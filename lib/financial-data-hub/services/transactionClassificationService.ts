@@ -34,6 +34,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isDuplicateExcluded } from '@/lib/read-models/core/spendingRules';
 import { fetchAllRows } from '../bank-csv/pagination';
 import { recordDocumentAuditEvent } from './auditLog';
 import {
@@ -131,6 +132,12 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
       skippedOverride += 1;
       continue;
     }
+    // WP-08 (EXP-G4): a removed duplicate is never classified -- giving it
+    // its twin's category is what let the approval cascade approve it, and
+    // it carries no financial meaning either way. (EXP-G12): an APPROVED
+    // line is a settled decision; re-running the engine (every import calls
+    // it) must never change its type or category behind the user's back.
+    if (isDuplicateExcluded(txn.dedup_status) || txn.approval_status === 'approved') continue;
 
     const classifiable: ClassifiableTransaction = {
       id: txn.id,
@@ -203,7 +210,10 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
   }
 
   // --- Transfer / settlement / loan-payment matching (batch, cross-account) ---
-  const eligible = transactions.filter((t) => !t.user_override);
+  // WP-08 (EXP-G4): a removed duplicate is never proposed as either side of a
+  // transfer or refund -- a pending link on it would block its (counted)
+  // counterpart's approval.
+  const eligible = transactions.filter((t) => !t.user_override && !isDuplicateExcluded(t.dedup_status));
   const transferCandidates: TransferCandidateTxn[] = eligible.map((t) => ({
     id: t.id,
     financialAccountId: t.financial_account_id,
@@ -270,7 +280,7 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
     amountOriginal: t.amount_original,
     currencyOriginal: t.currency_original,
     creditDebit: t.credit_debit,
-    isRefundClassified: resolvedByTxnId.get(t.id)?.economicTransactionType === 'refund',
+    isRefundClassified: (resolvedByTxnId.get(t.id)?.economicTransactionType ?? t.economic_transaction_type) === 'refund',
   }));
   const proposedRefunds = matchRefundsToOriginals(refundCandidates.filter((t) => !existingLinkedIds.has(t.id)));
   let refundLinksProposed = 0;

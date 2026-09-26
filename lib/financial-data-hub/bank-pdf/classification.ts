@@ -28,6 +28,7 @@ export interface PdfClassificationResult {
     | 'corrupt'
     | 'page_limit_exceeded'
     | 'insufficient_text'
+    | 'timeout'
     | 'unknown_error';
 }
 
@@ -50,6 +51,8 @@ export async function classifyPdf(bytes: Uint8Array, password?: string): Promise
       corrupt: 'corrupt',
       page_limit_exceeded: 'unsupported',
       insufficient_text: 'image_only',
+      // Not a structural verdict; the orchestrator checks reasonCode first.
+      timeout: 'unsupported',
       unknown_error: 'unsupported',
     };
     return {

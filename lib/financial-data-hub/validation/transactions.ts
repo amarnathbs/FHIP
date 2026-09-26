@@ -250,7 +250,12 @@ export type FdhRecurringSeriesReviewInput = z.infer<typeof fdhRecurringSeriesRev
  * `allocation_sequence` (1..N, in array order) and `user_id` — never
  * trusted from the payload. */
 const fdhSplitAllocationLineSchema = z.object({
-  economic_transaction_type: z.enum(FDH_ECONOMIC_TRANSACTION_TYPES),
+  // WP-08 (EXP-G5): a split line must say what the money was. 'unknown' was
+  // accepted here and then counted nowhere, silently; it is refused instead
+  // (and by migration 0212's fdh8_replace_transaction_allocations).
+  economic_transaction_type: z.enum(FDH_ECONOMIC_TRANSACTION_TYPES).refine((t) => t !== 'unknown', {
+    message: 'Every split line needs a type. "Unknown" is not allowed.',
+  }),
   category_id: fdhUuid.nullish(),
   subcategory_id: fdhUuid.nullish(),
   amount: fdhMoneyMagnitude,

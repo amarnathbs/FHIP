@@ -41,3 +41,30 @@ export async function recordDocumentAuditEvent(event: {
     console.error(`fdh_document_audit_events insert failed for event_type=${event.eventType}: ${error.message}`);
   }
 }
+
+/**
+ * WP-08 (EXP-G8): the same audit rows as `recordDocumentAuditEvent`, written
+ * in ONE insert per 500 events. A 1,001-line statement approval used to write
+ * its 1,001 `transaction_approved` rows one request at a time; the rows and
+ * their content are unchanged, only the round trips are.
+ */
+export async function recordDocumentAuditEvents(events: ReadonlyArray<Parameters<typeof recordDocumentAuditEvent>[0]>): Promise<void> {
+  if (events.length === 0) return;
+  const admin = createAdminClient();
+  for (let i = 0; i < events.length; i += 500) {
+    const chunk = events.slice(i, i + 500);
+    const { error } = await admin.from('fdh_document_audit_events').insert(
+      chunk.map((event) => ({
+        user_id: event.userId,
+        document_id: event.documentId,
+        event_type: event.eventType,
+        actor_type: event.actorType,
+        actor_id: event.actorId ?? null,
+        metadata: event.metadata ?? null,
+      })),
+    );
+    if (error) {
+      console.error(`fdh_document_audit_events batch insert failed (${chunk.length} rows, first event_type=${chunk[0].eventType}): ${error.message}`);
+    }
+  }
+}

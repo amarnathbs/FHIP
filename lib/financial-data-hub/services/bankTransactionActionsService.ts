@@ -84,6 +84,20 @@ export async function resolveDuplicateCandidate(
     throw new BankTransactionActionError('invalid_state', 'this duplicate candidate has already been resolved');
   }
 
+  // WP-08 (EXP-G4/EXP-G12): the side a resolution EXCLUDES must not be an
+  // approved line -- excluding it would silently remove an approved amount
+  // from every figure without reopening its statement. The usual case
+  // ('removed_b', the new upload's copy) is unaffected: the new side is
+  // still pending.
+  const perSide = resolveDedupStatusPerSide(input.resolution);
+  for (const [side, txnId] of [['a', candidate.transaction_id_a], ['b', candidate.transaction_id_b]] as const) {
+    if (perSide[side] !== 'user_confirmed_duplicate') continue;
+    const { data: excluded } = await transactionsRepository.getForUser(userId, txnId);
+    if (excluded?.approval_status === 'approved') {
+      throw new BankTransactionActionError('invalid_state', 'The line you chose to remove is already approved. Reopen its statement first, or remove the other copy instead.');
+    }
+  }
+
   const newStatus = input.resolution === 'kept_both' ? 'not_duplicate' : 'confirmed_duplicate';
   const { error: candidateUpdateError } = await duplicateCandidatesRepository.update(userId, candidate.id, {
     status: newStatus,
@@ -118,6 +132,9 @@ export async function resolveDuplicateCandidate(
   });
 }
 
+export const APPROVED_TRANSACTION_CORRECTION_MESSAGE =
+  'This transaction is already approved. Reopen its statement to change it.';
+
 /**
  * Layers a user correction over one normalised field of an owned transaction
  * (spec 47). Preserves the previous value in `fdh_transaction_corrections`
@@ -132,6 +149,15 @@ export async function correctTransaction(
 ): Promise<FdhTransaction> {
   const { data: transaction } = await transactionsRepository.getForUser(userId, transactionId);
   if (!transaction) throw new BankTransactionActionError('not_found', 'transaction not found');
+  // WP-08 (EXP-G12): an APPROVED line is part of the approved ledger and of
+  // its statement's Approved Financial Summary. Changing its amount, type,
+  // date, currency or direction here used to move every figure at once while
+  // the summary stayed stale; the statement must be reopened first (which
+  // supersedes the summary and returns every line to pending). The route
+  // maps this to 409.
+  if (transaction.approval_status === 'approved') {
+    throw new BankTransactionActionError('invalid_state', APPROVED_TRANSACTION_CORRECTION_MESSAGE);
+  }
 
   const previousValue = (transaction as unknown as Record<string, unknown>)[input.field_name] ?? null;
 

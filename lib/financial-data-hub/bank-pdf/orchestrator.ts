@@ -72,7 +72,8 @@ export type PdfPipelineStatus =
   | 'page_limit_exceeded'
   | 'unsupported_layout'
   | 'ambiguous_layout'
-  | 'extraction_low_confidence';
+  | 'extraction_low_confidence'
+  | 'extraction_timeout';
 
 export interface PdfPipelineResult {
   status: PdfPipelineStatus;
@@ -164,6 +165,8 @@ export interface RunPdfPipelineInput {
 export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<PdfPipelineResult> {
   const classified = await classifyPdf(input.bytes, input.password);
 
+  // WP-08 (UPL-01): the read ran out of time -- retryable, not a verdict.
+  if (classified.reasonCode === 'timeout') return emptyResult('extraction_timeout');
   if (classified.classification === 'encrypted') {
     return emptyResult(classified.reasonCode === 'wrong_password' ? 'password_invalid' : 'encrypted');
   }

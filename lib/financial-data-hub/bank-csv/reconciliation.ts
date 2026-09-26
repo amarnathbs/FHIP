@@ -204,3 +204,29 @@ export interface DateRange {
 export function rangesOverlap(a: DateRange, b: DateRange): boolean {
   return a.start <= b.end && b.start <= a.end;
 }
+
+/**
+ * WP-08 (EXP-G17): how a new statement overlaps the account's earlier
+ * imports -- the number of earlier statements it overlaps and the overlapping
+ * span -- or null when it overlaps none. Pure; the services turn a non-null
+ * result into an info-severity statement note the user sees.
+ */
+export function computeStatementOverlap(
+  priorRanges: ReadonlyMap<string, DateRange>,
+  current: { earliestDate: string | null; latestDate: string | null } | null | undefined,
+): { overlappingStatementCount: number; overlapFrom: string; overlapTo: string } | null {
+  if (!current?.earliestDate || !current.latestDate) return null;
+  const range = { start: current.earliestDate, end: current.latestDate };
+  let count = 0;
+  let from = null as string | null;
+  let to = null as string | null;
+  for (const prior of priorRanges.values()) {
+    if (!rangesOverlap(prior, range)) continue;
+    count += 1;
+    const s = prior.start > range.start ? prior.start : range.start;
+    const e = prior.end < range.end ? prior.end : range.end;
+    from = from === null || s < from ? s : from;
+    to = to === null || e > to ? e : to;
+  }
+  return count === 0 || from === null || to === null ? null : { overlappingStatementCount: count, overlapFrom: from, overlapTo: to };
+}

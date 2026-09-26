@@ -1,5 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRows, type RangeableQuery } from '@/lib/financial-data-hub/bank-csv/pagination';
 
 // GET /api/financial-data-hub/documents/{documentId}/review-summary — FDH-7
 // spec sections 15-19. A concise pre-transaction-review summary. CONSUMES the
@@ -52,19 +53,29 @@ export async function GET(_req: Request, { params }: { params: Promise<{ documen
     economic_transaction_type: string;
     approval_status: string;
   }
-  const [reconciliation, txnCounts, transferOpen, duplicatesOpen] = await Promise.all([
+  // WP-08 (EXP-G8): every line, paged past PostgREST's 1,000-row cap. Before,
+  // a 1,001-line statement was summarised as 1,000 lines.
+  let txns: TxnCountRow[];
+  try {
+    txns = await fetchAllRows<TxnCountRow>(() =>
+      supabase
+        .from('fdh_transactions')
+        .select('id, credit_debit, review_status, economic_transaction_type, approval_status')
+        .eq('user_id', user.id)
+        .eq('statement_upload_id', documentId)
+        .order('id', { ascending: true }) as unknown as RangeableQuery<TxnCountRow>,
+    );
+  } catch {
+    return bad('could not load statement', 500);
+  }
+
+  const [reconciliation, transferOpen, duplicatesOpen] = await Promise.all([
     supabase
       .from('fdh_reconciliation_results')
       .select('opening_balance, extracted_credits, extracted_debits, expected_closing_balance, reported_closing_balance, variance, status, currency_code')
       .eq('user_id', user.id)
       .eq('statement_upload_id', documentId)
       .maybeSingle<ReconciliationRow>(),
-    supabase
-      .from('fdh_transactions')
-      .select('id, credit_debit, review_status, economic_transaction_type, approval_status', { count: 'exact', head: false })
-      .eq('user_id', user.id)
-      .eq('statement_upload_id', documentId)
-      .returns<TxnCountRow[]>(),
     supabase
       .from('fdh_transaction_links')
       .select('id, transaction_id_from, transaction_id_to', { count: 'exact', head: true })
@@ -78,7 +89,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ documen
       .eq('status', 'pending'),
   ]);
 
-  const txns = txnCounts.data ?? [];
   const credits = txns.filter((t) => t.credit_debit === 'credit').length;
   const debits = txns.filter((t) => t.credit_debit === 'debit').length;
   const needsReview = txns.filter((t) => t.review_status === 'pending' || t.review_status === 'in_review').length;

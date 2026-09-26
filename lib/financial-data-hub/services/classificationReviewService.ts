@@ -22,6 +22,7 @@ import {
   transactionsRepository,
   userClassificationRulesRepository,
 } from '../repositories';
+import { REFUND_LIKE_LINK_TYPES } from '@/lib/read-models/core/spendingRules';
 import { recordDocumentAuditEvent } from './auditLog';
 import { correctTransaction } from './bankTransactionActionsService';
 import type { FdhRecurringSeriesReviewInput, FdhTransactionLinkReviewInput } from '../validation/transactions';
@@ -248,7 +249,7 @@ const TRANSFER_LIKE_LINK_TYPES: ReadonlyArray<FdhTransactionLink['link_type']> =
   'investment_funding',
   'loan_payment',
 ];
-const REFUND_LIKE_LINK_TYPES: ReadonlyArray<FdhTransactionLink['link_type']> = ['refund_original', 'reversal_original'];
+// WP-08: the canonical refund-link set (lib/read-models/core/spendingRules.ts), not a copy.
 
 /**
  * FDH-6 (spec section 64, gap G1) — explains WHY one of the caller's own
@@ -284,7 +285,7 @@ export async function explainTransactionReviewReasons(
     (l) => l.transaction_id_to !== null && l.status === 'pending' && TRANSFER_LIKE_LINK_TYPES.includes(l.link_type),
   );
   const pendingRefundLinkExists = links.some(
-    (l) => l.status === 'pending' && REFUND_LIKE_LINK_TYPES.includes(l.link_type),
+    (l) => l.status === 'pending' && REFUND_LIKE_LINK_TYPES.has(l.link_type),
   );
   const pendingDuplicateCandidateExists = duplicates.some(
     (d) => d.status === 'pending' && (d.transaction_id_a === transactionId || d.transaction_id_b === transactionId),

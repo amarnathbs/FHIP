@@ -22,6 +22,21 @@
  * Zero-row updates return `data: []` with no error (the real PostgREST
  * behaviour) and `.single()` on zero rows returns an error, so a service that
  * trusts a silent zero-row write is caught.
+ *
+ * WP-08 additions (all opt-in or mirroring migration 0212 exactly):
+ *  4. `maxRows` (option): every SELECT returns at most this many rows, the
+ *     PostgREST `db-max-rows` cap (1,000 on this project), silently -- so an
+ *     unpaged read of a 1,001-line statement really loses line 1,001.
+ *  5. `maxInListLength` (option): a GET whose `.in()` list is longer fails
+ *     like an over-long request URL (1,000 UUIDs is ~37 KB of query string).
+ *  6. `rpcs` (option, default 'with_0212'): the 0212 functions
+ *     `fdh7_bulk_approve_transactions` and `fdh8_replace_transaction_
+ *     allocations`, mirrored (set-based, all-or-nothing); 'without_0212'
+ *     answers them like PostgREST answers a function that does not exist
+ *     (code PGRST202), so the pre-0212 fallback paths can be exercised.
+ *  7. The 0212 blocking policy: an excluded duplicate never blocks, and an
+ *     allocation cannot be written while its parent is approved.
+ *  8. `update(patch, { count: 'exact' })` reports the affected-row count.
  */
 
 type Row = Record<string, unknown>;
@@ -103,12 +118,24 @@ export interface FakeDb {
   sessionClient(userId: string): FakeClient;
   adminClient(): FakeClient;
   hasBlockingIssue(userId: string, transactionId: string): boolean;
+  /** Calls made to each RPC, for assertions about round trips. */
+  rpcCalls: Record<string, number>;
+  /** SELECT requests issued per table, for assertions about round trips. */
+  selectCalls: Record<string, number>;
+}
+
+export interface FakeDbOptions {
+  maxRows?: number;
+  maxInListLength?: number;
+  rpcs?: 'with_0212' | 'without_0212';
 }
 
 type FakeClient = {
   from(table: string): QueryBuilder;
-  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
+  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
 };
+
+const EXCLUDED_DEDUP = ['duplicate_confirmed', 'user_confirmed_duplicate'];
 
 class QueryBuilder implements PromiseLike<{ data: unknown; error: { message: string } | null; count?: number | null }> {
   private filters: Filter[] = [];
@@ -122,6 +149,8 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: { message: str
   private rangeTo: number | null = null;
   private limitN: number | null = null;
   private singleMode: 'single' | 'maybe' | null = null;
+  private updateCount = false;
+  private longestIn = 0;
 
   constructor(
     private readonly db: FakeDbImpl,
@@ -138,11 +167,11 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: { message: str
     return this;
   }
   insert(row: Row | Row[]) { this.mode = 'insert'; this.payload = row; return this; }
-  update(patch: Row) { this.mode = 'update'; this.payload = patch; return this; }
+  update(patch: Row, opts?: { count?: string }) { this.mode = 'update'; this.payload = patch; this.updateCount = opts?.count === 'exact'; return this; }
   delete() { this.mode = 'delete'; return this; }
   eq(col: string, val: unknown) { this.filters.push((r) => String(r[col]) === String(val)); return this; }
   neq(col: string, val: unknown) { this.filters.push((r) => String(r[col]) !== String(val)); return this; }
-  in(col: string, vals: readonly unknown[]) { const s = vals.map(String); this.filters.push((r) => s.includes(String(r[col]))); return this; }
+  in(col: string, vals: readonly unknown[]) { const s = vals.map(String); this.longestIn = Math.max(this.longestIn, s.length); this.filters.push((r) => s.includes(String(r[col]))); return this; }
   is(col: string, val: unknown) { this.filters.push((r) => (val === null ? r[col] === null || r[col] === undefined : r[col] === val)); return this; }
   not(col: string, op: string, val: unknown) { const f = opFilter(col, op, String(val)); this.filters.push((r) => !f(r)); return this; }
   lte(col: string, val: unknown) { this.filters.push(opFilter(col, 'lte', String(val))); return this; }
@@ -193,6 +222,10 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: { message: str
 
   private execute(): { data: unknown; error: { message: string } | null; count?: number | null } {
     if (this.mode === 'select') {
+      this.db.selectCalls[this.table] = (this.db.selectCalls[this.table] ?? 0) + 1;
+      if (this.db.options.maxInListLength !== undefined && this.longestIn > this.db.options.maxInListLength) {
+        return { data: null, error: { message: `414 URI Too Long (.in() list of ${this.longestIn})` } };
+      }
       let rows = this.matching();
       for (const o of [...this.orders].reverse()) {
         rows = [...rows].sort((a, b) => (cmp(a[o.col], String(b[o.col])) * (o.asc ? 1 : -1)));
@@ -200,6 +233,7 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: { message: str
       const count = rows.length;
       if (this.rangeFrom !== null) rows = rows.slice(this.rangeFrom, (this.rangeTo ?? rows.length) + 1);
       if (this.limitN !== null) rows = rows.slice(0, this.limitN);
+      if (this.db.options.maxRows !== undefined) rows = rows.slice(0, this.db.options.maxRows);
       if (this.head) return { data: null, error: null, count };
       const shaped = this.shape(rows);
       return this.countMode ? { ...shaped, count } : shaped;
@@ -225,7 +259,8 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: { message: str
         Object.assign(row, next);
         updated.push(row);
       }
-      return this.returning || this.singleMode ? this.shape(updated) : { data: null, error: null };
+      if (this.returning || this.singleMode) return this.shape(updated);
+      return this.updateCount ? { data: null, error: null, count: updated.length } : { data: null, error: null };
     }
     const targets = new Set(this.matching());
     this.db.tables[this.table] = this.db.rows(this.table).filter((r) => !targets.has(r));
@@ -235,6 +270,9 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: { message: str
 
 class FakeDbImpl implements FakeDb {
   tables: Record<string, Row[]> = {};
+  rpcCalls: Record<string, number> = {};
+  selectCalls: Record<string, number> = {};
+  constructor(readonly options: FakeDbOptions = {}) {}
 
   rows(table: string): Row[] {
     this.tables[table] ??= [];
@@ -248,6 +286,7 @@ class FakeDbImpl implements FakeDb {
   }
 
   beforeInsert(table: string, row: Row, role: string) {
+    if (table === 'fdh_transaction_allocations') this.guardAllocationParent(row.transaction_id);
     if (role !== 'authenticated') return;
     if (['fdh_transaction_links', 'fdh_recurring_transactions'].includes(table)) {
       throw new Error(`${table}: rows may only be created by the server`);
@@ -263,7 +302,16 @@ class FakeDbImpl implements FakeDb {
     );
   }
 
+  /** Mirror of 0212's trg_fdh8_guard_allocation_parent_not_approved. */
+  guardAllocationParent(transactionId: unknown) {
+    const parent = this.rows('fdh_transactions').find((t) => t.id === transactionId);
+    if (parent && parent.approval_status === 'approved') {
+      throw new Error('fdh_transaction_allocations: the transaction is approved; reopen its statement before changing its split');
+    }
+  }
+
   beforeUpdate(table: string, old: Row, next: Row, role: string, uid: string | null) {
+    if (table === 'fdh_transaction_allocations') this.guardAllocationParent(old.transaction_id);
     if (table === 'fdh_transactions') {
       if (role === 'authenticated') {
         for (const f of ['economic_transaction_type', 'category_id', 'subcategory_id', 'merchant_id']) {
@@ -305,9 +353,11 @@ class FakeDbImpl implements FakeDb {
     }
   }
 
-  /** Mirror of `fdh7_transaction_has_blocking_issue` (0076 as amended by 0085). */
+  /** Mirror of `fdh7_transaction_has_blocking_issue` (0076, amended by 0085
+   * and 0212: an excluded duplicate never blocks). */
   hasBlockingIssue(userId: string, transactionId: string): boolean {
     const t = this.rows('fdh_transactions').find((r) => r.id === transactionId && r.user_id === userId);
+    if (t && EXCLUDED_DEDUP.includes(String(t.dedup_status))) return false;
     const allocs = this.rows('fdh_transaction_allocations').filter((a) => a.transaction_id === transactionId && a.user_id === userId);
     const allocSum = allocs.reduce((s, a) => s + Math.round(Number(a.amount) * 100), 0);
     const parent = t ? Math.round(Number(t.amount_original) * 100) : 0;
@@ -322,7 +372,7 @@ class FakeDbImpl implements FakeDb {
   statementHasBlockingIssue(userId: string, statementId: string): boolean {
     const item = this.rows('fdh_review_items').some((r) => r.user_id === userId && r.statement_upload_id === statementId && r.severity === 'blocking' && ['open', 'in_progress'].includes(String(r.status)));
     const recon = this.rows('fdh_reconciliation_results').some((r) => r.user_id === userId && r.statement_upload_id === statementId && r.status === 'failed');
-    const txn = this.rows('fdh_transactions').some((t) => t.user_id === userId && t.statement_upload_id === statementId && this.hasBlockingIssue(userId, String(t.id)));
+    const txn = this.rows('fdh_transactions').some((t) => t.user_id === userId && t.statement_upload_id === statementId && !EXCLUDED_DEDUP.includes(String(t.dedup_status)) && this.hasBlockingIssue(userId, String(t.id)));
     return item || recon || txn;
   }
 
@@ -330,11 +380,78 @@ class FakeDbImpl implements FakeDb {
     return {
       from: (table: string) => new QueryBuilder(this, table, role, uid),
       rpc: async (fn: string, args: Record<string, unknown>) => {
+        this.rpcCalls[fn] = (this.rpcCalls[fn] ?? 0) + 1;
         if (fn === 'fdh7_transaction_has_blocking_issue') return { data: this.hasBlockingIssue(String(args.p_user_id), String(args.p_transaction_id)), error: null };
         if (fn === 'fdh7_statement_has_blocking_issue') return { data: this.statementHasBlockingIssue(String(args.p_user_id), String(args.p_statement_id)), error: null };
-        return { data: null, error: { message: `fake supabase: unknown rpc ${fn}` } };
+        const with0212 = (this.options.rpcs ?? 'with_0212') === 'with_0212';
+        if (with0212 && fn === 'fdh7_bulk_approve_transactions') return this.bulkApprove(uid, (args.p_transaction_ids ?? []) as string[]);
+        if (with0212 && fn === 'fdh8_replace_transaction_allocations') return this.replaceAllocations(uid, String(args.p_transaction_id), (args.p_allocations ?? []) as Row[], args.p_finalize !== false);
+        return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` } };
       },
     };
+  }
+
+  /** Mirror of 0212's fdh7_bulk_approve_transactions: one set-based update;
+   * the approval guard (beforeUpdate) still runs for every row. */
+  private bulkApprove(uid: string | null, ids: string[]) {
+    if (!uid) return { data: null, error: { code: '42501', message: 'an authenticated user is required' } };
+    const unique = [...new Set(ids)];
+    if (unique.length > 5000) return { data: null, error: { code: 'FH422', message: 'at most 5000 transactions per call' } };
+    const mine = new Map(this.rows('fdh_transactions').filter((t) => t.user_id === uid).map((t) => [String(t.id), t] as const));
+    const out = { approved: [] as string[], blocked: [] as string[], already_approved: [] as string[], skipped_duplicates: [] as string[], not_found: [] as string[] };
+    const toApprove: Row[] = [];
+    for (const id of unique) {
+      const t = mine.get(id);
+      if (!t) { out.not_found.push(id); continue; }
+      if (t.approval_status === 'approved') { out.already_approved.push(id); continue; }
+      if (EXCLUDED_DEDUP.includes(String(t.dedup_status))) { out.skipped_duplicates.push(id); continue; }
+      if (this.hasBlockingIssue(uid, id)) { out.blocked.push(id); continue; }
+      toApprove.push(t);
+    }
+    try {
+      const staged = toApprove.map((t) => {
+        const next = { ...t, approval_status: 'approved', approved_by: uid, updated_at: new Date().toISOString() };
+        this.beforeUpdate('fdh_transactions', t, next, 'authenticated', uid);
+        return [t, next] as const;
+      });
+      for (const [t, next] of staged) Object.assign(t, next);
+    } catch (e) {
+      return { data: null, error: { code: 'P0001', message: e instanceof Error ? e.message : String(e) } };
+    }
+    out.approved = toApprove.map((t) => String(t.id));
+    return { data: out, error: null };
+  }
+
+  /** Mirror of 0212's fdh8_replace_transaction_allocations: validate, then
+   * delete + insert in one synchronous step (the row lock's effect). */
+  private replaceAllocations(uid: string | null, transactionId: string, lines: Row[], finalize: boolean) {
+    if (!uid) return { data: null, error: { code: '42501', message: 'an authenticated user is required' } };
+    const t = this.rows('fdh_transactions').find((r) => r.id === transactionId && r.user_id === uid);
+    if (!t) return { data: null, error: { code: 'FH404', message: 'transaction not found' } };
+    if (t.approval_status === 'approved') return { data: null, error: { code: 'FH409', message: 'this transaction is approved; reopen its statement before changing its split' } };
+    if (lines.length < 1 || lines.length > 50) return { data: null, error: { code: 'FH422', message: 'a split needs between 1 and 50 lines' } };
+    if (lines.some((l) => !l.economic_transaction_type || l.economic_transaction_type === 'unknown')) {
+      return { data: null, error: { code: 'FH422', message: 'every split line needs a type; "unknown" is not allowed' } };
+    }
+    if (lines.some((l) => !(Number(l.amount) > 0))) return { data: null, error: { code: 'FH422', message: 'every split line needs an amount greater than zero' } };
+    const sum = lines.reduce((s, l) => s + Math.round(Number(l.amount) * 10000), 0);
+    const parent = Math.round(Number(t.amount_original) * 10000);
+    if (finalize && sum !== parent) return { data: null, error: { code: 'FH422', message: `the split lines add up to ${sum / 10000} but the transaction is ${parent / 10000}` } };
+    if (!finalize && sum > parent) return { data: null, error: { code: 'FH422', message: 'the split lines add up to more than the transaction' } };
+    this.tables.fdh_transaction_allocations = this.rows('fdh_transaction_allocations').filter((a) => !(a.transaction_id === transactionId && a.user_id === uid));
+    const created = lines.map((l, i) => this.insert('fdh_transaction_allocations', {
+      user_id: uid,
+      transaction_id: transactionId,
+      allocation_sequence: i + 1,
+      economic_transaction_type: l.economic_transaction_type,
+      category_id: l.category_id ?? null,
+      subcategory_id: l.subcategory_id ?? null,
+      amount: Number(l.amount),
+      currency_code: t.currency_original,
+      percentage: null,
+      note: l.note ?? null,
+    }));
+    return { data: created.map((r) => ({ ...r })), error: null };
   }
 
   sessionClient(userId: string): FakeClient {
@@ -346,6 +463,6 @@ class FakeDbImpl implements FakeDb {
   }
 }
 
-export function createFakeDb(): FakeDb {
-  return new FakeDbImpl();
+export function createFakeDb(options: FakeDbOptions = {}): FakeDb {
+  return new FakeDbImpl(options);
 }

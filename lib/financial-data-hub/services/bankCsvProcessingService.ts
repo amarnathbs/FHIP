@@ -48,9 +48,11 @@ import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { detectBankCsvFormat } from '../bank-csv/detection';
 import { getAdapterById } from '../bank-csv/adapters/registry';
 import { adapterToRowFormat, mappingToRowFormat } from '../bank-csv/normalize';
+import { encodeUnreadLines, summariseUnreadLines, type UnreadLinesSummary } from '../domain/unreadLines';
+import { STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
 import { runBankCsvPipeline, decideCertification } from '../bank-csv/orchestrator';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges } from '../bank-csv/repository';
-import { rangesOverlap } from '../bank-csv/reconciliation';
+import { computeStatementOverlap } from '../bank-csv/reconciliation';
 import type { BankCsvMappingConfirmInput } from '../validation/bankCsv';
 import type { FdhStatementUpload, FdhCsvColumnMapping } from '../domain/types';
 import { createHash } from 'node:crypto';
@@ -259,6 +261,8 @@ export async function confirmBankCsvMapping(
 const INSERT_CHUNK_SIZE = 500;
 
 export interface ProcessBankCsvResult {
+  /** WP-08 (EXP-G14): the lines that could not be read, with reasons. */
+  unreadLines?: UnreadLinesSummary;
   document: FdhStatementUpload;
   transactionsCreated: number;
   duplicatesSkipped: number;
@@ -491,13 +495,11 @@ export async function processBankCsvDocument(userId: string, documentId: string)
       });
     }
 
-    // Overlap evidence (spec 44) — informational only, folded into date
-    // coverage; does not by itself change certification.
-    const overlapsPrior = pipeline.dateCoverage?.earliestDate && pipeline.dateCoverage?.latestDate
-      ? [...priorRanges.values()].some((r) =>
-          rangesOverlap(r, { start: pipeline.dateCoverage!.earliestDate!, end: pipeline.dateCoverage!.latestDate! }),
-        )
-      : false;
+    // Overlap evidence (spec 44) — informational only; does not by itself
+    // change certification. WP-08 (EXP-G17): no longer computed and thrown
+    // away -- it becomes an info note on the statement (below).
+    const overlap = computeStatementOverlap(priorRanges, pipeline.dateCoverage);
+    const unreadLines = summariseUnreadLines(pipeline.rejected);
 
     // Reconciliation persistence (spec 42-43).
     if (pipeline.reconciliation) {
@@ -530,7 +532,7 @@ export async function processBankCsvDocument(userId: string, documentId: string)
       {
         check_code: 'transaction_count_valid',
         status: pipeline.declaredRowCount === pipeline.parsedRowCount ? 'pass' : 'fail',
-        details_sanitised: `declared=${pipeline.declaredRowCount} parsed=${pipeline.parsedRowCount}`,
+        details_sanitised: `declared=${pipeline.declaredRowCount} parsed=${pipeline.parsedRowCount} ${encodeUnreadLines(unreadLines)}`,
       },
       {
         check_code: 'account_identified',
@@ -617,7 +619,18 @@ export async function processBankCsvDocument(userId: string, documentId: string)
         context_json: { counts: { variance_minor_units: 1 } },
       } as never);
     }
-    void overlapsPrior;
+    if (overlap) {
+      await reviewItemsRepository.create(userId, {
+        household_id: document.household_id,
+        statement_upload_id: documentId,
+        transaction_id: null,
+        review_type: 'other',
+        severity: 'info',
+        status: 'open',
+        title_code: STATEMENT_OVERLAP_TITLE_CODE,
+        context_json: { overlapping_statement_count: overlap.overlappingStatementCount, overlap_from: overlap.overlapFrom, overlap_to: overlap.overlapTo },
+      } as never);
+    }
 
     let finalProcessingStatus: FdhStatementUpload['processing_status'] = 'review_required';
     assertDocumentTransition('processing', 'extracted');
@@ -683,6 +696,7 @@ export async function processBankCsvDocument(userId: string, documentId: string)
       duplicatesSkipped: duplicateConfirmedCount,
       duplicateCandidates: duplicateCandidateCount,
       rejectedRows: pipeline.rejected.length,
+      unreadLines,
       certificationStatus: certification.certificationStatus,
       reconciliationStatus: pipeline.reconciliation?.status ?? null,
     };

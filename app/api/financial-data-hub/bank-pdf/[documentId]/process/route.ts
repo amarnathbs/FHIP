@@ -5,6 +5,11 @@ import { processBankPdfDocument, BankPdfProcessingError } from '@/lib/financial-
 
 const bodySchema = z.object({ password: z.string().max(200).optional() }).optional();
 
+// WP-08 (UPL-01): a bounded request. The PDF read itself stops at
+// PDF_EXTRACTION_TIMEOUT_MS (20 s) with a retryable `extraction_timeout`;
+// this is the outer ceiling for the rest of the import.
+export const maxDuration = 60;
+
 // POST /api/financial-data-hub/bank-pdf/{documentId}/process — spec sections
 // 6, 13-46, 55-56, 89-90. Idempotent/retry-safe (see the service module's
 // header comment). `password`, when the document is awaiting one, travels
@@ -48,6 +53,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       duplicates_skipped: result.duplicatesSkipped,
       duplicate_candidates: result.duplicateCandidates,
       rejected_rows: result.rejectedRows,
+      // WP-08 (EXP-G14/EXP-G15): why lines could not be read, and whether an
+      // AI reading may be missing lines (the statement then needs a check).
+      unread_lines: result.unreadLines ?? null,
+      incomplete_extraction: result.incompleteExtraction ?? false,
       page_count: result.document.page_count,
       declared_row_count: result.document.declared_row_count,
       parsed_row_count: result.document.parsed_row_count,

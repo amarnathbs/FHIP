@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { ResourceErrorState, ResourceLoadingSkeleton } from '@/components/resources/admin/ResourceStates';
+import { StatementDetailsDrawer } from '@/components/financial-data-hub/StatementDetailsDrawer';
 // Type-only imports (erased at build): the page renders EXACTLY the
 // snake_case shape the API returns, so a camelCase mismatch is a compile
 // error, not a blank screen. `tests/unit/fdhCategoryReviewRoutes.test.ts`
 // also pins every field this file reads against a real route response.
-import type { CategoryGroup, NeedsDecisionItem, SurplusEffect } from '@/lib/financial-data-hub/domain/categoryReview';
+import type { CategoryGroup, CategoryReviewMonthTotals, NeedsDecisionItem, StatementNote, SurplusEffect } from '@/lib/financial-data-hub/domain/categoryReview';
 import type { StatementCategoryReview as ReviewPayload, GroupApprovalResult, ApproveAllResult, SetCategoryResult } from '@/lib/financial-data-hub/services/categoryReviewService';
 
 interface CategoryOption {
@@ -49,12 +50,49 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+// WP-08: the one canonical rule set (lib/read-models/core/spendingRules.ts)
+// decides each group's effect; refunds reduce spending only with a confirmed
+// link to the purchase (PO D-01).
 const COUNTS_TOWARD_TEXT: Record<SurplusEffect, string> = {
   income: 'Counts as income',
   spending: 'Counts as spending',
-  reduces_spending: 'Reduces your spending',
-  not_counted: 'Not counted in your Monthly Surplus',
+  reduces_spending: 'Refund linked to its purchase: reduces your spending',
+  refund_unlinked: 'Refund not linked to a purchase: not taken off your spending',
+  not_counted: 'Not counted as income or spending',
+  split: 'Counted by its split lines',
 };
+
+function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  if (!y || !m) return month;
+  return new Intl.DateTimeFormat('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, 1)));
+}
+
+/** EXP-G3 copy: which month each figure lands in, and how the dashboard uses
+ * it (the average of the last 3 complete months a statement fully covers). */
+function MonthFigures({ months, approvedOnly }: { months: CategoryReviewMonthTotals[]; approvedOnly: boolean }) {
+  const rows = months.filter((m) => (approvedOnly
+    ? m.approved_income !== 0 || m.approved_spending !== 0
+    : m.approved_income !== 0 || m.approved_spending !== 0 || m.waiting_income !== 0 || m.waiting_spending !== 0));
+  if (rows.length === 0) return null;
+  return (
+    <ul className="mt-2 space-y-1 text-sm text-ink">
+      {rows.map((m) => (
+        <li key={`${m.month}-${m.currency}`}>
+          <span className="font-medium">{monthLabel(m.month)}:</span>{' '}
+          approved income {money(m.approved_income, m.currency)}, approved spending {money(m.approved_spending, m.currency)}
+          {!approvedOnly && (m.waiting_income !== 0 || m.waiting_spending !== 0)
+            ? `; once you approve the rest: income ${money(m.waiting_income, m.currency)}, spending ${money(m.waiting_spending, m.currency)} more`
+            : ''}
+          .
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const DASHBOARD_BASIS_TEXT =
+  'Approved figures become the actual income and spending for the month they are dated in. Your dashboard uses the average of the last 3 complete months that your approved statements fully cover, so a statement that covers only part of a month is shown but not averaged.';
 
 const OPTION_GROUPS: Array<{ label: string; types: readonly string[] }> = [
   { label: 'Spending', types: ['expense', 'fee', 'tax', 'debt_interest'] },
@@ -169,7 +207,15 @@ export function StatementCategoryReview({
       let message = `Approved ${group.label}: ${plural(result.approved, 'transaction', 'transactions')}.`;
       if (result.failed > 0) message += ` ${plural(result.failed, 'transaction', 'transactions')} could not be approved yet and ${result.failed === 1 ? 'is' : 'are'} listed above.`;
       if (result.statement_finalised) message += ' Every transaction on this statement is now approved.';
+      else if (result.statement_not_finalised_reason) message += ` ${result.statement_not_finalised_reason}`;
       return message;
+    });
+  }
+
+  function acknowledge(note: StatementNote) {
+    void run(`note:${note.id}`, async () => {
+      await apiPost<{ acknowledged: boolean }>(`/api/financial-data-hub/documents/${encodeURIComponent(statementId)}/review-items/${encodeURIComponent(note.id)}/acknowledge`, {});
+      return 'Thank you. You confirmed every transaction on this statement is listed.';
     });
   }
 
@@ -178,28 +224,52 @@ export function StatementCategoryReview({
       const result = await apiPost<ApproveAllResult>(`${url}/approve-all`, {});
       return result.outcome === 'already_approved'
         ? 'Everything on this statement was already approved. Nothing changed.'
-        : `Approved ${plural(result.approved, 'transaction', 'transactions')}. They now count toward your Monthly Surplus.`;
+        : `Approved ${plural(result.approved, 'transaction', 'transactions')}. They now count as actual income and spending for the months they are dated in.`;
     });
   }
 
   if (loading) return <ResourceLoadingSkeleton rows={4} />;
   if (loadError || !review) return <ResourceErrorState message={loadError ?? 'We could not load this statement.'} onRetry={() => { void reload(); }} />;
 
-  const { counts, totals, groups, needs_decision: needsDecision, statement } = review;
+  const { counts, totals, groups, needs_decision: needsDecision, statement, months, notes } = review;
   const period = formatPeriod(statement.period_start, statement.period_end);
   const allApproved = counts.transactions > 0 && counts.waiting_for_approval === 0;
   const readyToApprove = counts.ready_to_approve;
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="space-y-2">
         <h1 className="text-xl font-semibold text-ink">Review your statement by category</h1>
         <p className="mt-1 text-sm text-muted">
           {period ? `Statement period ${period}. ` : ''}
           Check the total for each category and approve it. You only need to look at single transactions when we could
           not tell what they are.
         </p>
+        <StatementDetailsDrawer statementId={statement.id} />
       </div>
+
+      {notes.length > 0 && (
+        <section aria-labelledby="notes-heading" className="space-y-2 rounded-compact border border-line bg-white p-4">
+          <h2 id="notes-heading" className="text-base font-semibold text-ink">About this statement</h2>
+          <ul className="space-y-2">
+            {notes.map((note) => (
+              <li key={note.id} className={note.severity === 'blocking' ? 'rounded-compact bg-risk/10 px-3 py-2 text-sm text-ink' : 'rounded-compact bg-trust/5 px-3 py-2 text-sm text-ink'}>
+                <p>{note.text}</p>
+                {note.can_acknowledge && (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => acknowledge(note)}
+                    className="mt-2 rounded-compact border border-trust px-3 py-1 text-sm font-semibold text-trust disabled:opacity-50"
+                  >
+                    I have checked: every transaction is listed
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <p ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className={announcement ? 'rounded-compact bg-positive/10 px-3 py-2 text-sm text-positive' : 'sr-only'}>
         {announcement}
@@ -215,13 +285,13 @@ export function StatementCategoryReview({
           <p className="mt-2 text-sm text-muted">This statement has no transactions to review.</p>
         ) : allApproved ? (
           <p className="mt-2 text-sm text-ink">
-            All {plural(counts.approved, 'transaction is', 'transactions are')} approved and count toward your Monthly Surplus.
+            All {plural(counts.approved, 'transaction is', 'transactions are')} approved.
           </p>
         ) : (
           <p className="mt-2 text-sm text-ink">
             {plural(counts.waiting_for_approval, 'transaction is', 'transactions are')} waiting for your approval
             {counts.needs_decision > 0 ? `, and ${counts.needs_decision} of ${counts.needs_decision === 1 ? 'them needs' : 'them need'} you to choose a category first` : ''}.
-            Nothing counts toward your Monthly Surplus until you approve it.
+            Nothing counts toward your income or spending until you approve it.
           </p>
         )}
         {totals.length > 0 && (
@@ -245,9 +315,8 @@ export function StatementCategoryReview({
             ))}
           </ul>
         )}
-        <p className="mt-2 text-xs text-muted">
-          The Monthly Surplus on your dashboard uses approved transactions dated in the current month.
-        </p>
+        <MonthFigures months={months} approvedOnly={allApproved} />
+        <p className="mt-2 text-xs text-muted">{DASHBOARD_BASIS_TEXT}</p>
         {counts.duplicates_removed > 0 && (
           <p className="mt-2 text-xs text-muted">
             {plural(counts.duplicates_removed, 'transaction was', 'transactions were')} removed as a duplicate and {counts.duplicates_removed === 1 ? 'is' : 'are'} not counted.
@@ -378,6 +447,7 @@ export function StatementCategoryReview({
                       <p className="text-xs text-muted">
                         {plural(group.count, 'transaction', 'transactions')} · {COUNTS_TOWARD_TEXT[group.counts_toward]}
                       </p>
+                      {group.not_counted_reason && <p className="text-xs text-muted">{group.not_counted_reason}</p>}
                       {!group.fully_confident && group.status !== 'approved' && (
                         <p className="mt-1 text-xs text-muted">Suggested from the wording on your statement. Check the total looks right.</p>
                       )}
@@ -455,7 +525,9 @@ export function StatementCategoryReview({
       {allApproved && (
         <section className="rounded-compact border border-positive/40 bg-positive/5 p-4">
           <h2 className="text-base font-semibold text-ink">You are done</h2>
-          <p className="mt-1 text-sm text-ink">This statement is fully approved and counts toward your Monthly Surplus.</p>
+          <p className="mt-1 text-sm text-ink">
+            This statement is fully approved. Its lines are your actual income and spending for the months they are dated in.
+          </p>
           <Link href={backHref} className="mt-2 inline-block text-sm font-semibold text-trust hover:underline">{backLabel}</Link>
         </section>
       )}

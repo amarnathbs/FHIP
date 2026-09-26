@@ -31,6 +31,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   documentAuditEventsRepository,
+  financialAccountsRepository,
   ingestionJobsRepository,
   reviewItemsRepository,
   statementUploadsRepository,
@@ -64,6 +65,7 @@ import {
   AIE_BANK_STATEMENT_PARSER_VERSION,
   AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME,
   AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION,
+  AIE_BANK_STATEMENT_MAX_TRANSACTIONS,
   type MappedBankStatementDraft,
 } from '@/lib/aie/adapters/bankStatement';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
@@ -72,7 +74,10 @@ import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraf
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS, type IdenticalUploadMatch } from './identicalUpload';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges } from '../bank-csv/repository';
-import { rangesOverlap } from '../bank-csv/reconciliation';
+import { computeStatementOverlap } from '../bank-csv/reconciliation';
+import { computeAccountFingerprint, normaliseMaskedIdentifier } from '../bank-csv/accountIdentity';
+import { encodeUnreadLines, summariseUnreadLines, type UnreadLinesSummary } from '../domain/unreadLines';
+import { AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
 import { moneyEquals } from '../domain/money';
 import { checkPasswordAttemptRateLimit } from '../bank-pdf/password';
 import type { FdhStatementUpload } from '../domain/types';
@@ -121,6 +126,11 @@ const INSERT_CHUNK_SIZE = 500;
 
 export interface ProcessBankPdfResult {
   document: FdhStatementUpload;
+  /** WP-08 (EXP-G14): the lines that could not be read, with reasons. */
+  unreadLines?: UnreadLinesSummary;
+  /** WP-08 (EXP-G15): an AI reading that may be missing lines (blocking
+   * review item raised; the statement cannot be approved until settled). */
+  incompleteExtraction?: boolean;
   transactionsCreated: number;
   duplicatesSkipped: number;
   duplicateCandidates: number;
@@ -213,6 +223,8 @@ function errorCodeForPipelineStatus(status: PdfPipelineStatus): FdhErrorCode | n
       return 'format_ambiguous';
     case 'extraction_low_confidence':
       return 'extraction_low_confidence';
+    case 'extraction_timeout':
+      return 'extraction_timeout';
     default:
       return null;
   }
@@ -378,6 +390,29 @@ export async function processBankPdfDocument(userId: string, documentId: string,
       await recordDocumentAuditEvent({ userId, documentId, eventType: 'pdf_decrypted_for_processing', actorType: 'system' });
     }
 
+    if (pipeline.status === 'extraction_timeout') {
+      // WP-08 (UPL-01): reading the PDF did not finish inside its time budget
+      // (e.g. a text file disguised as a PDF that makes the parser spin). Not
+      // a verdict on the document: `failed` (retryable), never `rejected`.
+      assertDocumentTransition('processing', 'failed');
+      const finalDoc = await adminUpdateStatementUpload(userId, documentId, {
+        processing_status: 'failed',
+        error_code: 'extraction_timeout',
+        review_status: 'pending',
+      });
+      await recordDocumentAuditEvent({ userId, documentId, eventType: 'pdf_processing_failed', actorType: 'system', metadata: { reason: 'extraction_timeout' } });
+      return {
+        document: (finalDoc ?? document) as FdhStatementUpload,
+        transactionsCreated: 0,
+        duplicatesSkipped: 0,
+        duplicateCandidates: 0,
+        rejectedRows: 0,
+        certificationStatus: null,
+        reconciliationStatus: null,
+        pipelineStatus: pipeline.status,
+      };
+    }
+
     if (pipeline.status !== 'ok') {
       // AI FALLBACK, attempted BEFORE the terminal rejection below and only
       // for the statuses where the document is genuinely readable text that
@@ -504,8 +539,11 @@ export async function persistBankPdfPipelineResult(params: {
   document: FdhStatementUpload;
   pipeline: PdfPipelineResult;
   priorRanges: Awaited<ReturnType<typeof loadPriorStatementDateRanges>>;
+  /** Present only on the AI-fallback confirm path: what the server-issued
+   * draft said about itself (never taken from the client). */
+  aiContext?: AiReadingContext;
 }): Promise<ProcessBankPdfResult> {
-  const { userId, documentId, document, pipeline, priorRanges } = params;
+  const { userId, documentId, document, pipeline, priorRanges, aiContext } = params;
   await recordDocumentAuditEvent({
     userId,
     documentId,
@@ -640,12 +678,10 @@ export async function persistBankPdfPipelineResult(params: {
     });
   }
 
-  const overlapsPrior = pipeline.dateCoverage?.earliestDate && pipeline.dateCoverage?.latestDate
-    ? [...priorRanges.values()].some((r) =>
-        rangesOverlap(r, { start: pipeline.dateCoverage!.earliestDate!, end: pipeline.dateCoverage!.latestDate! }),
-      )
-    : false;
-  void overlapsPrior;
+  // WP-08 (EXP-G17): overlap evidence becomes a visible info note instead
+  // of being computed and discarded.
+  const overlap = computeStatementOverlap(priorRanges, pipeline.dateCoverage);
+  const unreadLines = summariseUnreadLines(pipeline.rejected, pipeline.unparseableBlockCount);
 
   // Reconciliation persistence (spec 42-43, 60-62) — reuses R7's exact
   // `fdh_reconciliation_results` table and `reconcileBalances()` output
@@ -693,13 +729,26 @@ export async function persistBankPdfPipelineResult(params: {
     });
   }
 
+  // WP-08 (EXP-G14): the masked account identifier the statement prints is
+  // used for matching instead of being dropped.
+  const identifier = await reconcileMaskedIdentifier(userId, document, pipeline.statementMetadata?.maskedAccountIdentifier ?? null);
+  // WP-08 (EXP-G15): an AI reading that may have stopped early.
+  const incompleteExtraction = Boolean(aiContext) && (
+    aiContext!.allTransactionsListed === false
+    || (aiContext!.rowsRead >= AIE_BANK_STATEMENT_MAX_TRANSACTIONS && pipeline.reconciliation?.status !== 'reconciled')
+  );
+
   const dqChecks: { check_code: string; status: string; details_sanitised?: string }[] = [
     {
       check_code: 'transaction_count_valid',
-      status: pipeline.rejected.length === 0 && pipeline.unparseableBlockCount === 0 ? 'pass' : 'fail',
-      details_sanitised: `parsed=${pipeline.accepted.length} rejected=${pipeline.rejected.length} unparseable=${pipeline.unparseableBlockCount}`,
+      status: pipeline.rejected.length === 0 && pipeline.unparseableBlockCount === 0 && !incompleteExtraction ? 'pass' : 'fail',
+      details_sanitised: `parsed=${pipeline.accepted.length} rejected=${pipeline.rejected.length} unparseable=${pipeline.unparseableBlockCount} ${encodeUnreadLines(unreadLines)}`,
     },
-    { check_code: 'account_identified', status: document.financial_account_id ? 'pass' : 'fail' },
+    {
+      check_code: 'account_identified',
+      status: !document.financial_account_id ? 'fail' : identifier.mismatch ? 'warning' : 'pass',
+      details_sanitised: identifier.mismatch ? 'masked_identifier_mismatch' : identifier.filled ? 'masked_identifier_recorded' : undefined,
+    },
     {
       check_code: 'balance_reconciled',
       status:
@@ -719,6 +768,15 @@ export async function persistBankPdfPipelineResult(params: {
     },
     { check_code: 'duplicate_file', status: document.duplicate_of_document_id ? 'warning' : 'pass' },
   ];
+  if (aiContext) {
+    // What the AI said about its own reading, persisted as evidence (counts
+    // and flags only -- the warning text itself may quote the document).
+    dqChecks.push({
+      check_code: 'low_extraction_confidence',
+      status: incompleteExtraction || aiContext.warningCount > 0 ? 'warning' : 'pass',
+      details_sanitised: `ai_reading all_transactions_listed=${aiContext.allTransactionsListed === null ? 'unknown' : aiContext.allTransactionsListed} rows_read=${aiContext.rowsRead} row_cap=${AIE_BANK_STATEMENT_MAX_TRANSACTIONS} warnings=${aiContext.warningCount}`,
+    });
+  }
   for (const check of dqChecks) {
     await adminInsert('fdh_data_quality_results', {
       user_id: userId,
@@ -744,7 +802,7 @@ export async function persistBankPdfPipelineResult(params: {
     manual_override: false,
   });
 
-  const certification = decidePdfCertification({
+  const decidedCertification = decidePdfCertification({
     pipelineStatus: pipeline.status,
     declaredRowCount: pipeline.accepted.length + pipeline.rejected.length + pipeline.unparseableBlockCount,
     parsedRowCount: pipeline.accepted.length,
@@ -753,6 +811,53 @@ export async function persistBankPdfPipelineResult(params: {
     accountAmbiguous: false,
     reconciliationStatus: declaredBalanceMismatch ? 'failed' : (pipeline.reconciliation?.status ?? null),
   });
+  // WP-08 (EXP-G15): a possibly-incomplete AI reading is never certified; it
+  // lands in review with a blocking statement-level item the user settles
+  // after checking the statement (or by adding the missing lines).
+  const certification = incompleteExtraction && decidedCertification.certificationStatus === 'certified'
+    ? { ...decidedCertification, certificationStatus: 'review_required' as const }
+    : decidedCertification;
+  if (incompleteExtraction) {
+    await reviewItemsRepository.create(userId, {
+      household_id: document.household_id,
+      statement_upload_id: documentId,
+      transaction_id: null,
+      review_type: 'other',
+      severity: 'blocking',
+      status: 'open',
+      title_code: AI_EXTRACTION_INCOMPLETE_TITLE_CODE,
+      context_json: { rows_read: aiContext!.rowsRead, all_transactions_listed: aiContext!.allTransactionsListed, row_cap: AIE_BANK_STATEMENT_MAX_TRANSACTIONS },
+    } as never);
+  }
+  if (overlap) {
+    await reviewItemsRepository.create(userId, {
+      household_id: document.household_id,
+      statement_upload_id: documentId,
+      transaction_id: null,
+      review_type: 'other',
+      severity: 'info',
+      status: 'open',
+      title_code: STATEMENT_OVERLAP_TITLE_CODE,
+      context_json: { overlapping_statement_count: overlap.overlappingStatementCount, overlap_from: overlap.overlapFrom, overlap_to: overlap.overlapTo },
+    } as never);
+  }
+  if (identifier.mismatch) {
+    await reviewItemsRepository.create(userId, {
+      household_id: document.household_id,
+      statement_upload_id: documentId,
+      transaction_id: null,
+      review_type: 'other',
+      severity: 'warning',
+      status: 'open',
+      title_code: 'bank_statement.account_identifier_mismatch',
+      context_json: null,
+    } as never);
+  }
+  // AI institution name (EXP-G14) names an account that was created without
+  // one; a name the user or a certified parser already gave is never replaced.
+  if (aiContext?.institutionName && document.financial_account_id) {
+    await nameAccountFromAiReading(userId, document.financial_account_id, aiContext.institutionName);
+  }
 
   if (certification.certificationStatus === 'review_required' && duplicateCandidateCount > 0) {
     await reviewItemsRepository.create(userId, {
@@ -811,6 +916,10 @@ export async function persistBankPdfPipelineResult(params: {
     pdf_classification: pipeline.unparseableBlockCount > 0 || (pipeline.rejected.length > 0) ? 'mixed_content' : 'text_native',
     extraction_confidence: pipeline.statementExtractionConfidence,
     declared_row_count: pipeline.accepted.length + pipeline.rejected.length + pipeline.unparseableBlockCount,
+    // WP-08 (EXP-G14): the period the statement prints (native or AI-read)
+    // is persisted -- the canonical read models' coverage input. A period
+    // the user declared at upload is never overwritten.
+    ...statementPeriodPatch(document, pipeline.statementMetadata),
   });
 
   await ingestionJobsRepository.listForUser(userId, 500).then(async ({ data }) => {
@@ -838,10 +947,93 @@ export async function persistBankPdfPipelineResult(params: {
     duplicatesSkipped: duplicateConfirmedCount,
     duplicateCandidates: duplicateCandidateCount,
     rejectedRows: pipeline.rejected.length + pipeline.unparseableBlockCount,
+    unreadLines,
+    incompleteExtraction,
     certificationStatus: certification.certificationStatus,
     reconciliationStatus: declaredBalanceMismatch ? 'failed' : (pipeline.reconciliation?.status ?? null),
     pipelineStatus: pipeline.status,
   };
+}
+
+/** What a server-issued AI draft said about its own reading. */
+export interface AiReadingContext {
+  institutionName: string | null;
+  /** null when no server-issued draft is available (pre-0197 database). */
+  allTransactionsListed: boolean | null;
+  warningCount: number;
+  rowsRead: number;
+}
+
+/** The period columns to write: the printed period, only where the upload
+ * did not already carry one, and only when it is a real range. */
+export function statementPeriodPatch(
+  document: Pick<FdhStatementUpload, 'statement_period_start' | 'statement_period_end'>,
+  metadata: { statementPeriodStart: string | null; statementPeriodEnd: string | null } | null | undefined,
+): { statement_period_start?: string; statement_period_end?: string } {
+  if (document.statement_period_start || document.statement_period_end) return {};
+  const start = metadata?.statementPeriodStart ?? null;
+  const end = metadata?.statementPeriodEnd ?? null;
+  if (!start || !end || end < start) return {};
+  return { statement_period_start: start, statement_period_end: end };
+}
+
+function trailingDigits(identifier: string | null): string | null {
+  const m = (identifier ?? '').match(/(\d{3,6})\s*$/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Compares the masked identifier the statement prints with the account the
+ * upload was attached to. An account with no identifier gets this one -- and,
+ * when this is the account's only statement, its matching fingerprint too,
+ * so the next upload of the same account is matched to it instead of
+ * creating a second account. A different identifier is a mismatch the user
+ * is shown; nothing is re-pointed automatically.
+ */
+async function reconcileMaskedIdentifier(
+  userId: string,
+  document: FdhStatementUpload,
+  printed: string | null,
+): Promise<{ mismatch: boolean; filled: boolean }> {
+  const normalised = normaliseMaskedIdentifier(printed);
+  if (!normalised || !document.financial_account_id) return { mismatch: false, filled: false };
+  const { data: account } = await financialAccountsRepository.getForUser(userId, document.financial_account_id);
+  if (!account) return { mismatch: false, filled: false };
+  const existing = (account as { masked_identifier?: string | null }).masked_identifier ?? null;
+  if (existing) {
+    const a = trailingDigits(existing);
+    const b = trailingDigits(normalised);
+    return { mismatch: Boolean(a && b && a !== b), filled: false };
+  }
+  const supabase = await createClient();
+  const { count: others, error: countError } = await supabase
+    .from('fdh_statement_uploads')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('financial_account_id', account.id)
+    .neq('id', document.id);
+  if (countError) return { mismatch: false, filled: false };
+  const patch: Record<string, unknown> = { masked_identifier: normalised };
+  if ((others ?? 1) === 0) {
+    patch.account_fingerprint = computeAccountFingerprint({
+      userId,
+      institutionId: account.institution_id ?? null,
+      currencyCode: account.currency_code,
+      maskedIdentifierNormalised: normalised,
+    });
+  }
+  const { error } = await financialAccountsRepository.update(userId, account.id, patch as never);
+  return { mismatch: false, filled: !error };
+}
+
+const GENERIC_ACCOUNT_NAMES = new Set(['imported account', 'imported bank account', '']);
+
+async function nameAccountFromAiReading(userId: string, accountId: string, institutionName: string): Promise<void> {
+  const name = institutionName.trim().slice(0, 120);
+  if (!name) return;
+  const { data: account } = await financialAccountsRepository.getForUser(userId, accountId);
+  if (!account || !GENERIC_ACCOUNT_NAMES.has((account.display_name ?? '').trim().toLowerCase())) return;
+  await financialAccountsRepository.update(userId, accountId, { display_name: name } as never);
 }
 
 export type AiBankStatementFallbackOutcome = { ok: true; draft: BankStatementAiFallbackDraft } | { ok: false; reason: string };
@@ -993,8 +1185,15 @@ export async function confirmAiBankStatementFallback(
   }
 
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_statement_ai_fallback_confirmed', actorType: 'user' });
+  const issued = claim.claimed ? (claim.payload as Partial<BankStatementAiFallbackDraft> | null) : null;
+  const aiContext: AiReadingContext = {
+    institutionName: typeof issued?.institutionName === 'string' ? issued.institutionName : null,
+    allTransactionsListed: typeof issued?.allTransactionsListed === 'boolean' ? issued.allTransactionsListed : null,
+    warningCount: Array.isArray(issued?.warnings) ? issued.warnings.length : 0,
+    rowsRead: Array.isArray(issued?.rows) ? issued.rows.length : reviewed.rows.length,
+  };
   try {
-    return await confirmClaimedBankStatementDraft(userId, documentId, document, reviewed);
+    return await confirmClaimedBankStatementDraft(userId, documentId, document, reviewed, aiContext);
   } catch (e) {
     if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
@@ -1006,6 +1205,7 @@ async function confirmClaimedBankStatementDraft(
   documentId: string,
   document: FdhStatementUpload,
   reviewed: Parameters<typeof confirmAiBankStatementFallback>[2],
+  aiContext: AiReadingContext,
 ): Promise<ProcessBankPdfResult> {
   if (!document.financial_account_id) {
     throw new BankPdfProcessingError('account_unresolved', 'account identity is ambiguous — resolve it before confirming');
@@ -1040,7 +1240,7 @@ async function confirmClaimedBankStatementDraft(
     parserVersion: `${AIE_BANK_STATEMENT_PARSER_NAME}@${AIE_BANK_STATEMENT_PARSER_VERSION}`,
   });
 
-  return persistBankPdfPipelineResult({ userId, documentId, document, pipeline, priorRanges });
+  return persistBankPdfPipelineResult({ userId, documentId, document, pipeline, priorRanges, aiContext });
 }
 
 function draftResult(document: FdhStatementUpload, draft: BankStatementAiFallbackDraft, duplicateOfDocumentId?: string): ProcessBankPdfResult {

@@ -21,9 +21,12 @@
  */
 
 import { PDFParse, PasswordException } from 'pdf-parse';
+import { DeadlineExceededError, deadlineBudget } from '@/lib/shared/withDeadline';
 
 export const AIE_PDF_MAX_PAGES = 60;
 export const AIE_PDF_MAX_EXTRACTED_TEXT_CHARS = 2_000_000;
+/** WP-08 (UPL-01): wall-clock budget for one local PDF read. */
+export const AIE_PDF_EXTRACTION_TIMEOUT_MS = 20_000;
 const MIN_CHARS_PER_PAGE = 40;
 const MIN_TOTAL_CHARS = 80;
 
@@ -33,6 +36,7 @@ export type AiePdfExtractionFailureKind =
   | 'corrupt'
   | 'insufficient_text'
   | 'page_limit_exceeded'
+  | 'timeout'
   | 'unknown_error';
 
 export interface AiePdfExtractionSuccess {
@@ -49,17 +53,23 @@ export interface AiePdfExtractionFailure {
 }
 export type AiePdfExtractionResult = AiePdfExtractionSuccess | AiePdfExtractionFailure;
 
-export async function extractPdfTextLocally(bytes: Uint8Array, password?: string): Promise<AiePdfExtractionResult> {
+export async function extractPdfTextLocally(
+  bytes: Uint8Array,
+  password?: string,
+  options: { timeoutMs?: number } = {},
+): Promise<AiePdfExtractionResult> {
   let parser: PDFParse | null = null;
+  let timedOut = false;
+  const budget = deadlineBudget(options.timeoutMs ?? AIE_PDF_EXTRACTION_TIMEOUT_MS);
   try {
     parser = new PDFParse({ data: bytes, password: password || undefined });
-    const info = await parser.getInfo();
+    const info = await budget.run(parser.getInfo(), 'PDF info');
     const pageCount = info.total ?? 0;
     if (pageCount > AIE_PDF_MAX_PAGES) {
       return { ok: false, kind: 'page_limit_exceeded', message: `${pageCount} pages exceeds the ${AIE_PDF_MAX_PAGES}-page limit.` };
     }
 
-    const result = await parser.getText();
+    const result = await budget.run(parser.getText(), 'PDF text');
     const pages = (result.pages ?? []).map((p) =>
       p.text
         .split('\n')
@@ -78,6 +88,10 @@ export async function extractPdfTextLocally(bytes: Uint8Array, password?: string
 
     return { ok: true, pages, pageCount: pages.length, concatenatedText: pages.join('\n'), sparsePageIndexes };
   } catch (err) {
+    if (err instanceof DeadlineExceededError) {
+      timedOut = true;
+      return { ok: false, kind: 'timeout', message: 'Reading this PDF took too long, so it was stopped.' };
+    }
     if (err instanceof PasswordException) {
       return password
         ? { ok: false, kind: 'wrong_password', message: 'The supplied password did not open this document.' }
@@ -85,6 +99,7 @@ export async function extractPdfTextLocally(bytes: Uint8Array, password?: string
     }
     return { ok: false, kind: 'corrupt', message: 'Could not read this PDF.' };
   } finally {
-    if (parser) await parser.destroy().catch(() => undefined);
+    if (parser && timedOut) void parser.destroy().catch(() => undefined);
+    else if (parser) await parser.destroy().catch(() => undefined);
   }
 }

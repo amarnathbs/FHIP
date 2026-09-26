@@ -69,6 +69,7 @@ import {
   DUPLICATE_UPLOAD_MESSAGE,
   type WaitingImport,
 } from '@/components/financial-data-hub/WaitingImports';
+import { StatementDetailsDrawer } from '@/components/financial-data-hub/StatementDetailsDrawer';
 
 type Phase =
   | 'form'
@@ -132,7 +133,28 @@ const FAILURE_MESSAGES: Record<string, string> = {
   malware_scan_failed: 'We could not finish checking this file for safety. Please try again.',
   malware_scan_timeout: 'We could not finish checking this file for safety in time. Please try again.',
   malware_scan_unknown: 'We could not finish checking this file for safety. Please try again.',
+  // WP-08 (UPL-01): the PDF read ran out of its time budget.
+  extraction_timeout: 'Reading this file took too long, so we stopped. It may not be a normal statement PDF. Please try again, or download the statement from your bank again and upload that copy.',
 };
+
+/** WP-08 (PO D-10): whose account the statement is for. */
+const OWNER_OPTIONS: Array<{ value: 'self' | 'spouse' | 'joint' | 'smsf'; label: string }> = [
+  { value: 'self', label: 'Mine' },
+  { value: 'spouse', label: 'My partner\u2019s' },
+  { value: 'joint', label: 'Joint (ours)' },
+  { value: 'smsf', label: 'My SMSF\u2019s' },
+];
+
+interface UnreadLines {
+  count: number;
+  reasons: Array<{ reason: string; count: number; text: string }>;
+}
+
+function unreadLinesText(u: UnreadLines | null | undefined): string | null {
+  if (!u || u.count === 0) return null;
+  const parts = u.reasons.map((r) => `${r.count} had ${r.text}`);
+  return `${u.count} line${u.count === 1 ? '' : 's'} could not be read${parts.length ? `: ${parts.join('; ')}` : ''}. They are not included. Add them by hand if they are real transactions.`;
+}
 
 interface ProcessSummary {
   transactionsCreated: number;
@@ -144,6 +166,10 @@ interface ProcessSummary {
   /** 2026-09-26: the statement whose category review the "done" link opens
    * (null when there is no single statement to point at). */
   statementId?: string | null;
+  /** WP-08 (EXP-G14): lines that could not be read, with reasons. */
+  unreadLines?: UnreadLines | null;
+  /** WP-08 (EXP-G15): an AI reading that may be missing lines. */
+  incompleteExtraction?: boolean;
 }
 
 async function readJson(res: Response) {
@@ -155,6 +181,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   const [country, setCountry] = useState<'AU' | 'IN'>('AU');
   const [currency, setCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [maskedIdentifier, setMaskedIdentifier] = useState('');
+  // WP-08 (D-10): no default -- the user says whose account this is.
+  const [ownerRole, setOwnerRole] = useState<'' | 'self' | 'spouse' | 'joint' | 'smsf'>('');
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');
   const [documentId, setDocumentId] = useState<string | null>(null);
@@ -263,6 +291,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         duplicatesSkipped: data.duplicates_skipped ?? 0,
         reconciliationStatus: data.reconciliation_status ?? null,
         statementId: documentId,
+        unreadLines: (data.unread_lines as UnreadLines | null | undefined) ?? null,
+        incompleteExtraction: Boolean(data.incomplete_extraction),
       });
       setPhase('done');
     } finally {
@@ -374,6 +404,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       duplicatesSkipped: data.duplicates_skipped ?? 0,
       reconciliationStatus: data.reconciliation_status ?? null,
       statementId: docId,
+      unreadLines: (data.unread_lines as UnreadLines | null | undefined) ?? null,
+      incompleteExtraction: Boolean(data.incomplete_extraction),
     });
     setPhase('done');
   }
@@ -387,6 +419,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     try {
       const params = new URLSearchParams({ country_code: country, currency_code: currency });
       if (maskedIdentifier) params.set('masked_identifier', maskedIdentifier);
+      if (ownerRole) params.set('owner_role', ownerRole);
       if (file.name) params.set('filename', file.name);
 
       const uploadRes = await fetch(
@@ -506,8 +539,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
             Upload a bank statement (PDF or CSV) and FHIP will extract your transactions for you to review and
-            approve. Approved transactions count toward your Monthly Surplus automatically — nothing here changes
-            your totals until you approve it.
+            approve. Approved transactions become your actual income and spending for the months they are dated in —
+            nothing here changes your totals until you approve it.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
@@ -524,6 +557,21 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
                 <option value="AU">Australia</option>
                 <option value="IN">India</option>
               </select>
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted">Whose account is this?</span>
+              <select
+                className="w-full rounded border border-gray-300 px-3 py-2"
+                value={ownerRole}
+                onChange={(e) => setOwnerRole(e.target.value as typeof ownerRole)}
+                aria-describedby="owner-role-help"
+              >
+                <option value="">Choose one</option>
+                {OWNER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <span id="owner-role-help" className="mt-1 block text-xs text-muted">
+                Joint accounts count in full to your household. An SMSF&apos;s transactions are kept with the fund, not your household spending.
+              </span>
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Account / card number (last few digits, optional)</span>
@@ -547,7 +595,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={handleUpload}
-            disabled={!file || busy || uploadEnabled !== true}
+            disabled={!file || !ownerRole || busy || uploadEnabled !== true}
             className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Upload statement
@@ -736,6 +784,16 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
                 ? `Done. Every transaction on this statement was already imported (${summary.duplicatesSkipped} duplicate${summary.duplicatesSkipped === 1 ? '' : 's'} skipped).`
                 : 'Done. This statement has been processed.'}
           </p>
+          {unreadLinesText(summary?.unreadLines) && (
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{unreadLinesText(summary?.unreadLines)}</p>
+          )}
+          {summary?.incompleteExtraction && (
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              This statement was read by AI and may be missing transactions. Before you can approve it, check it against your
+              statement: add any missing transactions by hand, or confirm on the review page that every transaction is listed.
+            </p>
+          )}
+          {summary?.statementId && !summary.alreadyImported && <StatementDetailsDrawer statementId={summary.statementId} />}
           {/* 2026-09-26: straight to THIS statement's category-totals review
               (approve totals per category; only unrecognised lines are
               listed one by one). The review page links back to Expenses. */}

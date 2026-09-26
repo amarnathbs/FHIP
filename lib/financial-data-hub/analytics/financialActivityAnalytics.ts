@@ -52,6 +52,8 @@ import type { FdhCategory, FdhMerchant } from '../domain/types';
 import type { FdhEconomicTransactionType, FdhTransactionApprovalStatus } from '../constants/enums';
 import { categoriesRepository, merchantsRepository } from '../repositories/index';
 import { fetchAllRows } from '../bank-csv/pagination';
+// WP-08: the ONE canonical duplicate / refund-link definition (no mirror).
+import { isDuplicateExcluded, REFUND_LIKE_LINK_TYPES } from '@/lib/read-models/core/spendingRules';
 import type { DateRange } from './period';
 
 // ---------------------------------------------------------------------------
@@ -65,7 +67,6 @@ export interface ActivityFilters {
   accountId?: string | null;
 }
 
-const DUPLICATE_EXCLUDED_DEDUP_STATUSES = ['duplicate_confirmed', 'user_confirmed_duplicate'] as const;
 
 interface RawTxnRow {
   id: string;
@@ -184,7 +185,7 @@ async function fetchConfirmedRefundLinks(
       .select('transaction_id_from, transaction_id_to, link_type, status')
       .eq('user_id', userId)
       .eq('status', 'confirmed')
-      .in('link_type', ['refund_original', 'reversal_original'])
+      .in('link_type', [...REFUND_LIKE_LINK_TYPES])
       .order('id', { ascending: true })
       .returns<{ transaction_id_from: string; transaction_id_to: string | null }[]>(),
   );
@@ -419,7 +420,7 @@ async function computeCategoryBreakdown(
   // allocation-vs-parent split handling).
   const countsByCurrency = new Map<string, Map<string, number>>();
   for (const t of txns) {
-    if ((DUPLICATE_EXCLUDED_DEDUP_STATUSES as readonly string[]).includes(t.dedup_status)) continue;
+    if (isDuplicateExcluded(t.dedup_status)) continue;
     const bump = (currency: string, categoryId: string | null) => {
       const key = categoryId ?? 'uncategorised';
       const perCurrency = countsByCurrency.get(currency) ?? new Map<string, number>();
@@ -532,7 +533,7 @@ export async function getMerchants(
     const perMerchantLastDate = new Map<string, string>();
 
     for (const t of group) {
-      if ((DUPLICATE_EXCLUDED_DEDUP_STATUSES as readonly string[]).includes(t.dedup_status)) continue;
+      if (isDuplicateExcluded(t.dedup_status)) continue;
       if (!t.merchant_id) continue; // spec 31 — no global merchant for personal transfer recipients (no merchant_id at all)
       const isExpense = t.allocations.length > 0
         ? t.allocations.some((a) => a.economic_transaction_type === 'expense')

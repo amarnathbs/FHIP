@@ -14,6 +14,7 @@
 
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { recordDocumentAuditEvent } from './auditLog';
+import { recordAccountOwner, type AccountOwnerWrite } from './accountOwner';
 import { financialAccountsRepository, institutionsRepository, reviewItemsRepository, statementUploadsRepository } from '../repositories';
 import { loadExistingAccountsForInstitutionCurrency } from '../bank-csv/repository';
 import { normaliseMaskedIdentifier, resolveAccountIdentity } from '../bank-csv/accountIdentity';
@@ -23,6 +24,8 @@ import type { FdhStatementUpload } from '../domain/types';
 export interface BankCsvUploadOutcome {
   document: FdhStatementUpload;
   accountResolution: 'reused' | 'created' | 'ambiguous';
+  /** WP-08 (D-10): whether the owner the user chose was stored. */
+  ownerRole: AccountOwnerWrite;
 }
 
 /**
@@ -111,6 +114,8 @@ export async function uploadBankCsv(
     }
   }
 
+  const ownerRole = financialAccountId ? await recordAccountOwner(userId, financialAccountId, metadata.owner_role) : 'not_provided';
+
   const { data: finalDoc } = await statementUploadsRepository.update(userId, completed.id, {
     financial_account_id: financialAccountId,
     statement_period_start: metadata.statement_period_start ?? null,
@@ -127,5 +132,5 @@ export async function uploadBankCsv(
     metadata: { account_resolution: accountResolution },
   });
 
-  return { document: (finalDoc ?? completed) as FdhStatementUpload, accountResolution };
+  return { document: (finalDoc ?? completed) as FdhStatementUpload, accountResolution, ownerRole };
 }

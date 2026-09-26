@@ -30,7 +30,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ transac
     });
   } catch (e) {
     if (e instanceof TransactionSplitError) {
-      return bad(e.message, e.code === 'not_found' ? 404 : 422);
+      // WP-08: an approved transaction is 409 (reopen its statement first).
+      return bad(e.message, e.code === 'not_found' ? 404 : e.code === 'approved' ? 409 : 422);
     }
     return bad('We could not save this split.', 500);
   }

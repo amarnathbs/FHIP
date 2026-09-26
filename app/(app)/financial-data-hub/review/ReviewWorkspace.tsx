@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatMoney, formatMoneyCode } from '@/lib/engines/money';
 import { ResourceEmptyState, ResourceErrorState, ResourceLoadingSkeleton } from '@/components/resources/admin/ResourceStates';
+// WP-08: rows removed as a duplicate count nowhere and are never approved --
+// the canonical rule, not a copy (spendingRules is pure and client-safe).
+import { isDuplicateExcluded } from '@/lib/read-models/core/spendingRules';
+import { SplitTransactionEditor } from './SplitTransactionEditor';
 
 // Mirrors lib/financial-data-hub/constants/enums.ts FDH_ECONOMIC_TRANSACTION_TYPES
 // (kept as a plain literal list here rather than importing the server-only
@@ -328,8 +332,14 @@ export function ReviewWorkspace({
               </dl>
             </div>
 
+            {isDuplicateExcluded(txn.dedup_status) && (
+              <p className="rounded-compact bg-trust/5 px-3 py-2 text-sm text-ink">
+                This line was removed as a duplicate of another transaction. It is not counted and does not need approval.
+              </p>
+            )}
+
             {/* Approve */}
-            {txn.approval_status !== 'approved' && (
+            {txn.approval_status !== 'approved' && !isDuplicateExcluded(txn.dedup_status) && (
               <div className="rounded-compact border border-line bg-white p-4">
                 <h3 className="text-sm font-semibold text-ink">Approve this transaction</h3>
                 <p className="mt-1 text-xs text-muted">Once approved, it counts toward your income/expense totals.</p>
@@ -344,7 +354,14 @@ export function ReviewWorkspace({
               </div>
             )}
 
-            {/* Correct classification */}
+            {/* Correct classification. WP-08 (EXP-G12): an approved line is
+                changed only after its statement is reopened (the server
+                refuses with 409 either way). */}
+            {txn.approval_status === 'approved' ? (
+              <p className="rounded-compact border border-line bg-white p-4 text-sm text-muted">
+                This transaction is approved. To change its category, type or split, reopen its statement first.
+              </p>
+            ) : (
             <div className="rounded-compact border border-line bg-white p-4">
               <h3 className="text-sm font-semibold text-ink">Correct classification</h3>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -394,6 +411,18 @@ export function ReviewWorkspace({
                 </button>
               </div>
             </div>
+            )}
+
+            {txn.approval_status !== 'approved' && !isDuplicateExcluded(txn.dedup_status) && (
+              <SplitTransactionEditor
+                transactionId={txn.id}
+                amount={Number(txn.amount_original)}
+                currency={txn.currency_original}
+                categories={categories}
+                disabled={actionBusy}
+                onSave={(label, action) => { void runAction(label, action); }}
+              />
+            )}
 
             {/* Transfer / settlement / refund links */}
             {links.length > 0 && (

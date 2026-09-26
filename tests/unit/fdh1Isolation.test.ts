@@ -539,9 +539,14 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // and its type, from `constants/enums.ts`) so the read model's
       // type -> bucket map is compile-time exhaustive and can never drift
       // from the FDH taxonomy. It imports no FDH service, repository or
-      // table name, and FDH itself imports nothing from lib/read-models --
-      // the direction of dependency is downstream -> FDH vocabulary only,
-      // the same "reuse the vocabulary, do not restate it" precedent as the
+      // table name. Since WP-08, FDH imports exactly one thing back from
+      // lib/read-models: this file's pure spending/refund/duplicate rules
+      // (approvalService, categoryReview, categoryReviewService, analytics,
+      // approvedSummary, classification, ReviewWorkspace), so the Dashboard,
+      // Activity and Category review apply ONE rule (PO D-01). The shared
+      // module holds vocabulary and pure functions only -- no service,
+      // repository or table name -- the same "reuse the vocabulary, do not
+      // restate it" precedent as the
       // AIE payslip adapter entries above. The ONLY file under
       // lib/read-models that names FDH; every other read-model file is kept
       // free of the literal so this stays a single entry.
