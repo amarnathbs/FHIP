@@ -96,6 +96,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       transactions_created: result.transactionsCreated,
       duplicates_skipped: result.duplicatesSkipped,
       duplicate_candidates: result.duplicateCandidates,
+      // WP-08 (EXP-G14/EXP-G15).
+      unread_lines: result.unreadLines ?? null,
+      incomplete_extraction: result.incompleteExtraction ?? false,
     });
   } catch (e) {
     if (e instanceof BankPdfProcessingError) {

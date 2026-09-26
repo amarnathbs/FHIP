@@ -33,7 +33,8 @@
  */
 
 import { PDFParse, PasswordException } from 'pdf-parse';
-import { PDF_MAX_PAGES, PDF_MAX_EXTRACTED_TEXT_CHARS } from './constants';
+import { DeadlineExceededError, deadlineBudget } from '@/lib/shared/withDeadline';
+import { PDF_EXTRACTION_TIMEOUT_MS, PDF_MAX_PAGES, PDF_MAX_EXTRACTED_TEXT_CHARS } from './constants';
 
 export type PdfTextExtractionFailureKind =
   | 'password_required'
@@ -41,6 +42,7 @@ export type PdfTextExtractionFailureKind =
   | 'corrupt'
   | 'insufficient_text'
   | 'page_limit_exceeded'
+  | 'timeout'
   | 'unknown_error';
 
 export interface PdfTextExtractionSuccess {
@@ -77,11 +79,18 @@ export type PdfTextExtractionResult = PdfTextExtractionSuccess | PdfTextExtracti
 const MIN_CHARS_PER_PAGE = 40;
 const MIN_TOTAL_CHARS = 80;
 
-export async function extractPdfPages(bytes: Uint8Array, password?: string): Promise<PdfTextExtractionResult> {
+export async function extractPdfPages(
+  bytes: Uint8Array,
+  password?: string,
+  options: { timeoutMs?: number } = {},
+): Promise<PdfTextExtractionResult> {
   let parser: PDFParse | null = null;
+  let timedOut = false;
+  // WP-08 (UPL-01): the whole read (info + text) shares one wall-clock budget.
+  const budget = deadlineBudget(options.timeoutMs ?? PDF_EXTRACTION_TIMEOUT_MS);
   try {
     parser = new PDFParse({ data: bytes, password: password || undefined });
-    const info = await parser.getInfo();
+    const info = await budget.run(parser.getInfo(), 'PDF info');
     const pageCount = info.total ?? 0;
     if (pageCount > PDF_MAX_PAGES) {
       return {
@@ -91,7 +100,7 @@ export async function extractPdfPages(bytes: Uint8Array, password?: string): Pro
       };
     }
 
-    const result = await parser.getText();
+    const result = await budget.run(parser.getText(), 'PDF text');
     const pages = (result.pages ?? []).map((p) =>
       p.text
         .split('\n')
@@ -122,6 +131,14 @@ export async function extractPdfPages(bytes: Uint8Array, password?: string): Pro
 
     return { ok: true, pages, pageCount: pages.length, sparsePageIndexes };
   } catch (err) {
+    if (err instanceof DeadlineExceededError) {
+      timedOut = true;
+      return {
+        ok: false,
+        kind: 'timeout',
+        error: 'Reading this PDF took too long, so we stopped. It may not be a normal statement PDF. Please try again, or export the statement again from your bank.',
+      };
+    }
     if (err instanceof PasswordException) {
       // Same disambiguation rule Investment Intelligence R2 already proved
       // out: whether this means "a password is required" or "the supplied
@@ -140,6 +157,8 @@ export async function extractPdfPages(bytes: Uint8Array, password?: string): Pro
     // with the correct password does not leak parser state (spec 25: the
     // decrypt attempt and its in-memory artefacts are disposed regardless of
     // outcome).
-    if (parser) await parser.destroy().catch(() => undefined);
+    // A parser abandoned by the deadline is destroyed without waiting on it.
+    if (parser && timedOut) void parser.destroy().catch(() => undefined);
+    else if (parser) await parser.destroy().catch(() => undefined);
   }
 }

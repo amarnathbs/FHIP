@@ -58,6 +58,8 @@
  */
 
 import type { FdhEconomicTransactionType, FdhTransactionDedupStatus } from '../constants/enums';
+// WP-08: the ONE canonical duplicate-exclusion rule (no mirrored list).
+import { isDuplicateExcluded } from '@/lib/read-models/core/spendingRules';
 import { fromMinorUnits, toMinorUnits } from './money';
 
 export interface ApprovedSummaryAllocation {
@@ -114,11 +116,6 @@ export class FdhApprovedSummaryError extends Error {
   }
 }
 
-const DUPLICATE_EXCLUDED_STATUSES: ReadonlyArray<FdhTransactionDedupStatus> = [
-  'duplicate_confirmed',
-  'user_confirmed_duplicate',
-];
-
 function bucketField(type: FdhEconomicTransactionType): keyof ApprovedFinancialSummaryTotals | null {
   switch (type) {
     case 'income': return 'income_total';
@@ -174,7 +171,7 @@ export function computeApprovedFinancialSummary(
   };
 
   for (const txn of transactions) {
-    if (DUPLICATE_EXCLUDED_STATUSES.includes(txn.dedup_status)) {
+    if (isDuplicateExcluded(txn.dedup_status)) {
       duplicateExcluded += 1;
       continue; // spec 59 — contributes nothing, but the row is not deleted.
     }
@@ -212,14 +209,14 @@ export function computeApprovedFinancialSummary(
   for (const [refundId, originalId] of refundToOriginal) {
     const refundTxn = byId.get(refundId);
     const originalTxn = byId.get(originalId);
-    if (!refundTxn || DUPLICATE_EXCLUDED_STATUSES.includes(refundTxn.dedup_status)) continue;
+    if (!refundTxn || isDuplicateExcluded(refundTxn.dedup_status)) continue;
     if (!originalTxn || originalTxn.economic_transaction_type !== 'expense') continue;
     // If the ORIGINAL purchase is itself a confirmed duplicate (already
     // contributing nothing to expense_total), the refund must not net
     // against a contribution that was never counted in the first place —
     // that would under-count expense_total by the refund amount for no
     // corresponding counted expense.
-    if (DUPLICATE_EXCLUDED_STATUSES.includes(originalTxn.dedup_status)) continue;
+    if (isDuplicateExcluded(originalTxn.dedup_status)) continue;
     if (refundTxn.economic_transaction_type !== 'refund') continue;
     const minor = toMinorUnits(refundTxn.amount_original, refundTxn.currency_original);
     addToBucket('expense_total', -minor);

@@ -147,6 +147,9 @@ export function errorCodeForPdfExtractionFailure(kind: string): FdhErrorCode {
       return 'ocr_required';
     case 'page_limit_exceeded':
       return 'page_limit_exceeded';
+    // WP-08 (UPL-01): a PDF read that ran out of its time budget.
+    case 'timeout':
+      return 'extraction_timeout';
     default:
       return 'internal_error';
   }

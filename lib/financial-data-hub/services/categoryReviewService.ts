@@ -20,16 +20,20 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { isDuplicateExcluded, REFUND_LIKE_LINK_TYPES } from '@/lib/read-models/core/spendingRules';
 import { fetchAllRows, type RangeableQuery } from '../bank-csv/pagination';
 import {
+  ACKNOWLEDGEABLE_STATEMENT_TITLE_CODES,
   buildCategoryReview,
+  buildStatementNotes,
   derivePayeeKey,
-  DUPLICATE_EXCLUDED_DEDUP_STATUSES,
   linkDecisionForChosenType,
   pendingIdsForGroup,
   type CategoryReview,
   type CategoryReviewBlockers,
   type CategoryReviewTransaction,
+  type StatementNote,
+  type StatementReviewItemRow,
 } from '../domain/categoryReview';
 import { toMinorUnits } from '../domain/money';
 import { categoriesRepository, subcategoriesRepository, transactionsRepository, userClassificationRulesRepository } from '../repositories';
@@ -53,6 +57,8 @@ export class CategoryReviewError extends Error {
 }
 
 export interface StatementCategoryReview extends CategoryReview {
+  /** Open statement-level checks and notes, in words (EXP-G15 / EXP-G17). */
+  notes: StatementNote[];
   statement: {
     id: string;
     period_start: string | null;
@@ -157,39 +163,88 @@ async function loadReviewInputs(userId: string, statementId: string): Promise<{
   }
   const blockingReviewItemTxnIds = new Set(reviewItems.map((r) => r.transaction_id).filter((id): id is string => Boolean(id && ids.has(id))));
 
-  // A split whose allocations do not add up to the parent blocks approval.
+  // A split whose allocations do not add up to the parent blocks approval;
+  // one that does counts through its parts (EXP-G5).
+  type AllocRow = { transaction_id: string; allocation_sequence: number; economic_transaction_type: FdhEconomicTransactionType; amount: number | string; currency_code: string };
   const invalidSplitTxnIds = new Set<string>();
   const allocSum = new Map<string, number>();
+  const partsByTxn = new Map<string, AllocRow[]>();
   for (const part of chunk([...ids], 100)) {
-    const { data, error } = await supabase
-      .from('fdh_transaction_allocations')
-      .select('transaction_id, amount, currency_code')
-      .eq('user_id', userId)
-      .in('transaction_id', part);
-    if (error) throw new CategoryReviewError('invalid_state', 'We could not load this statement.');
-    for (const a of (data ?? []) as Array<{ transaction_id: string; amount: number | string; currency_code: string }>) {
+    let rows: AllocRow[];
+    try {
+      rows = await fetchAllRows<AllocRow>(() =>
+        supabase
+          .from('fdh_transaction_allocations')
+          .select('transaction_id, allocation_sequence, economic_transaction_type, amount, currency_code')
+          .eq('user_id', userId)
+          .in('transaction_id', part)
+          .order('transaction_id', { ascending: true })
+          .order('allocation_sequence', { ascending: true }) as unknown as RangeableQuery<AllocRow>,
+      );
+    } catch {
+      throw new CategoryReviewError('invalid_state', 'We could not load this statement.');
+    }
+    for (const a of rows) {
       allocSum.set(a.transaction_id, (allocSum.get(a.transaction_id) ?? 0) + toMinorUnits(Number(a.amount), a.currency_code));
+      partsByTxn.set(a.transaction_id, [...(partsByTxn.get(a.transaction_id) ?? []), a]);
     }
   }
+  const splitPartsByTxn = new Map<string, AllocRow[]>();
   for (const t of transactions) {
     const sum = allocSum.get(t.id);
-    if (sum !== undefined && sum !== toMinorUnits(Number(t.amount_original), t.currency_original)) invalidSplitTxnIds.add(t.id);
+    if (sum === undefined) continue;
+    if (sum !== toMinorUnits(Number(t.amount_original), t.currency_original)) invalidSplitTxnIds.add(t.id);
+    else splitPartsByTxn.set(t.id, partsByTxn.get(t.id) ?? []);
   }
 
-  return { transactions, blockers: { pendingLinkTypesByTxn, pendingDuplicateTxnIds, blockingReviewItemTxnIds, invalidSplitTxnIds } };
+  // D-01: only a refund with a CONFIRMED link to its purchase reduces spending.
+  const confirmedRefundLinks = await fetchAllRows<{ id: string; transaction_id_from: string; transaction_id_to: string | null }>(() =>
+    supabase
+      .from('fdh_transaction_links')
+      .select('id, transaction_id_from, transaction_id_to')
+      .eq('user_id', userId)
+      .eq('status', 'confirmed')
+      .in('link_type', [...REFUND_LIKE_LINK_TYPES])
+      .order('id', { ascending: true }) as unknown as RangeableQuery<{ id: string; transaction_id_from: string; transaction_id_to: string | null }>,
+  );
+  const confirmedRefundTxnIds = new Set(
+    confirmedRefundLinks.filter((l) => l.transaction_id_to && ids.has(l.transaction_id_from)).map((l) => l.transaction_id_from),
+  );
+
+  return {
+    transactions,
+    blockers: { pendingLinkTypesByTxn, pendingDuplicateTxnIds, blockingReviewItemTxnIds, invalidSplitTxnIds, confirmedRefundTxnIds, splitPartsByTxn },
+  };
+}
+
+/** Open review items about the whole statement (not one line). */
+async function loadStatementReviewItems(userId: string, statementId: string): Promise<StatementReviewItemRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('fdh_review_items')
+    .select('id, severity, title_code, context_json')
+    .eq('user_id', userId)
+    .eq('statement_upload_id', statementId)
+    .is('transaction_id', null)
+    .in('status', ['open', 'in_progress'])
+    .order('id', { ascending: true });
+  if (error) throw new CategoryReviewError('invalid_state', 'We could not load this statement.');
+  return (data ?? []) as StatementReviewItemRow[];
 }
 
 /** The category-totals review for one of the user's own statements. */
 export async function getStatementCategoryReview(userId: string, statementId: string): Promise<StatementCategoryReview> {
   const statement = await loadStatement(userId, statementId);
-  const [{ transactions, blockers }, categoriesResult] = await Promise.all([
+  const [{ transactions, blockers }, categoriesResult, statementItems] = await Promise.all([
     loadReviewInputs(userId, statementId),
     categoriesRepository.listActiveAll(),
+    loadStatementReviewItems(userId, statementId),
   ]);
   if (categoriesResult.error) throw new CategoryReviewError('invalid_state', 'We could not load the category list.');
   const review = buildCategoryReview(transactions, categoriesResult.data ?? [], blockers);
   return {
     ...review,
+    notes: buildStatementNotes(statementItems),
     statement: {
       id: statement.id,
       period_start: statement.statement_period_start,
@@ -208,21 +263,30 @@ export interface GroupApprovalResult {
   failed: number;
   results: BulkActionItemResult[];
   statement_finalised: boolean;
+  /** Why the statement was not finalised although every line is approved
+   * (an open statement-level check), in words; null otherwise. */
+  statement_not_finalised_reason?: string | null;
 }
 
 /** Once every line on a statement is approved, completes the statement
  * itself through the existing `approveStatement` (lifecycle, Approved
  * Financial Summary, raw-file purge). Best-effort: the transactions are
  * already approved and counted whether or not this succeeds. */
-async function finaliseStatementIfComplete(userId: string, statementId: string): Promise<boolean> {
+async function finaliseStatementIfComplete(userId: string, statementId: string): Promise<{ finalised: boolean; reason: string | null }> {
   const { transactions } = await loadReviewInputs(userId, statementId);
-  const counted = transactions.filter((t) => !DUPLICATE_EXCLUDED_DEDUP_STATUSES.includes(t.dedup_status));
-  if (counted.length === 0 || counted.some((t) => t.approval_status !== 'approved')) return false;
+  const counted = transactions.filter((t) => !isDuplicateExcluded(t.dedup_status));
+  if (counted.length === 0 || counted.some((t) => t.approval_status !== 'approved')) return { finalised: false, reason: null };
   try {
     await approveStatement(userId, statementId);
-    return true;
-  } catch {
-    return false;
+    return { finalised: true, reason: null };
+  } catch (e) {
+    // WP-08 (EXP-G4): no longer swallowed silently -- the lines are approved
+    // and counted, and the user is told what still holds the statement open.
+    const blocking = buildStatementNotes(await loadStatementReviewItems(userId, statementId)).find((n) => n.severity === 'blocking');
+    return {
+      finalised: false,
+      reason: blocking?.text ?? (e instanceof Error ? 'Every line is approved, but the statement itself could not be completed yet.' : null),
+    };
   }
 }
 
@@ -242,13 +306,14 @@ export async function approveCategoryGroup(userId: string, statementId: string, 
   }
 
   const result = await bulkApproveTransactions(userId, ids);
-  const statementFinalised = result.succeeded > 0 ? await finaliseStatementIfComplete(userId, statementId) : false;
+  const finalise = result.succeeded > 0 ? await finaliseStatementIfComplete(userId, statementId) : { finalised: false, reason: null };
   return {
     outcome: result.failed === 0 ? 'approved' : result.succeeded === 0 ? 'blocked' : 'partly_approved',
     approved: result.succeeded,
     failed: result.failed,
     results: result.results,
-    statement_finalised: statementFinalised,
+    statement_finalised: finalise.finalised,
+    statement_not_finalised_reason: finalise.reason,
   };
 }
 
@@ -278,7 +343,12 @@ export async function approveAllOnStatement(userId: string, statementId: string)
     await approveStatement(userId, statementId);
   } catch (e) {
     if (e instanceof ApprovalError) {
-      throw new CategoryReviewError(e.code === 'not_found' ? 'not_found' : 'invalid_state', 'Some transactions could not be approved yet. Refresh the page to see which ones need a decision.', e.details);
+      const blocking = review.notes.find((n) => n.severity === 'blocking');
+      throw new CategoryReviewError(
+        e.code === 'not_found' ? 'not_found' : 'invalid_state',
+        blocking ? blocking.text : 'Some transactions could not be approved yet. Refresh the page to see which ones need a decision.',
+        e.details,
+      );
     }
     throw e;
   }
@@ -414,4 +484,38 @@ export async function setTransactionCategory(
     payee_remembered: payeeRemembered,
     payee_key: payeeKey,
   };
+}
+
+/**
+ * EXP-G15: the user settles a statement-level check they are allowed to
+ * settle themselves -- today only "this AI reading may be incomplete", after
+ * checking the statement. Every other statement-level item (a failed
+ * reconciliation, an ambiguous account) is NOT acknowledgeable here.
+ */
+export async function acknowledgeStatementReviewItem(userId: string, statementId: string, itemId: string): Promise<{ acknowledged: boolean }> {
+  const supabase = await createClient();
+  const { data: item, error } = await supabase
+    .from('fdh_review_items')
+    .select('id, status, title_code, statement_upload_id, transaction_id')
+    .eq('id', itemId)
+    .eq('user_id', userId)
+    .maybeSingle<{ id: string; status: string; title_code: string; statement_upload_id: string | null; transaction_id: string | null }>();
+  if (error) throw new CategoryReviewError('invalid_state', 'We could not load this check.');
+  if (!item || item.statement_upload_id !== statementId || item.transaction_id !== null) {
+    throw new CategoryReviewError('not_found', 'This check was not found on this statement.');
+  }
+  if (!ACKNOWLEDGEABLE_STATEMENT_TITLE_CODES.includes(item.title_code)) {
+    throw new CategoryReviewError('invalid_input', 'This check cannot be dismissed. It is settled by fixing the statement itself.');
+  }
+  if (!['open', 'in_progress'].includes(item.status)) return { acknowledged: false };
+  const { data: updated, error: updateError } = await supabase
+    .from('fdh_review_items')
+    .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: userId, resolution_code: 'user_confirmed_complete' })
+    .eq('id', itemId)
+    .eq('user_id', userId)
+    .select('id');
+  if (updateError || !updated || (updated as unknown[]).length !== 1) {
+    throw new CategoryReviewError('invalid_state', 'We could not save your confirmation. Please try again.');
+  }
+  return { acknowledged: true };
 }

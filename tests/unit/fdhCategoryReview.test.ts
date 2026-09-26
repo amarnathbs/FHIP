@@ -15,14 +15,12 @@ import {
   looksLikeOwnAccountTransfer,
   pendingIdsForGroup,
   surplusEffect,
-  SURPLUS_INCOME_TYPES,
-  SURPLUS_REFUND_TYPE,
-  SURPLUS_SPENDING_TYPES,
   type CategoryReviewBlockers,
   type CategoryReviewTransaction,
 } from '@/lib/financial-data-hub/domain/categoryReview';
 import { matchesRule } from '@/lib/financial-data-hub/classification/ruleMatching';
-import { BANK_EXPENSE_TRANSACTION_TYPES, BANK_INCOME_TRANSACTION_TYPES, BANK_REFUND_TRANSACTION_TYPE } from '@/lib/services/dashboardData';
+import { FDH_ECONOMIC_TRANSACTION_TYPES } from '@/lib/financial-data-hub/constants/enums';
+import { ECONOMIC_TYPE_BUCKET } from '@/lib/read-models/core/spendingRules';
 
 const CATS = [
   { id: 'cat-food', category_key: 'food', display_name: 'Food & Dining', economic_type: 'expense' },
@@ -61,15 +59,22 @@ const NO_BLOCKERS: CategoryReviewBlockers = {
 };
 
 describe('shared definitions', () => {
-  it('Monthly Surplus mapping is exactly the dashboard\'s own constants', () => {
-    expect([...SURPLUS_SPENDING_TYPES].sort()).toEqual([...BANK_EXPENSE_TRANSACTION_TYPES].sort());
-    expect([...SURPLUS_INCOME_TYPES].sort()).toEqual([...BANK_INCOME_TRANSACTION_TYPES].sort());
-    expect(SURPLUS_REFUND_TYPE).toBe(BANK_REFUND_TRANSACTION_TYPE);
-    expect(surplusEffect('transfer')).toBe('not_counted');
+  // WP-08: the review no longer mirrors the Dashboard's constants; it uses
+  // the ONE canonical bucket map (lib/read-models/core/spendingRules.ts), and
+  // the PO D-01 refund rule (a refund reduces spending only when linked).
+  it('every economic type\'s effect comes from the canonical bucket map (no mirrored constants)', () => {
+    for (const type of FDH_ECONOMIC_TRANSACTION_TYPES) {
+      const bucket = ECONOMIC_TYPE_BUCKET[type];
+      const expected = bucket === 'income' ? 'income' : bucket === 'spending' ? 'spending' : bucket === 'refund' ? 'refund_unlinked' : 'not_counted';
+      expect(surplusEffect(type), type).toBe(expected);
+    }
     expect(surplusEffect('cash_withdrawal')).toBe('not_counted');
-    expect(surplusEffect('debt_principal')).toBe('not_counted');
     expect(surplusEffect('fee')).toBe('spending');
-    expect(surplusEffect('refund')).toBe('reduces_spending');
+  });
+
+  it('D-01: a refund reduces spending ONLY with a confirmed link to its purchase', () => {
+    expect(surplusEffect('refund')).toBe('refund_unlinked');
+    expect(surplusEffect('refund', { refundLinked: true })).toBe('reduces_spending');
   });
 
   it('uncategorised means the economic type is unknown, even when a category id is set', () => {
@@ -135,12 +140,23 @@ describe('buildCategoryReview', () => {
     const r = buildCategoryReview(rows, CATS, NO_BLOCKERS);
     const food = r.groups.find((g) => g.label === 'Food & Dining' && g.currency === 'AUD')!;
     expect(food).toMatchObject({ count: 3, total: 123.75, pending_count: 2, pending_total: 0.3, approved_count: 1, status: 'partly_approved', counts_toward: 'spending' });
-    expect(r.groups.map((g) => g.counts_toward)).toEqual(['income', 'spending', 'spending', 'reduces_spending', 'not_counted']);
+    // WP-08 (D-01): the refund has no confirmed link, so it is shown but NOT
+    // netted -- before, it silently took $20 off spending (-19.7).
+    expect(r.groups.map((g) => g.counts_toward)).toEqual(['income', 'spending', 'spending', 'refund_unlinked', 'not_counted']);
     expect(r.totals).toEqual([
-      { currency: 'AUD', waiting_income: 1850, waiting_spending: -19.7, approved_income: 0, approved_spending: 123.45 },
+      { currency: 'AUD', waiting_income: 1850, waiting_spending: 0.3, approved_income: 0, approved_spending: 123.45 },
       { currency: 'INR', waiting_income: 0, waiting_spending: 7, approved_income: 0, approved_spending: 0 },
     ]);
     expect(r.counts).toMatchObject({ transactions: 7, approved: 1, waiting_for_approval: 6, needs_decision: 0, ready_to_approve: 6 });
+  });
+
+  it('D-01: the same refund WITH a confirmed link is netted, in its own group', () => {
+    const food = t({ amount_original: 0.3 });
+    const refund = t({ credit_debit: 'credit', economic_transaction_type: 'refund', category_id: 'cat-refund', amount_original: 20 });
+    const r = buildCategoryReview([food, refund], CATS, { ...NO_BLOCKERS, confirmedRefundTxnIds: new Set([refund.id]) });
+    expect(r.groups.find((g) => g.economic_type === 'refund')).toMatchObject({ counts_toward: 'reduces_spending' });
+    expect(r.groups.find((g) => g.economic_type === 'refund')!.group_key.endsWith('|refund-linked')).toBe(true);
+    expect(r.totals[0]).toMatchObject({ currency: 'AUD', waiting_spending: -19.7 });
   });
 
   it('lists every line that needs a person separately and keeps it out of every group', () => {

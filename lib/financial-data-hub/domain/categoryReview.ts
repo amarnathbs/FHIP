@@ -36,24 +36,31 @@
  * instead and is in NO group — so approving a group can never approve a line
  * the user has not had a chance to categorise.
  *
- * WHAT COUNTS TOWARD MONTHLY SURPLUS. `SURPLUS_*` below mirror
- * `lib/services/dashboardData.ts`'s BANK_*_TRANSACTION_TYPES exactly (pinned
- * by `tests/unit/fdhCategoryReview.test.ts`), so the review never tells the
- * user a group "counts toward your spending" when the dashboard would ignore
- * it, or vice versa.
+ * WHAT COUNTS (WP-08, Approved Upload -> Canonical programme). This module
+ * no longer keeps its own copy of "what is spending". Every rule comes from
+ * the ONE canonical definition the read models use,
+ * `lib/read-models/core/spendingRules.ts`: the type -> bucket map, the
+ * duplicate exclusion, and the refund rule (PO D-01 -- a refund reduces
+ * spending ONLY with a CONFIRMED refund_original / reversal_original link;
+ * any other refund is shown, never netted). Before, this file mirrored the
+ * Dashboard's current-month constants and netted every refund, so the review
+ * and Activity could show different spending for the same approved lines.
  */
 
 import type { FdhEconomicTransactionType } from '../constants/enums';
+import {
+  bucketForType,
+  isDuplicateExcluded,
+  NON_SPENDING_LABELS,
+  REFUND_LIKE_LINK_TYPES,
+  type NonSpendingBucket,
+} from '@/lib/read-models/core/spendingRules';
 import { CLASSIFICATION_CONFIDENCE_SCORE } from '../classification/thresholds';
 import { fromMinorUnits, toMinorUnits } from './money';
 
 // ---------------------------------------------------------------------------
 // Shared definitions
 // ---------------------------------------------------------------------------
-
-export const SURPLUS_INCOME_TYPES: readonly FdhEconomicTransactionType[] = ['income'];
-export const SURPLUS_SPENDING_TYPES: readonly FdhEconomicTransactionType[] = ['expense', 'fee', 'debt_interest', 'tax'];
-export const SURPLUS_REFUND_TYPE: FdhEconomicTransactionType = 'refund';
 
 /** At or below this score an automatic classification is "low confidence"
  * (FDH-6's own boundary — see header). */
@@ -62,16 +69,30 @@ export const LOW_CONFIDENCE_CEILING = CLASSIFICATION_CONFIDENCE_SCORE.LOW;
 /** Classification methods that record a person's own decision. */
 export const USER_DECIDED_METHODS: readonly string[] = ['user_manual', 'user_rule'];
 
-/** Rows R7/FDH-7 already treat as removed duplicates — never counted. */
-export const DUPLICATE_EXCLUDED_DEDUP_STATUSES: readonly string[] = ['duplicate_confirmed', 'user_confirmed_duplicate'];
+/**
+ * What an approved line of this type does to the household's figures, from
+ * the canonical bucket map (an ordinary bank account -- card and loan
+ * facilities are reviewed on their own statements). `refund_unlinked` is a
+ * refund with no confirmed link to the purchase it refunds: shown, never
+ * netted, never income (D-01).
+ */
+export type SurplusEffect = 'income' | 'spending' | 'reduces_spending' | 'refund_unlinked' | 'not_counted' | 'split';
 
-export type SurplusEffect = 'income' | 'spending' | 'reduces_spending' | 'not_counted';
-
-export function surplusEffect(type: FdhEconomicTransactionType): SurplusEffect {
-  if (SURPLUS_INCOME_TYPES.includes(type)) return 'income';
-  if (SURPLUS_SPENDING_TYPES.includes(type)) return 'spending';
-  if (type === SURPLUS_REFUND_TYPE) return 'reduces_spending';
+export function surplusEffect(type: FdhEconomicTransactionType, opts: { refundLinked?: boolean } = {}): SurplusEffect {
+  const bucket = bucketForType(type, false);
+  if (bucket === 'income') return 'income';
+  if (bucket === 'spending') return 'spending';
+  if (bucket === 'refund') return opts.refundLinked ? 'reduces_spending' : 'refund_unlinked';
   return 'not_counted';
+}
+
+/** The visible reason a non-spending group is not counted (e.g. D-03 "Cash —
+ * spending unknown"), from the canonical labels. Null for counted groups. */
+export function notCountedReason(type: FdhEconomicTransactionType): string | null {
+  const bucket = bucketForType(type, false);
+  if (bucket === 'unknown') return 'Not counted until it has a category.';
+  if (bucket in NON_SPENDING_LABELS) return NON_SPENDING_LABELS[bucket as NonSpendingBucket];
+  return null;
 }
 
 export interface ClassificationFacts {
@@ -193,10 +214,15 @@ export interface CategoryReviewBlockers {
   pendingDuplicateTxnIds: ReadonlySet<string>;
   blockingReviewItemTxnIds: ReadonlySet<string>;
   invalidSplitTxnIds: ReadonlySet<string>;
+  /** Refund lines with a CONFIRMED refund_original / reversal_original link
+   * (D-01). Only these reduce spending. Absent = none. */
+  confirmedRefundTxnIds?: ReadonlySet<string>;
+  /** Lines split into allocations that add up to the line exactly (EXP-G5):
+   * they count through their parts, never the parent's own type. */
+  splitPartsByTxn?: ReadonlyMap<string, ReadonlyArray<{ economic_transaction_type: FdhEconomicTransactionType; amount: number | string }>>;
 }
 
 export const TRANSFER_LIKE_LINK_TYPES: readonly string[] = ['internal_transfer', 'credit_card_settlement', 'investment_funding', 'loan_payment'];
-export const REFUND_LIKE_LINK_TYPES: readonly string[] = ['refund_original', 'reversal_original'];
 
 export type NeedsDecisionReason =
   | 'possible_duplicate'
@@ -249,6 +275,8 @@ export interface CategoryGroup {
   direction: 'in' | 'out';
   currency: string;
   counts_toward: SurplusEffect;
+  /** Why a non-counted group is not counted, in words (null when counted). */
+  not_counted_reason: string | null;
   count: number;
   total: number;
   pending_count: number;
@@ -260,6 +288,17 @@ export interface CategoryGroup {
 }
 
 export interface CategoryReviewCurrencyTotals {
+  currency: string;
+  waiting_income: number;
+  waiting_spending: number;
+  approved_income: number;
+  approved_spending: number;
+}
+
+/** Approved and waiting figures per calendar month of the transaction date
+ * (EXP-G3 copy: the review says which month a figure lands in). */
+export interface CategoryReviewMonthTotals {
+  month: string;
   currency: string;
   waiting_income: number;
   waiting_spending: number;
@@ -281,6 +320,7 @@ export interface CategoryReviewCounts {
 export interface CategoryReview {
   counts: CategoryReviewCounts;
   totals: CategoryReviewCurrencyTotals[];
+  months: CategoryReviewMonthTotals[];
   groups: CategoryGroup[];
   needs_decision: NeedsDecisionItem[];
 }
@@ -300,18 +340,25 @@ const TYPE_LABEL: Record<string, string> = {
   cash_withdrawal: 'Cash withdrawals',
 };
 
-export function groupKeyFor(t: Pick<CategoryReviewTransaction, 'category_id' | 'economic_transaction_type' | 'credit_debit' | 'currency_original'>): string {
+export function groupKeyFor(
+  t: Pick<CategoryReviewTransaction, 'category_id' | 'economic_transaction_type' | 'credit_debit' | 'currency_original'>,
+  opts: { refundLinked?: boolean } = {},
+): string {
   const head = t.category_id ? `cat:${t.category_id}` : `type:${t.economic_transaction_type}`;
-  return `${head}|${t.credit_debit === 'credit' ? 'in' : 'out'}|${t.currency_original}`;
+  // D-01: linked and unlinked refunds count differently, so they are never
+  // in the same group (a group has one "counts toward" answer).
+  const refundTail = t.economic_transaction_type === 'refund' && opts.refundLinked ? '|refund-linked' : '';
+  return `${head}|${t.credit_debit === 'credit' ? 'in' : 'out'}|${t.currency_original}${refundTail}`;
 }
 
 function needsDecisionReason(t: CategoryReviewTransaction, b: CategoryReviewBlockers): NeedsDecisionReason | null {
   if (b.pendingDuplicateTxnIds.has(t.id)) return 'possible_duplicate';
   const linkTypes = b.pendingLinkTypesByTxn.get(t.id) ?? [];
   if (linkTypes.some((l) => TRANSFER_LIKE_LINK_TYPES.includes(l))) return 'transfer_check';
-  if (linkTypes.some((l) => REFUND_LIKE_LINK_TYPES.includes(l))) return 'refund_check';
-  if (isUncategorised(t)) return 'uncategorised';
-  if (isLowConfidence(t)) return 'low_confidence';
+  if (linkTypes.some((l) => REFUND_LIKE_LINK_TYPES.has(l))) return 'refund_check';
+  const isSplit = b.splitPartsByTxn?.has(t.id) ?? false;
+  if (!isSplit && isUncategorised(t)) return 'uncategorised';
+  if (!isSplit && isLowConfidence(t)) return 'low_confidence';
   if (b.blockingReviewItemTxnIds.has(t.id) || b.invalidSplitTxnIds.has(t.id) || linkTypes.length > 0) return 'other_check';
   return null;
 }
@@ -344,6 +391,8 @@ export function buildCategoryReview(
   const groups = new Map<string, CategoryGroup>();
   const needsDecision: NeedsDecisionItem[] = [];
   const totalsMinor = new Map<string, { wi: number; ws: number; ai: number; as: number }>();
+  const monthsMinor = new Map<string, { month: string; currency: string; wi: number; ws: number; ai: number; as: number }>();
+  const confirmedRefunds = blockers.confirmedRefundTxnIds ?? new Set<string>();
 
   let approved = 0;
   let waiting = 0;
@@ -356,7 +405,7 @@ export function buildCategoryReview(
   );
 
   for (const t of sorted) {
-    if (DUPLICATE_EXCLUDED_DEDUP_STATUSES.includes(t.dedup_status)) {
+    if (isDuplicateExcluded(t.dedup_status)) {
       duplicatesRemoved += 1;
       continue;
     }
@@ -366,8 +415,9 @@ export function buildCategoryReview(
     const isApproved = t.approval_status === 'approved';
     if (isApproved) approved += 1;
     else waiting += 1;
-    if (!isApproved && isUncategorised(t)) uncategorised += 1;
-    if (!isApproved && isLowConfidence(t)) lowConfidence += 1;
+    const splitLine = blockers.splitPartsByTxn?.has(t.id) ?? false;
+    if (!isApproved && !splitLine && isUncategorised(t)) uncategorised += 1;
+    if (!isApproved && !splitLine && isLowConfidence(t)) lowConfidence += 1;
 
     const reason = isApproved ? null : needsDecisionReason(t, blockers);
     if (reason) {
@@ -389,18 +439,25 @@ export function buildCategoryReview(
     }
 
     const type = t.economic_transaction_type as FdhEconomicTransactionType;
-    const key = groupKeyFor(t);
+    const refundLinked = confirmedRefunds.has(t.id);
+    const splitParts = blockers.splitPartsByTxn?.get(t.id) ?? null;
+    const key = splitParts ? `split|${direction}|${t.currency_original}` : groupKeyFor(t, { refundLinked: type === 'refund' && refundLinked });
     let g = groups.get(key);
     if (!g) {
       const category = t.category_id ? categoryById.get(t.category_id) : undefined;
       g = {
         group_key: key,
         category_id: t.category_id,
-        label: category?.display_name ?? TYPE_LABEL[type] ?? 'Other',
+        label: splitParts ? 'Split transactions' : category?.display_name ?? TYPE_LABEL[type] ?? 'Other',
         economic_type: type,
         direction,
         currency: t.currency_original,
-        counts_toward: surplusEffect(type),
+        counts_toward: splitParts ? 'split' : surplusEffect(type, { refundLinked }),
+        not_counted_reason: splitParts
+          ? null
+          : surplusEffect(type, { refundLinked }) === 'refund_unlinked'
+            ? 'A refund not yet linked to the purchase it refunds is shown here but not taken off your spending.'
+            : notCountedReason(type),
         count: 0,
         total: 0,
         pending_count: 0,
@@ -432,17 +489,29 @@ export function buildCategoryReview(
       fully_confident: confident,
     });
 
-    const effect = surplusEffect(type);
     const tm = totalsMinor.get(t.currency_original) ?? { wi: 0, ws: 0, ai: 0, as: 0 };
-    const signed = effect === 'spending' ? minor : effect === 'reduces_spending' ? -minor : 0;
-    if (effect === 'income') {
-      if (isApproved) tm.ai += minor;
-      else tm.wi += minor;
-    } else if (signed !== 0) {
-      if (isApproved) tm.as += signed;
-      else tm.ws += signed;
+    const monthKey = `${t.transaction_date.slice(0, 7)}|${t.currency_original}`;
+    const mm = monthsMinor.get(monthKey) ?? { month: t.transaction_date.slice(0, 7), currency: t.currency_original, wi: 0, ws: 0, ai: 0, as: 0 };
+    // A split line counts through its parts (the canonical rule), never its
+    // own type; an unsplit line through its own type.
+    const parts = splitParts
+      ? splitParts.map((p) => ({ type: p.economic_transaction_type, minor: toMinorUnits(Number(p.amount), t.currency_original) }))
+      : [{ type, minor }];
+    for (const part of parts) {
+      const effect = surplusEffect(part.type, { refundLinked });
+      const signed = effect === 'spending' ? part.minor : effect === 'reduces_spending' ? -part.minor : 0;
+      for (const bucket of [tm, mm]) {
+        if (effect === 'income') {
+          if (isApproved) bucket.ai += part.minor;
+          else bucket.wi += part.minor;
+        } else if (signed !== 0) {
+          if (isApproved) bucket.as += signed;
+          else bucket.ws += signed;
+        }
+      }
     }
     totalsMinor.set(t.currency_original, tm);
+    monthsMinor.set(monthKey, mm);
   }
 
   const groupList = [...groups.values()].map((g) => {
@@ -453,7 +522,7 @@ export function buildCategoryReview(
     return g;
   });
 
-  const effectRank: Record<SurplusEffect, number> = { income: 0, spending: 1, reduces_spending: 2, not_counted: 3 };
+  const effectRank: Record<SurplusEffect, number> = { income: 0, spending: 1, split: 2, reduces_spending: 3, refund_unlinked: 4, not_counted: 5 };
   groupList.sort((a, b) =>
     effectRank[a.counts_toward] - effectRank[b.counts_toward]
     || b.total - a.total
@@ -471,7 +540,19 @@ export function buildCategoryReview(
       approved_spending: fromMinorUnits(m.as, currency),
     }));
 
+  const months: CategoryReviewMonthTotals[] = [...monthsMinor.values()]
+    .sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0))
+    .map((m) => ({
+      month: m.month,
+      currency: m.currency,
+      waiting_income: fromMinorUnits(m.wi, m.currency),
+      waiting_spending: fromMinorUnits(m.ws, m.currency),
+      approved_income: fromMinorUnits(m.ai, m.currency),
+      approved_spending: fromMinorUnits(m.as, m.currency),
+    }));
+
   return {
+    months,
     counts: {
       transactions: transactions.length,
       approved,
@@ -513,4 +594,81 @@ export function linkDecisionForChosenType(
     investment_funding: ['transfer', 'investment', 'asset_purchase'],
   };
   return (compatible[linkType] ?? []).includes(chosenType) ? 'confirm' : 'reject';
+}
+
+// ---------------------------------------------------------------------------
+// Statement-level notes (EXP-G15 / EXP-G17): open review items that are about
+// the whole statement rather than one line, in words.
+// ---------------------------------------------------------------------------
+
+/** title_code of the blocking item a possibly-incomplete AI reading raises. */
+export const AI_EXTRACTION_INCOMPLETE_TITLE_CODE = 'bank_statement.ai_extraction_incomplete';
+/** title_code of the info note an overlapping statement raises. */
+export const STATEMENT_OVERLAP_TITLE_CODE = 'bank_statement.overlaps_prior_statement';
+/** Statement-level items the user may settle themselves (after checking the
+ * statement). Nothing else can be acknowledged away. */
+export const ACKNOWLEDGEABLE_STATEMENT_TITLE_CODES: readonly string[] = [AI_EXTRACTION_INCOMPLETE_TITLE_CODE];
+
+export interface StatementReviewItemRow {
+  id: string;
+  severity: 'info' | 'warning' | 'blocking';
+  title_code: string;
+  context_json: Record<string, unknown> | null;
+}
+
+export interface StatementNote {
+  id: string;
+  severity: 'info' | 'warning' | 'blocking';
+  title_code: string;
+  text: string;
+  can_acknowledge: boolean;
+}
+
+function num(v: unknown): number | null {
+  const n = Number(v);
+  return v === null || v === undefined || !Number.isFinite(n) ? null : n;
+}
+
+export function statementNoteText(item: StatementReviewItemRow): string {
+  const ctx = item.context_json ?? {};
+  switch (item.title_code) {
+    case AI_EXTRACTION_INCOMPLETE_TITLE_CODE: {
+      const rows = num((ctx as { rows_read?: unknown }).rows_read);
+      return `This statement was read by AI and may be missing transactions${rows !== null ? ` (${rows} read)` : ''}. `
+        + 'Check it against your statement. Add any missing transactions by hand, then confirm that every transaction is listed. '
+        + 'Until then this statement cannot be approved.';
+    }
+    case STATEMENT_OVERLAP_TITLE_CODE: {
+      const from = (ctx as { overlap_from?: unknown }).overlap_from;
+      const to = (ctx as { overlap_to?: unknown }).overlap_to;
+      const range = typeof from === 'string' && typeof to === 'string' ? ` (${from} to ${to})` : '';
+      return `This statement covers dates you have already imported for this account${range}. `
+        + 'Lines that match an earlier import are removed as duplicates or listed above for you to check, so nothing is counted twice.';
+    }
+    case 'bank_pdf.reconciliation_failed':
+    case 'bank_csv.reconciliation_failed':
+      return 'The transactions read from this statement do not add up to its closing balance. Some lines may be missing or misread.';
+    case 'bank_pdf.duplicate_candidates_pending_review':
+    case 'bank_csv.duplicate_candidates_pending_review':
+      return 'Some lines may be copies of transactions you imported before. They are listed above for you to decide.';
+    case 'bank_csv.account_identity_ambiguous':
+      return 'We could not tell which of your accounts this statement belongs to.';
+    default:
+      return item.severity === 'blocking'
+        ? 'This statement has an open check that must be settled before it can be approved.'
+        : 'This statement has a note for you to read.';
+  }
+}
+
+export function buildStatementNotes(items: readonly StatementReviewItemRow[]): StatementNote[] {
+  const rank = { blocking: 0, warning: 1, info: 2 } as const;
+  return [...items]
+    .sort((a, b) => rank[a.severity] - rank[b.severity] || (a.id < b.id ? -1 : 1))
+    .map((item) => ({
+      id: item.id,
+      severity: item.severity,
+      title_code: item.title_code,
+      text: statementNoteText(item),
+      can_acknowledge: ACKNOWLEDGEABLE_STATEMENT_TITLE_CODES.includes(item.title_code),
+    }));
 }

@@ -16,6 +16,15 @@
  * transaction row itself is NEVER duplicated or altered by this — no
  * `amount_original`/`credit_debit` write happens here (spec 28).
  *
+ * WP-08 (EXP-G5, migration 0212). The replace is now ONE database
+ * transaction -- `fdh8_replace_transaction_allocations` locks the parent row,
+ * deletes and inserts the whole set, and refuses an APPROVED parent (reopen
+ * its statement first) and any line typed 'unknown'. Before, the delete and
+ * each insert were separate requests: two concurrent saves interleaved into a
+ * mixed set, a failure half-way left a partial split, and an approved line
+ * could be re-split with no re-approval. Until 0212 is applied the old
+ * request sequence runs, behind the same app-level refusals.
+ *
  * TRANSFER SPLIT GUARD (spec 48). Splitting a transaction that is currently
  * the CONFIRMED side of an internal transfer/settlement link into anything
  * other than 100% `transfer`-typed allocations is refused with a clear,
@@ -29,13 +38,14 @@ import {
   transactionsRepository,
 } from '../repositories';
 import { recordDocumentAuditEvent } from './auditLog';
+import { isMissingRpcError } from './approvalService';
 import { assertAllocationsReconcile, isValidAllocationDraft, FdhAllocationIntegrityError } from '../domain/allocations';
 import type { FdhTransactionSplitRequestInput } from '../validation/transactions';
 import type { FdhTransaction, FdhTransactionAllocation } from '../domain/types';
 
 export class TransactionSplitError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid_split' | 'transfer_conflict',
+    readonly code: 'not_found' | 'invalid_split' | 'transfer_conflict' | 'approved',
     message: string,
   ) {
     super(message);
@@ -53,6 +63,12 @@ export async function splitTransaction(
 ): Promise<{ transaction: FdhTransaction; allocations: FdhTransactionAllocation[] }> {
   const { data: transaction } = await transactionsRepository.getForUser(userId, transactionId);
   if (!transaction) throw new TransactionSplitError('not_found', 'transaction not found');
+  if (transaction.approval_status === 'approved') {
+    throw new TransactionSplitError('approved', APPROVED_SPLIT_MESSAGE);
+  }
+  if (input.allocations.some((a) => (a.economic_transaction_type as string) === 'unknown')) {
+    throw new TransactionSplitError('invalid_split', 'Every split line needs a type. "Unknown" is not allowed.');
+  }
 
   // Spec 48 — transfer split guard: a CONFIRMED transfer/settlement link
   // involving this transaction requires every allocation to also be typed
@@ -96,38 +112,7 @@ export async function splitTransaction(
     );
   }
 
-  // Replace: delete the existing set for THIS transaction, then insert the
-  // new one. The delete is scoped by transaction_id AND user_id — an
-  // ordinary RLS-scoped query, never the service-role client — so a caller
-  // can only ever touch their own rows on their own transaction.
-  const supabase = await createClient();
-  const { error: deleteError } = await supabase
-    .from('fdh_transaction_allocations')
-    .delete()
-    .eq('transaction_id', transactionId)
-    .eq('user_id', userId);
-  if (deleteError) {
-    throw new TransactionSplitError('invalid_split', `could not clear the previous split: ${deleteError.message}`);
-  }
-
-  const created: FdhTransactionAllocation[] = [];
-  for (const [i, a] of input.allocations.entries()) {
-    const { data: row, error } = await transactionAllocationsRepository.create(userId, {
-      transaction_id: transactionId,
-      allocation_sequence: i + 1,
-      economic_transaction_type: a.economic_transaction_type,
-      category_id: a.category_id ?? null,
-      subcategory_id: a.subcategory_id ?? null,
-      amount: a.amount,
-      currency_code: transaction.currency_original,
-      percentage: null,
-      note: a.note ?? null,
-    } as never);
-    if (error || !row) {
-      throw new TransactionSplitError('invalid_split', error?.message ?? 'could not save allocation');
-    }
-    created.push(row);
-  }
+  const created = await replaceAllocations(userId, transaction, input);
 
   // review_status is deliberately left untouched here. R8's own DB trigger
   // (migration 0068) permits an authenticated-role write of `review_status
@@ -148,4 +133,69 @@ export async function splitTransaction(
   });
 
   return { transaction, allocations: created };
+}
+
+export const APPROVED_SPLIT_MESSAGE = 'This transaction is already approved. Reopen its statement to change its split.';
+
+const RPC_ERROR_CODES: Record<string, TransactionSplitError['code']> = {
+  FH404: 'not_found',
+  FH409: 'approved',
+  FH422: 'invalid_split',
+};
+
+/** The atomic replace (0212), or -- only while 0212 is not applied -- the
+ * pre-0212 request sequence. */
+async function replaceAllocations(
+  userId: string,
+  transaction: FdhTransaction,
+  input: FdhTransactionSplitRequestInput,
+): Promise<FdhTransactionAllocation[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('fdh8_replace_transaction_allocations', {
+    p_transaction_id: transaction.id,
+    p_allocations: input.allocations.map((a) => ({
+      economic_transaction_type: a.economic_transaction_type,
+      amount: a.amount,
+      category_id: a.category_id ?? null,
+      subcategory_id: a.subcategory_id ?? null,
+      note: a.note ?? null,
+    })),
+    p_finalize: input.finalize,
+  });
+  if (!error) return (data ?? []) as FdhTransactionAllocation[];
+  if (!isMissingRpcError(error)) {
+    const code = RPC_ERROR_CODES[(error as { code?: string }).code ?? ''];
+    if (code === 'approved') throw new TransactionSplitError('approved', APPROVED_SPLIT_MESSAGE);
+    throw new TransactionSplitError(code ?? 'invalid_split', error.message);
+  }
+
+  // Pre-0212 fallback (deploy window only): the same delete + insert sequence
+  // as before, scoped by transaction_id AND user_id through the RLS client.
+  const { error: deleteError } = await supabase
+    .from('fdh_transaction_allocations')
+    .delete()
+    .eq('transaction_id', transaction.id)
+    .eq('user_id', userId);
+  if (deleteError) {
+    throw new TransactionSplitError('invalid_split', `could not clear the previous split: ${deleteError.message}`);
+  }
+  const created: FdhTransactionAllocation[] = [];
+  for (const [i, a] of input.allocations.entries()) {
+    const { data: row, error: insertError } = await transactionAllocationsRepository.create(userId, {
+      transaction_id: transaction.id,
+      allocation_sequence: i + 1,
+      economic_transaction_type: a.economic_transaction_type,
+      category_id: a.category_id ?? null,
+      subcategory_id: a.subcategory_id ?? null,
+      amount: a.amount,
+      currency_code: transaction.currency_original,
+      percentage: null,
+      note: a.note ?? null,
+    } as never);
+    if (insertError || !row) {
+      throw new TransactionSplitError('invalid_split', insertError?.message ?? 'could not save allocation');
+    }
+    created.push(row);
+  }
+  return created;
 }

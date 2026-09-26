@@ -112,7 +112,7 @@ export function runBankCsvPipeline(input: RunPipelineInput): PipelineResult {
 
   rows.forEach((row, idx) => {
     const sourceRowNumber = idx + 1;
-    const result = normalizeRow(header, row, sourceRowNumber, rowFormat);
+    const result = normalizeRow(header, row, sourceRowNumber, rowFormat, { statementCurrency: input.currencyCode });
     if (!result.ok) {
       rejected.push({ sourceRowNumber, reason: result.reason });
       return;

@@ -27,6 +27,13 @@ export interface RowFormat {
     drCrIndicator?: string;
     balance?: string;
     reference?: string;
+    /** WP-08 (EXP-G14): a per-line currency column. Honoured as a CHECK, never
+     * as a conversion: a line whose currency is not the statement's is
+     * rejected with reason `currency_mismatch` (shown to the user), because
+     * one statement import is one account in one currency and nothing here
+     * may ever add an INR amount to an AUD total. Before, the mapping
+     * accepted this column and then ignored it. */
+    currency?: string;
   };
   amountConvention: FdhCsvAmountConvention;
   dateFormat: SupportedDateFormat;
@@ -49,6 +56,7 @@ export function mappingToRowFormat(mapping: FdhCsvColumnMapping, amountConventio
       drCrIndicator: mapping.dr_cr_indicator ?? undefined,
       balance: mapping.balance ?? undefined,
       reference: mapping.reference ?? undefined,
+      currency: mapping.currency ?? undefined,
     },
     amountConvention,
     dateFormat,
@@ -62,7 +70,8 @@ export type NormalizationFailureReason =
   | 'invalid_amount'
   | 'zero_amount'
   | 'ambiguous_direction'
-  | 'column_not_found';
+  | 'column_not_found'
+  | 'currency_mismatch';
 
 export interface NormalizedTransactionCandidate {
   sourceRowNumber: number;
@@ -139,8 +148,19 @@ export function normalizeRow(
   row: readonly string[],
   sourceRowNumber: number,
   rowFormat: RowFormat,
+  opts: { statementCurrency?: string | null } = {},
 ): NormalizationResult {
   const fail = (reason: NormalizationFailureReason): NormalizationResult => ({ ok: false, reason, sourceRowNumber });
+
+  if (rowFormat.columnRoles.currency) {
+    const raw = cell(header, row, rowFormat.columnRoles.currency);
+    if (raw === null) return fail('column_not_found');
+    const code = raw.trim().toUpperCase();
+    // A blank cell means "the statement's currency" (many exports only fill
+    // the column for foreign-currency lines).
+    if (code && opts.statementCurrency && code !== opts.statementCurrency.toUpperCase()) return fail('currency_mismatch');
+    if (code && !opts.statementCurrency) return fail('currency_mismatch');
+  }
 
   const dateRaw = cell(header, row, rowFormat.columnRoles.transactionDate);
   if (dateRaw === null) return fail('column_not_found');

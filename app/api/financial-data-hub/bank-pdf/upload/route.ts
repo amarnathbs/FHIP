@@ -32,6 +32,8 @@ export async function POST(req: Request) {
     declared_masked_identifier: url.searchParams.get('masked_identifier') || undefined,
     statement_period_start: url.searchParams.get('statement_period_start') || undefined,
     statement_period_end: url.searchParams.get('statement_period_end') || undefined,
+    // WP-08 (D-10): whose account this is (self / spouse / joint / smsf).
+    owner_role: url.searchParams.get('owner_role') || undefined,
   };
   const parsed = bankCsvUploadMetadataSchema.safeParse(metadataInput);
   if (!parsed.success) return bad(parsed.error.issues[0]?.message ?? 'Invalid request', 422);
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
   if (bytes.byteLength === 0) return bad('File upload incomplete.', 422);
 
   try {
-    const { document, accountResolution } = await uploadBankPdf(user.id, parsed.data, bytes);
+    const { document, accountResolution, ownerRole } = await uploadBankPdf(user.id, parsed.data, bytes);
     // 2026-09-25: a byte-identical re-upload of a statement already imported
     // (or whose AI draft awaits review) is flagged here, so the panel goes
     // straight to the original instead of asking for a password or an account
@@ -62,6 +64,7 @@ export async function POST(req: Request) {
       // sensitive internals in a user-facing response).
       password_required: document.error_code === 'password_required',
       account_resolution: accountResolution,
+      owner_role_recorded: ownerRole,
       financial_account_id: document.financial_account_id,
     });
   } catch (e) {

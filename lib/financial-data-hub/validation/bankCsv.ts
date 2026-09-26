@@ -14,6 +14,11 @@ import { SUPPORTED_DATE_FORMATS } from '../bank-csv/dateFormats';
 import { fdhCountryCode, fdhCurrencyCode, fdhUuid } from './primitives';
 import { fdhSanitisedFilename } from './filename';
 
+/** WP-08 (PO D-10): whose account this is. Mirrors migration 0207's
+ * chk_fdh_financial_accounts_owner_role_0207 exactly. */
+export const FDH_ACCOUNT_OWNER_ROLES = ['self', 'spouse', 'joint', 'smsf'] as const;
+export type FdhAccountOwnerRole = (typeof FDH_ACCOUNT_OWNER_ROLES)[number];
+
 /** Body of `POST /bank-csv/upload` — metadata alongside the streamed bytes
  * (the file itself is the request body, exactly like FDH-3's
  * `.../upload-sessions/{id}/complete`; this endpoint composes session-create
@@ -31,6 +36,10 @@ export const bankCsvUploadMetadataSchema = z.object({
   declared_masked_identifier: z.string().max(40).nullish(),
   statement_period_start: z.string().date().nullish(),
   statement_period_end: z.string().date().nullish(),
+  /** WP-08 (EXP-G13 capture, D-10): the user's answer to "whose account is
+   * this?". Optional on the API for older clients; the import panel always
+   * asks. */
+  owner_role: z.enum(FDH_ACCOUNT_OWNER_ROLES).nullish(),
 });
 export type BankCsvUploadMetadataInput = z.infer<typeof bankCsvUploadMetadataSchema>;
 

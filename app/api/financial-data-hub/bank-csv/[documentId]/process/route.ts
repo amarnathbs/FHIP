@@ -4,6 +4,9 @@ import { processBankCsvDocument, BankCsvProcessingError } from '@/lib/financial-
 // POST /api/financial-data-hub/bank-csv/{documentId}/process — spec 32-46,
 // 54, 55-56, 57 step 5. Idempotent/retry-safe — see the service module's
 // header comment.
+// WP-08 (UPL-01): a bounded request.
+export const maxDuration = 60;
+
 export async function POST(_req: Request, { params }: { params: Promise<{ documentId: string }> }) {
   const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
@@ -24,6 +27,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
       duplicates_skipped: result.duplicatesSkipped,
       duplicate_candidates: result.duplicateCandidates,
       rejected_rows: result.rejectedRows,
+      // WP-08 (EXP-G14): why lines could not be read, in words.
+      unread_lines: result.unreadLines ?? null,
       declared_row_count: result.document.declared_row_count,
       parsed_row_count: result.document.parsed_row_count,
     });

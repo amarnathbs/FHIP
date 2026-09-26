@@ -19,6 +19,14 @@
  * being silently truncated or left to run unbounded. */
 export const PDF_MAX_PAGES = 60;
 
+/**
+ * WP-08 (UPL-01): wall-clock budget for reading one PDF's text. A real
+ * 60-page statement reads in well under a second; this only ever trips on a
+ * file the parser cannot finish. Kept below the process routes' maxDuration
+ * so the request always answers with a controlled `extraction_timeout`.
+ */
+export const PDF_EXTRACTION_TIMEOUT_MS = 20_000;
+
 /** Never accept more transaction rows than this from a single statement
  * (spec 97-99's own scale ceiling — 5,000 transactions is the largest
  * certified synthetic case). A file that appears to declare more is rejected
