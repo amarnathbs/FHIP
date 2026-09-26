@@ -7,6 +7,7 @@ Baseline: origin/main `a115ee5`, read-only discovery copy. This file consolidate
 - **WP-00:** this matrix is now enforced in code. Every field, column and enum value below has an entry in the field-disposition registry (`lib/canonical-data/disposition/*`, generated as UPLOAD_FIELD_DISPOSITION_REGISTRY.md). Each open gap is `open_gap` and names an id from the gap register in section 10. The gate test fails on an orphan field (EXP-G14 registry, GAP-13, G6 registry, GAP-RET-10, INS-07 and INS-00 are closed by the registry itself).
 - **WP-01:** migration 0207 adds the additive columns and seams, and is the **only** widening of the shared CHECKs. The predecessors were derived from the ledger: `error_code` from **0179** (the plan said 0206, but 0206 does not touch that constraint; the ledger shows 0046 → 0071 → 0170 → 0179), and the audit event types from **0186** (109 values).
 - **WP-02:** the canonical read models (`lib/read-models`) implement the required destinations for DC-01/02/03/06/11/12/16, EXP-G2/G4 (read)/G5 (read)/G7/G9, GAP-01 (dedupe)/08/09, G9 and INV-G4 (dividend single leg). **No consumer has been switched yet** (WP-03..WP-07), so those gaps stay open in the register until the consumers switch.
+- **WP-07 / WP-15** (branch `feature/canonical-wp07-15`): the Expenses tab shows approved imported actuals beside the plan (EXP-G1 / DC-17); every Input Data grid shows its import provenance badge (GAP-06, G7, GAP-RET-08 badge parts). WP-15 adds the original-scope Input Population Proposal (migration **0214**): planned expenses from trailing-3-complete-month averages (fhip_mapping_key -> master_item_key, lib/import-bridge/expenseCategoryMapping.ts) and the bank closing balance as a cash asset (DC-16, D-04). 21 registry entries closed.
 
 ## Legend
 
@@ -370,7 +371,7 @@ Every gap id used above, with its severity and the work package(s) that close it
 | GAP-03 | P1 | WP-02, WP-03, WP-09 | Currency is not preserved for Income. |
 | GAP-04 | P1 | WP-09 | Idempotency is per PROPOSAL, not per payroll event. |
 | GAP-05 | P1 | WP-01, WP-09 | There is no self/spouse attribution for payslips. |
-| GAP-06 | P2 | WP-07, WP-09 | The Income tab does not meet the provenance and visibility contract. |
+| GAP-06 | P2 | WP-07, WP-09 | The Income tab does not meet the provenance and visibility contract. **Badge closed by WP-07**; the actual-income section stays WP-09. |
 | GAP-07 | P2 | WP-01, WP-09 | Many evidence-only payslip facts are never user-visible, and the proposal explanation is discarded. |
 | GAP-08 | P2 | WP-02, WP-09 | Variable pay (bonus, overtime, commission, other earnings/arrears) has no canonical economic effect. |
 | GAP-09 | P2 | WP-02, WP-03 | Null net becomes gross. |
@@ -380,7 +381,7 @@ Every gap id used above, with its severity and the work package(s) that close it
 | GAP-13 | P2 | WP-00 | There is no field-disposition registry and no CI orphan test for payslip fields. |
 | GAP-15 | P3 | WP-09 | Revised-payslip supersession is unimplemented. |
 | GAP-16 | P3 | WP-09 | The recurring-gross basis relies on unverified assumptions. |
-| EXP-G1 | P0 | WP-07 | The Expenses tab does not show approved imported actuals. |
+| EXP-G1 | P0 | WP-07 | The Expenses tab does not show approved imported actuals. **Closed by WP-07** (GET /api/expenses/actuals + ImportedExpenseActuals). |
 | EXP-G2 | P0 | WP-02 | There is no canonical Expense read model. |
 | EXP-G3 | P1 | WP-03, WP-08 | Approved actuals affect the Dashboard only when transaction_date falls in the CURRENT calendar month. |
 | EXP-G4 | P1 | WP-02, WP-03, WP-08 | Duplicate protection bypass. |
@@ -404,7 +405,7 @@ Every gap id used above, with its severity and the work package(s) that close it
 | G4 | P1 | WP-10, WP-11 | Bank repayment matching is too weak to drive a canonical link. |
 | G5 | P1 | WP-10 | Statement totals drop activity types, so reconciliation is wrong or vacuous. |
 | G6 | P2 | WP-00, WP-01, WP-10, WP-11 | Some extracted fields are silently dropped or never populated. |
-| G7 | P1 | WP-07, WP-11 | Imported cards/loans have no provenance or statement visibility in the Liabilities tab. |
+| G7 | P1 | WP-07, WP-11 | Imported cards/loans have no provenance or statement visibility in the Liabilities tab. **Badge + grid columns (minimum_payment, due_date, masked_identifier) closed by WP-07**; statement history stays WP-11. |
 | G8 | P2 | WP-11 | Owner is hard-coded to 'self' and household_id is not set on add_new, so a spouse's card or loan becomes self's debt (FDH-15 self≠spouse). |
 | G9 | P1 | WP-02, WP-03 | Downstream consumers are not ready for liability ledger events, so wiring G1 alone will mis-count. |
 | G10 | P2 | WP-11 | 'Keep existing' dismisses the whole statement. |
@@ -429,7 +430,7 @@ Every gap id used above, with its severity and the work package(s) that close it
 | GAP-RET-05 | P2 | WP-01, WP-13 | Extraction silently drops data. |
 | GAP-RET-06 | P2 | WP-13 | There is no economic as-of date on the canonical balance. |
 | GAP-RET-07 | P2 | WP-13 | A personal contribution or withdrawal matched to a bank transaction is only linked (fdh_retirement_statement_activities.linked_transaction_id), never reclassified. |
-| GAP-RET-08 | P2 | WP-07, WP-13 | Imported retirement rows carry no provenance label. |
+| GAP-RET-08 | P2 | WP-07, WP-13 | Imported retirement rows carry no provenance label. **Label/badge closed by WP-07**; the history link appears when WP-13 publishes its fdhPages builder. |
 | GAP-RET-09 | P2 | WP-13 | Authenticated users can INSERT forged approved evidence. |
 | GAP-RET-10 | P2 | WP-00 | There is no field-disposition registry or CI test for the retirement adapter. |
 | GAP-RET-11 | P3 | WP-13 | MEMBER_MISMATCH (added by 0119:189-192) is not in GENERIC_CODES or RETIREMENT_APPLY_REFUSAL_CODES, so it collapses to WRITE_FAILED, and the apply route returns 400 ins... |
@@ -461,8 +462,8 @@ Every gap id used above, with its severity and the work package(s) that close it
 | DC-13 | P1 | WP-05 | Currency mixing in Twin metrics and forecast goal variance: raw AUD+INR sums. |
 | DC-14 | P2 | WP-03, WP-04, WP-05 | Error->0 / null->0 coercions that make a failed read look like a real zero. |
 | DC-15 | P2 | WP-04 | Non-atomic, repeated dashboard computation. |
-| DC-16 | P2 | WP-02 | Bank statement closing balances and account balances never reach canonical assets (cash). |
-| DC-17 | P2 | WP-07 | The Expenses tab does not show approved imported actuals (the brief requires 'Woolworths $200 Groceries' to be visible alongside planned). |
+| DC-16 | P2 | WP-02 | Bank statement closing balances and account balances never reach canonical assets (cash). **Closed by WP-15** (migration 0214: the "Add your bank balance to Assets" proposal, one cash asset per account; D-04). |
+| DC-17 | P2 | WP-07 | The Expenses tab does not show approved imported actuals (the brief requires 'Woolworths $200 Groceries' to be visible alongside planned). **Closed by WP-07.** |
 | DC-18 | P2 | WP-04, WP-05 | Unpaginated register reads outside Dashboard. |
 | DC-19 | P3 | WP-03 | Direct fdh_* reads in downstream code. |
 | X-01 | P1 | WP-09, WP-11, WP-13 | "Update existing" applies confirmation-gated fields the user left unticked (income 0120:113, liability 0096:840, retirement 0119:147). |

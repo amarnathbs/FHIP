@@ -75,6 +75,15 @@ function formatImportedAt(value: unknown): string | null {
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/**
+ * WP-07: a grid field marked `hiddenOnImportedRows` (the "leave this row out"
+ * opt-out) is neither shown nor submitted on a row an import wrote -- that row
+ * IS the imported figure, so opting it out of itself is meaningless.
+ */
+export function isFieldHiddenOnRow(field: { hiddenOnImportedRows?: boolean } | undefined, row: ProvenanceRow): boolean {
+  return Boolean(field?.hiddenOnImportedRows) && isImportSourceType(row.source_type);
+}
+
 /** null = a manual row (or an unrecognised value): no badge. */
 export function provenanceBadgeFor(row: ProvenanceRow): ProvenanceBadgeModel | null {
   const sourceType = row.source_type;

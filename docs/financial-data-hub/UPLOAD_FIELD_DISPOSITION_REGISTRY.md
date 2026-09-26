@@ -11,24 +11,22 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Registry file | Owner | Entries | A | B | C | D | E | open_gap | ceiling | not_active |
 |---|---|---|---|---|---|---|---|---|---|---|
-| bankStatement | WP-08 | 162 | 0 | 20 | 27 | 115 | 0 | 33 | 33 | 0 |
+| bankStatement | WP-08 | 162 | 2 | 20 | 25 | 115 | 0 | 26 | 26 | 0 |
 | economicTransactionType | WP-02 | 13 | 0 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
 | payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 87 | 87 | 0 |
-| liabilityStatement | WP-10 | 139 | 29 | 22 | 34 | 41 | 13 | 94 | 94 | 0 |
+| liabilityStatement | WP-10 | 139 | 29 | 22 | 34 | 41 | 13 | 83 | 83 | 0 |
 | liabilityActivityLedger | WP-11 | 10 | 0 | 10 | 0 | 0 | 0 | 10 | 10 | 0 |
 | auInvestmentStatement | WP-12 | 167 | 42 | 31 | 24 | 56 | 14 | 74 | 74 | 0 |
-| retirementStatement | WP-13 | 201 | 17 | 0 | 115 | 66 | 3 | 131 | 131 | 0 |
+| retirementStatement | WP-13 | 201 | 17 | 0 | 115 | 66 | 3 | 128 | 128 | 0 |
 | iiCas | WP-12 | 41 | 15 | 5 | 9 | 12 | 0 | 0 | 0 | 0 |
 | insurance | WP-14 | 21 | 10 | 0 | 8 | 0 | 3 | 0 | 0 | 21 |
-| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 429 | | 21 |
+| **total** | | **884** | 133 | 113 | 272 | 330 | 36 | 408 | | 21 |
 
 ## Open gaps by id
 
 | Gap | Severity | Owner WP | Fields |
 |---|---|---|---|
 | DC-01 | P0 | WP-03 | 4 |
-| DC-16 | P2 | WP-08 | 2 |
-| EXP-G1 | P0 | WP-07 | 5 |
 | EXP-G14 | P2 | WP-08 | 18 |
 | EXP-G15 | P2 | WP-08 | 2 |
 | EXP-G4 | P1 | WP-08 | 2 |
@@ -38,7 +36,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | G4 | P1 | WP-10 | 2 |
 | G5 | P1 | WP-10, WP-11 | 12 |
 | G6 | P2 | WP-10 | 16 |
-| G7 | P1 | WP-07, WP-11 | 30 |
+| G7 | P1 | WP-11 | 19 |
 | GAP-01 | P0 | WP-03 | 1 |
 | GAP-03 | P1 | WP-09 | 2 |
 | GAP-04 | P1 | WP-09 | 3 |
@@ -55,7 +53,6 @@ Every field an active upload adapter extracts, every evidence column and every a
 | GAP-RET-05 | P2 | WP-13 | 8 |
 | GAP-RET-06 | P2 | WP-13 | 9 |
 | GAP-RET-07 | P2 | WP-13 | 5 |
-| GAP-RET-08 | P2 | WP-07 | 3 |
 | GAP-RET-09 | P2 | WP-13 | 2 |
 | INV-G1 | P0 | WP-12 | 2 |
 | INV-G11 | P3 | WP-12 | 1 |
@@ -79,7 +76,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `postedDate` | C evidence | evidence:fdh_transactions.posting_date | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `valueDate` | C evidence | evidence:fdh_transactions.value_date | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `descriptionRaw` | C evidence | evidence:fdh_transactions.description_raw (purgeable) | Financial Activity > transactions | compliant | — | — |
-| `descriptionClean` | B event | fdh_transactions.description_clean | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
+| `descriptionClean` | B event | fdh_transactions.description_clean | Expenses > Actual spending (imported) | compliant | — | — |
 | `referenceRaw` | C evidence | evidence:fdh_transactions.source_reference (dedup key) | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `amountOriginal` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
 | `creditDebit` | B event | fdh_transactions.credit_debit | Expenses > Import bank statement > category review | compliant | — | — |
@@ -94,7 +91,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `sourcePage` | D metadata | fdh_transactions.source_page | — | compliant | — | — |
 | `transactionDate` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | open_gap | DC-01 (P0) | WP-03 |
 | `descriptionRaw` | C evidence | evidence:fdh_transactions.description_raw (purgeable) | Financial Activity > transactions | compliant | — | — |
-| `descriptionClean` | B event | fdh_transactions.description_clean | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
+| `descriptionClean` | B event | fdh_transactions.description_clean | Expenses > Actual spending (imported) | compliant | — | — |
 | `amountOriginal` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
 | `creditDebit` | B event | fdh_transactions.credit_debit | Expenses > Import bank statement > category review | compliant | — | — |
 | `balanceAfter` | C evidence | evidence:fdh_transactions.balance_after | — | open_gap | EXP-G14 (P2) | WP-08 |
@@ -112,7 +109,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
 | `declaredOpeningBalance` | C evidence | evidence:fdh_reconciliation_results.opening_balance | Bank import panel > review summary (reconciliation) | compliant | — | — |
-| `declaredClosingBalance` | C evidence | evidence:fdh_reconciliation_results.reported_closing_balance (D-04: a cash-asset proposal the user Applies) | — | open_gap | DC-16 (P2) | WP-08 |
+| `declaredClosingBalance` | A state | assets.current_value (one cash asset per account, via the "Add your bank balance to Assets" proposal the user Applies -- fdh15_apply_asset_proposal; until then evidence fdh_reconciliation_results.reported_closing_balance, never in Net Worth) | Assets > Add your bank balance to Assets | compliant | — | — |
 | `maskedAccountIdentifier` | D metadata | account matching (currently dropped) | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `statementPeriodStart` | C evidence | fdh_statement_uploads.statement_period_start (coverage input) | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `statementPeriodEnd` | C evidence | fdh_statement_uploads.statement_period_end (coverage input) | — | open_gap | EXP-G14 (P2) | WP-08 |
@@ -128,7 +125,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `statementPeriodStart` | C evidence | fdh_statement_uploads.statement_period_start | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `statementPeriodEnd` | C evidence | fdh_statement_uploads.statement_period_end | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `declaredOpeningBalance` | C evidence | evidence:fdh_reconciliation_results.opening_balance | Bank import panel > review summary (reconciliation) | compliant | — | — |
-| `declaredClosingBalance` | C evidence | evidence:fdh_reconciliation_results.reported_closing_balance (D-04) | — | open_gap | DC-16 (P2) | WP-08 |
+| `declaredClosingBalance` | A state | assets.current_value (one cash asset per account, via the "Add your bank balance to Assets" proposal the user Applies -- fdh15_apply_asset_proposal; until then evidence fdh_reconciliation_results.reported_closing_balance, never in Net Worth) | Assets > Add your bank balance to Assets | compliant | — | — |
 | `allTransactionsListed` | C evidence | evidence: statement data-quality result | — | open_gap | EXP-G15 (P2) | WP-08 |
 | `transactions` | B event | fdh_transactions (one row per line, through the native pipeline) | Expenses > Import bank statement > category review | open_gap | EXP-G15 (P2) | WP-08 |
 
@@ -155,7 +152,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `posting_date` | C evidence | evidence:fdh_transactions.posting_date | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `value_date` | C evidence | evidence:fdh_transactions.value_date | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `description_raw` | C evidence | evidence:fdh_transactions.description_raw (purgeable) | Financial Activity > transactions | compliant | — | — |
-| `description_clean` | B event | fdh_transactions.description_clean | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
+| `description_clean` | B event | fdh_transactions.description_clean | Expenses > Actual spending (imported) | compliant | — | — |
 | `merchant_raw` | C evidence | evidence:fdh_transactions.merchant_raw | Financial Activity > merchants | compliant | — | — |
 | `merchant_id` | D metadata | fdh_transactions.merchant_id | — | compliant | — | — |
 | `amount_original` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
@@ -167,8 +164,8 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `fx_rate_source` | D metadata | fdh_transactions.fx_rate_source | — | compliant | — | — |
 | `credit_debit` | B event | fdh_transactions.credit_debit | Expenses > Import bank statement > category review | compliant | — | — |
 | `economic_transaction_type` | B event | fdh_transactions.economic_transaction_type (one read-model bucket per value) | Expenses > Import bank statement > category review | compliant | — | — |
-| `category_id` | B event | fdh_transactions.category_id (canonical expense group) | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
-| `subcategory_id` | B event | fdh_transactions.subcategory_id (essential flag) | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
+| `category_id` | B event | fdh_transactions.category_id (canonical expense group) | Expenses > Import bank statement > category review; Expenses > Actual spending (imported) | compliant | — | — |
+| `subcategory_id` | B event | fdh_transactions.subcategory_id (essential flag; planned-item key for the WP-15 averages proposal) | Expenses > Import bank statement > category review; Expenses > Actual spending (imported) | compliant | — | — |
 | `recurring_flag` | D metadata | fdh_transactions.recurring_flag | — | compliant | — | — |
 | `subscription_flag` | D metadata | fdh_transactions.subscription_flag | — | compliant | — | — |
 | `transfer_flag` | D metadata | fdh_transactions.transfer_flag | — | compliant | — | — |
@@ -456,19 +453,19 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `facilityType` | A state | liabilities.debt_type | Liabilities tab | compliant | — | — |
 | `nickname` | E unsupported | not persisted (a display nickname is not a canonical fact) | — | open_gap | G6 (P2) | WP-10 |
 | `institutionName` | A state | liabilities.lender | Liabilities tab | compliant | — | — |
-| `maskedIdentifier` | A state | liabilities.masked_identifier | — | open_gap | G7 (P1) | WP-07 |
+| `maskedIdentifier` | A state | liabilities.masked_identifier | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `statementPeriodStart` | C evidence | evidence:fdh_liability_statements.statement_period_start | — | open_gap | G7 (P1) | WP-11 |
 | `statementPeriodEnd` | C evidence | evidence:fdh_liability_statements.statement_period_end | — | open_gap | G7 (P1) | WP-11 |
 | `statementDate` | C evidence | evidence:fdh_liability_statements.statement_date | — | open_gap | G7 (P1) | WP-11 |
-| `dueDate` | A state | liabilities.due_date | — | open_gap | G7 (P1) | WP-07 |
+| `dueDate` | A state | liabilities.due_date | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `openingBalance` | C evidence | evidence:fdh_liability_statements.opening_balance | — | open_gap | G7 (P1) | WP-11 |
-| `closingBalance` | A state | liabilities.balance (card) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
+| `closingBalance` | A state | liabilities.balance (card) | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `creditLimit` | A state | liabilities.credit_limit (not in Net Worth) | Liabilities tab | compliant | — | — |
 | `minimumPayment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | open_gap | X-01 (P1) | WP-11 |
 | `interestRate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab | open_gap | G7 (P1) | WP-11 |
 | `availableCredit` | E unsupported | not populated (shown as "Not shown on statement") | — | open_gap | G6 (P2) | WP-10 |
 | `openingPrincipal` | C evidence | evidence:fdh_liability_statements.opening_principal | — | open_gap | G7 (P1) | WP-11 |
-| `closingPrincipal` | A state | liabilities.balance (loan) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
+| `closingPrincipal` | A state | liabilities.balance (loan) | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `rateType` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
 | `repaymentFrequency` | E unsupported | not populated (proposal reads null) | — | open_gap | G6 (P2) | WP-10 |
 | `maturityDate` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
@@ -501,13 +498,13 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `schemaVersion` | D metadata | aie run evidence | — | compliant | — | — |
 | `documentMissingReasonCode` | D metadata | aie run evidence | — | compliant | — | — |
 | `institutionName` | A state | liabilities.lender | Liabilities tab | compliant | — | — |
-| `maskedIdentifier` | A state | liabilities.masked_identifier | — | open_gap | G7 (P1) | WP-07 |
+| `maskedIdentifier` | A state | liabilities.masked_identifier | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `statementPeriodStart` | C evidence | evidence:fdh_liability_statements.statement_period_start | — | open_gap | G7 (P1) | WP-11 |
 | `statementPeriodEnd` | C evidence | evidence:fdh_liability_statements.statement_period_end | — | open_gap | G7 (P1) | WP-11 |
 | `statementDate` | C evidence | evidence:fdh_liability_statements.statement_date | — | open_gap | G7 (P1) | WP-11 |
-| `dueDate` | A state | liabilities.due_date | — | open_gap | G7 (P1) | WP-07 |
+| `dueDate` | A state | liabilities.due_date | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `openingBalance` | C evidence | evidence:fdh_liability_statements.opening_balance | — | open_gap | G7 (P1) | WP-11 |
-| `closingBalance` | A state | liabilities.balance (card) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
+| `closingBalance` | A state | liabilities.balance (card) | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `creditLimit` | A state | liabilities.credit_limit (not in Net Worth) | Liabilities tab | compliant | — | — |
 | `minimumPayment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | open_gap | X-01 (P1) | WP-11 |
 | `interestRate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab | open_gap | G7 (P1) | WP-11 |
@@ -542,19 +539,19 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `country_code` | A state | liabilities.country_code | Liabilities tab | compliant | — | — |
 | `currency_code` | A state | liabilities.currency_code (unsupported currency refused) | Liabilities tab | open_gap | G13 (P3) | WP-11 |
 | `institution_name` | A state | liabilities.lender | Liabilities tab | compliant | — | — |
-| `masked_identifier` | A state | liabilities.masked_identifier | — | open_gap | G7 (P1) | WP-07 |
+| `masked_identifier` | A state | liabilities.masked_identifier | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `statement_period_start` | C evidence | evidence:fdh_liability_statements.statement_period_start | — | open_gap | G7 (P1) | WP-11 |
 | `statement_period_end` | C evidence | evidence:fdh_liability_statements.statement_period_end | — | open_gap | G7 (P1) | WP-11 |
 | `statement_date` | C evidence | evidence:fdh_liability_statements.statement_date | — | open_gap | G7 (P1) | WP-11 |
-| `due_date` | A state | liabilities.due_date | — | open_gap | G7 (P1) | WP-07 |
+| `due_date` | A state | liabilities.due_date | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `opening_balance` | C evidence | evidence:fdh_liability_statements.opening_balance | — | open_gap | G7 (P1) | WP-11 |
-| `closing_balance` | A state | liabilities.balance (card) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
+| `closing_balance` | A state | liabilities.balance (card) | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `credit_limit` | A state | liabilities.credit_limit (not in Net Worth) | Liabilities tab | compliant | — | — |
 | `minimum_payment` | A state | liabilities.minimum_payment (monthly_repayment only when ticked; D-08) | Liabilities tab | open_gap | X-01 (P1) | WP-11 |
 | `interest_rate` | A state | liabilities.interest_rate (loan) / card APR in statement history | Liabilities tab | open_gap | G7 (P1) | WP-11 |
 | `available_credit` | E unsupported | not populated (shown as "Not shown on statement") | — | open_gap | G6 (P2) | WP-10 |
 | `opening_principal` | C evidence | evidence:fdh_liability_statements.opening_principal | — | open_gap | G7 (P1) | WP-11 |
-| `closing_principal` | A state | liabilities.balance (loan) | Liabilities tab | open_gap | G7 (P1) | WP-07 |
+| `closing_principal` | A state | liabilities.balance (loan) | Liabilities tab (grid field + "Imported from credit card / loan statement" badge) | compliant | — | — |
 | `rate_type` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
 | `repayment_frequency` | E unsupported | not populated (proposal reads null) | — | open_gap | G6 (P2) | WP-10 |
 | `maturity_date` | E unsupported | not populated | — | open_gap | G6 (P2) | WP-10 |
@@ -867,7 +864,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `statementStartDate` | C evidence | evidence:fdh_retirement_statements.statement_start_date | — | open_gap | GAP-RET-06 (P2) | WP-13 |
 | `statementEndDate` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
 | `openingBalance` | C evidence | evidence:fdh_retirement_statements.opening_balance | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `closingBalance` | A state | retirement_accounts.current_balance | Retirement tab | open_gap | GAP-RET-08 (P2) | WP-07 |
+| `closingBalance` | A state | retirement_accounts.current_balance | Retirement tab ("Imported from retirement statement" badge, WP-07) | compliant | — | — |
 | `employerContributions` | A state | retirement_accounts.employer_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
 | `personalContributions` | A state | retirement_accounts.personal_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
 | `salarySacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | — | open_gap | GAP-RET-04 (P2) | WP-13 |
@@ -932,7 +929,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `statementStartDate` | C evidence | evidence:fdh_retirement_statements.statement_start_date | — | open_gap | GAP-RET-06 (P2) | WP-13 |
 | `statementEndDate` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
 | `openingBalance` | C evidence | evidence:fdh_retirement_statements.opening_balance | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `closingBalance` | A state | retirement_accounts.current_balance | Retirement tab | open_gap | GAP-RET-08 (P2) | WP-07 |
+| `closingBalance` | A state | retirement_accounts.current_balance | Retirement tab ("Imported from retirement statement" badge, WP-07) | compliant | — | — |
 | `employerContributions` | A state | retirement_accounts.employer_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
 | `personalContributions` | A state | retirement_accounts.personal_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
 | `salarySacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | — | open_gap | GAP-RET-04 (P2) | WP-13 |
@@ -1014,7 +1011,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `statement_start_date` | C evidence | evidence:fdh_retirement_statements.statement_start_date | — | open_gap | GAP-RET-06 (P2) | WP-13 |
 | `statement_end_date` | C evidence | evidence:fdh_retirement_statements.statement_end_date (balance as-of) | — | open_gap | GAP-RET-06 (P2) | WP-13 |
 | `opening_balance` | C evidence | evidence:fdh_retirement_statements.opening_balance | — | open_gap | GAP-RET-03 (P1) | WP-13 |
-| `closing_balance` | A state | retirement_accounts.current_balance | Retirement tab | open_gap | GAP-RET-08 (P2) | WP-07 |
+| `closing_balance` | A state | retirement_accounts.current_balance | Retirement tab ("Imported from retirement statement" badge, WP-07) | compliant | — | — |
 | `employer_contributions` | A state | retirement_accounts.employer_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
 | `personal_contributions` | A state | retirement_accounts.personal_contribution (only when ticked, with contribution_frequency; D-12) | — | open_gap | GAP-RET-01 (P1) | WP-13 |
 | `salary_sacrifice` | C evidence | evidence:fdh_retirement_statements.salary_sacrifice | — | open_gap | GAP-RET-04 (P2) | WP-13 |

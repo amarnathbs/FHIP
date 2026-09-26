@@ -19,7 +19,7 @@ import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { ProvenanceBadge } from '@/components/grid/ProvenanceBadge';
-import { isImportSourceType } from '@/lib/grid/provenance';
+import { isFieldHiddenOnRow, isImportSourceType } from '@/lib/grid/provenance';
 
 interface MasterItem {
   item_key: string;
@@ -120,10 +120,8 @@ function isFieldLockedForRow(row: Row, fieldName: string): boolean {
 // lib/grid/assetFieldMetadata.ts. Defaults to true (shown) for any grid
 // that doesn't opt in, so every other module's behaviour is unchanged.
 function isFieldApplicableForRow(row: Row, fieldName: string, config: GridConfig): boolean {
-  // WP-07: a field marked hiddenOnImportedRows (the "exclude from my plan"
-  // opt-out) is neither shown nor submitted for a row an import wrote — that
-  // row IS the imported figure, so opting it out of itself is meaningless.
-  if (isImportSourceType(row.source_type) && config.fields.find((f) => f.name === fieldName)?.hiddenOnImportedRows) return false;
+  // WP-07: see isFieldHiddenOnRow (lib/grid/provenance.ts).
+  if (isFieldHiddenOnRow(config.fields.find((f) => f.name === fieldName), row)) return false;
   return config.fieldVisibleForRow ? config.fieldVisibleForRow(fieldName, row.master_item_key ?? null) : true;
 }
 

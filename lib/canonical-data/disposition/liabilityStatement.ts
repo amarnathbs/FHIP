@@ -13,11 +13,12 @@ const G4 = gap('G4', 'P1', 'WP-10');
 const G5 = gap('G5', 'P1', 'WP-10');
 const G6 = gap('G6', 'P2', 'WP-10');
 const G7 = gap('G7', 'P1', 'WP-11');
-const G7_BADGE = gap('G7', 'P1', 'WP-07');
 const G13 = gap('G13', 'P3', 'WP-11');
 const X01 = gap('X-01', 'P1', 'WP-11');
 
 const LT = 'Liabilities tab';
+// WP-07: shown as grid fields, with the "Imported from ... statement" badge.
+const LT_GRID = 'Liabilities tab (grid field + "Imported from credit card / loan statement" badge)';
 const EV = (col: string) => `evidence:fdh_liability_statements.${col}`;
 const LEDGER = 'fdh_transactions (card/loan facility ledger row, WP-11)';
 
@@ -26,13 +27,13 @@ function header(style: 'camel' | 'snake'): Row[] {
   const f = (camel: string, snake: string) => (style === 'camel' ? camel : snake);
   return [
     [f('institutionName', 'institution_name'), A, 'liabilities.lender', LT],
-    [f('maskedIdentifier', 'masked_identifier'), A, 'liabilities.masked_identifier', null, G7_BADGE],
+    [f('maskedIdentifier', 'masked_identifier'), A, 'liabilities.masked_identifier', LT_GRID],
     [f('statementPeriodStart', 'statement_period_start'), C, EV('statement_period_start'), null, G7],
     [f('statementPeriodEnd', 'statement_period_end'), C, EV('statement_period_end'), null, G7],
     [f('statementDate', 'statement_date'), C, EV('statement_date'), null, G7],
-    [f('dueDate', 'due_date'), A, 'liabilities.due_date', null, G7_BADGE],
+    [f('dueDate', 'due_date'), A, 'liabilities.due_date', LT_GRID],
     [f('openingBalance', 'opening_balance'), C, EV('opening_balance'), null, G7],
-    [f('closingBalance', 'closing_balance'), A, 'liabilities.balance (card)', LT, G7_BADGE],
+    [f('closingBalance', 'closing_balance'), A, 'liabilities.balance (card)', LT_GRID],
     [f('creditLimit', 'credit_limit'), A, 'liabilities.credit_limit (not in Net Worth)', LT],
     [f('minimumPayment', 'minimum_payment'), A, 'liabilities.minimum_payment (monthly_repayment only when ticked; D-08)', LT, X01],
     [f('interestRate', 'interest_rate'), A, 'liabilities.interest_rate (loan) / card APR in statement history', LT, G7],
@@ -44,7 +45,7 @@ function loanAndUnsupported(style: 'camel' | 'snake'): Row[] {
   return [
     [f('availableCredit', 'available_credit'), E, 'not populated (shown as "Not shown on statement")', null, G6],
     [f('openingPrincipal', 'opening_principal'), C, EV('opening_principal'), null, G7],
-    [f('closingPrincipal', 'closing_principal'), A, 'liabilities.balance (loan)', LT, G7_BADGE],
+    [f('closingPrincipal', 'closing_principal'), A, 'liabilities.balance (loan)', LT_GRID],
     [f('rateType', 'rate_type'), E, 'not populated', null, G6],
     [f('repaymentFrequency', 'repayment_frequency'), E, 'not populated (proposal reads null)', null, G6],
     [f('maturityDate', 'maturity_date'), E, 'not populated', null, G6],
@@ -133,7 +134,7 @@ const ACTIVITIES: Row[] = [
 export const liabilityStatementRegistry: RegistryFile = {
   id: 'liabilityStatement',
   ownerWp: 'WP-10',
-  OPEN_GAP_CEILING: 94,
+  OPEN_GAP_CEILING: 83,
   entries: [
     ...rows('liability_native', 'ts_interface', 'fdh:liability/types.ts#LiabilityStatementExtraction', NATIVE),
     ...rows('liability_native', 'ts_interface', 'fdh:liability/types.ts#LiabilityStatementActivity', NATIVE_ACTIVITY),

@@ -14,7 +14,7 @@
  *     withdrawals, transfers, loan interest & fees inside a repayment ...).
  * Read-only. Nothing here writes to expense_items.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatMoneyWhole } from '@/lib/engines/money';
 import type { ImportedActualsDto, ImportedActualsOk } from '@/lib/expenses/importedActuals';
 
@@ -32,24 +32,27 @@ export function ImportedExpenseActuals({ refreshKey = 0 }: { refreshKey?: number
   const [group, setGroup] = useState('');
   const [month, setMonth] = useState('');
 
-  const load = useCallback(async () => {
-    setError(null);
+  useEffect(() => {
+    let cancelled = false;
     const params = new URLSearchParams({ page: String(page), pageSize: '50' });
     if (group) params.set('group', group);
     if (month) params.set('month', month);
-    try {
-      const res = await fetch(`/api/expenses/actuals?${params.toString()}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Request failed');
-      setData(json.data as ImportedActualsDto);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load imported spending');
-    }
-  }, [page, group, month]);
-
-  useEffect(() => {
-    void load();
-  }, [load, refreshKey]);
+    fetch(`/api/expenses/actuals?${params.toString()}`)
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? 'Request failed');
+        if (!cancelled) {
+          setError(null);
+          setData(json.data as ImportedActualsDto);
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load imported spending');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [page, group, month, refreshKey]);
 
   if (error) {
     return <section className="rounded-card border border-line bg-white p-4 text-sm text-risk">Imported spending is unavailable right now ({error}). Your planned expenses below are unaffected.</section>;

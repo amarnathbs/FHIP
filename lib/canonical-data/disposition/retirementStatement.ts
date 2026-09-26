@@ -14,7 +14,6 @@ const R04 = gap('GAP-RET-04', 'P2', 'WP-13');
 const R05 = gap('GAP-RET-05', 'P2', 'WP-13');
 const R06 = gap('GAP-RET-06', 'P2', 'WP-13');
 const R07 = gap('GAP-RET-07', 'P2', 'WP-13');
-const R08 = gap('GAP-RET-08', 'P2', 'WP-07');
 const R09 = gap('GAP-RET-09', 'P2', 'WP-13');
 
 const RT = 'Retirement tab';
@@ -31,7 +30,7 @@ function header(style: 'camel' | 'snake'): Row[] {
     [f('statementStartDate', 'statement_start_date'), C, EV('statement_start_date'), null, R06],
     [f('statementEndDate', 'statement_end_date'), C, EV('statement_end_date') + ' (balance as-of)', null, R06],
     [f('openingBalance', 'opening_balance'), C, EV('opening_balance'), null, R03],
-    [f('closingBalance', 'closing_balance'), A, 'retirement_accounts.current_balance', RT, R08],
+    [f('closingBalance', 'closing_balance'), A, 'retirement_accounts.current_balance', `${RT} ("Imported from retirement statement" badge, WP-07)`],
     [f('employerContributions', 'employer_contributions'), A, 'retirement_accounts.employer_contribution (only when ticked, with contribution_frequency; D-12)', null, R01],
     [f('personalContributions', 'personal_contributions'), A, 'retirement_accounts.personal_contribution (only when ticked, with contribution_frequency; D-12)', null, R01],
     [f('salarySacrifice', 'salary_sacrifice'), C, EV('salary_sacrifice'), null, R04],
@@ -175,7 +174,7 @@ const POSITIONS: Row[] = [
 export const retirementStatementRegistry: RegistryFile = {
   id: 'retirementStatement',
   ownerWp: 'WP-13',
-  OPEN_GAP_CEILING: 131,
+  OPEN_GAP_CEILING: 128,
   entries: [
     ...rows('retirement_native', 'ts_interface', 'fdh:retirement/types.ts#RetirementStatementExtraction', NATIVE),
     ...rows('retirement_native', 'ts_interface', 'fdh:retirement/types.ts#RetirementActivityEvidence', NATIVE_ACTIVITY),

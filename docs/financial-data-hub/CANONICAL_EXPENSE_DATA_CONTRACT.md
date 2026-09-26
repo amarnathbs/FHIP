@@ -75,6 +75,18 @@ Oracle, Household M vs Household I: planned groceries of $800 a month and covere
 | `financial_snapshots.monthly_expenses` | combined, over complete covered months | WP-03 |
 | Debt service (surplus, DSR, cash outflow) | `selectLiabilities`, never the expense figure (section 7) | WP-03 |
 
+### 6a. The "update planned from actual averages" proposal (WP-15, migration 0214)
+
+The ONLY path by which imported spending changes `expense_items`:
+
+* **Figure.** Per planned item (`master_item_key`), the covered-month average of household spending lines over the default window (trailing 3 complete months), using the read model's own `coveredMonthlyAverage` — the same number the Expenses tab shows. Refunds net only through the confirmed-link rule (D-01), against the planned item of the original purchase. Partial months are listed, never averaged.
+* **Mapping.** `fdh_categories/fdh_subcategories.fhip_mapping_key` (0053) → `master_item_key`, in `lib/import-bridge/expenseCategoryMapping.ts`. Every mapped row lands in the **same canonical group** on both sides (unit-tested with an anti-vacuity control); otherwise the combined basis would count the same spending twice. A taxonomy key with no single planned item (e.g. "Parking & Tolls", "Other Housing") maps to null and is listed as "not matched to a single planned item", never guessed.
+* **Proposal.** One inert `fhip_import_proposals` row per item (`target_domain 'expense'`, `source_kind 'bank_statement'`, `source_window_from/to`), recommended add / update / keep. Keep is shown and never persisted.
+* **Apply.** `fdh15_apply_expense_proposals(p_decisions)`: one all-or-nothing batch; per item a row lock, a ready→applied compare-and-swap (a repeat Apply is `ALREADY_APPLIED`), per-field staleness against the snapshot, a stale-safe add (a row for the item appearing since generation is `STALE_PROPOSAL`), a column allow-list, an application audit row and `source_type = 'bank_statement_average'` provenance. No transaction is copied.
+* **Downstream.** Applying never changes the combined figure for a group that has covered actuals (combined = actual there); it only makes the plan equal the actual (unit-tested: before and after Apply, combined is identical).
+
+The bank closing balance proposal (D-04) is the Assets counterpart: `fdh15_apply_asset_proposal` re-derives the balance from the approved statement (a hand-made value is refused) and links the cash asset to its account (`assets.source_financial_account_id`, one active asset per account), so a balance is in Net Worth once, through that asset; the "Bank balance per statement — not in Net Worth" evidence bucket is never added to any total.
+
 ## 7. Coupling with debt service (`selectLiabilities`)
 
 * A loan with facility-ledger events in covered months: debt service is the **actual** principal plus interest plus fee. This **replaces** the contractual `monthly_repayment` and is never added to it (D-09).
