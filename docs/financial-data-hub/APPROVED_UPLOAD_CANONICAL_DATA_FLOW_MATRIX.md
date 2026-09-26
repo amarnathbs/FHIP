@@ -2,6 +2,12 @@
 
 Baseline: origin/main `a115ee5`, read-only discovery copy. This file consolidates the seven domain maps. Conflicts between maps were settled by reading the code (see "Architect verification" at the end). Every field and event a map reported appears below; nothing was sampled.
 
+## Programme status (updated by WP-00 / WP-01 / WP-02, branch `feature/canonical-upload-foundation`)
+
+- **WP-00:** this matrix is now enforced in code. Every field, column and enum value below has an entry in the field-disposition registry (`lib/canonical-data/disposition/*`, generated as UPLOAD_FIELD_DISPOSITION_REGISTRY.md). Each open gap is `open_gap` and names an id from the gap register in section 10. The gate test fails on an orphan field (EXP-G14 registry, GAP-13, G6 registry, GAP-RET-10, INS-07 and INS-00 are closed by the registry itself).
+- **WP-01:** migration 0207 adds the additive columns and seams, and is the **only** widening of the shared CHECKs. The predecessors were derived from the ledger: `error_code` from **0179** (the plan said 0206, but 0206 does not touch that constraint; the ledger shows 0046 → 0071 → 0170 → 0179), and the audit event types from **0186** (109 values).
+- **WP-02:** the canonical read models (`lib/read-models`) implement the required destinations for DC-01/02/03/06/11/12/16, EXP-G2/G4 (read)/G5 (read)/G7/G9, GAP-01 (dedupe)/08/09, G9 and INV-G4 (dividend single leg). **No consumer has been switched yet** (WP-03..WP-07), so those gaps stay open in the register until the consumers switch.
+
 ## Legend
 
 **Classification:** A canonical state · B canonical event (fdh_transactions + allocations/links) · C evidence (must be user-visible) · D derived/technical metadata · E explicitly unsupported (visible explanation).
