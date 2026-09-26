@@ -215,11 +215,16 @@ export function makeSupabaseImportBridgeStore(): ImportBridgeStore {
   };
 }
 
-/** A PostgREST / Postgres "no such column" error naming `column`. */
+/**
+ * A PostgREST / Postgres "no such column" error. `column` is the optional
+ * column the caller is about to drop from its retry; the retry itself is the
+ * proof -- if a DIFFERENT column is missing, the retry fails the same way and
+ * that error is surfaced unchanged.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function isMissingColumn(error: { code?: string; message?: string } | null | undefined, column: string): boolean {
   if (!error) return false;
-  const code = error.code ?? '';
-  return (code === 'PGRST204' || code === '42703') && (error.message ?? '').includes(column);
+  return error.code === 'PGRST204' || error.code === '42703';
 }
 
 /**

@@ -7,6 +7,7 @@ Baseline: origin/main `a115ee5`, read-only discovery copy. This file consolidate
 - **WP-00:** this matrix is now enforced in code. Every field, column and enum value below has an entry in the field-disposition registry (`lib/canonical-data/disposition/*`, generated as UPLOAD_FIELD_DISPOSITION_REGISTRY.md). Each open gap is `open_gap` and names an id from the gap register in section 10. The gate test fails on an orphan field (EXP-G14 registry, GAP-13, G6 registry, GAP-RET-10, INS-07 and INS-00 are closed by the registry itself).
 - **WP-01:** migration 0207 adds the additive columns and seams, and is the **only** widening of the shared CHECKs. The predecessors were derived from the ledger: `error_code` from **0179** (the plan said 0206, but 0206 does not touch that constraint; the ledger shows 0046 → 0071 → 0170 → 0179), and the audit event types from **0186** (109 values).
 - **WP-02:** the canonical read models (`lib/read-models`) implement the required destinations for DC-01/02/03/06/11/12/16, EXP-G2/G4 (read)/G5 (read)/G7/G9, GAP-01 (dedupe)/08/09, G9 and INV-G4 (dividend single leg). **No consumer has been switched yet** (WP-03..WP-07), so those gaps stay open in the register until the consumers switch.
+- **WP-09** (branch `feature/canonical-wp09`): payslip -> Income. Migration **0210** (predecessors from the ledger: apply RPC 0120, approve RPC 0091, authoritative trigger 0185 -- the trigger's protected set is 0185's plus `income_owner`) adds event-level idempotency (ALREADY_APPLIED + partial unique index, preflight report `scripts/fdh9_0210_duplicate_income_applications_report.sql`), the owner/spouse path, CURRENCY_MISMATCH, the X-01 default field set, the review-acknowledgement gate, `fdh9_restamp_payroll_bank_match` (driven by the post-bank-approval matcher) and `fdh9_supersede_payroll_event`. The Income tab shows "Actual income from your imports" (selectIncome; a matched credit is "counted once with payslip") and Payslip details. GAP-01 therefore holds BY CONSTRUCTION in the read model whichever order the payslip and bank statement arrive; the dashboard consumers still switch in WP-03. 83 payslip registry entries closed (ceiling 87 -> 4).
 
 ## Legend
 
@@ -367,19 +368,19 @@ Every gap id used above, with its severity and the work package(s) that close it
 |---|---|---|---|
 | GAP-01 | P0 | WP-02, WP-03, WP-14 | Payslip salary plus the matching bank salary credit is counted TWICE in the Dashboard and in every loadDashboard consumer (Score, DNA, Resilience, Goals, Forecast, Rep... |
 | GAP-02 | P1 | WP-05, WP-06 | The Twin uses a divergent private Income loader. |
-| GAP-03 | P1 | WP-02, WP-03, WP-09 | Currency is not preserved for Income. |
-| GAP-04 | P1 | WP-09 | Idempotency is per PROPOSAL, not per payroll event. |
-| GAP-05 | P1 | WP-01, WP-09 | There is no self/spouse attribution for payslips. |
-| GAP-06 | P2 | WP-07, WP-09 | The Income tab does not meet the provenance and visibility contract. |
-| GAP-07 | P2 | WP-01, WP-09 | Many evidence-only payslip facts are never user-visible, and the proposal explanation is discarded. |
-| GAP-08 | P2 | WP-02, WP-09 | Variable pay (bonus, overtime, commission, other earnings/arrears) has no canonical economic effect. |
+| GAP-03 | P1 | WP-02, WP-03, WP-09 | Currency is not preserved for Income. **Write side closed by WP-09** (0210 CURRENCY_MISMATCH; currency-mismatched candidates never offered); consumers stay WP-03. |
+| GAP-04 | P1 | WP-09 | Idempotency is per PROPOSAL, not per payroll event. **Closed by WP-09** (0210: ALREADY_APPLIED per payroll event + partial unique index; the proposal route answers 409 with the Income row). |
+| GAP-05 | P1 | WP-01, WP-09 | There is no self/spouse attribution for payslips. **Closed by WP-09** (owner chosen at upload, fixed at approval; candidates + RPC scoped to it). |
+| GAP-06 | P2 | WP-07, WP-09 | The Income tab does not meet the provenance and visibility contract. **Actual-income section closed by WP-09** (GET /api/income/actuals + ImportedIncomeActuals). |
+| GAP-07 | P2 | WP-01, WP-09 | Many evidence-only payslip facts are never user-visible, and the proposal explanation is discarded. **Closed by WP-09** (Payslip details from review + imported row; summary persisted and rendered; full correction vocabulary). |
+| GAP-08 | P2 | WP-02, WP-09 | Variable pay (bonus, overtime, commission, other earnings/arrears) has no canonical economic effect. **Closed by WP-09** (dated one-off actual via selectIncome, shown on the Income tab; PO D-06). |
 | GAP-09 | P2 | WP-02, WP-03 | Null net becomes gross. |
-| GAP-10 | P2 | WP-09 | Bank matching is a one-shot at payslip processing time. |
-| GAP-11 | P2 | WP-08, WP-09 | Payslips can get stranded before Apply. |
-| GAP-12 | P3 | WP-09 | semimonthly, irregular and unknown pay frequencies can never be applied as a new Income row. |
+| GAP-10 | P2 | WP-09 | Bank matching is a one-shot at payslip processing time. **Closed by WP-09** (post-bank-approval matcher + fdh9_restamp_payroll_bank_match; approved credits only). |
+| GAP-11 | P2 | WP-08, WP-09 | Payslips can get stranded before Apply. **Resume stages closed by WP-09** (waiting-imports kind=payslip: ai_draft / review / compare; unapproved re-upload opens review); hub routing stays WP-08. |
+| GAP-12 | P3 | WP-09 | semimonthly, irregular and unknown pay frequencies can never be applied as a new Income row. **Closed by WP-09** (user chooses the frequency; twice-monthly converted exactly; correction form sets pay_frequency). |
 | GAP-13 | P2 | WP-00 | There is no field-disposition registry and no CI orphan test for payslip fields. |
-| GAP-15 | P3 | WP-09 | Revised-payslip supersession is unimplemented. |
-| GAP-16 | P3 | WP-09 | The recurring-gross basis relies on unverified assumptions. |
+| GAP-15 | P3 | WP-09 | Revised-payslip supersession is unimplemented. **Closed by WP-09** (revision detected at review, fdh9_supersede_payroll_event on approval). |
+| GAP-16 | P3 | WP-09 | The recurring-gross basis relies on unverified assumptions. **Closed by WP-09** (reimbursement inclusion and salary-sacrifice basis from the payslip lines, recorded and shown). |
 | EXP-G1 | P0 | WP-07 | The Expenses tab does not show approved imported actuals. |
 | EXP-G2 | P0 | WP-02 | There is no canonical Expense read model. |
 | EXP-G3 | P1 | WP-03, WP-08 | Approved actuals affect the Dashboard only when transaction_date falls in the CURRENT calendar month. |
@@ -434,7 +435,7 @@ Every gap id used above, with its severity and the work package(s) that close it
 | GAP-RET-10 | P2 | WP-00 | There is no field-disposition registry or CI test for the retirement adapter. |
 | GAP-RET-11 | P3 | WP-13 | MEMBER_MISMATCH (added by 0119:189-192) is not in GENERIC_CODES or RETIREMENT_APPLY_REFUSAL_CODES, so it collapses to WRITE_FAILED, and the apply route returns 400 ins... |
 | GAP-RET-12 | P3 | — | PDF super statements (the most common real format) are not machine-readable. |
-| UPL-01 | P2 | WP-01, WP-08, WP-09 | Payslip and bank PDF extraction has no wall-clock timeout, so residual R-14-8 (brief §129) is STILL OPEN on current main. |
+| UPL-01 | P2 | WP-01, WP-08, WP-09 | Payslip and bank PDF extraction has no wall-clock timeout, so residual R-14-8 (brief §129) is STILL OPEN on current main. **Payslip route maxDuration by WP-09**; the extraction timeout itself is WP-08. |
 | UPL-02 | P2 | WP-12 | The India II CAS upload (the live, flag-free PDF surface) skips the real GuardDuty scan without any warning to the user when migration 0196's columns are absent. |
 | UPL-03 | P3 | WP-08 | The generic FDH upload page (/financial-data-hub) is reachable in production by direct URL. |
 | INS-00 | P3 | WP-00 | ACTIVE USER FLOW: NO for Insurance and for all AIE-fronted adapters (generic, FDH-bank, II adapter, Insurance). |
@@ -465,4 +466,4 @@ Every gap id used above, with its severity and the work package(s) that close it
 | DC-17 | P2 | WP-07 | The Expenses tab does not show approved imported actuals (the brief requires 'Woolworths $200 Groceries' to be visible alongside planned). |
 | DC-18 | P2 | WP-04, WP-05 | Unpaginated register reads outside Dashboard. |
 | DC-19 | P3 | WP-03 | Direct fdh_* reads in downstream code. |
-| X-01 | P1 | WP-09, WP-11, WP-13 | "Update existing" applies confirmation-gated fields the user left unticked (income 0120:113, liability 0096:840, retirement 0119:147). |
+| X-01 | P1 | WP-09, WP-11, WP-13 | "Update existing" applies confirmation-gated fields the user left unticked (income 0120:113, liability 0096:840, retirement 0119:147). **Income closed by WP-09** (0210: default field set excludes requires_confirmation). |

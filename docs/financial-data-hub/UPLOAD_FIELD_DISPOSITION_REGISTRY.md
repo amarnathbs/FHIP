@@ -13,14 +13,14 @@ Every field an active upload adapter extracts, every evidence column and every a
 |---|---|---|---|---|---|---|---|---|---|---|
 | bankStatement | WP-08 | 162 | 0 | 20 | 27 | 115 | 0 | 33 | 33 | 0 |
 | economicTransactionType | WP-02 | 13 | 0 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
-| payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 87 | 87 | 0 |
+| payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 4 | 4 | 0 |
 | liabilityStatement | WP-10 | 139 | 29 | 22 | 34 | 41 | 13 | 94 | 94 | 0 |
 | liabilityActivityLedger | WP-11 | 10 | 0 | 10 | 0 | 0 | 0 | 10 | 10 | 0 |
 | auInvestmentStatement | WP-12 | 167 | 42 | 31 | 24 | 56 | 14 | 74 | 74 | 0 |
 | retirementStatement | WP-13 | 201 | 17 | 0 | 115 | 66 | 3 | 131 | 131 | 0 |
 | iiCas | WP-12 | 41 | 15 | 5 | 9 | 12 | 0 | 0 | 0 | 0 |
 | insurance | WP-14 | 21 | 10 | 0 | 8 | 0 | 3 | 0 | 0 | 21 |
-| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 429 | | 21 |
+| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 346 | | 21 |
 
 ## Open gaps by id
 
@@ -40,15 +40,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | G6 | P2 | WP-10 | 16 |
 | G7 | P1 | WP-07, WP-11 | 30 |
 | GAP-01 | P0 | WP-03 | 1 |
-| GAP-03 | P1 | WP-09 | 2 |
-| GAP-04 | P1 | WP-09 | 3 |
-| GAP-05 | P1 | WP-09 | 1 |
-| GAP-07 | P2 | WP-09 | 60 |
-| GAP-08 | P2 | WP-09 | 12 |
 | GAP-09 | P2 | WP-03 | 3 |
-| GAP-10 | P2 | WP-09 | 1 |
-| GAP-12 | P3 | WP-09 | 3 |
-| GAP-15 | P3 | WP-09 | 1 |
 | GAP-RET-01 | P1 | WP-13 | 6 |
 | GAP-RET-03 | P1 | WP-13 | 56 |
 | GAP-RET-04 | P2 | WP-13 | 42 |
@@ -294,37 +286,37 @@ Every field an active upload adapter extracts, every evidence column and every a
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
 | `country` | D metadata | fdh_payroll_events.country_code | — | compliant | — | — |
-| `currencyCode` | A state | income_sources.currency_code | Income tab | open_gap | GAP-03 (P1) | WP-09 |
+| `currencyCode` | A state | income_sources.currency_code (CURRENCY_MISMATCH on update, 0210) | Income tab | compliant | — | — |
 | `payFrequencySource` | D metadata | fdh_payroll_events.pay_frequency_source | — | compliant | — | — |
 | `grossPaySource` | D metadata | fdh_payroll_events.gross_pay_source | — | compliant | — | — |
-| `employerName` | A state | income_sources.employer_name | Income tab | open_gap | GAP-04 (P1) | WP-09 |
-| `payPeriodStart` | C evidence | evidence:fdh_payroll_events.pay_period_start | — | open_gap | GAP-07 (P2) | WP-09 |
-| `payPeriodEnd` | C evidence | evidence:fdh_payroll_events.pay_period_end | — | open_gap | GAP-07 (P2) | WP-09 |
-| `paymentDate` | C evidence | evidence:fdh_payroll_events.payment_date (economic date) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `payFrequency` | A state | income_sources.frequency (user-confirmed) | Income tab | open_gap | GAP-12 (P3) | WP-09 |
+| `employerName` | A state | income_sources.employer_name | Income tab | compliant | — | — |
+| `payPeriodStart` | C evidence | evidence:fdh_payroll_events.pay_period_start | Income > Payslip details | compliant | — | — |
+| `payPeriodEnd` | C evidence | evidence:fdh_payroll_events.pay_period_end | Income > Payslip details | compliant | — | — |
+| `paymentDate` | C evidence | evidence:fdh_payroll_events.payment_date (economic date) | Income > Payslip details | compliant | — | — |
+| `payFrequency` | A state | income_sources.frequency (user-confirmed; semimonthly / irregular / unknown: user chooses) | Income tab | compliant | — | — |
 | `grossPay` | A state | income_sources.amount (recurring gross) | Income tab | compliant | — | — |
-| `basePay` | C evidence | evidence:fdh_payroll_events.base_pay | — | open_gap | GAP-07 (P2) | WP-09 |
-| `overtimePay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `bonusPay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `commissionPay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `allowancesTotal` | A state | income_sources.amount (inside recurring gross) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `reimbursementsTotal` | E unsupported | not income (subtracted from recurring gross) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `otherEarnings` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `taxWithheld` | C evidence | evidence:fdh_payroll_events.tax_withheld | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employeeDeductionsTotal` | C evidence | evidence:fdh_payroll_events.employee_deductions_total | — | open_gap | GAP-07 (P2) | WP-09 |
-| `salarySacrifice` | C evidence | evidence:fdh_payroll_events.salary_sacrifice | — | open_gap | GAP-07 (P2) | WP-09 |
-| `professionalTax` | C evidence | evidence:fdh_payroll_events.professional_tax | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employerRetirementContribution` | C evidence | evidence:fdh_payroll_events.employer_retirement_contribution (never income) | Income > Import from payslip (evidence only) | compliant | — | — |
-| `employeeRetirementContribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employerNpsContribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employeeNpsContribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
+| `basePay` | C evidence | evidence:fdh_payroll_events.base_pay | Income > Payslip details | compliant | — | — |
+| `overtimePay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `bonusPay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `commissionPay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `allowancesTotal` | A state | income_sources.amount (inside recurring gross) | Income > Payslip details | compliant | — | — |
+| `reimbursementsTotal` | E unsupported | not income (taken out of recurring gross when the payslip lines show it is inside gross) | Income > Payslip details ("Not income") | compliant | — | — |
+| `otherEarnings` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `taxWithheld` | C evidence | evidence:fdh_payroll_events.tax_withheld | Income > Payslip details | compliant | — | — |
+| `employeeDeductionsTotal` | C evidence | evidence:fdh_payroll_events.employee_deductions_total | Income > Payslip details | compliant | — | — |
+| `salarySacrifice` | C evidence | evidence:fdh_payroll_events.salary_sacrifice (+ the recorded gross basis) | Income > Payslip details | compliant | — | — |
+| `professionalTax` | C evidence | evidence:fdh_payroll_events.professional_tax | Income > Payslip details | compliant | — | — |
+| `employerRetirementContribution` | C evidence | evidence:fdh_payroll_events.employer_retirement_contribution (never income) | Income > Payslip details | compliant | — | — |
+| `employeeRetirementContribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | Income > Payslip details | compliant | — | — |
+| `employerNpsContribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | Income > Payslip details | compliant | — | — |
+| `employeeNpsContribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | Income > Payslip details | compliant | — | — |
 | `netPay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | open_gap | GAP-09 (P2) | WP-03 |
-| `ytdGross` | C evidence | evidence:fdh_payroll_events.ytd_gross (never summed) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `ytdTax` | C evidence | evidence:fdh_payroll_events.ytd_tax | — | open_gap | GAP-07 (P2) | WP-09 |
-| `ytdNet` | C evidence | evidence:fdh_payroll_events.ytd_net | — | open_gap | GAP-07 (P2) | WP-09 |
-| `ytdEmployerRetirement` | C evidence | evidence:fdh_payroll_events.ytd_employer_retirement | — | open_gap | GAP-07 (P2) | WP-09 |
-| `ytdEmployeeRetirement` | C evidence | evidence:fdh_payroll_events.ytd_employee_retirement | — | open_gap | GAP-07 (P2) | WP-09 |
-| `components` | C evidence | evidence:fdh_payroll_components | — | open_gap | GAP-07 (P2) | WP-09 |
+| `ytdGross` | C evidence | evidence:fdh_payroll_events.ytd_gross (never summed) | Income > Payslip details | compliant | — | — |
+| `ytdTax` | C evidence | evidence:fdh_payroll_events.ytd_tax | Income > Payslip details | compliant | — | — |
+| `ytdNet` | C evidence | evidence:fdh_payroll_events.ytd_net | Income > Payslip details | compliant | — | — |
+| `ytdEmployerRetirement` | C evidence | evidence:fdh_payroll_events.ytd_employer_retirement | Income > Payslip details | compliant | — | — |
+| `ytdEmployeeRetirement` | C evidence | evidence:fdh_payroll_events.ytd_employee_retirement | Income > Payslip details | compliant | — | — |
+| `components` | C evidence | evidence:fdh_payroll_components | Income > Payslip details | compliant | — | — |
 | `parserName` | D metadata | fdh_payroll_events.parser_name | — | compliant | — | — |
 | `parserVersion` | D metadata | fdh_payroll_events.parser_version | — | compliant | — | — |
 | `extractionConfidence` | D metadata | fdh_payroll_events.extraction_confidence | — | compliant | — | — |
@@ -334,11 +326,11 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `side` | C evidence | evidence:fdh_payroll_components.component_side | — | open_gap | GAP-07 (P2) | WP-09 |
-| `type` | C evidence | evidence:fdh_payroll_components.component_type | — | open_gap | GAP-07 (P2) | WP-09 |
-| `labelRaw` | C evidence | evidence:fdh_payroll_components.label_raw | — | open_gap | GAP-07 (P2) | WP-09 |
-| `amount` | C evidence | evidence:fdh_payroll_components.amount | — | open_gap | GAP-07 (P2) | WP-09 |
-| `isYearToDate` | C evidence | evidence:fdh_payroll_components.is_year_to_date | — | open_gap | GAP-07 (P2) | WP-09 |
+| `side` | C evidence | evidence:fdh_payroll_components.component_side | Income > Payslip details | compliant | — | — |
+| `type` | C evidence | evidence:fdh_payroll_components.component_type | Income > Payslip details | compliant | — | — |
+| `labelRaw` | C evidence | evidence:fdh_payroll_components.label_raw | Income > Payslip details | compliant | — | — |
+| `amount` | C evidence | evidence:fdh_payroll_components.amount | Income > Payslip details | compliant | — | — |
+| `isYearToDate` | C evidence | evidence:fdh_payroll_components.is_year_to_date | Income > Payslip details | compliant | — | — |
 
 ### payslip_ai · zod_schema · `aie:payslip/schema.ts#payslipDocumentFactsSchema`
 
@@ -346,27 +338,27 @@ Every field an active upload adapter extracts, every evidence column and every a
 |---|---|---|---|---|---|---|
 | `schemaVersion` | D metadata | aie run evidence | — | compliant | — | — |
 | `documentMissingReasonCode` | D metadata | aie run evidence | — | compliant | — | — |
-| `employerName` | A state | income_sources.employer_name | Income tab | open_gap | GAP-04 (P1) | WP-09 |
-| `payPeriodStart` | C evidence | evidence:fdh_payroll_events.pay_period_start | — | open_gap | GAP-07 (P2) | WP-09 |
-| `payPeriodEnd` | C evidence | evidence:fdh_payroll_events.pay_period_end | — | open_gap | GAP-07 (P2) | WP-09 |
-| `paymentDate` | C evidence | evidence:fdh_payroll_events.payment_date (economic date) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `payFrequency` | A state | income_sources.frequency (user-confirmed) | Income tab | open_gap | GAP-12 (P3) | WP-09 |
+| `employerName` | A state | income_sources.employer_name | Income tab | compliant | — | — |
+| `payPeriodStart` | C evidence | evidence:fdh_payroll_events.pay_period_start | Income > Payslip details | compliant | — | — |
+| `payPeriodEnd` | C evidence | evidence:fdh_payroll_events.pay_period_end | Income > Payslip details | compliant | — | — |
+| `paymentDate` | C evidence | evidence:fdh_payroll_events.payment_date (economic date) | Income > Payslip details | compliant | — | — |
+| `payFrequency` | A state | income_sources.frequency (user-confirmed; semimonthly / irregular / unknown: user chooses) | Income tab | compliant | — | — |
 | `grossPay` | A state | income_sources.amount (recurring gross) | Income tab | compliant | — | — |
-| `basePay` | C evidence | evidence:fdh_payroll_events.base_pay | — | open_gap | GAP-07 (P2) | WP-09 |
-| `overtimePay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `bonusPay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `commissionPay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `allowancesTotal` | A state | income_sources.amount (inside recurring gross) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `reimbursementsTotal` | E unsupported | not income (subtracted from recurring gross) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `otherEarnings` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `taxWithheld` | C evidence | evidence:fdh_payroll_events.tax_withheld | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employeeDeductionsTotal` | C evidence | evidence:fdh_payroll_events.employee_deductions_total | — | open_gap | GAP-07 (P2) | WP-09 |
-| `salarySacrifice` | C evidence | evidence:fdh_payroll_events.salary_sacrifice | — | open_gap | GAP-07 (P2) | WP-09 |
-| `professionalTax` | C evidence | evidence:fdh_payroll_events.professional_tax | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employerRetirementContribution` | C evidence | evidence:fdh_payroll_events.employer_retirement_contribution (never income) | Income > Import from payslip (evidence only) | compliant | — | — |
-| `employeeRetirementContribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employerNpsContribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employeeNpsContribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
+| `basePay` | C evidence | evidence:fdh_payroll_events.base_pay | Income > Payslip details | compliant | — | — |
+| `overtimePay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `bonusPay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `commissionPay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `allowancesTotal` | A state | income_sources.amount (inside recurring gross) | Income > Payslip details | compliant | — | — |
+| `reimbursementsTotal` | E unsupported | not income (taken out of recurring gross when the payslip lines show it is inside gross) | Income > Payslip details ("Not income") | compliant | — | — |
+| `otherEarnings` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `taxWithheld` | C evidence | evidence:fdh_payroll_events.tax_withheld | Income > Payslip details | compliant | — | — |
+| `employeeDeductionsTotal` | C evidence | evidence:fdh_payroll_events.employee_deductions_total | Income > Payslip details | compliant | — | — |
+| `salarySacrifice` | C evidence | evidence:fdh_payroll_events.salary_sacrifice (+ the recorded gross basis) | Income > Payslip details | compliant | — | — |
+| `professionalTax` | C evidence | evidence:fdh_payroll_events.professional_tax | Income > Payslip details | compliant | — | — |
+| `employerRetirementContribution` | C evidence | evidence:fdh_payroll_events.employer_retirement_contribution (never income) | Income > Payslip details | compliant | — | — |
+| `employeeRetirementContribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | Income > Payslip details | compliant | — | — |
+| `employerNpsContribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | Income > Payslip details | compliant | — | — |
+| `employeeNpsContribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | Income > Payslip details | compliant | — | — |
 | `netPay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | open_gap | GAP-09 (P2) | WP-03 |
 
 ### payslip_native · db_column · `db:fdh_payroll_events`
@@ -379,48 +371,48 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `statement_upload_id` | D metadata | fdh_payroll_events.statement_upload_id | — | compliant | — | — |
 | `employer_normalised` | D metadata | fdh_payroll_events.employer_normalised | — | compliant | — | — |
 | `country_code` | D metadata | fdh_payroll_events.country_code | — | compliant | — | — |
-| `currency_code` | A state | income_sources.currency_code | Income tab | open_gap | GAP-03 (P1) | WP-09 |
+| `currency_code` | A state | income_sources.currency_code (CURRENCY_MISMATCH on update, 0210) | Income tab | compliant | — | — |
 | `pay_frequency_source` | D metadata | fdh_payroll_events.pay_frequency_source | — | compliant | — | — |
-| `employer_name` | A state | income_sources.employer_name | Income tab | open_gap | GAP-04 (P1) | WP-09 |
-| `pay_period_start` | C evidence | evidence:fdh_payroll_events.pay_period_start | — | open_gap | GAP-07 (P2) | WP-09 |
-| `pay_period_end` | C evidence | evidence:fdh_payroll_events.pay_period_end | — | open_gap | GAP-07 (P2) | WP-09 |
-| `payment_date` | C evidence | evidence:fdh_payroll_events.payment_date (economic date) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `pay_frequency` | A state | income_sources.frequency (user-confirmed) | Income tab | open_gap | GAP-12 (P3) | WP-09 |
+| `employer_name` | A state | income_sources.employer_name | Income tab | compliant | — | — |
+| `pay_period_start` | C evidence | evidence:fdh_payroll_events.pay_period_start | Income > Payslip details | compliant | — | — |
+| `pay_period_end` | C evidence | evidence:fdh_payroll_events.pay_period_end | Income > Payslip details | compliant | — | — |
+| `payment_date` | C evidence | evidence:fdh_payroll_events.payment_date (economic date) | Income > Payslip details | compliant | — | — |
+| `pay_frequency` | A state | income_sources.frequency (user-confirmed; semimonthly / irregular / unknown: user chooses) | Income tab | compliant | — | — |
 | `gross_pay` | A state | income_sources.amount (recurring gross) | Income tab | compliant | — | — |
-| `base_pay` | C evidence | evidence:fdh_payroll_events.base_pay | — | open_gap | GAP-07 (P2) | WP-09 |
-| `overtime_pay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `bonus_pay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `commission_pay` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `allowances_total` | A state | income_sources.amount (inside recurring gross) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `reimbursements_total` | E unsupported | not income (subtracted from recurring gross) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `other_earnings` | B event | fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06) | — | open_gap | GAP-08 (P2) | WP-09 |
-| `tax_withheld` | C evidence | evidence:fdh_payroll_events.tax_withheld | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employee_deductions_total` | C evidence | evidence:fdh_payroll_events.employee_deductions_total | — | open_gap | GAP-07 (P2) | WP-09 |
-| `salary_sacrifice` | C evidence | evidence:fdh_payroll_events.salary_sacrifice | — | open_gap | GAP-07 (P2) | WP-09 |
-| `professional_tax` | C evidence | evidence:fdh_payroll_events.professional_tax | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employer_retirement_contribution` | C evidence | evidence:fdh_payroll_events.employer_retirement_contribution (never income) | Income > Import from payslip (evidence only) | compliant | — | — |
-| `employee_retirement_contribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employer_nps_contribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | — | open_gap | GAP-07 (P2) | WP-09 |
-| `employee_nps_contribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
+| `base_pay` | C evidence | evidence:fdh_payroll_events.base_pay | Income > Payslip details | compliant | — | — |
+| `overtime_pay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `bonus_pay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `commission_pay` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `allowances_total` | A state | income_sources.amount (inside recurring gross) | Income > Payslip details | compliant | — | — |
+| `reimbursements_total` | E unsupported | not income (taken out of recurring gross when the payslip lines show it is inside gross) | Income > Payslip details ("Not income") | compliant | — | — |
+| `other_earnings` | B event | income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06) | Income > Actual income (one-off pay) | compliant | — | — |
+| `tax_withheld` | C evidence | evidence:fdh_payroll_events.tax_withheld | Income > Payslip details | compliant | — | — |
+| `employee_deductions_total` | C evidence | evidence:fdh_payroll_events.employee_deductions_total | Income > Payslip details | compliant | — | — |
+| `salary_sacrifice` | C evidence | evidence:fdh_payroll_events.salary_sacrifice (+ the recorded gross basis) | Income > Payslip details | compliant | — | — |
+| `professional_tax` | C evidence | evidence:fdh_payroll_events.professional_tax | Income > Payslip details | compliant | — | — |
+| `employer_retirement_contribution` | C evidence | evidence:fdh_payroll_events.employer_retirement_contribution (never income) | Income > Payslip details | compliant | — | — |
+| `employee_retirement_contribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | Income > Payslip details | compliant | — | — |
+| `employer_nps_contribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | Income > Payslip details | compliant | — | — |
+| `employee_nps_contribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | Income > Payslip details | compliant | — | — |
 | `net_pay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | open_gap | GAP-09 (P2) | WP-03 |
-| `ytd_gross` | C evidence | evidence:fdh_payroll_events.ytd_gross | — | open_gap | GAP-07 (P2) | WP-09 |
-| `ytd_tax` | C evidence | evidence:fdh_payroll_events.ytd_tax | — | open_gap | GAP-07 (P2) | WP-09 |
-| `ytd_net` | C evidence | evidence:fdh_payroll_events.ytd_net | — | open_gap | GAP-07 (P2) | WP-09 |
-| `ytd_employer_retirement` | C evidence | evidence:fdh_payroll_events.ytd_employer_retirement | — | open_gap | GAP-07 (P2) | WP-09 |
-| `ytd_employee_retirement` | C evidence | evidence:fdh_payroll_events.ytd_employee_retirement | — | open_gap | GAP-07 (P2) | WP-09 |
+| `ytd_gross` | C evidence | evidence:fdh_payroll_events.ytd_gross | Income > Payslip details | compliant | — | — |
+| `ytd_tax` | C evidence | evidence:fdh_payroll_events.ytd_tax | Income > Payslip details | compliant | — | — |
+| `ytd_net` | C evidence | evidence:fdh_payroll_events.ytd_net | Income > Payslip details | compliant | — | — |
+| `ytd_employer_retirement` | C evidence | evidence:fdh_payroll_events.ytd_employer_retirement | Income > Payslip details | compliant | — | — |
+| `ytd_employee_retirement` | C evidence | evidence:fdh_payroll_events.ytd_employee_retirement | Income > Payslip details | compliant | — | — |
 | `parser_name` | D metadata | fdh_payroll_events.parser_name | — | compliant | — | — |
 | `parser_version` | D metadata | fdh_payroll_events.parser_version | — | compliant | — | — |
 | `extraction_confidence` | D metadata | fdh_payroll_events.extraction_confidence | — | compliant | — | — |
 | `reconciliation_status` | D metadata | fdh_payroll_events.reconciliation_status | — | compliant | — | — |
 | `reconciliation_variance` | D metadata | fdh_payroll_events.reconciliation_variance | — | compliant | — | — |
-| `bank_match_status` | D metadata | fdh_payroll_events.bank_match_status | — | open_gap | GAP-10 (P2) | WP-09 |
+| `bank_match_status` | D metadata | fdh_payroll_events.bank_match_status (re-matched on bank approval: fdh9_restamp_payroll_bank_match, 0210) | — | compliant | — | — |
 | `bank_match_transaction_id` | D metadata | dedup link: the payslip and its bank credit are ONE income event (selectIncome) | — | open_gap | GAP-01 (P0) | WP-03 |
 | `bank_match_confidence` | D metadata | fdh_payroll_events.bank_match_confidence | — | compliant | — | — |
 | `review_status` | D metadata | fdh_payroll_events.review_status | — | compliant | — | — |
 | `approval_status` | D metadata | fdh_payroll_events.approval_status | — | compliant | — | — |
 | `approved_at` | D metadata | fdh_payroll_events.approved_at | — | compliant | — | — |
 | `approved_by` | D metadata | fdh_payroll_events.approved_by | — | compliant | — | — |
-| `superseded_by_payroll_event_id` | D metadata | fdh_payroll_events.superseded_by_payroll_event_id | — | open_gap | GAP-15 (P3) | WP-09 |
+| `superseded_by_payroll_event_id` | D metadata | fdh_payroll_events.superseded_by_payroll_event_id (fdh9_supersede_payroll_event, 0210) | — | compliant | — | — |
 | `payslip_fingerprint` | D metadata | fdh_payroll_events.payslip_fingerprint | — | compliant | — | — |
 | `created_at` | D metadata | fdh_payroll_events.created_at | — | compliant | — | — |
 | `updated_at` | D metadata | fdh_payroll_events.updated_at | — | compliant | — | — |
@@ -428,7 +420,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `user_corrected_fields` | D metadata | fdh_payroll_events.user_corrected_fields | — | compliant | — | — |
 | `last_corrected_at` | D metadata | fdh_payroll_events.last_corrected_at | — | compliant | — | — |
 | `last_corrected_by` | D metadata | fdh_payroll_events.last_corrected_by | — | compliant | — | — |
-| `income_owner` | A state | income_sources.owner (self / spouse, chosen at upload) | — | open_gap | GAP-05 (P1) | WP-09 |
+| `income_owner` | A state | income_sources.owner (self / spouse, chosen at upload, fixed at approval; 0210 MEMBER_MISMATCH) | Income tab | compliant | — | — |
 
 ### payslip_native · db_column · `db:fdh_payroll_components`
 
@@ -437,11 +429,11 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `id` | D metadata | fdh_payroll_components.id | — | compliant | — | — |
 | `user_id` | D metadata | fdh_payroll_components.user_id | — | compliant | — | — |
 | `payroll_event_id` | D metadata | fdh_payroll_components.payroll_event_id | — | compliant | — | — |
-| `component_side` | C evidence | evidence:fdh_payroll_components.component_side | — | open_gap | GAP-07 (P2) | WP-09 |
-| `component_type` | C evidence | evidence:fdh_payroll_components.component_type | — | open_gap | GAP-07 (P2) | WP-09 |
-| `label_raw` | C evidence | evidence:fdh_payroll_components.label_raw | — | open_gap | GAP-07 (P2) | WP-09 |
-| `amount` | C evidence | evidence:fdh_payroll_components.amount | — | open_gap | GAP-07 (P2) | WP-09 |
-| `is_year_to_date` | C evidence | evidence:fdh_payroll_components.is_year_to_date | — | open_gap | GAP-07 (P2) | WP-09 |
+| `component_side` | C evidence | evidence:fdh_payroll_components.component_side | Income > Payslip details | compliant | — | — |
+| `component_type` | C evidence | evidence:fdh_payroll_components.component_type | Income > Payslip details | compliant | — | — |
+| `label_raw` | C evidence | evidence:fdh_payroll_components.label_raw | Income > Payslip details | compliant | — | — |
+| `amount` | C evidence | evidence:fdh_payroll_components.amount | Income > Payslip details | compliant | — | — |
+| `is_year_to_date` | C evidence | evidence:fdh_payroll_components.is_year_to_date | Income > Payslip details | compliant | — | — |
 | `created_at` | D metadata | fdh_payroll_components.created_at | — | compliant | — | — |
 
 ## liabilityStatement (owner WP-10)

@@ -325,7 +325,10 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     if (evidence.revises) reviewReasons.push('revised_payslip');
     if (evidence.grossBasis?.reimbursementBasis === 'assumed_included') reviewReasons.push('reimbursement_inclusion_assumed');
     if (evidence.grossBasis?.salarySacrificeBasis === 'unknown') reviewReasons.push('salary_sacrifice_basis_unknown');
-    if (target && !foldEmployer(evidence.employerName) && target.master_item_key === 'employment_salary') reviewReasons.push('matched_catalogue_salary_without_employer');
+    if (target && target.master_item_key === 'employment_salary' && !foldEmployer(target.employer_name)
+      && !(foldEmployer(evidence.employerName) && (foldEmployer(target.source_name) ?? '').includes(foldEmployer(evidence.employerName)!))) {
+      reviewReasons.push('matched_catalogue_salary_without_employer');
+    }
 
     const fields: ProposedField[] = [];
 

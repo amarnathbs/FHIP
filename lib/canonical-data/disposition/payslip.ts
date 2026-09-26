@@ -1,70 +1,78 @@
 /**
  * Field dispositions -- PAYSLIP (native parser + AI fallback) and the payroll
  * evidence tables. Owner: WP-09. Matrix section 2.
+ *
+ * WP-09 closed GAP-03 (write), GAP-04, GAP-05, GAP-07, GAP-08, GAP-10, GAP-12
+ * and GAP-15 here:
+ *  - every evidence figure is user-visible in Income > Payslip details
+ *    (components/income/PayslipDetails.tsx, from the review step and from an
+ *    imported Income row), labelled from THIS registry (lib/income/
+ *    payslipDetails.ts);
+ *  - variable pay is a dated one-off actual income event of the Applied
+ *    payslip's Income row (selectIncome actual.variablePay, PO D-06), deduped
+ *    against the matched bank credit;
+ *  - owner, currency and event-level idempotency are enforced by the 0210
+ *    apply RPC; the bank match is re-stamped on bank approval.
+ * Still open: GAP-01 (the dashboard consumers switch in WP-03) and GAP-09
+ * (null net = unknown in the consumers, WP-03).
  */
 import { A, B, C, D, E, gap, rows, technical, type Row } from './build';
 import type { RegistryFile } from './types';
 
 const GAP01 = gap('GAP-01', 'P0', 'WP-03'); // dedupe key honoured by selectIncome (WP-02); consumers switch in WP-03
-const GAP03 = gap('GAP-03', 'P1', 'WP-09');
-const GAP04 = gap('GAP-04', 'P1', 'WP-09');
-const GAP05 = gap('GAP-05', 'P1', 'WP-09');
-const GAP07 = gap('GAP-07', 'P2', 'WP-09');
-const GAP08 = gap('GAP-08', 'P2', 'WP-09');
 const GAP09 = gap('GAP-09', 'P2', 'WP-03');
-const GAP10 = gap('GAP-10', 'P2', 'WP-09');
-const GAP12 = gap('GAP-12', 'P3', 'WP-09');
-const GAP15 = gap('GAP-15', 'P3', 'WP-09');
 
 const INCOME = 'Income tab';
+const DETAILS = 'Income > Payslip details';
 const EV = (col: string) => `evidence:fdh_payroll_events.${col}`;
-const VARIABLE = 'fdh_transactions(income, one-off, dated, deduped against the matched bank credit -- D-06)';
+const VARIABLE = "income_sources (the Applied payslip's row) -> selectIncome actual.variablePay: dated one-off actual income, deduped against the matched bank credit (PO D-06)";
+const VARIABLE_SEEN = 'Income > Actual income (one-off pay)';
 
 /** Shared by the native type, the AI schema and the table (field -> column). */
 function payslipFacts(style: 'camel' | 'snake'): Row[] {
   const f = (camel: string, snake: string) => (style === 'camel' ? camel : snake);
   return [
-    [f('employerName', 'employer_name'), A, 'income_sources.employer_name', INCOME, GAP04],
-    [f('payPeriodStart', 'pay_period_start'), C, EV('pay_period_start'), null, GAP07],
-    [f('payPeriodEnd', 'pay_period_end'), C, EV('pay_period_end'), null, GAP07],
-    [f('paymentDate', 'payment_date'), C, EV('payment_date') + ' (economic date)', null, GAP07],
-    [f('payFrequency', 'pay_frequency'), A, 'income_sources.frequency (user-confirmed)', INCOME, GAP12],
+    [f('employerName', 'employer_name'), A, 'income_sources.employer_name', INCOME],
+    [f('payPeriodStart', 'pay_period_start'), C, EV('pay_period_start'), DETAILS],
+    [f('payPeriodEnd', 'pay_period_end'), C, EV('pay_period_end'), DETAILS],
+    [f('paymentDate', 'payment_date'), C, EV('payment_date') + ' (economic date)', DETAILS],
+    [f('payFrequency', 'pay_frequency'), A, 'income_sources.frequency (user-confirmed; semimonthly / irregular / unknown: user chooses)', INCOME],
     [f('grossPay', 'gross_pay'), A, 'income_sources.amount (recurring gross)', INCOME],
-    [f('basePay', 'base_pay'), C, EV('base_pay'), null, GAP07],
-    [f('overtimePay', 'overtime_pay'), B, VARIABLE, null, GAP08],
-    [f('bonusPay', 'bonus_pay'), B, VARIABLE, null, GAP08],
-    [f('commissionPay', 'commission_pay'), B, VARIABLE, null, GAP08],
-    [f('allowancesTotal', 'allowances_total'), A, 'income_sources.amount (inside recurring gross)', null, GAP07],
-    [f('reimbursementsTotal', 'reimbursements_total'), E, 'not income (subtracted from recurring gross)', null, GAP07],
-    [f('otherEarnings', 'other_earnings'), B, VARIABLE, null, GAP08],
-    [f('taxWithheld', 'tax_withheld'), C, EV('tax_withheld'), null, GAP07],
-    [f('employeeDeductionsTotal', 'employee_deductions_total'), C, EV('employee_deductions_total'), null, GAP07],
-    [f('salarySacrifice', 'salary_sacrifice'), C, EV('salary_sacrifice'), null, GAP07],
-    [f('professionalTax', 'professional_tax'), C, EV('professional_tax'), null, GAP07],
-    [f('employerRetirementContribution', 'employer_retirement_contribution'), C, EV('employer_retirement_contribution') + ' (never income)', 'Income > Import from payslip (evidence only)'],
-    [f('employeeRetirementContribution', 'employee_retirement_contribution'), C, EV('employee_retirement_contribution'), null, GAP07],
-    [f('employerNpsContribution', 'employer_nps_contribution'), C, EV('employer_nps_contribution') + ' (never income)', null, GAP07],
-    [f('employeeNpsContribution', 'employee_nps_contribution'), C, EV('employee_nps_contribution'), null, GAP07],
+    [f('basePay', 'base_pay'), C, EV('base_pay'), DETAILS],
+    [f('overtimePay', 'overtime_pay'), B, VARIABLE, VARIABLE_SEEN],
+    [f('bonusPay', 'bonus_pay'), B, VARIABLE, VARIABLE_SEEN],
+    [f('commissionPay', 'commission_pay'), B, VARIABLE, VARIABLE_SEEN],
+    [f('allowancesTotal', 'allowances_total'), A, 'income_sources.amount (inside recurring gross)', DETAILS],
+    [f('reimbursementsTotal', 'reimbursements_total'), E, 'not income (taken out of recurring gross when the payslip lines show it is inside gross)', `${DETAILS} ("Not income")`],
+    [f('otherEarnings', 'other_earnings'), B, VARIABLE, VARIABLE_SEEN],
+    [f('taxWithheld', 'tax_withheld'), C, EV('tax_withheld'), DETAILS],
+    [f('employeeDeductionsTotal', 'employee_deductions_total'), C, EV('employee_deductions_total'), DETAILS],
+    [f('salarySacrifice', 'salary_sacrifice'), C, EV('salary_sacrifice') + ' (+ the recorded gross basis)', DETAILS],
+    [f('professionalTax', 'professional_tax'), C, EV('professional_tax'), DETAILS],
+    [f('employerRetirementContribution', 'employer_retirement_contribution'), C, EV('employer_retirement_contribution') + ' (never income)', DETAILS],
+    [f('employeeRetirementContribution', 'employee_retirement_contribution'), C, EV('employee_retirement_contribution'), DETAILS],
+    [f('employerNpsContribution', 'employer_nps_contribution'), C, EV('employer_nps_contribution') + ' (never income)', DETAILS],
+    [f('employeeNpsContribution', 'employee_nps_contribution'), C, EV('employee_nps_contribution'), DETAILS],
     [f('netPay', 'net_pay'), A, 'income_sources.net_amount (null = unknown, never gross)', INCOME, GAP09],
   ];
 }
 
 const YTD: Row[] = [
-  ['ytdGross', C, EV('ytd_gross') + ' (never summed)', null, GAP07],
-  ['ytdTax', C, EV('ytd_tax'), null, GAP07],
-  ['ytdNet', C, EV('ytd_net'), null, GAP07],
-  ['ytdEmployerRetirement', C, EV('ytd_employer_retirement'), null, GAP07],
-  ['ytdEmployeeRetirement', C, EV('ytd_employee_retirement'), null, GAP07],
+  ['ytdGross', C, EV('ytd_gross') + ' (never summed)', DETAILS],
+  ['ytdTax', C, EV('ytd_tax'), DETAILS],
+  ['ytdNet', C, EV('ytd_net'), DETAILS],
+  ['ytdEmployerRetirement', C, EV('ytd_employer_retirement'), DETAILS],
+  ['ytdEmployeeRetirement', C, EV('ytd_employee_retirement'), DETAILS],
 ];
 
 const NATIVE: Row[] = [
   ['country', D, 'fdh_payroll_events.country_code'],
-  ['currencyCode', A, 'income_sources.currency_code', INCOME, GAP03],
+  ['currencyCode', A, 'income_sources.currency_code (CURRENCY_MISMATCH on update, 0210)', INCOME],
   ['payFrequencySource', D, 'fdh_payroll_events.pay_frequency_source'],
   ['grossPaySource', D, 'fdh_payroll_events.gross_pay_source'],
   ...payslipFacts('camel'),
   ...YTD,
-  ['components', C, 'evidence:fdh_payroll_components', null, GAP07],
+  ['components', C, 'evidence:fdh_payroll_components', DETAILS],
   ['parserName', D, 'fdh_payroll_events.parser_name'],
   ['parserVersion', D, 'fdh_payroll_events.parser_version'],
   ['extractionConfidence', D, 'fdh_payroll_events.extraction_confidence'],
@@ -72,11 +80,11 @@ const NATIVE: Row[] = [
 ];
 
 const COMPONENT: Row[] = [
-  ['side', C, 'evidence:fdh_payroll_components.component_side', null, GAP07],
-  ['type', C, 'evidence:fdh_payroll_components.component_type', null, GAP07],
-  ['labelRaw', C, 'evidence:fdh_payroll_components.label_raw', null, GAP07],
-  ['amount', C, 'evidence:fdh_payroll_components.amount', null, GAP07],
-  ['isYearToDate', C, 'evidence:fdh_payroll_components.is_year_to_date', null, GAP07],
+  ['side', C, 'evidence:fdh_payroll_components.component_side', DETAILS],
+  ['type', C, 'evidence:fdh_payroll_components.component_type', DETAILS],
+  ['labelRaw', C, 'evidence:fdh_payroll_components.label_raw', DETAILS],
+  ['amount', C, 'evidence:fdh_payroll_components.amount', DETAILS],
+  ['isYearToDate', C, 'evidence:fdh_payroll_components.is_year_to_date', DETAILS],
 ];
 
 const AI: Row[] = [
@@ -87,37 +95,37 @@ const AI: Row[] = [
 
 const EVENTS: Row[] = [
   ...technical(['id', 'user_id', 'household_id', 'statement_upload_id', 'employer_normalised', 'country_code'], 'fdh_payroll_events'),
-  ['currency_code', A, 'income_sources.currency_code', INCOME, GAP03],
+  ['currency_code', A, 'income_sources.currency_code (CURRENCY_MISMATCH on update, 0210)', INCOME],
   ['pay_frequency_source', D, 'fdh_payroll_events.pay_frequency_source'],
   ...payslipFacts('snake'),
-  ['ytd_gross', C, EV('ytd_gross'), null, GAP07],
-  ['ytd_tax', C, EV('ytd_tax'), null, GAP07],
-  ['ytd_net', C, EV('ytd_net'), null, GAP07],
-  ['ytd_employer_retirement', C, EV('ytd_employer_retirement'), null, GAP07],
-  ['ytd_employee_retirement', C, EV('ytd_employee_retirement'), null, GAP07],
+  ['ytd_gross', C, EV('ytd_gross'), DETAILS],
+  ['ytd_tax', C, EV('ytd_tax'), DETAILS],
+  ['ytd_net', C, EV('ytd_net'), DETAILS],
+  ['ytd_employer_retirement', C, EV('ytd_employer_retirement'), DETAILS],
+  ['ytd_employee_retirement', C, EV('ytd_employee_retirement'), DETAILS],
   ...technical(['parser_name', 'parser_version', 'extraction_confidence', 'reconciliation_status', 'reconciliation_variance'], 'fdh_payroll_events'),
-  ['bank_match_status', D, 'fdh_payroll_events.bank_match_status', null, GAP10],
+  ['bank_match_status', D, 'fdh_payroll_events.bank_match_status (re-matched on bank approval: fdh9_restamp_payroll_bank_match, 0210)'],
   ['bank_match_transaction_id', D, 'dedup link: the payslip and its bank credit are ONE income event (selectIncome)', null, GAP01],
   ...technical(['bank_match_confidence', 'review_status', 'approval_status', 'approved_at', 'approved_by'], 'fdh_payroll_events'),
-  ['superseded_by_payroll_event_id', D, 'fdh_payroll_events.superseded_by_payroll_event_id', null, GAP15],
+  ['superseded_by_payroll_event_id', D, 'fdh_payroll_events.superseded_by_payroll_event_id (fdh9_supersede_payroll_event, 0210)'],
   ...technical(['payslip_fingerprint', 'created_at', 'updated_at', 'gross_pay_source', 'user_corrected_fields', 'last_corrected_at', 'last_corrected_by'], 'fdh_payroll_events'),
-  ['income_owner', A, 'income_sources.owner (self / spouse, chosen at upload)', null, GAP05],
+  ['income_owner', A, 'income_sources.owner (self / spouse, chosen at upload, fixed at approval; 0210 MEMBER_MISMATCH)', INCOME],
 ];
 
 const COMPONENTS_TABLE: Row[] = [
   ...technical(['id', 'user_id', 'payroll_event_id'], 'fdh_payroll_components'),
-  ['component_side', C, 'evidence:fdh_payroll_components.component_side', null, GAP07],
-  ['component_type', C, 'evidence:fdh_payroll_components.component_type', null, GAP07],
-  ['label_raw', C, 'evidence:fdh_payroll_components.label_raw', null, GAP07],
-  ['amount', C, 'evidence:fdh_payroll_components.amount', null, GAP07],
-  ['is_year_to_date', C, 'evidence:fdh_payroll_components.is_year_to_date', null, GAP07],
+  ['component_side', C, 'evidence:fdh_payroll_components.component_side', DETAILS],
+  ['component_type', C, 'evidence:fdh_payroll_components.component_type', DETAILS],
+  ['label_raw', C, 'evidence:fdh_payroll_components.label_raw', DETAILS],
+  ['amount', C, 'evidence:fdh_payroll_components.amount', DETAILS],
+  ['is_year_to_date', C, 'evidence:fdh_payroll_components.is_year_to_date', DETAILS],
   ['created_at', D, 'fdh_payroll_components.created_at'],
 ];
 
 export const payslipRegistry: RegistryFile = {
   id: 'payslip',
   ownerWp: 'WP-09',
-  OPEN_GAP_CEILING: 87,
+  OPEN_GAP_CEILING: 4,
   entries: [
     ...rows('payslip_native', 'ts_interface', 'fdh:payslip/types.ts#PayrollExtraction', NATIVE),
     ...rows('payslip_native', 'ts_interface', 'fdh:payslip/types.ts#PayrollComponent', COMPONENT),
