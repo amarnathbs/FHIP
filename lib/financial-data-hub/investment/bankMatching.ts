@@ -134,6 +134,26 @@ export function buildBrokerNarrativeSignal(statementInstitutionName: string | nu
   };
 }
 
+const GENERIC_NAME_WORDS = new Set(['THE', 'LTD', 'LIMITED', 'GROUP', 'HOLDINGS', 'CORP', 'CORPORATION', 'FUND', 'TRUST', 'AUSTRALIA', 'AUSTRALIAN', 'BANK', 'INC', 'PLC', 'ETF', 'INDEX', 'SHARES']);
+
+/**
+ * A dividend or distribution is paid by the COMPANY / fund (its share
+ * registry), not by the broker, so the bank narrative names the security
+ * ("BHP GROUP DIV", "VAS DST"), not CommSec. For those two types the security
+ * itself is an accepted institution signal: its ticker (3+ characters) or the
+ * first distinctive word of its name. Amount + date alone still never match.
+ */
+export function narrativeNamesSecurity(narrative: string | null | undefined, tickerRaw: string | null | undefined, securityNameRaw: string | null | undefined): boolean {
+  const n = normaliseNarrative(narrative);
+  const ticker = (tickerRaw ?? '').toUpperCase().replace(/\.(AX|ASX)$/, '').replace(/[^A-Z0-9]/g, '');
+  if (ticker.length >= 3 && n.includes(` ${ticker} `)) return true;
+  const firstWord = normaliseNarrative(securityNameRaw).trim().split(' ').find((w) => w.length >= 3 && !GENERIC_NAME_WORDS.has(w));
+  return Boolean(firstWord && n.includes(` ${firstWord} `));
+}
+
+/** Activity types whose bank leg is paid by the security's issuer rather than the broker. */
+export const AU_ISSUER_PAID_ACTIVITY_TYPES: ReadonlySet<string> = new Set(['DIVIDEND', 'DISTRIBUTION']);
+
 /**
  * The bank-leg DIRECTION each statement activity must have (INV-G4). A broker
  * BUY is funded by a bank DEBIT; a SELL / dividend / withdrawal arrives as a

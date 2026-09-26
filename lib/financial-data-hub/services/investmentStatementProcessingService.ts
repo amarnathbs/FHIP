@@ -42,6 +42,8 @@ import { reconcileAuStatementTotals } from '../investment/statementTotals';
 import {
   matchBankBrokerEvent,
   buildBrokerNarrativeSignal,
+  narrativeNamesSecurity,
+  AU_ISSUER_PAID_ACTIVITY_TYPES,
   AU_ACTIVITY_BANK_DIRECTION,
   AU_ACTIVITY_BANK_LEG_TYPE,
   AU_ACTIVITY_MATCH_PRIORITY,
@@ -988,10 +990,10 @@ export async function matchAuStatementActivitiesToBank(userId: string, statement
     if (!statement) return empty('Statement not found.');
 
     // PAGINATION (spec section 93): every read pages past PostgREST's cap.
-    const activities = await fetchAllRows<{ id: string; activity_type: string; amount: number; trade_date: string | null; settlement_date: string | null; currency_code: string; bank_match_status: string; linked_transaction_id: string | null }>(() =>
+    const activities = await fetchAllRows<{ id: string; activity_type: string; amount: number; trade_date: string | null; settlement_date: string | null; currency_code: string; bank_match_status: string; linked_transaction_id: string | null; ticker_raw: string | null; security_name_raw: string | null }>(() =>
       admin
         .from('fdh_investment_statement_activities')
-        .select('id, activity_type, amount, trade_date, settlement_date, currency_code, bank_match_status, linked_transaction_id')
+        .select('id, activity_type, amount, trade_date, settlement_date, currency_code, bank_match_status, linked_transaction_id, ticker_raw, security_name_raw')
         .eq('user_id', userId)
         .eq('statement_id', statementId)
         .in('activity_type', Object.keys(AU_ACTIVITY_BANK_DIRECTION))
@@ -1040,12 +1042,20 @@ export async function matchAuStatementActivitiesToBank(userId: string, statement
       const eligible = eventDate
         ? legs.filter((l) => !claimed.has(l.id) && l.credit_debit === direction && l.currency_original === activity.currency_code)
         : [];
-      const candidates: BankTransactionCandidate[] = eligible.map((l) => ({
-        transactionId: l.id,
-        amount: Number(l.amount_original),
-        transactionDate: l.transaction_date,
-        ...signal.evaluate([l.description_clean, l.description_raw, l.merchant_raw].filter(Boolean).join(' ')),
-      }));
+      const candidates: BankTransactionCandidate[] = eligible.map((l) => {
+        const narrative = [l.description_clean, l.description_raw, l.merchant_raw].filter(Boolean).join(' ');
+        const broker = signal.evaluate(narrative);
+        // A dividend is paid by the issuer, so naming the SECURITY is also a
+        // real signal for it (never for a trade or a broker-cash movement).
+        const issuer = AU_ISSUER_PAID_ACTIVITY_TYPES.has(activity.activity_type) && narrativeNamesSecurity(narrative, activity.ticker_raw, activity.security_name_raw);
+        return {
+          transactionId: l.id,
+          amount: Number(l.amount_original),
+          transactionDate: l.transaction_date,
+          institutionOrNarrativeMatches: broker.institutionOrNarrativeMatches || issuer,
+          positivelyWrongBroker: broker.positivelyWrongBroker && !issuer,
+        };
+      });
       const result = eventDate
         ? matchBankBrokerEvent({ amount: Number(activity.amount), eventDate, currencyCode: activity.currency_code, dateToleranceDays: BANK_MATCH_WINDOW_DAYS }, candidates)
         : { outcome: 'bank_evidence_not_available' as const, matchedTransactionId: null, candidates: [] };
