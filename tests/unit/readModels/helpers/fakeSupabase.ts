@@ -49,10 +49,20 @@ export interface FakeQuery extends PromiseLike<{ data: any; error: unknown }> {
   range(a: number, b: number): FakeQuery;
   single(): FakeQuery;
   maybeSingle(): FakeQuery;
-  upsert(row: Row, opts?: unknown): Promise<{ data: null; error: unknown }>;
-  insert(row: Row): Promise<{ data: null; error: unknown }>;
+  upsert(row: Row, opts?: unknown): FakeWrite;
+  insert(row: Row | Row[]): FakeWrite;
+  delete(): FakeWrite;
   /** WP-03: update(patch).eq(...) -- applied to the stored rows matching every eq. */
   update(patch: Row): FakeUpdate;
+}
+
+/** A write result that can be awaited directly or chained (.select().single() / .eq()),
+ * like the real builder -- the Score / DNA / Resilience loaders chain their persistence. */
+export interface FakeWrite extends PromiseLike<{ data: null; error: unknown }> {
+  select(cols?: string): FakeWrite;
+  single(): FakeWrite;
+  maybeSingle(): FakeWrite;
+  eq(col: string, val: unknown): FakeWrite;
 }
 
 export interface FakeUpdate extends PromiseLike<{ data: null; error: unknown; count: number }> {
@@ -64,6 +74,19 @@ export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSup
   const upserts: { table: string; row: Row }[] = [];
   const updates: { table: string; patch: Row; filters: Record<string, unknown>; matched: number }[] = [];
   const writeError = (table: string) => (options.failWritesOn?.has(table) ? { message: `injected write failure on ${table}`, code: 'XX000' } : null);
+
+  function fakeWrite(error: unknown): FakeWrite {
+    const w: FakeWrite = {
+      select() { return w; },
+      single() { return w; },
+      maybeSingle() { return w; },
+      eq() { return w; },
+      then(onFulfilled, onRejected) {
+        return Promise.resolve({ data: null, error }).then(onFulfilled, onRejected);
+      },
+    };
+    return w;
+  }
 
   function from(table: string): FakeQuery {
     let rows = [...(tables[table] ?? [])];
@@ -126,12 +149,15 @@ export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSup
       upsert(row: Row) {
         const error = writeError(table);
         if (!error) upserts.push({ table, row });
-        return Promise.resolve({ data: null, error });
+        return fakeWrite(error);
       },
-      insert(row: Row) {
+      insert(row: Row | Row[]) {
         const error = writeError(table);
-        if (!error) upserts.push({ table, row });
-        return Promise.resolve({ data: null, error });
+        if (!error) for (const r of Array.isArray(row) ? row : [row]) upserts.push({ table, row: r });
+        return fakeWrite(error);
+      },
+      delete() {
+        return fakeWrite(writeError(table));
       },
       update(patch: Row) {
         const filters: Record<string, unknown> = {};
