@@ -632,14 +632,15 @@ export function AuInvestmentStatementImportPanel({
   }
 
   /** Runs one account/security action, then reloads the review. Errors stay on the review screen. */
-  async function runReviewAction(action: () => Promise<{ ok: boolean; json: { error?: string } }>) {
+  async function runReviewAction(action: () => Promise<{ ok: boolean; json: { error?: string; message?: string } }>) {
     if (!documentId) return;
     setBusy(true);
     setMessage(null);
     try {
       const { ok, json } = await action();
       if (!ok) {
-        setMessage(json.error ?? 'That did not work. Please try again.');
+        // `bad(msg, status, code)` sends { error: code, message: msg } -- show the sentence, not the code.
+        setMessage(json.message ?? json.error ?? 'That did not work. Please try again.');
         return;
       }
       await loadReview(documentId);

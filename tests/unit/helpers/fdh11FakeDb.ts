@@ -24,6 +24,8 @@ export interface FakeDbOptions {
   defaults?: Record<string, Row>;
   /** Unique keys per table: an insert colliding on one returns error 23505. */
   unique?: Record<string, string[][]>;
+  /** numeric columns: a decimal string written to one is read back as a JSON number (PostgREST's numeric behaviour). */
+  numeric?: Record<string, string[]>;
   /** rpc(name, args) handler. */
   rpc?: (name: string, args: Row, db: FakeDb) => { data: unknown; error: { message: string } | null };
   /** Called before each insert; return an error message to refuse it (simulates a trigger). */
@@ -130,10 +132,17 @@ class Query implements PromiseLike<{ data: unknown; error: unknown }> {
   private matches() {
     return this.db.rows(this.table).filter((r) => this.filters.every((f) => f(r)));
   }
+  private coerce(row: Row): Row {
+    const numeric = this.db.options.numeric?.[this.table];
+    if (!numeric) return row;
+    const out: Row = { ...row };
+    for (const c of numeric) if (typeof out[c] === 'string' && out[c] !== '' && Number.isFinite(Number(out[c]))) out[c] = Number(out[c]);
+    return out;
+  }
   private withDefaults(row: Row): Row {
     const d = this.db.options.defaults?.[this.table] ?? {};
     const out: Row = { id: randomUUID(), created_at: new Date().toISOString(), ...d };
-    for (const [k, v] of Object.entries(row)) if (v !== undefined) out[k] = v;
+    for (const [k, v] of Object.entries(this.coerce(row))) if (v !== undefined) out[k] = v;
     return out;
   }
   private uniqueViolation(row: Row, ignore?: Row): boolean {
@@ -177,7 +186,7 @@ class Query implements PromiseLike<{ data: unknown; error: unknown }> {
       for (const raw of this.payload) {
         const existing = this.db.rows(this.table).find((r) => this.conflict.every((k) => eqv(r[k], raw[k])));
         if (existing) {
-          Object.assign(existing, raw);
+          Object.assign(existing, this.coerce(raw));
           out.push(existing);
         } else {
           const row = this.withDefaults(raw);
@@ -192,7 +201,7 @@ class Query implements PromiseLike<{ data: unknown; error: unknown }> {
     }
     if (this.mode === 'update') {
       const rows = this.matches();
-      for (const r of rows) Object.assign(r, this.patch);
+      for (const r of rows) Object.assign(r, this.coerce(this.patch));
       this.db.updates.push({ table: this.table, patch: this.patch, count: rows.length });
       return this.returning || this.singleMode ? this.finish(rows) : { data: null, error: null };
     }
