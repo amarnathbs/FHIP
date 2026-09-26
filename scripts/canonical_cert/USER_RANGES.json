@@ -1,0 +1,1560 @@
+{
+  "generatedAt": "2026-09-26T23:12:30.731Z",
+  "devProject": "vqycarelcoijzwlpkpcz",
+  "note": "Existing standing synthetic fixture users only. Ranges are disjoint. Each certifier uses ONLY its own range and its own port.",
+  "ports": {
+    "A": 3971,
+    "B": 3972,
+    "C": 3973,
+    "D": 3974,
+    "SMOKE": 3970
+  },
+  "harnessReserved": [
+    "fhip.e2e.tc050@test.fhip.invalid"
+  ],
+  "ranges": {
+    "A": [
+      {
+        "set": "FCAST",
+        "fixtureId": "TC001",
+        "email": "forecast.tc001@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "891e877b-3615-445e-a0b1-17f014415883",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC006",
+        "email": "forecast.tc006@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "a75c38e5-6472-4850-bc39-233cb2957d8c",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC010",
+        "email": "forecast.tc010@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "ad6f86e4-d9f5-40cf-a1c2-06d4156fe7d7",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC017",
+        "email": "forecast.tc017@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "9bed77aa-e0dc-4b70-a7e6-8f6286e4fafb",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC025",
+        "email": "forecast.tc025@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "60457111-1b20-4d17-aff5-ed5fdf3b8118",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC034",
+        "email": "forecast.tc034@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "e5d43ba1-3309-4dc4-a177-78013056c800",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC048",
+        "email": "forecast.tc048@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "d8039853-ae9f-4ed1-afd2-35138287d0b6",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC054",
+        "email": "forecast.tc054@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "71112aba-10f8-4085-8d19-107b152dc667",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC059",
+        "email": "forecast.tc059@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "75fc8c36-35a9-4fd7-8dc7-af8f189c9f4f",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC067",
+        "email": "forecast.tc067@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "9d58f4e1-07f2-46db-8c3f-af9bd9385a8a",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC073",
+        "email": "forecast.tc073@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "609670c3-3ca3-4614-ac41-b325d294c3d9",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC080",
+        "email": "forecast.tc080@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "d0f4afcc-272c-4eeb-9714-2a9d5f01cce6",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC090",
+        "email": "forecast.tc090@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "610ac799-f9a1-4c21-8fe8-9efe267dd481",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC003",
+        "email": "fhip.e2e.tc003@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "0a87867a-2460-4b99-85db-48ddf79d31f6",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 2
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC007",
+        "email": "fhip.e2e.tc007@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "6bfb3bc3-b754-4e68-8bb1-91d2d5b58618",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC011",
+        "email": "fhip.e2e.tc011@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "297aae3c-f9ba-4bed-bd46-20f33e4dbc48",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC015",
+        "email": "fhip.e2e.tc015@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "75ceb63f-29f1-49fd-90a8-7d41b9be5c14",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC019",
+        "email": "fhip.e2e.tc019@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "4893c793-7a5a-4e07-82d7-d1167c953980",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC023",
+        "email": "fhip.e2e.tc023@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "806143b4-e492-4532-8c36-42162603e430",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC048",
+        "email": "fhip.e2e.tc048@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "8e3a0e58-4e89-41b3-ae2d-dc987f8af675",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC028",
+        "email": "fhip.e2e.tc028@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "765bc9d7-1a94-4d69-94a7-8d58b71bbef7",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC032",
+        "email": "fhip.e2e.tc032@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "f98948a9-3bbf-437b-bff1-0aeb78fe87f6",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC036",
+        "email": "fhip.e2e.tc036@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "091a8ff9-e5ac-4151-bdc5-b2f5b0724239",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC040",
+        "email": "fhip.e2e.tc040@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "dca43ce2-4008-48d0-95ab-7b48a934be4c",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC044",
+        "email": "fhip.e2e.tc044@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "A",
+        "devUserId": "2be5d420-b74e-47c8-9ab0-6c20b875f9b5",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      }
+    ],
+    "B": [
+      {
+        "set": "FCAST",
+        "fixtureId": "TC002",
+        "email": "forecast.tc002@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "2984ac17-c9e5-4a20-8c0d-6d2cb55d7e02",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC007",
+        "email": "forecast.tc007@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "10c92d25-9d2e-4b8e-8ba8-cd8e7b510870",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC012",
+        "email": "forecast.tc012@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "194dacdd-074e-4682-a602-909858653816",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC020",
+        "email": "forecast.tc020@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "af048889-efb0-4d27-8f53-5fa6c202cd7c",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC026",
+        "email": "forecast.tc026@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "1d751d7d-b5be-4f28-92dc-37032abeaff3",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC038",
+        "email": "forecast.tc038@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "93d26679-31b9-45d7-a842-caa42a945e08",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC051",
+        "email": "forecast.tc051@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "8e28545a-4c76-4489-bced-b2ec3b39326a",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC055",
+        "email": "forecast.tc055@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "8454c9a3-0606-4969-8c21-0ce209ee198d",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC060",
+        "email": "forecast.tc060@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "cdf0830b-f183-46de-bdae-8fb72d35d85f",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC068",
+        "email": "forecast.tc068@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "99d6ac7b-5c1c-4bc4-89be-2cae4f3b7664",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC076",
+        "email": "forecast.tc076@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "12a3e92b-0b86-4d4a-92a2-9fd781affcb2",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC081",
+        "email": "forecast.tc081@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "f2ceb877-b2c7-4f8c-a4a0-503583ea8b50",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC095",
+        "email": "forecast.tc095@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "26addcb7-1446-4867-94fe-791da8cccc92",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC004",
+        "email": "fhip.e2e.tc004@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "b30f2caf-dd2e-418f-ac6a-e052c854abaa",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC008",
+        "email": "fhip.e2e.tc008@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "ed07ba5d-a38c-4816-ad43-e6b970a104be",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC012",
+        "email": "fhip.e2e.tc012@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "0f6e51ba-cada-44a6-8510-ce912ac4fa2e",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC016",
+        "email": "fhip.e2e.tc016@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "a8f1f744-1ba1-43d5-94b7-78cf612dd7e4",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 5
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC020",
+        "email": "fhip.e2e.tc020@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "984c15a9-9b9c-4a11-a30a-d396927483e8",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC024",
+        "email": "fhip.e2e.tc024@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "03d32f0e-4968-4634-9308-0e21ea9df5f5",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC049",
+        "email": "fhip.e2e.tc049@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "29ef9177-b035-4d23-b0a1-cc6c2a6967c2",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 2
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC029",
+        "email": "fhip.e2e.tc029@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "126d88f9-01f1-447c-a144-61bf193678e8",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC033",
+        "email": "fhip.e2e.tc033@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "305d7c6d-2872-4e71-97ad-274885b67101",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC037",
+        "email": "fhip.e2e.tc037@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "8676e50f-ef01-49a5-83ec-ca6661e51a42",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC041",
+        "email": "fhip.e2e.tc041@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "e4620208-8910-4430-9de9-75bee4e4bc1f",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC045",
+        "email": "fhip.e2e.tc045@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "B",
+        "devUserId": "fa3bdaf8-f602-4553-8876-c1b86fbb365c",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      }
+    ],
+    "C": [
+      {
+        "set": "FCAST",
+        "fixtureId": "TC003",
+        "email": "forecast.tc003@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "21bc7564-6679-4173-a494-837f48983ccf",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC008",
+        "email": "forecast.tc008@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "5e5aa253-18f2-4190-8eef-4c1fee42a26e",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC013",
+        "email": "forecast.tc013@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "9567f706-a6b5-4cf6-aadf-67eaff7fd38f",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC023",
+        "email": "forecast.tc023@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "6e876aaf-21aa-44fb-85bc-ef4e9bbef2c5",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC028",
+        "email": "forecast.tc028@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "79c7f796-5e72-4962-8e13-624e30026f07",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC041",
+        "email": "forecast.tc041@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "fd57a550-c091-4c21-b802-8e6802812c76",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC052",
+        "email": "forecast.tc052@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "e2b128c1-b249-4362-a893-5ba10780432f",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC056",
+        "email": "forecast.tc056@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "76958197-2e32-4c4c-859c-d4babcdf5eef",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC063",
+        "email": "forecast.tc063@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "705c72d7-957b-4792-8cc1-fd2014c5f9c7",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC071",
+        "email": "forecast.tc071@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "cc861a5d-f6de-4715-9f69-6273b47e8348",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC077",
+        "email": "forecast.tc077@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "e0b1a5da-57fb-433d-b517-c0ef3c9843e6",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC082",
+        "email": "forecast.tc082@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "c1c5f507-b513-4d07-9f90-dbe1d3762d78",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC001",
+        "email": "fhip.e2e.tc001@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "e9ff2441-05bf-441d-8d2c-a7c7549d6ec7",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC005",
+        "email": "fhip.e2e.tc005@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "91ebda98-d65d-4fa2-a611-fda01e18a9eb",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC009",
+        "email": "fhip.e2e.tc009@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "a4c869ca-9665-4fab-b288-a8d4caeb8f7c",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 2
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC013",
+        "email": "fhip.e2e.tc013@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "255ff6bc-8fc0-433b-aabe-21de2b141c64",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC017",
+        "email": "fhip.e2e.tc017@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "53893665-da54-4bc7-b49a-4dc69d430e16",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC021",
+        "email": "fhip.e2e.tc021@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "f1b835ce-e3bd-46b4-898a-67594572a99a",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC025",
+        "email": "fhip.e2e.tc025@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "1b8c54a1-8267-43b5-96cd-201c6f94db27",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 2
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC026",
+        "email": "fhip.e2e.tc026@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "550b942a-57c1-41ca-a6ba-b2b57ca9c16b",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC030",
+        "email": "fhip.e2e.tc030@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "4bf647fd-0984-487b-b746-71c941ddff58",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC034",
+        "email": "fhip.e2e.tc034@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "41ab6262-b076-4996-8630-ef6520b2bef2",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC038",
+        "email": "fhip.e2e.tc038@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "818f64c1-9c18-4568-bb6f-780c96b28c54",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC042",
+        "email": "fhip.e2e.tc042@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "b0680754-5ab0-4273-9fba-2cbe8832e0b8",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC047",
+        "email": "fhip.e2e.tc047@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "C",
+        "devUserId": "90d1b182-c665-4ff0-badf-470362f8335a",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      }
+    ],
+    "D": [
+      {
+        "set": "FCAST",
+        "fixtureId": "TC004",
+        "email": "forecast.tc004@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "ae69583a-55ca-4f24-8cfd-d89523751544",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC009",
+        "email": "forecast.tc009@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "387ddc55-4813-4913-9e2c-64348eb0461f",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC015",
+        "email": "forecast.tc015@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "4672a2f3-f2bd-4a02-b05f-3cf1725e1b8c",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC024",
+        "email": "forecast.tc024@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "6ccb4d07-5b9c-4207-942e-515e44fcd1f1",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC033",
+        "email": "forecast.tc033@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "0da0b646-cae5-468f-9934-9d0c848af463",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC043",
+        "email": "forecast.tc043@example.test",
+        "country": "AU",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "8606247e-a351-4eaf-a13d-dc6719843377",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC053",
+        "email": "forecast.tc053@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "c4ec6714-e1e2-4a9c-a9d9-d6136d7bcabd",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC058",
+        "email": "forecast.tc058@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "1f356dd1-2c30-4c31-b3e5-829abdf61a27",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC065",
+        "email": "forecast.tc065@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "ea92e844-2315-4499-8476-38a501cd2336",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC072",
+        "email": "forecast.tc072@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "0fd32c7a-158a-4fbf-befa-cc77a828ef41",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC078",
+        "email": "forecast.tc078@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "6f10dec4-b448-4f95-9c90-7bbed96c3eca",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "FCAST",
+        "fixtureId": "TC083",
+        "email": "forecast.tc083@example.test",
+        "country": "IN",
+        "signIn": [
+          "password",
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "854fd280-0d90-4795-a528-4792aef1c524",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 0
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC002",
+        "email": "fhip.e2e.tc002@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "a597ecf5-7ab3-44d3-b57c-dec9562d57aa",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC006",
+        "email": "fhip.e2e.tc006@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "a180c4cb-296b-4945-b03e-74f16bdc260d",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC010",
+        "email": "fhip.e2e.tc010@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "cba69124-f531-46ca-ae44-bfc4a11b35e1",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 2
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC014",
+        "email": "fhip.e2e.tc014@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "f1fad62e-1cc3-4efa-a04d-fc3d9f3a1812",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC018",
+        "email": "fhip.e2e.tc018@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "441d20a1-ae0e-4016-8f16-f6244a778f71",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC022",
+        "email": "fhip.e2e.tc022@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "158adb0b-5cc2-4a1c-ad32-a0c605e0f104",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC046",
+        "email": "fhip.e2e.tc046@test.fhip.invalid",
+        "country": "AU",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "ef4fd213-e18d-4973-a374-d49744e46912",
+        "onboarded": true,
+        "profileCountry": "AU",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC027",
+        "email": "fhip.e2e.tc027@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "6ea01eb2-4dad-42f7-9bbf-c18582f27ac1",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 3
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC031",
+        "email": "fhip.e2e.tc031@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "76d59bf7-34dd-4d0d-9833-1cb0aaed1c43",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 2
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC035",
+        "email": "fhip.e2e.tc035@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "e1c434dd-2e95-43a3-8a07-0df15aedfb6e",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 1
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC039",
+        "email": "fhip.e2e.tc039@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "fafa2758-975b-47e9-b2bd-debe5b70eb97",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      },
+      {
+        "set": "E2E50",
+        "fixtureId": "TC043",
+        "email": "fhip.e2e.tc043@test.fhip.invalid",
+        "country": "IN",
+        "signIn": [
+          "mint"
+        ],
+        "range": "D",
+        "devUserId": "1018c738-8a69-440b-b6a7-37b3543b97ee",
+        "onboarded": true,
+        "profileCountry": "IN",
+        "countryConfirmed": false,
+        "householdMembers": 4
+      }
+    ]
+  }
+}
