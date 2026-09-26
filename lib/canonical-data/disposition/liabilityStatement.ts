@@ -9,15 +9,15 @@
  * GST and the bank-match candidates persisted; the never-populated columns are
  * E with user copy). WP-11 closed G1, G2, G4 (verified Apply links, picker,
  * back-match), G7 (Statement history), G13 (unsupported currency refused) and
- * X-01 (a card minimum payment never reaches monthly_repayment unticked). The
- * remaining open gaps are the grid provenance badges (G7, WP-07).
+ *  X-01 (a card minimum payment never reaches monthly_repayment unticked). The
+ * grid provenance badges (the other half of G7) were closed by WP-07.
  */
-import { A, B, C, D, E, gap, rows, technical, type Row } from './build';
+import { A, B, C, D, E, rows, technical, type Row } from './build';
 import type { RegistryFile } from './types';
 
-const G7_BADGE = gap('G7', 'P1', 'WP-07');
-
 const LT = 'Liabilities tab';
+// WP-07: shown as grid fields, with the "Imported from ... statement" badge (closes the G7 badge half).
+const LT_GRID = 'Liabilities tab (grid field + "Imported from credit card / loan statement" badge)';
 const HISTORY = 'Liabilities tab → Statement history';
 const REVIEW = 'Liabilities tab → Import Statement (review)';
 const NOT_READ = `${HISTORY} ("Not read from statements …")`;
@@ -29,13 +29,13 @@ function header(style: 'camel' | 'snake'): Row[] {
   const f = (camel: string, snake: string) => (style === 'camel' ? camel : snake);
   return [
     [f('institutionName', 'institution_name'), A, 'liabilities.lender', LT],
-    [f('maskedIdentifier', 'masked_identifier'), A, 'liabilities.masked_identifier', null, G7_BADGE],
+    [f('maskedIdentifier', 'masked_identifier'), A, 'liabilities.masked_identifier', LT_GRID],
     [f('statementPeriodStart', 'statement_period_start'), C, EV('statement_period_start'), HISTORY],
     [f('statementPeriodEnd', 'statement_period_end'), C, EV('statement_period_end'), HISTORY],
     [f('statementDate', 'statement_date'), C, EV('statement_date'), HISTORY],
-    [f('dueDate', 'due_date'), A, 'liabilities.due_date', null, G7_BADGE],
+    [f('dueDate', 'due_date'), A, 'liabilities.due_date', LT_GRID],
     [f('openingBalance', 'opening_balance'), C, EV('opening_balance'), HISTORY],
-    [f('closingBalance', 'closing_balance'), A, 'liabilities.balance (card)', LT, G7_BADGE],
+    [f('closingBalance', 'closing_balance'), A, 'liabilities.balance (card)', LT_GRID],
     [f('creditLimit', 'credit_limit'), A, 'liabilities.credit_limit (not in Net Worth)', LT],
     [f('minimumPayment', 'minimum_payment'), A, 'liabilities.minimum_payment (monthly_repayment only when ticked; D-08)', LT],
     [f('interestRate', 'interest_rate'), A, 'liabilities.interest_rate (loan) / card APR in statement history', `${LT}; ${HISTORY}`],
@@ -47,7 +47,7 @@ function loanAndUnsupported(style: 'camel' | 'snake'): Row[] {
   return [
     [f('availableCredit', 'available_credit'), E, 'not read from statements', NOT_READ],
     [f('openingPrincipal', 'opening_principal'), C, EV('opening_principal'), HISTORY],
-    [f('closingPrincipal', 'closing_principal'), A, 'liabilities.balance (loan)', LT, G7_BADGE],
+    [f('closingPrincipal', 'closing_principal'), A, 'liabilities.balance (loan)', LT_GRID],
     [f('rateType', 'rate_type'), E, 'not read from statements', NOT_READ],
     [f('repaymentFrequency', 'repayment_frequency'), E, 'not read from statements (proposal reads null)', `${REVIEW} ("Not shown on statement"); ${NOT_READ}`],
     [f('maturityDate', 'maturity_date'), E, 'not read from statements', NOT_READ],
@@ -144,7 +144,7 @@ const ACTIVITIES: Row[] = [
 export const liabilityStatementRegistry: RegistryFile = {
   id: 'liabilityStatement',
   ownerWp: 'WP-10',
-  OPEN_GAP_CEILING: 11,
+  OPEN_GAP_CEILING: 0,
   entries: [
     ...rows('liability_native', 'ts_interface', 'fdh:liability/types.ts#LiabilityStatementExtraction', NATIVE),
     ...rows('liability_native', 'ts_interface', 'fdh:liability/types.ts#LiabilityStatementActivity', NATIVE_ACTIVITY),

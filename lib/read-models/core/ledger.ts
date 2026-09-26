@@ -163,6 +163,10 @@ export interface ActualLine {
   groupUnmapped: boolean;
   essential: boolean;
   categoryId: string | null;
+  /** fdh_subcategories.id of the part (WP-15 maps it to an expense_items key). */
+  subcategoryId: string | null;
+  /** The taxonomy mapping key, subcategory's first ('food.groceries'), else the category's ('expense.food'). */
+  mappingKey: string | null;
   categoryLabel: string | null;
   description: string | null;
   amountNative: number;
@@ -338,6 +342,8 @@ export function normaliseLedger(raw: RawLedger, fx: FxContext, window: ReadWindo
         groupUnmapped: g.unmapped,
         essential: isEssentialFdh(cat?.essential_discretionary, sub?.essential_discretionary),
         categoryId: part.categoryId,
+        subcategoryId: part.subcategoryId,
+        mappingKey: sub?.fhip_mapping_key ?? cat?.fhip_mapping_key ?? null,
         categoryLabel: sub?.display_name ?? cat?.display_name ?? null,
         description: txn.description_clean,
         amountNative: part.amount,

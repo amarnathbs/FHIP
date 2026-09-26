@@ -8,12 +8,12 @@
  * WP-13 closed GAP-RET-01/02/03/04/05/06/07/09/11 (migration 0211, the
  * annualised + frequency-paired contribution proposal, the Retirement tab's
  * statement history and the user-confirmed bank leg). GAP-RET-08 (the grid's
- * provenance badge) belongs to WP-07.
+ * provenance badge) was closed by WP-07.
  */
-import { A, C, D, gap, rows, technical, type Row } from './build';
+import { A, C, D, rows, technical, type Row } from './build';
 import type { RegistryFile } from './types';
 
-const R08 = gap('GAP-RET-08', 'P2', 'WP-07');
+// GAP-RET-08 closed by WP-07: the grid shows the "Imported from retirement statement" badge.
 
 const RT = 'Retirement tab';
 /** Where every piece of statement evidence is visible after Apply (WP-13). */
@@ -32,7 +32,7 @@ function header(style: 'camel' | 'snake'): Row[] {
     [f('statementStartDate', 'statement_start_date'), C, EV('statement_start_date') + ' (annualises contribution totals, D-12)', HIST],
     [f('statementEndDate', 'statement_end_date'), C, EV('statement_end_date') + ' (balance as-of; an older statement never silently regresses the balance)', HIST],
     [f('openingBalance', 'opening_balance'), C, EV('opening_balance'), HIST],
-    [f('closingBalance', 'closing_balance'), A, 'retirement_accounts.current_balance', RT, R08],
+    [f('closingBalance', 'closing_balance'), A, 'retirement_accounts.current_balance', `${RT} ("Imported from retirement statement" badge, WP-07)`],
     [f('employerContributions', 'employer_contributions'), A, 'retirement_accounts.employer_contribution (annualised, only when ticked, with contribution_frequency; D-12)', REVIEW],
     [f('personalContributions', 'personal_contributions'), A, 'retirement_accounts.personal_contribution (annualised, only when ticked, with contribution_frequency; D-12)', REVIEW],
     [f('salarySacrifice', 'salary_sacrifice'), C, EV('salary_sacrifice'), HIST],
@@ -178,7 +178,7 @@ const POSITIONS: Row[] = [
 export const retirementStatementRegistry: RegistryFile = {
   id: 'retirementStatement',
   ownerWp: 'WP-13',
-  OPEN_GAP_CEILING: 3,
+  OPEN_GAP_CEILING: 0,
   entries: [
     ...rows('retirement_native', 'ts_interface', 'fdh:retirement/types.ts#RetirementStatementExtraction', NATIVE),
     ...rows('retirement_native', 'ts_interface', 'fdh:retirement/types.ts#RetirementActivityEvidence', NATIVE_ACTIVITY),

@@ -13,7 +13,7 @@ import { loadFxContext, toReporting, type FxContext, type ReportingCurrency } fr
 import type { NormalisedLedger } from './core/ledger';
 import { fetchAllByIds, fetchAllRows, type ReadModelClient } from './core/paginate';
 import { isFacilityAccount } from './core/spendingRules';
-import { addUnconverted, emptyUnconverted, isHouseholdOwner, provenance, roundMoney, toUnavailable, type MoneyValue, type Provenance, type ReadModelResult, type UnconvertedTally } from './core/types';
+import { ReadModelUnavailableError, addUnconverted, emptyUnconverted, isHouseholdOwner, provenance, roundMoney, toUnavailable, type MoneyValue, type Provenance, type ReadModelResult, type UnconvertedTally } from './core/types';
 
 export interface AssetRow {
   id: string;
@@ -27,6 +27,8 @@ export interface AssetRow {
   linked_liability_id: string | null;
   /** WP-05 (Twin / forecast cross-border). */
   country_code?: string | null;
+  /** WP-15 (0214): the bank account whose statement balance this cash asset carries. Absent before 0214. */
+  source_financial_account_id?: string | null;
 }
 
 export interface BankAccountRow {
@@ -74,6 +76,8 @@ export interface BankBalanceEvidence {
   asOf: string | null;
   closingBalance: MoneyValue;
   label: string;
+  /** WP-15: the asset this balance was applied as (it is then in Net Worth once, through that asset -- never through this bucket). */
+  inNetWorthAs: { assetId: string; assetName: string } | null;
 }
 
 export const BANK_BALANCE_EVIDENCE_LABEL = 'Bank balance per statement — not in Net Worth';
@@ -108,7 +112,11 @@ export function computeAssets(input: {
       household: isHouseholdOwner(row.owner), linkedLiabilityId: row.linked_liability_id,
       value: { amountNative: Number(row.current_value), currency: row.currency_code, amountReporting },
       countryCode: row.country_code ?? null,
-      provenance: row.source_type === 'investment_intelligence_published' ? provenance('investment_intelligence') : provenance('manual'),
+      provenance: row.source_type === 'investment_intelligence_published'
+        ? provenance('investment_intelligence')
+        : row.source_type === 'bank_statement_import'
+          ? provenance('bank_statement', null, row.source_financial_account_id ?? null)
+          : provenance('manual'),
     };
   });
 
@@ -127,6 +135,7 @@ export function computeAssets(input: {
     if (!latest) continue;
     const rc = recon.get(latest.id)!;
     const currency = rc.currency_code ?? account.currency_code;
+    const applied = input.assets.find((a) => a.source_financial_account_id === account.id) ?? null;
     evidence.push({
       accountId: account.id,
       accountName: account.display_name,
@@ -135,6 +144,7 @@ export function computeAssets(input: {
       asOf: latest.statement_period_end,
       closingBalance: { amountNative: Number(rc.reported_closing_balance), currency, amountReporting: toReporting(Number(rc.reported_closing_balance), currency, fx) },
       label: BANK_BALANCE_EVIDENCE_LABEL,
+      inNetWorthAs: applied ? { assetId: applied.id, assetName: applied.asset_name } : null,
     });
   }
   const sum = (vals: (number | null)[]) => r(vals.reduce<number>((s, v) => s + (v ?? 0), 0));
@@ -148,16 +158,22 @@ export function computeAssets(input: {
   };
 }
 
+const ASSET_COLUMNS = 'id, asset_name, asset_class, current_value, currency_code, owner, master_item_key, source_type, linked_liability_id, country_code';
+
 /** The active `assets` register, paged (WP-05: also used alone by register-only consumers). */
 export async function loadAssetRows(userId: string, client: ReadModelClient): Promise<AssetRow[]> {
-  return fetchAllRows<AssetRow>('assets', (from, to) =>
-    client
-      .from('assets')
-      .select('id, asset_name, asset_class, current_value, currency_code, owner, master_item_key, source_type, linked_liability_id, country_code')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('id', { ascending: true })
-      .range(from, to));
+  const read = (columns: string) => (from: number, to: number) =>
+    client.from('assets').select(columns).eq('user_id', userId).eq('is_active', true).order('id', { ascending: true }).range(from, to);
+  // WP-15's account link (0214). On a database without 0214, read without it
+  // (every asset is then unlinked) -- never fail the whole Assets model on an
+  // additive column that is not deployed yet. Any other error fails closed.
+  const probe: { error: unknown } = await client.from('assets').select(`${ASSET_COLUMNS}, source_financial_account_id`).eq('user_id', userId).range(0, 0);
+  const code = (probe.error as { code?: string } | null)?.code;
+  if (probe.error && (code === '42703' || code === 'PGRST204')) {
+    return (await fetchAllRows<AssetRow>('assets', read(ASSET_COLUMNS))).map((r) => ({ ...r, source_financial_account_id: null }));
+  }
+  if (probe.error) throw new ReadModelUnavailableError('query_failed', 'assets');
+  return fetchAllRows<AssetRow>('assets', read(`${ASSET_COLUMNS}, source_financial_account_id`));
 }
 
 export async function loadAssetInputs(userId: string, client: ReadModelClient, bankAccounts: readonly BankAccountRow[]) {

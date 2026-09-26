@@ -35,6 +35,12 @@ export const fdhPages = {
     filter.accountId ? `${BASE_PAGE}/activity/transactions?account_id=${enc(filter.accountId)}` : `${BASE_PAGE}/activity/transactions`,
   activitySpending: () => `${BASE_PAGE}/activity/spending`,
   activityIncome: () => `${BASE_PAGE}/activity/income`,
+  // Integration of WP-07's grid provenance badge with the domain history
+  // sections (lib/grid/provenance.ts HISTORY_ROUTE_BUILDER names these):
+  /** WP-11: the Liabilities tab's "Statement history" section. */
+  liabilityStatementHistory: () => '/liabilities#liability-statement-history',
+  /** WP-13: the Retirement tab's imported-statements history. */
+  retirementStatementHistory: () => '/retirement#imported-retirement-statements',
 } as const;
 
 export const fdhApi = {

@@ -64,10 +64,16 @@ describe('upload field-disposition registry gate', () => {
     expect(ins.every((e) => e.status === 'not_active')).toBe(true);
   });
 
-  it('R7 is OFF until WP-14, and would fail today (the open P0/P1 gaps are real, not hidden)', () => {
+  it('R7 flag is OFF until WP-14 turns it on; after the stage-2 integration strict mode already passes (every ceiling is 0)', () => {
+    // Before integration this asserted that strict mode would FAIL (real open
+    // P0/P1 gaps). With WP-03..WP-15 merged, every registry file has 0 open
+    // gaps, so strict mode now finds nothing; the R6 ratchet (ceiling 0 = the
+    // exact count) already refuses any new open gap. The R7 rule itself is
+    // proven to fire by the anti-vacuity control (it re-opens one G1 entry).
     expect(STRICT_CERTIFICATION).toBe(false);
+    for (const f of REGISTRY_FILES) expect(f.OPEN_GAP_CEILING, `${f.id} ceiling`).toBe(0);
     const strict = checkRegistry(REGISTRY_FILES, enumerated, { gapRegister, strict: true });
-    expect(strict.filter((x) => x.rule === 'R7').length).toBeGreaterThan(0);
+    expect(strict.map((x) => x.message)).toEqual([]);
   });
 
   it('R10: the checked-in registry doc equals the generated one (run scripts/generate-upload-field-disposition-doc.mjs)', () => {

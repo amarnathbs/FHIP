@@ -3,21 +3,26 @@
  * and the approved bank ledger / statement tables. Owner: WP-08 (bank
  * pipeline); WP-07 (Expenses-tab display). Matrix section 1.
  */
-import { B, C, D, gap, rows, technical, type Row } from './build';
+import { A, B, C, D, rows, technical, type Row } from './build';
 import type { RegistryFile } from './types';
 
 // Gap references (APPROVED_UPLOAD_CANONICAL_DATA_FLOW_MATRIX.md, gap register).
 // DC-01 closed by WP-03 (2026-09-27): the Dashboard and every loadDashboard
 // consumer read approved lines through the canonical read models, averaged over
 // complete covered months -- no current-calendar-month window remains.
-const EXPG1 = gap('EXP-G1', 'P0', 'WP-07');
+// EXP-G1 closed by WP-07: approved lines are shown on the Expenses tab beside the plan.
 // WP-08 closed EXP-G4 (duplicate chain), EXP-G14 (dropped / invisible
-// fields) and EXP-G15 (incomplete AI extraction) for this file. DC-16 stays
-// open: the closing balance is now VISIBLE, labelled per D-04, in the
-// statement details drawer; the cash-asset proposal the user Applies is WP-15.
-const DC16 = gap('DC-16', 'P2', 'WP-15');
+// fields) and EXP-G15 (incomplete AI extraction) for this file. DC-16 is
+// closed by WP-15: the closing balance is visible, labelled per D-04, in the
+// statement details drawer (WP-08) and reaches Assets only through the
+// cash-asset proposal the user Applies (0214).
 
 const REVIEW = 'Expenses > Import bank statement > category review';
+// WP-07 (closes EXP-G1): the approved line on the Expenses tab, beside the plan.
+const ACTUALS = 'Expenses > Actual spending (imported)';
+// WP-15 (closes DC-16, PO D-04): the balance reaches Assets only when the user applies it.
+const CLOSING_BALANCE_TO_ASSET = 'assets.current_value (one cash asset per account, via the "Add your bank balance to Assets" proposal the user Applies -- fdh15_apply_asset_proposal; until then evidence fdh_reconciliation_results.reported_closing_balance, never in Net Worth)';
+const ASSETS_PROPOSAL = 'Assets > Add your bank balance to Assets';
 const ACTIVITY = 'Financial Activity > transactions';
 /** WP-08: the StatementDetailsDrawer component, opened
  * from the category review and the import panel. */
@@ -30,7 +35,7 @@ const CSV: Row[] = [
   ['postedDate', C, 'evidence:fdh_transactions.posting_date', DETAILS],
   ['valueDate', C, 'evidence:fdh_transactions.value_date', DETAILS],
   ['descriptionRaw', C, 'evidence:fdh_transactions.description_raw (purgeable)', ACTIVITY],
-  ['descriptionClean', B, 'fdh_transactions.description_clean', REVIEW, EXPG1, 'payee; the Expenses-tab actual line label'],
+  ['descriptionClean', B, 'fdh_transactions.description_clean', ACTUALS, null, 'payee; the Expenses-tab actual line label'],
   ['referenceRaw', C, 'evidence:fdh_transactions.source_reference (dedup key)', DETAILS],
   ['amountOriginal', B, 'fdh_transactions.amount_original', REVIEW],
   ['creditDebit', B, 'fdh_transactions.credit_debit', REVIEW, null, 'direction only, never economic meaning'],
@@ -43,7 +48,7 @@ const PDF_TXN: Row[] = [
   ['sourcePage', D, 'fdh_transactions.source_page'],
   ['transactionDate', B, 'fdh_transactions.transaction_date', REVIEW],
   ['descriptionRaw', C, 'evidence:fdh_transactions.description_raw (purgeable)', ACTIVITY],
-  ['descriptionClean', B, 'fdh_transactions.description_clean', REVIEW, EXPG1],
+  ['descriptionClean', B, 'fdh_transactions.description_clean', ACTUALS],
   ['amountOriginal', B, 'fdh_transactions.amount_original', REVIEW],
   ['creditDebit', B, 'fdh_transactions.credit_debit', REVIEW],
   ['balanceAfter', C, 'evidence:fdh_transactions.balance_after', DETAILS],
@@ -59,7 +64,7 @@ const PDF_TXN: Row[] = [
 
 const PDF_META: Row[] = [
   ['declaredOpeningBalance', C, 'evidence:fdh_reconciliation_results.opening_balance', 'Bank import panel > review summary (reconciliation)'],
-  ['declaredClosingBalance', C, 'evidence:fdh_reconciliation_results.reported_closing_balance (D-04: a cash-asset proposal the user Applies)', `${DETAILS} (labelled "not in your Net Worth unless you add it as a cash asset")`, DC16],
+  ['declaredClosingBalance', A, CLOSING_BALANCE_TO_ASSET, `${ASSETS_PROPOSAL} + ${DETAILS} (labelled "not in your Net Worth unless you add it as a cash asset")`],
   ['maskedAccountIdentifier', D, 'fdh_financial_accounts.masked_identifier / account_fingerprint (account matching; a mismatch raises a visible warning)', DETAILS],
   ['statementPeriodStart', C, 'fdh_statement_uploads.statement_period_start (coverage input)', `Category review header + ${DETAILS}`],
   ['statementPeriodEnd', C, 'fdh_statement_uploads.statement_period_end (coverage input)', `Category review header + ${DETAILS}`],
@@ -73,7 +78,7 @@ const AI_DOC: Row[] = [
   ['statementPeriodStart', C, 'fdh_statement_uploads.statement_period_start', `Category review header + ${DETAILS}`],
   ['statementPeriodEnd', C, 'fdh_statement_uploads.statement_period_end', `Category review header + ${DETAILS}`],
   ['declaredOpeningBalance', C, 'evidence:fdh_reconciliation_results.opening_balance', DETAILS],
-  ['declaredClosingBalance', C, 'evidence:fdh_reconciliation_results.reported_closing_balance (D-04)', `${DETAILS} (labelled per D-04)`, DC16],
+  ['declaredClosingBalance', A, CLOSING_BALANCE_TO_ASSET, `${ASSETS_PROPOSAL} + ${DETAILS} (labelled per D-04)`],
   ['allTransactionsListed', C, 'evidence:fdh_data_quality_results(low_extraction_confidence) + a blocking review item when false', `${DETAILS} + Category review "About this statement"`],
   ['transactions', B, 'fdh_transactions (one row per line, through the native pipeline)', REVIEW, null, 'hitting the 80-row AI cap without a reconciled balance forces a blocking incomplete-extraction review item'],
 ];
@@ -92,7 +97,7 @@ const TXN_TABLE: Row[] = [
   ['posting_date', C, 'evidence:fdh_transactions.posting_date', DETAILS],
   ['value_date', C, 'evidence:fdh_transactions.value_date', DETAILS],
   ['description_raw', C, 'evidence:fdh_transactions.description_raw (purgeable)', ACTIVITY],
-  ['description_clean', B, 'fdh_transactions.description_clean', REVIEW, EXPG1],
+  ['description_clean', B, 'fdh_transactions.description_clean', ACTUALS],
   ['merchant_raw', C, 'evidence:fdh_transactions.merchant_raw', 'Financial Activity > merchants'],
   ['merchant_id', D, 'fdh_transactions.merchant_id'],
   ['amount_original', B, 'fdh_transactions.amount_original', REVIEW],
@@ -100,8 +105,8 @@ const TXN_TABLE: Row[] = [
   ...technical(['amount_reporting_currency', 'reporting_currency', 'fx_rate', 'fx_rate_date', 'fx_rate_source'], 'fdh_transactions'),
   ['credit_debit', B, 'fdh_transactions.credit_debit', REVIEW],
   ['economic_transaction_type', B, 'fdh_transactions.economic_transaction_type (one read-model bucket per value)', REVIEW],
-  ['category_id', B, 'fdh_transactions.category_id (canonical expense group)', REVIEW, EXPG1],
-  ['subcategory_id', B, 'fdh_transactions.subcategory_id (essential flag)', REVIEW, EXPG1],
+  ['category_id', B, 'fdh_transactions.category_id (canonical expense group)', `${REVIEW}; ${ACTUALS}`],
+  ['subcategory_id', B, 'fdh_transactions.subcategory_id (essential flag; planned-item key for the WP-15 averages proposal)', `${REVIEW}; ${ACTUALS}`],
   ...technical(['recurring_flag', 'subscription_flag', 'transfer_flag', 'classification_confidence', 'extraction_confidence', 'classification_method'], 'fdh_transactions'),
   ['source_reference', C, 'evidence:fdh_transactions.source_reference', DETAILS],
   ...technical(['source_page', 'source_row', 'review_status', 'user_override', 'created_at', 'updated_at', 'source_row_hash', 'economic_fingerprint', 'economic_fingerprint_version'], 'fdh_transactions'),
@@ -136,7 +141,7 @@ const UPLOAD_TABLE: Row[] = [
 export const bankStatementRegistry: RegistryFile = {
   id: 'bankStatement',
   ownerWp: 'WP-08',
-  OPEN_GAP_CEILING: 7,
+  OPEN_GAP_CEILING: 0,
   entries: [
     ...rows('bank_csv', 'ts_interface', 'fdh:bank-csv/normalize.ts#NormalizedTransactionCandidate', CSV),
     ...rows('bank_pdf', 'ts_interface', 'fdh:bank-pdf/orchestrator.ts#AcceptedPdfTransactionPlan', PDF_TXN),
