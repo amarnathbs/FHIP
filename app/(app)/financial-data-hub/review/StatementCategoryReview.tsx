@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { ResourceErrorState, ResourceLoadingSkeleton } from '@/components/resources/admin/ResourceStates';
 // Type-only imports (erased at build): the page renders EXACTLY the
@@ -93,6 +93,10 @@ export function StatementCategoryReview({
   const [actionError, setActionError] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [remember, setRemember] = useState<Record<string, boolean>>({});
+  // After an action the line or button the user was on may disappear; focus
+  // moves to the result message so keyboard and screen-reader users are not
+  // left on a detached element.
+  const statusRef = useRef<HTMLParagraphElement>(null);
 
   const url = `/api/financial-data-hub/documents/${encodeURIComponent(statementId)}/category-review`;
 
@@ -129,6 +133,7 @@ export function StatementCategoryReview({
       const message = await action();
       await reload();
       setAnnouncement(message);
+      requestAnimationFrame(() => statusRef.current?.focus());
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'That did not work. Please try again.');
     } finally {
@@ -196,7 +201,7 @@ export function StatementCategoryReview({
         </p>
       </div>
 
-      <p role="status" aria-live="polite" className={announcement ? 'rounded-compact bg-positive/10 px-3 py-2 text-sm text-positive' : 'sr-only'}>
+      <p ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className={announcement ? 'rounded-compact bg-positive/10 px-3 py-2 text-sm text-positive' : 'sr-only'}>
         {announcement}
       </p>
       {actionError && (

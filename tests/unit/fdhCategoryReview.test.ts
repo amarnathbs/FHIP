@@ -21,6 +21,7 @@ import {
   type CategoryReviewBlockers,
   type CategoryReviewTransaction,
 } from '@/lib/financial-data-hub/domain/categoryReview';
+import { matchesRule } from '@/lib/financial-data-hub/classification/ruleMatching';
 import { BANK_EXPENSE_TRANSACTION_TYPES, BANK_INCOME_TRANSACTION_TYPES, BANK_REFUND_TRANSACTION_TYPE } from '@/lib/services/dashboardData';
 
 const CATS = [
@@ -90,10 +91,25 @@ describe('shared definitions', () => {
     expect(looksLikeOwnAccountTransfer('Woolworths 1234 Melbourne')).toBe(false);
   });
 
-  it('payee keys drop reference numbers so the rule matches next month', () => {
-    expect(derivePayeeKey('Quillfeather Studio Pty Ltd')).toBe('QUILLFEATHER STUDIO PTY LTD');
-    expect(derivePayeeKey('WOOLWORTHS 1234 MELBOURNE 03/09')).toBe('WOOLWORTHS MELBOURNE');
+  it('payee keys skip reference numbers AND still match the same line and next month\'s line through R8\'s own matcher', () => {
+    // Real line texts from the live DEV import of the synthetic PDF.
+    const cases: Array<[string, string, string]> = [
+      ['Quillfeather Studio Pty Ltd', 'QUILLFEATHER STUDIO PTY LTD', 'Quillfeather Studio Pty Ltd'],
+      ['PAYROLL 5521 Quillfeather Studio Pty Ltd', 'QUILLFEATHER STUDIO PTY LTD', 'PAYROLL 6634 Quillfeather Studio Pty Ltd'],
+      ['BPAY 889201 Origin Energy Holdings', 'ORIGIN ENERGY HOLDINGS', 'BPAY 901112 Origin Energy Holdings'],
+      ['Online R4471 Linked Acc Trns To Savings Q...', 'LINKED ACC TRNS TO', 'Online R5120 Linked Acc Trns To Savings Q...'],
+      ['Rent 0826 Little Harbour Realty', 'LITTLE HARBOUR REALTY', 'Rent 0926 Little Harbour Realty'],
+      ['WOOLWORTHS 1234 MELBOURNE 03/09', 'WOOLWORTHS', 'WOOLWORTHS 8812 MELBOURNE 04/10'],
+    ];
+    for (const [thisMonth, key, nextMonth] of cases) {
+      expect(derivePayeeKey(thisMonth)).toBe(key);
+      const rule = { match_kind: 'description_contains' as const, needle_normalised: key };
+      const txn = (d: string) => ({ descriptionClean: d, merchantRaw: null, financialAccountId: 'a', institutionId: null });
+      expect(matchesRule(txn(thisMonth), rule), `${key} vs ${thisMonth}`).toBe(true);
+      expect(matchesRule(txn(nextMonth), rule), `${key} vs ${nextMonth}`).toBe(true);
+    }
     expect(derivePayeeKey('12345678')).toBeNull();
+    expect(derivePayeeKey('ATM')).toBeNull();
     expect(derivePayeeKey(null)).toBeNull();
   });
 

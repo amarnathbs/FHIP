@@ -130,18 +130,32 @@ export function looksLikeOwnAccountTransfer(description: string | null | undefin
   return OWN_TRANSFER_TERMS.some((term) => text.includes(term));
 }
 
-/** The literal payee text a remembered personal rule matches on next time:
- * upper-cased, digits and punctuation removed (reference numbers and dates
- * change every month), the first four words kept. Returns null when too
- * little text is left to be a safe, specific match. */
+/** The literal payee text a remembered personal rule matches on next time.
+ *
+ * R8's `description_contains` is a LITERAL substring match against the
+ * upper-cased, whitespace-collapsed description (`textMatch.toMatchText`), so
+ * the key must be a contiguous piece of that text. It is the longest run of
+ * consecutive plain words (letters only, 2+ characters) — a token carrying
+ * digits or punctuation (a reference number, a date, "R4471", "Q...") ends a
+ * run, because those change from one statement to the next — capped at four
+ * words. "PAYROLL 5521 Quillfeather Studio Pty Ltd" -> "QUILLFEATHER STUDIO
+ * PTY LTD"; "BPAY 889201 Origin Energy Holdings" -> "ORIGIN ENERGY HOLDINGS".
+ * Returns null when nothing specific enough (4+ characters) is left. */
 export function derivePayeeKey(description: string | null | undefined): string | null {
-  const words = (description ?? '')
-    .toUpperCase()
-    .replace(/[0-9]/g, ' ')
-    .replace(/[^A-Z&' ]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 1);
-  const key = words.slice(0, 4).join(' ').trim();
+  const tokens = (description ?? '').toUpperCase().replace(/\s+/g, ' ').trim().split(' ');
+  let best: string[] = [];
+  let current: string[] = [];
+  const consider = () => {
+    const candidate = current.slice(0, 4);
+    if (candidate.join(' ').length > best.join(' ').length) best = candidate;
+    current = [];
+  };
+  for (const token of tokens) {
+    if (/^[A-Z&'-]{2,}$/.test(token)) current.push(token);
+    else consider();
+  }
+  consider();
+  const key = best.join(' ');
   return key.length >= 4 ? key : null;
 }
 
