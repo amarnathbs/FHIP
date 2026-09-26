@@ -45,9 +45,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ proposa
       result.code === 'PROPOSAL_NOT_FOUND' ? 404 :
       result.code === 'STALE_PROPOSAL' ? 409 :
       result.code === 'ALREADY_APPLIED' ? 409 :
+      // WP-09 (0210): refusals about WHICH row a payslip may touch.
+      result.code === 'CURRENCY_MISMATCH' || result.code === 'MEMBER_MISMATCH' ? 409 :
       result.code === 'NO_FIELDS_SELECTED' || result.code === 'FORBIDDEN_FIELD' || result.code === 'INVALID_APPLY_MODE' || result.code === 'DOMAIN_VALIDATION_FAILED' ? 422 :
       400;
-    return Response.json({ error: result.error, code: result.code, staleness: 'staleness' in result ? result.staleness : undefined }, { status });
+    const details = 'details' in result ? (result.details as Record<string, unknown> | undefined) : undefined;
+    return Response.json({
+      error: result.error,
+      code: result.code,
+      staleness: 'staleness' in result ? result.staleness : undefined,
+      // ALREADY_APPLIED names the Income row the payslip is already in.
+      target_entity_id: typeof details?.targetEntityId === 'string' ? details.targetEntityId : undefined,
+    }, { status });
   }
 
   await recordDocumentAuditEvent({

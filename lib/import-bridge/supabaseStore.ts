@@ -215,6 +215,13 @@ export function makeSupabaseImportBridgeStore(): ImportBridgeStore {
   };
 }
 
+/** A PostgREST / Postgres "no such column" error naming `column`. */
+export function isMissingColumn(error: { code?: string; message?: string } | null | undefined, column: string): boolean {
+  if (!error) return false;
+  const code = error.code ?? '';
+  return (code === 'PGRST204' || code === '42703') && (error.message ?? '').includes(column);
+}
+
 /**
  * Persist a freshly generated proposal.
  *
@@ -242,22 +249,32 @@ export async function persistProposal(
       .eq('status', 'ready');
   }
 
-  const { data, error } = await supabase
+  const row = {
+    user_id: userId,
+    target_domain: draft.targetDomain,
+    source_kind: draft.sourceKind,
+    source_payroll_event_id: sourcePayrollEventId,
+    currency_code: draft.currencyCode,
+    target_entity_id: draft.targetEntityId,
+    target_entity_updated_at: draft.targetEntityUpdatedAt,
+    recommended_apply_mode: draft.recommendedApplyMode,
+    duplicate_of_entity_id: draft.duplicateOfEntityId,
+    status: 'ready',
+  };
+  // WP-09 (GAP-07): the adapter's explanation -- title, lines and review
+  // reasons -- is kept with the proposal (fhip_import_proposals.summary,
+  // migration 0207) instead of being thrown away, so the compare step and a
+  // resumed proposal can show WHY each figure was proposed. Until 0207 is
+  // applied the column does not exist; the proposal is then stored without it
+  // exactly as before rather than failing.
+  let { data, error } = await supabase
     .from('fhip_import_proposals')
-    .insert({
-      user_id: userId,
-      target_domain: draft.targetDomain,
-      source_kind: draft.sourceKind,
-      source_payroll_event_id: sourcePayrollEventId,
-      currency_code: draft.currencyCode,
-      target_entity_id: draft.targetEntityId,
-      target_entity_updated_at: draft.targetEntityUpdatedAt,
-      recommended_apply_mode: draft.recommendedApplyMode,
-      duplicate_of_entity_id: draft.duplicateOfEntityId,
-      status: 'ready',
-    })
+    .insert({ ...row, summary: draft.summary })
     .select('id')
     .single();
+  if (error && isMissingColumn(error, 'summary')) {
+    ({ data, error } = await supabase.from('fhip_import_proposals').insert(row).select('id').single());
+  }
   if (error || !data) throw new Error(error?.message ?? 'could not create the proposal');
 
   const proposalId = data.id as string;

@@ -189,6 +189,9 @@ export const PAYSLIP_FAILURE_MESSAGES: Record<string, string> = {
   document_type_not_identified: "This doesn't look like a payslip we can read yet. Please check the file, or add this income manually.",
   layout_unsupported: "We couldn't recognise the layout of this payslip. Please check the file, or add this income manually.",
   internal_error: 'Something went wrong while processing this payslip.',
+  // UPL-01 (WP-08 maps a timed-out PDF read to this code; WP-09 gives the
+  // payslip panel its words).
+  extraction_timeout: 'Reading this payslip took too long, so we stopped. Please try again, or add this income manually.',
 };
 
 export interface ProcessPayslipResult {
@@ -263,10 +266,33 @@ async function loadBankCandidates(userId: string, paymentDate: string | undefine
     )
     .eq('user_id', userId)
     .eq('credit_debit', 'credit')
+    // WP-09 (GAP-10): only APPROVED bank lines are evidence. An unapproved
+    // line may still be reclassified, split or removed as a duplicate, so it
+    // is never stamped as the payslip's deposit; it is matched later, when its
+    // statement is approved (lib/import-bridge/payslipBankRematch.ts).
+    .eq('approval_status', 'approved')
     .gte('transaction_date', from.toISOString().slice(0, 10))
     .lte('transaction_date', to.toISOString().slice(0, 10))
     .limit(100);
-  return (data ?? []) as BankCandidate[];
+  return excludeClaimedCandidates(userId, (data ?? []) as BankCandidate[]);
+}
+
+/**
+ * Drops deposits another payroll event already corroborates. One deposit is
+ * evidence for at most one pay run (0091's unique index); without this a
+ * REVISED payslip with the same net found its predecessor's deposit, hit that
+ * unique index on insert, and the 23505 was mistaken for "identical payslip".
+ */
+export async function excludeClaimedCandidates(userId: string, candidates: BankCandidate[]): Promise<BankCandidate[]> {
+  if (candidates.length === 0) return candidates;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('fdh_payroll_events')
+    .select('bank_match_transaction_id')
+    .eq('user_id', userId)
+    .in('bank_match_transaction_id', candidates.map((c) => c.id));
+  const claimed = new Set(((data ?? []) as Array<{ bank_match_transaction_id: string | null }>).map((r) => r.bank_match_transaction_id));
+  return candidates.filter((c) => !claimed.has(c.id));
 }
 
 export async function processPayslipDocument(userId: string, documentId: string, password?: string): Promise<ProcessPayslipResult> {
@@ -1027,4 +1053,87 @@ export async function getPayrollEventForReview(userId: string, payrollEventId: s
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
   return { event, components: components ?? [] };
+}
+
+// ---------------------------------------------------------------------------
+// Revised payslips (WP-09, GAP-15)
+// ---------------------------------------------------------------------------
+
+export interface RevisionPredecessor {
+  payroll_event_id: string;
+  statement_upload_id: string | null;
+  employer_name: string | null;
+  pay_period_start: string | null;
+  pay_period_end: string | null;
+  gross_pay: number | null;
+  net_pay: number | null;
+  approval_status: string;
+  currency_code: string;
+}
+
+interface RevisionRow extends RevisionPredecessor {
+  id: string;
+  employer_normalised: string | null;
+  payslip_fingerprint: string | null;
+  superseded_by_payroll_event_id: string | null;
+  created_at: string;
+}
+
+/**
+ * The earlier payslip this one REVISES, if any: same employer, same pay
+ * period, same currency, different content (a different fingerprint -- the
+ * same content is a duplicate, handled by the fingerprint index), and not
+ * itself already replaced. The same rule `fdh9_supersede_payroll_event`
+ * (0210) re-checks before it links anything, so a stale answer here can never
+ * supersede the wrong payslip.
+ */
+export async function findRevisionPredecessor(userId: string, payrollEventId: string): Promise<RevisionPredecessor | null> {
+  const supabase = await createClient();
+  const cols = 'id, statement_upload_id, employer_name, employer_normalised, pay_period_start, pay_period_end, gross_pay, net_pay, approval_status, currency_code, payslip_fingerprint, superseded_by_payroll_event_id, created_at';
+  const { data: current } = await supabase.from('fdh_payroll_events').select(cols).eq('user_id', userId).eq('id', payrollEventId).maybeSingle();
+  const me = current as RevisionRow | null;
+  if (!me || !me.employer_normalised || !me.pay_period_end || me.superseded_by_payroll_event_id) return null;
+  const { data } = await supabase
+    .from('fdh_payroll_events')
+    .select(cols)
+    .eq('user_id', userId)
+    .eq('employer_normalised', me.employer_normalised)
+    .eq('pay_period_end', me.pay_period_end)
+    .is('superseded_by_payroll_event_id', null)
+    .neq('id', me.id)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  const match = ((data ?? []) as RevisionRow[]).find((e) =>
+    e.currency_code === me.currency_code
+    && e.payslip_fingerprint !== me.payslip_fingerprint
+    && (!e.pay_period_start || !me.pay_period_start || e.pay_period_start === me.pay_period_start)
+    // Only an OLDER payslip can be revised by this one.
+    && e.created_at <= me.created_at);
+  if (!match) return null;
+  return {
+    payroll_event_id: match.id,
+    statement_upload_id: match.statement_upload_id,
+    employer_name: match.employer_name,
+    pay_period_start: match.pay_period_start,
+    pay_period_end: match.pay_period_end,
+    gross_pay: match.gross_pay,
+    net_pay: match.net_pay,
+    approval_status: match.approval_status,
+    currency_code: match.currency_code,
+  };
+}
+
+export type SupersedeResult = { ok: true; bankMatchMoved: boolean } | { ok: false; code: string };
+
+/** Links `supersededId` -> `supersedingId` through `fdh9_supersede_payroll_event` (0210). */
+export async function supersedePayrollEvent(supersededId: string, supersedingId: string): Promise<SupersedeResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('fdh9_supersede_payroll_event', {
+    p_superseded_payroll_event_id: supersededId,
+    p_superseding_payroll_event_id: supersedingId,
+  });
+  if (error) return { ok: false, code: error.code === 'PGRST202' ? 'MIGRATION_PENDING' : 'WRITE_FAILED' };
+  const result = data as { ok: boolean; code?: string; bank_match_moved?: boolean } | null;
+  if (!result?.ok) return { ok: false, code: result?.code ?? 'WRITE_FAILED' };
+  return { ok: true, bankMatchMoved: Boolean(result.bank_match_moved) };
 }

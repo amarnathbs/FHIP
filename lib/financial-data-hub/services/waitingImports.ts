@@ -16,7 +16,7 @@
 import { createClient } from '@/lib/supabase/server';
 import type { DraftDocumentType } from './aiFallbackDrafts';
 
-export type WaitingImportKind = 'liability' | 'retirement' | 'investment' | 'bank';
+export type WaitingImportKind = 'liability' | 'retirement' | 'investment' | 'bank' | 'payslip';
 
 /** Where the user left off. */
 export type WaitingImportStage =
@@ -49,6 +49,7 @@ const DRAFT_TYPE: Record<WaitingImportKind, DraftDocumentType> = {
   retirement: 'retirement_statement',
   investment: 'investment_statement',
   bank: 'bank_statement',
+  payslip: 'payslip',
 };
 
 /** Upload states a document can hold while its draft still awaits review --
@@ -87,6 +88,8 @@ function draftLabel(kind: WaitingImportKind, payload: unknown): { label: string 
       return { label: str(header.institutionName), periodEnd: str(header.statementPeriodEnd) };
     case 'retirement':
       return { label: str(p.fundName), periodEnd: str(p.statementEndDate) };
+    case 'payslip':
+      return { label: str(p.employerName), periodEnd: str(p.payPeriodEnd) };
     default:
       return { label: str(p.institutionName), periodEnd: str(p.statementPeriodEnd) };
   }
@@ -145,7 +148,7 @@ interface StatementRow {
   period_end: string | null;
 }
 
-async function waitingEvidence(supabase: Client, userId: string, kind: Exclude<WaitingImportKind, 'bank'>): Promise<WaitingImport[]> {
+async function waitingEvidence(supabase: Client, userId: string, kind: Exclude<WaitingImportKind, 'bank' | 'payslip'>): Promise<WaitingImport[]> {
   let rows: StatementRow[] = [];
   if (kind === 'liability') {
     const { data } = await supabase
@@ -222,6 +225,50 @@ async function waitingEvidence(supabase: Client, userId: string, kind: Exclude<W
   });
 }
 
+/**
+ * WP-09 (GAP-11): payslips left part-way. Before this only a 'ready' proposal
+ * could be resumed (GET /income-proposals), so a payslip that was read but
+ * never approved -- or approved but never compared -- was stranded: a
+ * re-upload only reached the duplicate guard. Stages:
+ *   review   payroll evidence saved, not yet approved;
+ *   compare  approved, and never applied to Income or dismissed.
+ * A superseded (revised) payslip is not waiting; its revision is.
+ */
+async function waitingPayslips(supabase: Client, userId: string): Promise<WaitingImport[]> {
+  const { data, error } = await supabase
+    .from('fdh_payroll_events')
+    .select('id, statement_upload_id, approval_status, employer_name, pay_period_end, currency_code, country_code, created_at')
+    .eq('user_id', userId)
+    .is('superseded_by_payroll_event_id', null)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) return [];
+  const events = ((data ?? []) as Array<{ id: string; statement_upload_id: string | null; approval_status: string; employer_name: string | null; pay_period_end: string | null; currency_code: string | null; country_code: string | null; created_at: string | null }>)
+    .filter((e) => e.statement_upload_id);
+  if (events.length === 0) return [];
+  const ids = events.map((e) => e.id);
+  const [decided, applied] = await Promise.all([
+    decidedStatementIds(supabase, userId, 'source_payroll_event_id', ids),
+    supabase.from('fhip_import_applications').select('source_payroll_event_id').eq('user_id', userId).eq('target_domain', 'income').in('source_payroll_event_id', ids),
+  ]);
+  const done = new Set<string>([...decided, ...((applied.data ?? []) as Array<{ source_payroll_event_id: string }>).map((r) => r.source_payroll_event_id)]);
+  const waiting = events.filter((e) => !done.has(e.id)).slice(0, MAX_ITEMS);
+  const uploads = await uploadsById(supabase, userId, waiting.map((e) => e.statement_upload_id!));
+  return waiting.map((e) => {
+    const u = uploads.get(e.statement_upload_id!);
+    return {
+      document_id: e.statement_upload_id!,
+      stage: e.approval_status === 'approved' ? ('compare' as const) : ('review' as const),
+      document_type: u?.document_type ?? 'payslip',
+      country_code: u?.country_code ?? e.country_code,
+      currency_code: u?.currency_code ?? e.currency_code,
+      uploaded_at: u?.created_at ?? e.created_at,
+      label: e.employer_name,
+      period_end: e.pay_period_end,
+    };
+  });
+}
+
 /** Everything of this kind the user left part-way through, newest first:
  * AI readings awaiting a check, then saved statements awaiting a decision.
  * Bank statements list only AI readings -- their saved transactions are
@@ -230,6 +277,7 @@ export async function listWaitingImports(userId: string, kind: WaitingImportKind
   const supabase = await createClient();
   const drafts = await waitingDrafts(supabase, userId, kind);
   if (kind === 'bank') return drafts;
+  if (kind === 'payslip') return [...drafts, ...(await waitingPayslips(supabase, userId))];
   const evidence = await waitingEvidence(supabase, userId, kind);
   return [...drafts, ...evidence];
 }

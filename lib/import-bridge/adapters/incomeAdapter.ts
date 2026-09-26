@@ -97,6 +97,91 @@ export interface IncomeEvidence {
   /** Review reasons carried from extraction/reconciliation/bank matching. */
   reviewReasons: string[];
   bankMatchStatus: 'matched' | 'no_match' | 'multiple_candidates' | 'not_attempted';
+  // --- WP-09 additions (all optional: an older caller behaves as before) ---
+  /** Whose payslip this is (GAP-05). Candidates are already scoped to it. */
+  owner?: 'self' | 'spouse';
+  /** Salary sacrifice this period (a pre-tax deduction). */
+  salarySacrifice?: number;
+  /** How the recurring-gross basis was decided (GAP-16). */
+  grossBasis?: GrossBasis;
+  /** A frequency the USER chose for a payslip whose own frequency has no
+   * Income equivalent (GAP-12). `scale` converts one pay's amounts to the
+   * chosen frequency (semimonthly -> monthly is x2; otherwise 1). */
+  frequencyChoice?: { frequency: string; scale: number } | null;
+  /** A same-employer row that was NOT offered because it is in another
+   * currency (GAP-03): the user is told why a new row is proposed. */
+  excludedCurrencyCandidate?: { name: string; currency: string } | null;
+  /** This payslip revises an earlier one for the same period (GAP-15). */
+  revises?: { payrollEventId: string; periodEnd: string | null } | null;
+}
+
+/**
+ * GAP-16: how the payslip's own gross relates to reimbursements and salary
+ * sacrifice, decided from the payslip's OWN component lines when they add up,
+ * and recorded (never silently assumed) when they do not.
+ */
+export interface GrossBasis {
+  /** Whether the stated gross already contains the reimbursement lines. */
+  reimbursementsIncludedInGross: boolean;
+  /** 'component_identity': the earning lines prove it; 'assumed_included': no
+   * proof, so the conservative assumption (subtract) was used; 'none': no
+   * reimbursement on this payslip. */
+  reimbursementBasis: 'component_identity' | 'assumed_included' | 'none';
+  /** 'pre_sacrifice': the earning lines sum to the gross and the sacrifice is
+   * a deduction below it; 'unknown': sacrifice present, no proof either way. */
+  salarySacrificeBasis: 'pre_sacrifice' | 'unknown' | 'none';
+}
+
+/** The subset of a payroll component line the gross-basis rule reads. */
+export interface GrossBasisComponent {
+  side: string;
+  type: string;
+  amount: number;
+  isYearToDate: boolean;
+}
+
+const cents = (n: number) => Math.round(n * 100);
+
+/** Pure. See `GrossBasis`. Current-period lines only; YTD is never arithmetic. */
+export function deriveGrossBasis(input: {
+  grossPay?: number;
+  reimbursementsTotal?: number;
+  salarySacrifice?: number;
+  components: readonly GrossBasisComponent[];
+}): GrossBasis {
+  const lines = input.components.filter((c) => !c.isYearToDate);
+  const earnings = lines.filter((c) => c.side === 'earning');
+  const earningsCents = earnings.reduce((s, c) => s + cents(Number(c.amount)), 0);
+  const grossCents = input.grossPay === undefined ? null : cents(input.grossPay);
+  const reimbCents = cents(input.reimbursementsTotal ?? 0);
+  const hasReimbLine = earnings.some((c) => c.type === 'reimbursement');
+  const identityHolds = grossCents !== null && earnings.length > 0 && Math.abs(earningsCents - grossCents) <= 1;
+
+  let reimbursementsIncludedInGross = false;
+  let reimbursementBasis: GrossBasis['reimbursementBasis'] = 'none';
+  if (reimbCents > 0) {
+    if (identityHolds) {
+      // The earning lines ARE the gross: it contains a reimbursement exactly
+      // when a reimbursement line is among them.
+      reimbursementsIncludedInGross = hasReimbLine;
+      reimbursementBasis = 'component_identity';
+    } else if (grossCents !== null && hasReimbLine && earnings.length > 0 && Math.abs(earningsCents - reimbCents - grossCents) <= 1) {
+      // The lines are gross PLUS the reimbursement: the stated gross excludes it.
+      reimbursementsIncludedInGross = false;
+      reimbursementBasis = 'component_identity';
+    } else {
+      // No proof: keep FDH-9's conservative rule (subtract), and say so.
+      reimbursementsIncludedInGross = true;
+      reimbursementBasis = 'assumed_included';
+    }
+  }
+
+  let salarySacrificeBasis: GrossBasis['salarySacrificeBasis'] = 'none';
+  if ((input.salarySacrifice ?? 0) > 0) {
+    const sacrificeIsDeduction = lines.some((c) => c.side === 'deduction' && c.type === 'salary_sacrifice');
+    salarySacrificeBasis = identityHolds && sacrificeIsDeduction ? 'pre_sacrifice' : 'unknown';
+  }
+  return { reimbursementsIncludedInGross, reimbursementBasis, salarySacrificeBasis };
 }
 
 /** Every canonical column this adapter is EVER permitted to write. */
@@ -180,15 +265,23 @@ export function findDuplicateIncome(
   existing: readonly ExistingIncomeRow[],
 ): ExistingIncomeRow | null {
   const employer = foldEmployer(evidence.employerName);
-  if (!employer) return null;
+  if (employer) {
+    const byEmployer = existing.find((row) => foldEmployer(row.employer_name) === employer);
+    if (byEmployer) return byEmployer;
 
-  const byEmployer = existing.find((row) => foldEmployer(row.employer_name) === employer);
-  if (byEmployer) return byEmployer;
+    const byName = existing.find(
+      (row) => row.income_type === 'salary' && (foldEmployer(row.source_name) ?? '').includes(employer),
+    );
+    if (byName) return byName;
+  }
 
-  const byName = existing.find(
-    (row) => row.income_type === 'salary' && (foldEmployer(row.source_name) ?? '').includes(employer),
-  );
-  return byName ?? null;
+  // WP-09: the catalogue "Employment Salary" row a user typed in by hand,
+  // with no employer on it, is almost certainly the salary this payslip is
+  // for. Proposing a SECOND salary row next to it would count the same pay
+  // twice. Recommended only when it is the ONE such row; the user can still
+  // choose "add as new".
+  const catalogueSalary = existing.filter((row) => row.master_item_key === 'employment_salary' && !foldEmployer(row.employer_name));
+  return catalogueSalary.length === 1 ? catalogueSalary[0] : null;
 }
 
 function field(
@@ -221,9 +314,18 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     const target = duplicate;
     const recommendedApplyMode: RecommendedApplyMode = target ? 'update_existing' : 'add_new';
 
-    const recurringGross = computeRecurringGross(evidence);
+    const choice = evidence.frequencyChoice ?? null;
+    const scale = choice?.scale ?? 1;
+    const scaled = (n: number | undefined) => (n === undefined ? undefined : Number((n * scale).toFixed(2)));
+    const baseRecurringGross = computeRecurringGross(evidence);
+    const recurringGross = scaled(baseRecurringGross);
     const variable = hasVariablePay(evidence);
     const reviewReasons = [...evidence.reviewReasons];
+    if (evidence.excludedCurrencyCandidate) reviewReasons.push('existing_income_in_other_currency');
+    if (evidence.revises) reviewReasons.push('revised_payslip');
+    if (evidence.grossBasis?.reimbursementBasis === 'assumed_included') reviewReasons.push('reimbursement_inclusion_assumed');
+    if (evidence.grossBasis?.salarySacrificeBasis === 'unknown') reviewReasons.push('salary_sacrifice_basis_unknown');
+    if (target && !foldEmployer(evidence.employerName) && target.master_item_key === 'employment_salary') reviewReasons.push('matched_catalogue_salary_without_employer');
 
     const fields: ProposedField[] = [];
 
@@ -260,7 +362,7 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     // A period containing a bonus has an unrepresentative net, so proposing it
     // as the ongoing net would be misleading.
     if (evidence.netPay !== undefined && !variable) {
-      fields.push(field('net_amount', evidence.netPay, target, { reasonCode: 'net_from_payslip' }));
+      fields.push(field('net_amount', scaled(evidence.netPay), target, { reasonCode: scale !== 1 ? 'net_converted_to_chosen_frequency' : 'net_from_payslip' }));
     } else if (evidence.netPay !== undefined && variable) {
       reviewReasons.push('net_not_proposed_period_includes_variable_pay');
     }
@@ -268,8 +370,13 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     // --- frequency: cautious ------------------------------------------------
     // Proposed only when the payroll frequency has a canonical equivalent, and
     // marked requires_confirmation unless the payslip literally stated it
-    // (spec section 27).
-    if (evidence.canonicalFrequency) {
+    // (spec section 27). WP-09 (GAP-12): a frequency the user CHOSE for a
+    // semimonthly / irregular / unknown payslip is proposed as confirmed.
+    if (choice) {
+      fields.push(field('frequency', choice.frequency, target, {
+        reasonCode: scale !== 1 ? 'semimonthly_converted_to_chosen_frequency' : 'frequency_chosen_by_user',
+      }));
+    } else if (evidence.canonicalFrequency) {
       fields.push(field('frequency', evidence.canonicalFrequency, target, {
         requiresConfirmation: !evidence.frequencyStated,
         reasonCode: evidence.frequencyStated ? 'frequency_stated_on_payslip' : 'frequency_inferred_single_payslip',
@@ -351,17 +458,57 @@ function buildSummary(
     n === undefined ? 'Not shown on payslip' : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   lines.push({ label: 'Employer', value: evidence.employerName ?? 'Not identified' });
+  if (evidence.owner) {
+    lines.push({ label: 'Whose income', value: evidence.owner === 'spouse' ? 'Your spouse' : 'You' });
+  }
   lines.push({ label: 'Income type', value: 'Salary' });
   lines.push({
     label: 'Pay frequency',
-    value: evidence.canonicalFrequency ?? 'Not certain',
-    note: evidence.frequencyStated ? 'Stated on your payslip' : 'Worked out from this payslip — please confirm',
+    value: evidence.frequencyChoice?.frequency ?? evidence.canonicalFrequency ?? 'Not certain',
+    note: evidence.frequencyChoice
+      ? evidence.frequencyChoice.scale !== 1
+        ? `You chose this. Twice-monthly pay is converted: each amount is multiplied by ${evidence.frequencyChoice.scale}`
+        : 'You chose this'
+      : evidence.frequencyStated ? 'Stated on your payslip' : evidence.canonicalFrequency ? 'Worked out from this payslip — please confirm' : 'Choose how often you are paid before adding this as new income',
   });
   lines.push({
     label: 'Ordinary gross pay',
     value: money(recurringGross),
     note: variable ? 'Bonus, overtime and commission are left out of your regular income' : undefined,
   });
+  const basis = evidence.grossBasis;
+  if (basis && basis.reimbursementBasis !== 'none') {
+    lines.push({
+      label: 'Reimbursements',
+      value: basis.reimbursementsIncludedInGross ? 'Taken out of gross' : 'Not part of gross',
+      note: basis.reimbursementBasis === 'component_identity'
+        ? 'Worked out from the pay lines on your payslip'
+        : 'Your payslip does not show whether gross includes them, so they were taken out to be safe — please check',
+    });
+  }
+  if (basis && basis.salarySacrificeBasis !== 'none') {
+    lines.push({
+      label: 'Gross basis',
+      value: basis.salarySacrificeBasis === 'pre_sacrifice' ? 'Before salary sacrifice' : 'Not certain',
+      note: basis.salarySacrificeBasis === 'pre_sacrifice'
+        ? `Salary sacrifice of ${money(evidence.salarySacrifice)} is deducted after this gross`
+        : `Your payslip shows salary sacrifice of ${money(evidence.salarySacrifice)}, but not whether the gross is before or after it`,
+    });
+  }
+  if (evidence.excludedCurrencyCandidate) {
+    lines.push({
+      label: 'Existing entry not updated',
+      value: `${evidence.excludedCurrencyCandidate.name} (${evidence.excludedCurrencyCandidate.currency})`,
+      note: `It is in ${evidence.excludedCurrencyCandidate.currency} and this payslip is in ${evidence.currencyCode}, so the two are never mixed`,
+    });
+  }
+  if (evidence.revises) {
+    lines.push({
+      label: 'Revised payslip',
+      value: evidence.revises.periodEnd ? `Replaces your payslip for the period ending ${evidence.revises.periodEnd}` : 'Replaces an earlier payslip',
+      note: 'The earlier payslip no longer counts',
+    });
+  }
   if (variable) {
     const variableTotal =
       (evidence.bonusPay ?? 0) + (evidence.overtimePay ?? 0)

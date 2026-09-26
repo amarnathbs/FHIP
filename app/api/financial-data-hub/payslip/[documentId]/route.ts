@@ -1,9 +1,15 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
-import { getPayrollEventForReview, getPayrollEventIdForDocument } from '@/lib/financial-data-hub/services/payslipProcessingService';
+import {
+  findRevisionPredecessor,
+  getPayrollEventForReview,
+  getPayrollEventIdForDocument,
+} from '@/lib/financial-data-hub/services/payslipProcessingService';
 
 // GET /api/financial-data-hub/payslip/{documentId} — the review read-model
 // (spec section 32). Read-only: never mutates the payroll event, and never
-// touches Income.
+// touches Income. WP-09: also says which earlier payslip this one would
+// revise (same employer and period, different content), so the review step
+// can ask "does this replace your earlier payslip?" (GAP-15).
 export async function GET(_req: Request, { params }: { params: Promise<{ documentId: string }> }) {
   const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
@@ -15,5 +21,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ documen
   const review = await getPayrollEventForReview(user.id, payrollEventId);
   if (!review) return bad('Payroll event not found.', 404);
 
-  return ok({ payroll_event: review.event, components: review.components });
+  const revisionOf = await findRevisionPredecessor(user.id, payrollEventId).catch(() => null);
+  return ok({ payroll_event: review.event, components: review.components, revision_of: revisionOf });
 }

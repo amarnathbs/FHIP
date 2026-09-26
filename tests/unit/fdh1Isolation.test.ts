@@ -546,6 +546,14 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // lib/read-models that names FDH; every other read-model file is kept
       // free of the literal so this stays a single entry.
       path.join(REPO_ROOT, 'lib', 'read-models', 'core', 'spendingRules.ts'),
+      // Approved Upload -> Canonical User Data programme, WP-09 (2026-09-27).
+      // `lib/import-bridge/payslipBankRematch.ts` is a REAL, intentional import
+      // of FDH's pure, certified salary matcher (`payslip/bankMatch.ts`'s
+      // `matchSalaryDeposit`), so a bank statement approved AFTER a payslip is
+      // matched by exactly the rule processing uses -- never a second copy of
+      // the highest-risk rule in FDH-9. It writes only through the 0210
+      // restamp RPC and imports no FDH service, repository or table module.
+      path.join(REPO_ROOT, 'lib', 'import-bridge', 'payslipBankRematch.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

@@ -1,9 +1,9 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { listWaitingImports, type WaitingImportKind } from '@/lib/financial-data-hub/services/waitingImports';
 
-const KINDS: readonly WaitingImportKind[] = ['liability', 'retirement', 'investment', 'bank'];
+const KINDS: readonly WaitingImportKind[] = ['liability', 'retirement', 'investment', 'bank', 'payslip'];
 
-// GET /api/financial-data-hub/waiting-imports?kind=liability|retirement|investment|bank
+// GET /api/financial-data-hub/waiting-imports?kind=liability|retirement|investment|bank|payslip
 //
 // 2026-09-25: the statement imports this user left part-way through (an AI
 // reading awaiting a check, evidence awaiting approval, a comparison never
