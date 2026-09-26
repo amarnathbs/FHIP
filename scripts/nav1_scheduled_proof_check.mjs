@@ -142,7 +142,6 @@ if (mode === 'daily') {
     compared++;
     if (amfi.get(c) === Number(r.price)) exact++;
   }
-  const missing = [...amfi.keys()].filter((c) => !onFile.has(c)).length;
   const zeroNotAmfiZero = navRows.filter((r) => !(Number(r.price) > 0) && !(Number(r.price) === 0 && amfi.get(codeOf.get(r.instrument_id)) === 0)).length;
   check('D11', 'no duplicate instrument/date; every row has provider + source timestamp; a non-positive NAV only where AMFI itself publishes 0 (segregated portfolios)', dup === 0 && zeroNotAmfiZero === 0 && navRows.every((r) => r.data_version && r.source_timestamp), { dup, zero_nav_rows: nonPos, zero_nav_rows_not_matching_amfi_zero: zeroNotAmfiZero, provenance: prov });
   check('D12', `independent AMFI NAVAll.txt: every comparable ${navDate} value identical`, compared > 0 && exact === compared, `${exact}/${compared} exact (AMFI now carries ${amfi.size} schemes dated ${amfiLabel(navDate)}; a value AMFI later corrected shows here as a mismatch -- inspect before failing the run)`);
