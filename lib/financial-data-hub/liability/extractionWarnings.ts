@@ -7,7 +7,9 @@
  * now stored on `fdh_liability_statements.extraction_warnings` (0207) in this
  * shape and shown on the review screen and in Statement history.
  *
- * Pure; no data access. Safe on the client.
+ * Pure; no data access. The words the user reads for each code live with the
+ * UI (components/liabilities/liabilityLedgerCopy.ts), which imports nothing
+ * from this module (tests/unit/fdh1Isolation.test.ts).
  */
 
 export interface LiabilityExtractionWarning {
@@ -32,24 +34,4 @@ export function toExtractionWarnings(warnings: readonly string[]): LiabilityExtr
     if (prefix) return { code: prefix.slice(0, -1), row: Number(m[1]), detail: rest.slice(prefix.length).slice(0, 60) };
     return { code: rest, row: Number(m[1]) };
   });
-}
-
-const COPY: Record<string, string> = {
-  zero_amount: 'A $0.00 line was left out (it moves no money).',
-  unrecognised_activity_type: 'A line with a type we do not recognise was left out.',
-  unparseable_date: 'A line with an unreadable date was left out.',
-  unparseable_amount: 'A line with an unreadable amount was left out.',
-  adjustment_direction_unknown: 'The statement has adjustment lines whose direction we could not tell, so its balance could not be checked.',
-  adjustment_sign_inferred_from_balance: 'The direction of the adjustment lines was taken from the statement balance.',
-  ai_opening_balance_not_printed_dropped: 'The opening balance was not printed on the statement, so it was not used.',
-  ai_closing_balance_not_printed_dropped: 'The closing balance was not printed on the statement, so it was not used.',
-};
-
-/** One sentence the user reads for a persisted warning. Never empty. */
-export function describeLiabilityExtractionWarning(w: LiabilityExtractionWarning): string {
-  const base = COPY[w.code]
-    ?? (w.code.startsWith('other_activity_not_in_totals') ? 'Some lines of type "Other" are not included in the statement totals.' : null)
-    ?? (w.code.startsWith('ai_') ? 'The AI-read draft raised a note on this statement.' : 'The statement raised a note during reading.');
-  const where = w.row !== undefined ? ` (row ${w.row}${w.detail ? `: "${w.detail}"` : ''})` : '';
-  return `${base}${where}`;
 }

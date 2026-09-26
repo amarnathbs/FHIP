@@ -101,6 +101,14 @@ async function loadUserTransactions(userId: string): Promise<FdhTransaction[]> {
 }
 
 /**
+ * WP-11: rows whose economic type is decided by the SOURCE document (the FDH-10
+ * ledger Apply writes classification_method = 'source'). Exported for its test.
+ */
+export function keepsSourceEconomicType(txn: Pick<FdhTransaction, 'classification_method'>): boolean {
+  return txn.classification_method === 'source';
+}
+
+/**
  * Runs the full R8 classification pipeline for one user: economic
  * type/category/merchant classification, transfer/settlement/refund
  * linking, and recurring-series detection. Safe to re-run at any time
@@ -120,6 +128,19 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
   const accountTypeByAccount = new Map<string, FdhAccountType>(accounts.map((a) => [a.id, a.account_type]));
 
   const admin = createAdminClient();
+
+  // FDH-6 (spec sections 101-103): a household with more than 1,000 links
+  // must never have its later links silently invisible to the dedup check
+  // below. Read ONCE, before classification (WP-11 needs it there too).
+  const existingLinksResult = await transactionLinksRepository.listForUserAll(userId);
+  // WP-11: a bank debit CONFIRMED as the settlement of a card/loan statement
+  // repayment (by the ledger Apply or the user) is a transfer; a re-run of the
+  // engine must not turn it back into an expense.
+  const settledBankLegs = new Set(
+    (existingLinksResult.data ?? [])
+      .filter((l) => l.status === 'confirmed' && l.transaction_id_to && (l.link_type === 'credit_card_settlement' || l.link_type === 'loan_payment'))
+      .map((l) => l.transaction_id_from),
+  );
 
   let classified = 0;
   let unresolved = 0;
@@ -145,6 +166,44 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
       user_override: txn.user_override,
     };
     const result = classifyTransaction(classifiable, institutionByAccount.get(txn.financial_account_id) ?? null, ref);
+
+    // WP-11 (0209): a row whose ECONOMIC TYPE came from the source document --
+    // an FDH-10 card/loan statement activity written by the ledger Apply --
+    // keeps it. The engine may still supply its CATEGORY / subcategory /
+    // merchant (a card purchase at a supermarket is groceries), never its
+    // economic type, method or flags: a card repayment must stay 'transfer',
+    // an interest line 'debt_interest'. An unresolved category never sends
+    // such a row back to review, and it never becomes a link candidate. The
+    // same holds for the bank debit a confirmed settlement link pairs with it.
+    if (keepsSourceEconomicType(txn) || settledBankLegs.has(txn.id)) {
+      if (result.source.kind === 'unresolved') continue;
+      const categoryChanged =
+        result.categoryId !== txn.category_id || result.subcategoryId !== txn.subcategory_id || result.merchantId !== txn.merchant_id;
+      if (!categoryChanged) continue;
+      classified += 1;
+      await admin
+        .from('fdh_transactions')
+        .update({ category_id: result.categoryId, subcategory_id: result.subcategoryId, merchant_id: result.merchantId })
+        .eq('id', txn.id)
+        .eq('user_id', userId);
+      await admin.from('fdh_classification_history').insert({
+        user_id: userId,
+        transaction_id: txn.id,
+        previous_economic_transaction_type: txn.economic_transaction_type,
+        new_economic_transaction_type: txn.economic_transaction_type,
+        previous_category_id: txn.category_id,
+        new_category_id: result.categoryId,
+        previous_subcategory_id: txn.subcategory_id,
+        new_subcategory_id: result.subcategoryId,
+        classification_method: result.classificationMethod,
+        confidence: CONFIDENCE_SCORE[result.confidence],
+        changed_by_type: 'system',
+        changed_by_user: null,
+        global_rule_id: result.source.kind === 'verified_global_rule' || result.source.kind === 'narrative_pattern' ? (result.source.ruleId ?? null) : null,
+        user_rule_id: result.source.kind === 'user_rule' ? (result.source.ruleId ?? null) : null,
+      });
+      continue;
+    }
     resolvedByTxnId.set(txn.id, result);
 
     const changed =
@@ -204,7 +263,13 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
 
   // --- Transfer / settlement / loan-payment matching (batch, cross-account) ---
   const eligible = transactions.filter((t) => !t.user_override);
-  const transferCandidates: TransferCandidateTxn[] = eligible.map((t) => ({
+  // WP-11: source-typed facility rows are left out of TRANSFER matching only:
+  // the ledger Apply links a card/loan repayment to its bank debit itself (a
+  // confirmed settlement link), so the engine must not propose a second,
+  // pending one. They stay in refund and recurring detection (a card refund
+  // can still be proposed against its purchase; a card subscription is still
+  // a subscription).
+  const transferCandidates: TransferCandidateTxn[] = eligible.filter((t) => !keepsSourceEconomicType(t)).map((t) => ({
     id: t.id,
     financialAccountId: t.financial_account_id,
     transactionDate: t.transaction_date,
@@ -214,11 +279,7 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
     descriptionClean: t.description_clean,
     sourceReference: t.source_reference,
   }));
-  // FDH-6 (spec sections 101-103): a household with more than 1,000 links
-  // must never have its later links silently invisible to this dedup check
-  // — that would let a duplicate transfer/refund link be proposed on top of
-  // an existing one past row 1,000.
-  const existingLinksResult = await transactionLinksRepository.listForUserAll(userId);
+  // (existingLinksResult was read once, above -- FDH-6's no-truncation read.)
   const existingLinkedIds = new Set(
     (existingLinksResult.data ?? []).flatMap((l) => [l.transaction_id_from, l.transaction_id_to].filter(Boolean) as string[]),
   );
@@ -270,7 +331,7 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
     amountOriginal: t.amount_original,
     currencyOriginal: t.currency_original,
     creditDebit: t.credit_debit,
-    isRefundClassified: resolvedByTxnId.get(t.id)?.economicTransactionType === 'refund',
+    isRefundClassified: (keepsSourceEconomicType(t) ? t.economic_transaction_type : resolvedByTxnId.get(t.id)?.economicTransactionType) === 'refund',
   }));
   const proposedRefunds = matchRefundsToOriginals(refundCandidates.filter((t) => !existingLinkedIds.has(t.id)));
   let refundLinksProposed = 0;

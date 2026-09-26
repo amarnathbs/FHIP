@@ -55,7 +55,7 @@ import { recordDocumentAuditEvent } from './auditLog';
 import { downloadDocumentObject } from './storage';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { extractLiabilityStatement } from '../liability/statementIntake';
-import { computeStatementTotals } from '../liability/statementReconciliation';
+import { computeStatementTotals, reconcileCreditCardStatement, reconcileLoanStatement } from '../liability/statementReconciliation';
 import { toExtractionWarnings } from '../liability/extractionWarnings';
 import { matchBankPayment, type BankTransactionCandidate } from '../liability/bankMatching';
 import type {
@@ -1270,5 +1270,54 @@ export async function getLiabilityStatementForReview(userId: string, statementId
       .order('activity_date', { ascending: true })
       .order('id', { ascending: true }),
   );
-  return { statement, activities };
+  // WP-11 (G4): the bank debits a repayment could be, so the review screen can
+  // offer a real choice instead of the dead-end "several possible matches".
+  const candidateIds = [...new Set(activities.flatMap((a) => (Array.isArray(a.bank_match_candidate_ids) ? (a.bank_match_candidate_ids as string[]) : [])))];
+  const bankCandidates: Record<string, unknown>[] = [];
+  for (let i = 0; i < candidateIds.length; i += 200) {
+    const { data } = await supabase
+      .from('fdh_transactions')
+      .select('id, transaction_date, amount_original, currency_original, description_clean')
+      .eq('user_id', userId)
+      .in('id', candidateIds.slice(i, i + 200));
+    bankCandidates.push(...((data ?? []) as Record<string, unknown>[]));
+  }
+  return { statement, activities, bankCandidates };
+}
+
+/**
+ * WP-11 (G4): the user's choice for a repayment with several possible bank
+ * debits -- one of the persisted candidates, or none of them. The RPC
+ * (fdh10_match_liability_payment, migration 0209) re-verifies the debit
+ * (yours, a debit, same currency and amount, approved, not a duplicate, not
+ * already paying another line) and writes under the internal-write GUC.
+ */
+export async function chooseLiabilityPaymentMatch(
+  userId: string,
+  documentId: string,
+  activityId: string,
+  bankTransactionId: string | null,
+): Promise<{ outcome: 'matched' | 'none_of_these' }> {
+  const statementId = await getLiabilityStatementIdForDocument(userId, documentId);
+  if (!statementId) throw new LiabilityStatementProcessingError('not_found', 'No statement evidence has been extracted from this document yet.');
+  const supabase = await createClient();
+  const { data: activity } = await supabase
+    .from('fdh_liability_statement_activities')
+    .select('id')
+    .eq('id', activityId)
+    .eq('statement_id', statementId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (!activity) throw new LiabilityStatementProcessingError('not_found', 'That statement line could not be found.');
+  const { data, error } = await supabase.rpc('fdh10_match_liability_payment', {
+    p_activity_id: activityId,
+    p_bank_transaction_id: bankTransactionId,
+    p_method: 'user_pick',
+  });
+  if (error) throw new Error(error.message);
+  const result = data as { ok: boolean; code?: string; error?: string; outcome?: 'matched' | 'none_of_these' };
+  if (!result.ok) {
+    throw new LiabilityStatementProcessingError(result.code === 'ACTIVITY_NOT_FOUND' ? 'not_found' : 'invalid_state', result.error ?? 'That bank transaction could not be chosen.');
+  }
+  return { outcome: result.outcome ?? 'matched' };
 }

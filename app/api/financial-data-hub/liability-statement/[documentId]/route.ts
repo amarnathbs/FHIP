@@ -15,5 +15,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ documen
   const review = await getLiabilityStatementForReview(user.id, statementId);
   if (!review) return bad('Statement not found.', 404);
 
-  return ok({ statement: review.statement, activities: review.activities });
+  return ok({ statement: review.statement, activities: review.activities, bank_candidates: review.bankCandidates });
 }

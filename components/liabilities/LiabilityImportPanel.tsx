@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
+import { ACTIVITY_LEDGER_OUTCOME, BLOCKER_LABELS, OWNER_CHOICES, describeExtractionWarning } from './liabilityLedgerCopy';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -61,6 +62,8 @@ type Phase =
   | 'comparing'
   | 'applied'
   | 'kept_existing'
+  // WP-11 (G10): the user rejected the statement; nothing from it is counted.
+  | 'rejected'
   | 'stale'
   | 'error';
 
@@ -75,7 +78,8 @@ const SCAN_REJECTION_MESSAGES: Record<string, string> = {
   malware_scan_unknown: 'We could not finish checking this file for safety. Please try again, or add this liability manually below.',
 };
 
-type Decision = 'add_new' | 'update_existing' | 'apply_selected_fields' | 'keep_existing';
+type Decision = 'add_new' | 'update_existing' | 'apply_selected_fields' | 'keep_existing' | 'reject_statement';
+type Owner = (typeof OWNER_CHOICES)[number]['value'];
 
 /** One AI-read activity line, exactly as the confirm route accepts it. */
 interface AiDraftActivity {
@@ -184,6 +188,10 @@ interface LiabilityStatement {
   // where it is not, rather than showing `undefined`.
   user_corrected_fields?: string[] | null;
   last_corrected_at?: string | null;
+  // WP-10 (G6): what extraction left out or could not check (0207 column).
+  extraction_warnings?: { code: string; row?: number; detail?: string }[] | null;
+  // WP-11: whether this statement's lines are recorded in your figures (0209).
+  ledger_status?: 'not_applied' | 'applied' | 'rejected';
 }
 
 /** The fields this panel lets a user correct on a CREDIT CARD statement, in
@@ -283,6 +291,22 @@ interface StatementActivity {
   amount: number;
   description_raw: string | null;
   bank_match_status: 'matched' | 'no_match' | 'multiple_candidates' | 'not_attempted' | 'bank_evidence_not_available';
+  principal_component?: number | null;
+  interest_component?: number | null;
+  fee_component?: number | null;
+  // WP-10 (G4): the bank debits this repayment could be, when more than one.
+  bank_match_candidate_ids?: string[] | null;
+  // WP-11: what the Apply recorded for this line (0209).
+  ledger_disposition?: string | null;
+}
+
+/** A bank debit a repayment could be (snake_case, as the review API returns it). */
+export interface BankCandidate {
+  id: string;
+  transaction_date: string;
+  amount_original: number;
+  currency_original: string;
+  description_clean: string | null;
 }
 
 // NOTE: kept in snake_case to match the raw API/DB column names, exactly
@@ -394,6 +418,16 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   const [proposalId, setProposalId] = useState<string | null>(null);
   const [fields, setFields] = useState<ProposedField[]>([]);
   const [decision, setDecision] = useState<Decision>('update_existing');
+  // WP-11: whether the proposal names an existing liability (keep_existing
+  // needs one), whose card/loan this is (G8), the user's acceptance that
+  // unrecognised lines are not counted, the Apply's blockers, and the bank
+  // debits a repayment could be (G4 picker).
+  const [hasTarget, setHasTarget] = useState(false);
+  const [owner, setOwner] = useState<Owner>('self');
+  const [acknowledgeUnclassified, setAcknowledgeUnclassified] = useState(false);
+  const [blockers, setBlockers] = useState<{ activityId: string; reason: string }[]>([]);
+  const [bankCandidates, setBankCandidates] = useState<BankCandidate[]>([]);
+  const [candidateChoice, setCandidateChoice] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   // 2026-09-24 correction surface. `corrections` holds the RAW string in each
@@ -457,6 +491,12 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     setCorrections({});
     setCorrectionError(null);
     setCorrectionNotice(null);
+    setHasTarget(false);
+    setOwner('self');
+    setAcknowledgeUnclassified(false);
+    setBlockers([]);
+    setBankCandidates([]);
+    setCandidateChoice({});
   }, []);
 
   /** The correctable fields for the statement actually on screen. */
@@ -568,7 +608,32 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     }
     setStatement(json.data.statement as LiabilityStatement);
     setActivities((json.data.activities as StatementActivity[]) ?? []);
+    setBankCandidates((json.data.bank_candidates as BankCandidate[]) ?? []);
     setPhase('review');
+  }
+
+  /** WP-11 (G4): the user's choice among several possible bank payments. */
+  async function handleChooseBankPayment(activityId: string) {
+    if (!documentId) return;
+    const choice = candidateChoice[activityId];
+    if (!choice) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/financial-data-hub/liability-statement/${documentId}/match-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activity_id: activityId, bank_transaction_id: choice === 'none' ? null : choice }),
+      });
+      const { ok, json } = await readJson(res);
+      if (!ok) throw new Error(json.error ?? 'That choice could not be saved.');
+      setBlockers((prev) => prev.filter((b) => b.activityId !== activityId));
+      await loadReview(documentId);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Handles the JSON body from EITHER the initial upload call or the
@@ -823,6 +888,9 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       );
       setSelected(defaultSel);
       setDecision(json.data.proposal?.target_entity_id ? 'update_existing' : 'add_new');
+      setHasTarget(Boolean(json.data.proposal?.target_entity_id));
+      setBlockers([]);
+      setMessage(null);
       setPhase('comparing');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
@@ -880,6 +948,10 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           // other decision safe to omit this for.
           selectedFields:
             decision === 'add_new' || decision === 'apply_selected_fields' ? Array.from(selected) : undefined,
+          // WP-11 (G8, PO D-10): whose card or loan this is.
+          owner,
+          // WP-11: the user accepted that unrecognised lines are not counted.
+          acknowledgeUnclassified,
         }),
       });
       const { ok, status, json } = await readJson(res);
@@ -894,11 +966,29 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           setPhase('applied');
           return;
         }
+        // WP-11: some lines need a decision first. Nothing was saved; stay on
+        // the comparison and say exactly which lines and why.
+        if (status === 409 && json.code === 'BLOCKING_REVIEW') {
+          setBlockers((json.blockers ?? []) as { activityId: string; reason: string }[]);
+          setMessage(json.error ?? 'Some statement lines need your decision first.');
+          return;
+        }
+        if (status === 422 && ['UNSUPPORTED_CURRENCY', 'CURRENCY_MISMATCH', 'INVALID_OWNER', 'FOREIGN_TRANSACTION', 'INVALID_APPLY_MODE'].includes(json.code)) {
+          setBlockers([]);
+          setMessage(json.error ?? 'This statement cannot be applied.');
+          return;
+        }
         throw new Error(json.error ?? 'The change could not be saved.');
       }
-      if (json.data.outcome === 'kept_existing') {
+      const recorded = describeRecordedLedger(json.data.ledger as RecordedLedger | null);
+      if (json.data.outcome === 'rejected_statement') {
+        setPhase('rejected');
+      } else if (json.data.outcome === 'kept_existing') {
+        setMessage(`Your existing liability was kept unchanged.${recorded}`);
         setPhase('kept_existing');
+        onApplied?.();
       } else {
+        setMessage(`Your liability has been updated from this statement.${recorded}`);
         setPhase('applied');
         onApplied?.();
       }
@@ -921,6 +1011,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   }
 
   const isCreditCard = statementType === 'credit_card';
+  const unclassifiedCount = activities.filter((a) => a.activity_type === 'ADJUSTMENT' || a.activity_type === 'OTHER').length;
 
   return (
     <div role="region" aria-label="Import a credit card or loan statement" className="rounded border border-gray-200 p-5" aria-live="polite">
@@ -1286,20 +1377,31 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             {reconciliationLabel[statement.reconciliation_status]}
           </p>
 
-          <div>
-            <h4 className="text-sm font-medium">Activity requiring review</h4>
-            <ul className="mt-2 space-y-1 text-sm">
-              {activities.filter((a) => a.activity_type === 'PAYMENT').map((a) => (
-                <li key={a.id} className="flex justify-between border-b border-gray-100 py-1">
-                  <span>{a.activity_date} — Payment {money(a.amount, statement.currency_code)}</span>
-                  <span className="text-muted">{bankMatchLabel[a.bank_match_status]}</span>
-                </li>
-              ))}
-              {activities.filter((a) => a.activity_type === 'PAYMENT').length === 0 && (
-                <li className="text-muted">No payment activity found on this statement.</li>
-              )}
-            </ul>
-          </div>
+          {!isCreditCard && (statement.drawdowns_total ?? 0) > 0 && (
+            <p className="text-sm">
+              <span className="font-medium">Drawdowns: </span>
+              {money(statement.drawdowns_total, statement.currency_code)} <span className="text-xs text-muted">(money borrowed — never income)</span>
+            </p>
+          )}
+
+          {(statement.extraction_warnings?.length ?? 0) > 0 && (
+            <div>
+              <h4 className="text-sm font-medium">Notes from reading this statement</h4>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-amber-900">
+                {statement.extraction_warnings!.map((w, i) => <li key={`${w.code}-${i}`}>{describeExtractionWarning(w)}</li>)}
+              </ul>
+            </div>
+          )}
+
+          <ActivityLedgerPreview
+            activities={activities}
+            currency={statement.currency_code}
+            bankCandidates={bankCandidates}
+            candidateChoice={candidateChoice}
+            onChoose={(activityId, value) => setCandidateChoice((prev) => ({ ...prev, [activityId]: value }))}
+            onSaveChoice={(activityId) => void handleChooseBankPayment(activityId)}
+            busy={busy}
+          />
 
           {statement.approval_status === 'approved' ? (
             <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">This statement evidence has been approved.</p>
@@ -1466,16 +1568,54 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
 
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">What would you like to do?</legend>
-            {(['add_new', 'update_existing', 'apply_selected_fields', 'keep_existing'] as Decision[]).map((d) => (
-              <label key={d} className="flex items-center gap-2 text-sm">
-                <input type="radio" name="liability-apply-decision" checked={decision === d} onChange={() => setDecision(d)} />
-                {d === 'add_new' && 'Add as a new liability'}
-                {d === 'update_existing' && 'Update my existing liability'}
-                {d === 'apply_selected_fields' && 'Apply only the fields I ticked above'}
-                {d === 'keep_existing' && 'Keep my existing liability as-is'}
-              </label>
-            ))}
+            {(['add_new', 'update_existing', 'apply_selected_fields', 'keep_existing', 'reject_statement'] as Decision[])
+              .filter((d) => d !== 'keep_existing' || hasTarget)
+              .map((d) => (
+                <label key={d} className="flex items-center gap-2 text-sm">
+                  <input type="radio" name="liability-apply-decision" checked={decision === d} onChange={() => setDecision(d)} />
+                  {d === 'add_new' && 'Add as a new liability'}
+                  {d === 'update_existing' && 'Update my existing liability'}
+                  {d === 'apply_selected_fields' && 'Apply only the fields I ticked above'}
+                  {d === 'keep_existing' && "Keep my existing liability's figures as they are (the statement's lines are still recorded)"}
+                  {d === 'reject_statement' && 'Reject this statement — record nothing from it'}
+                </label>
+              ))}
           </fieldset>
+
+          {decision !== 'reject_statement' && (
+            <label className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium">Whose {isCreditCard ? 'card' : 'loan'} is this?</span>
+              <select value={owner} onChange={(e) => setOwner(e.target.value as Owner)} className="rounded border border-gray-300 px-2 py-1">
+                {OWNER_CHOICES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+          )}
+
+          {decision !== 'reject_statement' && unclassifiedCount > 0 && (
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={acknowledgeUnclassified} onChange={(e) => setAcknowledgeUnclassified(e.target.checked)} className="mt-1" />
+              <span>
+                {unclassifiedCount} line(s) on this statement are adjustments we cannot classify. Record them as <strong>not counted</strong>.
+              </span>
+            </label>
+          )}
+
+          {blockers.length > 0 && (
+            <div className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">
+              <p className="font-medium">{message ?? 'Some statement lines need your decision first.'}</p>
+              <ul className="mt-1 list-disc pl-5">
+                {[...new Set(blockers.map((b) => b.reason))].map((r) => <li key={r}>{BLOCKER_LABELS[r] ?? r}</li>)}
+              </ul>
+              {blockers.some((b) => b.reason === 'multiple_bank_candidates') && (
+                <button type="button" onClick={() => setPhase('review')} className="mt-2 rounded border border-amber-700 px-3 py-1 text-xs">
+                  Choose the bank payments
+                </button>
+              )}
+            </div>
+          )}
+          {blockers.length === 0 && message && phase === 'comparing' && (
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">{message}</p>
+          )}
 
           <div className="flex gap-3">
             <button type="button" onClick={() => handleGenerateProposal()} disabled={busy} className="rounded border border-gray-300 px-3 py-1 text-sm">
@@ -1497,10 +1637,124 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
 
       {phase === 'kept_existing' && (
         <div className="mt-4 space-y-3">
-          <p className="rounded bg-gray-50 px-3 py-2 text-sm text-gray-800">Your existing liability was kept unchanged.</p>
+          <p className="rounded bg-gray-50 px-3 py-2 text-sm text-gray-800">{message ?? 'Your existing liability was kept unchanged.'}</p>
           <button type="button" onClick={onClose} className="rounded border border-gray-300 px-3 py-1 text-sm">Done</button>
         </div>
       )}
+
+      {phase === 'rejected' && (
+        <div className="mt-4 space-y-3">
+          <p className="rounded bg-gray-50 px-3 py-2 text-sm text-gray-800">
+            You rejected this statement. Nothing from it is counted in your figures; it stays visible in its statement history.
+          </p>
+          <button type="button" onClick={onClose} className="rounded border border-gray-300 px-3 py-1 text-sm">Done</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What the Apply RPC recorded (the apply route's `ledger`, camelCase from applyLiabilityProposalAtomic). */
+interface RecordedLedger {
+  transactionsCreated?: number;
+  duplicatesSkipped?: number;
+  excludedUnclassified?: number;
+  skipped?: string | null;
+}
+
+/** One sentence (with a leading space) for the success message. Exported for its test. */
+export function describeRecordedLedger(ledger: RecordedLedger | null | undefined): string {
+  if (!ledger || typeof ledger.transactionsCreated !== 'number') return '';
+  if (ledger.skipped) return ' This statement’s lines were already recorded, so nothing was counted twice.';
+  const parts = [` ${ledger.transactionsCreated} statement line(s) were recorded in your figures`];
+  if (ledger.duplicatesSkipped) parts.push(`${ledger.duplicatesSkipped} already recorded from an earlier statement were not counted twice`);
+  if (ledger.excludedUnclassified) parts.push(`${ledger.excludedUnclassified} unclassified line(s) are shown but not counted`);
+  return `${parts.join('; ')}.`;
+}
+
+/**
+ * WP-11 (G7, G4): EVERY statement line and how it will count once applied --
+ * spending, a transfer, cost of debt, principal, a drawdown, cash -- instead
+ * of the old PAYMENT-only list. A repayment with several possible bank
+ * payments gets a real choice (the persisted candidates, or none of them).
+ * Exported for its render test.
+ */
+export function ActivityLedgerPreview(props: {
+  activities: StatementActivity[];
+  currency: string;
+  bankCandidates: BankCandidate[];
+  candidateChoice: Record<string, string>;
+  onChoose: (activityId: string, value: string) => void;
+  onSaveChoice: (activityId: string) => void;
+  busy: boolean;
+}) {
+  const { activities, currency, bankCandidates, candidateChoice, onChoose, onSaveChoice, busy } = props;
+  const candidateById = new Map(bankCandidates.map((c) => [c.id, c] as const));
+  return (
+    <div>
+      <h4 className="text-sm font-medium">Statement lines and how each will count</h4>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[520px] border-collapse text-sm">
+          <caption className="sr-only">Every line read from this statement and how it will be counted</caption>
+          <thead>
+            <tr className="border-b border-gray-200 text-left">
+              <th scope="col" className="py-1 pr-2">Date</th>
+              <th scope="col" className="py-1 pr-2">Line</th>
+              <th scope="col" className="py-1 pr-2 text-right">Amount</th>
+              <th scope="col" className="py-1">How it will count</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activities.map((a) => {
+              const outcome = ACTIVITY_LEDGER_OUTCOME[a.activity_type] ?? { label: a.activity_type, counts: 'Not counted' };
+              const split = a.activity_type === 'PAYMENT' && (a.principal_component != null || a.interest_component != null || a.fee_component != null);
+              const candidates = (a.bank_match_candidate_ids ?? []).map((id) => candidateById.get(id)).filter((c): c is BankCandidate => Boolean(c));
+              return (
+                <tr key={a.id} className="border-b border-gray-100 align-top">
+                  <td className="py-1 pr-2 whitespace-nowrap">{a.activity_date}</td>
+                  <td className="py-1 pr-2">
+                    <span className="font-medium">{outcome.label}</span>
+                    {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
+                  </td>
+                  <td className="py-1 pr-2 text-right whitespace-nowrap">{money(a.amount, currency)}</td>
+                  <td className="py-1">
+                    {outcome.counts}
+                    {split && (
+                      <span className="block text-xs text-muted">
+                        Principal {money(a.principal_component ?? 0, currency)} · interest {money(a.interest_component ?? 0, currency)} · fee {money(a.fee_component ?? 0, currency)}
+                      </span>
+                    )}
+                    {(a.activity_type === 'PAYMENT' || a.activity_type === 'PRINCIPAL') && a.bank_match_status !== 'multiple_candidates' && (
+                      <span className="block text-xs text-muted">{bankMatchLabel[a.bank_match_status]}</span>
+                    )}
+                    {a.bank_match_status === 'multiple_candidates' && (
+                      <fieldset className="mt-1 space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
+                        <legend className="font-medium">Which bank payment was this repayment?</legend>
+                        {candidates.map((c) => (
+                          <label key={c.id} className="flex items-center gap-2">
+                            <input type="radio" name={`candidate-${a.id}`} checked={candidateChoice[a.id] === c.id} onChange={() => onChoose(a.id, c.id)} />
+                            {c.transaction_date} — {money(Number(c.amount_original), c.currency_original)}{c.description_clean ? ` — ${c.description_clean}` : ''}
+                          </label>
+                        ))}
+                        <label className="flex items-center gap-2">
+                          <input type="radio" name={`candidate-${a.id}`} checked={candidateChoice[a.id] === 'none'} onChange={() => onChoose(a.id, 'none')} />
+                          None of these
+                        </label>
+                        <button type="button" disabled={busy || !candidateChoice[a.id]} onClick={() => onSaveChoice(a.id)} className="rounded border border-amber-700 px-2 py-0.5 disabled:opacity-50">
+                          Save my choice
+                        </button>
+                      </fieldset>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {activities.length === 0 && (
+              <tr><td colSpan={4} className="py-2 text-muted">No lines were read from this statement.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
