@@ -60,6 +60,11 @@ export interface ResilienceInput {
   dependantsCount: number;
   isSelfEmployed: boolean;
   commitments: CommitmentRow[];
+  // WP-04 (DC-14): false when future_financial_commitments could not be read.
+  // An unread list is NOT "no commitments" (that flattered the emergency-fund
+  // figure); the component that nets commitments is then reported missing.
+  // Optional so every existing caller keeps its behaviour (undefined = read).
+  commitmentsAvailable?: boolean;
   isCurrentSnapshotRecent: boolean; // most recent financial_snapshots row is this calendar month
   hasPriorMonthHistory: boolean; // at least one earlier resilience_scores row exists
   config: ResilienceConfig;
@@ -167,6 +172,13 @@ function scoreEmergencyFund(
   if (!d.hasExpenses) {
     return {
       result: missingComponent('emergency_fund', 'Emergency Fund Adequacy', weight, 'Add expenses to calculate this.'),
+      accessible,
+      committed90d,
+    };
+  }
+  if (input.commitmentsAvailable === false) {
+    return {
+      result: missingComponent('emergency_fund', 'Emergency Fund Adequacy', weight, 'Your upcoming commitments could not be loaded, so available cash cannot be calculated right now.'),
       accessible,
       committed90d,
     };

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { fetchAllRows, loadDashboardContext, type DashboardContext, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { loadSectionStatus } from '@/lib/services/financialSectionStatusData';
 import {
   computeResilience,
@@ -37,18 +37,28 @@ export interface ResiliencePayload extends ResilienceResult {
 // (which never persists), and by Module 4's Health Score engine (which
 // absorbs this engine's overall score as its own resilience component,
 // rather than recomputing resilience logic itself).
-export async function buildResilienceInput(userId: string, client?: SupabaseServerClient): Promise<ResilienceInput> {
+//
+// WP-04 (DC-15): pass the request's DashboardContext (one canonical snapshot)
+// when the caller already has it -- the Health Score and Goals loaders do --
+// so the Dashboard is never recomputed within one request.
+export async function buildResilienceInput(userId: string, client?: SupabaseServerClient, context?: DashboardContext): Promise<ResilienceInput> {
   const supabase = client ?? (await createClient());
 
   const [householdRes, profileRes, configRes, commitmentsRes, snapshotRes, priorScoreRes] = await Promise.all([
     supabase.from('households').select('dependants_count').eq('user_id', userId).maybeSingle(),
     supabase.from('user_profiles').select('employment_status').eq('user_id', userId).single(),
     supabase.from('resilience_config').select('config').eq('is_active', true).single(),
-    supabase
-      .from('future_financial_commitments')
-      .select('amount, due_date, is_mandatory')
-      .eq('user_id', userId)
-      .eq('is_active', true),
+    // WP-04 (DC-14 / DC-18): paged, and a failed read is reported as
+    // unavailable -- never an empty list that flatters available cash.
+    fetchAllRows<CommitmentRow>((from, to) =>
+      supabase
+        .from('future_financial_commitments')
+        .select('amount, due_date, is_mandatory')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .range(from, to)
+    ).then((rows) => ({ rows, ok: true as const }), () => ({ rows: [] as CommitmentRow[], ok: false as const })),
     supabase
       .from('financial_snapshots')
       .select('snapshot_month')
@@ -65,7 +75,7 @@ export async function buildResilienceInput(userId: string, client?: SupabaseServ
       .maybeSingle(),
   ]);
 
-  const dashboard = await loadDashboard(userId, supabase);
+  const dashboard = (context && context.userId === userId ? context : await loadDashboardContext(userId, supabase)).summary;
   const sectionStatus = await loadSectionStatus(userId, dashboard, supabase);
   const employmentStatus = profileRes.data?.employment_status ?? '';
   const isSelfEmployed = /self.?employed/i.test(employmentStatus);
@@ -75,7 +85,8 @@ export async function buildResilienceInput(userId: string, client?: SupabaseServ
     dashboard,
     dependantsCount: householdRes.data?.dependants_count ?? 0,
     isSelfEmployed,
-    commitments: (commitmentsRes.data as CommitmentRow[]) ?? [],
+    commitments: commitmentsRes.rows,
+    commitmentsAvailable: commitmentsRes.ok,
     isCurrentSnapshotRecent,
     hasPriorMonthHistory: Boolean(priorScoreRes.data),
     config: configRes.data?.config as ResilienceConfig,
@@ -83,11 +94,11 @@ export async function buildResilienceInput(userId: string, client?: SupabaseServ
   };
 }
 
-export async function loadResilience(userId: string, client?: SupabaseServerClient): Promise<ResiliencePayload> {
+export async function loadResilience(userId: string, client?: SupabaseServerClient, context?: DashboardContext): Promise<ResiliencePayload> {
   const supabase = client ?? (await createClient());
 
   const [input, historyRes] = await Promise.all([
-    buildResilienceInput(userId, supabase),
+    buildResilienceInput(userId, supabase, context),
     supabase
       .from('resilience_scores')
       .select('score_month, rounded_score')

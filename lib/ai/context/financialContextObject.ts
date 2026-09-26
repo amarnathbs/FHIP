@@ -9,7 +9,7 @@
 
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard } from '@/lib/services/dashboardData';
+import { loadDashboardContext, type DashboardContext } from '@/lib/services/dashboardData';
 import { computeDashboard, type DashboardSummary } from '@/lib/engines/dashboard';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
 import { loadFinancialDna } from '@/lib/services/financialDnaData';
@@ -216,9 +216,16 @@ export async function buildFinancialContextObject(userId: string, options: Build
   // is safe: the `integrity.readFailures.length > 0` gate below still fires
   // and returns buildSourceFailureContext() before this fallback value is
   // ever used for anything a provider could see.
+  //
+  // WP-04 (DC-15): ONE canonical snapshot for the whole context build. The
+  // Score, DNA, Resilience and Goals loaders below all read this same
+  // DashboardContext instead of each recomputing the Dashboard (previously
+  // ~6 recomputations, any of which could straddle an Apply).
   let dashboard: DashboardSummary;
+  let dashboardContext: DashboardContext | undefined;
   try {
-    dashboard = await loadDashboard(userId, supabase);
+    dashboardContext = await loadDashboardContext(userId, supabase);
+    dashboard = dashboardContext.summary;
   } catch {
     dashboard = computeDashboard(
       { income: [], expenses: [], assets: [], liabilities: [], investments: [], retirement: [], insurance: [], goals: [], snapshots: [] },
@@ -234,7 +241,7 @@ export async function buildFinancialContextObject(userId: string, options: Build
   // --- Health score -----------------------------------------------------
   let healthScorePayload: Awaited<ReturnType<typeof loadHealthScore>> | null = null;
   try {
-    healthScorePayload = await loadHealthScore(userId, supabase);
+    healthScorePayload = await loadHealthScore(userId, supabase, dashboardContext);
   } catch {
     /* fail closed below via UNAVAILABLE certification */
   }
@@ -242,7 +249,7 @@ export async function buildFinancialContextObject(userId: string, options: Build
   // --- Financial DNA ------------------------------------------------------
   let dnaPayload: Awaited<ReturnType<typeof loadFinancialDna>> | null = null;
   try {
-    dnaPayload = await loadFinancialDna(userId, supabase);
+    dnaPayload = await loadFinancialDna(userId, supabase, dashboardContext);
   } catch {
     /* fail closed */
   }
@@ -250,7 +257,7 @@ export async function buildFinancialContextObject(userId: string, options: Build
   // --- Resilience -----------------------------------------------------
   let resiliencePayload: Awaited<ReturnType<typeof loadResilience>> | null = null;
   try {
-    resiliencePayload = await loadResilience(userId, supabase);
+    resiliencePayload = await loadResilience(userId, supabase, dashboardContext);
   } catch {
     /* fail closed */
   }
@@ -264,7 +271,7 @@ export async function buildFinancialContextObject(userId: string, options: Build
   // build is exactly such a read-only consumer.
   let goalsPage: Awaited<ReturnType<typeof computeGoalsPagePayload>>['payload'] | null = null;
   try {
-    goalsPage = (await computeGoalsPagePayload(userId, supabase)).payload;
+    goalsPage = (await computeGoalsPagePayload(userId, supabase, dashboardContext)).payload;
   } catch {
     /* fail closed */
   }

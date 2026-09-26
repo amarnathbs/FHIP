@@ -59,8 +59,11 @@ function fixtures(userId: string, marker: number): Record<string, Row[]> {
   return {
     user_profiles: [{ user_id: userId, preferred_currency: 'AUD', country_of_residence: 'AU', secondary_country: null, employment_status: `emp_tok_${marker}` }],
     households: [{ id: `hh-${marker}`, user_id: userId, household_type: `hh_tok_${marker}`, marital_status: 'married', dependants_count: 1 }],
-    income_sources: [{ user_id: userId, is_active: true, source_name: `Salary-${marker}`, amount: marker, net_amount: marker * 0.75, frequency: 'monthly', master_item_key: 'salary', employer_name: `Employer-${marker}` }],
-    expense_items: [{ user_id: userId, is_active: true, expense_name: `Rent-${marker}`, amount: marker / 4, frequency: 'monthly', is_essential: true, master_item_key: 'rent', expense_category: 'housing' }],
+    // WP-03: income / expense rows carry currency_code, as every database row does
+    // (NOT NULL). The canonical read models fail closed on a row with no
+    // currency instead of assuming it is already in the reporting currency.
+    income_sources: [{ id: `inc-${marker}`, currency_code: 'AUD', user_id: userId, is_active: true, source_name: `Salary-${marker}`, amount: marker, net_amount: marker * 0.75, frequency: 'monthly', master_item_key: 'salary', employer_name: `Employer-${marker}` }],
+    expense_items: [{ id: `exp-${marker}`, currency_code: 'AUD', user_id: userId, is_active: true, expense_name: `Rent-${marker}`, amount: marker / 4, frequency: 'monthly', is_essential: true, master_item_key: 'rent', expense_category: 'housing' }],
     assets: [{ user_id: userId, is_active: true, current_value: marker * 50, asset_class: 'property', master_item_key: 'home', country_code: 'AU', currency_code: 'AUD' }],
     liabilities: [{ user_id: userId, is_active: true, balance: marker * 20, interest_rate: 5, monthly_repayment: marker / 8, debt_type: 'mortgage', master_item_key: 'mortgage', country_code: 'AU', currency_code: 'AUD' }],
     investments: [],

@@ -2,7 +2,7 @@
 
 This matrix lists every downstream consumer of household financial data, what it reads today on `origin/main` `a115ee5`, and which canonical selector it must switch to. The file:line references come from the stage-1 consumer map (APPROVED_UPLOAD_CANONICAL_DATA_FLOW_MATRIX.md section 8).
 
-**WP-02 switched no consumer.** Status legend: **open** means the consumer still reads the legacy source; **ready** means the selector it needs now exists in `lib/read-models`.
+**WP-02 switched no consumer. WP-03 and WP-04 (2026-09-27) switched the Dashboard and every consumer that reads it.** Status legend: **open** means the consumer still reads the legacy source; **ready** means the selector it needs now exists in `lib/read-models`; **done** means the consumer reads it.
 
 ## Selectors (all in `lib/read-models`, server-only)
 
@@ -20,13 +20,13 @@ This matrix lists every downstream consumer of household financial data, what it
 
 | Consumer | Meaning | Legacy source (a115ee5) | Canonical source | Basis | Gap | Owner | Status |
 |---|---|---|---|---|---|---|---|
-| Dashboard `loadDashboard` / `computeDashboard` | gross / net income | `income_sources` (dashboardData.ts:130, no currency) + current-month bank income added to gross and net | `selectIncome().combined` | combined | DC-01, DC-02, GAP-01, GAP-03, GAP-09 | WP-03 | ready |
-| Dashboard | expenses, surplus, savings rate, essential / lifestyle, top expenses | `expense_items` + current-month bank actuals, ignoring dedup, allocations and refund links (dashboardData.ts:203-213, 266-280) | `selectExpenses({ basis: 'combined' })` | combined | DC-01, DC-02, DC-03, DC-11, EXP-G2..G9 | WP-03 | ready |
-| Dashboard | debt service / DSR | `monthly_repayment` + bank interest and fees (dashboard.ts:735, 743) | `selectLiabilities().householdDebtServiceMonthly` | actual replaces contractual | DC-06, EXP-G7, G9 | WP-03 | ready |
-| Dashboard | assets / investments / retirement / Net Worth | registers, partly converted (dashboard.ts:816-853) | `selectAssets`, `selectInvestments().publishedTotal`, `selectRetirement` | — | DC-08, DC-12, DC-16 | WP-03 | ready |
-| Dashboard | `hasIncome` / `hasExpenses` | manual rows only (dashboard.ts:1302-1303) | `flags.hasAny` on the income and expense models | — | DC-05, EXP-G6 | WP-03 | ready |
-| Dashboard | `financial_snapshots` history | upserted on every load, errors ignored (dashboardData.ts:308-330) | combined values over complete covered months | combined | DC-01, DC-14 | WP-03 | ready |
-| Health Score, DNA, Resilience, Goals, Recommendations, AI context, section status | everything above | `loadDashboard` called up to twice per request (healthScoreData.ts:64, 70; resilienceData.ts:68) | `buildCanonicalFinancialSnapshot` | combined | DC-14, DC-15, DC-18 | WP-04 | ready |
+| Dashboard `loadDashboard` / `computeDashboard` | gross / net income | `income_sources` (dashboardData.ts:130, no currency) + current-month bank income added to gross and net | `selectIncome().combined` | combined | DC-01, DC-02, GAP-01, GAP-03, GAP-09 | WP-03 | done (WP-03/04) |
+| Dashboard | expenses, surplus, savings rate, essential / lifestyle, top expenses | `expense_items` + current-month bank actuals, ignoring dedup, allocations and refund links (dashboardData.ts:203-213, 266-280) | `selectExpenses({ basis: 'combined' })` | combined | DC-01, DC-02, DC-03, DC-11, EXP-G2..G9 | WP-03 | done (WP-03/04) |
+| Dashboard | debt service / DSR | `monthly_repayment` + bank interest and fees (dashboard.ts:735, 743) | `selectLiabilities().householdDebtServiceMonthly` | actual replaces contractual | DC-06, EXP-G7, G9 | WP-03 | done (WP-03/04) |
+| Dashboard | assets / investments / retirement / Net Worth | registers, partly converted (dashboard.ts:816-853) | register rows for the composition breakdowns, converted fail-closed (an unsupported currency is excluded and surfaced); the D-05 / D-04 evidence buckets come from `selectInvestments().unpublished` / `selectAssets().bankBalanceEvidence` and are shown, never added | — | DC-08, DC-12, DC-16 | WP-03 | done (WP-03), see note 1 |
+| Dashboard | `hasIncome` / `hasExpenses` | manual rows only (dashboard.ts:1302-1303) | `flags.hasAny` on the income and expense models | — | DC-05, EXP-G6 | WP-03 | done (WP-03/04) |
+| Dashboard | `financial_snapshots` history | upserted on every load, errors ignored (dashboardData.ts:308-330) | combined values over complete covered months | combined | DC-01, DC-14 | WP-03 | done (WP-03/04) |
+| Health Score, DNA, Resilience, Goals, Recommendations, AI context, section status | everything above | `loadDashboard` called up to twice per request (healthScoreData.ts:64, 70; resilienceData.ts:68) | `buildCanonicalFinancialSnapshot` | combined | DC-14, DC-15, DC-18 | WP-04 | done (WP-03/04) |
 | Financial Twin / benchmark | income band, expense ratio, housing, remittance, Net Worth | private loader (twinData.ts:137-144, 255-289), no bank data, no superseded flag, raw currency sums | snapshot; expenses by group | combined | DC-04, DC-13, GAP-02, EXP-G10 | WP-05 | ready |
 | Forecast | baseline income and expense, contributions | `loadDashboard`; contributions not converted; null frequency treated as monthly (forecastData.ts:403, 691, 922, 1500-1552) | snapshot: planned basis for projection, actual for variance display, combined essentials for the resilience baseline | planned / actual | DC-13, DC-14, GAP-RET-02 | WP-05 | ready |
 | Reports (free + premium) | appendix line items, Net Worth, staleness | reportSnapshotResolver.ts:345-371 (includes superseded rows, no bank, no currency); freshness from manual registers only (:158-166, 203-207) | snapshot; appendix lists planned and actual lines with provenance; staleness includes `approved_at`, allocations, ii publications, applications | combined | DC-09, DC-10, EXP-G11 | WP-06 | ready |
@@ -37,9 +37,16 @@ This matrix lists every downstream consumer of household financial data, what it
 | Retirement tab | imported provenance, contribution history | grid only | `selectRetirement().lines[].provenance`; history is WP-13 evidence | — | GAP-RET-03, GAP-RET-08 | WP-07, WP-13 | ready (badge) |
 | FDH Activity / Category review | one spending and refund rule | own constants (categoryReview.ts:73, 437; approvedSummary.ts) | import `lib/read-models/core/spendingRules` | actual | EXP-G9 | WP-08 | ready |
 
+**Notes on the WP-03 / WP-04 switch**
+
+1. The balance-sheet composition figures (by type, by country, by rate type, by institution) still come from register rows the loader reads for that purpose; the read models do not carry those columns. Totals and breakdowns are converted once with the snapshot's FX context, and a row in an unsupported currency is excluded and counted in `dataStatus.unconverted` instead of being added raw. The per-country breakdowns (`assetsByCountry`, `investmentByCountry` and so on) stay "as recorded" in each row's own currency by design (G6 / DD-009); `netWorthByCountryConverted` is the converted view.
+2. ONE snapshot per request. `loadDashboardContext(userId, client)` returns the snapshot and the Dashboard summary together. The Score, DNA, Resilience, Goals, Recommendations and AI-context loaders take that `DashboardContext` as an optional last argument, and the Dashboard page and the AI context pass it, so none of them recomputes the Dashboard.
+3. D-08's own premise ("revolving cards whose consumption is counted as expense") is applied literally: when a household has NO counted consumption (no ordinary planned expense line and no covered imported spending), the revolving repayment is the only record of that outflow and is counted once (`householdDebtServiceUnderD08`). The rule is the same for manual and imported households.
+4. The Twin (WP-05) still calls `computeDashboard` with register rows and no `canonical` input; it gets the registers-only computation (no imported actuals, no calendar-month window, GAP-09, D-08 and fail-closed currency applied).
+
 ## Direct `fdh_*` reads outside the FDH module
 
 | Reader | Tables | Justification / plan |
 |---|---|---|
-| `lib/services/dashboardData.ts:205, 216, 268` | `fdh_transactions` | To be removed by WP-03, which switches to `lib/read-models`. |
+| ~~`lib/services/dashboardData.ts:205, 216, 268`~~ | `fdh_transactions` | **Removed by WP-03.** `tests/unit/dashboardCanonicalReadModel.test.ts` (DC-19) fails if any file under `lib/services` or `lib/engines` queries `fdh_transactions` again. |
 | `lib/read-models/core/ledger.ts`, `corroboration.ts`, `assets.ts` | `fdh_transactions`, `fdh_transaction_allocations`, `fdh_transaction_links`, `fdh_financial_accounts`, `fdh_statement_uploads`, `fdh_categories`, `fdh_subcategories`, `fdh_reconciliation_results`, `fdh_payroll_events`, `fdh_*_statement_activities`, `fdh_*_statements` | **Justified.** These are the canonical approved-event layer and its evidence, read through one audited module. Every read is paged and user-scoped, and a failure returns `unavailable`. The only import from the FDH module is its economic-type vocabulary (`core/spendingRules.ts`, one fdh1Isolation allow-list entry). |

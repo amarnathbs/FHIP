@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard, type SupabaseServerClient } from '@/lib/services/dashboardData';
+import { loadDashboardContext, type DashboardContext, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { buildResilienceInput } from '@/lib/services/resilienceData';
 import { loadSectionStatus } from '@/lib/services/financialSectionStatusData';
 import { computeResilience } from '@/lib/engines/resilience';
@@ -46,7 +46,11 @@ export interface HealthScorePayload extends HealthScoreResult {
 // Builds the full HealthScoreInput without persisting anything — used by the
 // real GET route (which persists afterwards) and by the what-if simulator
 // (which never persists).
-export async function buildHealthScoreInput(userId: string, client?: SupabaseServerClient): Promise<HealthScoreInput> {
+//
+// WP-04 (DC-15): ONE canonical snapshot per Score request. This used to run
+// loadDashboard() here AND again inside buildResilienceInput(); both now read
+// the same DashboardContext (pass one in when the caller already has it).
+export async function buildHealthScoreInput(userId: string, client?: SupabaseServerClient, context?: DashboardContext): Promise<HealthScoreInput> {
   const supabase = client ?? (await createClient());
 
   const [profileRes, householdRes, checkInsRes, configRes] = await Promise.all([
@@ -61,13 +65,14 @@ export async function buildHealthScoreInput(userId: string, client?: SupabaseSer
     supabase.from('health_score_config').select('config').eq('is_active', true).single(),
   ]);
 
-  const dashboard = await loadDashboard(userId, supabase);
+  const ctx = context && context.userId === userId ? context : await loadDashboardContext(userId, supabase);
+  const dashboard = ctx.summary;
   const sectionStatus = await loadSectionStatus(userId, dashboard, supabase);
   const config = configRes.data?.config as HealthScoreConfig;
   const employmentStatus = profileRes.data?.employment_status ?? '';
   const isSelfEmployed = /self.?employed/i.test(employmentStatus);
 
-  const resilienceInput = await buildResilienceInput(userId, supabase);
+  const resilienceInput = await buildResilienceInput(userId, supabase, ctx);
   const resilienceResult = resilienceInput.config ? computeResilience(resilienceInput) : null;
 
   return {
@@ -82,11 +87,11 @@ export async function buildHealthScoreInput(userId: string, client?: SupabaseSer
   };
 }
 
-export async function loadHealthScore(userId: string, client?: SupabaseServerClient): Promise<HealthScorePayload> {
+export async function loadHealthScore(userId: string, client?: SupabaseServerClient, context?: DashboardContext): Promise<HealthScorePayload> {
   const supabase = client ?? (await createClient());
 
   const [input, historyRes] = await Promise.all([
-    buildHealthScoreInput(userId, supabase),
+    buildHealthScoreInput(userId, supabase, context),
     supabase
       .from('financial_health_scores')
       .select('score_month, rounded_score')

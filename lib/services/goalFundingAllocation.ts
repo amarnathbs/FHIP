@@ -160,34 +160,44 @@ export async function resolveAllocatedAmount(
     return source.allocatedAmount;
   }
   const supabase = await createClient();
+  // WP-04 (DC-14): a failed read is an error, never a $0 value written into
+  // goal_funding_sources.allocated_amount. A missing (archived) row is still
+  // the documented $0 snapshot.
+  const orFail = <T>(res: { data: T; error: unknown }, what: string): T => {
+    if (res.error) throw new Error(`Linked ${what} could not be read`);
+    return res.data;
+  };
   if (source.linkedAssetId) {
-    const { data } = await supabase
+    const res = await supabase
       .from('assets')
       .select('current_value')
       .eq('id', source.linkedAssetId)
       .eq('user_id', userId)
       .eq('is_active', true)
       .maybeSingle();
+    const data = orFail(res, 'asset');
     return ((data?.current_value as number) ?? 0) * (source.allocationPercentage / 100);
   }
   if (source.linkedInvestmentId) {
-    const { data } = await supabase
+    const res = await supabase
       .from('investments')
       .select('current_value')
       .eq('id', source.linkedInvestmentId)
       .eq('user_id', userId)
       .eq('is_active', true)
       .maybeSingle();
+    const data = orFail(res, 'investment');
     return ((data?.current_value as number) ?? 0) * (source.allocationPercentage / 100);
   }
   if (source.linkedRetirementId) {
-    const { data } = await supabase
+    const res = await supabase
       .from('retirement_accounts')
       .select('current_balance')
       .eq('id', source.linkedRetirementId)
       .eq('user_id', userId)
       .eq('is_active', true)
       .maybeSingle();
+    const data = orFail(res, 'retirement account');
     return ((data?.current_balance as number) ?? 0) * (source.allocationPercentage / 100);
   }
   return source.allocatedAmount;

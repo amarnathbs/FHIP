@@ -139,7 +139,13 @@ function scoreCashFlow(input: HealthScoreInput, bands: ScoreBand[]): ComponentRe
   if (!d.hasIncome || !d.hasExpenses) {
     return missingComponent('cash_flow', 'Cash Flow Health', weight, 'Add income and expenses to calculate this.');
   }
-  const margin = d.savingsRate ?? 0;
+  // WP-04 (DC-14): a null savings rate means the surplus could not be
+  // computed (no income, or a cash-flow section could not be read). It is a
+  // MISSING input, never a 0% margin.
+  if (d.savingsRate === null) {
+    return missingComponent('cash_flow', 'Cash Flow Health', weight, 'Your cash flow could not be calculated from the data available right now.');
+  }
+  const margin = d.savingsRate;
   const marginScore =
     margin < 0
       ? clamp(10 + margin * 100, 10, 30)
@@ -194,6 +200,13 @@ function scoreSavings(input: HealthScoreInput, bands: ScoreBand[]): ComponentRes
   if (!isReviewed(input.sectionStatus.expenses)) {
     return missingComponent('savings', 'Savings Behaviour', weight, 'Add expenses to calculate this.');
   }
+  // WP-04 (DC-14): savingsRate is null exactly when the surplus could not be
+  // computed (zero income, or an unreadable income / expense / debt section):
+  // that is a missing component, not a 0% savings rate. With a known savings
+  // rate the contribution rates below are known too (same income basis).
+  if (d.savingsRate === null) {
+    return missingComponent('savings', 'Savings Behaviour', weight, 'Your savings rate could not be calculated from the data available right now.');
+  }
   const income = d.netMonthlyIncome || d.grossMonthlyIncome;
   const cashSavingsRate = income > 0 ? Math.max(d.monthlySurplus, 0) / income : 0;
   const investmentContributionRate = d.investmentContributionRate ?? 0;
@@ -220,7 +233,10 @@ function scoreSavings(input: HealthScoreInput, bands: ScoreBand[]): ComponentRes
   const streak = (() => {
     let count = 0;
     for (let i = d.snapshots.length - 1; i >= 0; i--) {
-      if ((d.snapshots[i].savings_rate ?? 0) > 0) count++;
+      // A month whose savings rate is unknown (null) ends the streak: it is not
+      // evidence of saving, and it is never read as a 0% month either.
+      const rate = d.snapshots[i].savings_rate;
+      if (rate !== null && rate !== undefined && rate > 0) count++;
       else break;
     }
     return count;
@@ -333,7 +349,12 @@ function scoreDebt(input: HealthScoreInput, bands: ScoreBand[]): ComponentResult
     }
     return missingComponent('debt', 'Debt Health', weight, 'Add liabilities (or confirm you have none) to calculate this.');
   }
-  const dsr = d.debtServiceRatio ?? 0;
+  // WP-04 (DC-14): a null DSR (no income on file, or income / debt service
+  // could not be read) used to score as 0% -- the TOP band. It is missing.
+  if (d.debtServiceRatio === null) {
+    return missingComponent('debt', 'Debt Health', weight, 'Add income (or check your data loaded) to calculate your debt service ratio.');
+  }
+  const dsr = d.debtServiceRatio;
   const raw = scoreFromBrackets((1 - dsr) * 100, [
     { min: 85, score: 100 },
     { min: 75, score: 85 },

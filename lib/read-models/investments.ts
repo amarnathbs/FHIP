@@ -30,6 +30,8 @@ export interface InvestmentRow {
   owner: string | null;
   master_item_key: string | null;
   source_type: string | null;
+  /** WP-04: goal funding-source allocation reads it through this selector (paged). */
+  annual_contribution?: number | null;
   ii_canonical_account_id: string | null;
   ii_canonical_instrument_id: string | null;
 }
@@ -58,6 +60,8 @@ export interface InvestmentLine {
   owner: string | null;
   household: boolean;
   value: MoneyValue;
+  /** Native currency, per year; null when not recorded. */
+  annualContribution: number | null;
   provenance: Provenance;
 }
 
@@ -102,6 +106,7 @@ export function computeInvestments(input: {
       id: row.id, name: row.investment_name, investmentType: row.investment_type, masterItemKey: row.master_item_key,
       owner: row.owner, household: isHouseholdOwner(row.owner),
       value: { amountNative: Number(row.current_value), currency: row.currency_code, amountReporting },
+      annualContribution: row.annual_contribution == null ? null : Number(row.annual_contribution),
       provenance: row.source_type === 'investment_intelligence_published' ? provenance('investment_intelligence') : provenance('manual'),
     };
   });
@@ -145,7 +150,7 @@ export async function loadInvestmentInputs(userId: string, client: ReadModelClie
   const investments = await fetchAllRows<InvestmentRow>('investments', (from, to) =>
     client
       .from('investments')
-      .select('id, investment_name, investment_type, current_value, currency_code, owner, master_item_key, source_type, ii_canonical_account_id, ii_canonical_instrument_id')
+      .select('id, investment_name, investment_type, current_value, currency_code, owner, master_item_key, source_type, annual_contribution, ii_canonical_account_id, ii_canonical_instrument_id')
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('id', { ascending: true })

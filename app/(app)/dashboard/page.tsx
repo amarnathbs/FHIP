@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { loadDashboard } from '@/lib/services/dashboardData';
+import { loadDashboardContext } from '@/lib/services/dashboardData';
+import { DashboardDataStatusNotice } from '@/components/dashboard/DashboardDataStatusNotice';
 import { loadHealthScore } from '@/lib/services/healthScoreData';
 import { loadResilience } from '@/lib/services/resilienceData';
 import { computeGoalsPagePayload } from '@/lib/services/goalsData';
@@ -53,10 +54,14 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .maybeSingle();
 
-  const summary = await loadDashboard(user.id);
-  const healthScore = await loadHealthScore(user.id);
-  const resilience = await loadResilience(user.id, supabase);
-  const { payload: goalsPayload } = await computeGoalsPagePayload(user.id);
+  // WP-04 (DC-15): ONE canonical snapshot for everything on this page. The
+  // Dashboard figures, the Health Score, Resilience and the Goals card all
+  // read this same context instead of each recomputing the Dashboard.
+  const dashboardContext = await loadDashboardContext(user.id, supabase);
+  const summary = dashboardContext.summary;
+  const healthScore = await loadHealthScore(user.id, supabase, dashboardContext);
+  const resilience = await loadResilience(user.id, supabase, dashboardContext);
+  const { payload: goalsPayload } = await computeGoalsPagePayload(user.id, supabase, dashboardContext);
   const recommendationMatches = await getLatestRecommendations(user.id, supabase);
   const dataFreshness = await loadDataFreshness(user.id, supabase);
   const dataQuality = buildDataQuality({ dashboard: summary, dataFreshness, healthScore });
@@ -77,6 +82,8 @@ export default async function DashboardPage() {
             <span>{summary.currency}</span>
           </p>
         </div>
+
+        <DashboardDataStatusNotice status={summary.dataStatus} currency={summary.currency} />
 
         {/* Health hero + four vital signs */}
         <section>

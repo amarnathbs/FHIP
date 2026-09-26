@@ -11,22 +11,21 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Registry file | Owner | Entries | A | B | C | D | E | open_gap | ceiling | not_active |
 |---|---|---|---|---|---|---|---|---|---|---|
-| bankStatement | WP-08 | 162 | 0 | 20 | 27 | 115 | 0 | 33 | 33 | 0 |
+| bankStatement | WP-08 | 162 | 0 | 20 | 27 | 115 | 0 | 29 | 29 | 0 |
 | economicTransactionType | WP-02 | 13 | 0 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
-| payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 87 | 87 | 0 |
+| payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 83 | 83 | 0 |
 | liabilityStatement | WP-10 | 139 | 29 | 22 | 34 | 41 | 13 | 94 | 94 | 0 |
 | liabilityActivityLedger | WP-11 | 10 | 0 | 10 | 0 | 0 | 0 | 10 | 10 | 0 |
 | auInvestmentStatement | WP-12 | 167 | 42 | 31 | 24 | 56 | 14 | 74 | 74 | 0 |
 | retirementStatement | WP-13 | 201 | 17 | 0 | 115 | 66 | 3 | 131 | 131 | 0 |
 | iiCas | WP-12 | 41 | 15 | 5 | 9 | 12 | 0 | 0 | 0 | 0 |
 | insurance | WP-14 | 21 | 10 | 0 | 8 | 0 | 3 | 0 | 0 | 21 |
-| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 429 | | 21 |
+| **total** | | **884** | 131 | 113 | 274 | 330 | 36 | 421 | | 21 |
 
 ## Open gaps by id
 
 | Gap | Severity | Owner WP | Fields |
 |---|---|---|---|
-| DC-01 | P0 | WP-03 | 4 |
 | DC-16 | P2 | WP-08 | 2 |
 | EXP-G1 | P0 | WP-07 | 5 |
 | EXP-G14 | P2 | WP-08 | 18 |
@@ -39,13 +38,11 @@ Every field an active upload adapter extracts, every evidence column and every a
 | G5 | P1 | WP-10, WP-11 | 12 |
 | G6 | P2 | WP-10 | 16 |
 | G7 | P1 | WP-07, WP-11 | 30 |
-| GAP-01 | P0 | WP-03 | 1 |
 | GAP-03 | P1 | WP-09 | 2 |
 | GAP-04 | P1 | WP-09 | 3 |
 | GAP-05 | P1 | WP-09 | 1 |
 | GAP-07 | P2 | WP-09 | 60 |
 | GAP-08 | P2 | WP-09 | 12 |
-| GAP-09 | P2 | WP-03 | 3 |
 | GAP-10 | P2 | WP-09 | 1 |
 | GAP-12 | P3 | WP-09 | 3 |
 | GAP-15 | P3 | WP-09 | 1 |
@@ -75,7 +72,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
 | `sourceRowNumber` | D metadata | fdh_transactions.source_row | — | compliant | — | — |
-| `transactionDate` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | open_gap | DC-01 (P0) | WP-03 |
+| `transactionDate` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | compliant | — | — |
 | `postedDate` | C evidence | evidence:fdh_transactions.posting_date | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `valueDate` | C evidence | evidence:fdh_transactions.value_date | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `descriptionRaw` | C evidence | evidence:fdh_transactions.description_raw (purgeable) | Financial Activity > transactions | compliant | — | — |
@@ -92,7 +89,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 |---|---|---|---|---|---|---|
 | `sourceRowNumber` | D metadata | fdh_transactions.source_row | — | compliant | — | — |
 | `sourcePage` | D metadata | fdh_transactions.source_page | — | compliant | — | — |
-| `transactionDate` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | open_gap | DC-01 (P0) | WP-03 |
+| `transactionDate` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | compliant | — | — |
 | `descriptionRaw` | C evidence | evidence:fdh_transactions.description_raw (purgeable) | Financial Activity > transactions | compliant | — | — |
 | `descriptionClean` | B event | fdh_transactions.description_clean | Expenses > Import bank statement > category review | open_gap | EXP-G1 (P0) | WP-07 |
 | `amountOriginal` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
@@ -136,7 +133,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Field | Disposition | Destination | User-visible at | Status | Gap | Owner |
 |---|---|---|---|---|---|---|
-| `transactionDate` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | open_gap | DC-01 (P0) | WP-03 |
+| `transactionDate` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | compliant | — | — |
 | `descriptionRaw` | C evidence | evidence:fdh_transactions.description_raw | Financial Activity > transactions | compliant | — | — |
 | `amount` | B event | fdh_transactions.amount_original | Expenses > Import bank statement > category review | compliant | — | — |
 | `creditDebit` | B event | fdh_transactions.credit_debit | Expenses > Import bank statement > category review | compliant | — | — |
@@ -151,7 +148,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `household_id` | D metadata | fdh_transactions.household_id | — | compliant | — | — |
 | `financial_account_id` | D metadata | fdh_transactions.financial_account_id | — | compliant | — | — |
 | `statement_upload_id` | D metadata | fdh_transactions.statement_upload_id | — | compliant | — | — |
-| `transaction_date` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | open_gap | DC-01 (P0) | WP-03 |
+| `transaction_date` | B event | fdh_transactions.transaction_date | Expenses > Import bank statement > category review | compliant | — | — |
 | `posting_date` | C evidence | evidence:fdh_transactions.posting_date | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `value_date` | C evidence | evidence:fdh_transactions.value_date | — | open_gap | EXP-G14 (P2) | WP-08 |
 | `description_raw` | C evidence | evidence:fdh_transactions.description_raw (purgeable) | Financial Activity > transactions | compliant | — | — |
@@ -318,7 +315,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `employeeRetirementContribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
 | `employerNpsContribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | — | open_gap | GAP-07 (P2) | WP-09 |
 | `employeeNpsContribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
-| `netPay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | open_gap | GAP-09 (P2) | WP-03 |
+| `netPay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | compliant | — | — |
 | `ytdGross` | C evidence | evidence:fdh_payroll_events.ytd_gross (never summed) | — | open_gap | GAP-07 (P2) | WP-09 |
 | `ytdTax` | C evidence | evidence:fdh_payroll_events.ytd_tax | — | open_gap | GAP-07 (P2) | WP-09 |
 | `ytdNet` | C evidence | evidence:fdh_payroll_events.ytd_net | — | open_gap | GAP-07 (P2) | WP-09 |
@@ -367,7 +364,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `employeeRetirementContribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
 | `employerNpsContribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | — | open_gap | GAP-07 (P2) | WP-09 |
 | `employeeNpsContribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
-| `netPay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | open_gap | GAP-09 (P2) | WP-03 |
+| `netPay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | compliant | — | — |
 
 ### payslip_native · db_column · `db:fdh_payroll_events`
 
@@ -402,7 +399,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `employee_retirement_contribution` | C evidence | evidence:fdh_payroll_events.employee_retirement_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
 | `employer_nps_contribution` | C evidence | evidence:fdh_payroll_events.employer_nps_contribution (never income) | — | open_gap | GAP-07 (P2) | WP-09 |
 | `employee_nps_contribution` | C evidence | evidence:fdh_payroll_events.employee_nps_contribution | — | open_gap | GAP-07 (P2) | WP-09 |
-| `net_pay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | open_gap | GAP-09 (P2) | WP-03 |
+| `net_pay` | A state | income_sources.net_amount (null = unknown, never gross) | Income tab | compliant | — | — |
 | `ytd_gross` | C evidence | evidence:fdh_payroll_events.ytd_gross | — | open_gap | GAP-07 (P2) | WP-09 |
 | `ytd_tax` | C evidence | evidence:fdh_payroll_events.ytd_tax | — | open_gap | GAP-07 (P2) | WP-09 |
 | `ytd_net` | C evidence | evidence:fdh_payroll_events.ytd_net | — | open_gap | GAP-07 (P2) | WP-09 |
@@ -414,7 +411,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `reconciliation_status` | D metadata | fdh_payroll_events.reconciliation_status | — | compliant | — | — |
 | `reconciliation_variance` | D metadata | fdh_payroll_events.reconciliation_variance | — | compliant | — | — |
 | `bank_match_status` | D metadata | fdh_payroll_events.bank_match_status | — | open_gap | GAP-10 (P2) | WP-09 |
-| `bank_match_transaction_id` | D metadata | dedup link: the payslip and its bank credit are ONE income event (selectIncome) | — | open_gap | GAP-01 (P0) | WP-03 |
+| `bank_match_transaction_id` | D metadata | dedup link: the payslip and its bank credit are ONE income event (selectIncome) | — | compliant | — | — |
 | `bank_match_confidence` | D metadata | fdh_payroll_events.bank_match_confidence | — | compliant | — | — |
 | `review_status` | D metadata | fdh_payroll_events.review_status | — | compliant | — | — |
 | `approval_status` | D metadata | fdh_payroll_events.approval_status | — | compliant | — | — |

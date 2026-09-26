@@ -7,7 +7,9 @@ import { B, C, D, gap, rows, technical, type Row } from './build';
 import type { RegistryFile } from './types';
 
 // Gap references (APPROVED_UPLOAD_CANONICAL_DATA_FLOW_MATRIX.md, gap register).
-const DC01 = gap('DC-01', 'P0', 'WP-03'); // read model done in WP-02; consumers switch in WP-03
+// DC-01 closed by WP-03 (2026-09-27): the Dashboard and every loadDashboard
+// consumer read approved lines through the canonical read models, averaged over
+// complete covered months -- no current-calendar-month window remains.
 const EXPG1 = gap('EXP-G1', 'P0', 'WP-07');
 const EXPG4 = gap('EXP-G4', 'P1', 'WP-08');
 const EXPG14 = gap('EXP-G14', 'P2', 'WP-08');
@@ -19,7 +21,7 @@ const ACTIVITY = 'Financial Activity > transactions';
 
 const CSV: Row[] = [
   ['sourceRowNumber', D, 'fdh_transactions.source_row'],
-  ['transactionDate', B, 'fdh_transactions.transaction_date', REVIEW, DC01, 'economic date; averaged over complete covered months'],
+  ['transactionDate', B, 'fdh_transactions.transaction_date', REVIEW, null, 'economic date; averaged over complete covered months'],
   ['postedDate', C, 'evidence:fdh_transactions.posting_date', null, EXPG14],
   ['valueDate', C, 'evidence:fdh_transactions.value_date', null, EXPG14],
   ['descriptionRaw', C, 'evidence:fdh_transactions.description_raw (purgeable)', ACTIVITY],
@@ -34,7 +36,7 @@ const CSV: Row[] = [
 const PDF_TXN: Row[] = [
   ['sourceRowNumber', D, 'fdh_transactions.source_row'],
   ['sourcePage', D, 'fdh_transactions.source_page'],
-  ['transactionDate', B, 'fdh_transactions.transaction_date', REVIEW, DC01],
+  ['transactionDate', B, 'fdh_transactions.transaction_date', REVIEW],
   ['descriptionRaw', C, 'evidence:fdh_transactions.description_raw (purgeable)', ACTIVITY],
   ['descriptionClean', B, 'fdh_transactions.description_clean', REVIEW, EXPG1],
   ['amountOriginal', B, 'fdh_transactions.amount_original', REVIEW],
@@ -72,7 +74,7 @@ const AI_DOC: Row[] = [
 ];
 
 const AI_TXN: Row[] = [
-  ['transactionDate', B, 'fdh_transactions.transaction_date', REVIEW, DC01],
+  ['transactionDate', B, 'fdh_transactions.transaction_date', REVIEW],
   ['descriptionRaw', C, 'evidence:fdh_transactions.description_raw', ACTIVITY],
   ['amount', B, 'fdh_transactions.amount_original', REVIEW],
   ['creditDebit', B, 'fdh_transactions.credit_debit', REVIEW],
@@ -81,7 +83,7 @@ const AI_TXN: Row[] = [
 
 const TXN_TABLE: Row[] = [
   ...technical(['id', 'user_id', 'household_id', 'financial_account_id', 'statement_upload_id'], 'fdh_transactions'),
-  ['transaction_date', B, 'fdh_transactions.transaction_date', REVIEW, DC01],
+  ['transaction_date', B, 'fdh_transactions.transaction_date', REVIEW],
   ['posting_date', C, 'evidence:fdh_transactions.posting_date', null, EXPG14],
   ['value_date', C, 'evidence:fdh_transactions.value_date', null, EXPG14],
   ['description_raw', C, 'evidence:fdh_transactions.description_raw (purgeable)', ACTIVITY],
@@ -129,7 +131,7 @@ const UPLOAD_TABLE: Row[] = [
 export const bankStatementRegistry: RegistryFile = {
   id: 'bankStatement',
   ownerWp: 'WP-08',
-  OPEN_GAP_CEILING: 33,
+  OPEN_GAP_CEILING: 29,
   entries: [
     ...rows('bank_csv', 'ts_interface', 'fdh:bank-csv/normalize.ts#NormalizedTransactionCandidate', CSV),
     ...rows('bank_pdf', 'ts_interface', 'fdh:bank-pdf/orchestrator.ts#AcceptedPdfTransactionPlan', PDF_TXN),

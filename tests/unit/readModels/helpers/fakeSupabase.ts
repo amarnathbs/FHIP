@@ -18,6 +18,8 @@ export interface FakeSupabaseOptions {
   failOn?: Set<string>;
   /** Tables that reject any select naming one of these columns (simulates a pre-0207 DB). */
   missingColumns?: Record<string, string[]>;
+  /** Tables whose upsert / insert / update returns an error (WP-03: snapshot write failure). */
+  failWritesOn?: Set<string>;
 }
 
 export interface FakeRequest {
@@ -47,13 +49,44 @@ export interface FakeQuery extends PromiseLike<{ data: any; error: unknown }> {
   range(a: number, b: number): FakeQuery;
   single(): FakeQuery;
   maybeSingle(): FakeQuery;
-  upsert(row: Row): Promise<{ data: null; error: null }>;
-  insert(row: Row): Promise<{ data: null; error: null }>;
+  upsert(row: Row, opts?: unknown): FakeWrite;
+  insert(row: Row | Row[]): FakeWrite;
+  delete(): FakeWrite;
+  /** WP-03: update(patch).eq(...) -- applied to the stored rows matching every eq. */
+  update(patch: Row): FakeUpdate;
+}
+
+/** A write result that can be awaited directly or chained (.select().single() / .eq()),
+ * like the real builder -- the Score / DNA / Resilience loaders chain their persistence. */
+export interface FakeWrite extends PromiseLike<{ data: null; error: unknown }> {
+  select(cols?: string): FakeWrite;
+  single(): FakeWrite;
+  maybeSingle(): FakeWrite;
+  eq(col: string, val: unknown): FakeWrite;
+}
+
+export interface FakeUpdate extends PromiseLike<{ data: null; error: unknown; count: number }> {
+  eq(col: string, val: unknown): FakeUpdate;
 }
 
 export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSupabaseOptions = {}) {
   const requests: FakeRequest[] = [];
   const upserts: { table: string; row: Row }[] = [];
+  const updates: { table: string; patch: Row; filters: Record<string, unknown>; matched: number }[] = [];
+  const writeError = (table: string) => (options.failWritesOn?.has(table) ? { message: `injected write failure on ${table}`, code: 'XX000' } : null);
+
+  function fakeWrite(error: unknown): FakeWrite {
+    const w: FakeWrite = {
+      select() { return w; },
+      single() { return w; },
+      maybeSingle() { return w; },
+      eq() { return w; },
+      then(onFulfilled, onRejected) {
+        return Promise.resolve({ data: null, error }).then(onFulfilled, onRejected);
+      },
+    };
+    return w;
+  }
 
   function from(table: string): FakeQuery {
     let rows = [...(tables[table] ?? [])];
@@ -113,8 +146,37 @@ export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSup
       range(a: number, b: number) { rangeFrom = a; rangeTo = b; return builder; },
       single() { single = 'single'; return builder; },
       maybeSingle() { single = 'maybe'; return builder; },
-      upsert(row: Row) { upserts.push({ table, row }); return Promise.resolve({ data: null, error: null }); },
-      insert(row: Row) { upserts.push({ table, row }); return Promise.resolve({ data: null, error: null }); },
+      upsert(row: Row) {
+        const error = writeError(table);
+        if (!error) upserts.push({ table, row });
+        return fakeWrite(error);
+      },
+      insert(row: Row | Row[]) {
+        const error = writeError(table);
+        if (!error) for (const r of Array.isArray(row) ? row : [row]) upserts.push({ table, row: r });
+        return fakeWrite(error);
+      },
+      delete() {
+        return fakeWrite(writeError(table));
+      },
+      update(patch: Row) {
+        const filters: Record<string, unknown> = {};
+        const upd: FakeUpdate = {
+          eq(col: string, val: unknown) { filters[col] = val; return upd; },
+          then(onFulfilled, onRejected) {
+            const error = writeError(table);
+            let matched = 0;
+            if (!error) {
+              for (const r of tables[table] ?? []) {
+                if (Object.entries(filters).every(([k, v]) => r[k] === v)) { Object.assign(r, patch); matched += 1; }
+              }
+              updates.push({ table, patch, filters, matched });
+            }
+            return Promise.resolve({ data: null, error, count: matched }).then(onFulfilled, onRejected);
+          },
+        };
+        return upd;
+      },
       then(onFulfilled, onRejected) {
         return Promise.resolve(execute()).then(onFulfilled, onRejected);
       },
@@ -122,5 +184,5 @@ export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSup
     return builder;
   }
 
-  return { client: { from }, requests, upserts };
+  return { client: { from }, requests, upserts, updates };
 }

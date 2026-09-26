@@ -64,6 +64,8 @@ export interface LiabilityLine {
   id: string;
   name: string;
   debtType: string;
+  /** liabilities.master_item_key (WP-03/04: property-debt purpose, per-month debt service). */
+  masterItemKey: string | null;
   family: DebtFamily;
   serviceClass: DebtServiceClass;
   owner: string | null;
@@ -176,6 +178,7 @@ export function computeLiabilities(
       id: row.id,
       name: row.liability_name,
       debtType: row.debt_type,
+      masterItemKey: row.master_item_key,
       family: debtFamilyFor(row.debt_type, row.master_item_key),
       serviceClass,
       owner,
@@ -257,6 +260,25 @@ export async function selectLiabilities(
   } catch (error) {
     return toUnavailable(error, 'selectLiabilities');
   }
+}
+
+/**
+ * PO D-08's OWN CONDITION (WP-03). D-08 excludes a revolving card's repayment
+ * from surplus debt service "for revolving cards whose consumption is counted
+ * as expense". When the household has NO counted consumption at all (no
+ * ordinary planned expense line and no covered imported spending) that
+ * premise does not hold: the card repayment is then the only record of that
+ * outflow, and excluding it would count it ZERO times (e.g. a card liability
+ * with an $800 repayment and no expenses entered, LR-FI-2 ROW 6). In that case
+ * the contractual repayment of each excluded revolving liability is counted,
+ * exactly once. Applied identically to manual and imported households.
+ */
+export function householdDebtServiceUnderD08(model: Pick<LiabilitiesReadModelData, 'lines' | 'householdDebtServiceMonthly'>, consumptionCounted: boolean): number {
+  if (consumptionCounted) return model.householdDebtServiceMonthly;
+  const restored = model.lines
+    .filter((l) => l.household && l.debtServiceBasis === 'excluded_revolving')
+    .reduce((s, l) => s + (l.contractualMonthly?.amountReporting ?? 0), 0);
+  return roundMoney(model.householdDebtServiceMonthly + restored);
 }
 
 /** Rows with the SMSF property-loan link applied to `owner` (LR-12R). */

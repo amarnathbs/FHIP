@@ -232,8 +232,12 @@ describe('Financial Resilience scoring — synthetic personas', () => {
       income: [{ amount: 6000, net_amount: null, frequency: 'monthly', master_item_key: 'employment_salary' }],
       expenses: [{ expense_name: 'Essentials', amount: 2500, frequency: 'monthly', is_essential: true }],
       assets: [{ current_value: 4000, asset_class: 'cash' }],
+      // WP-03 (PO D-08): the card's repayment is not surplus debt service when
+      // consumption is counted as expense, so the debt pressure this persona
+      // tests now comes from an instalment loan carrying the same $2,200.
       liabilities: [
-        { balance: 25000, interest_rate: 20, monthly_repayment: 2200, debt_type: 'credit_card', interest_rate_type: 'variable', credit_limit: 26000 },
+        { balance: 25000, interest_rate: 20, monthly_repayment: 0, debt_type: 'credit_card', interest_rate_type: 'variable', credit_limit: 26000 },
+        { balance: 20000, interest_rate: 14, monthly_repayment: 2200, debt_type: 'personal_loan', interest_rate_type: 'variable' },
         { balance: 15000, interest_rate: 12, monthly_repayment: 900, debt_type: 'personal_loan', interest_rate_type: 'variable' },
       ],
     });

@@ -94,6 +94,11 @@ export default async function FinancialDnaPage() {
             <StrengthsRisks strengths={payload.strengths} risks={payload.risks} />
             <FocusActions actions={payload.actions} />
 
+            {!payload.propertyDebtBreakdownAvailable && (
+              <SectionCard title="Debt Purpose — Owner-Occupied vs Investment vs Consumer">
+                <p className="text-sm text-gray-600">Your debt breakdown could not be loaded right now. Please try again shortly.</p>
+              </SectionCard>
+            )}
             {payload.propertyDebtBreakdown.length > 0 && (
               <SectionCard title="Debt Purpose — Owner-Occupied vs Investment vs Consumer">
                 <p className="text-sm text-gray-600">
