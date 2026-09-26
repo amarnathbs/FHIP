@@ -64,6 +64,8 @@ export interface LiabilityLine {
   id: string;
   name: string;
   debtType: string;
+  /** liabilities.master_item_key (WP-03/04: property-debt purpose, per-month debt service). */
+  masterItemKey: string | null;
   family: DebtFamily;
   serviceClass: DebtServiceClass;
   owner: string | null;
@@ -176,6 +178,7 @@ export function computeLiabilities(
       id: row.id,
       name: row.liability_name,
       debtType: row.debt_type,
+      masterItemKey: row.master_item_key,
       family: debtFamilyFor(row.debt_type, row.master_item_key),
       serviceClass,
       owner,

@@ -2,7 +2,7 @@ import { toMonthly, type Frequency } from './money';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems } from './businessEntityValuation';
 import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
-import { isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
+import { debtServiceClassFor, isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the subset of each register's columns the dashboard uses)
@@ -27,6 +27,10 @@ export interface IncomeRow {
   // any select that predates the column) keeps compiling and behaving
   // identically — undefined is treated the same as false.
   superseded_by_bank_import?: boolean | null;
+  // WP-03 (DC-12 / GAP-03): converted to the reporting currency; an absent
+  // code is the reporting currency (legacy fixtures), an unsupported one is
+  // excluded and surfaced in dataStatus.unconverted.
+  currency_code?: string | null;
 }
 export interface ExpenseRow {
   expense_name: string;
@@ -38,23 +42,139 @@ export interface ExpenseRow {
   owner?: string | null;
   // LR-3 (migration 0131): see IncomeRow's matching field.
   superseded_by_bank_import?: boolean | null;
+  currency_code?: string | null; // see IncomeRow
 }
 
-// LR-3: an approved fdh_transactions row, already scoped by the caller to a
-// single household, `approval_status = 'approved'`, and a specific calendar
-// period (dashboardData.ts uses the current month) — this engine does no
-// date filtering of its own, matching the "just sum what you're given"
-// contract every other DashboardInput array already has. Deliberately reads
-// amount_original/currency_original (not fdh_transactions' own precomputed
-// amount_reporting_currency) and converts via this engine's own
-// reportingValue()/fxRateAudInr — the same single conversion mechanism every
-// other register in this file already uses, rather than trusting a second,
-// independently-computed reporting-currency figure that could in principle
-// have been derived against a different rate or preference than this
-// dashboard's own.
-export interface BankTransactionRow {
-  amount_original: number;
-  currency_original: string | null;
+// ---------------------------------------------------------------------------
+// WP-03 (Approved Upload -> Canonical programme): the CANONICAL cash-flow
+// input. The server loader (lib/services/dashboardData.ts) builds ONE
+// CanonicalFinancialSnapshot per request (lib/read-models) and maps its
+// income / expense / liability read models into this plain shape, so this
+// engine stays pure and client-importable (it never imports a read model at
+// runtime -- only this DTO crosses the boundary).
+//
+// When `canonical` is present, EVERY cash-flow figure comes from it and the
+// raw income / expense rows are ignored:
+//   - income: planned income_sources + approved bank credits, the payslip's
+//     own matched bank credit counted ONCE (GAP-01), unknown net never
+//     replaced by gross (GAP-09), currency converted once (GAP-03);
+//   - expenses: the COMBINED basis -- per canonical group, the actual monthly
+//     average over complete covered months when the group has any, otherwise
+//     the plan; never planned + actual for the same group (PO D-02, DC-02);
+//     no calendar-month window (DC-01);
+//   - debt service: counted ONCE per liability (PO D-08 / D-09): actual loan
+//     principal + interest + fee REPLACES the contractual repayment, and a
+//     revolving card's minimum payment is not added on top of the purchases.
+// The pre-programme `bankExpenseTransactions` / `bankIncomeTransactions`
+// inputs (current calendar month, blindly added to the plan) are removed.
+// ---------------------------------------------------------------------------
+
+export interface CanonicalUnavailable {
+  status: 'unavailable';
+  reason: string;
+  source: string;
+}
+
+export interface CanonicalIncomeLine {
+  name: string;
+  /** Reporting currency, per month (gross). */
+  monthly: number;
+  employerName: string | null;
+  masterItemKey: string | null;
+  source: 'planned' | 'actual' | 'variable_pay';
+}
+
+export interface CanonicalIncomeFigures {
+  status: 'ok';
+  grossMonthly: number;
+  /** The KNOWN net only -- a component whose net is unknown adds nothing here (GAP-09). */
+  netKnownMonthly: number;
+  netUnknownComponents: number;
+  /** D-07: bank credits (net only) are inside the gross as a floor. */
+  grossIncludesNetFloor: boolean;
+  /** Approved bank income credits counted (not represented by a payslip row). */
+  importedMonthly: number;
+  lines: CanonicalIncomeLine[];
+  /** hasIncome: any household income on file, planned or actual. */
+  present: boolean;
+  possibleDuplicateCount: number;
+  representedCount: number;
+  unconverted: { count: number; byCurrency: Record<string, number> };
+}
+
+export interface CanonicalExpenseLine {
+  name: string;
+  monthly: number;
+  source: 'planned' | 'actual';
+}
+
+export interface CanonicalExpenseFigures {
+  status: 'ok';
+  monthly: number;
+  essentialMonthly: number;
+  lifestyleMonthly: number;
+  coreSurvivalMonthly: number;
+  /** The slice of `monthly` taken from imported actuals (groups on the actual basis). */
+  importedMonthly: number;
+  lines: CanonicalExpenseLine[];
+  /** hasExpenses: any household expense on file, planned or actual. */
+  present: boolean;
+  unconverted: { count: number; byCurrency: Record<string, number> };
+  unknownPendingCount: number;
+  excludedDuplicates: number;
+  partialLineCount: number;
+  unlinkedRefundCount: number;
+}
+
+export interface CanonicalDebtServiceFigures {
+  status: 'ok';
+  householdMonthly: number;
+  /** D-09 display line: interest + fees inside card/loan repayments (already inside householdMonthly). */
+  costOfDebtMonthly: number;
+  principalMonthly: number;
+}
+
+export interface CanonicalCashFlowInput {
+  income: CanonicalIncomeFigures | CanonicalUnavailable;
+  expenses: CanonicalExpenseFigures | CanonicalUnavailable;
+  debtService: CanonicalDebtServiceFigures | CanonicalUnavailable;
+  /** The read window the actual figures were averaged over. */
+  window: { from: string; to: string; months: string[]; coveredMonths: string[] } | null;
+  /** Other snapshot sections that could not be read (investments, retirement, assets, ledger). */
+  otherUnavailable: { section: string; reason: string; source: string }[];
+  /** D-05 / D-04 evidence buckets, shown but never inside Net Worth. */
+  importedNotInNetWorth: { label: string; count: number; total: number } | null;
+  bankBalanceEvidence: { label: string; count: number; total: number } | null;
+}
+
+/**
+ * How the figures were produced, and everything that was left OUT of them
+ * (DC-14: an error or an unconvertible amount is never shown as a real zero).
+ */
+export interface DashboardDataStatus {
+  basis: 'canonical_read_models' | 'registers_only';
+  /** Sections that could not be read; their figures are excluded, and their has* flags false. */
+  unavailable: { section: string; reason: string; source: string }[];
+  /** Amounts in a currency the app cannot convert (e.g. USD): excluded from totals, never added raw. */
+  unconverted: { count: number; byCurrency: Record<string, number> };
+  /** GAP-09: counted income components whose NET is unknown (never replaced by gross). */
+  netIncomeUnknownComponents: number;
+  /** Surplus basis: 'net' (all known), 'net_partial' (unknown nets left out), 'gross_fallback' (no net known). */
+  netIncomeBasis: 'net' | 'net_partial' | 'gross_fallback' | 'none';
+  grossIncomeIncludesNetFloor: boolean;
+  /** D-09 display line ("Cost of debt"): already inside debtMonthlyRepayments, never added again. */
+  costOfDebtMonthly: number;
+  window: CanonicalCashFlowInput['window'];
+  importedNotInNetWorth: CanonicalCashFlowInput['importedNotInNetWorth'];
+  bankBalanceEvidence: CanonicalCashFlowInput['bankBalanceEvidence'];
+  /** Retirement contributions with no frequency: shown, never assumed monthly (GAP-RET-02). */
+  retirementContributionFrequencyUnknown: number;
+  /** D-07 review prompts: imported income credits that look like a planned source. */
+  possibleDuplicateIncomeCount: number;
+  /** Imported lines not yet approved / still 'unknown' (never counted, never guessed). */
+  unknownPendingCount: number;
+  /** Result of this load's financial_snapshots write (set by the loader). */
+  snapshotWrite?: 'written' | 'failed' | 'skipped_read_only';
 }
 // LR-FI-1: assets/investments/retirement_accounts carry the same `owner`
 // column as the other four registers (migration 0004), so it is declared here
@@ -114,6 +234,7 @@ export interface InsuranceRow {
   renewal_date: string | null;
   waiting_period_days?: number | null;
   owner?: string | null;
+  currency_code?: string | null; // WP-03: cover and premium converted (DC-12)
 }
 export interface GoalRow {
   goal_name: string;
@@ -155,13 +276,11 @@ export interface DashboardInput {
   insurance: InsuranceRow[];
   goals: GoalRow[];
   snapshots: SnapshotRow[]; // most recent last
-  // LR-3: approved bank-statement transactions for the current period.
-  // Optional and defaulted to [] below so every existing caller (every test
-  // fixture, and any caller that predates LR-3) keeps compiling and behaves
-  // byte-for-byte identically — a household with no linked bank import sees
-  // zero change from this feature existing.
-  bankExpenseTransactions?: BankTransactionRow[];
-  bankIncomeTransactions?: BankTransactionRow[];
+  // WP-03: the canonical cash-flow figures (see CanonicalCashFlowInput). The
+  // Dashboard loader always passes it; a caller that does not (the Twin until
+  // WP-05, unit fixtures) gets the registers-only computation, which has NO
+  // imported actuals -- the old LR-3 current-month bank arrays are gone.
+  canonical?: CanonicalCashFlowInput;
   // LR-11 (Company / Family Trust Entity Architecture) — this household's
   // active business entities, each with the raw line items
   // computeBusinessEntityOwnershipValue() needs to net. Optional and
@@ -174,7 +293,7 @@ export interface DashboardInput {
 
 // Income sources not derived from active work — used for passive-income and
 // financial-independence ratios.
-const PASSIVE_INCOME_KEYS = new Set([
+export const PASSIVE_INCOME_KEYS: ReadonlySet<string> = new Set([
   'rental_income',
   'airbnb_income',
   'interest_income',
@@ -198,7 +317,7 @@ const PASSIVE_INCOME_KEYS = new Set([
 // groceries, essential health, minimum transport) from existing master-item
 // tags, since expenses aren't separately tiered in the data model. Only
 // counted when the row is also marked essential by the user.
-const CORE_SURVIVAL_EXPENSE_KEYS = new Set([
+export const CORE_SURVIVAL_EXPENSE_KEYS: ReadonlySet<string> = new Set([
   'mortgage',
   'rent',
   'council_rates',
@@ -333,9 +452,6 @@ export function isCreditCardDebt(debtType: string, masterItemKey?: string | null
   return masterItemKey === 'credit_card' || masterItemKey === 'store_card' || debtType === 'credit_card';
 }
 
-function sumMonthly<T>(rows: T[], amountField: keyof T, freqField: keyof T): number {
-  return rows.reduce((sum, r) => sum + toMonthly(Number(r[amountField]), r[freqField] as Frequency), 0);
-}
 
 // App Review spec §12-13's double-counting guard — a debt-repayment expense
 // row and the matching Liability's monthly_repayment represent the same cash
@@ -410,11 +526,11 @@ export interface DashboardSummary {
   // purely so `lib/services/forecastData.ts`'s and `lib/engines/whatIf.ts`'s
   // "same basis as totalLiabilities" wiring needs no changes here.
   totalLiabilityMonthlyRepayments: number;
-  totalMonthlyExpenses: number; // essential + lifestyle + bank-derived (excludes debt repayments, tracked separately)
-  // LR-3: the slice of totalMonthlyExpenses/grossMonthlyIncome that came from
-  // approved bank-statement transactions rather than manual entry — exposed
-  // separately so a caller (or a future UI) can show "how much of this came
-  // from your bank feed" without re-deriving it from raw input arrays.
+  totalMonthlyExpenses: number; // essential + lifestyle, combined basis (excludes debt repayments, tracked separately)
+  // The slice of totalMonthlyExpenses / grossMonthlyIncome taken from approved
+  // imported actuals (WP-03: groups on the ACTUAL side of the combined basis,
+  // and bank income credits not represented by a payslip row). A part of the
+  // total, never added to it. 0 on the registers-only path.
   bankMonthlyExpenses: number;
   bankMonthlyIncome: number;
   monthlySurplus: number;
@@ -553,6 +669,11 @@ export interface DashboardSummary {
   hasExpenses: boolean;
   hasAssets: boolean;
   hasLiabilities: boolean;
+
+  // WP-03: how these figures were produced and what was left out of them.
+  // Optional only so hand-built summaries in older fixtures keep compiling;
+  // computeDashboard() always sets it.
+  dataStatus?: DashboardDataStatus;
 }
 
 function ratio(
@@ -586,11 +707,36 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // Per-country breakdowns (assetsByCountry etc., below) deliberately do NOT
   // go through this — the cross-border report section shows those "as
   // recorded, in each country's own currency" by design.
-  function reportingValue(rowCurrencyCode: string | null | undefined, amount: number): number {
+  //
+  // WP-03 (DC-12): FAIL CLOSED on an unsupported currency. A row with NO
+  // currency code (legacy fixtures -- every database row has one) is still the
+  // reporting currency, so single-currency households are unchanged; but a
+  // row in a currency this app cannot convert (e.g. USD) is no longer added
+  // raw as if it were AUD/INR. It contributes 0 to every total and breakdown,
+  // and is counted once in dataStatus.unconverted instead.
+  function convertOrNull(rowCurrencyCode: string | null | undefined, amount: number): number | null {
+    if (rowCurrencyCode === null || rowCurrencyCode === undefined || rowCurrencyCode === '') return amount;
     const rowCurrency = toSupportedCurrency(rowCurrencyCode);
-    if (!rowCurrency) return amount;
+    if (!rowCurrency) return null;
     return convertToReportingCurrency(amount, rowCurrency, currency, fxRateAudInr);
   }
+  function reportingValue(rowCurrencyCode: string | null | undefined, amount: number): number {
+    return convertOrNull(rowCurrencyCode, amount) ?? 0;
+  }
+  const unconverted = { count: 0, byCurrency: {} as Record<string, number> };
+  function tallyUnconverted(rows: readonly { currency_code?: string | null }[], amountOf: (r: never) => number) {
+    for (const r of rows) {
+      if (convertOrNull(r.currency_code, 1) !== null) continue;
+      const code = String(r.currency_code);
+      unconverted.count += 1;
+      unconverted.byCurrency[code] = (unconverted.byCurrency[code] ?? 0) + Number(amountOf(r as never));
+    }
+  }
+  tallyUnconverted(input.assets, (r: AssetRow) => r.current_value);
+  tallyUnconverted(input.investments, (r: InvestmentRow) => r.current_value);
+  tallyUnconverted(input.retirement, (r: RetirementRow) => r.current_balance);
+  tallyUnconverted(input.liabilities, (r: LiabilityRow) => r.balance);
+  tallyUnconverted(input.insurance, (r: InsuranceRow) => r.cover_amount);
   // LR-FI-1 (P0 SMSF household financial isolation) — the single point where
   // this engine separates the PERSONAL household's operating cash flow from
   // an SMSF's own. Everything computed from these two arrays is household
@@ -630,172 +776,242 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // fixing, and why that fix was too broad.
   const householdLiabilities = householdOperatingCashFlowRows(input.liabilities);
 
-  // LR-3: approved bank-derived income (the current period's real, already-
-  // realised money, not a recurring-frequency estimate) is added directly
-  // into both gross and net — there is no separate "gross vs net" concept
-  // for a bank transaction the way there is for a manually-entered salary
-  // row, so it is treated as already-net, already-realised income for both
-  // figures. Not counted in passiveMonthlyIncome (no master_item_key exists
-  // on a bank transaction to classify it by), so it falls into
-  // activeMonthlyIncome by exclusion below — a reasonable default, not a
-  // claim that all bank-derived income is active.
-  const bankMonthlyIncome = (input.bankIncomeTransactions ?? []).reduce(
-    (sum, t) => sum + reportingValue(t.currency_original, t.amount_original),
-    0
-  );
-  const bankMonthlyExpenses = (input.bankExpenseTransactions ?? []).reduce(
-    (sum, t) => sum + reportingValue(t.currency_original, t.amount_original),
-    0
-  );
+  // ---------------------------------------------------------------------------
+  // CASH FLOW (WP-03). One set of figures, from EITHER the canonical read
+  // models (the Dashboard loader always passes them) OR, for a caller that has
+  // none, the registers alone. There is no third path: the LR-3 current-
+  // calendar-month bank arrays that were added blindly on top of the plan are
+  // gone (DC-01, DC-02, DC-03, EXP-G3).
+  // ---------------------------------------------------------------------------
+  type Unavailable = { section: string; reason: string; source: string };
+  interface CashFlowFigures {
+    incomeAvailable: boolean;
+    expensesAvailable: boolean;
+    debtAvailable: boolean;
+    grossMonthlyIncome: number;
+    netMonthlyIncome: number;
+    netUnknownComponents: number;
+    grossIncludesNetFloor: boolean;
+    passiveMonthlyIncome: number;
+    dividendMonthlyIncome: number;
+    rentalMonthlyIncome: number;
+    incomeLines: CanonicalIncomeLine[];
+    essentialMonthlyExpenses: number;
+    coreSurvivalMonthlyExpenses: number;
+    lifestyleMonthlyExpenses: number;
+    totalMonthlyExpenses: number;
+    expenseLines: CanonicalExpenseLine[];
+    debtMonthlyRepayments: number;
+    costOfDebtMonthly: number;
+    bankMonthlyIncome: number;
+    bankMonthlyExpenses: number;
+    hasIncome: boolean;
+    hasExpenses: boolean;
+    unavailable: Unavailable[];
+    possibleDuplicateIncomeCount: number;
+    unknownPendingCount: number;
+  }
+  const isPassive = (key: string | null | undefined) => Boolean(key && PASSIVE_INCOME_KEYS.has(key));
+  const sumBy = <T>(rows: readonly T[], f: (r: T) => number) => rows.reduce((s, r) => s + f(r), 0);
+  const addUnconvertedAmount = (code: string, amount: number) => {
+    unconverted.count += 1;
+    unconverted.byCurrency[code] = (unconverted.byCurrency[code] ?? 0) + amount;
+  };
 
-  const grossMonthlyIncome = sumMonthly(householdIncome, 'amount', 'frequency') + bankMonthlyIncome;
-  const netMonthlyIncome = householdIncome.reduce((sum, r) => {
-    const monthly = toMonthly(r.net_amount ?? r.amount, r.frequency);
-    return sum + monthly;
-  }, bankMonthlyIncome);
-  const passiveMonthlyIncome = householdIncome
-    .filter((r) => r.master_item_key && PASSIVE_INCOME_KEYS.has(r.master_item_key))
-    .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
+  // Registers-only: manual / Applied rows, no imported actuals.
+  function registerCashFlow(): CashFlowFigures {
+    const income = householdIncome.flatMap((r) => {
+      const gross = convertOrNull(r.currency_code, toMonthly(Number(r.amount), r.frequency));
+      if (gross === null) {
+        addUnconvertedAmount(String(r.currency_code), Number(r.amount));
+        return [];
+      }
+      // GAP-09: a missing net is UNKNOWN. It is never replaced by the gross.
+      const net = r.net_amount === null || r.net_amount === undefined ? null : reportingValue(r.currency_code, toMonthly(Number(r.net_amount), r.frequency));
+      return [{ r, gross, net }];
+    });
+    const incomeLines: CanonicalIncomeLine[] = income.map(({ r, gross }) => ({
+      name: r.source_name ?? r.employer_name ?? 'Income source',
+      monthly: gross,
+      employerName: r.employer_name ?? null,
+      masterItemKey: r.master_item_key,
+      source: 'planned',
+    }));
+    // App Review spec §12-13 / LR-FI-2 §R2: a debt-repayment expense row whose
+    // liability repayment is already counted is excluded (see
+    // debtServiceContext.ts); built from HOUSEHOLD liabilities only (LR-FI-1).
+    const servicedFamilies = servicedDebtFamilies(householdLiabilities);
+    const expenses = householdExpenses
+      .filter((r) => !isDuplicateDebtServiceExpense(r, servicedFamilies))
+      .flatMap((r) => {
+        const monthly = convertOrNull(r.currency_code, toMonthly(Number(r.amount), r.frequency));
+        if (monthly === null) {
+          addUnconvertedAmount(String(r.currency_code), Number(r.amount));
+          return [];
+        }
+        return [{ r, monthly }];
+      });
+    const essential = sumBy(expenses.filter((e) => e.r.is_essential), (e) => e.monthly);
+    const lifestyle = sumBy(expenses.filter((e) => !e.r.is_essential), (e) => e.monthly);
+    return {
+      incomeAvailable: true,
+      expensesAvailable: true,
+      debtAvailable: true,
+      grossMonthlyIncome: sumBy(income, (i) => i.gross),
+      netMonthlyIncome: sumBy(income, (i) => i.net ?? 0),
+      netUnknownComponents: income.filter((i) => i.net === null).length,
+      grossIncludesNetFloor: false,
+      passiveMonthlyIncome: sumBy(income.filter((i) => isPassive(i.r.master_item_key)), (i) => i.gross),
+      dividendMonthlyIncome: sumBy(income.filter((i) => i.r.master_item_key === 'dividend_income'), (i) => i.gross),
+      rentalMonthlyIncome: sumBy(income.filter((i) => i.r.master_item_key === 'rental_income' || i.r.master_item_key === 'airbnb_income'), (i) => i.gross),
+      incomeLines,
+      essentialMonthlyExpenses: essential,
+      coreSurvivalMonthlyExpenses: sumBy(
+        expenses.filter((e) => e.r.is_essential && e.r.master_item_key && CORE_SURVIVAL_EXPENSE_KEYS.has(e.r.master_item_key)),
+        (e) => e.monthly
+      ),
+      lifestyleMonthlyExpenses: lifestyle,
+      totalMonthlyExpenses: essential + lifestyle,
+      expenseLines: expenses.map((e) => ({ name: e.r.expense_name, monthly: e.monthly, source: 'planned' })),
+      // PO D-08, applied equally to manual and imported households: a
+      // revolving facility's repayment is not debt service on top of the
+      // purchases its balance is built from. LR-FI-1 §12/§22: household only.
+      debtMonthlyRepayments: sumBy(
+        householdLiabilities.filter((l) => debtServiceClassFor(l.debt_type, l.master_item_key) !== 'revolving'),
+        (l) => reportingValue(l.currency_code, l.monthly_repayment ?? 0)
+      ),
+      costOfDebtMonthly: 0,
+      bankMonthlyIncome: 0,
+      bankMonthlyExpenses: 0,
+      // LR-FI-1: household scope, matching the figures they gate.
+      hasIncome: householdIncome.length > 0,
+      hasExpenses: householdExpenses.length > 0,
+      unavailable: [],
+      possibleDuplicateIncomeCount: 0,
+      unknownPendingCount: 0,
+    };
+  }
+
+  // Canonical: the read models' figures, taken as they are.
+  function canonicalCashFlow(c: CanonicalCashFlowInput): CashFlowFigures {
+    const unavailable: Unavailable[] = [];
+    const inc = c.income.status === 'ok' ? c.income : (unavailable.push({ section: 'income', reason: c.income.reason, source: c.income.source }), null);
+    const exp = c.expenses.status === 'ok' ? c.expenses : (unavailable.push({ section: 'expenses', reason: c.expenses.reason, source: c.expenses.source }), null);
+    const debt = c.debtService.status === 'ok' ? c.debtService : (unavailable.push({ section: 'liabilities', reason: c.debtService.reason, source: c.debtService.source }), null);
+    unavailable.push(...c.otherUnavailable);
+    const plannedIncome = inc ? inc.lines.filter((l) => l.source === 'planned') : [];
+    return {
+      incomeAvailable: inc !== null,
+      expensesAvailable: exp !== null,
+      debtAvailable: debt !== null,
+      grossMonthlyIncome: inc?.grossMonthly ?? 0,
+      netMonthlyIncome: inc?.netKnownMonthly ?? 0,
+      netUnknownComponents: inc?.netUnknownComponents ?? 0,
+      grossIncludesNetFloor: inc?.grossIncludesNetFloor ?? false,
+      // Imported bank credits carry no master item to classify them by, so
+      // they count as active income (the documented pre-programme default).
+      passiveMonthlyIncome: sumBy(plannedIncome.filter((l) => isPassive(l.masterItemKey)), (l) => l.monthly),
+      dividendMonthlyIncome: sumBy(plannedIncome.filter((l) => l.masterItemKey === 'dividend_income'), (l) => l.monthly),
+      rentalMonthlyIncome: sumBy(plannedIncome.filter((l) => l.masterItemKey === 'rental_income' || l.masterItemKey === 'airbnb_income'), (l) => l.monthly),
+      incomeLines: inc?.lines ?? [],
+      essentialMonthlyExpenses: exp?.essentialMonthly ?? 0,
+      coreSurvivalMonthlyExpenses: exp?.coreSurvivalMonthly ?? 0,
+      lifestyleMonthlyExpenses: exp?.lifestyleMonthly ?? 0,
+      totalMonthlyExpenses: exp?.monthly ?? 0,
+      expenseLines: exp?.lines ?? [],
+      debtMonthlyRepayments: debt?.householdMonthly ?? 0,
+      costOfDebtMonthly: debt?.costOfDebtMonthly ?? 0,
+      bankMonthlyIncome: inc?.importedMonthly ?? 0,
+      bankMonthlyExpenses: exp?.importedMonthly ?? 0,
+      // DC-05 / EXP-G6: planned OR actual. An unavailable section is not "has
+      // data" -- every engine then reports it missing instead of scoring $0.
+      hasIncome: inc?.present ?? false,
+      hasExpenses: exp?.present ?? false,
+      unavailable,
+      possibleDuplicateIncomeCount: inc?.possibleDuplicateCount ?? 0,
+      unknownPendingCount: exp?.unknownPendingCount ?? 0,
+    };
+  }
+
+  const cf = input.canonical ? canonicalCashFlow(input.canonical) : registerCashFlow();
+  if (input.canonical) {
+    for (const part of [input.canonical.income, input.canonical.expenses]) {
+      if (part.status !== 'ok') continue;
+      for (const [code, amount] of Object.entries(part.unconverted.byCurrency)) {
+        unconverted.byCurrency[code] = (unconverted.byCurrency[code] ?? 0) + amount;
+      }
+      unconverted.count += part.unconverted.count;
+    }
+  }
+  const {
+    grossMonthlyIncome,
+    netMonthlyIncome,
+    passiveMonthlyIncome,
+    essentialMonthlyExpenses,
+    coreSurvivalMonthlyExpenses,
+    lifestyleMonthlyExpenses,
+    totalMonthlyExpenses,
+    debtMonthlyRepayments,
+    bankMonthlyIncome,
+    bankMonthlyExpenses,
+  } = cf;
   const activeMonthlyIncome = grossMonthlyIncome - passiveMonthlyIncome;
-
-  // Old calculation → defect → corrected rule → expected new result
-  // (App Review spec §12-13):
-  //   Old: this filter excluded rows solely by `expense_category ===
-  //   'debt_repayment'`. expense_category is a DB column
-  //   (supabase/migrations/0003_module2.sql) the live grid UI never
-  //   actually lets the user set — lib/grid/configs.ts's expenseGridConfig
-  //   doesn't list it as an editable field, so it silently stays at
-  //   expenseSchema's Zod default of 'other' for every real expense row
-  //   created through the app. That made the exclusion dead code: a
-  //   household tracking both a "Mortgage" expense row (master_item_key
-  //   'mortgage') and a "Home Loan" liability with a monthly_repayment
-  //   double-counted that one real repayment in monthlySurplus,
-  //   debtServiceRatio, cashFlowRatio, disposableIncome and
-  //   operatingCashFlow — e.g. a $3,000 mortgage expense + $3,000 liability
-  //   repayment produced $6,000 of outflow, not $3,000.
-  //   Defect: the check needed master_item_key — the one field the grid
-  //   does reliably collect for catalogue rows (same root cause already
-  //   fixed above in this file for asset_class/investment_type/debt_type).
-  //   Corrected rule: exclude a debt-repayment expense row only when (a)
-  //   it's recognised as debt-repayment by master_item_key first
-  //   (DEBT_REPAYMENT_EXPENSE_TO_LIABILITY_ITEMS above), expense_category
-  //   as a fallback for custom/API rows with no master item, AND (b) the
-  //   household has a Liability of the *matching debt type* (mortgage vs.
-  //   auto loan, not "any liability at all") with a nonzero
-  //   monthly_repayment on file — so a debt-repayment expense with no
-  //   corresponding Liability entry (nothing already double-counting it)
-  //   is never silently dropped from cash flow, and an unrelated liability
-  //   (e.g. a car loan) never suppresses a differently-typed expense (e.g.
-  //   mortgage).
-  //   Expected new result: mortgage expense + matching home-loan liability
-  //   -> counted once. Home loan liability + car loan liability, both
-  //   tracked as Liabilities only with no matching Expense rows -> both
-  //   still counted, unaffected. A lone "Car Loan Repayments" expense with
-  //   zero car-type Liabilities on file is no longer silently excluded.
-  // LR-FI-1: built from HOUSEHOLD liabilities only. Before this fix an SMSF
-  // home-loan liability could suppress the household's own Mortgage expense
-  // row as a "double count", silently deleting a genuine personal outflow —
-  // the mirror image of the primary defect, and equally wrong.
-  // LR-FI-2 §R2: the family map and the matching rule now come from the
-  // canonical lib/engines/debtServiceContext.ts. Behaviour for the mortgage
-  // and auto families is preserved exactly; what changes is that the other
-  // seven families (personal, education, revolving, business, investment,
-  // tax, other) are now classified too, so a household servicing e.g. a
-  // commercial or construction loan, or a mortgage offset facility, finally
-  // matches its own "Mortgage" expense row instead of double-counting it.
-  const servicedFamilies = servicedDebtFamilies(householdLiabilities);
-  const nonDebtExpenses = householdExpenses.filter((r) => !isDuplicateDebtServiceExpense(r, servicedFamilies));
-  const essentialMonthlyExpenses = sumMonthly(
-    nonDebtExpenses.filter((r) => r.is_essential),
-    'amount',
-    'frequency'
-  );
-  const coreSurvivalMonthlyExpenses = sumMonthly(
-    nonDebtExpenses.filter((r) => r.is_essential && r.master_item_key && CORE_SURVIVAL_EXPENSE_KEYS.has(r.master_item_key)),
-    'amount',
-    'frequency'
-  );
-  const lifestyleMonthlyExpenses = sumMonthly(
-    nonDebtExpenses.filter((r) => !r.is_essential),
-    'amount',
-    'frequency'
-  );
-  // LR-3: bankMonthlyExpenses is added as its own explicit third term,
-  // deliberately NOT folded into essentialMonthlyExpenses or
-  // lifestyleMonthlyExpenses — a bank-derived transaction has no
-  // is_essential signal (that classification exists only on manually-
-  // entered expense_items rows), and guessing essential-vs-lifestyle from
-  // its FDH category would be exactly the kind of inference this codebase's
-  // established rigor forbids. It still reaches totalMonthlyExpenses (and
-  // therefore monthlySurplus, cashFlowRatio, totalOutflow below) — the
-  // figure the Product Owner explicitly asked LR-3 to wire this into — but
-  // does not appear split into essential/lifestyle, and does not enter
-  // liquidityRatio/financialIndependenceRatio further down, both of which
-  // are keyed specifically off essentialMonthlyExpenses.
-  const totalMonthlyExpenses = essentialMonthlyExpenses + lifestyleMonthlyExpenses + bankMonthlyExpenses;
-  // Same reporting-currency conversion as the balance totals above — a
-  // foreign-currency liability's repayment must not be added raw into a
-  // reporting-currency cash-flow figure (monthlySurplus, disposableIncome).
-  // LR-FI-1 §12/§22: household liabilities only, so an SMSF loan instalment
-  // can never enter monthlySurplus, disposableIncome or the Debt Service
-  // Ratio. The SMSF loan's BALANCE is untouched and still reaches
-  // totalLiabilities/netWorth below.
-  const debtMonthlyRepayments = householdLiabilities.reduce((sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0), 0);
-  // LR-FI-2 §6c. All-owner repayment total — the wealth-side counterpart to
-  // debtMonthlyRepayments, paired with the ALSO all-owner totalLiabilities
-  // below so forecastData.ts's/whatIf.ts's amortisation wiring always
-  // amortises a whole balance with a whole repayment. LR-FI-1/LR-FI-2 §28's
-  // own invariant is that a liability's balance (and therefore the
-  // repayment servicing it, for this wealth-side figure) stays whole
-  // regardless of owner — see totalLiabilities' own doc comment on
-  // DashboardSummary for the P0-1 regression this restores.
+  // LR-FI-2 §6c. All-owner CONTRACTUAL repayment total — the wealth-side
+  // counterpart to debtMonthlyRepayments, paired with the ALSO all-owner
+  // totalLiabilities below so forecastData.ts's/whatIf.ts's amortisation
+  // wiring always amortises a whole balance with a whole repayment. It is not
+  // cash flow, so the D-08/D-09 debt-service rules (which govern surplus) do
+  // not apply to it.
   const totalLiabilityMonthlyRepayments = input.liabilities.reduce(
     (sum, r) => sum + reportingValue(r.currency_code, r.monthly_repayment ?? 0),
     0
   );
 
+  // The household-level surplus basis is unchanged (net when any net is
+  // known, gross otherwise). What changed (GAP-09) is that a component whose
+  // net is unknown no longer contributes its GROSS as if it were net.
   const incomeForSurplus = netMonthlyIncome || grossMonthlyIncome;
+  const netIncomeBasis: DashboardDataStatus['netIncomeBasis'] = !cf.incomeAvailable || incomeForSurplus === 0
+    ? 'none'
+    : netMonthlyIncome === 0
+      ? 'gross_fallback'
+      : cf.netUnknownComponents > 0
+        ? 'net_partial'
+        : 'net';
+  // A surplus needs all three inputs. With any of them unreadable the figure
+  // below is still returned (it is a number in the contract), but every RATIO
+  // built on it is null, so nothing downstream scores it (DC-14).
+  const cashFlowComplete = cf.incomeAvailable && cf.expensesAvailable && cf.debtAvailable;
   const monthlySurplus = incomeForSurplus - totalMonthlyExpenses - debtMonthlyRepayments;
-  const savingsRate = incomeForSurplus > 0 ? monthlySurplus / incomeForSurplus : null;
+  const savingsRate = cashFlowComplete && incomeForSurplus > 0 ? monthlySurplus / incomeForSurplus : null;
   const operatingCashFlow = incomeForSurplus - essentialMonthlyExpenses;
   const disposableIncome = operatingCashFlow - debtMonthlyRepayments;
   const totalOutflow = totalMonthlyExpenses + debtMonthlyRepayments;
-  const cashFlowRatio = totalOutflow > 0 ? monthlySurplus / totalOutflow : null;
-  // LR-FI-1: these are the user-facing "your top household expenses/income"
-  // lists and the concentration ratios computed off them — an SMSF row
-  // appearing here would both misstate the ratio and read as a personal
-  // commitment the household does not have.
-  // LR-FI-2 §R2: built from nonDebtExpenses, not householdExpenses. A row
-  // suppressed as a duplicate of a Liability's own repayment was still being
-  // listed here, so "your top expenses" showed a $500 "Personal loan
-  // repayment" that totalMonthlyExpenses deliberately excludes — the list did
-  // not reconcile with the total sitting beside it, and the same repayment
-  // read to the user as both an expense and a debt commitment. Found by the
-  // live-DEV §R2 fixture. Purely a display/ratio scope correction: no total,
-  // ratio input or score changes, since every consumer of the excluded row's
-  // amount already used nonDebtExpenses.
-  const topExpenses = nonDebtExpenses
-    .map((e) => ({ name: e.expense_name, monthlyAmount: toMonthly(e.amount, e.frequency) }))
+  const cashFlowRatio = cashFlowComplete && totalOutflow > 0 ? monthlySurplus / totalOutflow : null;
+  // LR-FI-1 / LR-FI-2 §R2: household rows only, and never a row the totals
+  // exclude (a debt-service duplicate), so the list reconciles with the total.
+  const topExpenses = cf.expenseLines
+    .map((e) => ({ name: e.name, monthlyAmount: e.monthly }))
     .sort((a, b) => b.monthlyAmount - a.monthlyAmount)
     .slice(0, 5);
-  const topIncome = householdIncome
-    .map((r) => ({ name: r.source_name ?? r.employer_name ?? 'Income source', monthlyAmount: toMonthly(r.amount, r.frequency) }))
+  const topIncome = cf.incomeLines
+    .map((r) => ({ name: r.name, monthlyAmount: r.monthly }))
     .sort((a, b) => b.monthlyAmount - a.monthlyAmount)
     .slice(0, 5);
-  const incomeSourceCount = householdIncome.length;
-  const incomeMonthlyAmounts = householdIncome.map((r) => toMonthly(r.amount, r.frequency));
+  // Variable pay is part of its payslip's income source, not a source of its own.
+  const incomeSourceLines = cf.incomeLines.filter((r) => r.source !== 'variable_pay');
+  const incomeSourceCount = input.canonical ? incomeSourceLines.length : householdIncome.length;
+  const incomeMonthlyAmounts = incomeSourceLines.map((r) => r.monthly);
   const largestIncomeSharePct =
     grossMonthlyIncome > 0 && incomeMonthlyAmounts.length > 0
       ? Math.max(...incomeMonthlyAmounts) / grossMonthlyIncome
       : null;
-  const discretionaryRatio = incomeForSurplus > 0 ? lifestyleMonthlyExpenses / incomeForSurplus : null;
+  const discretionaryRatio = cf.incomeAvailable && cf.expensesAvailable && incomeForSurplus > 0 ? lifestyleMonthlyExpenses / incomeForSurplus : null;
 
-  const activeIncomeRows = householdIncome.filter((r) => !r.master_item_key || !PASSIVE_INCOME_KEYS.has(r.master_item_key));
   const employerMap = new Map<string, number>();
-  for (const r of activeIncomeRows) {
-    if (!r.employer_name) continue;
-    const monthly = toMonthly(r.amount, r.frequency);
-    employerMap.set(r.employer_name, (employerMap.get(r.employer_name) ?? 0) + monthly);
+  for (const r of incomeSourceLines) {
+    if (!r.employerName || isPassive(r.masterItemKey)) continue;
+    employerMap.set(r.employerName, (employerMap.get(r.employerName) ?? 0) + r.monthly);
   }
   const activeIncomeTotal = Array.from(employerMap.values()).reduce((sum, v) => sum + v, 0);
   const employerConcentration =
@@ -870,7 +1086,8 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const liabilityTypeMap = new Map<string, number>();
   for (const l of input.liabilities) {
     const key = l.master_item_key ?? l.debt_type;
-    liabilityTypeMap.set(key, (liabilityTypeMap.get(key) ?? 0) + l.balance);
+    // WP-03 (DC-12): reporting currency, like the totalLiabilities it breaks down.
+    liabilityTypeMap.set(key, (liabilityTypeMap.get(key) ?? 0) + reportingValue(l.currency_code, l.balance));
   }
   const liabilityByType = Array.from(liabilityTypeMap.entries()).map(([debtType, balance]) => ({ debtType, balance }));
 
@@ -932,11 +1149,14 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const propertyConcentration =
     totalAssetBaseForRatios > 0 ? (allocationMap.get('property') ?? 0) / totalAssetBaseForRatios : null;
 
+  // WP-03 (DC-12): every balance-weighted debt figure below weighs by the
+  // REPORTING-currency balance, so an INR loan is not weighted 56x an AUD one.
+  const bal = (r: LiabilityRow) => reportingValue(r.currency_code, r.balance);
   const liabilitiesWithRate = input.liabilities.filter((r) => r.interest_rate !== null);
-  const balanceWithRate = liabilitiesWithRate.reduce((sum, r) => sum + r.balance, 0);
-  const totalInterestWeighted = liabilitiesWithRate.reduce((sum, r) => sum + r.interest_rate! * r.balance, 0);
+  const balanceWithRate = liabilitiesWithRate.reduce((sum, r) => sum + bal(r), 0);
+  const totalInterestWeighted = liabilitiesWithRate.reduce((sum, r) => sum + r.interest_rate! * bal(r), 0);
   const averageInterestRate = balanceWithRate > 0 ? totalInterestWeighted / balanceWithRate : null;
-  const annualGrossIncome = grossMonthlyIncome * 12;
+  const annualGrossIncome = cf.incomeAvailable ? grossMonthlyIncome * 12 : 0;
   // LR-FI-2 §1 — Old calculation -> defect -> corrected rule -> expected new
   // result.
   //   Old: totalLiabilities / annualGrossIncome. LR-FI-1 made the DENOMINATOR
@@ -975,41 +1195,45 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // repayments") and every other ratio in this file that already divides by
   // incomeForSurplus. Previously divided by gross income, which silently
   // disagreed with the report copy's stated definition.
-  const debtServiceRatio = incomeForSurplus > 0 ? debtMonthlyRepayments / incomeForSurplus : null;
+  // WP-03: null (never 0) when income or debt service could not be read, so a
+  // failed read can never score as "no debt burden" (DC-14).
+  const debtServiceRatio = cf.incomeAvailable && cf.debtAvailable && incomeForSurplus > 0 ? debtMonthlyRepayments / incomeForSurplus : null;
   const liabilitiesWithPayoff = input.liabilities.map((l) => ({
     debtType: l.master_item_key ?? l.debt_type,
-    balance: l.balance,
+    balance: bal(l),
+    // Payoff months are a ratio of the row's own balance and repayment, in its own currency.
     monthsToPayoff: estimateMonthsToPayoff(l.balance, l.interest_rate, l.monthly_repayment),
   }));
   let goodDebt = 0;
   let badDebt = 0;
   for (const l of input.liabilities) {
-    if (isGoodDebt(l.debt_type, l.master_item_key)) goodDebt += l.balance;
-    else badDebt += l.balance;
+    if (isGoodDebt(l.debt_type, l.master_item_key)) goodDebt += bal(l);
+    else badDebt += bal(l);
   }
 
   const liabilitiesWithRateType = input.liabilities.filter((l) => (l.interest_rate_type ?? null) !== null);
-  const rateTypeBalance = liabilitiesWithRateType.reduce((sum, l) => sum + l.balance, 0);
+  const rateTypeBalance = liabilitiesWithRateType.reduce((sum, l) => sum + bal(l), 0);
   const variableRateDebtBalance = liabilitiesWithRateType
     .filter((l) => l.interest_rate_type === 'variable')
-    .reduce((sum, l) => sum + l.balance, 0);
+    .reduce((sum, l) => sum + bal(l), 0);
   const variableRateDebtRatio = rateTypeBalance > 0 ? variableRateDebtBalance / rateTypeBalance : null;
   const in12Months = new Date();
   in12Months.setMonth(in12Months.getMonth() + 12);
   const in12MonthsStr = in12Months.toISOString().slice(0, 10);
   const upcomingRateResetBalance12m = input.liabilities
     .filter((l) => l.fixed_rate_expiry && l.fixed_rate_expiry <= in12MonthsStr)
-    .reduce((sum, l) => sum + l.balance, 0);
+    .reduce((sum, l) => sum + bal(l), 0);
   const creditCardLiabilities = input.liabilities.filter(
     (l) => isCreditCardDebt(l.debt_type, l.master_item_key) && (l.credit_limit ?? null) !== null
   );
-  const totalCreditLimit = creditCardLiabilities.reduce((sum, l) => sum + (l.credit_limit ?? 0), 0);
+  const totalCreditLimit = creditCardLiabilities.reduce((sum, l) => sum + reportingValue(l.currency_code, l.credit_limit ?? 0), 0);
   const creditUtilization =
     totalCreditLimit > 0
-      ? creditCardLiabilities.reduce((sum, l) => sum + l.balance, 0) / totalCreditLimit
+      ? creditCardLiabilities.reduce((sum, l) => sum + bal(l), 0) / totalCreditLimit
       : null;
 
-  const investmentCostBase = input.investments.reduce((sum, r) => sum + (r.cost_base ?? r.current_value), 0);
+  // WP-03 (DC-12): same currency as totalInvestments, which it is subtracted from.
+  const investmentCostBase = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.cost_base ?? r.current_value), 0);
   const investmentUnrealisedGain = totalInvestments - investmentCostBase;
 
   let investmentDiversificationScore: number | null = null;
@@ -1017,7 +1241,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     const byType = new Map<string, number>();
     for (const i of input.investments) {
       const key = i.master_item_key ?? i.investment_type;
-      byType.set(key, (byType.get(key) ?? 0) + i.current_value);
+      byType.set(key, (byType.get(key) ?? 0) + reportingValue(i.currency_code, i.current_value));
     }
     const hhi = Array.from(byType.values()).reduce((sum, v) => sum + (v / totalInvestments) ** 2, 0);
     investmentDiversificationScore = Math.round((1 - hhi) * 100);
@@ -1026,7 +1250,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const countryMap = new Map<string, number>();
   for (const i of input.investments) {
     if (!i.country_code) continue;
-    countryMap.set(i.country_code, (countryMap.get(i.country_code) ?? 0) + i.current_value);
+    countryMap.set(i.country_code, (countryMap.get(i.country_code) ?? 0) + reportingValue(i.currency_code, i.current_value));
   }
   const investmentByCountry = Array.from(countryMap.entries()).map(([countryCode, value]) => ({ countryCode, value }));
   const countriesInUse = Array.from(
@@ -1041,7 +1265,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const institutionMap = new Map<string, number>();
   for (const i of input.investments) {
     if (!i.institution) continue;
-    institutionMap.set(i.institution, (institutionMap.get(i.institution) ?? 0) + i.current_value);
+    institutionMap.set(i.institution, (institutionMap.get(i.institution) ?? 0) + reportingValue(i.currency_code, i.current_value));
   }
   const institutionConcentration =
     institutionMap.size > 0 && totalInvestments > 0
@@ -1050,30 +1274,33 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
 
   // LR-FI-1 §14: SMSF dividends and SMSF property rent are fund income, not
   // household income — they must not appear as personal passive income.
-  const dividendMonthlyIncome = householdIncome
-    .filter((r) => r.master_item_key === 'dividend_income')
-    .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
+  // (Computed with the cash-flow figures above, from household rows only.)
+  const { dividendMonthlyIncome, rentalMonthlyIncome } = cf;
   const dividendYield = totalInvestments > 0 ? (dividendMonthlyIncome * 12) / totalInvestments : null;
 
-  const rentalMonthlyIncome = householdIncome
-    .filter((r) => r.master_item_key === 'rental_income' || r.master_item_key === 'airbnb_income')
-    .reduce((sum, r) => sum + toMonthly(r.amount, r.frequency), 0);
-
-  const retirementEmployerMonthlyContribution = input.retirement.reduce(
-    (sum, r) => sum + toMonthly(r.employer_contribution ?? 0, r.contribution_frequency ?? 'monthly'),
-    0
-  );
-  const retirementPersonalMonthlyContribution = input.retirement.reduce(
-    (sum, r) => sum + toMonthly(r.personal_contribution ?? 0, r.contribution_frequency ?? 'monthly'),
-    0
-  );
-  const investmentAnnualContribution = input.investments.reduce((sum, r) => sum + (r.annual_contribution ?? 0), 0);
-  const investmentContributionRate = incomeForSurplus > 0 ? investmentAnnualContribution / 12 / incomeForSurplus : null;
-  const retirementContributionRate =
-    incomeForSurplus > 0
-      ? (retirementEmployerMonthlyContribution + retirementPersonalMonthlyContribution) / incomeForSurplus
-      : null;
-  const retirementEmployerContributionRate = incomeForSurplus > 0 ? retirementEmployerMonthlyContribution / incomeForSurplus : null;
+  // WP-03 (GAP-RET-02 consumer, DC-12). A contribution is a monthly RATE only
+  // when its frequency is known: a NULL contribution_frequency is unknown and
+  // is left out (and counted in dataStatus), never assumed to be monthly -- a
+  // retirement statement's period total read as "monthly" inflated it ~12x.
+  // Converted to the reporting currency like the balances.
+  let retirementContributionFrequencyUnknown = 0;
+  const contributionMonthly = (r: RetirementRow, amount: number | null) => {
+    if (amount === null || amount === undefined || Number(amount) === 0) return 0;
+    if (!r.contribution_frequency) {
+      retirementContributionFrequencyUnknown += 1;
+      return 0;
+    }
+    return reportingValue(r.currency_code, toMonthly(Number(amount), r.contribution_frequency));
+  };
+  const retirementEmployerMonthlyContribution = input.retirement.reduce((sum, r) => sum + contributionMonthly(r, r.employer_contribution), 0);
+  const retirementPersonalMonthlyContribution = input.retirement.reduce((sum, r) => sum + contributionMonthly(r, r.personal_contribution), 0);
+  const investmentAnnualContribution = input.investments.reduce((sum, r) => sum + reportingValue(r.currency_code, r.annual_contribution ?? 0), 0);
+  const ratesAvailable = cf.incomeAvailable && incomeForSurplus > 0;
+  const investmentContributionRate = ratesAvailable ? investmentAnnualContribution / 12 / incomeForSurplus : null;
+  const retirementContributionRate = ratesAvailable
+    ? (retirementEmployerMonthlyContribution + retirementPersonalMonthlyContribution) / incomeForSurplus
+    : null;
+  const retirementEmployerContributionRate = ratesAvailable ? retirementEmployerMonthlyContribution / incomeForSurplus : null;
 
   // LR-FI-1 §15: an SMSF-paid premium is a fund operating cost and must not
   // read as household spending — but the POLICY's cover_amount is protection,
@@ -1086,8 +1313,9 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const insuranceTypeMap = new Map<string, { coverAmount: number; annualPremium: number }>();
   for (const i of input.insurance) {
     const entry = insuranceTypeMap.get(i.cover_type) ?? { coverAmount: 0, annualPremium: 0 };
-    entry.coverAmount += i.cover_amount;
-    if (isHouseholdOperatingCashFlow(i)) entry.annualPremium += toMonthly(i.premium, i.premium_frequency) * 12;
+    // WP-03 (DC-12): cover and premium in the reporting currency.
+    entry.coverAmount += reportingValue(i.currency_code, i.cover_amount);
+    if (isHouseholdOperatingCashFlow(i)) entry.annualPremium += reportingValue(i.currency_code, toMonthly(i.premium, i.premium_frequency) * 12);
     insuranceTypeMap.set(i.cover_type, entry);
   }
   const insuranceByType = Array.from(insuranceTypeMap.entries()).map(([coverType, v]) => ({
@@ -1299,10 +1527,29 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     // a zero-income household instead of honestly saying "add your income".
     // hasAssets/hasLiabilities are wealth flags and stay on the full
     // registers, so SMSF economic value keeps counting (§5, §28).
-    hasIncome: householdIncome.length > 0,
-    hasExpenses: householdExpenses.length > 0,
+    //
+    // WP-03 (DC-05 / EXP-G6): planned OR actual on the canonical path, so an
+    // imported-only household is no longer treated as having no income or
+    // expenses; false when that section could not be read.
+    hasIncome: cf.hasIncome,
+    hasExpenses: cf.hasExpenses,
     hasAssets: input.assets.length > 0 || input.investments.length > 0 || input.retirement.length > 0,
     hasLiabilities: input.liabilities.length > 0,
+    dataStatus: {
+      basis: input.canonical ? 'canonical_read_models' : 'registers_only',
+      unavailable: cf.unavailable,
+      unconverted,
+      netIncomeUnknownComponents: cf.netUnknownComponents,
+      netIncomeBasis,
+      grossIncomeIncludesNetFloor: cf.grossIncludesNetFloor,
+      costOfDebtMonthly: cf.costOfDebtMonthly,
+      window: input.canonical?.window ?? null,
+      importedNotInNetWorth: input.canonical?.importedNotInNetWorth ?? null,
+      bankBalanceEvidence: input.canonical?.bankBalanceEvidence ?? null,
+      retirementContributionFrequencyUnknown,
+      possibleDuplicateIncomeCount: cf.possibleDuplicateIncomeCount,
+      unknownPendingCount: cf.unknownPendingCount,
+    },
   };
 }
 
