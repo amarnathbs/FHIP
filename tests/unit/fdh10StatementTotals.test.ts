@@ -14,6 +14,7 @@ import { LIABILITY_LEDGER_MAPPING } from '@/lib/financial-data-hub/liability/cre
 import { decomposeLoanPayment } from '@/lib/financial-data-hub/liability/repaymentDecomposition';
 import { computeStatementTotals, type StatementTotalsActivity } from '@/lib/financial-data-hub/liability/statementReconciliation';
 import { toExtractionWarnings } from '@/lib/financial-data-hub/liability/extractionWarnings';
+import { persistLiabilityStatementEvidence } from '@/lib/financial-data-hub/services/liabilityStatementProcessingService';
 import { LIABILITY_ACTIVITY_TYPES } from '@/lib/financial-data-hub/liability/types';
 
 const act = (activityType: string, amount: number, extra: Partial<StatementTotalsActivity> = {}): StatementTotalsActivity => ({ activityType, amount, ...extra });
@@ -145,7 +146,6 @@ describe('persistLiabilityStatementEvidence payload + candidate query (G4, G5, G
   beforeEach(() => { calls.length = 0; rpcArgs = null; bankRows = []; matchedRows = []; });
 
   it('persists warnings, GST, signed adjustments, capitalised totals and the candidate ids of an ambiguous repayment', async () => {
-    const { persistLiabilityStatementEvidence } = await import('@/lib/financial-data-hub/services/liabilityStatementProcessingService');
     bankRows = [
       { id: 'b1', transaction_date: '2026-08-19', amount_original: 220, description_clean: 'TEST BANK CARD PAYMENT', description_raw: null, merchant_raw: null, dedup_status: 'unique' },
       { id: 'b2', transaction_date: '2026-08-21', amount_original: 220, description_clean: 'TEST BANK CARD PAYMENT', description_raw: null, merchant_raw: null, dedup_status: 'unique' },
