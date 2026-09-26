@@ -70,8 +70,12 @@ beforeEach(() => {
 describe('runPostBankApprovalMatchers (pure runner)', () => {
   const ctx = { userId: USER_ID, statementUploadId: DOC_ID, trigger: 'statement_approve' as const };
 
-  it('the shipped registry is empty in WP-01 (packages add their own entries)', () => {
-    expect(POST_BANK_APPROVAL_MATCHERS).toEqual([]);
+  it('the shipped registry holds at most ONE entry per owning package, each with a unique id (WP-12 added its own)', () => {
+    const ids = POST_BANK_APPROVAL_MATCHERS.map((m) => m.id);
+    const owners = POST_BANK_APPROVAL_MATCHERS.map((m) => m.ownerWp);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(owners).size).toBe(owners.length);
+    expect(POST_BANK_APPROVAL_MATCHERS.find((m) => m.ownerWp === 'WP-12')?.id).toBe('wp12_broker_bank_rematch');
   });
 
   it('runs every matcher in order and returns their outcomes', async () => {

@@ -70,20 +70,127 @@ export async function resolveAndPersistAuStatementAccount(userId: string, statem
 }
 
 /**
+ * Who holds the account (canonical-upload WP-12, INV-G10 / FDH-15 / PO D-10).
+ * Investment Intelligence records the holder as a `household_members` row;
+ * without one a position can never be certified or published
+ * (OWNER_UNRESOLVED). `self` resolves to the user's own member row, creating
+ * it (named from the profile) when the household has none yet -- a first-time
+ * user must be able to finish the journey. A member id is accepted only when
+ * it belongs to this same user.
+ */
+export type AuAccountOwnerChoice = { memberId: string } | { self: true };
+
+export async function resolveAuAccountOwnerMember(userId: string, owner: AuAccountOwnerChoice): Promise<{ memberId: string | null; error: string | null }> {
+  const admin = createAdminClient();
+  if ('memberId' in owner) {
+    const { data } = await admin.from('household_members').select('id, is_active').eq('id', owner.memberId).eq('user_id', userId).maybeSingle();
+    if (!data || data.is_active === false) return { memberId: null, error: 'That household member was not found.' };
+    return { memberId: data.id as string, error: null };
+  }
+  const { data: existing } = await admin
+    .from('household_members')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('relationship', 'self')
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (existing) return { memberId: existing.id as string, error: null };
+  const { data: profile } = await admin.from('user_profiles').select('full_name').eq('user_id', userId).maybeSingle();
+  const fullName = ((profile?.full_name as string | null) ?? '').trim() || 'Me';
+  const { data: created, error } = await admin.from('household_members').insert({ user_id: userId, full_name: fullName, relationship: 'self' }).select('id').single();
+  if (error || !created) return { memberId: null, error: error?.message ?? 'Could not record you as the account holder.' };
+  return { memberId: created.id as string, error: null };
+}
+
+/**
  * Confirm ADD NEW for a statement's account (spec section 45) — creates a
  * new `ii_accounts` row and persists it as the statement's
- * `canonical_account_id`, ONLY on this explicit call.
+ * `canonical_account_id`, ONLY on this explicit call. WP-12 (INV-G10): the
+ * holder is REQUIRED -- the account used to be created with no owner, which
+ * blocked certification and publication for good.
  */
-export async function confirmNewAuStatementAccount(userId: string, statementId: string, input: { institutionName: string; maskedAccountIdentifier: string | null; currencyCode: string }): Promise<{ accountId: string | null; error: string | null }> {
+export async function confirmNewAuStatementAccount(
+  userId: string,
+  statementId: string,
+  input: { institutionName: string; maskedAccountIdentifier: string | null; currencyCode: string; owner: AuAccountOwnerChoice },
+): Promise<{ accountId: string | null; error: string | null }> {
   const admin = createAdminClient();
   const { data: statement, error: stmtErr } = await admin.from('fdh_investment_statements').select('id, user_id').eq('id', statementId).eq('user_id', userId).maybeSingle();
   if (stmtErr || !statement) return { accountId: null, error: stmtErr?.message ?? 'Statement not found.' };
 
-  const created = await createAuInvestmentAccount(userId, input);
+  const owner = await resolveAuAccountOwnerMember(userId, input.owner);
+  if (!owner.memberId) return { accountId: null, error: owner.error };
+
+  const created = await createAuInvestmentAccount(userId, { ...input, ownerMemberId: owner.memberId });
   if (created.accountId) {
-    await admin.from('fdh_investment_statements').update({ canonical_account_id: created.accountId }).eq('id', statementId);
+    const { error } = await admin.from('fdh_investment_statements').update({ canonical_account_id: created.accountId }).eq('id', statementId).eq('user_id', userId);
+    if (error) return { accountId: null, error: error.message };
   }
   return created;
+}
+
+/**
+ * The user picks ONE of the candidates an ambiguous match offered (spec
+ * section 46: ambiguity is resolved by the user, never auto-picked). The
+ * account must be this user's own active AU account. Optionally records the
+ * holder when the account has none yet.
+ */
+export async function confirmExistingAuStatementAccount(
+  userId: string,
+  statementId: string,
+  accountId: string,
+  owner?: AuAccountOwnerChoice,
+): Promise<{ accountId: string | null; error: string | null }> {
+  const admin = createAdminClient();
+  const { data: statement } = await admin.from('fdh_investment_statements').select('id').eq('id', statementId).eq('user_id', userId).maybeSingle();
+  if (!statement) return { accountId: null, error: 'Statement not found.' };
+  const { data: account } = await admin.from('ii_accounts').select('id, owner_member_id').eq('id', accountId).eq('user_id', userId).eq('country_code', 'AU').eq('status', 'active').maybeSingle();
+  if (!account) return { accountId: null, error: 'That investment account was not found.' };
+  if (owner && !account.owner_member_id) {
+    const set = await setAuAccountOwner(userId, accountId, owner);
+    if (set.error) return { accountId: null, error: set.error };
+  }
+  const { error } = await admin.from('fdh_investment_statements').update({ canonical_account_id: accountId }).eq('id', statementId).eq('user_id', userId);
+  if (error) return { accountId: null, error: error.message };
+  return { accountId, error: null };
+}
+
+export interface AuAccountDescription {
+  accountId: string;
+  institutionName: string | null;
+  maskedAccountIdentifier: string | null;
+  ownerRecorded: boolean;
+}
+
+/** Display facts for the user's own AU accounts (institution + masked id only). */
+export async function describeAuAccounts(userId: string, accountIds: readonly string[]): Promise<AuAccountDescription[]> {
+  if (accountIds.length === 0) return [];
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('ii_accounts')
+    .select('id, institution_name, account_number_masked, owner_member_id')
+    .eq('user_id', userId)
+    .eq('country_code', 'AU')
+    .in('id', [...accountIds]);
+  return ((data ?? []) as { id: string; institution_name: string | null; account_number_masked: string | null; owner_member_id: string | null }[]).map((a) => ({
+    accountId: a.id,
+    institutionName: a.institution_name,
+    maskedAccountIdentifier: a.account_number_masked,
+    ownerRecorded: Boolean(a.owner_member_id),
+  }));
+}
+
+/** Records the holder of an existing AU account that has none (INV-G10). */
+export async function setAuAccountOwner(userId: string, accountId: string, owner: AuAccountOwnerChoice): Promise<{ memberId: string | null; error: string | null }> {
+  const admin = createAdminClient();
+  const resolved = await resolveAuAccountOwnerMember(userId, owner);
+  if (!resolved.memberId) return resolved;
+  const { data, error } = await admin.from('ii_accounts').update({ owner_member_id: resolved.memberId }).eq('id', accountId).eq('user_id', userId).eq('country_code', 'AU').select('id');
+  if (error) return { memberId: null, error: error.message };
+  if (!data || data.length === 0) return { memberId: null, error: 'That investment account was not found.' };
+  return resolved;
 }
 
 /**

@@ -56,6 +56,7 @@ export interface PostBankApprovalMatcher {
  * super personal contribution), so their edits never touch the same line.
  */
 export const POST_BANK_APPROVAL_MATCHERS: readonly PostBankApprovalMatcher[] = [
+  { id: 'wp12_broker_bank_rematch', ownerWp: 'WP-12', run: async (ctx) => (await import('@/lib/investment-import-bridge/brokerBankRematch')).runBrokerBankRematch(ctx) },
 ];
 
 export interface PostBankApprovalMatcherResult {

@@ -79,6 +79,98 @@ function scoreCandidate(
 
 const MATCH_SCORE_THRESHOLD = 60;
 
+// ---------------------------------------------------------------------------
+// Canonical-upload WP-12 (INV-G4): the REAL institution/narrative signal.
+//
+// Before this, the only production caller passed
+// `institutionOrNarrativeMatches: true` for every bank line, which silently
+// disabled the "never amount alone" guard above. The signal now comes from the
+// FDH-2 institution master (`fdh_financial_institutions` + aliases, migration
+// 0054 -- e.g. COMMSEC / COMMONWEALTH SECURITIES / SELFWEALTH): a bank line
+// corroborates this statement's broker only when its narrative names THAT
+// broker, and is a positive "wrong broker" when it names ANOTHER broker and
+// not this one.
+// ---------------------------------------------------------------------------
+
+export interface BrokerAliasSet {
+  institutionCode: string;
+  institutionName: string;
+  /** Upper-case alias strings (fdh_institution_aliases.alias_normalized). */
+  aliases: readonly string[];
+}
+
+export interface BrokerNarrativeSignal {
+  /** The statement's broker, resolved against the master; null when unknown. */
+  brokerCode: string | null;
+  evaluate(narrative: string | null | undefined): { institutionOrNarrativeMatches: boolean; positivelyWrongBroker: boolean };
+}
+
+const normaliseNarrative = (s: string | null | undefined) => ` ${(s ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()} `;
+const containsToken = (haystack: string, needle: string) => {
+  const n = normaliseNarrative(needle).trim();
+  return n.length >= 3 && haystack.includes(` ${n} `);
+};
+
+/**
+ * Builds the narrative signal for ONE statement. The statement's broker is
+ * the master broker whose name or any alias appears in the statement's own
+ * institution name; when none does, the statement's institution name itself
+ * (>= 3 characters) is the only accepted token. No institution name at all ->
+ * nothing can ever corroborate (amount + date alone never match).
+ */
+export function buildBrokerNarrativeSignal(statementInstitutionName: string | null | undefined, brokers: readonly BrokerAliasSet[]): BrokerNarrativeSignal {
+  const stmt = normaliseNarrative(statementInstitutionName);
+  const own = brokers.find((b) => containsToken(stmt, b.institutionName) || b.aliases.some((a) => containsToken(stmt, a)));
+  const ownTokens = own ? [own.institutionName, ...own.aliases] : statementInstitutionName && statementInstitutionName.trim().length >= 3 ? [statementInstitutionName] : [];
+  const otherTokens = brokers.filter((b) => b !== own).flatMap((b) => [b.institutionName, ...b.aliases]);
+  return {
+    brokerCode: own?.institutionCode ?? null,
+    evaluate(narrative) {
+      const n = normaliseNarrative(narrative);
+      const mine = ownTokens.some((t) => containsToken(n, t));
+      const other = !mine && otherTokens.some((t) => containsToken(n, t));
+      return { institutionOrNarrativeMatches: mine, positivelyWrongBroker: other };
+    },
+  };
+}
+
+/**
+ * The bank-leg DIRECTION each statement activity must have (INV-G4). A broker
+ * BUY is funded by a bank DEBIT; a SELL / dividend / withdrawal arrives as a
+ * CREDIT. Types absent here (security transfers, broker-cash interest, fees,
+ * corporate actions) have no household bank leg and are never bank-matched.
+ */
+export const AU_ACTIVITY_BANK_DIRECTION: Readonly<Record<string, 'credit' | 'debit'>> = {
+  CASH_DEPOSIT: 'debit',
+  BUY: 'debit',
+  CASH_WITHDRAWAL: 'credit',
+  SELL: 'credit',
+  DIVIDEND: 'credit',
+  DISTRIBUTION: 'credit',
+};
+
+/**
+ * Matching order within one statement: a broker-cash deposit/withdrawal is
+ * the bank leg when the statement prints one, so it claims the bank line
+ * first; a BUY/SELL settled from broker cash then finds that line taken
+ * (one bank line -> at most one activity).
+ */
+export const AU_ACTIVITY_MATCH_PRIORITY: readonly string[] = ['CASH_DEPOSIT', 'CASH_WITHDRAWAL', 'BUY', 'SELL', 'DIVIDEND', 'DISTRIBUTION'];
+
+/**
+ * What the bank leg becomes once the approved statement corroborates it
+ * (applied through fdh_internal_reclassify_corroborated_leg, 0207). DIVIDEND
+ * and DISTRIBUTION are deliberately ABSENT: the bank credit already is the one
+ * household income leg -- the broker line is corroboration only, never a
+ * second income event.
+ */
+export const AU_ACTIVITY_BANK_LEG_TYPE: Readonly<Record<string, 'investment' | 'asset_sale' | 'transfer'>> = {
+  CASH_DEPOSIT: 'investment',
+  BUY: 'investment',
+  SELL: 'asset_sale',
+  CASH_WITHDRAWAL: 'transfer',
+};
+
 export function matchBankBrokerEvent(
   query: BankMatchQuery,
   candidates: readonly BankTransactionCandidate[],

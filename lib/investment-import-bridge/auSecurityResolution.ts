@@ -44,7 +44,15 @@ export async function resolveAuSecurity(query: AuSecurityMatchQuery): Promise<Au
   return { ...matchAuSecurity(query, candidates), error: null };
 }
 
-export type AuSecurityEvidenceTable = 'fdh_investment_statement_positions' | 'fdh_investment_statement_activities';
+/** Names for an ambiguous-match picker (canonical-upload WP-12, INV-G3). */
+export async function describeInstruments(instrumentIds: readonly string[]): Promise<{ instrumentId: string; name: string; instrumentClass: string }[]> {
+  if (instrumentIds.length === 0) return [];
+  const admin = createAdminClient();
+  const { data } = await admin.from('ii_instruments').select('id, instrument_name, instrument_class').in('id', [...instrumentIds]);
+  return ((data ?? []) as { id: string; instrument_name: string; instrument_class: string }[]).map((r) => ({ instrumentId: r.id, name: r.instrument_name, instrumentClass: r.instrument_class }));
+}
+
+export type AuSecurityEvidenceTable ='fdh_investment_statement_positions' | 'fdh_investment_statement_activities';
 
 /**
  * Resolve AND persist the outcome onto one evidence row's

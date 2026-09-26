@@ -6,6 +6,7 @@ import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { investmentGridConfig } from '@/lib/grid/configs';
 import { InvestmentsSubNav } from '@/components/investments/InvestmentsSubNav';
 import { AuInvestmentStatementImportPanel } from '@/components/investments/AuInvestmentStatementImportPanel';
+import { ImportedInvestmentStatements } from '@/components/investments/ImportedInvestmentStatements';
 
 // FDH-11 spec sections 2, 76-83: the Investments hub offers three entry
 // points — Add Investment Manually (the existing grid below, unchanged and
@@ -15,13 +16,21 @@ import { AuInvestmentStatementImportPanel } from '@/components/investments/AuInv
 // India option must go to the existing India Investment capability").
 // FDH-11 is deliberately NOT a new top-level destination, mirroring the
 // exact pattern FDH-9/FDH-10 established for Income/Liabilities.
+//
+// Canonical-upload WP-12 (INV-G1/INV-G9, PO D-05): imported broker
+// statements are now visible here -- the "Imported, not yet in Net Worth"
+// bucket and the import history -- and "Add to Net Worth" reopens the import
+// panel at its explicit confirm step for that statement.
 export default function InvestmentsPage() {
   const [showAuImport, setShowAuImport] = useState(false);
+  const [resumeDocumentId, setResumeDocumentId] = useState<string | null>(null);
   const [gridKey, setGridKey] = useState(0);
   const auImportToggleRef = useRef<HTMLButtonElement>(null);
 
   function closeAuImport() {
     setShowAuImport(false);
+    setResumeDocumentId(null);
+    setGridKey((k) => k + 1);
     auImportToggleRef.current?.focus();
   }
 
@@ -34,7 +43,10 @@ export default function InvestmentsPage() {
           <button
             ref={auImportToggleRef}
             type="button"
-            onClick={() => setShowAuImport((v) => !v)}
+            onClick={() => {
+              setResumeDocumentId(null);
+              setShowAuImport((v) => !v);
+            }}
             aria-expanded={showAuImport}
             className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5"
           >
@@ -50,8 +62,21 @@ export default function InvestmentsPage() {
       </div>
 
       {showAuImport && (
-        <AuInvestmentStatementImportPanel onClose={closeAuImport} onApplied={() => setGridKey((k) => k + 1)} />
+        <AuInvestmentStatementImportPanel
+          key={resumeDocumentId ?? 'new'}
+          onClose={closeAuImport}
+          onApplied={() => setGridKey((k) => k + 1)}
+          resumeDocumentId={resumeDocumentId}
+        />
       )}
+
+      <ImportedInvestmentStatements
+        refreshKey={gridKey}
+        onAddToNetWorth={(documentId) => {
+          setResumeDocumentId(documentId);
+          setShowAuImport(true);
+        }}
+      />
 
       <hr className="border-gray-200" />
 

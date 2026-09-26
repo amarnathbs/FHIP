@@ -37,8 +37,17 @@ import { downloadDocumentObject } from './storage';
 import { recordDocumentAuditEvent } from './auditLog';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { detectAuInvestmentCsvFormat } from '../investment/detection';
-import { extractAuTransactionsFromCsv, extractAuPositionsFromCsv } from '../investment/csvExtraction';
-import { matchBankBrokerEvent, type BankTransactionCandidate } from '../investment/bankMatching';
+import { extractAuTransactionsFromCsv, extractAuPositionsFromCsv, summariseExtractionWarnings } from '../investment/csvExtraction';
+import { reconcileAuStatementTotals } from '../investment/statementTotals';
+import {
+  matchBankBrokerEvent,
+  buildBrokerNarrativeSignal,
+  AU_ACTIVITY_BANK_DIRECTION,
+  AU_ACTIVITY_BANK_LEG_TYPE,
+  AU_ACTIVITY_MATCH_PRIORITY,
+  type BankTransactionCandidate,
+  type BrokerAliasSet,
+} from '../investment/bankMatching';
 import type {
   AuStatementTransactionEvidence,
   AuStatementPositionEvidence,
@@ -182,6 +191,9 @@ const STATEMENT_TYPE_BY_KIND: Record<'transaction' | 'portfolio', AuInvestmentSt
 const DEFAULT_TRANSACTION_COLUMN_MAP = {
   date: 'Date', type: 'Type', amount: 'Amount', ticker: 'Code', isin: 'ISIN',
   securityName: 'Security Name', quantity: 'Quantity', price: 'Price', brokerage: 'Brokerage', settlementDate: 'Settlement Date',
+  // WP-12 (INV-G7): the tax evidence columns were never mapped, so franking
+  // credits and withholding tax were never extracted at all.
+  frankingCredit: 'Franking Credit', withholdingTax: 'Withholding Tax',
 };
 const DEFAULT_PORTFOLIO_COLUMN_MAP = {
   securityName: 'Security Name', ticker: 'Code', isin: 'ISIN', quantity: 'Quantity', unitPrice: 'Price', marketValue: 'Market Value', valuationDate: 'Valuation Date',
@@ -476,16 +488,15 @@ export interface PersistAuInvestmentEvidenceResult {
  * is that an AI-fallback-produced statement is INDISTINGUISHABLE downstream
  * from a natively-parsed one.
  *
- * Behaviour is unchanged from the inlined version, deliberately including its
- * two existing quirks, which are NOT tidied up here because tidying them would
- * be a behavioural change smuggled into a refactor:
- *   - `statementType` is passed in by the caller (from the user's own declared
- *     CSV kind) rather than read from `extraction.statementType`, matching
- *     what the inlined code did;
- *   - a failed positions/activities insert does NOT throw. It leaves the
- *     corresponding count at 0 while the statement row survives, so the user
- *     sees "0 holdings" rather than an error. Pre-existing behaviour, carried
- *     across as-is and flagged here rather than silently changed.
+ * `statementType` is passed in by the caller (from the user's own declared
+ * CSV kind) rather than read from `extraction.statementType`.
+ *
+ * Canonical-upload WP-12 (2026-09-27) deliberately changed the second quirk
+ * this header used to record: a failed positions/activities insert no longer
+ * leaves a "0 holdings" statement behind -- it removes the statement row and
+ * throws (INV-G6). Positions are created `apply_status: 'pending'` (INV-G2),
+ * the statement's own totals are reconciled, and the extractor's warnings are
+ * persisted for the user to see.
  */
 export async function persistAuInvestmentEvidence(params: {
   userId: string;
@@ -496,6 +507,18 @@ export async function persistAuInvestmentEvidence(params: {
   const { userId, documentId, statementType } = params;
   const ex = params.extraction;
   const admin = createAdminClient();
+
+  // Canonical-upload WP-12 (INV-G6/INV-G8): the statement's own totals are
+  // checked at persist (it used to stay 'insufficient_data' forever), and the
+  // extractor's warnings are PERSISTED (0207's extraction_warnings), so every
+  // row that could not be read is visible instead of silently gone.
+  const totals = reconcileAuStatementTotals({
+    currencyCode: ex.currencyCode,
+    positionMarketValues: ex.positions.map((p) => p.marketValue ?? null),
+    cashBalance: ex.cashBalance ?? null,
+    closingPortfolioValue: ex.closingPortfolioValue ?? null,
+  });
+  const extractionWarnings = summariseExtractionWarnings(ex.warnings ?? [], statementType === 'portfolio_csv' ? 'portfolio' : 'transaction');
 
   const { data: statement, error: stmtErr } = await admin
     .from('fdh_investment_statements')
@@ -516,6 +539,8 @@ export async function persistAuInvestmentEvidence(params: {
       parser_version: ex.parserVersion,
       extraction_confidence: ex.extractionConfidence,
       extraction_status: 'extracted',
+      reconciliation_status: totals.status,
+      extraction_warnings: extractionWarnings,
     })
     .select('id')
     .single();
@@ -524,34 +549,51 @@ export async function persistAuInvestmentEvidence(params: {
   }
   const statementId = statement.id as string;
 
-  let positionsExtracted = 0;
-  if (ex.positions.length > 0) {
-    const rows = ex.positions.map((p: AuStatementPositionEvidence) => ({
-      user_id: userId, statement_id: statementId, security_name_raw: p.securityNameRaw, ticker_raw: p.tickerRaw ?? null,
-      exchange: p.exchange ?? null, isin: p.isin ?? null, quantity: p.quantity, unit_price: p.unitPrice ?? null,
-      market_value: p.marketValue ?? null, currency_code: p.currencyCode, valuation_date: p.valuationDate, source_row_number: p.sourceRowNumber ?? null,
-    }));
-    const { error: posErr } = await admin.from('fdh_investment_statement_positions').insert(rows);
-    if (!posErr) positionsExtracted = rows.length;
-  }
+  // INV-G6: a failed positions/activities insert used to be SWALLOWED -- the
+  // statement survived with "0 holdings". Now any failure removes the
+  // statement row (its evidence children cascade) and throws, so the user sees
+  // an error and can retry; nothing half-written is left to approve.
+  const insertChunked = async (table: string, rows: Record<string, unknown>[]) => {
+    for (let i = 0; i < rows.length; i += EVIDENCE_INSERT_CHUNK) {
+      const { error } = await admin.from(table).insert(rows.slice(i, i + EVIDENCE_INSERT_CHUNK));
+      if (error) throw new Error(`${table}: ${error.message}`);
+    }
+  };
 
-  let activitiesExtracted = 0;
-  if (ex.transactions.length > 0) {
-    const rows = ex.transactions.map((t: AuStatementTransactionEvidence) => ({
-      user_id: userId, statement_id: statementId, activity_type: t.transactionType, trade_date: t.tradeDate ?? null,
-      settlement_date: t.settlementDate ?? null, security_name_raw: t.securityNameRaw ?? null, ticker_raw: t.tickerRaw ?? null,
-      isin: t.isin ?? null, quantity: t.quantity ?? null, unit_price: t.unitPrice ?? null, amount: t.amount,
-      currency_code: t.currencyCode, description_raw: t.descriptionRaw ?? null, brokerage_raw: t.brokerageRaw ?? null,
-      franking_credit_raw: t.frankingCreditRaw ?? null, withholding_tax_raw: t.withholdingTaxRaw ?? null, source_row_number: t.sourceRowNumber ?? null,
-    }));
-    const { error: actErr } = await admin.from('fdh_investment_statement_activities').insert(rows);
-    if (!actErr) activitiesExtracted = rows.length;
+  const positionRows = ex.positions.map((p: AuStatementPositionEvidence) => ({
+    user_id: userId, statement_id: statementId, security_name_raw: p.securityNameRaw, ticker_raw: p.tickerRaw ?? null,
+    exchange: p.exchange ?? null, isin: p.isin ?? null, quantity: p.quantity, unit_price: p.unitPrice ?? null,
+    market_value: p.marketValue ?? null, currency_code: p.currencyCode, valuation_date: p.valuationDate, source_row_number: p.sourceRowNumber ?? null,
+    // INV-G2: the column default 'not_applicable' meant a position could
+    // NEVER be applied (Apply selects 'pending'). Every position is now
+    // created awaiting Apply, exactly like an activity.
+    apply_status: 'pending',
+  }));
+  const activityRows = ex.transactions.map((t: AuStatementTransactionEvidence) => ({
+    user_id: userId, statement_id: statementId, activity_type: t.transactionType, trade_date: t.tradeDate ?? null,
+    settlement_date: t.settlementDate ?? null, security_name_raw: t.securityNameRaw ?? null, ticker_raw: t.tickerRaw ?? null,
+    isin: t.isin ?? null, quantity: t.quantity ?? null, unit_price: t.unitPrice ?? null, amount: t.amount,
+    currency_code: t.currencyCode, description_raw: t.descriptionRaw ?? null, brokerage_raw: t.brokerageRaw ?? null,
+    franking_credit_raw: t.frankingCreditRaw ?? null, withholding_tax_raw: t.withholdingTaxRaw ?? null, source_row_number: t.sourceRowNumber ?? null,
+  }));
+  try {
+    await insertChunked('fdh_investment_statement_positions', positionRows);
+    await insertChunked('fdh_investment_statement_activities', activityRows);
+  } catch (e) {
+    await admin.from('fdh_investment_statements').delete().eq('id', statementId).eq('user_id', userId);
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_extraction_failed', actorType: 'system', metadata: { reason: 'evidence_insert_failed' } });
+    throw new AuInvestmentStatementProcessingError('internal_error', `The statement lines could not be saved (${e instanceof Error ? e.message : String(e)}). Nothing was kept -- please try again.`);
   }
+  const positionsExtracted = positionRows.length;
+  const activitiesExtracted = activityRows.length;
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_extraction_completed', actorType: 'system', metadata: { statementId, positionsExtracted, activitiesExtracted } });
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_extraction_completed', actorType: 'system', metadata: { statementId, positionsExtracted, activitiesExtracted, warningCodes: extractionWarnings.map((w) => w.code), reconciliation: totals.status } });
 
   return { statementId, positionsExtracted, activitiesExtracted };
 }
+
+/** Evidence rows are inserted in chunks: a 1,001-line statement is two calls, never a truncation. */
+const EVIDENCE_INSERT_CHUNK = 500;
 
 export type AiAuInvestmentFallbackOutcome = { ok: true; draft: AuInvestmentStatementAiFallbackDraft } | { ok: false; reason: string };
 
@@ -856,73 +898,285 @@ export async function confirmAiAuInvestmentFallback(
   };
 }
 
+// ===========================================================================
+// Bank <-> broker matching, and the corroborated bank leg (canonical-upload
+// WP-12, INV-G4). Queries only the Hub's own tables (`fdh_transactions`, the
+// FDH-2 institution master) -- an intra-Hub reference, never an ii_ table.
+// ===========================================================================
+
+export interface AuBankMatchSummary {
+  matched: number;
+  noMatch: number;
+  multipleCandidates: number;
+  noBankEvidence: number;
+  error: string | null;
+}
+
+/** Days either side of the trade/settlement date a bank leg may fall on. */
+const BANK_MATCH_WINDOW_DAYS = 5;
+
+function shiftIsoDate(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The AU broker institutions and their aliases (FDH-2 master, 0054). */
+async function loadAuBrokerAliasSets(admin: ReturnType<typeof createAdminClient>): Promise<BrokerAliasSet[]> {
+  const { data: institutions, error } = await admin
+    .from('fdh_financial_institutions')
+    .select('id, institution_code, institution_name')
+    .eq('country_code', 'AU')
+    .eq('institution_type', 'broker');
+  if (error) throw new Error(`fdh_financial_institutions: ${error.message}`);
+  const ids = (institutions ?? []).map((i) => i.id as string);
+  if (ids.length === 0) return [];
+  const { data: aliases, error: aliasErr } = await admin.from('fdh_institution_aliases').select('institution_id, alias_normalized').in('institution_id', ids);
+  if (aliasErr) throw new Error(`fdh_institution_aliases: ${aliasErr.message}`);
+  return (institutions ?? []).map((i) => ({
+    institutionCode: i.institution_code as string,
+    institutionName: i.institution_name as string,
+    aliases: (aliases ?? []).filter((a) => a.institution_id === i.id).map((a) => String(a.alias_normalized)),
+  }));
+}
+
+interface BankLegRow {
+  id: string;
+  amount_original: number;
+  currency_original: string;
+  credit_debit: string;
+  transaction_date: string;
+  description_clean: string | null;
+  description_raw: string | null;
+  merchant_raw: string | null;
+  approval_status: string;
+  dedup_status: string | null;
+}
+
 /**
  * Bank <-> broker matching for one statement's activities (spec sections
- * 66-71). Queries `fdh_transactions` (the Hub's OWN cash ledger — an
- * intra-Hub reference, not a canonical-ledger touch).
+ * 66-71; rebuilt by WP-12 for INV-G4).
+ *
+ * What changed, each one a defect the audit found on main:
+ *  - the institution/narrative signal is REAL (the statement's broker, via the
+ *    FDH-2 alias master) -- it used to be a hard-coded `true`, which defeated
+ *    the "never amount alone" rule;
+ *  - only APPROVED, non-duplicate bank lines are candidates (it used to match
+ *    every fdh_transactions row, pending ones included);
+ *  - direction and currency must agree: a BUY is funded by a DEBIT in the
+ *    statement's currency, a SELL / dividend arrives as a CREDIT;
+ *  - BUY and SELL are matched (they were not even in the list), security
+ *    transfers are not (they have no bank leg);
+ *  - one bank line corroborates at most ONE activity: a line already claimed
+ *    by another activity (this statement or any other) is not a candidate,
+ *    and a broker-cash deposit claims its line before the BUY it funded;
+ *  - an activity already matched keeps its match (re-running never flips it),
+ *    so this is safe to call again whenever new bank lines are approved;
+ *  - the audit event is recorded against the DOCUMENT, not the statement id.
  */
-export async function matchAuStatementActivitiesToBank(userId: string, statementId: string): Promise<{ matched: number; noMatch: number; multipleCandidates: number; noBankEvidence: number; error: string | null }> {
+export async function matchAuStatementActivitiesToBank(userId: string, statementId: string): Promise<AuBankMatchSummary> {
   const admin = createAdminClient();
-  // PAGINATION (spec section 93): both reads use fetchAllRows — a
-  // statement with >1000 eligible activities, or a household with >1000
-  // bank transactions, would otherwise be silently truncated by
-  // PostgREST's row cap, producing a wrong (incomplete) match outcome
-  // rather than an error.
-  let activities;
+  const empty = (error: string | null): AuBankMatchSummary => ({ matched: 0, noMatch: 0, multipleCandidates: 0, noBankEvidence: 0, error });
   try {
-    activities = await fetchAllRows(() =>
+    const { data: statement, error: stmtErr } = await admin
+      .from('fdh_investment_statements')
+      .select('id, statement_upload_id, institution_name, base_currency')
+      .eq('id', statementId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (stmtErr) return empty(stmtErr.message);
+    if (!statement) return empty('Statement not found.');
+
+    // PAGINATION (spec section 93): every read pages past PostgREST's cap.
+    const activities = await fetchAllRows<{ id: string; activity_type: string; amount: number; trade_date: string | null; settlement_date: string | null; currency_code: string; bank_match_status: string; linked_transaction_id: string | null }>(() =>
       admin
         .from('fdh_investment_statement_activities')
-        .select('id, activity_type, amount, trade_date, currency_code')
+        .select('id, activity_type, amount, trade_date, settlement_date, currency_code, bank_match_status, linked_transaction_id')
         .eq('user_id', userId)
         .eq('statement_id', statementId)
-        .in('activity_type', ['DIVIDEND', 'DISTRIBUTION', 'TRANSFER_IN', 'TRANSFER_OUT', 'CASH_DEPOSIT', 'CASH_WITHDRAWAL'])
+        .in('activity_type', Object.keys(AU_ACTIVITY_BANK_DIRECTION))
         .order('id', { ascending: true }),
     );
-  } catch (e) {
-    return { matched: 0, noMatch: 0, multipleCandidates: 0, noBankEvidence: 0, error: e instanceof Error ? e.message : String(e) };
-  }
+    const toMatch = activities
+      .filter((a) => a.bank_match_status !== 'matched' || !a.linked_transaction_id)
+      .sort((a, b) => AU_ACTIVITY_MATCH_PRIORITY.indexOf(a.activity_type) - AU_ACTIVITY_MATCH_PRIORITY.indexOf(b.activity_type) || (a.id < b.id ? -1 : 1));
+    if (toMatch.length === 0) return empty(null);
 
-  const bankTxns = await fetchAllRows(() =>
+    const dates = toMatch.map((a) => a.trade_date ?? a.settlement_date).filter((d): d is string => Boolean(d)).sort();
+    let legs: BankLegRow[] = [];
+    if (dates.length > 0) {
+      legs = await fetchAllRows<BankLegRow>(() =>
+        admin
+          .from('fdh_transactions')
+          .select('id, amount_original, currency_original, credit_debit, transaction_date, description_clean, description_raw, merchant_raw, approval_status, dedup_status')
+          .eq('user_id', userId)
+          .eq('approval_status', 'approved')
+          .gte('transaction_date', shiftIsoDate(dates[0], -BANK_MATCH_WINDOW_DAYS))
+          .lte('transaction_date', shiftIsoDate(dates[dates.length - 1], BANK_MATCH_WINDOW_DAYS))
+          .order('transaction_date', { ascending: true })
+          .order('id', { ascending: true }),
+      );
+      legs = legs.filter((l) => l.dedup_status !== 'duplicate_confirmed' && l.dedup_status !== 'user_confirmed_duplicate');
+    }
+
+    // One bank line -> one activity: every line any activity of this user
+    // already claims is off the table.
+    const claimedRows = await fetchAllRows<{ id: string; linked_transaction_id: string | null }>(() =>
+      admin
+        .from('fdh_investment_statement_activities')
+        .select('id, linked_transaction_id')
+        .eq('user_id', userId)
+        .eq('bank_match_status', 'matched')
+        .order('id', { ascending: true }),
+    );
+    const claimed = new Set(claimedRows.map((r) => r.linked_transaction_id).filter((v): v is string => Boolean(v)));
+
+    const signal = buildBrokerNarrativeSignal(statement.institution_name as string | null, await loadAuBrokerAliasSets(admin));
+
+    let matched = 0, noMatch = 0, multipleCandidates = 0, noBankEvidence = 0;
+    for (const activity of toMatch) {
+      const direction = AU_ACTIVITY_BANK_DIRECTION[activity.activity_type];
+      const eventDate = activity.trade_date ?? activity.settlement_date;
+      const eligible = eventDate
+        ? legs.filter((l) => !claimed.has(l.id) && l.credit_debit === direction && l.currency_original === activity.currency_code)
+        : [];
+      const candidates: BankTransactionCandidate[] = eligible.map((l) => ({
+        transactionId: l.id,
+        amount: Number(l.amount_original),
+        transactionDate: l.transaction_date,
+        ...signal.evaluate([l.description_clean, l.description_raw, l.merchant_raw].filter(Boolean).join(' ')),
+      }));
+      const result = eventDate
+        ? matchBankBrokerEvent({ amount: Number(activity.amount), eventDate, currencyCode: activity.currency_code, dateToleranceDays: BANK_MATCH_WINDOW_DAYS }, candidates)
+        : { outcome: 'bank_evidence_not_available' as const, matchedTransactionId: null, candidates: [] };
+
+      let bankMatchStatus: string;
+      let linkedTransactionId: string | null = null;
+      if (result.outcome === 'matched' && result.matchedTransactionId) {
+        matched++;
+        bankMatchStatus = 'matched';
+        linkedTransactionId = result.matchedTransactionId;
+        claimed.add(linkedTransactionId);
+      } else if (result.outcome === 'no_match') { noMatch++; bankMatchStatus = 'no_match'; }
+      else if (result.outcome === 'multiple_candidates') { multipleCandidates++; bankMatchStatus = 'multiple_candidates'; }
+      else { noBankEvidence++; bankMatchStatus = 'bank_evidence_not_available'; }
+
+      const { error: updErr } = await admin
+        .from('fdh_investment_statement_activities')
+        .update({ bank_match_status: bankMatchStatus, linked_transaction_id: linkedTransactionId, bank_match_candidates: result.candidates.length > 0 ? result.candidates : null })
+        .eq('id', activity.id)
+        .eq('user_id', userId);
+      if (updErr) return { matched, noMatch, multipleCandidates, noBankEvidence, error: updErr.message };
+    }
+
+    // INV-G11 (1): the audit trail belongs to the DOCUMENT (it used to be
+    // written with the statement id in the document_id column).
+    if (statement.statement_upload_id) {
+      await recordDocumentAuditEvent({ userId, documentId: statement.statement_upload_id as string, eventType: 'investment_statement_bank_match_completed', actorType: 'system', metadata: { statementId, matched, noMatch, multipleCandidates, noBankEvidence, brokerRecognised: signal.brokerCode !== null } });
+    }
+    return { matched, noMatch, multipleCandidates, noBankEvidence, error: null };
+  } catch (e) {
+    return empty(e instanceof Error ? e.message : String(e));
+  }
+}
+
+export interface AuBankLegReclassifySummary {
+  reclassified: number;
+  unchanged: number;
+  skippedUserOverride: number;
+  notVerified: number;
+}
+
+/**
+ * INV-G4: once an APPROVED broker statement corroborates a bank leg, the leg's
+ * own economic type is made to say what it is -- a BUY / broker deposit is
+ * 'investment' (spending 0), a SELL is 'asset_sale' (ordinary income 0), a
+ * broker withdrawal is a 'transfer'. Dividends are NOT touched: the bank credit
+ * is already the single household income leg (one $400 event, never $800).
+ *
+ * Goes through `fdh_internal_reclassify_corroborated_leg` (0207), the one
+ * sanctioned path: it never overrides a line the user settled, writes the
+ * correction history first, and audits the change. The leg is re-verified
+ * here (approved, direction, currency, amount to the cent) so a weak or stale
+ * match can never re-type a line. Idempotent: a second run reports 'unchanged'.
+ */
+export async function reclassifyCorroboratedAuBankLegs(userId: string, statementId: string): Promise<AuBankLegReclassifySummary> {
+  const admin = createAdminClient();
+  const out: AuBankLegReclassifySummary = { reclassified: 0, unchanged: 0, skippedUserOverride: 0, notVerified: 0 };
+  const { data: statement } = await admin.from('fdh_investment_statements').select('id, approval_status').eq('id', statementId).eq('user_id', userId).maybeSingle();
+  if (!statement || statement.approval_status !== 'approved') return out;
+
+  const activities = await fetchAllRows<{ id: string; activity_type: string; amount: number; currency_code: string; linked_transaction_id: string | null }>(() =>
     admin
-      .from('fdh_transactions')
-      .select('id, amount_original, transaction_date, description_clean, financial_account_id')
+      .from('fdh_investment_statement_activities')
+      .select('id, activity_type, amount, currency_code, linked_transaction_id')
       .eq('user_id', userId)
+      .eq('statement_id', statementId)
+      .eq('bank_match_status', 'matched')
+      .in('activity_type', Object.keys(AU_ACTIVITY_BANK_LEG_TYPE))
       .order('id', { ascending: true }),
   );
-
-  let matched = 0, noMatch = 0, multipleCandidates = 0, noBankEvidence = 0;
-
-  for (const activity of activities) {
-    const candidates: BankTransactionCandidate[] = (bankTxns ?? []).map((b) => ({
-      transactionId: b.id as string,
-      amount: Number(b.amount_original),
-      transactionDate: b.transaction_date as string,
-      // Conservative default (disclosed residual — see
-      // FDH11_AU_BANK_MATCHING.md): real narrative-substring institution
-      // matching (mirroring liabilityStatementProcessingService.ts's own
-      // `loadBankCandidatesForPayment`) is a documented follow-up; this
-      // default still exercises the full amount+date+multi-candidate/
-      // no-evidence state machine correctly.
-      institutionOrNarrativeMatches: true,
-      positivelyWrongBroker: false,
-    }));
-    const result = matchBankBrokerEvent({ amount: Number(activity.amount), eventDate: activity.trade_date as string, currencyCode: activity.currency_code as string }, candidates);
-
-    let bankMatchStatus: string;
-    let linkedTransactionId: string | null = null;
-    if (result.outcome === 'matched') { matched++; bankMatchStatus = 'matched'; linkedTransactionId = result.matchedTransactionId; }
-    else if (result.outcome === 'no_match') { noMatch++; bankMatchStatus = 'no_match'; }
-    else if (result.outcome === 'multiple_candidates') { multipleCandidates++; bankMatchStatus = 'multiple_candidates'; }
-    else { noBankEvidence++; bankMatchStatus = 'bank_evidence_not_available'; }
-
-    await admin
-      .from('fdh_investment_statement_activities')
-      .update({ bank_match_status: bankMatchStatus, linked_transaction_id: linkedTransactionId, bank_match_candidates: result.candidates.length > 0 ? result.candidates : null })
-      .eq('id', activity.id);
+  for (const a of activities) {
+    if (!a.linked_transaction_id) continue;
+    const { data: leg } = await admin
+      .from('fdh_transactions')
+      .select('id, amount_original, currency_original, credit_debit, approval_status')
+      .eq('id', a.linked_transaction_id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    const verified =
+      leg &&
+      leg.approval_status === 'approved' &&
+      leg.credit_debit === AU_ACTIVITY_BANK_DIRECTION[a.activity_type] &&
+      leg.currency_original === a.currency_code &&
+      Math.round(Number(leg.amount_original) * 100) === Math.round(Number(a.amount) * 100);
+    if (!verified) {
+      out.notVerified += 1;
+      continue;
+    }
+    const { data: outcome, error } = await admin.rpc('fdh_internal_reclassify_corroborated_leg', {
+      p_user: userId,
+      p_txn: a.linked_transaction_id,
+      p_new_type: AU_ACTIVITY_BANK_LEG_TYPE[a.activity_type],
+      p_reason: `broker statement ${a.activity_type}`,
+      p_source_kind: 'investment_statement_activity',
+      p_source_id: a.id,
+    });
+    if (error) throw new Error(`fdh_internal_reclassify_corroborated_leg: ${error.message}`);
+    if (outcome === 'reclassified') out.reclassified += 1;
+    else if (outcome === 'skipped_user_override') out.skippedUserOverride += 1;
+    else out.unchanged += 1;
   }
+  return out;
+}
 
-  await recordDocumentAuditEvent({ userId, documentId: statementId, eventType: 'investment_statement_bank_match_completed', actorType: 'system', metadata: { matched, noMatch, multipleCandidates, noBankEvidence } });
-
-  return { matched, noMatch, multipleCandidates, noBankEvidence, error: null };
+/**
+ * The WP-12 post-bank-approval matcher body (INV-G4 / the WP-01 seam). A bank
+ * statement approved AFTER the broker statement was processed used to leave
+ * every broker activity 'bank_evidence_not_available' forever. Re-runs the
+ * matcher for each of this user's AU statements with an unmatched,
+ * bank-matchable activity, then re-types the newly corroborated legs of the
+ * approved ones. User-scoped and idempotent.
+ */
+export async function rematchAuStatementsAfterBankApproval(userId: string): Promise<{ statements: number; linked: number; reclassified: number }> {
+  const admin = createAdminClient();
+  const pending = await fetchAllRows<{ statement_id: string; id: string }>(() =>
+    admin
+      .from('fdh_investment_statement_activities')
+      .select('id, statement_id')
+      .eq('user_id', userId)
+      .neq('bank_match_status', 'matched')
+      .in('activity_type', Object.keys(AU_ACTIVITY_BANK_DIRECTION))
+      .order('id', { ascending: true }),
+  );
+  const statementIds = [...new Set(pending.map((p) => p.statement_id))].sort();
+  let linked = 0;
+  let reclassified = 0;
+  for (const statementId of statementIds) {
+    const summary = await matchAuStatementActivitiesToBank(userId, statementId);
+    if (summary.error) throw new Error(summary.error);
+    linked += summary.matched;
+    if (summary.matched > 0) reclassified += (await reclassifyCorroboratedAuBankLegs(userId, statementId)).reclassified;
+  }
+  return { statements: statementIds.length, linked, reclassified };
 }
