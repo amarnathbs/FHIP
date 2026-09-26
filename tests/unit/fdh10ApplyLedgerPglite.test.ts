@@ -492,4 +492,68 @@ describe('review decisions', () => {
     const again = await h.asTenant(U, async () => (await h.one<{ r: Json }>(`select fdh10_match_liability_payment($1::uuid, $2::uuid, 'bank_back_match') r`, [s.activityIds[0], debit])).r);
     expect(again).toMatchObject({ ok: false, code: 'NOT_ACTIONABLE' });
   });
+
+  it('back-match refuses a debit outside the 7-day window, a pending debit, and a debit already paying another line', async () => {
+    const U = uid(107);
+    await h.user(U);
+    const s = await h.statementWithProposal(U, {
+      activities: [
+        { activity_type: 'PAYMENT', amount: 300, activity_date: '2026-08-12', bank_match_status: 'bank_evidence_not_available' },
+        { activity_type: 'PAYMENT', amount: 300, activity_date: '2026-08-13', bank_match_status: 'bank_evidence_not_available' },
+      ],
+    });
+    expect(await h.apply(U, s.proposalId, 'add_new', { fields: ['liability_name', 'debt_type', 'balance', 'currency_code'] })).toMatchObject({ ok: true });
+    const bank = await h.bankAccount(U);
+    const far = await h.bankDebit(U, bank, 300, '2026-08-25');
+    const pending = await h.bankDebit(U, bank, 300, '2026-08-12', { approved: false });
+    const good = await h.bankDebit(U, bank, 300, '2026-08-12');
+    const match = (activity: string, txn: string) => h.asTenant(U, async () => (await h.one<{ r: Json }>(`select fdh10_match_liability_payment($1::uuid, $2::uuid, 'bank_back_match') r`, [activity, txn])).r);
+    expect(await match(s.activityIds[0], far)).toMatchObject({ ok: false, code: 'BANK_MATCH_INVALID' });
+    expect(await match(s.activityIds[0], pending)).toMatchObject({ ok: false, code: 'BANK_MATCH_INVALID' });
+    expect(await match(s.activityIds[0], good)).toMatchObject({ ok: true });
+    expect(await match(s.activityIds[1], good)).toMatchObject({ ok: false, code: 'ALREADY_MATCHED' });
+  });
+});
+
+describe('loan layouts: the Apply and the read model agree for split AND unsplit repayments', () => {
+  it('an UNSPLIT repayment 2,000 + a separate interest line 430 -> debt service 2,000 (not 430), cost of debt 430, spending 0', async () => {
+    const U = uid(110);
+    await h.user(U);
+    const bank = await h.bankAccount(U);
+    const debit = await h.bankDebit(U, bank, 2000, '2026-08-15', { type: 'expense', description: 'TEST BANK LOAN' });
+    const s = await h.statementWithProposal(U, {
+      statementType: 'loan',
+      activities: [
+        { activity_type: 'INTEREST', amount: 430, activity_date: '2026-08-01' },
+        { activity_type: 'PAYMENT', amount: 2000, activity_date: '2026-08-15', bank_match_status: 'matched', linked_transaction_id: debit },
+      ],
+    });
+    expect(await h.apply(U, s.proposalId, 'add_new', { fields: ['liability_name', 'debt_type', 'balance', 'currency_code'] })).toMatchObject({ ok: true, ledger: { transactions_created: 2, links_created: 1 } });
+    const { expenses, liabilities } = await readModels(U);
+    expect(spendingTotal(expenses)).toBe(0);
+    if (liabilities.status !== 'ok') throw new Error('unavailable');
+    const a = liabilities.lines[0].actual!;
+    // The pre-WP-11 read-model formula (principal + interest + fee) says 430 here.
+    expect(a.principalMonthly + a.interestMonthly + a.feeMonthly).toBe(430);
+    expect(a).toMatchObject({ paymentsMonthly: 2000, costOfDebtMonthly: 430, totalMonthly: 2000 });
+    expect(liabilities.householdDebtServiceMonthly).toBe(2000);
+  });
+
+  it.each([
+    [1000, 1000, null, null],
+    [500, 0, 480, 20],
+    [300, null, 300, null],
+  ])('DB allocations for payment %s = %s / %s / %s equal decomposeLoanPayment', async (amount, p, i, f) => {
+    const { decomposeLoanPayment } = await import('@/lib/financial-data-hub/liability/repaymentDecomposition');
+    const U = uid(1000 + amount);
+    await h.user(U);
+    const s = await h.statementWithProposal(U, { statementType: 'loan', activities: [{ activity_type: 'PAYMENT', amount, principal_component: p, interest_component: i, fee_component: f }] });
+    expect(await h.apply(U, s.proposalId, 'add_new', { fields: ['liability_name', 'debt_type', 'balance', 'currency_code'] })).toMatchObject({ ok: true });
+    const rows = await h.all<{ type: string; amount: string }>(
+      `select al.economic_transaction_type type, al.amount::text amount from fdh_transaction_allocations al
+         join fdh_liability_statement_activities a on a.ledger_transaction_id = al.transaction_id
+        where a.statement_id = $1 order by al.allocation_sequence`, [s.statementId]);
+    const certified = decomposeLoanPayment({ totalPayment: amount, principalComponent: p ?? undefined, interestComponent: i ?? undefined, feeComponent: f ?? undefined, currencyCode: 'AUD' });
+    expect(rows.map((r) => ({ economicType: r.type, amount: Number(r.amount) }))).toEqual(certified.allocations);
+  });
 });

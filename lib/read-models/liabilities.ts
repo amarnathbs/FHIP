@@ -6,8 +6,10 @@
  *  - INSTALMENT (loans): when the linked facility account has at least one
  *    covered month of approved ledger events in the window, debt service is
  *    the ACTUAL principal + interest + fee monthly average (e.g. 1,550 + 430 +
- *    20 = 2,000). It REPLACES the contractual monthly_repayment -- never added
- *    to it (D-09). Otherwise the contractual monthly_repayment is used.
+ *    20 = 2,000) -- or, when larger, the cash actually paid into the loan (an
+ *    unsplit repayment recorded as a transfer; WP-11). It REPLACES the
+ *    contractual monthly_repayment -- never added to it (D-09). Otherwise the
+ *    contractual monthly_repayment is used.
  *  - REVOLVING (cards, lines of credit, BNPL): the card's consumption is
  *    already counted as spending (manual expense rows, or imported card
  *    purchases), so its minimum payment / monthly_repayment is NOT counted
@@ -57,6 +59,9 @@ export interface LiabilityActualFigures {
   interestMonthly: number;
   feeMonthly: number;
   costOfDebtMonthly: number;
+  /** WP-11: cash paid INTO the facility (its credit-direction lines, e.g. an
+   * undecomposed loan repayment the ledger Apply records as a transfer). */
+  paymentsMonthly: number;
   totalMonthly: number;
 }
 
@@ -143,13 +148,23 @@ export function computeLiabilities(
       const principalMonthly = avg((l) => l.bucket === 'debt_principal');
       const interestMonthly = avg((l) => l.bucket === 'cost_of_debt' && l.type === 'debt_interest');
       const feeMonthly = avg((l) => l.bucket === 'cost_of_debt' && l.type === 'fee');
+      // WP-11: a loan statement that shows the repayment as ONE line (no
+      // principal/interest/fee split) and charges interest as its own line is
+      // recorded as a transfer INTO the loan plus a debit interest line. The
+      // cash paid is then the credit-direction total, not principal + interest
+      // + fee (which would be the interest alone). Debt service is whichever
+      // is larger, so the split layout (both 2,000) and the unsplit layout
+      // (payment 2,000 vs interest 430) both count the payment once, and a
+      // month with a charge but no payment still counts its cost of debt.
+      const paymentsMonthly = avg((l) => l.creditDebit === 'credit' && l.bucket !== 'refund');
       actual = {
         coveredMonths,
         principalMonthly,
         interestMonthly,
         feeMonthly,
         costOfDebtMonthly: r(interestMonthly + feeMonthly),
-        totalMonthly: r(principalMonthly + interestMonthly + feeMonthly),
+        paymentsMonthly,
+        totalMonthly: r(Math.max(paymentsMonthly, principalMonthly + interestMonthly + feeMonthly)),
       };
     }
 
