@@ -153,6 +153,10 @@ export type ImportApplyErrorCode =
   | 'INVALID_APPLY_MODE'
   | 'DOMAIN_VALIDATION_FAILED'
   | 'ALREADY_APPLIED'
+  // WP-09 (migration 0210): a payslip may only touch the Income row of the
+  // household member it was approved for, and never a row in another currency.
+  | 'MEMBER_MISMATCH'
+  | 'CURRENCY_MISMATCH'
   | 'WRITE_FAILED';
 
 export class ImportApplyError extends Error {

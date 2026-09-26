@@ -11,6 +11,12 @@ import {
 
 const bodySchema = z.object({ password: z.string().max(200).optional() }).optional();
 
+// UPL-01 (WP-09): a bounded request. The PDF read inside has its own, shorter
+// deadline (WP-08's PDF_EXTRACTION_TIMEOUT_MS), so a stuck parser answers with
+// a controlled `extraction_timeout` before the platform cuts the request --
+// the same 60 s the bank-statement process routes use.
+export const maxDuration = 60;
+
 // POST /api/financial-data-hub/payslip/{documentId}/process — FDH-9 spec
 // sections 4, 21, 25-29, 45-46, 55-58. Turns an uploaded payslip document into
 // payroll EVIDENCE (`fdh_payroll_events`/`fdh_payroll_components`). Never

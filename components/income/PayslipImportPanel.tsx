@@ -27,6 +27,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { normaliseProposedFields, type ProposedField } from '@/lib/import-bridge/proposedFieldShape';
+import { PayslipDetails } from '@/components/income/PayslipDetails';
+import { fieldReasonText, reviewReasonText } from '@/lib/income/payslipProposalText';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -124,19 +126,53 @@ interface PayrollEvent {
   gross_pay_source?: 'stated_on_document' | 'derived_from_components' | 'user_corrected' | null;
   user_corrected_fields?: string[] | null;
   last_corrected_at?: string | null;
+  // WP-09.
+  review_status?: 'not_required' | 'pending' | 'in_review' | 'resolved';
+  income_owner?: 'self' | 'spouse' | null;
+  payment_date?: string | null;
+  pay_frequency?: string | null;
+  [column: string]: unknown;
 }
 
-/** The fields this panel lets a user correct, in the order it shows them. */
+/** An earlier payslip this one would revise (GET /payslip/{id} `revision_of`). */
+interface RevisionOf {
+  payroll_event_id: string;
+  pay_period_start: string | null;
+  pay_period_end: string | null;
+  gross_pay: number | null;
+  net_pay: number | null;
+  approval_status: string;
+  currency_code: string;
+}
+
+/**
+ * The fields this panel lets a user correct, in the order it shows them.
+ * WP-09 (GAP-07): EXACTLY the vocabulary fdh9_correct_payroll_event (0185)
+ * and the correct route accept -- every figure a payslip carries can be fixed,
+ * not only the ten the first version offered.
+ */
 const CORRECTABLE_FIELDS = [
   'employer_name',
   'pay_period_start',
   'pay_period_end',
+  'payment_date',
+  'pay_frequency',
   'gross_pay',
   'base_pay',
   'overtime_pay',
   'bonus_pay',
+  'commission_pay',
+  'allowances_total',
+  'reimbursements_total',
+  'other_earnings',
   'tax_withheld',
+  'employee_deductions_total',
+  'salary_sacrifice',
+  'professional_tax',
   'employer_retirement_contribution',
+  'employee_retirement_contribution',
+  'employer_nps_contribution',
+  'employee_nps_contribution',
   'net_pay',
 ] as const;
 type CorrectableField = (typeof CORRECTABLE_FIELDS)[number];
@@ -145,30 +181,76 @@ const CORRECTION_LABELS: Record<CorrectableField, string> = {
   employer_name: 'Employer',
   pay_period_start: 'Pay period start (YYYY-MM-DD)',
   pay_period_end: 'Pay period end (YYYY-MM-DD)',
+  payment_date: 'Payment date (YYYY-MM-DD)',
+  pay_frequency: 'How often you are paid',
   gross_pay: 'Gross pay for this pay period',
   base_pay: 'Ordinary earnings for this pay period',
   overtime_pay: 'Overtime for this pay period',
   bonus_pay: 'Bonus for this pay period',
+  commission_pay: 'Commission for this pay period',
+  allowances_total: 'Allowances for this pay period',
+  reimbursements_total: 'Reimbursements for this pay period',
+  other_earnings: 'Other earnings / arrears for this pay period',
   tax_withheld: 'Tax withheld for this pay period',
+  employee_deductions_total: 'Other deductions for this pay period',
+  salary_sacrifice: 'Salary sacrifice for this pay period',
+  professional_tax: 'Professional tax for this pay period',
   employer_retirement_contribution: 'Employer super / retirement contribution',
+  employee_retirement_contribution: 'Your super / PF contribution',
+  employer_nps_contribution: 'Employer NPS contribution',
+  employee_nps_contribution: 'Your NPS contribution',
   net_pay: 'Net pay for this pay period',
 };
 
 const MONEY_CORRECTION_FIELDS: readonly CorrectableField[] = [
-  'gross_pay', 'base_pay', 'overtime_pay', 'bonus_pay', 'tax_withheld',
-  'employer_retirement_contribution', 'net_pay',
+  'gross_pay', 'base_pay', 'overtime_pay', 'bonus_pay', 'commission_pay', 'allowances_total',
+  'reimbursements_total', 'other_earnings', 'tax_withheld', 'employee_deductions_total',
+  'salary_sacrifice', 'professional_tax', 'employer_retirement_contribution',
+  'employee_retirement_contribution', 'employer_nps_contribution', 'employee_nps_contribution', 'net_pay',
 ];
 
-/** A payslip already read and waiting to be added (GET /income-proposals). */
+/** The payslip frequency vocabulary (fdh_payroll_events.pay_frequency). */
+const PAY_FREQUENCY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'semimonthly', label: 'Twice a month' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'annual', label: 'Annually' },
+  { value: 'irregular', label: 'Irregular' },
+  { value: 'unknown', label: 'Not sure' },
+];
+
+/** The Income frequencies a user may choose at the compare step (GAP-12). */
+const INCOME_FREQUENCY_CHOICES: { value: string; label: string }[] = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'annually', label: 'Annually' },
+];
+
+/** A payslip left part-way (GET /waiting-imports?kind=payslip). */
 interface WaitingPayslip {
-  proposal_id: string;
   document_id: string;
-  employer_name: string | null;
-  gross_pay: number | null;
-  net_pay: number | null;
-  pay_frequency: string | null;
-  payment_date: string | null;
+  stage: 'ai_draft' | 'review' | 'compare' | 'apply';
+  label: string | null;
+  period_end: string | null;
   currency_code: string | null;
+  ai_fallback_draft?: unknown;
+}
+
+const WAITING_STAGE_TEXT: Record<WaitingPayslip['stage'], string> = {
+  ai_draft: 'AI reading waiting for your check',
+  review: 'Waiting for your approval',
+  compare: 'Approved — not yet added to your income',
+  apply: 'Approved — not yet added to your income',
+};
+
+interface ProposalSummary {
+  title: string;
+  lines: { label: string; value: string; note?: string }[];
+  reviewReasons: string[];
 }
 
 const DUPLICATE_MESSAGE = 'You have already uploaded this payslip, so FHIP is continuing with the copy already on file.';
@@ -255,11 +337,28 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   // closing the panel or reloading the page stranded a proposal -- nothing on
   // screen listed it, and re-uploading only reached the duplicate guard.
   const [waiting, setWaiting] = useState<WaitingPayslip[]>([]);
+  // WP-09. Whose payslip this is (GAP-05) -- chosen at upload, confirmed at
+  // review, recorded at approval and fixed from then on.
+  const [incomeOwner, setIncomeOwner] = useState<'self' | 'spouse'>('self');
+  // The user has looked at the figures this payslip flagged for review.
+  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
+  // GAP-15: an earlier payslip this one revises, and whether it replaces it.
+  const [revisionOf, setRevisionOf] = useState<RevisionOf | null>(null);
+  const [replacesEarlier, setReplacesEarlier] = useState(true);
+  // GAP-07: the payslip's own lines, and the proposal's explanation.
+  const [components, setComponents] = useState<Record<string, unknown>[]>([]);
+  const [showDetails, setShowDetails] = useState(false);
+  const [summary, setSummary] = useState<ProposalSummary | null>(null);
+  // GAP-12: a frequency chosen for a payslip whose own has no Income equivalent.
+  const [frequencyChoice, setFrequencyChoice] = useState('monthly');
 
+  // WP-09 (GAP-11): every payslip left part-way -- an AI reading awaiting a
+  // check, evidence awaiting approval, or an approved payslip never added --
+  // not only a 'ready' proposal.
   const loadWaiting = useCallback(() => {
-    fetch('/api/financial-data-hub/income-proposals')
-      .then((res) => (res.ok ? res.json() : { data: { proposals: [] } }))
-      .then((json) => setWaiting(Array.isArray(json.data?.proposals) ? (json.data.proposals as WaitingPayslip[]) : []))
+    fetch('/api/financial-data-hub/waiting-imports?kind=payslip')
+      .then((res) => (res.ok ? res.json() : { data: { items: [] } }))
+      .then((json) => setWaiting(Array.isArray(json.data?.items) ? (json.data.items as WaitingPayslip[]) : []))
       .catch(() => setWaiting([]));
   }, []);
 
@@ -295,6 +394,12 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     setCorrections({});
     setCorrectionError(null);
     setCorrectionNotice(null);
+    setReviewAcknowledged(false);
+    setRevisionOf(null);
+    setReplacesEarlier(true);
+    setComponents([]);
+    setShowDetails(false);
+    setSummary(null);
   }, []);
 
   /** Seed every correction input from what was actually extracted. */
@@ -395,7 +500,11 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       setPhase('error');
       return;
     }
-    setEvent(json.data.payroll_event as PayrollEvent);
+    const loaded = json.data.payroll_event as PayrollEvent;
+    setEvent(loaded);
+    setComponents(Array.isArray(json.data.components) ? (json.data.components as Record<string, unknown>[]) : []);
+    setRevisionOf((json.data.revision_of as RevisionOf | null | undefined) ?? null);
+    if (loaded.income_owner === 'spouse' || loaded.income_owner === 'self') setIncomeOwner(loaded.income_owner);
     setPhase('review');
   }
 
@@ -531,7 +640,15 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     if (!documentId) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/financial-data-hub/payslip/${documentId}/approve`, { method: 'POST' });
+      const res = await fetch(`/api/financial-data-hub/payslip/${documentId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          income_owner: incomeOwner,
+          acknowledge_review: reviewAcknowledged,
+          replaces_earlier: Boolean(revisionOf) && replacesEarlier,
+        }),
+      });
       const { ok, json } = await readJson(res);
       if (!ok) throw new Error(json.error ?? 'Could not approve this payroll evidence.');
       await loadReview(documentId);
@@ -544,25 +661,56 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     }
   }
 
-  /** Continue a payslip that was read earlier and is still waiting to be added. */
+  /** Continue a payslip left part-way, at the stage it was left (GAP-11). */
   async function resumeWaiting(w: WaitingPayslip) {
     setDocumentId(w.document_id);
     setMessage(null);
+    if (w.stage === 'ai_draft' && w.ai_fallback_draft) {
+      setAiDraft(w.ai_fallback_draft as AiFallbackDraft);
+      setPhase('ai_fallback_review');
+      return;
+    }
+    if (w.stage === 'review') {
+      setBusy(true);
+      try {
+        await loadReview(w.document_id);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     await handleGenerateProposal(w.document_id);
   }
 
-  async function handleGenerateProposal(forDocumentId?: string) {
+  async function handleGenerateProposal(forDocumentId?: string, frequency?: string) {
     const target = forDocumentId ?? documentId;
     if (!target) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/financial-data-hub/payslip/${target}/proposal`, { method: 'POST' });
+      const res = await fetch(`/api/financial-data-hub/payslip/${target}/proposal`, {
+        method: 'POST',
+        ...(frequency ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frequency }) } : {}),
+      });
       const { ok, json } = await readJson(res);
       // A re-upload of an already-imported payslip: continue with the original.
       if (!ok && json.error === 'duplicate_payslip' && typeof json.duplicate_of_document_id === 'string' && !forDocumentId) {
         setDocumentId(json.duplicate_of_document_id);
         setMessage(DUPLICATE_MESSAGE);
         await handleGenerateProposal(json.duplicate_of_document_id);
+        return;
+      }
+      // WP-09 (GAP-04): this payslip is already in Income -- never a second proposal.
+      if (!ok && json.code === 'ALREADY_APPLIED') {
+        setMessage('This payslip is already in your income, so nothing more needs to be added.');
+        setPhase('applied');
+        loadWaiting();
+        return;
+      }
+      // WP-09 (GAP-11): a re-upload of a payslip that was never approved opens
+      // its review step instead of an error.
+      if (!ok && json.code === 'NOT_APPROVED') {
+        setDocumentId(target);
+        await loadReview(target);
         return;
       }
       if (!ok) throw new Error(json.message ?? json.error ?? 'We could not prepare an income comparison for this payslip.');
@@ -574,6 +722,9 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       );
       setSelected(defaultSel);
       setDecision(json.data.proposal?.target_entity_id ? 'update_existing' : 'add_new');
+      // GAP-07: the adapter's explanation, from this response or the stored proposal.
+      const s = (json.data.summary ?? json.data.proposal?.summary ?? null) as ProposalSummary | null;
+      setSummary(s && Array.isArray(s.lines) ? { title: String(s.title ?? ''), lines: s.lines, reviewReasons: Array.isArray(s.reviewReasons) ? s.reviewReasons : [] } : null);
       setPhase('comparing');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Something went wrong.');
@@ -611,8 +762,16 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           return;
         }
         if (status === 409 && json.code === 'ALREADY_APPLIED') {
-          setMessage('This proposal has already been applied to your income.');
+          setMessage('This payslip is already in your income, so it was not added again.');
           setPhase('applied');
+          return;
+        }
+        // WP-09 (0210): the entry chosen belongs to someone else, or is in
+        // another currency. Nothing was changed; "Refresh comparison" builds a
+        // proposal from the payslip's own member and currency.
+        if (status === 409 && (json.code === 'CURRENCY_MISMATCH' || json.code === 'MEMBER_MISMATCH')) {
+          setMessage(`${json.error ?? 'This payslip cannot update that income entry.'} Nothing was changed.`);
+          setPhase('stale');
           return;
         }
         throw new Error(json.error ?? 'The change could not be saved.');
@@ -679,16 +838,15 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       {phase === 'form' && waiting.length > 0 && (
         <section className="mt-4 space-y-2" aria-labelledby="payslips-waiting-heading">
           <h3 id="payslips-waiting-heading" className="text-sm font-semibold">
-            {waiting.length === 1 ? 'A payslip is ready to add to your income' : `${waiting.length} payslips are ready to add to your income`}
+            {waiting.length === 1 ? 'A payslip is waiting for you' : `${waiting.length} payslips are waiting for you`}
           </h3>
           <ul className="space-y-2">
             {waiting.map((w) => (
-              <li key={w.proposal_id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 px-3 py-2 text-sm">
+              <li key={`${w.document_id}-${w.stage}`} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 px-3 py-2 text-sm">
                 <span>
-                  {w.employer_name ?? 'Employer not identified'}
-                  {w.gross_pay !== null && ` · ${money(w.gross_pay, w.currency_code ?? 'AUD')} gross`}
-                  {w.pay_frequency && ` · ${w.pay_frequency}`}
-                  {w.payment_date && ` · paid ${w.payment_date}`}
+                  {w.label ?? 'Employer not identified'}
+                  {w.period_end && ` · period ending ${w.period_end}`}
+                  <span className="block text-xs text-muted">{WAITING_STAGE_TEXT[w.stage]}</span>
                 </span>
                 <button
                   type="button"
@@ -696,7 +854,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
                   disabled={busy}
                   className="rounded bg-trust px-3 py-1 text-white disabled:opacity-50"
                 >
-                  Review and add
+                  Continue
                 </button>
               </li>
             ))}
@@ -719,6 +877,17 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
             >
               <option value="AU">Australia</option>
               <option value="IN">India</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted">Whose payslip is this?</span>
+            <select
+              className="w-full max-w-xs rounded border border-gray-300 px-3 py-2"
+              value={incomeOwner}
+              onChange={(e) => setIncomeOwner(e.target.value === 'spouse' ? 'spouse' : 'self')}
+            >
+              <option value="self">Mine</option>
+              <option value="spouse">My spouse&apos;s</option>
             </select>
           </label>
           <label className="block text-sm">
@@ -904,9 +1073,57 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
             {bankMatchLabel[event.bank_match_status]}
           </p>
 
+          <button
+            type="button"
+            onClick={() => setShowDetails((v) => !v)}
+            aria-expanded={showDetails}
+            className="text-sm text-trust underline"
+          >
+            {showDetails ? 'Hide every figure on this payslip' : 'See every figure on this payslip'}
+          </button>
+          {showDetails && <PayslipDetails event={event} components={components} />}
+
+          {revisionOf && event.approval_status !== 'approved' && (
+            <div className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900" data-testid="payslip-revision">
+              <p>
+                You already have a payslip from this employer for the period
+                {revisionOf.pay_period_start ? ` ${revisionOf.pay_period_start} –` : ''} {revisionOf.pay_period_end ?? ''}
+                {revisionOf.net_pay !== null && ` (net ${money(revisionOf.net_pay, revisionOf.currency_code)})`}.
+              </p>
+              <label className="mt-1 flex items-center gap-2">
+                <input type="checkbox" checked={replacesEarlier} onChange={(e) => setReplacesEarlier(e.target.checked)} />
+                This is a revised payslip — it replaces the earlier one
+              </label>
+            </div>
+          )}
+
           {event.approval_status === 'approved' ? (
-            <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">This payroll evidence has been approved.</p>
+            <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">
+              This payroll evidence has been approved{event.income_owner === 'spouse' ? ' as your spouse’s income' : ''}.
+            </p>
           ) : (
+            <fieldset className="space-y-2 text-sm">
+              <legend className="font-medium">Whose payslip is this?</legend>
+              <label className="mr-4 inline-flex items-center gap-2">
+                <input type="radio" name="payslip-owner" checked={incomeOwner === 'self'} onChange={() => setIncomeOwner('self')} />
+                Mine
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="payslip-owner" checked={incomeOwner === 'spouse'} onChange={() => setIncomeOwner('spouse')} />
+                My spouse&apos;s
+              </label>
+              <p className="text-xs text-muted">It will only update that person&apos;s income, and cannot be changed after you approve.</p>
+            </fieldset>
+          )}
+
+          {event.approval_status !== 'approved' && (event.review_status === 'pending' || event.review_status === 'in_review') && (
+            <label className="flex items-start gap-2 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <input type="checkbox" className="mt-1" checked={reviewAcknowledged} onChange={(e) => setReviewAcknowledged(e.target.checked)} />
+              Some figures on this payslip need your check. I have checked them (or corrected them) and they are right.
+            </label>
+          )}
+
+          {event.approval_status === 'approved' ? null : (
             <div className="flex gap-3">
               <button
                 type="button"
@@ -918,8 +1135,8 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
               </button>
               <button
                 type="button"
-                onClick={handleApprove}
-                disabled={busy}
+                onClick={() => handleApprove()}
+                disabled={busy || ((event.review_status === 'pending' || event.review_status === 'in_review') && !reviewAcknowledged)}
                 className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
               >
                 Approve
@@ -965,6 +1182,21 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
                     {CORRECTION_LABELS[field]}
                     {isMoney && <span className="text-xs"> ({event.currency_code})</span>}
                   </label>
+                  {field === 'pay_frequency' ? (
+                    <select
+                      id={`payslip-correct-${field}`}
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      value={corrections[field] || 'unknown'}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCorrections((prev) => ({ ...prev, [field]: next }));
+                      }}
+                    >
+                      {PAY_FREQUENCY_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  ) : (
                   <input
                     id={`payslip-correct-${field}`}
                     type={isMoney ? 'number' : 'text'}
@@ -979,6 +1211,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
                       setCorrections((prev) => ({ ...prev, [field]: next }));
                     }}
                   />
+                  )}
                   {wasCorrected && (
                     <span id={`payslip-correct-${field}-note`} className="mt-0.5 block text-xs text-muted">
                       You corrected this earlier.
@@ -1023,6 +1256,49 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         <div className="mt-4 space-y-4">
           <h3 className="font-semibold">Current income vs payslip proposal</h3>
           {phase === 'stale' && message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>}
+          {/* WP-09 (GAP-07): why each figure was proposed -- the adapter's own
+              explanation, which used to be built and thrown away. */}
+          {summary && (
+            <div className="space-y-2 rounded border border-gray-200 px-3 py-2 text-sm" data-testid="payslip-proposal-summary">
+              {summary.title && <p className="font-medium">{summary.title}</p>}
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                {summary.lines.map((l) => (
+                  <div key={l.label}>
+                    <dt className="text-xs text-muted">{l.label}</dt>
+                    <dd>
+                      {l.value}
+                      {l.note && <span className="block text-xs text-muted">{l.note}</span>}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {summary.reviewReasons.length > 0 && (
+                <ul className="list-disc space-y-1 pl-5 text-xs text-amber-900" aria-label="Please check">
+                  {summary.reviewReasons.map((r) => (
+                    <li key={r}>{reviewReasonText(r)}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {/* GAP-12: a payslip paid twice a month or irregularly has no Income
+              frequency of its own; the user chooses one and the comparison is
+              rebuilt with it (twice-monthly amounts are converted exactly). */}
+          {!fields.some((f) => f.fieldName === 'frequency') && (
+            <div className="flex flex-wrap items-end gap-2 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="payslip-frequency-chooser">
+              <label className="block">
+                <span className="mb-1 block">How often should this income be recorded?</span>
+                <select className="rounded border border-gray-300 px-2 py-1 text-gray-900" value={frequencyChoice} onChange={(e) => setFrequencyChoice(e.target.value)}>
+                  {INCOME_FREQUENCY_CHOICES.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" disabled={busy} onClick={() => handleGenerateProposal(undefined, frequencyChoice)} className="rounded border border-gray-300 bg-white px-3 py-1 text-gray-900 disabled:opacity-50">
+                Use this frequency
+              </button>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] border-collapse text-sm">
               <caption className="sr-only">Comparison of current income to the proposed payslip values</caption>
@@ -1049,6 +1325,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
                     <tr key={f.fieldName} className="border-b border-gray-100">
                       <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">
                         {FIELD_LABELS[f.fieldName] ?? f.fieldName}
+                        {fieldReasonText(f.reasonCode) && <span className="block text-xs">{fieldReasonText(f.reasonCode)}</span>}
                       </th>
                       <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind)}</td>
                       <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind)}</td>

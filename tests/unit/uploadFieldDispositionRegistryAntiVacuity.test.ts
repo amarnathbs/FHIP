@@ -169,10 +169,10 @@ describe('the other rules bite (named failures)', () => {
   });
 
   it('R5: an open gap naming an id the matrix does not have, or the wrong severity', () => {
-    const unknown = withEntries('payslip', (es) => es.map((e) => (e.adapter === 'payslip_native' && e.field === 'basePay' ? { ...e, gapId: 'GAP-99' } : e)));
-    expect(check(unknown)).toEqual(['R5 unknown gap: payslip_native.basePay (fdh:payslip/types.ts#PayrollExtraction) names GAP-99, which is not in the matrix gap register']);
-    const wrongSev = withEntries('payslip', (es) => es.map((e) => (e.adapter === 'payslip_native' && e.field === 'basePay' ? { ...e, severity: 'P0' as const } : e)));
-    expect(check(wrongSev)).toEqual(['R5 severity mismatch: payslip_native.basePay (fdh:payslip/types.ts#PayrollExtraction) says GAP-07 is P0, the matrix says P2']);
+    const unknown = withEntries('payslip', (es) => es.map((e) => (e.adapter === 'payslip_native' && e.field === 'netPay' ? { ...e, gapId: 'GAP-99' } : e)));
+    expect(check(unknown)).toEqual(['R5 unknown gap: payslip_native.netPay (fdh:payslip/types.ts#PayrollExtraction) names GAP-99, which is not in the matrix gap register']);
+    const wrongSev = withEntries('payslip', (es) => es.map((e) => (e.adapter === 'payslip_native' && e.field === 'netPay' ? { ...e, severity: 'P0' as const } : e)));
+    expect(check(wrongSev)).toEqual(['R5 severity mismatch: payslip_native.netPay (fdh:payslip/types.ts#PayrollExtraction) says GAP-09 is P0, the matrix says P2']);
   });
 
   it('R6: the ratchet -- one more open gap than the ceiling allows', () => {

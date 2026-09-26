@@ -44,6 +44,8 @@ interface RpcResponse {
   field?: string;
   existing?: string | null;
   current?: string | null;
+  proposal_currency?: string | null;
+  target_currency?: string | null;
 }
 
 /**
@@ -77,6 +79,14 @@ export async function applyIncomeProposalAtomic(request: ApplyIncomeProposalRequ
       ...(result.code === 'STALE_PROPOSAL'
         ? { staleness: { stale: true, changed: [{ fieldName: result.field ?? '', snapshotValue: result.existing ?? null, currentValue: result.current ?? null, proposedValue: null }] } }
         : {}),
+      // WP-09 (0210): ALREADY_APPLIED at the payroll-EVENT level names the
+      // Income row the payslip is already in, so the UI can point at it.
+      ...(result.code === 'ALREADY_APPLIED' && result.target_entity_id
+        ? { details: { targetEntityId: result.target_entity_id, applicationId: result.application_id ?? null } }
+        : {}),
+      ...(result.code === 'CURRENCY_MISMATCH'
+        ? { details: { proposalCurrency: result.proposal_currency ?? null, targetCurrency: result.target_currency ?? null } }
+        : {}),
     };
   }
 
@@ -94,13 +104,65 @@ export async function applyIncomeProposalAtomic(request: ApplyIncomeProposalRequ
   };
 }
 
-/** Approve a payroll event through `fdh9_approve_payroll_event()` — the one
- * legitimate path for `approval_status` (spec sections 10, 42). */
-export async function approvePayrollEventAtomic(payrollEventId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export type PayslipIncomeOwner = 'self' | 'spouse';
+
+export interface ApprovePayrollEventOptions {
+  /** Whose payslip this is (GAP-05). Fixed at approval; decides which
+   * household member's Income row the payslip may create or update. */
+  incomeOwner?: PayslipIncomeOwner;
+  /** The user has looked at the figures the payslip flagged for review. */
+  acknowledgeReview?: boolean;
+}
+
+export type ApprovePayrollEventResult =
+  | { ok: true; incomeOwner: PayslipIncomeOwner; alreadyApproved: boolean }
+  | { ok: false; code: string; error: string };
+
+/** PostgREST's "no function with these arguments" -- 0210 not applied yet. */
+function isMissingFunction(error: { code?: string; message?: string } | null): boolean {
+  return Boolean(error && (error.code === 'PGRST202' || /could not find the function/i.test(error.message ?? '')));
+}
+
+/**
+ * Approve a payroll event through `fdh9_approve_payroll_event()` — the one
+ * legitimate path for `approval_status` (spec sections 10, 42). Since 0210 it
+ * also records whose payslip it is and requires a flagged review to be
+ * acknowledged.
+ *
+ * Before 0210 is applied the three-argument RPC does not exist. A SELF
+ * approval then falls back to the one-argument function (exactly the old
+ * behaviour; the route has already enforced the review acknowledgement). A
+ * SPOUSE approval cannot be represented without 0210, so it is refused rather
+ * than silently recorded as the user's own income.
+ */
+export async function approvePayrollEventAtomic(
+  payrollEventId: string,
+  options: ApprovePayrollEventOptions = {},
+): Promise<ApprovePayrollEventResult> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('fdh9_approve_payroll_event', { p_payroll_event_id: payrollEventId });
-  if (error) return { ok: false, error: error.message };
-  const result = data as { ok: boolean; error?: string };
-  if (!result.ok) return { ok: false, error: result.error ?? 'Could not approve this payroll event.' };
-  return { ok: true };
+  const { data, error } = await supabase.rpc('fdh9_approve_payroll_event', {
+    p_payroll_event_id: payrollEventId,
+    p_income_owner: options.incomeOwner ?? null,
+    p_acknowledge_review: Boolean(options.acknowledgeReview),
+  });
+  type Response = { ok: boolean; code?: string; error?: string; outcome?: string; income_owner?: string } | null;
+  let response = data as Response;
+  if (error && isMissingFunction(error)) {
+    if (options.incomeOwner === 'spouse') {
+      return { ok: false, code: 'MIGRATION_PENDING', error: "Recording a spouse's payslip needs a database update that has not been applied yet. Please try again later." };
+    }
+    const legacy = await supabase.rpc('fdh9_approve_payroll_event', { p_payroll_event_id: payrollEventId });
+    if (legacy.error) return { ok: false, code: 'WRITE_FAILED', error: legacy.error.message };
+    response = legacy.data as Response;
+  } else if (error) {
+    return { ok: false, code: 'WRITE_FAILED', error: error.message };
+  }
+  if (!response?.ok) {
+    return { ok: false, code: response?.code ?? 'WRITE_FAILED', error: response?.error ?? 'Could not approve this payroll event.' };
+  }
+  return {
+    ok: true,
+    incomeOwner: response.income_owner === 'spouse' ? 'spouse' : 'self',
+    alreadyApproved: response.outcome === 'already_approved',
+  };
 }
