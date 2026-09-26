@@ -388,6 +388,21 @@ export async function persistLiabilityProposal(
     })
     .select('id')
     .single();
+  // WP-11 (G11): migration 0209's partial unique index allows ONE ready or
+  // applied proposal per statement. Two concurrent "Continue to comparison"
+  // clicks can no longer leave two ready proposals: the loser of the race gets
+  // 23505 here and answers with the winner's proposal instead of an error.
+  if (error && (error as { code?: string }).code === '23505') {
+    const { data: live } = await supabase
+      .from('fhip_import_proposals')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('source_liability_statement_id', sourceLiabilityStatementId)
+      .eq('status', 'ready')
+      .maybeSingle();
+    if (live?.id) return live.id as string;
+    throw new Error('This statement has already been applied.');
+  }
   if (error || !data) throw new Error(error?.message ?? 'could not create the proposal');
 
   const proposalId = data.id as string;

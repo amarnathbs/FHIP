@@ -156,5 +156,106 @@ console.log('\n=== 3. SECURITY INVOKER: no privilege beyond the caller\'s own ==
   check('function is SECURITY INVOKER (prosecdef = false)', fnMeta && fnMeta.prosecdef === false, JSON.stringify(fnMeta));
 }
 
+// ===========================================================================
+// WP-10 additions (forward port as 0208): new evidence columns, the two
+// unique indexes and their loud pre-checks, the extended F.2 trigger,
+// idempotency and zero rows rewritten.
+// ===========================================================================
+const M0208 = '0208_fdh10_atomic_liability_statement_persist.sql';
+const SQL_0208 = fs.readFileSync(path.join(MIG, M0208), 'utf8');
+async function buildUpTo(stopBefore) {
+  const d = await PGlite.create();
+  await d.exec(fs.readFileSync(path.join(HERE, 'db-rebuild-check', 'shim.sql'), 'utf8'));
+  for (const f of files) {
+    if (f >= stopBefore) break;
+    await d.exec(fs.readFileSync(path.join(MIG, f), 'utf8').replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, ''));
+    if (f.startsWith('0001')) await d.exec(seed);
+  }
+  return d;
+}
+const protectedCols = (body) => new Set([...(body ?? '').matchAll(/new\.([a-z_]+) is distinct from old\.\1/g)].map((m) => m[1]));
+const lastFnBody = (sql, name) => {
+  const all = [...sql.matchAll(new RegExp(`create or replace function ${name}\\(\\)[\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$`, 'g'))];
+  return all.length ? all[all.length - 1][1] : null;
+};
+
+console.log('\n=== 4. WP-10: the evidence the old path dropped is persisted (G5, G6, G4) ===');
+{
+  const doc = await newUpload(A);
+  const r = await rpc(A, doc, { ...STATEMENT, adjustments_total: -30, capitalised_total: null, extraction_warnings: [{ code: 'zero_amount', row: 4 }] }, [
+    act(250, 1, { gst_amount_raw: '22.73' }),
+    act(220, 2, { activity_type: 'PAYMENT', bank_match_status: 'multiple_candidates', bank_match_candidate_ids: ['aaaaaaaa-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000002'] }),
+  ]);
+  check('persist with the new evidence succeeds', r.ok === true, JSON.stringify(r));
+  const st = (await db.query(`select extraction_warnings, adjustments_total::text adj from fdh_liability_statements where id = $1`, [r.statement_id])).rows[0];
+  check('extraction_warnings stored (G6)', st.extraction_warnings.length === 1 && st.extraction_warnings[0].code === 'zero_amount' && st.extraction_warnings[0].row === 4, JSON.stringify(st.extraction_warnings));
+  check('signed adjustments_total stored (G5; it was never written)', st.adj === '-30.0000', st.adj);
+  const acts = (await db.query(`select gst_amount_raw, bank_match_candidate_ids from fdh_liability_statement_activities where statement_id = $1 order by source_row_number`, [r.statement_id])).rows;
+  check('gst_amount_raw stored (G6; it was extracted then dropped)', acts[0].gst_amount_raw === '22.73');
+  check('bank_match_candidate_ids stored for the ambiguous repayment (G4 picker)', Array.isArray(acts[1].bank_match_candidate_ids) && acts[1].bank_match_candidate_ids.length === 2);
+  const bad = await rpc(A, await newUpload(A), { ...STATEMENT, extraction_warnings: { code: 'not an array' } }, [act(1, 1)]);
+  check('a non-array extraction_warnings is refused (INVALID_PAYLOAD), nothing written', bad.ok === false && bad.code === 'INVALID_PAYLOAD', JSON.stringify(bad));
+}
+
+console.log('\n=== 5. WP-10: the unique indexes bite (one statement per document; one bank debit per repayment) ===');
+{
+  const doc = await newUpload(A);
+  const first = await rpc(A, doc, STATEMENT, [act(10, 1)]);
+  const direct = await attempt(() => asRole('service_role', null, () => db.query(
+    `insert into fdh_liability_statements (user_id, statement_upload_id, statement_type, facility_type, country_code, currency_code) values ($1,$2,'credit_card','credit_card','AU','AUD')`, [A, doc])));
+  check('a second statement for the same document is refused by uq_fdh_liability_statements_upload_0208 even outside the RPC', first.ok && !direct.ok && /uq_fdh_liability_statements_upload_0208/.test(direct.message), direct.message ?? 'INSERTED');
+  await asRole('service_role', null, () => db.query(`insert into fdh_financial_accounts (user_id, account_type, country_code, currency_code, display_name) values ($1,'transaction','AU','AUD','Bank')`, [A]));
+  const bankTxn = (await asRole('service_role', null, () => db.query(
+    `insert into fdh_transactions (user_id, financial_account_id, transaction_date, amount_original, currency_original, credit_debit, approval_status, approved_at, approved_by)
+     select $1, id, '2026-07-10', 200, 'AUD', 'debit', 'approved', now(), $1 from fdh_financial_accounts where user_id = $1 limit 1 returning id`, [A]))).rows[0].id;
+  const m1 = await rpc(A, await newUpload(A), STATEMENT, [act(200, 1, { activity_type: 'PAYMENT', bank_match_status: 'matched', linked_transaction_id: bankTxn })]);
+  check('a repayment matched to a bank debit persists', m1.ok === true, JSON.stringify(m1));
+  const doc2 = await newUpload(A);
+  const m2 = await attempt(() => rpc(A, doc2, STATEMENT, [act(200, 1, { activity_type: 'PAYMENT', bank_match_status: 'matched', linked_transaction_id: bankTxn })]));
+  check('the SAME bank debit matched by a second statement is refused (23505, uq_fdh_liability_activities_bank_txn_0208) and that statement is not written', !m2.ok && /uq_fdh_liability_activities_bank_txn_0208/.test(m2.message), m2.message ?? 'PERSISTED');
+}
+
+console.log('\n=== 6. WP-10: F.2 (activities) is a strict superset of its predecessor and protects the new columns ===');
+{
+  const pre = protectedCols(lastFnBody(fs.readFileSync(path.join(MIG, '0096_fdh10_credit_cards_loans_intelligence.sql'), 'utf8'), 'fdh10_liability_activities_assert_authoritative_write'));
+  const post = protectedCols(lastFnBody(SQL_0208, 'fdh10_liability_activities_assert_authoritative_write'));
+  check('0208 F.2 protects every column 0096 protected', pre.size === 9 && [...pre].every((c) => post.has(c)), `${pre.size} -> ${post.size}`);
+  check('...plus bank_match_candidate_ids, gst_amount_raw, ledger_transaction_id', ['bank_match_candidate_ids', 'gst_amount_raw', 'ledger_transaction_id'].every((c) => post.has(c)));
+  for (const set of [`gst_amount_raw = 'forged'`, `bank_match_candidate_ids = null`]) {
+    const r = await attempt(() => asTenant(A, () => db.query(`update fdh_liability_statement_activities set ${set} where user_id = $1`, [A])));
+    check(`authenticated direct UPDATE refused: ${set.split(' ')[0]}`, !r.ok && /system-authoritative/.test(r.message), r.message ?? 'UPDATED');
+  }
+}
+
+console.log('\n=== 7. WP-10 ANTI-VACUITY: before 0208 the duplicates are possible; the pre-check refuses them loudly ===');
+{
+  const d = await buildUpTo(M0208);
+  const U = '44444444-4444-4444-4444-444444444444';
+  await d.exec(`insert into auth.users(id,email) values ('${U}','d@t.test'); update user_profiles set country_of_residence='AU', country_confirmed_at=now(), country_source='USER_CONFIRMED', country_updated_at=now() where user_id='${U}';`);
+  await d.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ role: 'service_role' })]);
+  const up = (await d.query(`insert into fdh_statement_uploads (user_id, source_type, document_type, country_code, currency_code, mime_type, processing_status) values ($1,'csv','credit_card_statement','AU','AUD','text/csv','queued') returning id`, [U])).rows[0].id;
+  const s1 = await attempt(() => d.query(`insert into fdh_liability_statements (user_id, statement_upload_id, statement_type, facility_type, country_code, currency_code) values ($1,$2,'credit_card','credit_card','AU','AUD')`, [U, up]));
+  const s2 = await attempt(() => d.query(`insert into fdh_liability_statements (user_id, statement_upload_id, statement_type, facility_type, country_code, currency_code) values ($1,$2,'credit_card','credit_card','AU','AUD')`, [U, up]));
+  check('BEFORE 0208: two statements for one document are accepted (the DEV retry defect)', s1.ok && s2.ok);
+  const xmin = (await d.query(`select id::text, xmin::text from fdh_liability_statements order by 1`)).rows;
+  const r = await attempt(() => d.exec(SQL_0208));
+  check('0208 over that data raises PRE-CHECK FAILED (1 document) instead of failing an index build obscurely', !r.ok && /0208 PRE-CHECK FAILED: 1 document/.test(r.message), r.message ?? 'APPLIED');
+  const fnAbsent = Number((await d.query(`select count(*) n from pg_proc where proname = 'fdh10_persist_liability_statement'`)).rows[0].n) === 0;
+  const colAbsent = Number((await d.query(`select count(*) n from information_schema.columns where column_name = 'bank_match_candidate_ids'`)).rows[0].n) === 0;
+  check('...and nothing of 0208 was applied (no function, no column)', fnAbsent && colAbsent);
+  // The PO remedy for the orphan (0 activities, never approved), then 0208 applies -- twice, idempotently.
+  await d.query(`delete from fdh_liability_statements where id = (select id from fdh_liability_statements where statement_upload_id = $1 order by created_at desc, id desc limit 1)`, [up]);
+  const xminKept = (await d.query(`select id::text, xmin::text from fdh_liability_statements order by 1`)).rows;
+  const ok1 = await attempt(() => d.exec(SQL_0208));
+  check('after the remedy 0208 applies', ok1.ok, ok1.message ?? '');
+  const xminAfter = (await d.query(`select id::text, xmin::text from fdh_liability_statements order by 1`)).rows;
+  check('zero rows rewritten by 0208 (xmin unchanged)', JSON.stringify(xminKept) === JSON.stringify(xminAfter) && xmin.length === 2);
+  const snap = async () => JSON.stringify((await d.query(`select md5(prosrc) m from pg_proc where proname in ('fdh10_persist_liability_statement','fdh10_liability_activities_assert_authoritative_write') union all select md5(indexdef) from pg_indexes where indexname like '%0208' order by 1`)).rows);
+  const before = await snap();
+  const ok2 = await attempt(() => d.exec(SQL_0208));
+  check('re-applying 0208 raises nothing and changes no function or index', ok2.ok && before === (await snap()), ok2.message ?? '');
+  await d.close();
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
