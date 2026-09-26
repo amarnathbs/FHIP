@@ -19,6 +19,7 @@
  */
 import { useEffect, useState } from 'react';
 import { formatMoneyWhole } from '@/lib/engines/money';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import type { IncomeActualsDto, IncomeActualsOk } from '@/lib/income/importedIncomeActuals';
 import { PayslipDetails } from '@/components/income/PayslipDetails';
 
@@ -127,7 +128,7 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
               <tr className="border-b border-gray-200 text-left text-xs text-muted">
                 <th scope="col" className="py-1 pr-2 font-normal">Date</th>
                 <th scope="col" className="py-1 pr-2 font-normal">Description</th>
-                <th scope="col" className="py-1 pr-2 font-normal">Amount</th>
+                <th scope="col" className={`py-1 pr-2 font-normal ${NUM_HEADER_CLASS}`}>Amount</th>
                 <th scope="col" className="py-1 font-normal">How it counts</th>
               </tr>
             </thead>
@@ -147,7 +148,7 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
                       )}
                     </span>
                   </td>
-                  <td className="py-1 pr-2">{money(l.amount, l.currency)}{l.amountReporting === null && <span className="block text-xs text-caution">not converted — not in totals</span>}</td>
+                  <td className={`py-1 pr-2 ${NUM_CELL_CLASS}`}>{money(l.amount, l.currency)}{l.amountReporting === null && <span className="block text-xs text-caution">not converted — not in totals</span>}</td>
                   <td className="py-1 text-xs">
                     {l.treatmentLabel}
                     {l.representedByName && <span className="block text-muted">Same money as “{l.representedByName}”</span>}
@@ -171,7 +172,7 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
                 <tr key={v.payrollEventId} className="border-b border-gray-100">
                   <td className="py-1 pr-2">{v.date}</td>
                   <td className="py-1 pr-2">{v.employerName ?? v.sourceName ?? 'Payslip'}<span className="block text-xs text-muted">Imported from payslip · counted once, on its pay date</span></td>
-                  <td className="py-1">{money(v.grossNative, v.currency)}</td>
+                  <td className={`py-1 ${NUM_CELL_CLASS}`}>{money(v.grossNative, v.currency)}</td>
                 </tr>
               ))}
             </tbody>

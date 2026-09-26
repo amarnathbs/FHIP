@@ -14,6 +14,7 @@
  */
 import { formatMoneyExact } from '@/lib/engines/money';
 import { buildPayslipDetails } from '@/lib/income/payslipDetails';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 function show(value: string | number | null, kind: 'money' | 'text' | 'date', currency: string): string {
   if (value === null) return 'Not shown on payslip';
@@ -57,7 +58,7 @@ export function PayslipDetails({
               {g.rows.map((r) => (
                 <tr key={r.column} className="border-b border-gray-100" data-column={r.column}>
                   <th scope="row" className="py-1 pr-2 text-left font-normal text-muted">{r.label}</th>
-                  <td className="py-1 pr-2">
+                  <td className={`py-1 pr-2 ${r.kind === 'money' ? NUM_CELL_CLASS : ''}`}>
                     {show(r.value, r.kind, details.currency)}
                     {r.corrected && <span className="ml-1 text-xs text-muted">(you corrected this)</span>}
                   </td>
@@ -76,7 +77,7 @@ export function PayslipDetails({
               <tr className="border-b border-gray-200 text-left text-xs text-muted">
                 <th scope="col" className="py-1 pr-2 font-normal">Line</th>
                 <th scope="col" className="py-1 pr-2 font-normal">Type</th>
-                <th scope="col" className="py-1 font-normal">Amount</th>
+                <th scope="col" className={`py-1 font-normal ${NUM_HEADER_CLASS}`}>Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -87,7 +88,7 @@ export function PayslipDetails({
                     {SIDE_LABEL[c.side] ?? c.side}
                     {c.isYearToDate ? ' · year to date' : ''}
                   </td>
-                  <td className="py-1">{formatMoneyExact(c.amount, details.currency)}</td>
+                  <td className={`py-1 ${NUM_CELL_CLASS}`}>{formatMoneyExact(c.amount, details.currency)}</td>
                 </tr>
               ))}
             </tbody>
