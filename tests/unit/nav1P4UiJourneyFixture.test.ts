@@ -17,6 +17,7 @@ type Expected = { schemes: Array<{ folio: string; amfiCode: string; isin: string
 
 async function parse(id: string) {
   const extraction = await extractPdfText(readFileSync(join(DIR, `${id}.pdf`)));
+  if (!extraction.ok) throw new Error(`${id}.pdf did not extract: ${extraction.kind} ${extraction.error}`);
   return { result: parseExtractedDocument(extraction.text), expected: JSON.parse(readFileSync(join(DIR, `${id}.expected.json`), 'utf8')) as Expected };
 }
 
