@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { incomeGridConfig } from '@/lib/grid/configs';
 import { PayslipImportPanel } from '@/components/income/PayslipImportPanel';
+import { ImportedIncomeActuals } from '@/components/income/ImportedIncomeActuals';
 import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
 
 // Income tab layout (FDH-9 spec section 22): a header offering the two entry
@@ -55,6 +56,12 @@ export default function IncomePage() {
       <hr className="border-gray-200" />
 
       <FinancialDataGrid key={gridKey} config={incomeGridConfig} moduleKey="INCOME" />
+
+      {/* WP-09 (GAP-06): approved imported income next to the entries above,
+          from the canonical Income read model -- a bank deposit that is a
+          payslip's pay is shown "counted once with payslip", never added
+          twice, and nothing is copied into the entries. */}
+      <ImportedIncomeActuals refreshKey={gridKey} />
     </div>
   );
 }
