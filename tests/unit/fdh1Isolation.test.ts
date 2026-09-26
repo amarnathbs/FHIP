@@ -523,6 +523,16 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // this test exists to catch. Disclosed in the dispatch report as a
       // pre-existing defect fixed in passing, not as part of this feature.
       path.join(REPO_ROOT, 'lib', 'shared', 'pdfStructuralScan.ts'),
+      // Approved Upload -> Canonical User Data programme, WP-01 (k)
+      // (2026-09-26). `lib/import-bridge/fdhRoutes.ts` is a pure string
+      // builder for FDH page/API paths (review links, statement details
+      // fetches) -- it imports nothing and contains no `from
+      // '@/lib/financial-data-hub...'` import; it matches only because the
+      // URLs themselves contain the segment. It is allow-listed ONCE here so
+      // that every later UI package (Expenses actuals, Income / Liabilities /
+      // Retirement statement details, Investments imports) builds its links
+      // through it and needs no further entry.
+      path.join(REPO_ROOT, 'lib', 'import-bridge', 'fdhRoutes.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

@@ -2,6 +2,7 @@ import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { approveCategoryGroup } from '@/lib/financial-data-hub/services/categoryReviewService';
 import { categoryReviewErrorResponse } from '@/lib/financial-data-hub/services/categoryReviewHttp';
 import { fdhApproveCategoryGroupSchema } from '@/lib/financial-data-hub/validation/transactions';
+import { runPostBankApprovalHook } from '../../../postBankApprovalHook';
 
 // POST /api/financial-data-hub/documents/{documentId}/category-review/approve-group
 // Approves exactly the still-pending transactions of one category group,
@@ -26,6 +27,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
         { status: 409 },
       );
     }
+    // WP-01 seam (see approve/route.ts): lines were newly approved.
+    if (result.approved > 0) await runPostBankApprovalHook(user.id, documentId, 'category_approve_group');
     return ok(result);
   } catch (e) {
     return categoryReviewErrorResponse(e, 'We could not approve this category.');

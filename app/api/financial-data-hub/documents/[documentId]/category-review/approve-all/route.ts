@@ -1,6 +1,7 @@
 import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { approveAllOnStatement } from '@/lib/financial-data-hub/services/categoryReviewService';
 import { categoryReviewErrorResponse } from '@/lib/financial-data-hub/services/categoryReviewHttp';
+import { runPostBankApprovalHook } from '../../../postBankApprovalHook';
 
 // POST /api/financial-data-hub/documents/{documentId}/category-review/approve-all
 // Approves everything left on the statement through FDH-7's existing
@@ -12,7 +13,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
   if (!user) return unauthenticated!;
 
   try {
-    return ok(await approveAllOnStatement(user.id, documentId));
+    const result = await approveAllOnStatement(user.id, documentId);
+    // WP-01 seam (see approve/route.ts). Skipped when nothing new was approved.
+    if (result.outcome === 'approved') await runPostBankApprovalHook(user.id, documentId, 'category_approve_all');
+    return ok(result);
   } catch (e) {
     return categoryReviewErrorResponse(e, 'We could not approve this statement.');
   }

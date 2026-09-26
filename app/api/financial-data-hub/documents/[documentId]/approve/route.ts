@@ -1,5 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { approveStatement, ApprovalError } from '@/lib/financial-data-hub/services/approvalService';
+import { runPostBankApprovalHook } from '../../postBankApprovalHook';
 
 // POST /api/financial-data-hub/documents/{documentId}/approve — FDH-7 spec
 // sections 52-58, 63, 108-110. Statement approval is a deliberate user
@@ -14,6 +15,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
 
   try {
     const { statement } = await approveStatement(user.id, documentId);
+    // WP-01 seam: match other documents' evidence against the newly approved
+    // bank lines. Never affects this response (failures are audited).
+    await runPostBankApprovalHook(user.id, documentId, 'statement_approve');
     return ok({
       statement_id: statement.id,
       processing_status: statement.processing_status,
