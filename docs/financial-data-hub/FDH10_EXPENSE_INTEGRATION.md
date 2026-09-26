@@ -23,6 +23,6 @@ When both a bank statement and a card statement exist for the same repayment, th
 
 `tests/unit/fdh8*.test.ts` (the full pre-existing FDH-8 suite) was re-run unchanged as part of the full-repository regression pass — see `FDH10_COMPLETION_REPORT.md`'s regression section for the exact pass count. FDH-10 introduces no FDH-8 file changes at all, so this is a genuine "unaffected by construction" result, not merely an assertion.
 
-## Residual
+## Residual (CLOSED by WP-11, migration 0209, 2026-09-27)
 
-No FDH-10 code path in this pass actually WRITES a card-statement-derived `fdh_transactions` row yet (the classification/planning logic in `creditCardEconomics.ts` is complete and certified; the persistence step that turns a `PlannedLedgerWrite` into a real row was not built this pass — see the completion report).
+~~No FDH-10 code path in this pass actually WRITES a card-statement-derived `fdh_transactions` row yet.~~ The Apply RPC `fdh10_apply_liability_proposal` (0209) now writes one approved `fdh_transactions` row per statement activity on the card/loan facility account (mapping `LIABILITY_LEDGER_MAPPING`, parity-tested against `classifyStatementActivity`), loan payment allocations per `decomposeLoanPayment`, and a confirmed `credit_card_settlement` / `loan_payment` link from the matched bank debit (reclassified to `transfer`), in the same transaction as the liability update. Oracles on real Postgres: `tests/unit/fdh10ApplyLedgerPglite.test.ts`; migration proof: `scripts/fdh10_0209_pglite_verification.mjs`. Consumers must read the canonical read models (`lib/read-models`, WP-02/WP-03) in the same release.

@@ -206,16 +206,21 @@ export function LiabilityStatementHistory({ refreshKey = 0 }: { refreshKey?: num
     return () => { cancelled = true; };
   }, [refreshKey]);
 
-  const load = useCallback(async (id: string) => {
-    setError(null);
-    setStatements(null);
+  const fetchHistory = useCallback(async (id: string): Promise<{ statements: HistoryStatementRow[] | null; error: string | null }> => {
     const res = await fetch(`/api/liabilities/${encodeURIComponent(id)}/statements`);
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) { setError(json.error ?? 'Statement history is unavailable right now.'); return; }
-    setStatements((json.data?.statements ?? []) as HistoryStatementRow[]);
+    if (!res.ok) return { statements: null, error: json.error ?? 'Statement history is unavailable right now.' };
+    return { statements: (json.data?.statements ?? []) as HistoryStatementRow[], error: null };
   }, []);
 
-  useEffect(() => { if (selected) void load(selected); }, [selected, load, refreshKey]);
+  useEffect(() => {
+    if (!selected) return;
+    let cancelled = false;
+    fetchHistory(selected)
+      .then((r) => { if (!cancelled) { setStatements(r.statements); setError(r.error); } })
+      .catch(() => { if (!cancelled) setError('Statement history is unavailable right now.'); });
+    return () => { cancelled = true; };
+  }, [selected, fetchHistory, refreshKey]);
 
   async function record(statementId: string, acknowledge = false) {
     setBusy(true);
@@ -236,7 +241,9 @@ export function LiabilityStatementHistory({ refreshKey = 0 }: { refreshKey?: num
       }
       setAckFor(null);
       setNotice(`Recorded ${json.data?.ledger?.transactionsCreated ?? 0} line(s) from this statement.`);
-      await load(selected);
+      const refreshed = await fetchHistory(selected);
+      setStatements(refreshed.statements);
+      setError(refreshed.error);
     } finally {
       setBusy(false);
     }
