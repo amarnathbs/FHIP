@@ -141,6 +141,9 @@ interface ProcessSummary {
   /** 2026-09-25: this upload was a byte-identical copy of a statement already
    * imported; nothing was read again and nothing new was created. */
   alreadyImported?: boolean;
+  /** 2026-09-26: the statement whose category review the "done" link opens
+   * (null when there is no single statement to point at). */
+  statementId?: string | null;
 }
 
 async function readJson(res: Response) {
@@ -259,6 +262,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         transactionsCreated: data.transactions_created ?? 0,
         duplicatesSkipped: data.duplicates_skipped ?? 0,
         reconciliationStatus: data.reconciliation_status ?? null,
+        statementId: documentId,
       });
       setPhase('done');
     } finally {
@@ -313,6 +317,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         duplicatesSkipped: data.duplicates_skipped ?? 0,
         reconciliationStatus: data.reconciliation_status ?? null,
         alreadyImported: true,
+        statementId: (data.duplicate_of_document_id as string | undefined) ?? null,
       });
       setPhase('done');
       return;
@@ -368,6 +373,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       transactionsCreated: data.transactions_created ?? 0,
       duplicatesSkipped: data.duplicates_skipped ?? 0,
       reconciliationStatus: data.reconciliation_status ?? null,
+      statementId: docId,
     });
     setPhase('done');
   }
@@ -730,8 +736,16 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
                 ? `Done. Every transaction on this statement was already imported (${summary.duplicatesSkipped} duplicate${summary.duplicatesSkipped === 1 ? '' : 's'} skipped).`
                 : 'Done. This statement has been processed.'}
           </p>
-          <a href="/financial-data-hub/review" className="inline-block rounded bg-trust px-4 py-2 text-sm text-white">
-            Review and approve transactions
+          {/* 2026-09-26: straight to THIS statement's category-totals review
+              (approve totals per category; only unrecognised lines are
+              listed one by one). The review page links back to Expenses. */}
+          <a
+            href={summary?.statementId
+              ? `/financial-data-hub/review?statement=${encodeURIComponent(summary.statementId)}&from=expenses`
+              : '/financial-data-hub/review?from=expenses'}
+            className="inline-block rounded bg-trust px-4 py-2 text-sm text-white"
+          >
+            Review by category and approve
           </a>
           <button type="button" onClick={reset} className="ml-3 rounded border border-gray-300 px-3 py-1 text-sm">
             Upload another

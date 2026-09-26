@@ -1,44 +1,41 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { categoriesRepository } from '@/lib/financial-data-hub/repositories/index';
 import { ReviewWorkspace } from './ReviewWorkspace';
+import { StatementCategoryReview } from './StatementCategoryReview';
 
 /**
  * FDH-8 closure (spec Phase I) — the dedicated FDH-7 review destination
  * every "Review transactions" / "Review transaction" link across FDH-8 now
- * points to, replacing the disclosed fallback to the generic
- * `/financial-data-hub` upload screen.
+ * points to.
  *
- * THIS IS NOT A NEW REVIEW ENGINE. Every action below (approve, correct
- * classification, confirm/reject transfer, confirm duplicate/keep both,
- * split, approve statement) calls the SAME, UNCHANGED FDH-7 API routes that
- * already existed before this closure pass
- * (`app/api/financial-data-hub/bank-transactions/**`,
- * `transaction-links/[linkId]/review`,
- * `recurring-transactions/[recurringId]/review`,
- * `documents/[documentId]/approve`) — this page is a thin UI wrapper around
- * FDH-7's own, already-certified services, exactly as the closure spec's
- * Phase I requires. Two small READ-ONLY lookup routes were added
- * (`transaction-links` and `duplicate-candidates`, both GET-only, both
- * filtered by `transaction_id`) so this page can discover which link/
- * candidate row applies to a focused transaction before calling the
- * existing action endpoint — no new mutation, no new approval semantics.
+ * THIS IS NOT A NEW REVIEW ENGINE. Every action calls FDH-7/R8's existing
+ * services through their API routes (see ReviewWorkspace.tsx and
+ * StatementCategoryReview.tsx).
  *
  * Deep-link params (all server-authorised — a browser-supplied id is never
- * trusted as ownership proof; every fetch below is scoped to the
- * authenticated user via RLS + explicit `.eq('user_id', ...)` in the routes
- * themselves):
- *   ?transaction=<id>  — focus one transaction (from Overview/Transaction
- *                        Explorer/Pending disclosure)
- *   ?statement=<id>    — focus one statement's approval readiness
- *   ?reason=<type>     — hint which section of the general queue to open
- *                        first (transfers | duplicates | uncategorised |
- *                        recurring | needs_attention)
+ * trusted as ownership proof; every fetch is scoped to the authenticated
+ * user via RLS + explicit `.eq('user_id', ...)` in the routes themselves):
+ *   ?statement=<id>    — the category-totals review of one imported
+ *                        statement (2026-09-26): approve category totals,
+ *                        decide only the lines that need a person
+ *   ?transaction=<id>  — focus one transaction
+ *   ?reason=<type>     — open the general queue on one tile's list
+ *   ?from=<place>      — where the "Back to ..." link returns to
+ *                        (expenses | activity | hub; default expenses,
+ *                        because bank statements are imported from Expenses)
  */
+const RETURN_TARGETS: Record<string, { href: string; label: string }> = {
+  expenses: { href: '/expenses', label: 'Back to Expenses' },
+  activity: { href: '/financial-data-hub/activity', label: 'Back to Financial Activity' },
+  hub: { href: '/financial-data-hub', label: 'Back to Financial Data Hub' },
+};
+
 export default async function FinancialDataHubReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ transaction?: string; statement?: string; reason?: string; account_id?: string }>;
+  searchParams: Promise<{ transaction?: string; statement?: string; reason?: string; account_id?: string; from?: string }>;
 }) {
   const sp = await searchParams;
   const supabase = await createClient();
@@ -50,25 +47,46 @@ export default async function FinancialDataHubReviewPage({
   const { data: categories, error: categoriesError } = await categoriesRepository.listActiveAll();
   if (categoriesError) throw new Error(categoriesError.message);
   const categoryOptions = (categories ?? [])
+    .filter((c) => c.economic_type !== 'unknown')
     .map((c) => ({ id: c.id, label: c.display_name, economicType: c.economic_type }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
+  const backTarget = RETURN_TARGETS[sp.from ?? ''] ?? RETURN_TARGETS.expenses;
+  const fromParam = sp.from && RETURN_TARGETS[sp.from] ? sp.from : 'expenses';
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">Review financial activity</h1>
-        <p className="mt-1 text-sm text-muted">
-          Machine-processed transactions wait here until you approve, correct or confirm them. Nothing below counts
-          toward your approved income/expense totals until you act on it.
-        </p>
-      </div>
-      <ReviewWorkspace
-        initialTransactionId={sp.transaction ?? null}
-        initialStatementId={sp.statement ?? null}
-        initialReason={sp.reason ?? null}
-        initialAccountId={sp.account_id ?? null}
-        categories={categoryOptions}
-      />
+      <nav aria-label="Return">
+        <Link href={backTarget.href} className="text-sm font-semibold text-trust hover:underline">
+          ← {backTarget.label}
+        </Link>
+      </nav>
+      {sp.statement ? (
+        <StatementCategoryReview
+          statementId={sp.statement}
+          categories={categoryOptions}
+          backHref={backTarget.href}
+          backLabel={backTarget.label}
+          fromParam={fromParam}
+        />
+      ) : (
+        <>
+          <div>
+            <h1 className="text-xl font-semibold text-ink">Review your imported transactions</h1>
+            <p className="mt-1 text-sm text-muted">
+              Imported transactions wait here until you approve them. Only approved transactions count toward your
+              income, spending and Monthly Surplus.
+            </p>
+          </div>
+          <ReviewWorkspace
+            initialTransactionId={sp.transaction ?? null}
+            initialReason={sp.reason ?? null}
+            initialAccountId={sp.account_id ?? null}
+            fromParam={fromParam}
+            categories={categoryOptions}
+          />
+        </>
+      )}
     </div>
   );
 }

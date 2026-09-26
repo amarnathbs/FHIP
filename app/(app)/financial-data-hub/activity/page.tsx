@@ -20,7 +20,7 @@ import { resolveActivityParams, type RawSearchParams } from './_lib/searchParams
 // split/approve-statement API routes. This closes the prior CONDITIONAL
 // PASS's disclosed gap (every link previously fell back to the generic
 // `/financial-data-hub` upload screen, which had no review UI at all).
-const REVIEW_QUEUE_HREF = '/financial-data-hub/review';
+const REVIEW_QUEUE_HREF = '/financial-data-hub/review?from=activity';
 
 export default async function FinancialActivityOverviewPage({
   searchParams,
@@ -240,7 +240,7 @@ export default async function FinancialActivityOverviewPage({
           <ul className="space-y-2 text-sm text-ink">
             {overview.review.needs_attention > 0 && (
               <li>
-                <Link href={`${REVIEW_QUEUE_HREF}?reason=needs_attention`} className="hover:underline">
+                <Link href={`${REVIEW_QUEUE_HREF}&reason=needs_attention`} className="hover:underline">
                   <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Needs attention</span>
                   {overview.review.needs_attention} transaction{overview.review.needs_attention === 1 ? '' : 's'} need your review
                 </Link>
@@ -248,7 +248,7 @@ export default async function FinancialActivityOverviewPage({
             )}
             {overview.review.transfers > 0 && (
               <li>
-                <Link href={`${REVIEW_QUEUE_HREF}?reason=transfers`} className="hover:underline">
+                <Link href={`${REVIEW_QUEUE_HREF}&reason=transfers`} className="hover:underline">
                   <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Transfers</span>
                   {overview.review.transfers} possible transfer{overview.review.transfers === 1 ? '' : 's'} awaiting confirmation
                 </Link>
@@ -256,7 +256,7 @@ export default async function FinancialActivityOverviewPage({
             )}
             {overview.review.possible_duplicates > 0 && (
               <li>
-                <Link href={`${REVIEW_QUEUE_HREF}?reason=duplicates`} className="hover:underline">
+                <Link href={`${REVIEW_QUEUE_HREF}&reason=duplicates`} className="hover:underline">
                   <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Duplicates</span>
                   {overview.review.possible_duplicates} possible duplicate{overview.review.possible_duplicates === 1 ? '' : 's'} to confirm
                 </Link>
@@ -264,7 +264,7 @@ export default async function FinancialActivityOverviewPage({
             )}
             {overview.review.uncategorised > 0 && (
               <li>
-                <Link href={`${REVIEW_QUEUE_HREF}?reason=uncategorised`} className="hover:underline">
+                <Link href={`${REVIEW_QUEUE_HREF}&reason=uncategorised`} className="hover:underline">
                   <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Uncategorised</span>
                   {overview.review.uncategorised} uncategorised transaction{overview.review.uncategorised === 1 ? '' : 's'}
                 </Link>
@@ -272,7 +272,7 @@ export default async function FinancialActivityOverviewPage({
             )}
             {overview.review.recurring_candidates > 0 && (
               <li>
-                <Link href={`${REVIEW_QUEUE_HREF}?reason=recurring`} className="hover:underline">
+                <Link href={`${REVIEW_QUEUE_HREF}&reason=recurring`} className="hover:underline">
                   <span className="mr-2 inline-block rounded-compact bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Recurring</span>
                   {overview.review.recurring_candidates} recurring candidate{overview.review.recurring_candidates === 1 ? '' : 's'} to confirm
                 </Link>
