@@ -17,7 +17,15 @@ export type DataQualityFlag =
   | 'INSUFFICIENT_HISTORY'
   | 'OPTION_TOTAL_RETURN_UNAVAILABLE'
   | 'STALE_MARKET_DATA'
-  | 'PLAN_OPTION_MISMATCH';
+  | 'PLAN_OPTION_MISMATCH'
+  // NAV 1 — PO decision #5.6 (2026-09-27), additive to this vocabulary, not
+  // a replacement for NAV_HISTORY_INCOMPLETE: that flag means a metric
+  // could not be CALCULATED for lack of coverage. This one is purely
+  // informational — the metric WAS calculated from real stored data, but
+  // some of that data has been confirmed unrecoverable from every approved
+  // source (ii_nav_source_coverage_gaps, migration 0219) if it were ever
+  // lost. See lib/engines/investment-intelligence/navCoverageDisclosure.ts.
+  | 'UNRECOVERABLE_HISTORY_PERIOD';
 
 export interface DataQualityAnnotation {
   flag: DataQualityFlag;
