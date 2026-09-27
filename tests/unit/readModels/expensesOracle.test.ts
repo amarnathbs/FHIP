@@ -78,6 +78,32 @@ describe('credit card: purchases $200 + $20, repayment $220 -> household expense
     expect(e.actual.monthly).toBe(440);
   });
 
+  // Economic-oracle certification (2026-09-27, reproduced live on DEV): every
+  // bank line a person categorises carries user_override. A repayment the user
+  // filed as "Shopping" before the card statement was Applied -- whose Apply then
+  // CONFIRMED the settlement link to that very debit -- counted $440.
+  const userFiled = (linkStatus: string | null) => tables(card(), {
+    fdh_transactions: [
+      txn({ id: 'p1', account: 'card', statement: 's-card', date: '2026-08-03', amount: 200, type: 'expense', category: CAT.food, subcategory: SUB.groceries }),
+      txn({ id: 'p2', account: 'card', statement: 's-card', date: '2026-08-09', amount: 20, type: 'expense', category: CAT.food, subcategory: SUB.restaurants }),
+      txn({ id: 'pay-card', account: 'card', statement: 's-card', date: '2026-08-28', amount: 220, type: 'transfer', cd: 'credit', category: CAT.ccPayment }),
+      txn({ id: 'pay-bank', account: 'bank', statement: 's-bank', date: '2026-08-28', amount: 220, type: 'expense', category: CAT.lifestyle, userOverride: true }),
+    ],
+    fdh_transaction_links: linkStatus ? [link('lnk', 'pay-bank', 'pay-card', 'credit_card_settlement', linkStatus)] : [],
+  });
+
+  it('a repayment the USER filed as spending (user_override) with a CONFIRMED settlement link: still 220, never 440', async () => {
+    const e = await run(userFiled('confirmed'));
+    expect(e.actual.monthly).toBe(220);
+    expect(e.actual.lines.map((l) => l.transactionId).sort()).toEqual(['p1', 'p2']);
+    expect(nonSpending(e, 'transfer').totalInWindow).toBe(440);
+  });
+
+  it('negative controls: a user-filed leg with only a PENDING link, or no link, stays the user\'s spending (440)', async () => {
+    expect((await run(userFiled('pending'))).actual.monthly).toBe(440);
+    expect((await run(userFiled(null))).actual.monthly).toBe(440);
+  });
+
   it('a cash advance on the card is not consumption (spending 0, shown as cash)', async () => {
     const e = await run(tables(card(), { fdh_transactions: [txn({ account: 'card', statement: 's-card', date: '2026-08-05', amount: 300, type: 'cash_withdrawal' })] }));
     expect(e.actual.monthly).toBe(0);

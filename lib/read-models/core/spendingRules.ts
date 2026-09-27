@@ -33,7 +33,9 @@
  *     reversal_original link to a counted spending line (PO D-01, the
  *     certified FDH-7 rule). Any other refund is shown as unlinked, never
  *     netted and never counted as income.
- *  9. A row the user settled (user_override) is never re-bucketed by 6 or 7.
+ *  9. A row the user settled (user_override) is never re-bucketed by
+ *     corroboration (7). A CONFIRMED link (6) is itself a settled match and
+ *     applies whatever the row was typed, by the user or by the classifier.
  */
 import { FDH_ECONOMIC_TRANSACTION_TYPES, type FdhEconomicTransactionType } from '@/lib/financial-data-hub/constants/enums';
 
@@ -207,7 +209,15 @@ export function effectiveBucket(input: {
   corroborations: readonly CorroborationEvidence[];
 }): ReBucketResult {
   const base = bucketForType(input.type, input.onFacility);
-  if (input.isSplit || input.userOverride || input.onFacility) return { bucket: base, reason: null };
+  if (input.isSplit || input.onFacility) return { bucket: base, reason: null };
+  // Rule 6 BEFORE rule 9 (certification fix, 2026-09-27): a CONFIRMED link is
+  // itself a settled match -- the contract's "a transfer whatever it was
+  // typed". Every bank line a person categorises carries user_override, so
+  // gating links behind it made rule 6 dead for exactly the lines users touch:
+  // a repayment filed as "Shopping" before the card statement was Applied (the
+  // Apply then CONFIRMS the settlement link to that debit) counted $440, not
+  // $220 -- reproduced live on DEV. Undoing the match is done by rejecting the
+  // link, which removes it from `links` here.
   const confirmed = input.links.filter((l) => l.status === 'confirmed');
   if (confirmed.some((l) => SETTLEMENT_LINK_TYPES.has(l.linkType) && l.counterpartOnFacility)) {
     return { bucket: 'transfer', reason: base === 'transfer' ? null : 'facility_settlement_link' };
@@ -218,6 +228,9 @@ export function effectiveBucket(input: {
   if (confirmed.some((l) => l.linkType === 'investment_funding') && base === 'spending') {
     return { bucket: 'investment', reason: 'investment_funding_link' };
   }
+  // Rule 9: corroboration (automatic, unconfirmed evidence) never overrides a
+  // person's own decision.
+  if (input.userOverride) return { bucket: base, reason: null };
   for (const c of input.corroborations) {
     if (c.kind === 'investment_activity') {
       if (c.activityType === 'BUY' && base !== 'investment') return { bucket: 'investment', reason: 'broker_buy_corroboration' };
