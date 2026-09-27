@@ -1,0 +1,112 @@
+{
+  "investor": "synthetic",
+  "statementPeriod": {
+    "from": "2023-04-01",
+    "to": "2026-09-18"
+  },
+  "schemes": [
+    {
+      "folio": "927010000001",
+      "amfiCode": "122639",
+      "isin": "INF879O01027",
+      "name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+      "transactions": [
+        {
+          "date": "2023-04-03",
+          "type": "sip",
+          "amount": "10000.00",
+          "units": "187.254",
+          "nav": "53.4035",
+          "balanceAfter": "187.254",
+          "ref": "NAV1P4-001"
+        },
+        {
+          "date": "2023-10-03",
+          "type": "sip",
+          "amount": "10000.00",
+          "units": "160.014",
+          "nav": "62.4944",
+          "balanceAfter": "347.268",
+          "ref": "NAV1P4-002"
+        },
+        {
+          "date": "2024-04-02",
+          "type": "sip",
+          "amount": "10000.00",
+          "units": "132.158",
+          "nav": "75.6672",
+          "balanceAfter": "479.426",
+          "ref": "NAV1P4-003"
+        },
+        {
+          "date": "2024-10-01",
+          "type": "sip",
+          "amount": "10000.00",
+          "units": "112.808",
+          "nav": "88.6465",
+          "balanceAfter": "592.234",
+          "ref": "NAV1P4-004"
+        },
+        {
+          "date": "2025-04-01",
+          "type": "sip",
+          "amount": "10000.00",
+          "units": "117.696",
+          "nav": "84.9643",
+          "balanceAfter": "709.930",
+          "ref": "NAV1P4-005"
+        },
+        {
+          "date": "2026-03-02",
+          "type": "redemption",
+          "amount": "15000.00",
+          "units": "164.074",
+          "nav": "91.4220",
+          "balanceAfter": "545.856",
+          "ref": "NAV1P4-006"
+        }
+      ],
+      "closingUnits": "545.856",
+      "closingValue": "49048.93",
+      "fullyRedeemed": false
+    },
+    {
+      "folio": "927010000002",
+      "amfiCode": "103504",
+      "isin": "INF200K01180",
+      "name": "SBI Large Cap Fund - Regular Plan - Growth",
+      "transactions": [
+        {
+          "date": "2023-04-03",
+          "type": "purchase",
+          "amount": "25000.00",
+          "units": "403.497",
+          "nav": "61.9583",
+          "balanceAfter": "403.497",
+          "ref": "NAV1P4-101"
+        },
+        {
+          "date": "2023-10-03",
+          "type": "purchase",
+          "amount": "15000.00",
+          "units": "209.857",
+          "nav": "71.4771",
+          "balanceAfter": "613.354",
+          "ref": "NAV1P4-102"
+        },
+        {
+          "date": "2025-04-01",
+          "type": "redemption",
+          "amount": "52225.13",
+          "units": "613.354",
+          "nav": "85.1468",
+          "balanceAfter": "0.000",
+          "ref": "NAV1P4-103"
+        }
+      ],
+      "closingUnits": "0.000",
+      "closingValue": "0.00",
+      "fullyRedeemed": true
+    }
+  ]
+}

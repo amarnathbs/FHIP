@@ -90,7 +90,18 @@ export interface HydrationDeps {
    * error rather than throwing: a lost batch record must be visible, but must
    * not undo the run's work.
    */
-  recordBatch(summary: HydrationJobResult, batchId: string | null): Promise<{ error: string | null }>;
+  recordBatch(summary: HydrationJobResult, batchId: string | null): Promise<{ error: string | null; batchId?: string | null }>;
+  /**
+   * Monitoring truthfulness (NAV 1, 2026-09-27): write the run's terminal
+   * outcome to ii_reference_job_control, the row the admin surface and the
+   * runbook read. Before this, hydration never wrote it, so a job succeeding
+   * 48 times a day showed "Last success never". Called once per non-dry run
+   * that examined its instruments, AFTER the batch is recorded. The update to
+   * make is decided by planHydrationJobControlUpdate(). Optional so a deps
+   * object without it still type-checks; best effort -- a lost update is
+   * reported in the result, never fails the run.
+   */
+  recordJobControlOutcome?(outcome: HydrationJobControlOutcome): Promise<{ error: string | null }>;
   /** NAV 1 Stage D (0190): the confirmed earliest date with NAV data for this instrument, or null if none is recorded. */
   fetchHistoryFloor(instrumentId: string): Promise<string | null>;
   /**
@@ -110,6 +121,54 @@ export interface HydrationDeps {
   fetchAttemptLedger?(): Promise<{ records: Map<string, HydrationAttemptRecord> | null; error: string | null }>;
   /** Record one fetch attempt (0198). Best effort: a lost record is counted in telemetry, never fails the run. */
   recordAttempt?(record: HydrationAttemptRecord, detail: string): Promise<{ error: string | null }>;
+}
+
+/** A hydration run's terminal outcome, as recorded in ii_reference_job_control. */
+export interface HydrationJobControlOutcome {
+  status: 'succeeded' | 'partial' | 'failed';
+  finishedAt: string;
+  /** The saved batch row, or null when it could not be saved (then no batch is referenced). */
+  batchId: string | null;
+}
+
+/**
+ * The job-control update for one terminal hydration outcome, or null for none.
+ *
+ *   succeeded -> last_success_at = finishedAt (+ the batch), failure streak reset.
+ *                Includes the no-op run (every held fund already covered): the
+ *                job did everything it needed to, which is success.
+ *   failed    -> last_failure_at = finishedAt, failure streak + 1.
+ *   partial   -> NOTHING. Some work is left (a fetch failed, or the budget
+ *                deferred funds), so this is neither a success -- the timestamp
+ *                would claim coverage that does not exist -- nor a failure that
+ *                should count towards a streak. The batch row's error_code
+ *                (HYDRATION_SOME_FETCHES_FAILED / HYDRATION_WORK_REMAINING) is
+ *                where a partial run is visible.
+ *
+ * Idempotent per run: each update applies only while the stored timestamp is
+ * OLDER than finishedAt (`onlyIfOlderThan`), so recording the same run twice
+ * -- a retry, or a run that closes a batch another run already reconciled --
+ * never counts it twice and never moves a timestamp backwards.
+ */
+export function planHydrationJobControlUpdate(
+  outcome: HydrationJobControlOutcome,
+  priorConsecutiveFailures: number,
+): { column: 'last_success_at' | 'last_failure_at'; onlyIfOlderThan: string; set: Record<string, string | number | null> } | null {
+  if (outcome.status === 'succeeded') {
+    return {
+      column: 'last_success_at',
+      onlyIfOlderThan: outcome.finishedAt,
+      set: { last_success_at: outcome.finishedAt, last_success_batch_id: outcome.batchId, consecutive_failures: 0, updated_at: outcome.finishedAt },
+    };
+  }
+  if (outcome.status === 'failed') {
+    return {
+      column: 'last_failure_at',
+      onlyIfOlderThan: outcome.finishedAt,
+      set: { last_failure_at: outcome.finishedAt, consecutive_failures: Math.max(0, priorConsecutiveFailures) + 1, updated_at: outcome.finishedAt },
+    };
+  }
+  return null;
 }
 
 /** One instrument's fetch history (0198 ii_nav_hydration_attempts). */
@@ -281,6 +340,8 @@ export interface HydrationJobResult {
   finishedAt: string;
   /** Present when the batch record could not be saved -- the run's work still stands. */
   batchRecordError?: string;
+  /** Present when the job-control outcome (last_success_at / last_failure_at) could not be saved. */
+  jobControlError?: string;
   /** Absent only on runs that stopped before examining anything (kill switch, overlap). */
   telemetry?: HydrationTelemetry;
 }
@@ -520,6 +581,10 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     }
 
     const entriesBefore = perInstrument.length;
+    // Hoisted so a fetch that THROWS part-way still reports what it committed.
+    let instrumentRowsInserted = 0;
+    let chunksCompleted = 0;
+    let windowChunkCount = 0;
     try {
 
       // Report every outcome finished so far before starting a fetch: if this
@@ -550,8 +615,7 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
       // ordinary already-covered/gap-to-fetch check (no separate checkpoint
       // state needed).
       const windowChunks = chunkDateWindow(requiredFrom, toDate, MAX_FETCH_WINDOW_DAYS);
-      let instrumentRowsInserted = 0;
-      let chunksCompleted = 0;
+      windowChunkCount = windowChunks.length;
       let stoppedAt: string | null = null; // the requiredFrom of the chunk that failed, if any
       let stopDetail: string | null = null;
       // Earliest date any provider returned in this run, and -- if the walk
@@ -659,11 +723,32 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
         rowsInserted: instrumentRowsInserted,
         historyFloorRecorded,
       });
+    } catch (e) {
+      // NAV 1 (2026-09-27): a THROWN error for one instrument is that
+      // instrument's failure, not the run's. Before this it propagated: the run
+      // ended with no batch outcome and -- worse -- no attempt record, so the
+      // same instrument stayed "never attempted", sorted first again on the
+      // next run, threw again, and every instrument behind it was starved for
+      // good. The adapters return errors as values, but the fund-house
+      // resolver and the paged reads throw on a database error, so this is a
+      // real path. Rows already written are committed; report them.
+      const message = e instanceof Error ? e.message : String(e);
+      totalInserted += instrumentRowsInserted;
+      if (chunksCompleted > 0) {
+        partiallyHydrated++;
+        perInstrument.push({
+          instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'partially_hydrated',
+          detail: `${chunksCompleted}/${windowChunkCount} chunk(s) completed (${instrumentRowsInserted} row(s) inserted) before an error was thrown: ${message}`,
+          rowsInserted: instrumentRowsInserted,
+        });
+      } else {
+        failed++;
+        perInstrument.push({ instrumentId, reasons: req.reasons, requiredFromDate: req.fromDate, outcome: 'fetch_failed', detail: `error thrown: ${message}`, rowsInserted: 0 });
+      }
     } finally {
-      // Every attempt -- whatever its outcome -- moves the instrument to the
-      // back of the queue (0198), so a fund that keeps failing cannot hold
-      // the budget. A thrown fetch leaves no entry and records nothing; the
-      // error propagates as before.
+      // Every attempt -- whatever its outcome, including a thrown error --
+      // moves the instrument to the back of the queue (0199), so a fund that
+      // keeps failing cannot hold the budget.
       if (perInstrument.length > entriesBefore) await recordAttemptFor(instrumentId, perInstrument[perInstrument.length - 1]);
     }
   }
@@ -727,6 +812,19 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     if (saved.error) {
       result.batchRecordError = saved.error;
       result.detail += ` BATCH RECORD NOT SAVED: ${saved.error}`;
+    }
+    // Monitoring truthfulness: the job-control row is updated only now, after
+    // the outcome is final and recorded. The batch it points at is the one
+    // actually saved (null if none was), never a row that may not exist.
+    if (deps.recordJobControlOutcome) {
+      const savedBatchId = saved.error ? null : saved.batchId !== undefined ? saved.batchId : batchId;
+      try {
+        const jc = await deps.recordJobControlOutcome({ status: outcome.status, finishedAt: result.finishedAt, batchId: savedBatchId ?? null });
+        if (jc.error) result.jobControlError = jc.error;
+      } catch (e) {
+        result.jobControlError = e instanceof Error ? e.message : String(e);
+      }
+      if (result.jobControlError) result.detail += ` JOB-CONTROL OUTCOME NOT SAVED: ${result.jobControlError}`;
     }
   }
   return result;

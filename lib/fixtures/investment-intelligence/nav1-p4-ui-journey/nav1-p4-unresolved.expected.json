@@ -1,0 +1,29 @@
+{
+  "investor": "synthetic",
+  "statementPeriod": {
+    "from": "2023-04-01",
+    "to": "2026-09-18"
+  },
+  "schemes": [
+    {
+      "folio": "927010000009",
+      "amfiCode": "999999",
+      "isin": "INF999Z99ZZ9",
+      "name": "NAV1 P4 Unresolvable Test Scheme - Direct Plan - Growth",
+      "transactions": [
+        {
+          "date": "2024-01-02",
+          "type": "purchase",
+          "amount": "5000.00",
+          "units": "500.000",
+          "nav": "10.0000",
+          "balanceAfter": "500.000",
+          "ref": "NAV1P4-901"
+        }
+      ],
+      "closingUnits": "500.000",
+      "closingValue": "5000.00",
+      "fullyRedeemed": false
+    }
+  ]
+}

@@ -7,8 +7,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchAllRows } from '../pagination';
-import type { HydrationAttemptRecord, HydrationDeps, HydrationJobResult, HydrationWriteRow, PerInstrumentOutcome } from './selectiveHistoricalHydrationJob';
-import { buildHydrationBatchRow, HYDRATION_BATCH_KIND, HYDRATION_STALE_RUNNING_MINUTES } from './selectiveHistoricalHydrationJob';
+import type { HydrationAttemptRecord, HydrationDeps, HydrationJobControlOutcome, HydrationJobResult, HydrationWriteRow, PerInstrumentOutcome } from './selectiveHistoricalHydrationJob';
+import { buildHydrationBatchRow, HYDRATION_BATCH_KIND, HYDRATION_STALE_RUNNING_MINUTES, planHydrationJobControlUpdate } from './selectiveHistoricalHydrationJob';
 import { reconcileStaleRunningBatches } from './referenceImportRunner';
 import type { FundHouseResolver } from './adapters/amfiHistoricalAdapter';
 import type { BenchmarkDependency } from './navRetentionPolicy';
@@ -56,6 +56,33 @@ export function createLiveFundHouseResolver(): FundHouseResolver {
 
 export function createLiveHydrationDeps(): HydrationDeps {
   const db = createAdminClient();
+
+  /**
+   * NAV 1 monitoring truthfulness (2026-09-27). The daily ingest job has always
+   * written ii_reference_job_control; hydration never did, so the admin surface
+   * showed a job that succeeds every 30 minutes as "Last success never".
+   */
+  const recordJobControlOutcome = async (outcome: HydrationJobControlOutcome): Promise<{ error: string | null }> => {
+    const { data: prior, error: readError } = await db
+      .from('ii_reference_job_control')
+      .select('consecutive_failures')
+      .eq('job_key', KILL_SWITCH_JOB_KEY)
+      .maybeSingle();
+    if (readError) return { error: `could not read job control: ${readError.message}` };
+    if (!prior) return { error: 'no ii_reference_job_control row exists for this job_key' };
+    const plan = planHydrationJobControlUpdate(outcome, (prior.consecutive_failures as number | null) ?? 0);
+    if (plan === null) return { error: null }; // a partial run: visible in the batch row, not here
+    // Only while the stored timestamp is older: recording the same run twice
+    // never double-counts and never moves the timestamp backwards. Zero rows
+    // updated therefore means "a newer outcome is already recorded", not an error.
+    const { error } = await db
+      .from('ii_reference_job_control')
+      .update(plan.set)
+      .eq('job_key', KILL_SWITCH_JOB_KEY)
+      .or(`${plan.column}.is.null,${plan.column}.lt."${plan.onlyIfOlderThan}"`)
+      .select('job_key');
+    return { error: error ? error.message : null };
+  };
 
   return {
     async isEnabled() {
@@ -184,7 +211,7 @@ export function createLiveHydrationDeps(): HydrationDeps {
         HYDRATION_STALE_RUNNING_MINUTES,
       );
       if (rec.reconciledIds.length > 0) {
-        await db
+        const { data: reconciled } = await db
           .from('ii_reference_import_batches')
           .update({
             status: 'failed',
@@ -192,7 +219,16 @@ export function createLiveHydrationDeps(): HydrationDeps {
             error_code: 'STALE_RUNNING_RECONCILED',
             error_detail: `Reconciled by a later hydration run after ${HYDRATION_STALE_RUNNING_MINUTES}+ minute(s) with no terminal status -- most likely the platform ended the process. Its progress so far is in notes.perInstrument.`,
           })
-          .in('id', rec.reconciledIds);
+          .in('id', rec.reconciledIds)
+          .eq('status', 'running')
+          .select('id');
+        // A run the platform killed is a failure, and monitoring must say so.
+        // Only when THIS call actually moved a row out of 'running' (two runs
+        // reconciling the same abandoned row cannot both count it), and once
+        // per reconciliation: the guard in recordJobControlOutcome admits one
+        // failure per timestamp.
+        const moved = (reconciled ?? []).map((r) => r.id as string);
+        if (moved.length > 0) await recordJobControlOutcome({ status: 'failed', finishedAt: startedAt, batchId: moved[0] });
       }
       if (rec.stillRunning) return { batchId: null, blocked: rec.detail, error: null };
 
@@ -238,13 +274,15 @@ export function createLiveHydrationDeps(): HydrationDeps {
         // as stale: the real outcome replaces the guess. `.select()` so a
         // zero-row update is detected, never mistaken for success.
         const { data, error } = await db.from('ii_reference_import_batches').update(row).eq('id', batchId).select('id');
-        if (error) return { error: fmt(error) };
-        if ((data ?? []).length === 1) return { error: null };
+        if (error) return { error: fmt(error), batchId: null };
+        if ((data ?? []).length === 1) return { error: null, batchId };
         // The open row is gone; fall through and insert, so the outcome is still recorded.
       }
-      const { error } = await db.from('ii_reference_import_batches').insert(row);
-      return { error: error ? fmt(error) : null };
+      const { data: inserted, error } = await db.from('ii_reference_import_batches').insert(row).select('id');
+      return { error: error ? fmt(error) : null, batchId: error ? null : ((inserted?.[0]?.id as string | undefined) ?? null) };
     },
+
+    recordJobControlOutcome,
 
     async fetchHistoryFloor(instrumentId: string) {
       const { data, error } = await db

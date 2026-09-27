@@ -1,0 +1,18 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Apr-2023 To 18-Sep-2026
+
+Folio No: 927010000009
+PAN: PCQAL0927F
+Name: NAVONE SYNTHETIC TESTUSER
+Holding Mode: SI
+
+AMC Name: Synthetic Unresolvable Mutual Fund
+Scheme Name: NAV1 P4 Unresolvable Test Scheme - Direct Plan - Growth
+ISIN: INF999Z99ZZ9
+AMFI Code: 999999
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+02-Jan-2024   Purchase                              5,000.00  500.000  10.0000  500.000 [Ref: NAV1P4-901]
+
+Closing Unit Balance as on 18-Sep-2026 : 500.000 Units   Valuation : Rs. 5,000.00   NAV as on 18-Sep-2026 : Rs. 10.0000

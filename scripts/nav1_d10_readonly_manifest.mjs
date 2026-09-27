@@ -99,8 +99,14 @@ const git = (c) => { try { return execSync(`git ${c}`, { cwd: repoRoot }).toStri
 const migDir = path.join(repoRoot, 'supabase', 'migrations');
 const migFiles = fs.readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort();
 const migrationSetHash = sha256(migFiles.map((f) => `${f}:${sha256(fs.readFileSync(path.join(migDir, f)))}`).join('\n'));
-const m0189 = fs.readFileSync(path.join(migDir, '0189_nav1_user_held_retention_definition.sql'), 'utf8');
-const predicateSrc = m0189.slice(m0189.indexOf('create or replace function pc6_nav_row_is_candidate'), m0189.indexOf("comment on function pc6_nav_row_is_candidate"));
+// The predicate's CURRENT definition is the one in the highest-numbered
+// migration that (re)creates it -- 0200 since 2026-09-25. (This once hashed
+// 0189's body unconditionally and labelled the manifest "0189", which was
+// stale once 0200 replaced the function in production on 2026-09-26.)
+const predicateMigration = migFiles.filter((f) => /create or replace function (public\.)?pc6_nav_row_is_candidate/.test(fs.readFileSync(path.join(migDir, f), 'utf8'))).at(-1);
+const predicateMigrationSrc = fs.readFileSync(path.join(migDir, predicateMigration), 'utf8');
+const predicateStart = predicateMigrationSrc.search(/create or replace function (public\.)?pc6_nav_row_is_candidate/);
+const predicateSrc = predicateMigrationSrc.slice(predicateStart, predicateMigrationSrc.indexOf('comment on function pc6_nav_row_is_candidate', predicateStart));
 
 log(`target ${T.environment} (${T.host}); READ-ONLY`);
 const policyRows = (await get(`ii_nav_retention_policy?select=policy_version,changeover_date,environment,activated_at&environment=eq.${T.environment}`)).body;
@@ -298,7 +304,7 @@ const manifest = {
   migration_set: { files: migFiles.length, last: migFiles.at(-1), sha256: migrationSetHash, note: 'repository set at the generator commit; the applied set is not readable via PostgREST' },
   retention_policy: policy,
   candidate_predicate: {
-    version: '0189 (pc6_nav_row_is_candidate)', repo_source_sha256: sha256(predicateSrc), deployed_description: deployedPredicateDescription,
+    version: `${predicateMigration.slice(0, 4)} (pc6_nav_row_is_candidate, ${predicateMigration})`, repo_source_sha256: sha256(predicateSrc), deployed_description: deployedPredicateDescription,
     manifest_rule: 'price_date < changeover AND instrument NOT IN independent protected set (seven user-scoped ii_* sources, benchmarks, ANY report dependency, ANY hold row, merge families, core investments links, pending AI-review ISINs). Stricter than the predicate: report pins and closed holds protect the whole instrument.',
     rule_sha256: sha256('nav1-d10-manifest-rule-v1'),
   },

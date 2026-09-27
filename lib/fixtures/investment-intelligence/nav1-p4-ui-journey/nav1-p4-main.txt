@@ -1,0 +1,41 @@
+CAMS Consolidated Account Statement
+Statement Period : 01-Apr-2023 To 18-Sep-2026
+
+Folio No: 927010000001
+PAN: PCQAL0927F
+Name: NAVONE SYNTHETIC TESTUSER
+Holding Mode: SI
+
+AMC Name: PPFAS Mutual Fund
+Scheme Name: Parag Parikh Flexi Cap Fund - Direct Plan - Growth
+ISIN: INF879O01027
+AMFI Code: 122639
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+03-Apr-2023   SIP Purchase                          10,000.00  187.254  53.4035  187.254 [Ref: NAV1P4-001]
+03-Oct-2023   SIP Purchase                          10,000.00  160.014  62.4944  347.268 [Ref: NAV1P4-002]
+02-Apr-2024   SIP Purchase                          10,000.00  132.158  75.6672  479.426 [Ref: NAV1P4-003]
+01-Oct-2024   SIP Purchase                          10,000.00  112.808  88.6465  592.234 [Ref: NAV1P4-004]
+01-Apr-2025   SIP Purchase                          10,000.00  117.696  84.9643  709.930 [Ref: NAV1P4-005]
+02-Mar-2026   Redemption                            15,000.00  164.074  91.4220  545.856 [Ref: NAV1P4-006]
+
+Closing Unit Balance as on 18-Sep-2026 : 545.856 Units   Valuation : Rs. 49,048.93   NAV as on 18-Sep-2026 : Rs. 89.8569
+
+Folio No: 927010000002
+PAN: PCQAL0927F
+Name: NAVONE SYNTHETIC TESTUSER
+Holding Mode: SI
+
+AMC Name: SBI Mutual Fund
+Scheme Name: SBI Large Cap Fund - Regular Plan - Growth
+ISIN: INF200K01180
+AMFI Code: 103504
+Registrar: CAMS
+
+Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance
+03-Apr-2023   Purchase                              25,000.00  403.497  61.9583  403.497 [Ref: NAV1P4-101]
+03-Oct-2023   Purchase                              15,000.00  209.857  71.4771  613.354 [Ref: NAV1P4-102]
+01-Apr-2025   Redemption                            52,225.13  613.354  85.1468  0.000 [Ref: NAV1P4-103]
+
+Closing Unit Balance as on 18-Sep-2026 : 0.000 Units   Valuation : Rs. 0.00   NAV as on 18-Sep-2026 : Rs. 91.1604

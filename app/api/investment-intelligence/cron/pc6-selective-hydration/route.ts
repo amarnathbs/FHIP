@@ -85,6 +85,9 @@ export async function POST(req: Request) {
       // Null when the batch ledger row was saved. Surfaced so a lost record
       // can never again be invisible (see buildHydrationBatchRow()).
       batch_record_error: result.batchRecordError ?? null,
+      // Null when ii_reference_job_control (last_success_at / last_failure_at)
+      // was updated, or when the outcome was partial and nothing was due.
+      job_control_error: result.jobControlError ?? null,
       // Examined / already covered / attempted / succeeded / deferred / failed /
       // remaining, plus how the fetch budget was ordered (NAV 1 completion, P1).
       telemetry: result.telemetry ?? null,
