@@ -96,8 +96,10 @@ begin
   alter table fdh_financial_accounts disable trigger trg_enforce_country_confirmed;
   alter table fdh_statement_uploads disable trigger trg_enforce_country_confirmed;
   alter table fdh_liability_statements disable trigger trg_enforce_country_confirmed;
-  alter table income_sources disable trigger trg_enforce_country_confirmed;
-  alter table expense_items disable trigger trg_enforce_country_confirmed;
+  -- income_sources and expense_items had trg_enforce_country_confirmed REPLACED by migration 0129 (G5B)
+  -- with a differently-named trigger calling a different function; the old name no longer exists there.
+  alter table income_sources disable trigger trg_g5b_write_permitted;
+  alter table expense_items disable trigger trg_g5b_write_permitted;
   alter table assets disable trigger trg_enforce_country_confirmed;
   alter table retirement_accounts disable trigger trg_enforce_country_confirmed;
 
@@ -147,8 +149,8 @@ begin
   alter table fdh_financial_accounts enable trigger trg_enforce_country_confirmed;
   alter table fdh_statement_uploads enable trigger trg_enforce_country_confirmed;
   alter table fdh_liability_statements enable trigger trg_enforce_country_confirmed;
-  alter table income_sources enable trigger trg_enforce_country_confirmed;
-  alter table expense_items enable trigger trg_enforce_country_confirmed;
+  alter table income_sources enable trigger trg_g5b_write_permitted;
+  alter table expense_items enable trigger trg_g5b_write_permitted;
   alter table assets enable trigger trg_enforce_country_confirmed;
   alter table retirement_accounts enable trigger trg_enforce_country_confirmed;
 
