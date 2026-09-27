@@ -8,6 +8,7 @@ async function main() {
     let x = q.select(arg('--select') ?? '*');
     for (const kv of (arg('--eq') ?? '').split(',').filter(Boolean)) { const [k, v] = kv.split('='); x = x.eq(k, v); }
     for (const kv of (arg('--in') ?? '').split(';').filter(Boolean)) { const [k, v] = kv.split('='); x = x.in(k, v.split('|')); }
+    for (const kv of (arg('--gte') ?? '').split(',').filter(Boolean)) { const [k, v] = kv.split('='); x = x.gte(k, v); }
     if (arg('--order')) x = x.order(arg('--order')!);
     return x.limit(Number(arg('--limit') ?? 200));
   });
