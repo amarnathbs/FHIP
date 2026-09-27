@@ -25,6 +25,7 @@
  */
 import type { CanonicalFinancialSnapshot } from '@/lib/read-models/snapshot';
 import { NON_SPENDING_LABELS, type NonSpendingBucket } from '@/lib/read-models/core/spendingRules';
+import { bankBalancesNotInNetWorth } from '@/lib/read-models/bankBalanceDisclosure';
 
 export const CANONICAL_APPENDIX_VERSION = 2 as const;
 
@@ -247,9 +248,8 @@ export function buildCanonicalAppendix(snapshot: CanonicalFinancialSnapshot): Ca
       name: l.name, detail: l.assetClass, amountNative: l.value.amountNative, currency: l.value.currency, amountReporting: l.value.amountReporting,
       provenance: l.provenance.label, counted: l.value.amountReporting !== null, note: l.value.amountReporting === null ? 'Not counted: currency cannot be converted' : null,
     }))));
-    if (assets.bankBalanceEvidence.accounts.length > 0) {
-      notInCalculations.push({ label: assets.bankBalanceEvidence.label, count: assets.bankBalanceEvidence.accounts.length, total: assets.bankBalanceEvidence.total });
-    }
+    const openBalances = bankBalancesNotInNetWorth(assets.bankBalanceEvidence);
+    if (openBalances) notInCalculations.push(openBalances);
   } else unavailable.push('assets');
   if (investments.status === 'ok') {
     tables.push(table('investments', 'Investments', 'balance', investments.lines.map((l) => ({
