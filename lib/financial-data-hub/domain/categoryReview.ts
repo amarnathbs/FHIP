@@ -78,8 +78,9 @@ export const USER_DECIDED_METHODS: readonly string[] = ['user_manual', 'user_rul
  */
 export type SurplusEffect = 'income' | 'spending' | 'reduces_spending' | 'refund_unlinked' | 'not_counted' | 'split';
 
-export function surplusEffect(type: FdhEconomicTransactionType, opts: { refundLinked?: boolean } = {}): SurplusEffect {
-  const bucket = bucketForType(type, false);
+export function surplusEffect(type: FdhEconomicTransactionType, opts: { refundLinked?: boolean; creditDebit?: 'credit' | 'debit' | null } = {}): SurplusEffect {
+  // Rule 10 (canonical spending rules): money in of a spending type is a refund.
+  const bucket = bucketForType(type, false, opts.creditDebit);
   if (bucket === 'income') return 'income';
   if (bucket === 'spending') return 'spending';
   if (bucket === 'refund') return opts.refundLinked ? 'reduces_spending' : 'refund_unlinked';
@@ -340,6 +341,11 @@ const TYPE_LABEL: Record<string, string> = {
   cash_withdrawal: 'Cash withdrawals',
 };
 
+/** A refund, or (rule 10) money in of a spending type -- both are decided by the D-01 link rule. */
+export function isRefundLike(t: Pick<CategoryReviewTransaction, 'economic_transaction_type' | 'credit_debit'>): boolean {
+  return bucketForType(t.economic_transaction_type as FdhEconomicTransactionType, false, t.credit_debit) === 'refund';
+}
+
 export function groupKeyFor(
   t: Pick<CategoryReviewTransaction, 'category_id' | 'economic_transaction_type' | 'credit_debit' | 'currency_original'>,
   opts: { refundLinked?: boolean } = {},
@@ -347,7 +353,7 @@ export function groupKeyFor(
   const head = t.category_id ? `cat:${t.category_id}` : `type:${t.economic_transaction_type}`;
   // D-01: linked and unlinked refunds count differently, so they are never
   // in the same group (a group has one "counts toward" answer).
-  const refundTail = t.economic_transaction_type === 'refund' && opts.refundLinked ? '|refund-linked' : '';
+  const refundTail = isRefundLike(t) && opts.refundLinked ? '|refund-linked' : '';
   return `${head}|${t.credit_debit === 'credit' ? 'in' : 'out'}|${t.currency_original}${refundTail}`;
 }
 
@@ -441,7 +447,7 @@ export function buildCategoryReview(
     const type = t.economic_transaction_type as FdhEconomicTransactionType;
     const refundLinked = confirmedRefunds.has(t.id);
     const splitParts = blockers.splitPartsByTxn?.get(t.id) ?? null;
-    const key = splitParts ? `split|${direction}|${t.currency_original}` : groupKeyFor(t, { refundLinked: type === 'refund' && refundLinked });
+    const key = splitParts ? `split|${direction}|${t.currency_original}` : groupKeyFor(t, { refundLinked: isRefundLike(t) && refundLinked });
     let g = groups.get(key);
     if (!g) {
       const category = t.category_id ? categoryById.get(t.category_id) : undefined;
@@ -452,10 +458,10 @@ export function buildCategoryReview(
         economic_type: type,
         direction,
         currency: t.currency_original,
-        counts_toward: splitParts ? 'split' : surplusEffect(type, { refundLinked }),
+        counts_toward: splitParts ? 'split' : surplusEffect(type, { refundLinked, creditDebit: t.credit_debit }),
         not_counted_reason: splitParts
           ? null
-          : surplusEffect(type, { refundLinked }) === 'refund_unlinked'
+          : surplusEffect(type, { refundLinked, creditDebit: t.credit_debit }) === 'refund_unlinked'
             ? 'A refund not yet linked to the purchase it refunds is shown here but not taken off your spending.'
             : notCountedReason(type),
         count: 0,
@@ -498,7 +504,7 @@ export function buildCategoryReview(
       ? splitParts.map((p) => ({ type: p.economic_transaction_type, minor: toMinorUnits(Number(p.amount), t.currency_original) }))
       : [{ type, minor }];
     for (const part of parts) {
-      const effect = surplusEffect(part.type, { refundLinked });
+      const effect = surplusEffect(part.type, { refundLinked, creditDebit: t.credit_debit });
       const signed = effect === 'spending' ? part.minor : effect === 'reduces_spending' ? -part.minor : 0;
       for (const bucket of [tm, mm]) {
         if (effect === 'income') {

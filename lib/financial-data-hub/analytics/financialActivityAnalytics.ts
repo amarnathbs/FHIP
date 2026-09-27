@@ -204,6 +204,7 @@ function toOracleInput(t: ScopedTransaction): ApprovedSummaryTransaction {
     economic_transaction_type: t.economic_transaction_type,
     category_id: t.category_id,
     dedup_status: t.dedup_status,
+    credit_debit: t.credit_debit,
     allocations: t.allocations.map<ApprovedSummaryAllocation>((a) => ({
       economic_transaction_type: a.economic_transaction_type,
       category_id: a.category_id,
@@ -427,6 +428,8 @@ async function computeCategoryBreakdown(
       perCurrency.set(key, (perCurrency.get(key) ?? 0) + 1);
       countsByCurrency.set(currency, perCurrency);
     };
+    // Rule 10: money in of a spending type is a refund, not spending.
+    if (economicType === 'expense' && t.credit_debit === 'credit') continue;
     if (t.allocations.length > 0) {
       for (const a of t.allocations) {
         if (a.economic_transaction_type === economicType) bump(a.currency_code, a.category_id);
@@ -535,6 +538,7 @@ export async function getMerchants(
     for (const t of group) {
       if (isDuplicateExcluded(t.dedup_status)) continue;
       if (!t.merchant_id) continue; // spec 31 — no global merchant for personal transfer recipients (no merchant_id at all)
+      if (t.credit_debit === 'credit') continue; // rule 10: money in is never spending at a merchant
       const isExpense = t.allocations.length > 0
         ? t.allocations.some((a) => a.economic_transaction_type === 'expense')
         : t.economic_transaction_type === 'expense';

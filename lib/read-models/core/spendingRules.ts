@@ -34,6 +34,10 @@
  *     certified FDH-7 rule). Any other refund is shown as unlinked, never
  *     netted and never counted as income.
  *  9. A row the user settled (user_override) is never re-bucketed by 6 or 7.
+ * 10. Money in never adds to spending: on an ORDINARY account a CREDIT line
+ *     of a spending type is a refund (bucket 'refund'), so rule 8 decides
+ *     whether it nets. Not on a facility, where a credit is a repayment and
+ *     its interest/fee allocations are cost of debt. See directionalBucket().
  */
 import { FDH_ECONOMIC_TRANSACTION_TYPES, type FdhEconomicTransactionType } from '@/lib/financial-data-hub/constants/enums';
 
@@ -100,10 +104,30 @@ export const REFUND_LIKE_LINK_TYPES: ReadonlySet<string> = new Set(['refund_orig
 /** Rule 6. Link types whose non-facility leg is a transfer when confirmed. */
 export const SETTLEMENT_LINK_TYPES: ReadonlySet<string> = new Set(['credit_card_settlement', 'loan_payment']);
 
-/** Rule 4 + 5. */
-export function bucketForType(type: EconomicTransactionType, onFacility: boolean): ReadModelBucket {
-  if (onFacility && FACILITY_COST_OF_DEBT_TYPES.has(type)) return 'cost_of_debt';
-  return ECONOMIC_TYPE_BUCKET[type] ?? 'unknown';
+/** Rule 4 + 5 (+ rule 10 when the line's direction is given). */
+export function bucketForType(type: EconomicTransactionType, onFacility: boolean, creditDebit?: 'credit' | 'debit' | null): ReadModelBucket {
+  const base: ReadModelBucket = onFacility && FACILITY_COST_OF_DEBT_TYPES.has(type) ? 'cost_of_debt' : ECONOMIC_TYPE_BUCKET[type] ?? 'unknown';
+  // Rule 10 applies to ORDINARY accounts only. On a card/loan facility a CREDIT is a repayment, and the
+  // FDH-10 ledger decomposes it into principal / interest / fee allocations (D-09): its interest and fee
+  // parts are cost of debt, never a refund.
+  return onFacility ? base : directionalBucket(base, creditDebit);
+}
+
+/**
+ * Rule 10 (canonical-cert scale/UI, 2026-09-27). MONEY IN never adds to
+ * spending. A CREDIT line whose type is a spending type (expense / fee / tax /
+ * debt_interest, or cost of debt on a facility) -- e.g. "REFUND WOOLWORTHS"
+ * classified Food & Dining by the merchant master, or a payee the user
+ * remembered as Food & Dining whose statement also has credits -- is
+ * economically a refund / reversal of spending. It is bucketed 'refund', so
+ * rule 8 (PO D-01) applies unchanged: it nets only with a CONFIRMED
+ * refund_original / reversal_original link, otherwise it is shown as an
+ * unlinked refund and never counted. Before this rule the amount (stored
+ * unsigned) was ADDED to spending: a $20 refund raised spending by $20.
+ */
+export function directionalBucket(bucket: ReadModelBucket, creditDebit?: 'credit' | 'debit' | null): ReadModelBucket {
+  if (creditDebit === 'credit' && (bucket === 'spending' || bucket === 'cost_of_debt')) return 'refund';
+  return bucket;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,8 +229,10 @@ export function effectiveBucket(input: {
   userOverride: boolean;
   links: readonly LinkEvidence[];
   corroborations: readonly CorroborationEvidence[];
+  /** The line's direction (rule 10). Omitted = legacy behaviour (no direction rule). */
+  creditDebit?: 'credit' | 'debit' | null;
 }): ReBucketResult {
-  const base = bucketForType(input.type, input.onFacility);
+  const base = bucketForType(input.type, input.onFacility, input.creditDebit);
   if (input.isSplit || input.userOverride || input.onFacility) return { bucket: base, reason: null };
   const confirmed = input.links.filter((l) => l.status === 'confirmed');
   if (confirmed.some((l) => SETTLEMENT_LINK_TYPES.has(l.linkType) && l.counterpartOnFacility)) {
