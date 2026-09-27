@@ -23,6 +23,7 @@ import { describe, expect, it } from 'vitest';
 
 import { computeExpenses, type ExpenseItemRow } from '@/lib/read-models/expenses';
 import { computeAssets } from '@/lib/read-models/assets';
+import { bankBalancesNotInNetWorth } from '@/lib/read-models/bankBalanceDisclosure';
 import { fxContext } from '@/lib/read-models/core/currency';
 import { applyBankBalanceProposal, applyExpenseProposals, previewBankBalances, previewExpensePopulation, type PopulationClient } from '@/lib/import-bridge/populationProposalService';
 import type { ExpensePopulationResult } from '@/lib/import-bridge/populationProposals';
@@ -289,6 +290,39 @@ describe('(b) bank balance -> cash asset (PO D-04)', () => {
     expect(after.total).toBe(6000); // once
     expect(after.bankBalanceEvidence.accounts[0].inNetWorthAs).toEqual({ assetId: 'a1', assetName: 'Everyday' });
     expect(after.lines[0].provenance).toMatchObject({ kind: 'bank_statement', label: 'Imported from bank statement', accountId: 'bank' });
+  });
+
+  // Economic-oracle certification (2026-09-27, live on DEV): after Apply the
+  // Dashboard still disclosed "Bank balance per statement — not in Net Worth:
+  // $11,155" while Net Worth already held it through the applied asset.
+  it('the "not in Net Worth" disclosure lists only balances NOT yet applied (Dashboard, report appendix, report NW notes)', () => {
+    const fx = fxContext('AUD', 56, 'AU');
+    const common = {
+      bankAccounts: [{ id: 'bank', account_type: 'transaction', display_name: 'Everyday', currency_code: 'AUD' }, { id: 'sav', account_type: 'savings', display_name: 'Saver', currency_code: 'AUD' }],
+      statements: [{ id: 's-aug', financial_account_id: 'bank', statement_period_end: '2026-08-31', approved_at: null }, { id: 's-sav', financial_account_id: 'sav', statement_period_end: '2026-08-31', approved_at: null }],
+      reconciliations: [{ statement_upload_id: 's-aug', reported_closing_balance: 6000, currency_code: 'AUD', created_at: null }, { statement_upload_id: 's-sav', reported_closing_balance: 1500, currency_code: 'AUD', created_at: null }],
+      fx,
+    };
+    const before = computeAssets({ ...common, assets: [] });
+    expect(bankBalancesNotInNetWorth(before.bankBalanceEvidence)).toEqual({ label: 'Bank balance per statement — not in Net Worth', count: 2, total: 7500 });
+    const oneApplied = computeAssets({ ...common, assets: [{ id: 'a1', asset_name: 'Everyday', asset_class: 'cash', current_value: 6000, currency_code: 'AUD', owner: 'joint', master_item_key: null, source_type: 'bank_statement_import', linked_liability_id: null, source_financial_account_id: 'bank' }] });
+    expect(oneApplied.total).toBe(6000);
+    expect(bankBalancesNotInNetWorth(oneApplied.bankBalanceEvidence)).toEqual({ label: 'Bank balance per statement — not in Net Worth', count: 1, total: 1500 });
+    const allApplied = computeAssets({ ...common, assets: [
+      { id: 'a1', asset_name: 'Everyday', asset_class: 'cash', current_value: 6000, currency_code: 'AUD', owner: 'joint', master_item_key: null, source_type: 'bank_statement_import', linked_liability_id: null, source_financial_account_id: 'bank' },
+      { id: 'a2', asset_name: 'Saver', asset_class: 'cash', current_value: 1500, currency_code: 'AUD', owner: 'joint', master_item_key: null, source_type: 'bank_statement_import', linked_liability_id: null, source_financial_account_id: 'sav' },
+    ] });
+    expect(bankBalancesNotInNetWorth(allApplied.bankBalanceEvidence)).toBeNull();
+  });
+
+  it('every "not in Net Worth" disclosure (Dashboard notice, report appendix, report NW notes) goes through that one rule', async () => {
+    const { readFileSync } = await import('node:fs');
+    for (const file of ['lib/services/dashboardCanonicalAdapter.ts', 'lib/engines/reportCanonicalAppendix.ts', 'lib/services/reportSnapshotResolver.ts']) {
+      const src = readFileSync(file, 'utf8');
+      expect(src, file).toContain('bankBalancesNotInNetWorth(');
+      // the pre-fix pattern: every evidence account counted as "not in Net Worth", applied or not
+      expect(src, file).not.toMatch(/bankBalanceEvidence\.accounts\.length/);
+    }
   });
 
   it('a database without 0214 still reads assets (every asset unlinked), never "unavailable"', async () => {

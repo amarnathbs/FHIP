@@ -30,6 +30,7 @@ import { householdDebtServiceUnderD08 } from '@/lib/read-models/liabilities';
 import { groupForExpenseItem, type CanonicalExpenseGroup } from '@/lib/read-models/core/categoryGroups';
 import { coveredMonthlyAverage, type NormalisedLedger } from '@/lib/read-models/core/ledger';
 import { roundMoney, type ReadModelUnavailable } from '@/lib/read-models/core/types';
+import { bankBalancesNotInNetWorth } from '@/lib/read-models/bankBalanceDisclosure';
 
 const unavailable = (u: ReadModelUnavailable): CanonicalUnavailable => ({ status: 'unavailable', reason: u.reason, source: u.source });
 
@@ -177,8 +178,8 @@ export function toCanonicalCashFlow(snapshot: CanonicalFinancialSnapshotResult):
     importedNotInNetWorth: s.investments.status === 'ok' && s.investments.unpublished.count > 0
       ? { label: s.investments.unpublished.label, count: s.investments.unpublished.count, total: s.investments.unpublished.total }
       : null,
-    bankBalanceEvidence: s.assets.status === 'ok' && s.assets.bankBalanceEvidence.accounts.length > 0
-      ? { label: s.assets.bankBalanceEvidence.label, count: s.assets.bankBalanceEvidence.accounts.length, total: s.assets.bankBalanceEvidence.total }
-      : null,
+    // Only balances NOT yet applied as a cash asset: an applied one is in Net
+    // Worth once, through that asset (WP-15 / D-04).
+    bankBalanceEvidence: s.assets.status === 'ok' ? bankBalancesNotInNetWorth(s.assets.bankBalanceEvidence) : null,
   };
 }

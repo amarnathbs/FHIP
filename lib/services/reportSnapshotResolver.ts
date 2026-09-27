@@ -9,6 +9,7 @@ import type { GoalsPagePayload } from '@/lib/services/goalsData';
 import { buildCanonicalFinancialSnapshot, type CanonicalFinancialSnapshotResult } from '@/lib/read-models';
 import { loadImportedCategoryFreshness, loadImportedInputsLastChangedAt, maxTimestamp } from '@/lib/read-models/freshness';
 import { buildCanonicalAppendix, type CanonicalAppendix } from '@/lib/engines/reportCanonicalAppendix';
+import { bankBalancesNotInNetWorth } from '@/lib/read-models/bankBalanceDisclosure';
 import { computeSectionEligibility, isEligibleForOfficialMonthlyReport, type EligibilityInput } from '@/lib/engines/reportEligibility';
 import { listTwinRuns, getTwinRunDetail, type StoredTwinDetail } from '@/lib/services/financialTwinService';
 import { getPlanTier, type PlanTier } from '@/lib/services/entitlements';
@@ -461,10 +462,8 @@ export function notInNetWorthFrom(snapshot: CanonicalFinancialSnapshotResult): N
     const u = snapshot.investments.unpublished;
     out.push({ label: u.label, count: u.count, total: u.total });
   }
-  if (snapshot.assets.status === 'ok' && snapshot.assets.bankBalanceEvidence.accounts.length > 0) {
-    const b = snapshot.assets.bankBalanceEvidence;
-    out.push({ label: b.label, count: b.accounts.length, total: b.total });
-  }
+  const openBalances = snapshot.assets.status === 'ok' ? bankBalancesNotInNetWorth(snapshot.assets.bankBalanceEvidence) : null;
+  if (openBalances) out.push(openBalances);
   return out;
 }
 

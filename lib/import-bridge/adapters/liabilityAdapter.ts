@@ -181,8 +181,25 @@ export interface LiabilityEvidence {
   monthlyRepaymentAmount?: number;
   creditLimit?: number;
   dueDate?: string;
+  /** The statement's as-of date: period end, else statement date. */
+  statementPeriodEnd?: string;
+  statementDate?: string;
+  /**
+   * liabilityId -> the latest as-of date of a statement whose figures were
+   * ALREADY APPLIED to that liability. An OLDER statement must not silently
+   * regress the balance / due date / minimum payment a newer one set (the
+   * liability sibling of retirement's GAP-RET-06 guard; found by the
+   * economic-oracle certification, 2026-09-27: applying a July statement after
+   * August's moved a loan from 398,450 back to 400,000).
+   */
+  appliedAsOfByLiability?: Record<string, string>;
   reviewReasons: string[];
 }
+
+/** Point-in-time figures an older statement must never overwrite by default. */
+export const LIABILITY_POINT_IN_TIME_FIELDS: readonly string[] = [
+  'balance', 'interest_rate', 'monthly_repayment', 'credit_limit', 'minimum_payment', 'due_date',
+];
 
 /** Every canonical column this adapter is EVER permitted to write (spec
  * section 53's typed allow-list — no dynamic column name ever reaches the
@@ -262,9 +279,27 @@ export const liabilityAdapter: ImportDomainAdapter<LiabilityEvidence, ExistingLi
     const target = duplicate.outcome === 'single_match'
       ? existing.find((r) => r.id === duplicate.liabilityId) ?? null
       : null;
-    const recommendedApplyMode: RecommendedApplyMode = target ? 'update_existing' : 'add_new';
+    // An OLDER statement than one already applied to this liability: its
+    // point-in-time figures are still offered (the user may know better) but
+    // never ticked by default and never auto-selected by the RPC (0209 X-01
+    // only auto-applies recommended, confirmation-free fields). Its activities
+    // are still recorded in the ledger by 'keep_existing' (G10), which is
+    // therefore the recommendation.
+    const asOf = evidence.statementPeriodEnd ?? evidence.statementDate;
+    const lastApplied = target ? evidence.appliedAsOfByLiability?.[target.id] : undefined;
+    const olderThanApplied = lastApplied !== undefined && (asOf === undefined || asOf < lastApplied);
+    const recommendedApplyMode: RecommendedApplyMode = target ? (olderThanApplied ? 'keep_existing' : 'update_existing') : 'add_new';
     const reviewReasons = [...evidence.reviewReasons];
     if (duplicate.outcome === 'ambiguous') reviewReasons.push('ambiguous_facility_match_review_required');
+    if (olderThanApplied) {
+      reviewReasons.push(asOf === undefined
+        ? 'statement_date_unknown_a_statement_is_already_applied_figures_not_recommended'
+        : 'statement_is_older_than_one_already_applied_figures_not_recommended');
+    }
+    const olderGate = (name: string, opts: { isRecommended?: boolean; requiresConfirmation?: boolean; reasonCode: string }) =>
+      olderThanApplied && LIABILITY_POINT_IN_TIME_FIELDS.includes(name)
+        ? { ...opts, isRecommended: false, requiresConfirmation: true, reasonCode: 'statement_older_than_last_applied' }
+        : opts;
 
     const fields: ProposedField[] = [];
     const isCreditCard = evidence.facilityType === 'credit_card';
@@ -287,34 +322,34 @@ export const liabilityAdapter: ImportDomainAdapter<LiabilityEvidence, ExistingLi
     // --- balance: closing balance (card) or closing principal (loan) -------
     const closing = isCreditCard ? evidence.closingBalance : evidence.closingPrincipal;
     if (closing !== undefined) {
-      fields.push(field('balance', closing, target, { reasonCode: isCreditCard ? 'statement_closing_balance' : 'statement_closing_principal' }));
+      fields.push(field('balance', closing, target, olderGate('balance', { reasonCode: isCreditCard ? 'statement_closing_balance' : 'statement_closing_principal' })));
     } else {
       reviewReasons.push('no_closing_balance_on_statement');
     }
 
     // --- interest_rate: LOAN ONLY (spec section 77) -------------------------
     if (!isCreditCard && evidence.interestRate !== undefined) {
-      fields.push(field('interest_rate', evidence.interestRate, target, { reasonCode: 'statement_loan_rate' }));
+      fields.push(field('interest_rate', evidence.interestRate, target, olderGate('interest_rate', { reasonCode: 'statement_loan_rate' })));
     }
 
     // --- monthly_repayment: card minimum payment or loan repayment ---------
     const repayment = isCreditCard ? evidence.minimumPayment : evidence.monthlyRepaymentAmount;
     if (repayment !== undefined) {
-      fields.push(field('monthly_repayment', repayment, target, {
+      fields.push(field('monthly_repayment', repayment, target, olderGate('monthly_repayment', {
         requiresConfirmation: isCreditCard, // a card's MINIMUM payment is not the user's habitual repayment — spec 78
         reasonCode: isCreditCard ? 'statement_minimum_payment' : 'statement_contractual_repayment',
-      }));
+      })));
       if (isCreditCard) reviewReasons.push('minimum_payment_is_not_your_regular_repayment');
     }
 
     if (isCreditCard && evidence.creditLimit !== undefined) {
-      fields.push(field('credit_limit', evidence.creditLimit, target, { reasonCode: 'statement_credit_limit' }));
+      fields.push(field('credit_limit', evidence.creditLimit, target, olderGate('credit_limit', { reasonCode: 'statement_credit_limit' })));
     }
     if (isCreditCard && evidence.minimumPayment !== undefined) {
-      fields.push(field('minimum_payment', evidence.minimumPayment, target, { reasonCode: 'statement_minimum_payment' }));
+      fields.push(field('minimum_payment', evidence.minimumPayment, target, olderGate('minimum_payment', { reasonCode: 'statement_minimum_payment' })));
     }
     if (evidence.dueDate) {
-      fields.push(field('due_date', evidence.dueDate, target, { reasonCode: 'statement_due_date' }));
+      fields.push(field('due_date', evidence.dueDate, target, olderGate('due_date', { reasonCode: 'statement_due_date' })));
     }
 
     return {
