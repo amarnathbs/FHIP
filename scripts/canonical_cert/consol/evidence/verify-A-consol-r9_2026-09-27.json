@@ -1,0 +1,70 @@
+{
+  "ok": true,
+  "tablesCompared": 158,
+  "updatedRowsChecked": 1,
+  "rowDrift": [],
+  "diffs": [],
+  "globalsRemaining": [],
+  "before": {
+    "e5d43ba1-3309-4dc4-a177-78013056c800": {
+      "rows": 2096,
+      "objects": 0,
+      "nonEmpty": [
+        "assets:3",
+        "expense_items:6",
+        "financial_health_scores:1",
+        "financial_snapshots:1",
+        "financial_health_recommendations:5",
+        "forecast_assumptions:32",
+        "financial_health_component_scores:10",
+        "forecast_profiles:1",
+        "forecast_explanations:76",
+        "forecast_runs:11",
+        "forecast_scenarios:4",
+        "goal_funding_sources:6",
+        "households:1",
+        "forecast_results:1920",
+        "income_sources:2",
+        "insurance_policies:2",
+        "investments:4",
+        "liabilities:2",
+        "retirement_accounts:3",
+        "retirement_members:1",
+        "user_entitlements:1",
+        "user_goals:3",
+        "user_profiles:1"
+      ]
+    }
+  },
+  "after": {
+    "e5d43ba1-3309-4dc4-a177-78013056c800": {
+      "rows": 2096,
+      "objects": 0,
+      "nonEmpty": [
+        "assets:3",
+        "expense_items:6",
+        "financial_health_component_scores:10",
+        "financial_health_scores:1",
+        "financial_health_recommendations:5",
+        "financial_snapshots:1",
+        "forecast_assumptions:32",
+        "forecast_explanations:76",
+        "forecast_profiles:1",
+        "forecast_scenarios:4",
+        "forecast_runs:11",
+        "goal_funding_sources:6",
+        "households:1",
+        "forecast_results:1920",
+        "income_sources:2",
+        "insurance_policies:2",
+        "investments:4",
+        "liabilities:2",
+        "retirement_accounts:3",
+        "retirement_members:1",
+        "user_entitlements:1",
+        "user_goals:3",
+        "user_profiles:1"
+      ]
+    }
+  }
+}

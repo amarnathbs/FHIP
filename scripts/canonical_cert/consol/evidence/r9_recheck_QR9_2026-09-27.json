@@ -1,0 +1,541 @@
+{
+  "evidence": {
+    "email": "forecast.tc034@example.test",
+    "m0": {
+      "expenses": {
+        "actualMonthly": 0,
+        "combinedMonthly": 8200,
+        "plannedMonthly": 8200,
+        "actualTotalInWindow": 0,
+        "nonSpending": {
+          "transfer": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "cash_withdrawal": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "investment": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "asset_purchase": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "asset_sale": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "debt_principal": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "cost_of_debt": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          }
+        },
+        "unknownPendingCount": 0,
+        "refundsNetted": 0,
+        "refundsUnlinked": 0,
+        "coveredMonths": [],
+        "lineCount": 0
+      },
+      "income": {
+        "countedMonthly": 0,
+        "representedCount": 0,
+        "grossMonthly": 12500,
+        "netMonthly": 10250,
+        "netKnownMonthly": 10250,
+        "lines": 0,
+        "raw": {
+          "status": "ok",
+          "reportingCurrency": "AUD",
+          "window": {
+            "from": "2026-06-01",
+            "to": "2026-08-31",
+            "months": [
+              "2026-06",
+              "2026-07",
+              "2026-08"
+            ]
+          },
+          "planned": {
+            "lines": [
+              {
+                "id": "17182bbf-c403-517d-8ca6-4cb566974584",
+                "name": "Other Income",
+                "owner": "self",
+                "frequency": "monthly",
+                "currency": "AUD",
+                "grossNative": 1875,
+                "netNative": 1537.5,
+                "grossMonthly": 1875,
+                "netMonthly": 1537.5,
+                "counted": true,
+                "excludedLabel": null,
+                "sourceKind": "manual",
+                "sourceLabel": "Entered by you",
+                "hasPayslipDetails": false
+              },
+              {
+                "id": "5e5ed472-16e9-59ab-ada9-8212a1f1c52c",
+                "name": "Primary Employment",
+                "owner": "self",
+                "frequency": "monthly",
+                "currency": "AUD",
+                "grossNative": 10625,
+                "netNative": 8712.5,
+                "grossMonthly": 10625,
+                "netMonthly": 8712.5,
+                "counted": true,
+                "excludedLabel": null,
+                "sourceKind": "manual",
+                "sourceLabel": "Entered by you",
+                "hasPayslipDetails": false
+              }
+            ],
+            "grossMonthly": 12500,
+            "netKnownMonthly": 10250,
+            "netUnknownCount": 0,
+            "unconverted": {
+              "count": 0,
+              "byCurrency": {}
+            }
+          },
+          "actual": {
+            "lines": [],
+            "countedMonthly": 0,
+            "countedCount": 0,
+            "representedCount": 0,
+            "possibleDuplicateCount": 0,
+            "unconverted": {
+              "count": 0,
+              "byCurrency": {}
+            }
+          },
+          "variablePay": {
+            "lines": [],
+            "grossMonthly": 0
+          },
+          "combined": {
+            "grossMonthly": 12500,
+            "netMonthly": 10250,
+            "netKnownMonthly": 10250,
+            "grossIncludesNetFloor": false
+          },
+          "hasPlanned": true,
+          "hasActual": false
+        }
+      },
+      "dashboard": {
+        "grossMonthlyIncome": 12500,
+        "netMonthlyIncome": 10250,
+        "totalMonthlyExpenses": 8200,
+        "debtMonthlyRepayments": 2880,
+        "costOfDebtMonthly": 0,
+        "retirementEmployerMonthlyContribution": 1050,
+        "retirementPersonalMonthlyContribution": 450,
+        "totalMonthlyExpensesPlusDebt": 11080,
+        "basis": "canonical_read_models",
+        "unknownPendingCount": 0,
+        "bankBalanceEvidence": null,
+        "importedNotInNetWorth": null,
+        "monthlySurplus": -830,
+        "totalLiabilities": 380000,
+        "netWorth": 1447870,
+        "totalAssets": 2870,
+        "totalInvestments": 1620000,
+        "totalRetirement": 205000
+      }
+    },
+    "bank": {
+      "documentId": "c0efa506-410f-4d13-b406-af446bc152c7",
+      "closing": 10400,
+      "decisions": [
+        {
+          "id": "84d83fb7-69b1-4cc6-afe0-f86610000f51",
+          "description": "TRANSFER TO FHIP TEST BROKER QR9",
+          "category": "investment_purchase",
+          "status": 200,
+          "type": "asset_purchase"
+        },
+        {
+          "id": "f8d9d3fc-b819-4477-ada4-3d17930c45b0",
+          "description": "FHIP TEST BROKER SALE PROCEEDS QR9",
+          "category": "income",
+          "status": 200,
+          "type": "income"
+        },
+        {
+          "id": "883a906b-479b-499b-a395-59dca1728edc",
+          "description": "FHIP TEST DIVIDEND BHP QR9",
+          "category": "income",
+          "status": 200,
+          "type": "income"
+        }
+      ],
+      "approve": {
+        "status": 200,
+        "json": {
+          "data": {
+            "outcome": "approved",
+            "approved": 3
+          }
+        }
+      },
+      "txns": [
+        {
+          "id": "84d83fb7-69b1-4cc6-afe0-f86610000f51",
+          "transaction_date": "2026-08-04",
+          "description_clean": "TRANSFER TO FHIP TEST BROKER QR9",
+          "description_raw": "TRANSFER TO FHIP TEST BROKER QR9",
+          "amount_original": 10000,
+          "credit_debit": "debit",
+          "economic_transaction_type": "asset_purchase",
+          "category_id": "3718cf25-df9b-4aad-abfe-695f340e6c68",
+          "subcategory_id": null,
+          "approval_status": "approved",
+          "dedup_status": "unique",
+          "user_override": true,
+          "financial_account_id": "1ca796b3-e932-4dd4-a4e5-f1258a8c4a28",
+          "classification_method": "user_manual"
+        },
+        {
+          "id": "f8d9d3fc-b819-4477-ada4-3d17930c45b0",
+          "transaction_date": "2026-08-20",
+          "description_clean": "FHIP TEST BROKER SALE PROCEEDS QR9",
+          "description_raw": "FHIP TEST BROKER SALE PROCEEDS QR9",
+          "amount_original": 15000,
+          "credit_debit": "credit",
+          "economic_transaction_type": "income",
+          "category_id": "0c046122-43e8-431d-94e2-527e734377b1",
+          "subcategory_id": null,
+          "approval_status": "approved",
+          "dedup_status": "unique",
+          "user_override": true,
+          "financial_account_id": "1ca796b3-e932-4dd4-a4e5-f1258a8c4a28",
+          "classification_method": "user_manual"
+        },
+        {
+          "id": "883a906b-479b-499b-a395-59dca1728edc",
+          "transaction_date": "2026-08-25",
+          "description_clean": "FHIP TEST DIVIDEND BHP QR9",
+          "description_raw": "FHIP TEST DIVIDEND BHP QR9",
+          "amount_original": 400,
+          "credit_debit": "credit",
+          "economic_transaction_type": "income",
+          "category_id": "0c046122-43e8-431d-94e2-527e734377b1",
+          "subcategory_id": "5affa57f-b843-4aa4-9892-d31dc0558922",
+          "approval_status": "approved",
+          "dedup_status": "unique",
+          "user_override": true,
+          "financial_account_id": "1ca796b3-e932-4dd4-a4e5-f1258a8c4a28",
+          "classification_method": "user_manual"
+        }
+      ]
+    },
+    "brokerApply": {
+      "data": {
+        "statement_id": "44c6debd-619a-40f8-98f7-ec37db72fedc",
+        "applied_count": 3,
+        "skipped_count": 1,
+        "activities": [
+          {
+            "id": "12744c5c-6087-4e26-aa32-c25e5d536576",
+            "activity_type": "BUY",
+            "trade_date": "2026-08-05",
+            "amount": 9980,
+            "ok": true,
+            "code": null,
+            "canonical_transaction_id": "d75e75b9-8aa5-41b3-b7a3-43f063495c93",
+            "reason": null
+          },
+          {
+            "id": "1c4923ac-d6ca-499a-9213-a3ddb98f935c",
+            "activity_type": "DIVIDEND",
+            "trade_date": "2026-08-25",
+            "amount": 400,
+            "ok": true,
+            "code": null,
+            "canonical_transaction_id": "77c390f7-e3de-48e3-a1fa-41a73bfd5699",
+            "reason": null
+          },
+          {
+            "id": "5af48188-26f0-42b8-a564-04a1b619d9bb",
+            "activity_type": "SELL",
+            "trade_date": "2026-08-18",
+            "amount": 15000,
+            "ok": true,
+            "code": null,
+            "canonical_transaction_id": "8d857fd1-dc7d-4f91-9360-b29866cf14cc",
+            "reason": null
+          },
+          {
+            "id": "afb8bf0b-8c82-4032-902f-e338694b09e7",
+            "activity_type": "CASH_DEPOSIT",
+            "trade_date": "2026-08-04",
+            "amount": 10000,
+            "ok": false,
+            "code": "CANONICAL_TYPE_UNSUPPORTED",
+            "canonical_transaction_id": null,
+            "reason": "Broker cash is not tracked yet: this deposit into your broker cash account stays as statement evidence. The money leaving your bank account is recorded as invested, not spent."
+          }
+        ],
+        "positions": [],
+        "bank_legs": {
+          "reclassified": 0,
+          "unchanged": 0,
+          "skipped_user_override": 2,
+          "not_verified": 0
+        },
+        "bank_leg_error": null,
+        "certification": []
+      }
+    },
+    "saleAfter": {
+      "id": "f8d9d3fc-b819-4477-ada4-3d17930c45b0",
+      "economic_transaction_type": "income",
+      "user_override": true
+    },
+    "m1": {
+      "expenses": {
+        "actualMonthly": 0,
+        "combinedMonthly": 8200,
+        "plannedMonthly": 8200,
+        "actualTotalInWindow": 0,
+        "nonSpending": {
+          "transfer": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "cash_withdrawal": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "investment": {
+            "totalInWindow": 10000,
+            "count": 1,
+            "monthly": 10000
+          },
+          "asset_purchase": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "asset_sale": {
+            "totalInWindow": 15000,
+            "count": 1,
+            "monthly": 15000
+          },
+          "debt_principal": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          },
+          "cost_of_debt": {
+            "totalInWindow": 0,
+            "count": 0,
+            "monthly": 0
+          }
+        },
+        "unknownPendingCount": 0,
+        "refundsNetted": 0,
+        "refundsUnlinked": 0,
+        "coveredMonths": [
+          "2026-08"
+        ],
+        "lineCount": 0
+      },
+      "income": {
+        "countedMonthly": 400,
+        "representedCount": 0,
+        "grossMonthly": 12900,
+        "netMonthly": 10650,
+        "netKnownMonthly": 10650,
+        "lines": 1,
+        "raw": {
+          "status": "ok",
+          "reportingCurrency": "AUD",
+          "window": {
+            "from": "2026-06-01",
+            "to": "2026-08-31",
+            "months": [
+              "2026-06",
+              "2026-07",
+              "2026-08"
+            ]
+          },
+          "planned": {
+            "lines": [
+              {
+                "id": "17182bbf-c403-517d-8ca6-4cb566974584",
+                "name": "Other Income",
+                "owner": "self",
+                "frequency": "monthly",
+                "currency": "AUD",
+                "grossNative": 1875,
+                "netNative": 1537.5,
+                "grossMonthly": 1875,
+                "netMonthly": 1537.5,
+                "counted": true,
+                "excludedLabel": null,
+                "sourceKind": "manual",
+                "sourceLabel": "Entered by you",
+                "hasPayslipDetails": false
+              },
+              {
+                "id": "5e5ed472-16e9-59ab-ada9-8212a1f1c52c",
+                "name": "Primary Employment",
+                "owner": "self",
+                "frequency": "monthly",
+                "currency": "AUD",
+                "grossNative": 10625,
+                "netNative": 8712.5,
+                "grossMonthly": 10625,
+                "netMonthly": 8712.5,
+                "counted": true,
+                "excludedLabel": null,
+                "sourceKind": "manual",
+                "sourceLabel": "Entered by you",
+                "hasPayslipDetails": false
+              }
+            ],
+            "grossMonthly": 12500,
+            "netKnownMonthly": 10250,
+            "netUnknownCount": 0,
+            "unconverted": {
+              "count": 0,
+              "byCurrency": {}
+            }
+          },
+          "actual": {
+            "lines": [
+              {
+                "key": "883a906b-479b-499b-a395-59dca1728edc",
+                "transactionId": "883a906b-479b-499b-a395-59dca1728edc",
+                "date": "2026-08-25",
+                "month": "2026-08",
+                "description": "FHIP TEST DIVIDEND BHP QR9",
+                "amount": 400,
+                "currency": "AUD",
+                "amountReporting": 400,
+                "coverage": "covered",
+                "treatment": "counted",
+                "treatmentLabel": "Counted",
+                "representedByName": null,
+                "possibleDuplicateOf": [],
+                "sourceLabel": "Imported from bank statement",
+                "statementHref": "/financial-data-hub/review?statement=c0efa506-410f-4d13-b406-af446bc152c7&from=income",
+                "accountName": "Imported account"
+              }
+            ],
+            "countedMonthly": 400,
+            "countedCount": 1,
+            "representedCount": 0,
+            "possibleDuplicateCount": 0,
+            "unconverted": {
+              "count": 0,
+              "byCurrency": {}
+            }
+          },
+          "variablePay": {
+            "lines": [],
+            "grossMonthly": 0
+          },
+          "combined": {
+            "grossMonthly": 12900,
+            "netMonthly": 10650,
+            "netKnownMonthly": 10650,
+            "grossIncludesNetFloor": true
+          },
+          "hasPlanned": true,
+          "hasActual": true
+        }
+      },
+      "dashboard": {
+        "grossMonthlyIncome": 12900,
+        "netMonthlyIncome": 10650,
+        "totalMonthlyExpenses": 8200,
+        "debtMonthlyRepayments": 2880,
+        "costOfDebtMonthly": 0,
+        "retirementEmployerMonthlyContribution": 1050,
+        "retirementPersonalMonthlyContribution": 450,
+        "totalMonthlyExpensesPlusDebt": 11080,
+        "basis": "canonical_read_models",
+        "unknownPendingCount": 0,
+        "bankBalanceEvidence": {
+          "label": "Bank balance per statement — not in Net Worth",
+          "count": 1,
+          "total": 10400
+        },
+        "importedNotInNetWorth": null,
+        "monthlySurplus": -430,
+        "totalLiabilities": 380000,
+        "netWorth": 1447870,
+        "totalAssets": 2870,
+        "totalInvestments": 1620000,
+        "totalRetirement": 205000
+      }
+    },
+    "deltas": {
+      "dIncome": 400,
+      "dGross": 400
+    }
+  },
+  "results": [
+    {
+      "ok": true,
+      "label": "bank statement approved",
+      "detail": {
+        "status": 200,
+        "json": {
+          "data": {
+            "outcome": "approved",
+            "approved": 3
+          }
+        }
+      }
+    },
+    {
+      "ok": true,
+      "label": "sale proceeds line carries the user decision (income, user_override)",
+      "detail": {
+        "type": "income",
+        "override": true
+      }
+    },
+    {
+      "ok": true,
+      "label": "broker SELL 15,000 matched to the user-filed 15,000 credit",
+      "detail": {
+        "sell": "f8d9d3fc-b819-4477-ada4-3d17930c45b0",
+        "bank": "f8d9d3fc-b819-4477-ada4-3d17930c45b0"
+      }
+    },
+    {
+      "ok": true,
+      "label": "R9 ORACLE: SELL 15,000 matched on an approved+applied broker statement -> ordinary income 0 (only the 400 dividend counts)",
+      "detail": {
+        "dCountedMonthly": 400,
+        "dDashboardGross": 400,
+        "saleAfter": {
+          "id": "f8d9d3fc-b819-4477-ada4-3d17930c45b0",
+          "economic_transaction_type": "income",
+          "user_override": true
+        }
+      }
+    }
+  ]
+}
