@@ -164,6 +164,9 @@ const steps: Record<string, () => Promise<void>> = {
       state[`${key}Proposal`] = d.proposal_id; save();
       const ap = await call('POST', `/api/financial-data-hub/liability-proposals/${d.proposal_id}/apply`, { json: { decision, selectedFields: selected } });
       show('apply', ap.json?.data ?? ap.json);
+      // What the Liabilities panel does after a successful Apply (GP-D4 fix): best-effort categorise.
+      const c = await call('POST', '/api/financial-data-hub/bank-transactions/categorise');
+      show('categorise', c.json?.data ?? c.json);
     }
   },
   // ---------------------------------------------------------------- AU broker (Investments -> AU statement import)
@@ -282,8 +285,8 @@ const steps: Record<string, () => Promise<void>> = {
     const g = await call('POST', '/api/expenses/planned-from-actuals', { json: { action: 'generate' } });
     show('generate', g.json?.data);
     const items = (g.json?.data?.items ?? g.json?.data?.proposals ?? []) as any[];
-    const decisions = items.filter((i) => (i.proposalId ?? i.proposal_id) && (i.recommendation ?? i.recommended_action) !== 'keep')
-      .map((i) => ({ proposalId: i.proposalId ?? i.proposal_id, decision: (i.recommendation ?? i.recommended_action) === 'update' ? 'update_existing' : 'add_new' }));
+    const decisions = items.filter((i) => (i.proposalId ?? i.proposal_id) && (i.recommended ?? i.recommendation ?? i.recommended_action) !== 'keep')
+      .map((i) => ({ proposalId: i.proposalId ?? i.proposal_id, decision: (i.recommended ?? i.recommendation ?? i.recommended_action) === 'add_new' ? 'add_new' : 'update_existing' }));
     show('decisions', decisions);
     if (!decisions.length) return;
     const ap = await call('POST', '/api/expenses/planned-from-actuals', { json: { action: 'apply', decisions } });

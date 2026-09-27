@@ -48,7 +48,12 @@ async function main() {
   for (const g of GETS) await call(out, `GET ${g}`, 'GET', g);
   if (args.includes('--heavy')) {
     await call(out, 'POST /api/financial-twin/generate', 'POST', '/api/financial-twin/generate');
-    for (const f of FORECASTS) await call(out, `POST /api/forecast/run ${f}`, 'POST', '/api/forecast/run', { forecast_type: f });
+    for (const f of FORECASTS) {
+      const r = await call(out, `POST /api/forecast/run ${f}`, 'POST', '/api/forecast/run', { forecast_type: f });
+      const runId = (r.json as { data?: { run?: { id?: string } } } | null)?.data?.run?.id;
+      // The run's projected results (the forecast outputs themselves, not just the run header).
+      if (runId) await call(out, `GET /api/forecast/runs/[id] ${f}`, 'GET', `/api/forecast/runs/${runId}`);
+    }
   }
   if (args.includes('--report')) {
     const g = await call(out, 'POST /api/reports/generate', 'POST', '/api/reports/generate', {});
