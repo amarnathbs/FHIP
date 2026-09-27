@@ -50,6 +50,50 @@ interface LiabilityStatementRow {
   repayment_frequency: string | null;
   reconciliation_status: string;
   approval_status: string;
+  statement_period_end: string | null;
+  statement_date: string | null;
+}
+
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * liabilityId -> the latest as-of date (period end, else statement date) of a
+ * statement whose figures were ALREADY APPLIED to it (an application that
+ * wrote at least one field). Read from the application ledger, never
+ * inferred. Mirrors the retirement proposal route's loadAppliedAsOfByAccount.
+ */
+export async function loadAppliedAsOfByLiability(supabase: ServerClient, userId: string, currentStatementId: string): Promise<Record<string, string>> {
+  const { data: applications, error } = await supabase
+    .from('fhip_import_applications')
+    .select('target_entity_id, source_liability_statement_id, applied_fields')
+    .eq('user_id', userId)
+    .eq('target_domain', 'liability')
+    .not('source_liability_statement_id', 'is', null);
+  if (error) throw new LiabilityProposalError('internal_error', 'We could not read your earlier statement imports.');
+  const relevant = ((applications ?? []) as { target_entity_id: string | null; source_liability_statement_id: string | null; applied_fields: string[] | null }[])
+    .filter((a) => a.target_entity_id && a.source_liability_statement_id && a.source_liability_statement_id !== currentStatementId && (a.applied_fields?.length ?? 0) > 0);
+  const statementIds = [...new Set(relevant.map((a) => a.source_liability_statement_id as string))];
+  if (statementIds.length === 0) return {};
+  const asOf = new Map<string, string>();
+  for (let i = 0; i < statementIds.length; i += 200) {
+    const { data: rows, error: stErr } = await supabase
+      .from('fdh_liability_statements')
+      .select('id, statement_period_end, statement_date')
+      .eq('user_id', userId)
+      .in('id', statementIds.slice(i, i + 200));
+    if (stErr) throw new LiabilityProposalError('internal_error', 'We could not read your earlier statement imports.');
+    for (const r of (rows ?? []) as { id: string; statement_period_end: string | null; statement_date: string | null }[]) {
+      const d = r.statement_period_end ?? r.statement_date;
+      if (d) asOf.set(r.id, d);
+    }
+  }
+  const out: Record<string, string> = {};
+  for (const a of relevant) {
+    const d = asOf.get(a.source_liability_statement_id as string);
+    const target = a.target_entity_id as string;
+    if (d && (!out[target] || d > out[target])) out[target] = d;
+  }
+  return out;
 }
 
 /** Builds the generic bridge's `LiabilityEvidence` from one statement row. */
@@ -84,6 +128,8 @@ function toLiabilityEvidence(statement: LiabilityStatementRow): LiabilityEvidenc
     monthlyRepaymentAmount,
     creditLimit: isCreditCard ? (statement.credit_limit ?? undefined) : undefined,
     dueDate: statement.due_date ?? undefined,
+    statementPeriodEnd: statement.statement_period_end ?? undefined,
+    statementDate: statement.statement_date ?? undefined,
     reviewReasons,
   };
 }
@@ -103,7 +149,7 @@ export async function generateLiabilityProposal(
   const { data: statement, error } = await supabase
     .from('fdh_liability_statements')
     .select(
-      'id, user_id, statement_upload_id, statement_type, facility_type, country_code, currency_code, institution_name, masked_identifier, due_date, closing_balance, closing_principal, interest_rate, credit_limit, minimum_payment, payments_total, repayment_frequency, reconciliation_status, approval_status',
+      'id, user_id, statement_upload_id, statement_type, facility_type, country_code, currency_code, institution_name, masked_identifier, due_date, closing_balance, closing_principal, interest_rate, credit_limit, minimum_payment, payments_total, repayment_frequency, reconciliation_status, approval_status, statement_period_end, statement_date',
     )
     .eq('id', statementId)
     .eq('user_id', userId)
@@ -121,7 +167,7 @@ export async function generateLiabilityProposal(
     .eq('user_id', userId)
     .eq('is_active', true);
 
-  const evidence = toLiabilityEvidence(row);
+  const evidence = { ...toLiabilityEvidence(row), appliedAsOfByLiability: await loadAppliedAsOfByLiability(supabase, userId, statementId) };
   const draft = liabilityAdapter.buildProposal(evidence, (existingRows ?? []) as ExistingLiabilityRow[]);
   const proposalId = await persistLiabilityProposal(userId, draft, statementId);
 

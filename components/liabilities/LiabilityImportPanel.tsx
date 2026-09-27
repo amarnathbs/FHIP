@@ -887,7 +887,13 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           .map((f) => f.field_name),
       );
       setSelected(defaultSel);
-      setDecision(json.data.proposal?.target_entity_id ? 'update_existing' : 'add_new');
+      // An OLDER statement than one already applied is recommended as "keep my
+      // figures" (its lines are still recorded); its figures stay unticked.
+      setDecision(
+        json.data.proposal?.target_entity_id
+          ? (json.data.proposal?.recommended_apply_mode === 'keep_existing' ? 'keep_existing' : 'update_existing')
+          : 'add_new',
+      );
       setHasTarget(Boolean(json.data.proposal?.target_entity_id));
       setBlockers([]);
       setMessage(null);
