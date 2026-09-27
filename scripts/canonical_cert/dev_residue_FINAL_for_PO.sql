@@ -83,6 +83,24 @@ begin
   if n <> 2 then raise exception 'REFUSED (Section 3, tc025): fdh_statement_uploads -- % synthetic-owned rows present (expected 2)', n; end if;
 
   -- 2. Deletes, one table at a time, in the proven order (children before their parent references).
+  -- The SQL editor connects directly, not through PostgREST, so the mandatory country-confirmation
+  -- trigger (migration 0104/0108) does not recognise this session as service_role. At least one of these
+  -- fixture users has not confirmed a country. Deleting a fhip_import_applications / fdh_liability_statements
+  -- row can cascade an ON DELETE SET NULL into any table with a last_import_application_id /
+  -- duplicate_of_statement_id / supersedes_statement_id column, and that UPDATE fires the same trigger on
+  -- every one of those tables -- not just the 3 tables this file directly deletes from. Disable every
+  -- table in that cascade graph (whether or not this specific run touches it) for the rest of this block,
+  -- and re-enable them all before it ends. If anything above raised first, the whole transaction (including
+  -- these ALTER TABLEs) rolls back, so a failed run never leaves a trigger disabled.
+  alter table liabilities disable trigger trg_enforce_country_confirmed;
+  alter table fdh_financial_accounts disable trigger trg_enforce_country_confirmed;
+  alter table fdh_statement_uploads disable trigger trg_enforce_country_confirmed;
+  alter table fdh_liability_statements disable trigger trg_enforce_country_confirmed;
+  alter table income_sources disable trigger trg_enforce_country_confirmed;
+  alter table expense_items disable trigger trg_enforce_country_confirmed;
+  alter table assets disable trigger trg_enforce_country_confirmed;
+  alter table retirement_accounts disable trigger trg_enforce_country_confirmed;
+
   delete from fhip_import_applications where id in ('24a07f29-43b6-4f23-ba73-a89f0af06051', '9857b8a5-9d9e-4ef2-907f-9e3df4985b33', 'b8f279c4-b3f8-4db4-ac07-262a8a0aa1ac');
   get diagnostics n = row_count; if n <> 3 then raise exception 'Section 1: delete fhip_import_applications: % rows (expected 3)', n; end if;
   delete from fhip_import_applications where id in ('763ac2b2-2331-4483-8798-e8ea6b711ac0', 'b5e99c7b-1f12-4bda-a9da-91fe79e5e777');
@@ -124,6 +142,15 @@ begin
   get diagnostics n = row_count; if n <> 2 then raise exception 'Section 2: delete fdh_statement_uploads: % rows (expected 2)', n; end if;
   delete from fdh_statement_uploads where id in ('818e4fcb-b3bc-4eac-b8e0-3ec37f8d2543', 'e9495d92-6c4c-4b02-9c49-cc72049fcd3a');
   get diagnostics n = row_count; if n <> 2 then raise exception 'Section 3: delete fdh_statement_uploads: % rows (expected 2)', n; end if;
+
+  alter table liabilities enable trigger trg_enforce_country_confirmed;
+  alter table fdh_financial_accounts enable trigger trg_enforce_country_confirmed;
+  alter table fdh_statement_uploads enable trigger trg_enforce_country_confirmed;
+  alter table fdh_liability_statements enable trigger trg_enforce_country_confirmed;
+  alter table income_sources enable trigger trg_enforce_country_confirmed;
+  alter table expense_items enable trigger trg_enforce_country_confirmed;
+  alter table assets enable trigger trg_enforce_country_confirmed;
+  alter table retirement_accounts enable trigger trg_enforce_country_confirmed;
 
   raise notice 'canonical-cert FINAL residue removed: 42 rows deleted (18 tc012, 12 tc048, 12 tc025)';
 end $$;
