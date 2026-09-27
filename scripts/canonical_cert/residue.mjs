@@ -64,6 +64,13 @@ switch (cmd) {
     break;
   }
   case 'capture': print(await L.captureNew()); break;
+  case 'touched': {
+    // Pre-existing rows UPDATED since the baseline (invisible to verify's key diff). Exit 1 if any is unsaved.
+    const t = await L.touchedSince();
+    print({ since: t.since, touched: t.touched, unsaved: t.touched.filter((x) => !x.saved).length, uncoveredTables: t.uncovered.length });
+    if (t.touched.some((x) => !x.saved)) process.exitCode = 1;
+    break;
+  }
   case 'record': {
     const ids = String(arg('--ids') ?? '').split(',').filter(Boolean);
     const pk = String(arg('--pk') ?? 'id').split(',');

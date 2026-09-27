@@ -82,9 +82,16 @@ const pkFilter = (pk, key) => {
 async function keysFor(table, pk, userId, userCol = 'user_id') {
   const out = [];
   for (let from = 0; ; from += PAGE) {
-    const r = await rest(`${table}?select=${pk.join(',')}&${userCol}=eq.${userId}&order=${pk.join(',')}`, {
-      headers: { Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' },
-    });
+    // DEV is shared by parallel certifiers: a read can hit the statement timeout (57014) or a transient
+    // 5xx under load. Retry those only (never a 4xx), then fail loudly -- a snapshot is never partial.
+    let r;
+    for (let attempt = 1; ; attempt++) {
+      r = await rest(`${table}?select=${pk.join(',')}&${userCol}=eq.${userId}&order=${pk.join(',')}`, {
+        headers: { Range: `${from}-${from + PAGE - 1}`, 'Range-Unit': 'items' },
+      });
+      if (r.ok || r.status < 500 || attempt >= 4) break;
+      await new Promise((res) => setTimeout(res, 1500 * attempt));
+    }
     if (!r.ok) throw new Error(`read ${table} for ${userId}: HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
     out.push(...r.body.map((row) => keyOf(row, pk)));
     if (r.body.length < PAGE) break;
@@ -209,6 +216,37 @@ export class ResidueLedger {
     this.log(`restoreRows: ${this.data.updated.length - failures.length} restored, ${failures.length} failed`);
     this.save();
     return failures;
+  }
+
+  /**
+   * Rows that EXISTED at baseline and were UPDATED since (updated_at >= the ledger's createdAt). A key diff
+   * cannot see these (verify compares key sets); an Apply that updates a fixture row leaves them behind.
+   * Returns [{table, key, updated_at, saved}] -- `saved` = a snapshotRows() copy exists, so restoreRows() puts
+   * it back. Tables without an updated_at column are not covered (reported in `uncovered`).
+   */
+  async touchedSince() {
+    if (!this.data.baseline) throw new Error('no baseline');
+    const { url } = loadDevEnv();
+    const res = await fetch(`${url}/rest/v1/`, { headers: hdr() });
+    const defs = (await res.json()).definitions ?? {};
+    const tables = await userScopedTables();
+    const since = this.data.createdAt;
+    const touched = []; const uncovered = [];
+    const saved = new Set(this.data.updated.map((u) => `${u.table}|${u.key}`));
+    for (const { table, pk, userCol } of tables) {
+      if (!defs[table]?.properties?.updated_at) { uncovered.push(table); continue; }
+      for (const u of this.data.users) {
+        const before = new Set(this.data.baseline[u].tables[table] ?? []);
+        if (!before.size) continue;
+        const r = await rest(`${table}?select=${[...pk, 'updated_at'].join(',')}&${userCol}=eq.${u}&updated_at=gte.${encodeURIComponent(since)}`);
+        if (!r.ok) throw new Error(`touchedSince ${table}: HTTP ${r.status}`);
+        for (const row of r.body) {
+          const key = keyOf(row, pk);
+          if (before.has(key)) touched.push({ table, user: u, key, updated_at: row.updated_at, saved: saved.has(`${table}|${key}`) });
+        }
+      }
+    }
+    return { since, touched, uncovered };
   }
 
   /** Add every key/object that exists now but not at baseline. Returns {table: count}. */

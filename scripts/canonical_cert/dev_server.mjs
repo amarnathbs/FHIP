@@ -45,6 +45,13 @@ if (args.includes('--wait')) {
 const { ref, anonKey, serviceKey } = loadDevEnv();
 const env = childEnv();
 if (!args.includes('--allow-openai')) env.AIE_OPENAI_API_KEY = ''; // '' (not delete): see childEnv()
+// --count-requests: preload count_supabase_requests.cjs in the server process(es), so a journey can
+// record how many Supabase round trips each app request makes (timing model for the 28 s limit).
+if (args.includes('--count-requests')) {
+  const preload = new URL('./count_supabase_requests.cjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+  env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ''} --require ${preload}`.trim();
+  console.log('counting Supabase requests per server process (.canonical-cert/sb-requests-<pid>.json)');
+}
 console.log(`next dev -> http://127.0.0.1:${port}  (DEV project ${ref}; anon ${fingerprint(anonKey)}, service ${fingerprint(serviceKey)}; PRODUCTION_* stripped; OpenAI key ${env.AIE_OPENAI_API_KEY ? 'KEPT' : 'removed'})`);
 let linkedModules = false;
 try { linkedModules = fs.lstatSync('node_modules').isSymbolicLink(); } catch { /* no node_modules */ }
