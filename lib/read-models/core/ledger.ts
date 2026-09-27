@@ -331,7 +331,7 @@ export function normaliseLedger(raw: RawLedger, fx: FxContext, window: ReadWindo
       const cat = part.categoryId ? categories.get(part.categoryId) : undefined;
       const sub = part.subcategoryId ? subcategories.get(part.subcategoryId) : undefined;
       const g = groupForFdhCategory({ categoryKey: cat?.category_key ?? null, categoryMappingKey: cat?.fhip_mapping_key ?? null, subcategoryMappingKey: sub?.fhip_mapping_key ?? null });
-      const { bucket, reason } = effectiveBucket({ type: part.type, onFacility, isSplit, userOverride, links: linkEvidence, corroborations: corroboratedBy });
+      const { bucket, reason } = effectiveBucket({ type: part.type, onFacility, isSplit, userOverride, links: linkEvidence, corroborations: corroboratedBy, creditDebit: txn.credit_debit });
       const amountReporting = toReporting(part.amount, part.currency, fx);
       const line: ActualLine = {
         key: part.allocationSequence === null ? txn.id : `${txn.id}#${part.allocationSequence}`,
@@ -419,7 +419,7 @@ function resolveOriginalSpending(
   const expanded = expandTransaction(row, allocationsByTxn.get(row.id) ?? []);
   if (expanded.kind !== 'parts') return null;
   const onFacility = isFacilityAccount(accounts.get(row.financial_account_id));
-  const spendParts = expanded.parts.filter((p) => effectiveBucket({ type: p.type, onFacility, isSplit: true, userOverride: true, links: [], corroborations: [] }).bucket === 'spending');
+  const spendParts = expanded.parts.filter((p) => effectiveBucket({ type: p.type, onFacility, isSplit: true, userOverride: true, links: [], corroborations: [], creditDebit: row.credit_debit }).bucket === 'spending');
   const biggest = spendParts.sort((a, b) => b.amount - a.amount)[0];
   if (!biggest) return null;
   const cat = biggest.categoryId ? categories.get(biggest.categoryId) : undefined;

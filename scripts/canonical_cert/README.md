@@ -100,6 +100,10 @@ node scripts/canonical_cert/residue.mjs verify   --ledger $L                   #
   column-by-column (`updated_at` is excluded) and every recorded global row.
 - An UPDATE to a pre-existing fixture row is invisible to a key diff. Save the row first with
   `ResidueLedger.snapshotRows()`; `prepare` already does this for `user_profiles`.
+- `residue.mjs touched --ledger $L` lists rows that existed at baseline and have `updated_at` on or after the
+  ledger's start (exit 1 if any was not saved first). Run it before `cleanup`: an Apply that updates a fixture
+  row (e.g. a retirement statement applied to an existing account) leaves residue that `verify` cannot see.
+  Tables without `updated_at` are not covered.
 - Known residue that cannot be avoided: a sign-in updates `auth.users.last_sign_in_at` and writes GoTrue's
   own audit log. Neither is reachable through PostgREST.
 
@@ -131,6 +135,21 @@ node scripts/canonical_cert/residue.mjs cleanup  --ledger SMOKE2
 node scripts/canonical_cert/residue.mjs verify   --ledger SMOKE2   # exits 0
 node scripts/canonical_cert/signin.mjs --revoke --email fhip.e2e.tc050@test.fhip.invalid
 ```
+
+## 6b. Scale and UI journeys (scale-and-ui certifier)
+
+```bash
+node scripts/canonical_cert/dev_server.mjs --port 3973 --count-requests      # Supabase round trips per server process
+npx tsx scripts/canonical_cert/scale_journey.ts --email <e> --port 3973 --n 1000 --salt C --repeat reexport --out test-artifacts/canonical_cert/scale-1000.json
+npx tsx scripts/canonical_cert/ui_driver.ts --email <e> --port 3973 --control 3199   # headless Chromium, signed in
+curl -s 127.0.0.1:3199/act -d '[{"a":"goto","url":"/expenses"},{"a":"shot","name":"exp-01"}]'
+```
+
+- `scale_journey.ts` drives upload -> detect -> process -> categorise -> category review -> decisions ->
+  approve-all through the real routes, counts rows at every layer (service role reads only) and times every
+  request against the 28 s Amplify limit. `--repeat byte|reexport` uploads the same statement again.
+- `ui_driver.ts` holds one browser session for a fixture user (cookies from the harness session file, added
+  for the 127.0.0.1 origin only) and takes screenshots on request.
 
 ## 7. Migration presence on DEV (read-only)
 

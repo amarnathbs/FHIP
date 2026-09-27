@@ -59,7 +59,7 @@
 
 import type { FdhEconomicTransactionType, FdhTransactionDedupStatus } from '../constants/enums';
 // WP-08: the ONE canonical duplicate-exclusion rule (no mirrored list).
-import { isDuplicateExcluded } from '@/lib/read-models/core/spendingRules';
+import { bucketForType, isDuplicateExcluded } from '@/lib/read-models/core/spendingRules';
 import { fromMinorUnits, toMinorUnits } from './money';
 
 export interface ApprovedSummaryAllocation {
@@ -78,6 +78,10 @@ export interface ApprovedSummaryTransaction {
   dedup_status: FdhTransactionDedupStatus;
   /** Empty array = not split; this transaction's own type/amount is used. */
   allocations: ApprovedSummaryAllocation[];
+  /** The line's direction. With it, rule 10 of the canonical spending rules
+   * applies: money in of a spending type counts as a refund, never as
+   * expense. Omitted = legacy behaviour. */
+  credit_debit?: 'credit' | 'debit' | null;
 }
 
 /** A CONFIRMED refund->original relationship (spec 60). Anything not
@@ -116,7 +120,14 @@ export class FdhApprovedSummaryError extends Error {
   }
 }
 
-function bucketField(type: FdhEconomicTransactionType): keyof ApprovedFinancialSummaryTotals | null {
+/** Rule 10 (lib/read-models/core/spendingRules.ts): money in of a spending
+ * type is a refund. The same predicate the read models use. */
+function isDirectionalRefund(type: FdhEconomicTransactionType, creditDebit: 'credit' | 'debit' | null | undefined): boolean {
+  return type !== 'refund' && bucketForType(type, false, creditDebit) === 'refund';
+}
+
+function bucketField(type: FdhEconomicTransactionType, creditDebit?: 'credit' | 'debit' | null): keyof ApprovedFinancialSummaryTotals | null {
+  if (isDirectionalRefund(type, creditDebit)) return 'refund_total';
   switch (type) {
     case 'income': return 'income_total';
     case 'expense': return 'expense_total';
@@ -197,10 +208,11 @@ export function computeApprovedFinancialSummary(
       continue; // parent's own amount/type is NEVER also summed (spec 153).
     }
 
-    const field = bucketField(txn.economic_transaction_type);
+    const field = bucketField(txn.economic_transaction_type, txn.credit_debit);
     const minor = toMinorUnits(txn.amount_original, txn.currency_original);
     if (field) addToBucket(field, minor);
-    if (txn.economic_transaction_type !== 'transfer') addToCategory(txn.category_id, minor);
+    // Rule 10: money in of a spending type is not spending in its category.
+    if (txn.economic_transaction_type !== 'transfer' && !isDirectionalRefund(txn.economic_transaction_type, txn.credit_debit)) addToCategory(txn.category_id, minor);
   }
 
   // Refund netting (spec 60): a CONFIRMED refund->expense link subtracts the
@@ -210,14 +222,14 @@ export function computeApprovedFinancialSummary(
     const refundTxn = byId.get(refundId);
     const originalTxn = byId.get(originalId);
     if (!refundTxn || isDuplicateExcluded(refundTxn.dedup_status)) continue;
-    if (!originalTxn || originalTxn.economic_transaction_type !== 'expense') continue;
+    if (!originalTxn || originalTxn.economic_transaction_type !== 'expense' || isDirectionalRefund(originalTxn.economic_transaction_type, originalTxn.credit_debit)) continue;
     // If the ORIGINAL purchase is itself a confirmed duplicate (already
     // contributing nothing to expense_total), the refund must not net
     // against a contribution that was never counted in the first place —
     // that would under-count expense_total by the refund amount for no
     // corresponding counted expense.
     if (isDuplicateExcluded(originalTxn.dedup_status)) continue;
-    if (refundTxn.economic_transaction_type !== 'refund') continue;
+    if (refundTxn.economic_transaction_type !== 'refund' && !isDirectionalRefund(refundTxn.economic_transaction_type, refundTxn.credit_debit)) continue;
     const minor = toMinorUnits(refundTxn.amount_original, refundTxn.currency_original);
     addToBucket('expense_total', -minor);
   }

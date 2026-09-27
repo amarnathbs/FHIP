@@ -99,6 +99,63 @@ function rowFromRecord(record: SavedRecord, config: GridConfig, isCustom: boolea
   };
 }
 
+/**
+ * The grid's rows: one per catalogue item (its saved record, or an empty
+ * catalogue row), then saved rows the catalogue does not list, then custom
+ * rows. Exported for its unit test.
+ *
+ * "No record may disappear merely to tidy taxonomy" (A/I/R spec s.4.3): every
+ * active saved record is exactly one row. Canonical-cert UI journey (DEV,
+ * 2026-09-27): two AU broker holdings published by "Add to Net Worth" both
+ * carry master_item_key 'australian_shares'. The catalogue row used to keep
+ * only ONE record per key (a Map), so the second holding vanished from the
+ * Investments tab (grid total $19,000) while the Dashboard counted it
+ * (investments $21,500). Extra records with an already-used key now render as
+ * their own rows, under their own names, with a key that cannot collide.
+ */
+export function mergeSavedRows(masterItems: MasterItem[], savedRecords: SavedRecord[], config: GridConfig, currency: string): Row[] {
+  const firstByMasterKey = new Map<string, SavedRecord>();
+  const extraSameKey: SavedRecord[] = [];
+  for (const r of savedRecords) {
+    if (!r.master_item_key) continue;
+    if (firstByMasterKey.has(r.master_item_key)) extraSameKey.push(r);
+    else firstByMasterKey.set(r.master_item_key, r);
+  }
+  const merged = masterItems
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((item) => {
+      const saved = firstByMasterKey.get(item.item_key);
+      return saved ? rowFromRecord(saved, config, false, item.item_label) : rowFromMaster(item, currency, config);
+    });
+  const activeKeySet = new Set(masterItems.map((m) => m.item_key));
+  const ownName = (r: SavedRecord) => String(r[config.nameField] ?? '');
+  const extraRows = extraSameKey
+    .filter((r) => activeKeySet.has(r.master_item_key!))
+    .map((r) => ({ ...rowFromRecord(r, config, false, ownName(r)), key: `${r.master_item_key}#${r.id}` }));
+  const customRows = savedRecords
+    .filter((r) => !r.master_item_key)
+    .map((r) => rowFromRecord(r, config, true, ownName(r)));
+
+  // A/I/R consolidation safety net (spec s.4.3 "no record may disappear
+  // merely to tidy taxonomy"): a saved row can carry a master_item_key
+  // that no longer appears in the *active* master-items list — either
+  // because a catalogue item was deprecated after this row was saved
+  // (e.g. migration 0074's cross-module taxonomy cleanup), or a race
+  // between an in-flight save and a catalogue change. Without this, the
+  // row would match neither `merged` (only active master items) nor
+  // `customRows` (only master_item_key === null) and would silently
+  // vanish from the UI while still counting in every total. Rendered
+  // like a master-catalogue row (label from its own saved name field,
+  // not editable) rather than a custom row, since renaming it here
+  // would not change what it upserts against.
+  const orphanedRows = savedRecords
+    .filter((r) => r.master_item_key && !activeKeySet.has(r.master_item_key))
+    .map((r) => ({ ...rowFromRecord(r, config, false, ownName(r)), key: `${r.master_item_key}#${r.id}` }));
+
+  return [...merged, ...extraRows, ...orphanedRows, ...customRows];
+}
+
 // R3 spec section 38/40 — direct-edit protection + source provenance badge.
 // Fields Investment Intelligence certifies from a source document must not
 // become independently editable here (matches the server-side enforcement
@@ -331,36 +388,7 @@ export function FinancialDataGrid({
         setReviewConfirmed(reviewed?.status === 'reviewed_with_data' && savedRecords.length > 0);
       }
 
-      const byMasterKey = new Map(savedRecords.filter((r) => r.master_item_key).map((r) => [r.master_item_key!, r]));
-      const merged = masterItems
-        .slice()
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((item) => {
-          const saved = byMasterKey.get(item.item_key);
-          return saved ? rowFromRecord(saved, config, false, item.item_label) : rowFromMaster(item, currency, config);
-        });
-      const customRows = savedRecords
-        .filter((r) => !r.master_item_key)
-        .map((r) => rowFromRecord(r, config, true, String(r[config.nameField] ?? '')));
-
-      // A/I/R consolidation safety net (spec s.4.3 "no record may disappear
-      // merely to tidy taxonomy"): a saved row can carry a master_item_key
-      // that no longer appears in the *active* master-items list — either
-      // because a catalogue item was deprecated after this row was saved
-      // (e.g. migration 0074's cross-module taxonomy cleanup), or a race
-      // between an in-flight save and a catalogue change. Without this, the
-      // row would match neither `merged` (only active master items) nor
-      // `customRows` (only master_item_key === null) and would silently
-      // vanish from the UI while still counting in every total. Rendered
-      // like a master-catalogue row (label from its own saved name field,
-      // not editable) rather than a custom row, since renaming it here
-      // would not change what it upserts against.
-      const activeKeySet = new Set(masterItems.map((m) => m.item_key));
-      const orphanedRows = savedRecords
-        .filter((r) => r.master_item_key && !activeKeySet.has(r.master_item_key))
-        .map((r) => rowFromRecord(r, config, false, String(r[config.nameField] ?? '')));
-
-      setRows([...merged, ...orphanedRows, ...customRows]);
+      setRows(mergeSavedRows(masterItems, savedRecords, config, currency));
     }
     load();
     return () => {
@@ -419,7 +447,11 @@ export function FinancialDataGrid({
         !isFieldApplicableForRow(row, f.name, config) || row[f.name] === '' || row[f.name] == null ? undefined : row[f.name];
     }
 
-    const usePatch = row.is_custom && row.id;
+    // A saved row that is not its catalogue item's own row (a second record
+    // under the same master_item_key, or one whose catalogue item is gone --
+    // see mergeSavedRows) is edited by id: an upsert by master_item_key would
+    // write over the catalogue row's record instead.
+    const usePatch = row.id && (row.is_custom || row.key !== row.master_item_key);
     const url = usePatch ? `/api/${config.resource}/${row.id}` : `/api/${config.resource}`;
     const method = usePatch ? 'PATCH' : 'POST';
 

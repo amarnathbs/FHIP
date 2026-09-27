@@ -404,6 +404,7 @@ export async function approveStatement(
       economic_transaction_type: t.economic_transaction_type,
       category_id: t.category_id,
       dedup_status: t.dedup_status,
+      credit_debit: t.credit_debit, // rule 10: money in of a spending type is a refund
       allocations: t.allocations.map((a) => ({
         economic_transaction_type: a.economic_transaction_type,
         category_id: a.category_id,

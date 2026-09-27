@@ -115,6 +115,11 @@ export function keepsSourceEconomicType(txn: Pick<FdhTransaction, 'classificatio
  * linking, and recurring-series detection. Safe to re-run at any time
  * (e.g. after a new statement import, or after reference data changes).
  */
+/** Ids per batched UPDATE (a PostgREST `.in()` list travels in the URL: 100 UUIDs is ~3.7 KB). */
+export const CLASSIFICATION_WRITE_BATCH = 100;
+/** History rows per batched INSERT (request body). */
+export const CLASSIFICATION_HISTORY_BATCH = 500;
+
 export async function classifyUserTransactions(userId: string): Promise<ClassificationRunSummary> {
   const [transactions, userRulesResult, accountsResult] = await Promise.all([
     loadUserTransactions(userId),
@@ -147,6 +152,20 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
   let unresolved = 0;
   let skippedOverride = 0;
   const resolvedByTxnId = new Map<string, ReturnType<typeof classifyTransaction>>();
+
+  // Canonical-cert scale finding (2026-09-27): the writes below used to be one request per row (and a
+  // second one per classified row for its history), i.e. 1,000-2,000 SEQUENTIAL round trips for a
+  // 1,000-line statement inside one HTTP request -- far past the production 28 s limit. They are now
+  // collected and written in batches: rows receiving the IDENTICAL update share one
+  // `.in('id', <=100 ids)` request, and history rows are inserted in chunks. Same rows, same values.
+  const pendingUpdates = new Map<string, { patch: Record<string, unknown>; ids: string[] }>();
+  const queueUpdate = (patch: Record<string, unknown>, id: string) => {
+    const key = JSON.stringify(patch);
+    const entry = pendingUpdates.get(key);
+    if (entry) entry.ids.push(id);
+    else pendingUpdates.set(key, { patch, ids: [id] });
+  };
+  const historyRows: Record<string, unknown>[] = [];
 
   for (const txn of transactions) {
     if (txn.user_override) {
@@ -188,12 +207,8 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
         result.categoryId !== txn.category_id || result.subcategoryId !== txn.subcategory_id || result.merchantId !== txn.merchant_id;
       if (!categoryChanged) continue;
       classified += 1;
-      await admin
-        .from('fdh_transactions')
-        .update({ category_id: result.categoryId, subcategory_id: result.subcategoryId, merchant_id: result.merchantId })
-        .eq('id', txn.id)
-        .eq('user_id', userId);
-      await admin.from('fdh_classification_history').insert({
+      queueUpdate({ category_id: result.categoryId, subcategory_id: result.subcategoryId, merchant_id: result.merchantId }, txn.id);
+      historyRows.push({
         user_id: userId,
         transaction_id: txn.id,
         previous_economic_transaction_type: txn.economic_transaction_type,
@@ -222,35 +237,25 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
 
     if (result.source.kind === 'unresolved') {
       unresolved += 1;
-      if (changed || txn.review_status === 'not_required') {
-        await admin
-          .from('fdh_transactions')
-          .update({ review_status: 'pending' })
-          .eq('id', txn.id)
-          .eq('user_id', userId);
-      }
+      if (changed || txn.review_status === 'not_required') queueUpdate({ review_status: 'pending' }, txn.id);
       continue;
     }
 
     if (!changed) continue;
     classified += 1;
 
-    await admin
-      .from('fdh_transactions')
-      .update({
-        economic_transaction_type: result.economicTransactionType,
-        category_id: result.categoryId,
-        subcategory_id: result.subcategoryId,
-        merchant_id: result.merchantId,
-        transfer_flag: result.transferFlag,
-        subscription_flag: result.subscriptionFlag,
-        classification_confidence: CONFIDENCE_SCORE[result.confidence],
-        classification_method: result.classificationMethod,
-      })
-      .eq('id', txn.id)
-      .eq('user_id', userId);
+    queueUpdate({
+      economic_transaction_type: result.economicTransactionType,
+      category_id: result.categoryId,
+      subcategory_id: result.subcategoryId,
+      merchant_id: result.merchantId,
+      transfer_flag: result.transferFlag,
+      subscription_flag: result.subscriptionFlag,
+      classification_confidence: CONFIDENCE_SCORE[result.confidence],
+      classification_method: result.classificationMethod,
+    }, txn.id);
 
-    await admin.from('fdh_classification_history').insert({
+    historyRows.push({
       user_id: userId,
       transaction_id: txn.id,
       previous_economic_transaction_type: txn.economic_transaction_type,
@@ -266,6 +271,23 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
       global_rule_id: result.source.kind === 'verified_global_rule' || result.source.kind === 'narrative_pattern' ? (result.source.ruleId ?? null) : null,
       user_rule_id: result.source.kind === 'user_rule' ? (result.source.ruleId ?? null) : null,
     });
+  }
+
+  // Flush the batched classification writes (see above). A failed transaction batch throws: a partial
+  // write of up to 100 rows must never be reported as a completed run. History inserts stay best-effort,
+  // exactly as the per-row inserts were (their result was never checked).
+  for (const { patch, ids } of pendingUpdates.values()) {
+    for (let i = 0; i < ids.length; i += CLASSIFICATION_WRITE_BATCH) {
+      const { error } = await admin
+        .from('fdh_transactions')
+        .update(patch)
+        .in('id', ids.slice(i, i + CLASSIFICATION_WRITE_BATCH))
+        .eq('user_id', userId);
+      if (error) throw new Error(`classifyUserTransactions: batched update failed: ${error.message}`);
+    }
+  }
+  for (let i = 0; i < historyRows.length; i += CLASSIFICATION_HISTORY_BATCH) {
+    await admin.from('fdh_classification_history').insert(historyRows.slice(i, i + CLASSIFICATION_HISTORY_BATCH));
   }
 
   // --- Transfer / settlement / loan-payment matching (batch, cross-account) ---

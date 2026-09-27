@@ -444,7 +444,10 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         return;
       }
 
-      if (data.account_resolution === 'ambiguous') {
+      // A file the upload step REJECTED (e.g. file_corrupt) has no account question: it is reported as
+      // rejected below (canonical-cert, DEV 2026-09-27: a corrupt file also comes back 'ambiguous' and was
+      // told to add account digits). A password-protected PDF keeps the previous order.
+      if (data.account_resolution === 'ambiguous' && (!data.error_code || data.error_code === 'password_required')) {
         setMessage(
           'We couldn’t automatically match this statement to one of your accounts. Try adding the last few digits of the account or card number above and uploading again.',
         );

@@ -178,6 +178,15 @@ export interface RetirementEvidence {
    * one somehow does. */
   isSmsf?: boolean;
   reviewReasons: string[];
+  /**
+   * The account the statement's account-match step resolved to (the user's
+   * "Use this account", or the matcher's single match). AUTHORITATIVE: when it
+   * is one of the active, non-SMSF accounts passed in, it is the target, and
+   * fund-name matching is not re-run over it. (Canonical-cert, DEV 2026-09-27:
+   * re-running it discarded the user's choice whenever the fund's printed
+   * name differed from the account's name, and recommended a second account.)
+   */
+  confirmedAccountId?: string;
 }
 
 /**
@@ -489,7 +498,12 @@ export const retirementAdapter: ImportDomainAdapter<RetirementEvidence, Existing
   applicableFields: RETIREMENT_APPLICABLE_FIELDS,
 
   buildProposal(evidence, existing): ImportProposalDraft {
-    const duplicate = findDuplicateRetirementAccount(evidence, existing);
+    const confirmed = evidence.confirmedAccountId
+      ? existing.find((r) => r.id === evidence.confirmedAccountId && r.master_item_key !== 'smsf') ?? null
+      : null;
+    const duplicate = confirmed
+      ? { accountId: confirmed.id, outcome: 'single_match' as RetirementMatchOutcome }
+      : findDuplicateRetirementAccount(evidence, existing);
     // AMBIGUOUS is never silently resolved to the first candidate (spec
     // sections 18, 27): the proposal targets nothing and carries the ambiguity
     // as a review reason; the UI surfaces REVIEW_REQUIRED and the user picks.

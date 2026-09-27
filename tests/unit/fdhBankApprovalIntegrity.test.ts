@@ -444,7 +444,7 @@ describe('PDF / AI statement: period, masked identifier, AI evidence, incomplete
     await persist(3, { institutionName: null, allTransactionsListed: false, warningCount: 0, rowsRead: 3 });
     const t = h.db.rows('fdh_transactions').find((r) => r.statement_upload_id === DOC)!;
     Object.assign(t, { posting_date: '2026-07-02', value_date: '2026-07-03', source_reference: 'REF123', balance_after: 999.5 });
-    h.db.insert('fdh_reconciliation_results', { user_id: A, statement_upload_id: DOC, status: 'failed', opening_balance: 100, reported_closing_balance: 50, expected_closing_balance: 61, variance: 11, currency_code: 'AUD', created_at: '2999-01-01T00:00:00Z' }); // later than the row persist() wrote "now" (was a hard-coded date: a time bomb that fired on 2026-09-27)
+    h.db.insert('fdh_reconciliation_results', { user_id: A, statement_upload_id: DOC, status: 'failed', opening_balance: 100, reported_closing_balance: 50, expected_closing_balance: 61, variance: 11, currency_code: 'AUD', created_at: new Date(Date.now() + 86_400_000).toISOString() }); // newest: after persist()'s own row (a fixed date expired on 2026-09-27)
     const dq = h.db.rows('fdh_data_quality_results').find((q) => q.statement_upload_id === DOC && q.check_code === 'transaction_count_valid')!;
     dq.details_sanitised = `${dq.details_sanitised} unread=2 invalid_amount=2`.replace(/unread=0\s*/, '');
     const res = await call('@/app/api/financial-data-hub/documents/[documentId]/statement-details/route', 'GET', { params: { documentId: DOC } });

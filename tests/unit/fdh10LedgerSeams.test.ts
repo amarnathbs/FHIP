@@ -130,10 +130,19 @@ vi.mock('@/lib/supabase/admin', () => ({
       update: (patch: Record<string, unknown>) => {
         const entry: { table: string; patch: Record<string, unknown>; id?: unknown } = { table, patch };
         adminUpdates.push(entry);
-        const chain = { eq: (col: string, v: unknown) => { if (col === 'id') entry.id = v; return chain; }, in: () => chain, then: (r: (v: unknown) => void) => r({ error: null }) };
+        // The classifier writes rows that receive the same patch in one `.in('id', ids)` request
+        // (canonical-cert batching, 2026-09-27); one recorded entry per id keeps the assertions per row.
+        const chain = {
+          eq: (col: string, v: unknown) => { if (col === 'id') entry.id = v; return chain; },
+          in: (col: string, v: unknown[]) => {
+            if (col === 'id') { adminUpdates.splice(adminUpdates.indexOf(entry), 1); for (const id of v) adminUpdates.push({ table, patch, id }); }
+            return chain;
+          },
+          then: (r: (v: unknown) => void) => r({ error: null }),
+        };
         return chain;
       },
-      insert: (row: Record<string, unknown>) => { adminInserts.push({ table, row }); return { select: () => ({ single: async () => ({ data: null, error: { message: 'x' } }) }), then: (r: (v: unknown) => void) => r({ error: null }) }; },
+      insert: (row: Record<string, unknown> | Record<string, unknown>[]) => { for (const one of [row].flat()) adminInserts.push({ table, row: one }); return { select: () => ({ single: async () => ({ data: null, error: { message: 'x' } }) }), then: (r: (v: unknown) => void) => r({ error: null }) }; },
     }),
   }),
 }));

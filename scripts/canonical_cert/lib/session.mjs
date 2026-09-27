@@ -104,8 +104,10 @@ export async function api(email, method, route, { port, json, body, contentType,
   const init = { method, headers: { cookie: cookieHeader(session), ...headers }, redirect: 'manual' };
   if (json !== undefined) { init.body = JSON.stringify(json); init.headers['Content-Type'] = 'application/json'; }
   else if (body !== undefined) { init.body = body; if (contentType) init.headers['Content-Type'] = contentType; }
-  const res = await fetch(base + route, init);
-  const setCookies = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+  // node:http, not fetch: Node's fetch gives up on a response after 300 s (undici headersTimeout), and a
+  // scale journey must be able to MEASURE a request that runs longer than that (localhost only).
+  const res = await httpRequest(base + route, init);
+  const setCookies = res.setCookies;
   let changed = false;
   for (const sc of setCookies) {
     const [pair, ...attrs] = sc.split(';');
@@ -117,22 +119,59 @@ export async function api(email, method, route, { port, json, body, contentType,
     changed = true;
   }
   if (changed) fs.writeFileSync(sessionFile(email), JSON.stringify(session, null, 2));
-  const text = await res.text();
+  const text = res.text;
   let parsed = null; try { parsed = JSON.parse(text); } catch { /* not json */ }
   return { status: res.status, json: parsed, text, headers: res.headers };
 }
 
+/** Plain HTTP request with no client-side timeout (the app is on localhost). */
+async function httpRequest(url, init) {
+  const http = await import('node:http');
+  let body = init.body;
+  if (body !== undefined && typeof body !== 'string' && !Buffer.isBuffer(body)) {
+    body = body instanceof Uint8Array ? Buffer.from(body) : Buffer.from(await new Response(body).arrayBuffer());
+  }
+  return new Promise((resolve, reject) => {
+    const req = http.request(url, { method: init.method, headers: { ...init.headers, ...(body !== undefined ? { 'Content-Length': Buffer.byteLength(body) } : {}) } }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const headers = new Headers();
+        for (const [k, v] of Object.entries(res.headers)) if (v !== undefined && k !== 'set-cookie') headers.set(k, Array.isArray(v) ? v.join(', ') : String(v));
+        resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8'), headers, setCookies: res.headers['set-cookie'] ?? [] });
+      });
+      res.on('error', reject);
+    });
+    req.setTimeout(0);
+    req.on('error', reject);
+    if (body !== undefined) req.write(body);
+    req.end();
+  });
+}
+
 /** End the session server-side (local scope: only this session) and delete the session file. */
-export async function revoke(email) {
+export async function revoke(email, { scope = 'local' } = {}) {
   const session = loadSession(email);
   const chunk = (n) => { const m = n.match(/^sb-[a-z0-9]+-auth-token(?:\.(\d+))?$/); return m ? Number(m[1] ?? -1) : null; };
   const raw = Object.entries(session.cookies).filter(([n]) => chunk(n) !== null)
     .sort(([a], [b]) => chunk(a) - chunk(b)).map(([, v]) => v).join('');
   const decoded = raw.startsWith('base64-') ? Buffer.from(raw.slice(7), 'base64url').toString('utf8') : raw;
-  const token = JSON.parse(decoded).access_token;
+  const stored = JSON.parse(decoded);
+  let token = stored.access_token;
+  // An access token expires after an hour and signOut needs a valid one. Deleting the session file after a
+  // failed signOut used to strand a live refresh token on DEV; refresh first instead (canonical-cert, 2026-09-27).
+  if (typeof stored.expires_at === 'number' && stored.expires_at * 1000 < Date.now() + 30_000 && stored.refresh_token) {
+    const { url, anonKey } = loadDevEnv();
+    const res = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST', headers: { apikey: anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: stored.refresh_token }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.access_token) throw new Error(`signOut: refresh before sign-out failed (HTTP ${res.status}); session file kept`);
+    token = body.access_token;
+  }
   const admin = await serviceClient();
-  const { error } = await admin.auth.admin.signOut(token, 'local');
+  const { error } = await admin.auth.admin.signOut(token, scope);
+  if (error) throw new Error(`signOut failed: ${error.message}; session file kept`);
   fs.rmSync(sessionFile(email), { force: true });
-  if (error) throw new Error(`signOut failed: ${error.message}`);
   return true;
 }

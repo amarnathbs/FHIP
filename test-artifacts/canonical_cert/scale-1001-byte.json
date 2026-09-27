@@ -1,0 +1,630 @@
+{
+  "email": "forecast.tc008@example.test",
+  "n": 1001,
+  "file": "fhip-test-bank-scale-1001-2026-08-C.csv",
+  "fileDataLines": 1001,
+  "oracle": {
+    "rows": 1001,
+    "dataLines": 1001,
+    "fileLines": 1002,
+    "openingBalance": 100000,
+    "closingBalance": -265795,
+    "totalCredits": 47305,
+    "totalDebits": 413100,
+    "expectations": [
+      "exactly 1001 transactions persisted, none truncated",
+      "the same file uploaded twice -> 0 new transactions / 0 duplicate effects"
+    ]
+  },
+  "steps": {
+    "pre": {
+      "fdh_transactions_user": 0,
+      "fdh_transactions_user_approved": 0,
+      "fdh_statement_uploads_user": 0,
+      "per_statement": {},
+      "expenses_actuals": {
+        "status": "ok",
+        "lineCount": 0,
+        "pageCount": 1,
+        "linesOnPage": 0,
+        "totals": {
+          "plannedMonthly": 8200,
+          "actualMonthly": 0,
+          "combinedMonthly": 8200,
+          "actualTotalInWindow": 0
+        },
+        "coveredMonths": [],
+        "unknownPendingCount": 0,
+        "excludedDuplicates": 0,
+        "nonSpending": [
+          {
+            "bucket": "transfer",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "cash_withdrawal",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "investment",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "asset_purchase",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "asset_sale",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "debt_principal",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "cost_of_debt",
+            "count": 0,
+            "total": 0
+          }
+        ]
+      },
+      "dashboard": {
+        "totalMonthlyExpenses": 8200,
+        "bankMonthlyExpenses": 0,
+        "bankMonthlyIncome": 0,
+        "grossMonthlyIncome": 12500,
+        "netMonthlyIncome": 10250,
+        "monthlySurplus": -830,
+        "coveredMonths": [],
+        "unknownPendingCount": 0
+      }
+    },
+    "first": {
+      "upload": {
+        "status": 200,
+        "document_id": "b0899bd7-7629-419a-b9da-ef70483f4ba5",
+        "duplicate_of_document_id": null,
+        "account_resolution": "created",
+        "processing_status": "queued"
+      },
+      "detect": {
+        "status": 200,
+        "error": null
+      },
+      "process": {
+        "status": 200,
+        "error": null,
+        "document_id": "b0899bd7-7629-419a-b9da-ef70483f4ba5",
+        "duplicate": false,
+        "duplicate_of_document_id": null,
+        "transactions_created": 1001,
+        "duplicates_skipped": 0,
+        "rejected_rows": 0,
+        "declared_row_count": 1001,
+        "parsed_row_count": 1001,
+        "reconciliation_status": "reconciled",
+        "processing_status": "approved"
+      },
+      "categorise": {
+        "status": 200,
+        "summary": {
+          "transactionsConsidered": 1001,
+          "transactionsClassified": 0,
+          "transactionsUnresolved": 1001,
+          "transactionsSkippedUserOverride": 0,
+          "transferLinksProposed": 0,
+          "refundLinksProposed": 0,
+          "recurringSeriesDetected": 0
+        }
+      }
+    },
+    "after_process_db": {
+      "rows": 1001
+    },
+    "review1": {
+      "counts": {
+        "transactions": 1001,
+        "approved": 0,
+        "waiting_for_approval": 1001,
+        "needs_decision": 1001,
+        "uncategorised": 1001,
+        "low_confidence": 0,
+        "ready_to_approve": 0,
+        "duplicates_removed": 0
+      },
+      "needsDecision": 1001,
+      "groups": []
+    },
+    "rememberPayee": {
+      "status": 200,
+      "result": {
+        "transaction_id": "07e64da8-d009-425b-b9f9-f372538721f0",
+        "category_id": "5a8ba467-eaf4-4f68-82d5-07ed36931cd0",
+        "economic_transaction_type": "expense",
+        "classification_method": "user_manual",
+        "links_settled": 0,
+        "payee_remembered": true,
+        "payee_key": "FHIP TEST MERCHANT"
+      }
+    },
+    "review2": {
+      "counts": {
+        "transactions": 1001,
+        "approved": 0,
+        "waiting_for_approval": 1001,
+        "needs_decision": 0,
+        "uncategorised": 0,
+        "low_confidence": 0,
+        "ready_to_approve": 1001,
+        "duplicates_removed": 0
+      },
+      "needsDecision": 0
+    },
+    "decisions": {
+      "individuallyDecided": 0,
+      "failures": 0,
+      "count": 1,
+      "p50": 410002,
+      "max": 410002,
+      "overLimit": 1
+    },
+    "review3": {
+      "counts": {
+        "transactions": 1001,
+        "approved": 0,
+        "waiting_for_approval": 1001,
+        "needs_decision": 0,
+        "uncategorised": 0,
+        "low_confidence": 0,
+        "ready_to_approve": 1001,
+        "duplicates_removed": 0
+      },
+      "needsDecision": 0,
+      "groups": [
+        {
+          "key": "cat:5a8ba467-eaf4-4f68-82d5-07ed36931cd0|out|AUD",
+          "label": "Food & Dining",
+          "count": 900,
+          "pending": 900
+        },
+        {
+          "key": "cat:5a8ba467-eaf4-4f68-82d5-07ed36931cd0|in|AUD",
+          "label": "Food & Dining",
+          "count": 101,
+          "pending": 101
+        }
+      ]
+    },
+    "approveAll": {
+      "status": 200,
+      "result": {
+        "outcome": "approved",
+        "approved": 1001
+      }
+    },
+    "review4": {
+      "counts": {
+        "transactions": 1001,
+        "approved": 1001,
+        "waiting_for_approval": 0,
+        "needs_decision": 0,
+        "uncategorised": 0,
+        "low_confidence": 0,
+        "ready_to_approve": 0,
+        "duplicates_removed": 0
+      }
+    },
+    "post_approve": {
+      "fdh_transactions_user": 1001,
+      "fdh_transactions_user_approved": 1001,
+      "fdh_statement_uploads_user": 1,
+      "per_statement": {
+        "b0899bd7-7629-419a-b9da-ef70483f4ba5": {
+          "rows": 1001,
+          "approved": 1001
+        }
+      },
+      "expenses_actuals": {
+        "status": "ok",
+        "lineCount": 900,
+        "pageCount": 2,
+        "linesOnPage": 500,
+        "totals": {
+          "plannedMonthly": 8200,
+          "actualMonthly": 413100,
+          "combinedMonthly": 421300,
+          "actualTotalInWindow": 413100
+        },
+        "coveredMonths": [
+          "2026-08"
+        ],
+        "unknownPendingCount": 0,
+        "excludedDuplicates": 0,
+        "nonSpending": [
+          {
+            "bucket": "transfer",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "cash_withdrawal",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "investment",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "asset_purchase",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "asset_sale",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "debt_principal",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "cost_of_debt",
+            "count": 0,
+            "total": 0
+          }
+        ],
+        "lastPageLines": 400
+      },
+      "dashboard": {
+        "totalMonthlyExpenses": 421300,
+        "bankMonthlyExpenses": 413100,
+        "bankMonthlyIncome": 0,
+        "grossMonthlyIncome": 12500,
+        "netMonthlyIncome": 10250,
+        "monthlySurplus": -413930,
+        "coveredMonths": [
+          "2026-08"
+        ],
+        "unknownPendingCount": 0
+      }
+    },
+    "repeat": {
+      "upload": {
+        "status": 200,
+        "document_id": "a0c85988-7e83-4c54-9c9b-6c9b18958077",
+        "duplicate_of_document_id": "b0899bd7-7629-419a-b9da-ef70483f4ba5",
+        "account_resolution": "reused",
+        "processing_status": "queued"
+      },
+      "process": {
+        "status": 200,
+        "error": null,
+        "document_id": "b0899bd7-7629-419a-b9da-ef70483f4ba5",
+        "duplicate": true,
+        "duplicate_of_document_id": "b0899bd7-7629-419a-b9da-ef70483f4ba5",
+        "transactions_created": 0,
+        "duplicates_skipped": 1001,
+        "rejected_rows": 0,
+        "declared_row_count": 1001,
+        "parsed_row_count": 1001,
+        "reconciliation_status": "reconciled",
+        "processing_status": "approved"
+      },
+      "categorise": {
+        "status": 200,
+        "summary": {
+          "transactionsConsidered": 1001,
+          "transactionsClassified": 0,
+          "transactionsUnresolved": 0,
+          "transactionsSkippedUserOverride": 1,
+          "transferLinksProposed": 0,
+          "refundLinksProposed": 0,
+          "recurringSeriesDetected": 0
+        }
+      }
+    },
+    "repeatReview": {
+      "status": 200,
+      "counts": {
+        "transactions": 0,
+        "approved": 0,
+        "waiting_for_approval": 0,
+        "needs_decision": 0,
+        "uncategorised": 0,
+        "low_confidence": 0,
+        "ready_to_approve": 0,
+        "duplicates_removed": 0
+      },
+      "needsDecision": 0
+    },
+    "post_repeat": {
+      "fdh_transactions_user": 1001,
+      "fdh_transactions_user_approved": 1001,
+      "fdh_statement_uploads_user": 2,
+      "per_statement": {
+        "b0899bd7-7629-419a-b9da-ef70483f4ba5": {
+          "rows": 1001,
+          "approved": 1001
+        },
+        "a0c85988-7e83-4c54-9c9b-6c9b18958077": {
+          "rows": 0,
+          "approved": 0
+        }
+      },
+      "expenses_actuals": {
+        "status": "ok",
+        "lineCount": 900,
+        "pageCount": 2,
+        "linesOnPage": 500,
+        "totals": {
+          "plannedMonthly": 8200,
+          "actualMonthly": 413100,
+          "combinedMonthly": 421300,
+          "actualTotalInWindow": 413100
+        },
+        "coveredMonths": [
+          "2026-08"
+        ],
+        "unknownPendingCount": 0,
+        "excludedDuplicates": 0,
+        "nonSpending": [
+          {
+            "bucket": "transfer",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "cash_withdrawal",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "investment",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "asset_purchase",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "asset_sale",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "debt_principal",
+            "count": 0,
+            "total": 0
+          },
+          {
+            "bucket": "cost_of_debt",
+            "count": 0,
+            "total": 0
+          }
+        ],
+        "lastPageLines": 400
+      },
+      "dashboard": {
+        "totalMonthlyExpenses": 421300,
+        "bankMonthlyExpenses": 413100,
+        "bankMonthlyIncome": 0,
+        "grossMonthlyIncome": 12500,
+        "netMonthlyIncome": 10250,
+        "monthlySurplus": -413930,
+        "coveredMonths": [
+          "2026-08"
+        ],
+        "unknownPendingCount": 0
+      }
+    }
+  },
+  "timings": [
+    {
+      "step": "pre: GET expenses/actuals",
+      "ms": 9689,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 16,
+      "sbWaitMs": 15542
+    },
+    {
+      "step": "pre: GET dashboard/summary",
+      "ms": 5332,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 37,
+      "sbWaitMs": 6747
+    },
+    {
+      "step": "first: upload",
+      "ms": 6776,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 31,
+      "sbWaitMs": 5311
+    },
+    {
+      "step": "first: detect",
+      "ms": 9447,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 15,
+      "sbWaitMs": 3788
+    },
+    {
+      "step": "first: process",
+      "ms": 17531,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 30,
+      "sbWaitMs": 7491
+    },
+    {
+      "step": "first: categorise",
+      "ms": 182543,
+      "status": 200,
+      "overLimit": true,
+      "sbRequests": 1017,
+      "sbWaitMs": 180356
+    },
+    {
+      "step": "review#1: GET category-review",
+      "ms": 17266,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 25,
+      "sbWaitMs": 12211
+    },
+    {
+      "step": "decide: remember payee (out)",
+      "ms": 409794,
+      "status": 200,
+      "overLimit": true,
+      "sbRequests": 2032,
+      "sbWaitMs": 403380
+    },
+    {
+      "step": "review#2: GET category-review",
+      "ms": 4511,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 25,
+      "sbWaitMs": 5954
+    },
+    {
+      "step": "review#3: GET category-review",
+      "ms": 3608,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 23,
+      "sbWaitMs": 4142
+    },
+    {
+      "step": "approve-all",
+      "ms": 36092,
+      "status": 200,
+      "overLimit": true,
+      "sbRequests": 58,
+      "sbWaitMs": 26782
+    },
+    {
+      "step": "review#4: GET category-review",
+      "ms": 33816,
+      "status": 200,
+      "overLimit": true,
+      "sbRequests": 23,
+      "sbWaitMs": 33883
+    },
+    {
+      "step": "post_approve: GET expenses/actuals",
+      "ms": 20674,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 96,
+      "sbWaitMs": 19154
+    },
+    {
+      "step": "post_approve: GET actuals last page",
+      "ms": 16918,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 94,
+      "sbWaitMs": 17142
+    },
+    {
+      "step": "post_approve: GET dashboard/summary",
+      "ms": 23237,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 117,
+      "sbWaitMs": 22617
+    },
+    {
+      "step": "repeat(byte): upload",
+      "ms": 8695,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 30,
+      "sbWaitMs": 7511
+    },
+    {
+      "step": "repeat(byte): process",
+      "ms": 3214,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 10,
+      "sbWaitMs": 1958
+    },
+    {
+      "step": "repeat(byte): categorise",
+      "ms": 4627,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 16,
+      "sbWaitMs": 3864
+    },
+    {
+      "step": "repeat review: GET category-review",
+      "ms": 3303,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 13,
+      "sbWaitMs": 2160
+    },
+    {
+      "step": "post_repeat: GET expenses/actuals",
+      "ms": 24870,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 94,
+      "sbWaitMs": 24893
+    },
+    {
+      "step": "post_repeat: GET actuals last page",
+      "ms": 17432,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 94,
+      "sbWaitMs": 17638
+    },
+    {
+      "step": "post_repeat: GET dashboard/summary",
+      "ms": 18852,
+      "status": 200,
+      "overLimit": false,
+      "sbRequests": 115,
+      "sbWaitMs": 21089
+    }
+  ],
+  "fileDataLinesCounted": 1001,
+  "statementId": "b0899bd7-7629-419a-b9da-ef70483f4ba5",
+  "repeatStatementId": "a0c85988-7e83-4c54-9c9b-6c9b18958077",
+  "deltas": {
+    "fdh_transactions_user": 1001,
+    "fdh_transactions_user_approved": 1001,
+    "expenses_actuals_lineCount": 900,
+    "expenses_actuals_actualTotalInWindow": 413100,
+    "dashboard_bankMonthlyExpenses": 413100,
+    "dashboard_bankMonthlyIncome": 0
+  },
+  "repeatDeltas": {
+    "fdh_transactions_user": 0,
+    "fdh_transactions_user_approved": 0,
+    "expenses_actuals_lineCount": 0,
+    "expenses_actuals_actualTotalInWindow": 0,
+    "dashboard_bankMonthlyExpenses": 0,
+    "dashboard_bankMonthlyIncome": 0
+  }
+}

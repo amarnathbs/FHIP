@@ -1,0 +1,11 @@
+
+Running 6 tests using 1 worker
+
+  ok 1 tests\e2e\fdh14-ui-accessibility-smoke.spec.ts:139:7 › FDH-14 GAP 5 — UI/accessibility smoke › Income -> Payslip import (42.9s)
+  ok 2 tests\e2e\fdh14-ui-accessibility-smoke.spec.ts:174:7 › FDH-14 GAP 5 — UI/accessibility smoke › Liabilities -> Credit Card / Loan statement import (22.9s)
+  ok 3 tests\e2e\fdh14-ui-accessibility-smoke.spec.ts:204:7 › FDH-14 GAP 5 — UI/accessibility smoke › Investments -> Australian Investment Statement import (26.6s)
+  ok 4 tests\e2e\fdh14-ui-accessibility-smoke.spec.ts:228:7 › FDH-14 GAP 5 — UI/accessibility smoke › Retirement -> Retirement Statement import (35.1s)
+  ok 5 tests\e2e\fdh14-ui-accessibility-smoke.spec.ts:260:7 › FDH-14 GAP 5 — UI/accessibility smoke › Expenses -> Import bank statement (the bank-statement upload surface since D-13) (1.3m)
+  ok 6 tests\e2e\fdh14-ui-accessibility-smoke.spec.ts:308:7 › FDH-14 GAP 5 — UI/accessibility smoke › Retired generic upload page (/financial-data-hub, PO D-13): no uploader; old links redirect to the import tabs (1.2m)
+
+  6 passed (4.6m)

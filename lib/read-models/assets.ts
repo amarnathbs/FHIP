@@ -87,7 +87,11 @@ export interface AssetsReadModelData {
   lines: AssetLine[];
   total: number;
   householdTotal: number;
-  bankBalanceEvidence: { label: string; accounts: BankBalanceEvidence[]; total: number };
+  /** `accounts` lists every bank account's latest statement balance, each with `inNetWorthAs` when the user
+   * already added it as a cash asset. `total` / `notInNetWorthCount` cover ONLY the balances NOT in Net Worth:
+   * that is what the label says (canonical-cert UI journey, DEV 2026-09-27: after "Add to Assets" the Dashboard
+   * still said "Bank balance per statement — not in Net Worth: $27,895" while Net Worth included it). */
+  bankBalanceEvidence: { label: string; accounts: BankBalanceEvidence[]; total: number; notInNetWorthCount: number };
   unconverted: UnconvertedTally;
 }
 
@@ -153,7 +157,12 @@ export function computeAssets(input: {
     lines,
     total: sum(lines.map((l) => l.value.amountReporting)),
     householdTotal: sum(lines.filter((l) => l.household).map((l) => l.value.amountReporting)),
-    bankBalanceEvidence: { label: BANK_BALANCE_EVIDENCE_LABEL, accounts: evidence, total: sum(evidence.map((e) => e.closingBalance.amountReporting)) },
+    bankBalanceEvidence: {
+      label: BANK_BALANCE_EVIDENCE_LABEL,
+      accounts: evidence,
+      total: sum(evidence.filter((e) => !e.inNetWorthAs).map((e) => e.closingBalance.amountReporting)),
+      notInNetWorthCount: evidence.filter((e) => !e.inNetWorthAs).length,
+    },
     unconverted,
   };
 }
