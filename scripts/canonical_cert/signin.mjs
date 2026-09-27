@@ -24,8 +24,10 @@ if (!email) { console.error('usage: signin.mjs --range A --email <fixture email>
 // (UV_HANDLE_CLOSING) and turn a success into exit 127. process.exitCode is used instead.
 async function main() {
   if (args.includes('--revoke')) {
-    await revoke(email);
-    console.log(`revoked session for ${email}`);
+    // --scope global ends EVERY session of this range-owned fixture user (e.g. sessions whose files were lost).
+    const scope = arg('--scope') === 'global' ? 'global' : 'local';
+    await revoke(email, { scope });
+    console.log(`revoked ${scope === 'global' ? 'all sessions' : 'the session'} for ${email}`);
     return;
   }
   const range = arg('--range');
