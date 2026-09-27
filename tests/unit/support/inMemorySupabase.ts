@@ -68,6 +68,9 @@ export function createInMemoryDb(): InMemoryDb {
       delete: () => { deleting = true; return chain; },
       eq: (c: string, v: unknown) => { filters.push((r) => r[c] === v); return chain; },
       neq: (c: string, v: unknown) => { filters.push((r) => r[c] !== v); return chain; },
+      // .not(col, 'is', null) -- IS NOT NULL (added at the stage-3 consolidation: econ D2's
+      // loadAppliedAsOfByLiability uses it; the fake threw, and the liability proposal route answered 500).
+      not: (c: string, op: string, v: unknown) => { filters.push((r) => (op === 'is' ? (v === null ? r[c] !== null && r[c] !== undefined : r[c] !== v) : r[c] !== v)); return chain; },
       in: (c: string, vs: unknown[]) => { filters.push((r) => vs.includes(r[c])); return chain; },
       gte: (c: string, v: unknown) => { filters.push((r) => String(r[c]) >= String(v)); return chain; },
       order: (col: string, o?: { ascending?: boolean }) => { orderBy = { col, asc: o?.ascending !== false }; return chain; },

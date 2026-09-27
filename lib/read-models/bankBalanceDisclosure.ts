@@ -6,13 +6,19 @@
  * rule. Client-safe: pure, type-only imports (the report preview renders the
  * appendix in the browser).
  *
- * Certification fix (2026-09-27, reproduced live on DEV): after the bank
+ * Certification fix (2026-09-27, reproduced live on DEV by three certifiers:
+ * economic oracles D3, scale/UI SUI-6, golden pair GP-D5): after the bank
  * balance was Applied as a cash asset, the Dashboard still said
  * "Bank balance per statement — not in Net Worth: $11,155" while Net Worth
  * already contained it through that asset -- inviting the reader to add it a
  * second time.
+ *
+ * Consolidation (stage 3): the open-only figures are computed ONCE, in the
+ * assets read model (computeAssets: `total` / `notInNetWorthCount` cover only
+ * accounts with inNetWorthAs === null). This helper is the one place the
+ * consumers turn them into a disclosure, so the two can never disagree.
  */
-import type { BankBalanceEvidence } from './assets';
+import type { AssetsReadModelData } from './assets';
 
 export interface BankBalanceDisclosure {
   label: string;
@@ -20,9 +26,9 @@ export interface BankBalanceDisclosure {
   total: number;
 }
 
-export function bankBalancesNotInNetWorth(evidence: { label: string; accounts: readonly BankBalanceEvidence[] }): BankBalanceDisclosure | null {
-  const open = evidence.accounts.filter((a) => a.inNetWorthAs === null);
-  if (open.length === 0) return null;
-  const total = open.reduce((s, a) => s + (a.closingBalance.amountReporting ?? 0), 0);
-  return { label: evidence.label, count: open.length, total: Math.round(total * 100) / 100 };
+export function bankBalancesNotInNetWorth(
+  evidence: Pick<AssetsReadModelData['bankBalanceEvidence'], 'label' | 'total' | 'notInNetWorthCount'>,
+): BankBalanceDisclosure | null {
+  if (evidence.notInNetWorthCount === 0) return null;
+  return { label: evidence.label, count: evidence.notInNetWorthCount, total: evidence.total };
 }

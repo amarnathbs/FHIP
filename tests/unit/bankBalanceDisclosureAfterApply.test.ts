@@ -47,10 +47,23 @@ describe('"Bank balance per statement — not in Net Worth" counts only balances
   });
 
   it('[NC] the Dashboard, report snapshot and report appendix disclose the not-in-Net-Worth count, not every account', () => {
+    // Stage-3 consolidation: the three consumers go through the ONE helper (econ D3 == SUI-6 == GP-D5),
+    // and the helper reads the model's notInNetWorthCount / open-only total.
     for (const f of ['lib/services/dashboardCanonicalAdapter.ts', 'lib/services/reportSnapshotResolver.ts', 'lib/engines/reportCanonicalAppendix.ts']) {
       const src = fs.readFileSync(path.join(process.cwd(), f), 'utf8');
-      expect(src, f).toMatch(/bankBalanceEvidence\.notInNetWorthCount > 0/);
+      expect(src, f).toContain('bankBalancesNotInNetWorth(');
       expect(src, f).not.toMatch(/bankBalanceEvidence\.accounts\.length/);
     }
+    const helper = fs.readFileSync(path.join(process.cwd(), 'lib/read-models/bankBalanceDisclosure.ts'), 'utf8');
+    expect(helper).toMatch(/evidence\.notInNetWorthCount === 0/);
+    expect(helper).not.toMatch(/accounts\.length/);
+  });
+
+  it('[NC] behaviour through the helper: after one balance is added only the other is disclosed; all added -> no disclosure', async () => {
+    const { bankBalancesNotInNetWorth } = await import('@/lib/read-models/bankBalanceDisclosure');
+    expect(bankBalancesNotInNetWorth(computeAssets({ ...common, assets: [] }).bankBalanceEvidence)).toMatchObject({ count: 2, total: 7500 });
+    expect(bankBalancesNotInNetWorth(computeAssets({ ...common, assets: [addedEveryday] }).bankBalanceEvidence)).toMatchObject({ count: 1, total: 1500 });
+    const addedSaver = { ...addedEveryday, id: 'a2', asset_name: 'Saver', current_value: 1500, source_financial_account_id: 'bank2' };
+    expect(bankBalancesNotInNetWorth(computeAssets({ ...common, assets: [addedEveryday, addedSaver] }).bankBalanceEvidence)).toBeNull();
   });
 });
