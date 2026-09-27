@@ -71,6 +71,13 @@ const SCAN_REJECTION_MESSAGES: Record<string, string> = {
   malware_scan_unknown: 'We could not finish checking this file for safety. Please try again, or add this income manually below.',
 };
 
+// The upload step's own refusals (structural file checks), before anything is stored.
+const UPLOAD_REJECTION_MESSAGES: Record<string, string> = {
+  file_corrupt: 'This file appears to be corrupted or unreadable. Please try a different file, or add this income manually below.',
+  // The upload step also records a too-large file under this code.
+  unsupported_file_type: 'This file could not be accepted: please upload a PDF payslip of up to 20MB, or add this income manually below.',
+};
+
 // AI-fallback addition (2026-09-22). Mirrors the money/date field subset
 // `lib/aie/adapters/payslip/types.ts`'s `PAYSLIP_AI_COMPLETABLE_FIELDS`
 // declares — this UI never invents a field the backend contract does not
@@ -536,6 +543,18 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       if (!completeOk) throw new Error(completeJson.error ?? 'Upload failed');
       const docId = completeJson.data.document_id as string;
       setDocumentId(docId);
+
+      // The upload step itself can refuse the file (e.g. not a readable PDF -> `file_corrupt`); nothing was
+      // stored, so there is nothing to process. Say why, in the same words processing would use.
+      if (completeJson.data.processing_status === 'failed' || completeJson.data.processing_status === 'rejected') {
+        const code = completeJson.data.error_code as string | null;
+        setMessage(
+          (code && (SCAN_REJECTION_MESSAGES[code] ?? UPLOAD_REJECTION_MESSAGES[code]))
+            ?? 'This file could not be accepted. Please try a different file, or add this income manually below.',
+        );
+        setPhase('unable_to_read');
+        return;
+      }
 
       // Real-malware-gate async fix (2026-09-21): completeUpload() may have
       // left this document genuinely, legally waiting in `validating` — the

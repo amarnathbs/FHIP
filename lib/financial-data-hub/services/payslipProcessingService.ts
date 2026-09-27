@@ -323,6 +323,16 @@ export async function processPayslipDocument(userId: string, documentId: string,
     throw new PayslipProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
   }
 
+  // Canonical-cert UI journey (DEV, 2026-09-27): a `failed` document with NO stored bytes is an upload the
+  // upload step REJECTED (e.g. `file_corrupt`), not a retryable attempt. Re-processing it re-queued it, found
+  // nothing to read and overwrote the truthful error with `internal_error`. Refuse, in the rejection's words.
+  if (document.processing_status === 'failed' && !document.raw_document_storage_reference) {
+    throw new PayslipProcessingError(
+      'invalid_state',
+      (document.error_code && PAYSLIP_FAILURE_MESSAGES[document.error_code]) ?? 'This file could not be accepted. Please try a different file.',
+    );
+  }
+
   // Byte-identical re-upload (2026-09-25): the same user already turned these
   // exact bytes into a payroll event, so parsing again -- and especially
   // paying for a second AI read -- can only reach the same duplicate. Found in
