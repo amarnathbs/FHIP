@@ -1030,6 +1030,15 @@ export async function matchRetirementContributionsToPayslips(
 ): Promise<{ matched: number; noMatch: number; multipleCandidates: number; varianceReview: number; noPayslipEvidence: number; error: string | null }> {
   const admin = createAdminClient();
 
+  // `fdh_document_audit_events.document_id` FKs to `fdh_statement_uploads(id)`
+  // (0058), never to `fdh_retirement_statements(id)` -- the audit call below
+  // must use the statement's own upload id, not the statement row's id.
+  const { data: stmtForAudit } = await admin
+    .from('fdh_retirement_statements')
+    .select('statement_upload_id')
+    .eq('id', statementId).eq('user_id', userId).maybeSingle();
+  const documentId = (stmtForAudit?.statement_upload_id as string | null) ?? null;
+
   let activities;
   try {
     // PAGINATION (spec sections 138-139): a statement with more than 1000
@@ -1115,7 +1124,7 @@ export async function matchRetirementContributionsToPayslips(
   }
 
   await recordDocumentAuditEvent({
-    userId, documentId: statementId,
+    userId, documentId,
     eventType: 'retirement_statement_payslip_matched', actorType: 'system',
     metadata: { matched, noMatch, multipleCandidates, varianceReview, noPayslipEvidence },
   });
@@ -1197,8 +1206,12 @@ export async function matchRetirementActivitiesToBank(
 
   const { data: stmt } = await admin
     .from('fdh_retirement_statements')
-    .select('fund_name')
+    .select('fund_name, statement_upload_id')
     .eq('id', statementId).eq('user_id', userId).maybeSingle();
+  // `fdh_document_audit_events.document_id` FKs to `fdh_statement_uploads(id)`
+  // (0058), never to `fdh_retirement_statements(id)` -- the audit call below
+  // must use the statement's own upload id, not the statement row's id.
+  const documentId = (stmt?.statement_upload_id as string | null) ?? null;
 
   let activities;
   try {
@@ -1290,7 +1303,7 @@ export async function matchRetirementActivitiesToBank(
   }
 
   await recordDocumentAuditEvent({
-    userId, documentId: statementId,
+    userId, documentId,
     eventType: 'retirement_statement_bank_match_completed', actorType: 'system',
     metadata: { matched, noMatch, multipleCandidates, notExpected, noBankEvidence },
   });

@@ -78,9 +78,13 @@ export async function resolveRetirementStatementAccount(
 
   const { data: stmt } = await supabase
     .from('fdh_retirement_statements')
-    .select('id, currency_code, retirement_jurisdiction, fund_name, masked_account_identifier, account_type, smsf_classification')
+    .select('id, statement_upload_id, currency_code, retirement_jurisdiction, fund_name, masked_account_identifier, account_type, smsf_classification')
     .eq('id', statementId).eq('user_id', userId).maybeSingle();
   if (!stmt) return { status: 'not_attempted', accountId: null, memberId: null, error: 'statement not found' };
+  // `fdh_document_audit_events.document_id` FKs to `fdh_statement_uploads(id)`
+  // (0058), never to `fdh_retirement_statements(id)` -- every audit call below
+  // must use the statement's OWN upload id, not the statement row's id.
+  const documentId = stmt.statement_upload_id as string | null;
 
   // An SMSF statement is never matched to an ordinary super account
   // (spec sections 10-11). Terminal for FDH-12.
@@ -115,7 +119,7 @@ export async function resolveRetirementStatementAccount(
       })
       .eq('id', statementId).eq('user_id', userId);
     await recordDocumentAuditEvent({
-      userId, documentId: statementId,
+      userId, documentId,
       eventType: 'retirement_statement_account_matched', actorType: 'user',
       metadata: { outcome: 'new_account_confirmed' },
     });
@@ -154,7 +158,7 @@ export async function resolveRetirementStatementAccount(
       })
       .eq('id', statementId).eq('user_id', userId);
     await recordDocumentAuditEvent({
-      userId, documentId: statementId,
+      userId, documentId,
       eventType: 'retirement_statement_account_matched', actorType: 'user',
       metadata: { outcome: 'user_selected', accountId: chosen.id },
     });
@@ -209,7 +213,7 @@ export async function resolveRetirementStatementAccount(
     .eq('id', statementId).eq('user_id', userId);
 
   await recordDocumentAuditEvent({
-    userId, documentId: statementId,
+    userId, documentId,
     eventType: 'retirement_statement_account_matched', actorType: 'system',
     metadata: { outcome: result.status, reason: result.reason, candidateCount: result.candidates.length },
   });

@@ -102,8 +102,10 @@ import {
 import { detectRetirementCsvFormat } from '@/lib/financial-data-hub/retirement/detection';
 import { extractRetirementStatement } from '@/lib/financial-data-hub/retirement/extraction';
 import { structureExtractionWarnings } from '@/lib/financial-data-hub/retirement/warnings';
-import { matchRetirementActivitiesToBank, rematchRetirementActivitiesAfterBankApproval } from '@/lib/financial-data-hub/services/retirementStatementProcessingService';
+import { matchRetirementActivitiesToBank, matchRetirementContributionsToPayslips, rematchRetirementActivitiesAfterBankApproval } from '@/lib/financial-data-hub/services/retirementStatementProcessingService';
+import { resolveRetirementStatementAccount } from '@/lib/retirement-import-bridge/retirementAccountResolution';
 import { POST_BANK_APPROVAL_MATCHERS } from '@/lib/import-bridge/postBankApprovalMatchers';
+import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
 
 const REPO = path.resolve(__dirname, '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(REPO, rel), 'utf8');
@@ -398,5 +400,53 @@ describe('GAP-RET-07: bank re-match after a LATER bank approval (post-bank-appro
     expect(h.updates.some((u) => u.table === 'fdh_transactions')).toBe(false);
     const again = await rematchRetirementActivitiesAfterBankApproval(A);
     expect(again.linked).toBe(0);
+  });
+});
+
+// ===========================================================================
+// Real defect found live on DEV 2026-09-27 (final canonical-upload verification
+// pass): `fdh_document_audit_events.document_id` FKs to `fdh_statement_uploads
+// (id)` (0058), but these three call sites passed the STATEMENT's own id
+// (`fdh_retirement_statements.id`) as `documentId` -- never the same row, so
+// every retirement-statement account/payslip/bank-match audit insert violated
+// the FK and was silently dropped (console.error only) in every environment,
+// including production. Negative control: these fail on `documentId: statementId`.
+describe('audit trail: retirement statement events reference the upload document, not the statement row', () => {
+  beforeEach(() => { vi.mocked(recordDocumentAuditEvent).mockClear(); });
+  const auditedDocumentIdFor = (eventType: string) =>
+    vi.mocked(recordDocumentAuditEvent).mock.calls.find((c) => c[0].eventType === eventType)?.[0].documentId;
+
+  it('matchRetirementActivitiesToBank audits against statement_upload_id, not the statement id', async () => {
+    h.tables = {
+      fdh_retirement_statements: [statementRow('s1', { fund_name: 'Hostplus' })],
+      fdh_retirement_statement_activities: [activityRow('a1', 's1', { linked_transaction_id: 'txn-500', bank_match_status: 'matched' })],
+      fdh_transactions: [{ id: 'txn-500', user_id: A, amount_original: '500.00', transaction_date: '2026-03-11', description_clean: 'BPAY HOSTPLUS SUPER', description_raw: null, credit_debit: 'debit', currency_original: 'AUD' }],
+    };
+    await matchRetirementActivitiesToBank(A, 's1');
+    expect(auditedDocumentIdFor('retirement_statement_bank_match_completed')).toBe('doc-s1');
+  });
+
+  it('matchRetirementContributionsToPayslips audits against statement_upload_id, not the statement id', async () => {
+    h.tables = {
+      fdh_retirement_statements: [statementRow('s1')],
+      fdh_retirement_statement_activities: [],
+      fdh_payroll_events: [],
+    };
+    await matchRetirementContributionsToPayslips(A, 's1');
+    expect(auditedDocumentIdFor('retirement_statement_payslip_matched')).toBe('doc-s1');
+  });
+
+  it('resolveRetirementStatementAccount (confirm_new / user-selected / auto-match) all audit against statement_upload_id', async () => {
+    h.tables = {
+      fdh_retirement_statements: [statementRow('s1')],
+      retirement_members: [],
+      retirement_accounts: [],
+    };
+    await resolveRetirementStatementAccount(A, 's1', { confirmNewAccount: true });
+    expect(auditedDocumentIdFor('retirement_statement_account_matched')).toBe('doc-s1');
+
+    h.tables.retirement_accounts = [{ id: 'acc-1', user_id: A, account_name: 'Hostplus', account_type: 'industry_super', currency_code: 'AUD', country_code: 'AU', owner: 'self', master_item_key: null, retirement_member_id: null, updated_at: '2026-07-01T00:00:00Z', is_active: true }];
+    await resolveRetirementStatementAccount(A, 's1', { userConfirmedAccountId: 'acc-1' });
+    expect(auditedDocumentIdFor('retirement_statement_account_matched')).toBe('doc-s1');
   });
 });
