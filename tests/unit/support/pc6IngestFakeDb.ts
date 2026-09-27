@@ -118,14 +118,34 @@ class FakeQuery {
   }
   insert(p: Row | Row[]) { this.verb = 'insert'; this.payload = p; return this; }
   update(p: Row) { this.verb = 'update'; this.payload = p; return this; }
-  upsert(p: Row[], opts: { onConflict?: string; ignoreDuplicates?: boolean } = {}) { this.verb = 'upsert'; this.payload = p; this.upsertOpts = opts; return this; }
+  upsert(p: Row | Row[], opts: { onConflict?: string; ignoreDuplicates?: boolean } = {}) { this.verb = 'upsert'; this.payload = Array.isArray(p) ? p : [p]; this.upsertOpts = opts; return this; }
   eq(col: string, v: unknown) { this.filters.push((r) => getPath(r, col) === v); this.filterText.push(`${col}=eq`); return this; }
   neq(col: string, v: unknown) { this.filters.push((r) => getPath(r, col) !== v); this.filterText.push(`${col}=neq`); return this; }
   in(col: string, vs: unknown[]) { const s = new Set(vs); this.filters.push((r) => s.has(getPath(r, col))); this.filterText.push(`${col}=in(${vs.length})`); return this; }
   is(col: string, v: null | boolean) { this.filters.push((r) => getPath(r, col) === v); this.filterText.push(`${col}=is.${v}`); return this; }
+  lt(col: string, v: unknown) { this.filters.push((r) => { const cur = getPath(r, col) as string | number | null; return cur !== null && cur !== undefined && cur < (v as string | number); }); this.filterText.push(`${col}=lt`); return this; }
+  gt(col: string, v: unknown) { this.filters.push((r) => { const cur = getPath(r, col) as string | number | null; return cur !== null && cur !== undefined && cur > (v as string | number); }); this.filterText.push(`${col}=gt`); return this; }
   not(col: string, op: string, v: unknown) {
     if (op !== 'is') throw new Error(`fake: not.${op} unsupported`);
     this.filters.push((r) => getPath(r, col) !== v); this.filterText.push(`${col}=not.is.${v}`); return this;
+  }
+  /**
+   * Only the shape navReconciliationSweep.ts / selectiveHistoricalHydrationJobLive.ts
+   * actually send: `"<col>.is.null,<col>.lt.\"<iso>\""` -- an idempotent
+   * "apply only if this column is unset or older than X" guard.
+   */
+  or(expr: string) {
+    const parts = expr.split(',');
+    const preds = parts.map((p) => {
+      const isMatch = /^([a-zA-Z0-9_]+)\.is\.null$/.exec(p);
+      if (isMatch) { const col = isMatch[1]; return (r: Row) => getPath(r, col) === null || getPath(r, col) === undefined; }
+      const ltMatch = /^([a-zA-Z0-9_]+)\.lt\.(?:"([^"]*)"|(.+))$/.exec(p);
+      if (ltMatch) { const col = ltMatch[1]; const v = ltMatch[2] ?? ltMatch[3]; return (r: Row) => { const cur = getPath(r, col); return cur !== null && cur !== undefined && String(cur) < v; }; }
+      throw new Error(`fake: unsupported .or() clause '${p}'`);
+    });
+    this.filters.push((r) => preds.some((p) => p(r)));
+    this.filterText.push(`or(${expr})`);
+    return this;
   }
   order(col: string, opts: { ascending?: boolean } = {}) { this.orders.push({ col, asc: opts.ascending !== false }); return this; }
   limit(n: number) { this.limitN = n; return this; }
@@ -191,21 +211,29 @@ class FakeQuery {
     if (this.verb === 'upsert') {
       const list = this.payload as Row[];
       const keyOf = (r: Row) => (this.upsertOpts.onConflict ?? 'id').split(',').map((c) => r[c.trim()]).join('|');
-      const existing = new Set(t.map(keyOf));
+      const byKey = new Map(t.map((r) => [keyOf(r), r]));
       let written = 0;
+      const out: Row[] = [];
       for (const p of list) {
         if (this.tableName === 'ii_prices_nav') db.navUpsertPayloadKeys.push(`${p.instrument_id}|${p.price_date}`);
         const k = keyOf(p);
-        if (existing.has(k)) {
-          if (this.upsertOpts.ignoreDuplicates) continue;
-          return this.shape([], { message: 'duplicate key value violates unique constraint', code: '23505' });
+        const found = byKey.get(k);
+        if (found) {
+          if (this.upsertOpts.ignoreDuplicates) { out.push(found); continue; }
+          // Real PostgREST default: ON CONFLICT ... DO UPDATE (merge the row).
+          Object.assign(found, p);
+          out.push(found);
+          written++;
+          continue;
         }
-        t.push(this.withDefaults(p));
-        existing.add(k);
+        const created = this.withDefaults(p);
+        t.push(created);
+        byKey.set(k, created);
+        out.push(created);
         written++;
       }
       entry.rows = written;
-      return this.shape([]);
+      return this.shape(this.returning ? out : []);
     }
 
     if (this.verb === 'update') {
@@ -231,6 +259,7 @@ class FakeQuery {
       for (const c of ['rows_read', 'rows_accepted', 'rows_rejected', 'rows_inserted', 'rows_unchanged', 'rows_superseded']) r[c] ??= 0;
     }
     if (this.tableName === 'ii_prices_nav') r.quality_status ??= 'ok';
+    if (this.tableName === 'ii_reference_coverage_alerts') r.resolved_at ??= null;
     return r;
   }
 
