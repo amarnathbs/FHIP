@@ -158,6 +158,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
     memberType,
     isSmsf: false,
     reviewReasons,
+    // The account-match decision is authoritative (see below): the adapter
+    // targets it instead of re-matching by fund name.
+    confirmedAccountId: statement.account_match_status === 'matched' && statement.canonical_account_id ? (statement.canonical_account_id as string) : undefined,
   };
 
   // The account-match decision made earlier is AUTHORITATIVE over the
