@@ -4,6 +4,26 @@ frontend:
     preBuild:
       commands:
         - npm ci
+        # 2026-09-28 (build #246/#247 size failures): pdfjs-dist ships
+        # pdf.worker.mjs.map, a ~5MB debug sourcemap with zero runtime
+        # purpose (see the serverExternalPackages/outputFileTracingIncludes
+        # comment block in next.config.mjs -- Next's tracer pulls a traced
+        # file's sibling .map in automatically even though only
+        # pdf.worker.mjs itself is named there). It is traced into BOTH
+        # outputFileTracingIncludes routes independently (~10.5MB total),
+        # confirmed via each route's own .next/server/**/route.js.nft.json.
+        # An earlier incident (2026-09-06, see next.config.mjs) considered
+        # excluding it via outputFileTracingExcludes and dropped the idea
+        # only because it "did not visibly take effect" in local
+        # verification, with ample margin (~29MB) to not need it anyway.
+        # This time there is no such margin (build #246/#247 failed by only
+        # ~2.95MB), so this deletes the source .map file outright, in
+        # preBuild before `next build` ever runs its tracer -- Next cannot
+        # trace a sibling file that does not exist, regardless of whichever
+        # exclude-glob mechanism did or didn't work before. pdf.worker.mjs
+        # itself (the actual 2MB file every real PDF/CAS/bank-statement
+        # upload needs) is untouched; only its debug sourcemap is removed.
+        - rm -f node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs.map
         # Amplify's build image is Amazon Linux (no apt-get), so Playwright's
         # --with-deps flag (which only knows apt-based distros) fails outright.
         # Install Chromium's runtime shared libraries via yum instead, then
