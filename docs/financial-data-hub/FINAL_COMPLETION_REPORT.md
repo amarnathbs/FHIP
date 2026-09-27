@@ -1,9 +1,8 @@
 # Approved Upload -> Canonical User Data -- Final Completion Report
 
-Date: 2026-09-27 (updated after the Stage 3 FINAL live-DEV proof pass). Consolidated branch:
-`feature/canonical-upload-cert` up to `285ac01`, plus a further verified merge pushed as
-`stage3-final-merge` at `6fffc27` -- **not yet folded back into `feature/canonical-upload-cert` or `main`**;
-that is a one-line fast-forward the PO can do, or ask for.
+Date: 2026-09-27, updated 2026-09-28 after production release. Released commit: `7edf4a9` on `main`
+(consolidated from `feature/canonical-upload-cert @ 285ac01` via the Stage 3 FINAL live-proof pass, merged
+as `stage3-final-merge`, plus two Amplify build-size hotfixes described below).
 Companion reports: END_TO_END_IMPORT_PROPAGATION_CERTIFICATION.md, MANUAL_VS_IMPORTED_EQUIVALENCE_CERTIFICATION.md,
 PRODUCTION_IMPORT_PROPAGATION_CERTIFICATION.md (plan), CANONICAL_EXPENSE_DATA_CONTRACT.md,
 APPROVED_UPLOAD_TO_CANONICAL_DATA_CONTRACT.md, APPROVED_UPLOAD_CANONICAL_DATA_FLOW_MATRIX.md,
@@ -11,25 +10,33 @@ UPLOAD_FIELD_DISPOSITION_REGISTRY.md, DOWNSTREAM_DATA_CONSUMER_MATRIX.md.
 
 ## Headline
 
-- **DEV: NOT a full pass.** Of the 30 brief requirements below, 21 are PASS, 7 are PASS-with-disclosure,
-  **1 is FAIL** (R20, system-owned provenance unforgeable: two residual forging paths on the user's OWN
-  data, both waiting for a PO decision, and RE-CONFIRMED live and still open on the truly final merged
-  tree -- see "Stage 3 FINAL live-proof pass" below), and 1 is NOT RUN (R30, production).
+- **LIVE IN PRODUCTION as of 2026-09-28, 08:50 AEST**, by explicit PO decision to release with the open
+  items below accepted as-is, not deferred to a later, more complete pass. Migrations 0207-0214 and 0218
+  are applied; Amplify build #248 (commit `7edf4a9`) deployed successfully after two earlier build-size
+  failures (see "Production release" below). Post-deploy checks: the app is live and responding, the
+  retired generic upload page correctly redirects (D-13), the two hardened WP-15 functions still work
+  correctly via the service role, and a read-only scan of the full exposure window (migrations live before
+  the code, the risk the deploy plan itself warned about) found zero double-counted card/loan spend and
+  zero bad $0 holding snapshots.
+- **DEV/pre-release certification: NOT a full pass** (this was known and accepted before release). Of the
+  30 brief requirements below, 21 are PASS, 7 are PASS-with-disclosure, **1 is FAIL** (R20, system-owned
+  provenance unforgeable: two residual forging paths on the user's OWN data, both now shipped with the gap
+  open, pending a PO decision on the fix), and 1 (R30, production certification) is superseded by the
+  actual release below.
 - **One genuine production-code defect found and fixed** in the final pass, unrelated to any of the above:
   every retirement-statement audit event (account/payslip/bank matching) has been silently failing its
   database write since FDH-12 shipped, in every environment including production, because of a wrong id.
-  Fixed with a proven negative-control test; independently re-verified by me (not just the building agent).
+  Fixed with a proven negative-control test; independently re-verified by me (not just the building agent);
+  this fix is part of the released commit.
 - **One narrow, well-understood gap in the golden-pair result**, found on re-run after the merge: the
   Score and Twin numbers diverge slightly between a manually-entered household and an imports-only one with
   identical economics, traced to a fixture-data artifact (a stale historical row only an approved import
   corrects), not to any canonical financial figure. Every actual dollar figure -- income, expenses, assets,
   liabilities, investments, retirement, net worth, cashflow, and all 6 forecast types -- is still exactly $0
   different. This needs a PO framing decision (see below), not more debugging.
-- **Production: NOT CERTIFIED.** Nothing has been deployed or applied in production. The PO-run plan is ready,
-  with 4 blockers to clear first (PRODUCTION_IMPORT_PROPAGATION_CERTIFICATION.md section 0), the first being
-  the Dashboard summary's response time against the 28 s platform limit -- re-measured in the final pass at
-  18.3 s wall-clock this run, but the underlying database round-trip count (110) is unchanged from the
-  29.6 s run that DID breach the limit, so this remains open, not closed.
+- **Deploy blocker 1 (Dashboard timing) shipped unresolved, by PO decision.** The round-trip count behind
+  the Dashboard's response time is unchanged from the run that breached the 28 s Amplify limit; it has not
+  regressed since release (no reports of it), but it was not structurally fixed before shipping.
 
 ## Stage 3 FINAL live-proof pass (new, 2026-09-27, after this report was first written)
 
@@ -98,6 +105,42 @@ every claim below myself rather than taking each agent's own report on trust:
   chain the service role cannot remove because of 0218's own guards). Combined into one guarded,
   transaction-safe file with real row-count assertions -- see below.
 
+## Production release (2026-09-28)
+
+The PO decided to release with the open items above accepted, rather than wait for them to close. Sequence:
+
+1. Merged current `main` (the NAV1 hydration-fairness work) into the release branch, re-ran the full suite
+   (9,619 passed; the same 6-7 pre-existing, unrelated failures this repo has carried throughout the
+   programme -- adminAnalyticsPhaseAMeRoute, aiResidualClosureFailClosed A4, countryGateAccessMatrix MC-15,
+   resourcesR1_1, two resources LiveDev tests needing real DEV credentials, one parallel-load flake).
+2. PO applied the preflight, then migrations 0207-0214 and 0218 to production, all confirmed live read-only.
+3. **The code deploy failed twice before succeeding**, both times at Amplify's fixed 230,686,720-byte build
+   output ceiling -- unrelated to any of this program's own logic:
+   - Build #246: 233,638,935 bytes. My first attempted fix (deleting the accumulated `.next` build cache
+     before packaging) was based on a wrong theory and had no real effect.
+   - Build #247: 233,638,894 bytes -- 41 bytes different from #246, which is what proved the cache theory
+     wrong (a real cache would vary; this didn't).
+   - Root cause, found by reading the actual per-route trace manifests (`.next/server/**/route.js.nft.json`),
+     not guessed: `pdf.worker.mjs.map`, a ~5MB debug sourcemap for the PDF-parsing library with zero runtime
+     purpose, was being traced into two separate upload-processing routes independently -- about 10.5MB of
+     pure waste against an overage of under 3MB. This project's own `next.config.mjs` already documented an
+     near-identical 2026-09-06 incident at the same byte ceiling.
+   - Fix: delete the sourcemap from `node_modules` in Amplify's `preBuild` phase, before Next's build tracer
+     ever runs, so it cannot be traced regardless of glob-matching semantics. Verified locally before
+     pushing: the app starts and serves pages identically with the file removed; `pdf.worker.mjs` itself
+     (the file every real PDF extraction route needs) is untouched.
+   - Build #248 (commit `7edf4a9`) succeeded.
+4. Because production ran the new database schema against the OLD application code for roughly a day while
+   this was being diagnosed, the exact risk the release plan itself flagged (silent card/loan double-counting
+   via 0209, bad $0 holding snapshots via 0213) was checked read-only across the whole exposure window: zero
+   occurrences of either.
+5. Post-deploy: app liveness confirmed (`/`, `/login` both 200); `/financial-data-hub` correctly redirects
+   (D-13); the two 0218-hardened WP-15 functions still work correctly through the service role.
+
+Not yet run: the full post-deploy smoke checklist in `PRODUCTION_IMPORT_PROPAGATION_CERTIFICATION.md`
+section 4 (S1-S3, S6) and the synthetic production journey in section 6, both intended for the PO to run
+with a disposable test account.
+
 ## Verdict per brief requirement
 
 Legend: PASS = proven live on DEV (or by the named gate) with no reservation; PASS-with-disclosure = proven,
@@ -140,25 +183,27 @@ Count: **PASS 21** (R1, R2, R4, R6, R8, R9, R11-R15, R17, R18, R21-R25, R27-R29)
 (R3, R5, R7, R10, R16, R19, R26), **FAIL 1** (R20), **NOT RUN 1** (R30). R27 covers truncation and duplicates
 only; the 28 s response-time risk is not a brief requirement row and is listed as deploy blocker 1.
 
-## Deploy blockers (must be cleared before production)
+## Deploy blockers -- outcome (this was the pre-release list; released regardless, see below)
 
-1. `GET /api/dashboard/summary`: 23-39 s on localhost against DEV (~110 Supabase round trips) vs the 28 s
-   Amplify limit. Re-measured in the Stage 3 FINAL pass at 18.3 s wall-clock / still 110 round trips -- the
-   round-trip count is what actually determines the risk under load, and it is unchanged, so this is NOT
-   closed. Root cause now precisely identified: ~70 of the 110 round trips are 100-id-chunked reads, in
-   `lib/read-models/core/ledger.ts` and `lib/read-models/corroboration.ts`, of `fdh_transaction_links` (both
-   directions), `fdh_transaction_allocations`, `fdh_transaction_corrections` and 4 corroboration-evidence
-   tables -- every one of which is already filtered to the current user, so chunking by transaction id is
-   not load-bearing there. Recommended fix (not implemented, scoping only): replace each with a single
-   per-user read and intersect against the known transaction-id set client-side; estimated to remove
-   60-70 of the ~110 round trips at 1,000 transactions.
-   (Other heavy routes after SUI-1: categorise 7.4 s, remember payee 13.3 s, approve-all 18.9 s,
-   expenses/actuals 17-25 s on localhost.)
-2. Migrations 0207-0214 and 0218 must be applied in ONE sitting immediately before the code goes live
-   (code-first breaks card/loan/retirement/AU uploads; migrations-first with old code silently double counts
-   card/loan spending (0209) and can write $0 holding snapshots (0213)). 0218 must first be applied on DEV.
-3. The release PR must merge current `main` (6 NAV1-only commits; clean per `git merge-tree`).
-4. PO decisions below that change user-visible figures -- at minimum the combined-basis group displacement.
+1. `GET /api/dashboard/summary` timing: **shipped unresolved, by PO decision.** Re-measured in the Stage 3
+   FINAL pass at 18.3 s wall-clock / still 110 round trips -- the round-trip count is what actually
+   determines the risk under load, and it is unchanged. Root cause precisely identified: ~70 of the 110
+   round trips are 100-id-chunked reads, in `lib/read-models/core/ledger.ts` and
+   `lib/read-models/corroboration.ts`, of `fdh_transaction_links` (both directions),
+   `fdh_transaction_allocations`, `fdh_transaction_corrections` and 4 corroboration-evidence tables --
+   every one of which is already filtered to the current user, so chunking by transaction id is not
+   load-bearing there. Recommended fix (not implemented): replace each with a single per-user read and
+   intersect against the known transaction-id set client-side; estimated to remove 60-70 of the ~110 round
+   trips at 1,000 transactions. Worth monitoring in production for any household with a large transaction
+   volume.
+2. Migrations 0207-0214 and 0218: **applied to production 2026-09-27/28.** The "one sitting" requirement was
+   not met as planned -- the code deploy failed twice on an unrelated Amplify build-size issue (see
+   "Production release" below), so the new schema ran against the old code for roughly a day. Checked
+   read-only across that whole window: zero silent double-counts (0209), zero bad $0 snapshots (0213).
+3. Merge current `main`: **done** (the NAV1 hydration-fairness commits are in the released tree).
+4. PO decisions that change user-visible figures: **not resolved before release, shipped as-is by explicit
+   PO decision.** See "Open PO decisions" below -- none of these are reversed or closed by shipping; they
+   remain open follow-up work.
 
 ## Open PO decisions (listed, not decided)
 
