@@ -177,8 +177,8 @@ export function toCanonicalCashFlow(snapshot: CanonicalFinancialSnapshotResult):
     importedNotInNetWorth: s.investments.status === 'ok' && s.investments.unpublished.count > 0
       ? { label: s.investments.unpublished.label, count: s.investments.unpublished.count, total: s.investments.unpublished.total }
       : null,
-    bankBalanceEvidence: s.assets.status === 'ok' && s.assets.bankBalanceEvidence.accounts.length > 0
-      ? { label: s.assets.bankBalanceEvidence.label, count: s.assets.bankBalanceEvidence.accounts.length, total: s.assets.bankBalanceEvidence.total }
+    bankBalanceEvidence: s.assets.status === 'ok' && s.assets.bankBalanceEvidence.notInNetWorthCount > 0
+      ? { label: s.assets.bankBalanceEvidence.label, count: s.assets.bankBalanceEvidence.notInNetWorthCount, total: s.assets.bankBalanceEvidence.total }
       : null,
   };
 }

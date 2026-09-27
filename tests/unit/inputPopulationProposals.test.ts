@@ -288,6 +288,13 @@ describe('(b) bank balance -> cash asset (PO D-04)', () => {
     const after = computeAssets({ ...common, assets: [{ id: 'a1', asset_name: 'Everyday', asset_class: 'cash', current_value: 6000, currency_code: 'AUD', owner: 'joint', master_item_key: null, source_type: 'bank_statement_import', linked_liability_id: null, source_financial_account_id: 'bank' }] });
     expect(after.total).toBe(6000); // once
     expect(after.bankBalanceEvidence.accounts[0].inNetWorthAs).toEqual({ assetId: 'a1', assetName: 'Everyday' });
+    // GP-D5 (golden pair, live DEV 2026-09-27): once applied, the balance is IN Net Worth, so the
+    // "not in Net Worth" disclosure (Dashboard notice, report notInNetWorth, appendix) must not list it.
+    // Live, the Dashboard and the report still said "Bank balance per statement — not in Net Worth:
+    // $21,807.59 (2)" beside a Net Worth that already counted both balances.
+    expect(before.bankBalanceEvidence.notInNetWorthCount).toBe(1);
+    expect(after.bankBalanceEvidence.notInNetWorthCount).toBe(0);
+    expect(after.bankBalanceEvidence.total).toBe(0);
     expect(after.lines[0].provenance).toMatchObject({ kind: 'bank_statement', label: 'Imported from bank statement', accountId: 'bank' });
   });
 

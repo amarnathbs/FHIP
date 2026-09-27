@@ -87,7 +87,13 @@ export interface AssetsReadModelData {
   lines: AssetLine[];
   total: number;
   householdTotal: number;
-  bankBalanceEvidence: { label: string; accounts: BankBalanceEvidence[]; total: number };
+  /**
+   * `accounts`: every bank account with an approved closing balance, each saying whether it is already in
+   * Net Worth (`inNetWorthAs`). `total` / `notInNetWorthCount`: ONLY the balances NOT in Net Worth -- the
+   * figures consumers disclose under the "not in Net Worth" label (GP-D5: before, an applied balance was
+   * still disclosed as "not in Net Worth" beside a Net Worth that already counted it).
+   */
+  bankBalanceEvidence: { label: string; accounts: BankBalanceEvidence[]; total: number; notInNetWorthCount: number };
   unconverted: UnconvertedTally;
 }
 
@@ -153,7 +159,12 @@ export function computeAssets(input: {
     lines,
     total: sum(lines.map((l) => l.value.amountReporting)),
     householdTotal: sum(lines.filter((l) => l.household).map((l) => l.value.amountReporting)),
-    bankBalanceEvidence: { label: BANK_BALANCE_EVIDENCE_LABEL, accounts: evidence, total: sum(evidence.map((e) => e.closingBalance.amountReporting)) },
+    bankBalanceEvidence: {
+      label: BANK_BALANCE_EVIDENCE_LABEL,
+      accounts: evidence,
+      total: sum(evidence.filter((e) => e.inNetWorthAs === null).map((e) => e.closingBalance.amountReporting)),
+      notInNetWorthCount: evidence.filter((e) => e.inNetWorthAs === null).length,
+    },
     unconverted,
   };
 }

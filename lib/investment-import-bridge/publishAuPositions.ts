@@ -191,7 +191,10 @@ export async function publishAuStatementPositions(userId: string, statementId: s
     const result = await publishPosition(userId, h.id, {
       linkToExistingInvestmentId: d.linkToExistingInvestmentId ?? null,
       acknowledgedNoDuplicate: d.acknowledgedNoDuplicate ?? false,
-      correlationId: `fdh11:${statementId}`,
+      // ii_fhip_publications.correlation_id is a `uuid` column (0042). A prefixed string
+      // ("fdh11:<id>") made every publish fail on a real database (golden pair GP-D1); the
+      // statement id itself is a UUID and ties this statement's publications together.
+      correlationId: statementId,
     });
     out.push({ snapshotId: h.id, ok: !result.error, action: result.action, errorCode: result.errorCode ?? null, error: result.error });
   }

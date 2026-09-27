@@ -188,6 +188,8 @@ export interface CategoryReviewTransaction extends ClassificationFacts {
   id: string;
   transaction_date: string;
   description_clean: string | null;
+  /** GP-D4: the FDH-10 ledger Apply (0209) writes description_raw only; shown when there is no clean text. */
+  description_raw?: string | null;
   amount_original: number | string;
   currency_original: string;
   credit_debit: 'credit' | 'debit';
@@ -425,7 +427,7 @@ export function buildCategoryReview(
       needsDecision.push({
         id: t.id,
         transaction_date: t.transaction_date,
-        description: t.description_clean,
+        description: t.description_clean ?? t.description_raw ?? null,
         amount,
         currency: t.currency_original,
         direction,
@@ -483,7 +485,7 @@ export function buildCategoryReview(
     g.lines.push({
       id: t.id,
       transaction_date: t.transaction_date,
-      description: t.description_clean,
+      description: t.description_clean ?? t.description_raw ?? null,
       amount,
       approval_status: t.approval_status,
       fully_confident: confident,

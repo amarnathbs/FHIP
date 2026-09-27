@@ -56,6 +56,8 @@ export interface LedgerTransactionRow {
   category_id: string | null;
   subcategory_id: string | null;
   description_clean: string | null;
+  /** GP-D4: card/loan ledger rows (0209) carry description_raw only; it is shown when there is no clean text. */
+  description_raw?: string | null;
   dedup_status: string;
   approval_status: string;
   user_override: boolean;
@@ -345,7 +347,7 @@ export function normaliseLedger(raw: RawLedger, fx: FxContext, window: ReadWindo
         subcategoryId: part.subcategoryId,
         mappingKey: sub?.fhip_mapping_key ?? cat?.fhip_mapping_key ?? null,
         categoryLabel: sub?.display_name ?? cat?.display_name ?? null,
-        description: txn.description_clean,
+        description: txn.description_clean ?? txn.description_raw ?? null,
         amountNative: part.amount,
         currency: part.currency,
         amountReporting,
@@ -450,7 +452,7 @@ export function coveredMonthlyAverage(
 // Loader
 // ---------------------------------------------------------------------------
 
-const TXN_COLUMNS = 'id, financial_account_id, statement_upload_id, transaction_date, amount_original, currency_original, credit_debit, economic_transaction_type, category_id, subcategory_id, description_clean, dedup_status, approval_status, user_override';
+const TXN_COLUMNS = 'id, financial_account_id, statement_upload_id, transaction_date, amount_original, currency_original, credit_debit, economic_transaction_type, category_id, subcategory_id, description_clean, description_raw, dedup_status, approval_status, user_override';
 const ALLOCATION_COLUMNS = 'transaction_id, allocation_sequence, economic_transaction_type, category_id, subcategory_id, amount, currency_code';
 
 function isUndefinedColumn(error: unknown): boolean {

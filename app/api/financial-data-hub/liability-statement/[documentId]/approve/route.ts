@@ -2,6 +2,7 @@ import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getLiabilityStatementIdForDocument } from '@/lib/financial-data-hub/services/liabilityStatementProcessingService';
 import { approveLiabilityStatementAtomic } from '@/lib/import-bridge/applyLiabilityProposalAtomic';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
+import { runLiabilityStatementForwardMatch } from '@/lib/import-bridge/liabilityBankBackMatch';
 
 // POST /api/financial-data-hub/liability-statement/{documentId}/approve —
 // spec sections 4, 22, 41. Approving statement EVIDENCE. Canonical Liability
@@ -29,5 +30,22 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
     metadata: { statement_id: statementId },
   });
 
-  return ok({ statement_id: statementId, approved: true });
+  // GP-D2: the bank statement may have been approved BEFORE this one; link any repayment it paid now
+  // (the post-bank-approval back-match only sees card/loan statements that were already approved).
+  // Best effort: a failure never undoes the approval; it is audited and the review still offers the
+  // manual picker.
+  let bankPaymentsLinked = 0;
+  try {
+    bankPaymentsLinked = (await runLiabilityStatementForwardMatch(user.id, statementId)).linked ?? 0;
+  } catch (e) {
+    await recordDocumentAuditEvent({
+      userId: user.id,
+      documentId,
+      eventType: 'post_approval_matcher_failed',
+      actorType: 'system',
+      metadata: { matcher_id: 'gp_d2_liability_forward_match', trigger: 'liability_statement_approve', error_name: e instanceof Error ? e.name : 'Error' },
+    });
+  }
+
+  return ok({ statement_id: statementId, approved: true, bank_payments_linked: bankPaymentsLinked });
 }
