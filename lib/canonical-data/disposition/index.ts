@@ -40,11 +40,13 @@ export const REGISTRY_FILES: readonly RegistryFile[] = [
 export const FIELD_DISPOSITION_REGISTRY: readonly FieldDispositionEntry[] = REGISTRY_FILES.flatMap((f) => f.entries);
 
 /**
- * Registry rule R7 (strict certification). OFF until WP-14: while it is off,
- * open gaps are allowed under each file's ratchet ceiling. WP-14 turns it on,
- * after which ANY open P0/P1 gap in an active adapter fails the gate.
+ * Registry rule R7 (strict certification). ON since the stage-3 consolidation
+ * (2026-09-27): every registry file's OPEN_GAP_CEILING is 0 and strict mode
+ * finds nothing, so ANY open P0/P1 gap in an active adapter now fails the gate
+ * (the R6 ratchet already refused a NEW open gap; R7 also refuses re-opening
+ * one under a raised ceiling). Proven to fire by the anti-vacuity control.
  */
-export const STRICT_CERTIFICATION = false;
+export const STRICT_CERTIFICATION = true;
 
 const DISPOSITION_LABEL: Record<string, string> = {
   A_STATE: 'A state',

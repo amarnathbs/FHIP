@@ -64,13 +64,15 @@ describe('upload field-disposition registry gate', () => {
     expect(ins.every((e) => e.status === 'not_active')).toBe(true);
   });
 
-  it('R7 flag is OFF until WP-14 turns it on; after the stage-2 integration strict mode already passes (every ceiling is 0)', () => {
+  it('R7 strict certification is ON (stage-3 consolidation): every ceiling is 0 and strict mode finds nothing', () => {
     // Before integration this asserted that strict mode would FAIL (real open
     // P0/P1 gaps). With WP-03..WP-15 merged, every registry file has 0 open
     // gaps, so strict mode now finds nothing; the R6 ratchet (ceiling 0 = the
     // exact count) already refuses any new open gap. The R7 rule itself is
     // proven to fire by the anti-vacuity control (it re-opens one G1 entry).
-    expect(STRICT_CERTIFICATION).toBe(false);
+    // Stage 3 (2026-09-27): turned ON -- every ceiling is 0 and strict mode passes, so the gate itself
+    // (R1-R8 above, run with strict: STRICT_CERTIFICATION) now refuses any open P0/P1 gap.
+    expect(STRICT_CERTIFICATION).toBe(true);
     for (const f of REGISTRY_FILES) expect(f.OPEN_GAP_CEILING, `${f.id} ceiling`).toBe(0);
     const strict = checkRegistry(REGISTRY_FILES, enumerated, { gapRegister, strict: true });
     expect(strict.map((x) => x.message)).toEqual([]);
