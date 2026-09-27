@@ -123,6 +123,12 @@ export interface RawLedger {
   pendingApprovalCount: number;
   /** False when the database predates 0207 (owner_role / liability_id absent). */
   ownerAttributionAvailable: boolean;
+  /**
+   * txn id -> time of the user's LAST own decision on that line (latest non-system
+   * fdh_transaction_corrections row). Loaded only for user-decided lines that approved
+   * card/loan/broker evidence points at. Absent = unknown: rule 9 applies as before.
+   */
+  userDecisionAt?: Record<string, string>;
 }
 
 export function emptyRawLedger(): RawLedger {
@@ -310,6 +316,14 @@ export function normaliseLedger(raw: RawLedger, fx: FxContext, window: ReadWindo
       return { linkType: l.link_type, status: l.status, counterpartOnFacility: other ? isFacilityAccount(accounts.get(other.financial_account_id)) : false };
     });
     const corroboratedBy = corroboration.get(txn.id) ?? [];
+    // Rule-9 residual (security/integrity review): the user's category choice made BEFORE they
+    // approved the card/loan/broker statement that accounts for this exact line does not silence
+    // that later, explicit approval (live DEV: a SELL's 15,000 proceeds filed as "Income" counted
+    // +15,000 income). A decision made after the approval -- or of unknown time -- still stands.
+    const decisionAt = raw.userDecisionAt?.[txn.id];
+    const laterEvidence = txn.user_override && decisionAt !== undefined && corroboratedBy.some((c) =>
+      (c.kind === 'investment_activity' || c.kind === 'liability_activity') && c.approvedAt !== null && Date.parse(c.approvedAt) > Date.parse(decisionAt));
+    const userOverride = txn.user_override && !laterEvidence;
     const month = monthOf(txn.transaction_date);
     const lineCoverage: LineCoverage = isCovered(coverage, txn.financial_account_id, month) ? 'covered' : 'partial';
     const ownerRole = account?.owner_role ?? null;
@@ -317,7 +331,7 @@ export function normaliseLedger(raw: RawLedger, fx: FxContext, window: ReadWindo
       const cat = part.categoryId ? categories.get(part.categoryId) : undefined;
       const sub = part.subcategoryId ? subcategories.get(part.subcategoryId) : undefined;
       const g = groupForFdhCategory({ categoryKey: cat?.category_key ?? null, categoryMappingKey: cat?.fhip_mapping_key ?? null, subcategoryMappingKey: sub?.fhip_mapping_key ?? null });
-      const { bucket, reason } = effectiveBucket({ type: part.type, onFacility, isSplit, userOverride: txn.user_override, links: linkEvidence, corroborations: corroboratedBy });
+      const { bucket, reason } = effectiveBucket({ type: part.type, onFacility, isSplit, userOverride, links: linkEvidence, corroborations: corroboratedBy });
       const amountReporting = toReporting(part.amount, part.currency, fx);
       const line: ActualLine = {
         key: part.allocationSequence === null ? txn.id : `${txn.id}#${part.allocationSequence}`,
@@ -534,8 +548,36 @@ export async function loadApprovedLedger(userId: string, client: ReadModelClient
       .order('id', { ascending: true })
       .range(from, to));
   const corroboration = await loadCorroborationEvidence(userId, client, ids);
+  const userDecisionAt = await loadUserDecisionTimes(userId, client, transactions, corroboration);
   return {
     accounts, transactions, linkedRows, allocations, links, statements, liabilityStatements, categories, subcategories, corroboration,
-    pendingApprovalCount: pending.length, ownerAttributionAvailable,
+    pendingApprovalCount: pending.length, ownerAttributionAvailable, userDecisionAt,
   };
+}
+
+/**
+ * The time of the user's last own decision on each user-decided line that approved card/loan/broker
+ * evidence points at (the only lines the rule-9 residual concerns). System rows written by
+ * fdh_internal_reclassify_corroborated_leg carry a 'system:' reason and are not decisions.
+ * A failed read throws (fails closed), like every other query of this loader.
+ */
+async function loadUserDecisionTimes(
+  userId: string,
+  client: ReadModelClient,
+  transactions: readonly LedgerTransactionRow[],
+  corroboration: RawCorroborationEvidence,
+): Promise<Record<string, string>> {
+  const evidenced = new Set([...corroboration.investmentActivities, ...corroboration.liabilityActivities].map((a) => a.linked_transaction_id).filter((id): id is string => Boolean(id)));
+  const ids = transactions.filter((t) => t.user_override && evidenced.has(t.id)).map((t) => t.id);
+  if (ids.length === 0) return {};
+  const rows = await fetchAllByIds<{ transaction_id: string; corrected_at: string | null; created_at: string | null; reason: string | null }>('fdh_transaction_corrections', ids, (chunk, from, to) =>
+    client.from('fdh_transaction_corrections').select('transaction_id, corrected_at, created_at, reason').eq('user_id', userId).in('transaction_id', chunk).range(from, to));
+  const out: Record<string, string> = {};
+  for (const r of rows) {
+    if ((r.reason ?? '').startsWith('system:')) continue;
+    const at = r.corrected_at ?? r.created_at;
+    if (!at) continue;
+    if (!out[r.transaction_id] || Date.parse(at) > Date.parse(out[r.transaction_id])) out[r.transaction_id] = at;
+  }
+  return out;
 }

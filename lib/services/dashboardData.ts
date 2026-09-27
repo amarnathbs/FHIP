@@ -133,6 +133,12 @@ async function writeFinancialSnapshots(
 ): Promise<SnapshotWriteResult> {
   const today = new Date().toISOString().slice(0, 10);
   const current = monthStart();
+  // Error != 0 (security/integrity review): a section the snapshot could not
+  // read is carried in the summary as a 0 stand-in. Stored history must not
+  // turn that into a real zero, so its columns are written as null (unknown).
+  const unavailable = new Set((summary.dataStatus?.unavailable ?? []).map((u) => u.section));
+  const incomeKnown = !unavailable.has('income');
+  const outflowKnown = !unavailable.has('expenses') && !unavailable.has('liabilities');
   const { error } = await supabase.from('financial_snapshots').upsert(
     {
       user_id: userId,
@@ -140,10 +146,10 @@ async function writeFinancialSnapshots(
       total_assets: summary.totalAssets + summary.totalInvestments + summary.totalRetirement,
       total_liabilities: summary.totalLiabilities,
       net_worth: summary.netWorth,
-      monthly_income: summary.grossMonthlyIncome,
-      monthly_expenses: summary.totalMonthlyExpenses + summary.debtMonthlyRepayments,
-      monthly_surplus: summary.monthlySurplus,
-      savings_rate: summary.savingsRate,
+      monthly_income: incomeKnown ? summary.grossMonthlyIncome : null,
+      monthly_expenses: outflowKnown ? summary.totalMonthlyExpenses + summary.debtMonthlyRepayments : null,
+      monthly_surplus: incomeKnown && outflowKnown ? summary.monthlySurplus : null,
+      savings_rate: incomeKnown && outflowKnown ? summary.savingsRate : null,
       currency_code: summary.currency,
       // G6 Contract 3 -- FX-rate lineage, populated at write time.
       fx_rate_aud_inr: fxRateAudInr,

@@ -25,6 +25,10 @@ import { toMinor, type CorroborationEvidence, type CorroborationKind } from './c
 export interface CorroborationRef extends CorroborationEvidence {
   /** The statement / payroll event the evidence belongs to. */
   parentId: string | null;
+  /** When that statement was approved (null when unknown / payroll). The ledger lets approved
+   *  evidence re-bucket a user-decided line only when this is LATER than the user's last
+   *  decision on the line (security/integrity review, the rule-9 residual). */
+  approvedAt: string | null;
 }
 
 export interface BankLegFacts {
@@ -56,6 +60,7 @@ export interface ActivityEvidenceRow {
 export interface StatementApprovalRow {
   id: string;
   approval_status: string;
+  approved_at?: string | null;
 }
 
 export interface RawCorroborationEvidence {
@@ -99,7 +104,7 @@ export function buildCorroborationIndex(raw: RawCorroborationEvidence, bankLegs:
     if (e.approval_status !== 'approved' || e.superseded_by_payroll_event_id) continue;
     const leg = legs.get(e.bank_match_transaction_id);
     if (!leg || leg.credit_debit !== 'credit' || leg.currency_original !== e.currency_code) continue;
-    add(leg.id, { kind: 'payroll_event', sourceId: e.id, activityType: 'NET_PAY', parentId: e.id });
+    add(leg.id, { kind: 'payroll_event', sourceId: e.id, activityType: 'NET_PAY', parentId: e.id, approvedAt: null });
   }
 
   const activities: [CorroborationKind, ActivityEvidenceRow[], StatementApprovalRow[]][] = [
@@ -109,6 +114,7 @@ export function buildCorroborationIndex(raw: RawCorroborationEvidence, bankLegs:
   ];
   for (const [kind, rows, statements] of activities) {
     const approved = new Set(statements.filter((s) => s.approval_status === 'approved').map((s) => s.id));
+    const approvedAt = new Map(statements.map((s) => [s.id, s.approved_at ?? null] as const));
     // One-to-one: a bank leg claimed by two activities of the same kind is ambiguous -> not indexed.
     const claims = new Map<string, ActivityEvidenceRow[]>();
     for (const a of rows) {
@@ -123,7 +129,7 @@ export function buildCorroborationIndex(raw: RawCorroborationEvidence, bankLegs:
       if (!leg || leg.currency_original !== a.currency_code || !amountsMatch(leg.amount_original, a.amount)) continue;
       const expected = EXPECTED_DIRECTION[kind][a.activity_type];
       if (!expected || leg.credit_debit !== expected) continue;
-      add(txnId, { kind, sourceId: a.id, activityType: a.activity_type, parentId: a.statement_id });
+      add(txnId, { kind, sourceId: a.id, activityType: a.activity_type, parentId: a.statement_id, approvedAt: approvedAt.get(a.statement_id) ?? null });
     }
   }
   return index;
@@ -151,7 +157,7 @@ export async function loadCorroborationEvidence(userId: string, client: ReadMode
     );
   const statements = (table: string, rows: ActivityEvidenceRow[]) =>
     fetchAllByIds<StatementApprovalRow>(table, rows.map((r) => r.statement_id), (chunk, from, to) =>
-      client.from(table).select('id, approval_status').eq('user_id', userId).in('id', chunk).range(from, to),
+      client.from(table).select('id, approval_status, approved_at').eq('user_id', userId).in('id', chunk).range(from, to),
     );
   const liabilityActivities = await activity('fdh_liability_statement_activities');
   const investmentActivities = await activity('fdh_investment_statement_activities');
