@@ -1,0 +1,123 @@
+{
+ "brokerDoc": "3b01f3ff-3f6f-42e2-8c19-e8dcac453187",
+ "userId": "e9ff2441-05bf-441d-8d2c-a7c7549d6ec7",
+ "unpubAfterApply": {
+  "label": "Imported, not yet in Net Worth",
+  "count": 1,
+  "total": 5000,
+  "reporting_currency": "AUD",
+  "holdings": [
+   {
+    "name": "FHIP Test Equity AURET",
+    "as_of_date": "2026-08-31",
+    "value": 5000,
+    "currency_code": "AUD"
+   }
+  ]
+ },
+ "dashAfterApply": 9000,
+ "result_au": {
+  "unpublishedBeforePublish": {
+   "label": "Imported, not yet in Net Worth",
+   "count": 1,
+   "total": 5000,
+   "reporting_currency": "AUD",
+   "holdings": [
+    {
+     "name": "FHIP Test Equity AURET",
+     "as_of_date": "2026-08-31",
+     "value": 5000,
+     "currency_code": "AUD"
+    }
+   ]
+  },
+  "dashboardBeforePublish": 9000,
+  "dashboardAfterApply": 9000,
+  "unpublishedAfterApply": {
+   "label": "Imported, not yet in Net Worth",
+   "count": 1,
+   "total": 5000,
+   "reporting_currency": "AUD",
+   "holdings": [
+    {
+     "name": "FHIP Test Equity AURET",
+     "as_of_date": "2026-08-31",
+     "value": 5000,
+     "currency_code": "AUD"
+    }
+   ]
+  },
+  "unpublishedAfterPublish": {
+   "label": "Imported, not yet in Net Worth",
+   "count": 0,
+   "total": 0,
+   "reporting_currency": "AUD",
+   "holdings": []
+  },
+  "dashboardAfterPublish": 14000,
+  "netWorthMoved": true
+ },
+ "retDoc": "0eebe570-32b7-4456-80a0-b5ae6c5366d0",
+ "retTicked": [
+  "account_name",
+  "account_type",
+  "currency_code",
+  "country_code",
+  "owner",
+  "current_balance",
+  "employer_contribution",
+  "contribution_frequency"
+ ],
+ "retNotTicked": [],
+ "retApply": {
+  "data": {
+   "outcome": "applied",
+   "apply_mode": "add_new",
+   "target_entity_id": "95ace387-0d13-4736-b50a-20010312509b",
+   "application_id": "905a14a5-4bf3-47f8-9300-2735922f3c27",
+   "applied_fields": [
+    "account_name",
+    "account_type",
+    "currency_code",
+    "country_code",
+    "owner",
+    "current_balance",
+    "employer_contribution",
+    "contribution_frequency"
+   ]
+  }
+ },
+ "retAccountId": "95ace387-0d13-4736-b50a-20010312509b",
+ "bankDoc": "2a66eef9-b7fd-451f-a7ee-712acde41ea7",
+ "expensesBeforeBankLeg": {
+  "plannedMonthly": 3275,
+  "actualMonthly": 500,
+  "combinedMonthly": 2865,
+  "actualTotalInWindow": 500
+ },
+ "retTxnDoc": "e98e29fc-920f-4b96-b951-b0878d3fd155",
+ "retTxnActivityId": "f6763b6a-70b3-4858-a852-1f0ca4f9cb95",
+ "retTxnActivityMatch": "matched",
+ "result_retirement_bankleg": {
+  "before": {
+   "plannedMonthly": 3275,
+   "actualMonthly": 500,
+   "combinedMonthly": 2865,
+   "actualTotalInWindow": 500
+  },
+  "confirm": {
+   "data": {
+    "code": "CONFIRMED",
+    "outcome": "skipped_user_override",
+    "counted_as": "transfer",
+    "transaction_id": "79009e27-f3a2-4a53-afee-229da230dc97"
+   }
+  },
+  "after": {
+   "plannedMonthly": 3275,
+   "actualMonthly": 500,
+   "combinedMonthly": 2865,
+   "actualTotalInWindow": 500
+  }
+ }
+}
