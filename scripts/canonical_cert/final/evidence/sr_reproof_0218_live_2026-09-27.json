@@ -1,0 +1,120 @@
+{
+ "evidence": {
+  "victim": "fhip.e2e.tc001@test.fhip.invalid",
+  "attacker": "fhip.e2e.tc005@test.fhip.invalid",
+  "victimId": "e9ff2441-05bf-441d-8d2c-a7c7549d6ec7",
+  "attackerId": "91ebda98-d65d-4fa2-a611-fda01e18a9eb",
+  "at": "2026-09-27T12:13:20.309Z",
+  "sr01": {
+   "status": 403,
+   "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"fdh_liability_statements: approval, ledger, correction and link state are system-authoritative; statement evidence is created from a document by the statement persist only\"}"
+  },
+  "sr01_parent": {
+   "status": 403,
+   "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"fdh_liability_statements: approval, ledger, correction and link state are system-authoritative; statement evidence is created from a document by the statement persist only\"}"
+  },
+  "sr02_victimTxn": "79009e27-f3a2-4a53-afee-229da230dc97",
+  "sr02": {
+   "status": 403,
+   "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"fdh_transaction_allocations: cross-tenant reference -- transaction 79009e27-f3a2-4a53-afee-229da230dc97 belongs to a different user\"}"
+  },
+  "sr04_asset": {
+   "status": 401,
+   "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function fdh15_apply_asset_proposal\"}"
+  },
+  "sr04_expense": {
+   "status": 401,
+   "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function fdh15_apply_expense_proposals\"}"
+  },
+  "sr04_control_authenticated": {
+   "status": 200,
+   "body": "{\"ok\": false, \"code\": \"PROPOSAL_NOT_FOUND\", \"error\": \"That suggestion could not be found.\"}"
+  },
+  "sr03_bankUpload": {
+   "status": 200,
+   "documentId": "a8d1d566-4415-4599-88a6-5934ad2451c7"
+  },
+  "sr03_statement": {
+   "id": "a8d1d566-4415-4599-88a6-5934ad2451c7",
+   "financial_account_id": "18c2eb4b-d484-4b30-8267-1cf1eab3cd9e",
+   "processing_status": "approved"
+  },
+  "sr03_forgedProposal": {
+   "status": 201,
+   "id": "3be55de9-0d35-4599-b32c-0e4c300fdc82",
+   "body": "[{\"id\":\"3be55de9-0d35-4599-b32c-0e4c300fdc82\",\"user_id\":\"91ebda98-d65d-4fa2-a611-fda01e18a9eb\",\"target_domain\":\"asset\",\"source_kind\":\"bank_statement\",\"source_payroll_event_id\":null,\"currency_code\":null,\"target_entity_id\":null,\"target_entity_updated_at\":null,\"recommended_apply_mode\":\"add_new\",\"duplicate_of_entity_id\":null,\"status\":\"ready\",\"dismissed_at\":null,\"applied_at\":null,\"generated_at\":\"2026-0"
+  },
+  "sr03_forgedFields": {
+   "status": 201,
+   "body": "[{\"id\":\"93367685-e26e-4192-886f-2352e9d37d09\",\"user_id\":\"91ebda98-d65d-4fa2-a611-fda01e18a9eb\",\"proposal_id\":\"3be55de9-0d35-4599-b32c-0e4c300fdc82\",\"field_name\":\"current_value\",\"value_kind\":\"money\",\"proposed_value\":\"15000.00\",\"existing_value\":null,\"is_recommended\":true,\"requires_confirmation\":false,\"confidence\":null,\"reason_code\":null,\"created_at\":\"2026-09-27T12:13:59.424905+00:00\"}, \n {\"id\":\"c587dc0a-6626-4417-b9f1-bbb4ac493434\",\"user_id\":\"91ebda98-d65d-4fa2-a611-fda01e18a9eb\",\"proposal_id\":\"3b"
+  },
+  "sr03_attack": {
+   "status": 200,
+   "body": "{\"ok\": false, \"code\": \"CURRENCY_MISMATCH\", \"error\": \"This balance is in AUD. It can only be added to an asset held in AUD; amounts are never converted or added across currencies here.\", \"field\": \"currency_code\"}"
+  },
+  "sr03_assetsCreated": []
+ },
+ "results": [
+  {
+   "ok": true,
+   "label": "SR-01: forged approved liability statement INSERT refused by the 0218 trigger",
+   "detail": {
+    "status": 403,
+    "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"fdh_liability_statements: approval, ledger, correction and link state are system-authoritative; statement evidence is created from a document by the statement persist only\"}"
+   }
+  },
+  {
+   "ok": true,
+   "label": "SR-01b setup: even a PENDING liability statement with no document is refused (statement_upload_id is mandatory)",
+   "detail": {
+    "status": 403,
+    "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"fdh_liability_statements: approval, ledger, correction and link state are system-authoritative; statement evidence is created from a document by the statement persist only\"}"
+   }
+  },
+  {
+   "ok": true,
+   "label": "SR-02: cross-tenant split-line INSERT refused by the 0218 same-tenant trigger",
+   "detail": {
+    "status": 403,
+    "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"fdh_transaction_allocations: cross-tenant reference -- transaction 79009e27-f3a2-4a53-afee-229da230dc97 belongs to a different user\"}"
+   }
+  },
+  {
+   "ok": true,
+   "label": "SR-04a: anon EXECUTE on fdh15_apply_asset_proposal refused at the GRANT layer (401/permission denied, not 400 from inside the function)",
+   "detail": {
+    "status": 401,
+    "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function fdh15_apply_asset_proposal\"}"
+   }
+  },
+  {
+   "ok": true,
+   "label": "SR-04b: anon EXECUTE on fdh15_apply_expense_proposals refused at the GRANT layer",
+   "detail": {
+    "status": 401,
+    "body": "{\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function fdh15_apply_expense_proposals\"}"
+   }
+  },
+  {
+   "ok": true,
+   "label": "SR-04 control: the SAME RPC, authenticated, reaches the function body (200, PROPOSAL_NOT_FOUND) -- proves anon is refused at the grant, not by a broken function",
+   "detail": {
+    "status": 200,
+    "body": "{\"ok\": false, \"code\": \"PROPOSAL_NOT_FOUND\", \"error\": \"That suggestion could not be found.\"}"
+   }
+  },
+  {
+   "ok": true,
+   "label": "SR-03: an AUD-15,000 statement forged as currency_code=INR is refused as CURRENCY_MISMATCH (0218 re-derives the currency, not only the number)",
+   "detail": {
+    "status": 200,
+    "body": "{\"ok\": false, \"code\": \"CURRENCY_MISMATCH\", \"error\": \"This balance is in AUD. It can only be added to an asset held in AUD; amounts are never converted or added across currencies here.\", \"field\": \"currency_code\"}"
+   }
+  },
+  {
+   "ok": true,
+   "label": "SR-03: no INR asset carrying an AUD number was created",
+   "detail": []
+  }
+ ]
+}
