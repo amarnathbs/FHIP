@@ -71,7 +71,7 @@ export interface StatementCategoryReview extends CategoryReview {
 }
 
 const TXN_COLUMNS =
-  'id, transaction_date, description_clean, amount_original, currency_original, credit_debit, ' +
+  'id, transaction_date, description_clean, description_raw, amount_original, currency_original, credit_debit, ' +
   'economic_transaction_type, category_id, classification_method, classification_confidence, user_override, ' +
   'review_status, approval_status, dedup_status';
 

@@ -90,7 +90,8 @@ export interface AssetsReadModelData {
   /** `accounts` lists every bank account's latest statement balance, each with `inNetWorthAs` when the user
    * already added it as a cash asset. `total` / `notInNetWorthCount` cover ONLY the balances NOT in Net Worth:
    * that is what the label says (canonical-cert UI journey, DEV 2026-09-27: after "Add to Assets" the Dashboard
-   * still said "Bank balance per statement — not in Net Worth: $27,895" while Net Worth included it). */
+   * still said "Bank balance per statement — not in Net Worth: $27,895" while Net Worth included it).
+   * Same defect as econ D3 / golden pair GP-D5: consumers disclose through bankBalancesNotInNetWorth(). */
   bankBalanceEvidence: { label: string; accounts: BankBalanceEvidence[]; total: number; notInNetWorthCount: number };
   unconverted: UnconvertedTally;
 }

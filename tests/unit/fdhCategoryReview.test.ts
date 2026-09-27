@@ -222,3 +222,12 @@ describe('buildCategoryReview', () => {
     expect(pendingIdsForGroup(done, groupKeyFor(b))).toEqual([]);
   });
 });
+
+describe('GP-D4 (golden pair, live DEV 2026-09-27): card/loan ledger lines carry description_raw only', () => {
+  it('the review shows the statement text of a ledger line instead of a blank', () => {
+    const ledger = t({ description_clean: null, description_raw: 'WOOLWORTHS FHIP TEST GROCER GP2', classification_method: 'source', approval_status: 'approved' });
+    const r = buildCategoryReview([ledger], CATS, NO_BLOCKERS);
+    const lines = r.groups.flatMap((g) => g.lines);
+    expect(lines.map((l) => l.description)).toEqual(['WOOLWORTHS FHIP TEST GROCER GP2']);
+  });
+});

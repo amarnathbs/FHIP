@@ -177,7 +177,16 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
     // it carries no financial meaning either way. (EXP-G12): an APPROVED
     // line is a settled decision; re-running the engine (every import calls
     // it) must never change its type or category behind the user's back.
-    if (isDuplicateExcluded(txn.dedup_status) || txn.approval_status === 'approved') continue;
+    //
+    // GOLDEN PAIR GP-D4 (live DEV, 2026-09-27): the FDH-10 ledger Apply (0209) writes card/loan rows
+    // ALREADY APPROVED and with NO category, so the rule above skipped every one of them and the WP-11
+    // category-only path below never ran for a single real row: approved card purchases stayed
+    // "Other spending" for ever (live: $200 + $20 of supermarket purchases counted as spending, but in
+    // the wrong group, non-essential, with no category). A source-typed row that has NO category yet is
+    // the one exception: the approval came from the statement Apply, not from a user's category
+    // decision, and the path below only ever supplies a category (never the type), and only a first one.
+    const firstCategoryForSourceRow = txn.approval_status === 'approved' && keepsSourceEconomicType(txn) && txn.category_id == null;
+    if (isDuplicateExcluded(txn.dedup_status) || (txn.approval_status === 'approved' && !firstCategoryForSourceRow)) continue;
 
     const classifiable: ClassifiableTransaction = {
       id: txn.id,

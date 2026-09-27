@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
+import { statementPeriodError } from '@/components/expenses/bankUploadParams';
 import { ACTIVITY_LEDGER_OUTCOME, BLOCKER_LABELS, OWNER_CHOICES, describeExtractionWarning } from './liabilityLedgerCopy';
 import {
   waitForDocumentToLeaveValidating,
@@ -409,6 +410,10 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   const [creditLimit, setCreditLimit] = useState('');
   const [minimumPayment, setMinimumPayment] = useState('');
   const [interestRate, setInterestRate] = useState('');
+  // GP-D3: the statement period printed on the statement (a CSV does not carry it). Without it a month
+  // is only "partly covered" and the facility's purchases / repayment split are never averaged.
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
   const [documentId, setDocumentId] = useState<string | null>(null);
@@ -778,6 +783,10 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       } else if (interestRate) {
         params.set('interest_rate', interestRate);
       }
+      if (periodStart && periodEnd && statementPeriodError(periodStart, periodEnd) === null) {
+        params.set('statement_period_start', periodStart);
+        params.set('statement_period_end', periodEnd);
+      }
 
       setPhase('processing');
       const res = await fetch(`/api/financial-data-hub/liability-statement/upload?${params.toString()}`, {
@@ -987,6 +996,16 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         throw new Error(json.error ?? 'The change could not be saved.');
       }
       const recorded = describeRecordedLedger(json.data.ledger as RecordedLedger | null);
+      // GP-D4: the Apply has just written the card/loan lines to the ledger with no category. Run the
+      // same best-effort classification the bank-statement import runs after processing, so a card
+      // purchase at a supermarket arrives as groceries instead of "Other spending". Never blocks.
+      if (json.data.outcome !== 'rejected_statement') {
+        try {
+          await fetch('/api/financial-data-hub/bank-transactions/categorise', { method: 'POST' });
+        } catch {
+          // Best effort only; every line can still be categorised by hand in the statement review.
+        }
+      }
       if (json.data.outcome === 'rejected_statement') {
         setPhase('rejected');
       } else if (json.data.outcome === 'kept_existing') {
@@ -1116,7 +1135,17 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
                 <input type="number" step="0.01" className="w-full rounded border border-gray-300 px-3 py-2" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
               </label>
             )}
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted">Statement period from (recommended)</span>
+              <input type="date" className="w-full rounded border border-gray-300 px-3 py-2" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted">Statement period to (recommended)</span>
+              <input type="date" className="w-full rounded border border-gray-300 px-3 py-2" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+            </label>
           </div>
+          <p className="text-xs text-muted">A month counts in your averages only when a statement covers the whole month.</p>
+          {statementPeriodError(periodStart, periodEnd) && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">{statementPeriodError(periodStart, periodEnd)}</p>}
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Statement file (CSV)</span>
             <input type="file" accept="text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -1128,7 +1157,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <button
               type="button"
               onClick={handleUpload}
-              disabled={!file || busy || uploadEnabled !== true}
+              disabled={!file || busy || uploadEnabled !== true || statementPeriodError(periodStart, periodEnd) !== null}
               className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
             >
               Upload statement

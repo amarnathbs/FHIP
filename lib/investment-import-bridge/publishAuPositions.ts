@@ -193,7 +193,7 @@ export async function publishAuStatementPositions(userId: string, statementId: s
       acknowledgedNoDuplicate: d.acknowledgedNoDuplicate ?? false,
       // ii_fhip_publications.correlation_id is a UUID column (0042): the statement id itself is the
       // correlation id. A prefixed string ("fdh11:<id>") made every Add to Net Worth fail with
-      // "invalid input syntax for type uuid" (canonical-cert UI journey, DEV 2026-09-27).
+      // "invalid input syntax for type uuid" (canonical-cert UI journey SUI-3 == golden pair GP-D1, DEV 2026-09-27).
       correlationId: statementId,
     });
     out.push({ snapshotId: h.id, ok: !result.error, action: result.action, errorCode: result.errorCode ?? null, error: result.error });

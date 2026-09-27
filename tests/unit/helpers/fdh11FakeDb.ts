@@ -95,7 +95,7 @@ class Query implements PromiseLike<{ data: unknown; error: unknown }> {
   }
   or(expr: string) {
     const parts = expr.split(',').map((p) => p.split('.'));
-    this.filters.push((r) => parts.some(([c, op, ...rest]) => op === 'eq' && eqv(r[c], rest.join('.'))));
+    this.filters.push((r) => parts.some(([c, op, ...rest]) => (op === 'eq' && eqv(r[c], rest.join('.'))) || (op === 'is' && rest.join('.') === 'null' && (r[c] ?? null) === null)));
     return this;
   }
   order(c: string, o?: { ascending?: boolean }) { this.orders.push({ col: c, asc: o?.ascending !== false }); return this; }

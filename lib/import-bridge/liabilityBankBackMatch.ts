@@ -145,3 +145,95 @@ export const liabilityBankBackMatcher: PostBankApprovalMatcher = {
     return { linked, reclassified };
   },
 };
+
+/**
+ * GOLDEN PAIR GP-D2 (live DEV, 2026-09-27): the FORWARD match -- the other order.
+ *
+ * The back-match above runs when a BANK statement is approved, and only for card/loan statements that
+ * are ALREADY approved. Extraction-time matching only sees APPROVED bank debits. So when the user
+ * uploads both, approves the BANK statement first and the card/loan statement afterwards, neither
+ * step ever links the repayment: the bank debit keeps whatever the user typed it as (for example
+ * "Loan Principal Repayment", which then shows on the Expenses tab next to the loan's own principal
+ * line) and the settlement link is never written. Proven live on DEV: the loan's $2,000 repayment
+ * stayed 'bank_evidence_not_available' after both approvals and the Apply reported linksCreated 0.
+ *
+ * This runs when a card/loan statement is approved: every still-open repayment on THAT statement is
+ * matched against the user's approved bank debits with the SAME certified rule (planLiabilityBackMatches:
+ * amount + date tolerance + the lender named in the narrative, never an auto-pick between two debits,
+ * never one debit for two repayments) and recorded through the SAME re-verifying RPC. A debit that
+ * already settles another repayment is never offered.
+ */
+export async function runLiabilityStatementForwardMatch(userId: string, statementId: string): Promise<PostBankApprovalMatcherOutcome> {
+  const supabase = await createClient();
+  const { data: statement, error: stErr } = await supabase
+    .from('fdh_liability_statements')
+    .select('id, institution_name, approval_status, ledger_status')
+    .eq('user_id', userId)
+    .eq('id', statementId)
+    .maybeSingle();
+  if (stErr) throw new Error(stErr.message);
+  const st = statement as { id: string; institution_name: string | null; approval_status: string; ledger_status: string } | null;
+  if (!st || st.approval_status !== 'approved' || st.ledger_status === 'rejected') return { linked: 0, reclassified: 0 };
+
+  const repayments = await fetchAllRows<OpenRepayment>(() =>
+    supabase
+      .from('fdh_liability_statement_activities')
+      .select('id, statement_id, activity_type, activity_date, amount, currency_code')
+      .eq('user_id', userId)
+      .eq('statement_id', statementId)
+      .in('activity_type', ['PAYMENT', 'PRINCIPAL'])
+      .in('bank_match_status', [...OPEN_REPAYMENT_MATCH_STATUSES])
+      .or('ledger_disposition.is.null,ledger_disposition.eq.ledger_row')
+      .order('id', { ascending: true }),
+  );
+  if (repayments.length === 0) return { linked: 0, reclassified: 0 };
+
+  const shift = (d: string, days: number) => { const t = new Date(`${d}T00:00:00Z`); t.setUTCDate(t.getUTCDate() + days); return t.toISOString().slice(0, 10); };
+  const dates = repayments.map((r) => r.activity_date).sort();
+  const currencies = [...new Set(repayments.map((r) => r.currency_code))];
+  const debits = await fetchAllRows<ApprovedBankDebit & { dedup_status?: string }>(() =>
+    supabase
+      .from('fdh_transactions')
+      .select('id, transaction_date, amount_original, currency_original, description_clean, description_raw, merchant_raw')
+      .eq('user_id', userId)
+      .eq('credit_debit', 'debit')
+      .eq('approval_status', 'approved')
+      .in('currency_original', currencies)
+      .gte('transaction_date', shift(dates[0], -7))
+      .lte('transaction_date', shift(dates[dates.length - 1], 7))
+      .not('dedup_status', 'in', '(duplicate_confirmed,user_confirmed_duplicate)')
+      .order('id', { ascending: true }),
+  );
+  if (debits.length === 0) return { linked: 0, reclassified: 0 };
+
+  // A debit that already settles another repayment is never a candidate.
+  const taken = new Set<string>();
+  const ids = debits.map((d) => d.id);
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await supabase
+      .from('fdh_liability_statement_activities')
+      .select('linked_transaction_id')
+      .eq('user_id', userId)
+      .eq('bank_match_status', 'matched')
+      .in('linked_transaction_id', ids.slice(i, i + 200));
+    if (error) throw new Error(error.message);
+    for (const t of (data ?? []) as Array<{ linked_transaction_id: string | null }>) if (t.linked_transaction_id) taken.add(t.linked_transaction_id);
+  }
+  const free = debits.filter((d) => !taken.has(d.id));
+
+  let linked = 0;
+  let reclassified = 0;
+  for (const pair of planLiabilityBackMatches(repayments, free, new Map([[st.id, st.institution_name]]))) {
+    const { data, error } = await supabase.rpc('fdh10_match_liability_payment', {
+      p_activity_id: pair.activityId,
+      p_bank_transaction_id: pair.bankTransactionId,
+      p_method: 'bank_back_match',
+    });
+    if (error) throw Object.assign(new Error('fdh10_match_liability_payment failed'), { code: error.code ?? 'RPC_ERROR' });
+    const result = data as { ok: boolean; link?: string | null };
+    if (!result.ok) continue;
+    linked += 1;
+    if (result.link?.endsWith('+reclassified')) reclassified += 1;
+  }
+  return { linked, reclassified };
+}

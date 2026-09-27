@@ -285,5 +285,31 @@ export async function applyBankBalanceProposal(client: PopulationClient, request
   if (error) return { ok: false, code: 'WRITE_FAILED', error: error.message };
   const r = data as RpcOne;
   if (!r?.ok) return refusal(r ?? { ok: false });
+  if (r.target_entity_id) await stampAssetCountryFromAccount(client, r.target_entity_id);
   return { ok: true, results: [{ proposalId: request.proposalId, outcome: r.outcome ?? 'applied', targetEntityId: r.target_entity_id ?? null }] };
+}
+
+/**
+ * GOLDEN PAIR GP-D6 (found live on DEV, 2026-09-27): the applied cash asset carried no country_code
+ * (0214's allow-list has none), so every per-country view dropped it: the Dashboard's assetsByCountry and
+ * netWorthByCountryConverted (whose sum then no longer equalled Net Worth), countriesInUse, the Twin's
+ * cross-border metrics and the report's cross-border section (an INR spouse account made the household
+ * "single-country"). The country is the one the user declared for that bank account at upload
+ * (fdh_financial_accounts.country_code, NOT NULL) -- never derived from the currency. Only an EMPTY
+ * country is filled, so a country the user set by hand is never overwritten. country_code is not an
+ * import-provenance column (0214's assets guard does not cover it), so the user's own client may write it.
+ * Best effort: a failure leaves the asset exactly as the RPC wrote it.
+ */
+async function stampAssetCountryFromAccount(client: PopulationClient, assetId: string): Promise<void> {
+  try {
+    const { data: asset } = await client.from('assets').select('id, country_code, source_financial_account_id').eq('id', assetId).maybeSingle();
+    const a = asset as { country_code: string | null; source_financial_account_id: string | null } | null;
+    if (!a || a.country_code || !a.source_financial_account_id) return;
+    const { data: account } = await client.from('fdh_financial_accounts').select('country_code').eq('id', a.source_financial_account_id).maybeSingle();
+    const country = (account as { country_code: string | null } | null)?.country_code ?? null;
+    if (!country) return;
+    await client.from('assets').update({ country_code: country }).eq('id', assetId).is('country_code', null);
+  } catch {
+    // best effort (see above)
+  }
 }

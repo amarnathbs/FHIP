@@ -199,6 +199,21 @@ describe('R8 classifier respects the ledger Apply (0209)', () => {
     expect(adminInserts.filter((i) => i.table === 'fdh_transaction_links').map((i) => i.row.transaction_id_from)).toEqual(['ordinary']);
   });
 
+  it('GP-D4: a source-typed row as 0209 REALLY writes it (approved, no category) gets its first category; an approved row with a category, or an ordinary approved row, is never touched', async () => {
+    const { classifyUserTransactions } = await import('@/lib/financial-data-hub/services/transactionClassificationService');
+    userTxns = [
+      txn('ledger-purchase', { financial_account_id: 'card', classification_method: 'source', economic_transaction_type: 'expense', approval_status: 'approved', description_clean: null, merchant_raw: 'Woolworths' }),
+      txn('ledger-purchase-categorised', { financial_account_id: 'card', classification_method: 'source', economic_transaction_type: 'expense', approval_status: 'approved', category_id: 'cat-user-chose' }),
+      txn('approved-ordinary', { approval_status: 'approved' }),
+    ];
+    userLinks = [];
+    await classifyUserTransactions(U);
+    const byId = (id: string) => adminUpdates.filter((u) => u.table === 'fdh_transactions' && u.id === id).map((u) => u.patch);
+    expect(byId('ledger-purchase')).toEqual([{ category_id: 'cat-food', subcategory_id: 'sub-groceries', merchant_id: 'm-1' }]);
+    expect(byId('ledger-purchase-categorised')).toEqual([]); // EXP-G12 still holds: never re-categorised
+    expect(byId('approved-ordinary')).toEqual([]); // EXP-G12 still holds: never re-typed
+  });
+
   it('a bank debit CONFIRMED as a card/loan settlement stays a transfer when the engine re-runs', async () => {
     const { classifyUserTransactions } = await import('@/lib/financial-data-hub/services/transactionClassificationService');
     userTxns = [txn('bank-leg', { economic_transaction_type: 'transfer' })];

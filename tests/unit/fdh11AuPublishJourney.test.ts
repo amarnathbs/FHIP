@@ -156,6 +156,17 @@ describe('first-time AU user: approve -> apply -> Add to Net Worth (INV-G1/G2/G3
     const published = await json(await publishRoute(post({ action: 'publish', decisions: [{ snapshot_id: snapshotId }] }), params));
     expect(published.data.published_count).toBe(1);
 
+    // GOLDEN-PAIR GP-D1 (live DEV, 2026-09-27): ii_fhip_publications.correlation_id is a `uuid` column
+    // (migration 0042). The bridge sent "fdh11:<statementId>", so on a real database EVERY "Add to Net
+    // Worth" failed with WRITE_FAILED ("invalid input syntax for type uuid") and was rolled back; this
+    // in-memory database accepts any string, which is why no test saw it. The correlation id must be a
+    // UUID, and it is the statement id (it ties every publication from one statement together).
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const pubs = db.rows('ii_fhip_publications');
+    expect(pubs).toHaveLength(1);
+    expect(String(pubs[0].correlation_id)).toMatch(UUID);
+    expect(pubs[0].correlation_id).toBe(statementId);
+
     const inv = db.rows('investments');
     expect(inv).toHaveLength(1);
     expect(inv[0]).toMatchObject({ user_id: USER, source_type: 'investment_intelligence_published', owner: 'self', current_value: 9980, currency_code: 'AUD', ii_canonical_account_id: account.id, master_item_key: 'australian_shares' });

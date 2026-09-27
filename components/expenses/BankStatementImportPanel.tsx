@@ -57,6 +57,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { bankUploadParams, statementPeriodError } from './bankUploadParams';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -183,6 +184,9 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   const [maskedIdentifier, setMaskedIdentifier] = useState('');
   // WP-08 (D-10): no default -- the user says whose account this is.
   const [ownerRole, setOwnerRole] = useState<'' | 'self' | 'spouse' | 'joint' | 'smsf'>('');
+  // GP-D3: the statement period printed on the statement (a CSV does not carry it).
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');
   const [documentId, setDocumentId] = useState<string | null>(null);
@@ -412,15 +416,18 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
 
   async function handleUpload() {
     if (!file) return;
+    const periodProblem = statementPeriodError(periodStart, periodEnd);
+    if (periodProblem) {
+      setMessage(periodProblem);
+      return;
+    }
     const csv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
     setBusy(true);
     setPhase('uploading');
     setMessage(null);
     try {
-      const params = new URLSearchParams({ country_code: country, currency_code: currency });
-      if (maskedIdentifier) params.set('masked_identifier', maskedIdentifier);
-      if (ownerRole) params.set('owner_role', ownerRole);
-      if (file.name) params.set('filename', file.name);
+      // GP-D3: the statement period is sent when the user gives it, so a full month counts as covered.
+      const params = bankUploadParams({ country, currency, maskedIdentifier, ownerRole, filename: file.name, periodStart, periodEnd });
 
       const uploadRes = await fetch(
         `/api/financial-data-hub/${csv ? 'bank-csv' : 'bank-pdf'}/upload?${params.toString()}`,
@@ -586,6 +593,31 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
               />
             </label>
           </div>
+          <fieldset className="grid gap-4 sm:grid-cols-2" aria-describedby="statement-period-help">
+            <legend className="mb-1 text-sm text-muted">Statement period (as printed on the statement, recommended)</legend>
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted">From</span>
+              <input
+                type="date"
+                className="w-full rounded border border-gray-300 px-3 py-2"
+                value={periodStart}
+                onChange={(e) => setPeriodStart(e.target.value)}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted">To</span>
+              <input
+                type="date"
+                className="w-full rounded border border-gray-300 px-3 py-2"
+                value={periodEnd}
+                onChange={(e) => setPeriodEnd(e.target.value)}
+              />
+            </label>
+            <span id="statement-period-help" className="block text-xs text-muted sm:col-span-2">
+              A month counts in your averages only when a statement covers the whole month. Without the period,
+              FHIP can only use the dates of the first and last transactions.
+            </span>
+          </fieldset>
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Statement file (PDF or CSV, up to 20MB)</span>
             <input
@@ -595,6 +627,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </label>
+          {message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">{message}</p>}
           <button
             type="button"
             onClick={handleUpload}

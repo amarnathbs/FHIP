@@ -1,0 +1,508 @@
+{
+ "a": "M",
+ "b": "I",
+ "headline": [
+  {
+   "consumer": "Income",
+   "metric": "gross monthly (Dashboard)",
+   "M": 6700,
+   "I": 6700,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Income",
+   "metric": "net monthly (Dashboard)",
+   "M": 5000,
+   "I": 5000,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Income",
+   "metric": "combined gross (income read model)",
+   "M": 6700,
+   "I": 6700,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Income",
+   "metric": "combined net (income read model)",
+   "M": 5000,
+   "I": 5000,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Expenses",
+   "metric": "combined monthly (Dashboard basis)",
+   "M": 2916.5517,
+   "I": 2916.5517,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Expenses",
+   "metric": "combined monthly (expense read model)",
+   "M": 2916.5517,
+   "I": 2916.5517,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Expenses",
+   "metric": "essential monthly",
+   "M": 2916.5517,
+   "I": 2916.5517,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Expenses",
+   "metric": "lifestyle monthly",
+   "M": 0,
+   "I": 0,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Expenses",
+   "metric": "planned monthly (M: typed; I: WP-15 averages applied)",
+   "M": 2916.5517,
+   "I": 916.55,
+   "diff": -2000.0017,
+   "equal": false,
+   "expected": "BASIS (contract section 5): M typed a PLAN; I has approved ACTUALS and applied the WP-15 average only for groceries (rent is category-only -- GP-O3). The combined basis every consumer uses is equal."
+  },
+  {
+   "consumer": "Expenses",
+   "metric": "actual monthly (approved statements)",
+   "M": 0,
+   "I": 2916.5517,
+   "diff": 2916.5517,
+   "equal": false,
+   "expected": "BASIS: M has no statements by definition; the combined basis is equal."
+  },
+  {
+   "consumer": "Assets",
+   "metric": "total assets (core)",
+   "M": 21807.58620689655,
+   "I": 21807.58620689655,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Assets",
+   "metric": "assets + investments + retirement",
+   "M": 135951.33620689655,
+   "I": 135951.33620689655,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Liabilities",
+   "metric": "total liabilities",
+   "M": 399950,
+   "I": 399950,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Liabilities",
+   "metric": "debt service monthly (D-08/D-09)",
+   "M": 2000,
+   "I": 2000,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Liabilities",
+   "metric": "register balance sum (Liabilities tab)",
+   "M": 399950,
+   "I": 399950,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Investments",
+   "metric": "total investments",
+   "M": 12500,
+   "I": 12500,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Investments",
+   "metric": "register value sum (Investments tab)",
+   "M": 12500,
+   "I": 12500,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Investments",
+   "metric": "imported, not yet in Net Worth",
+   "M": 0,
+   "I": 0,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Retirement",
+   "metric": "total retirement",
+   "M": 101643.75,
+   "I": 101643.75,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Retirement",
+   "metric": "employer contribution monthly",
+   "M": 575,
+   "I": 575,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Net Worth",
+   "metric": "Dashboard net worth",
+   "M": -263998.6637931034,
+   "I": -263998.6637931034,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Cashflow",
+   "metric": "monthly surplus",
+   "M": 83.44830000000002,
+   "I": 83.44830000000002,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Cashflow",
+   "metric": "savings rate",
+   "M": 0.016689660000000002,
+   "I": 0.016689660000000002,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Cashflow",
+   "metric": "debt service ratio",
+   "M": 0.4,
+   "I": 0.4,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Cashflow",
+   "metric": "debt to income",
+   "M": 4.974502487562189,
+   "I": 4.974502487562189,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Cashflow",
+   "metric": "emergency fund months",
+   "M": 7.47718142863593,
+   "I": 7.47718142863593,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Score",
+   "metric": "overall health score",
+   "M": 46.24400000000001,
+   "I": 46.24400000000001,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "DNA",
+   "metric": "primary profile",
+   "M": "future_ready_professional",
+   "I": "future_ready_professional",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "DNA",
+   "metric": "primary score",
+   "M": 90.89,
+   "I": 90.89,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "DNA",
+   "metric": "confidence",
+   "M": 79.73125,
+   "I": 79.73125,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Resilience",
+   "metric": "overall score",
+   "M": 69.64,
+   "I": 69.64,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Resilience",
+   "metric": "accessible liquid resources",
+   "M": 21807.58620689655,
+   "I": 21807.58620689655,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Twin",
+   "metric": "metrics compared",
+   "M": 54,
+   "I": 54,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Twin",
+   "metric": "ahead / aligned / behind",
+   "M": "8 / 0 / 22",
+   "I": "8 / 0 / 22",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Twin",
+   "metric": "overall confidence",
+   "M": 55.9,
+   "I": 55.9,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "net worth run input hash",
+   "M": "b99858f76399",
+   "I": "b99858f76399",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "resilience run input hash",
+   "M": "86fa655b43ac",
+   "I": "86fa655b43ac",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "retirement run input hash",
+   "M": "f324157b0488",
+   "I": "f324157b0488",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Report",
+   "metric": "net worth (report net_worth section)",
+   "M": -263998.6637931034,
+   "I": -263998.6637931034,
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Liabilities",
+   "metric": "rows: type/balance/rate/repayment/min/limit/owner/currency",
+   "M": "\"credit_card\"|1500|null|0|30|5000|\"self\"|\"AUD\"|\"AU\" ; \"mortgage\"|398450|6.14|2000|null|null|\"self\"|\"AUD\"|\"AU\"",
+   "I": "\"credit_card\"|1500|null|0|30|5000|\"self\"|\"AUD\"|\"AU\" ; \"mortgage\"|398450|6.14|2000|null|null|\"self\"|\"AUD\"|\"AU\"",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Assets",
+   "metric": "rows: class/value/currency/country/owner",
+   "M": "\"cash\"|20180|\"AUD\"|\"AU\"|\"self\" ; \"cash\"|94400|\"INR\"|\"IN\"|\"spouse\"",
+   "I": "\"cash\"|20180|\"AUD\"|\"AU\"|\"self\" ; \"cash\"|94400|\"INR\"|\"IN\"|\"spouse\"",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Income",
+   "metric": "rows: type/gross/net/frequency/currency/owner",
+   "M": "\"salary\"|6700|5000|\"monthly\"|\"AUD\"|\"self\"",
+   "I": "\"salary\"|6700|5000|\"monthly\"|\"AUD\"|\"self\"",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Retirement",
+   "metric": "rows: balance/currency/country/owner",
+   "M": "101643.75|\"AUD\"|\"AU\"|\"self\"",
+   "I": "101643.75|\"AUD\"|\"AU\"|\"self\"",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Dashboard",
+   "metric": "liabilityByType (as a set)",
+   "M": "{\"debtType\":\"credit_card\",\"balance\":1500} ; {\"debtType\":\"mortgage\",\"balance\":398450}",
+   "I": "{\"debtType\":\"credit_card\",\"balance\":1500} ; {\"debtType\":\"mortgage\",\"balance\":398450}",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Dashboard",
+   "metric": "assetsByCountry (as a set)",
+   "M": "{\"countryCode\":\"AU\",\"value\":20180} ; {\"countryCode\":\"IN\",\"value\":94400}",
+   "I": "{\"countryCode\":\"AU\",\"value\":20180} ; {\"countryCode\":\"IN\",\"value\":94400}",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Dashboard",
+   "metric": "netWorthByCountryConverted (as a set)",
+   "M": "{\"countryCode\":\"AU\",\"value\":-278126.25} ; {\"countryCode\":\"IN\",\"value\":1627.5862068965516}",
+   "I": "{\"countryCode\":\"AU\",\"value\":-278126.25} ; {\"countryCode\":\"IN\",\"value\":1627.5862068965516}",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Dashboard",
+   "metric": "countriesInUse (as a set)",
+   "M": "\"AU\" ; \"IN\"",
+   "I": "\"AU\" ; \"IN\"",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "net worth projected results",
+   "M": "120 rows; sha 29706089977ad83a",
+   "I": "120 rows; sha 29706089977ad83a",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "resilience projected results",
+   "M": "120 rows; sha face9ba970a6ff8e",
+   "I": "120 rows; sha face9ba970a6ff8e",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "retirement projected results",
+   "M": "120 rows; sha 517d5c08f610ec8f",
+   "I": "120 rows; sha 517d5c08f610ec8f",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "debt projected results",
+   "M": "240 rows; sha 671e9e26ce574695",
+   "I": "240 rows; sha 671e9e26ce574695",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "investment projected results",
+   "M": "120 rows; sha 9def1dadb07c79c7",
+   "I": "240 rows; sha 988ca7d1aa88c052",
+   "diff": null,
+   "equal": false,
+   "expected": "GRANULARITY (GP-O1): 1 manual portfolio line vs 2 imported holdings -> 120 vs 240 entity rows; per-period totals compared below."
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "cross-border projected results",
+   "M": "120 rows; sha 35ffc69d8633d791",
+   "I": "120 rows; sha 35ffc69d8633d791",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "DNA",
+   "metric": "propertyDebtBreakdown (as a set)",
+   "M": "{\"purpose\":\"consumer\",\"currencyCode\":\"AUD\",\"liabilityCount\":1,\"totalBalance\":1500} ; {\"purpose\":\"owner_occupied\",\"currencyCode\":\"AUD\",\"liabilityCount\":1,\"totalBalance\":398450}",
+   "I": "{\"purpose\":\"consumer\",\"currencyCode\":\"AUD\",\"liabilityCount\":1,\"totalBalance\":1500} ; {\"purpose\":\"owner_occupied\",\"currencyCode\":\"AUD\",\"liabilityCount\":1,\"totalBalance\":398450}",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "net_worth per-period totals, 120 periods (max |diff| any column)",
+   "M": "120 periods",
+   "I": "120 periods",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "resilience per-period totals, 120 periods (max |diff| any column)",
+   "M": "120 periods",
+   "I": "120 periods",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "retirement per-period totals, 120 periods (max |diff| any column)",
+   "M": "120 periods",
+   "I": "120 periods",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "debt per-period totals, 120 periods (max |diff| any column)",
+   "M": "120 periods",
+   "I": "120 periods",
+   "diff": 0,
+   "equal": true
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "investment per-period totals, 120 periods (max |diff| any column)",
+   "M": "120 periods",
+   "I": "120 periods",
+   "diff": 0.04,
+   "equal": false,
+   "expected": "CENT ROUNDING: each entity row is rounded to the cent every period; 2 rows vs 1 row compound to at most 4 cents over 120 months (period 1 and 120 checked by hand: 13.15 + 52.62 = 65.77; 4,692.80 + 18,771.44 = 23,464.24)."
+  },
+  {
+   "consumer": "Forecast",
+   "metric": "cross_border per-period totals, 120 periods (max |diff| any column)",
+   "M": "120 periods",
+   "I": "120 periods",
+   "diff": 0,
+   "equal": true
+  }
+ ],
+ "classes": {
+  "REGISTER ROWS: same economics, different row shape (names, provenance labels, row order/granularity; I stores annual contributions and imported line-by-line rows)": 93,
+  "PROVENANCE / EVIDENCE VIEW: imported actual lines, statement links and import history exist only for I (M has none by definition)": 152,
+  "EVIDENCE VIEW: bank closing-balance proposals exist only for I (already applied, shown as \"Already added\")": 23,
+  "MANUAL-ENTRY LIMIT (GP-O1): M can hold ONE \"groceries\" catalogue row; the INR groceries is a custom row that the core-survival rule (keyed by master_item_key) does not recognise; I's INR groceries line is categorised groceries": 5,
+  "DESCRIPTOR: the part of combined expenses that came from statements (I 100%, M 0%); the combined total is equal": 1,
+  "PRESENTATION: top-N lists name planned ITEMS for M and canonical GROUPS for I; employer name read from the synthetic payslip as \"PTY LTD\" (parser observation GP-O2)": 48,
+  "ORDER ONLY: same members and values in a different array order (register row order)": 28,
+  "DISCLOSURE (D-09): I knows the 430 interest + 20 fee inside the 2,000 repayment from the loan statement; M cannot; debt service is 2,000 in both": 1,
+  "ORDER ONLY: same members and values in a different array order (checked as a set in the table)": 4,
+  "MANUAL-ENTRY LIMIT (GP-O1): M records the share portfolio as ONE catalogue line (100% \"largest holding\"); I imports two holdings (BHP 80%)": 1,
+  "FORECAST INPUT HASH: covers row names / row granularity (debt: liability names; investment: 1 vs 2 holdings); the projected results are compared leaf by leaf below": 4,
+  "FORECAST RESULT ROWS: positional leaf diff of entity rows returned in a different order (and, for investment, 1 vs 2 holdings); certified by the order-independent row / per-period-total checks in the table": 5083,
+  "CLOCK: data-quality \"last updated\" timestamps of each run": 36,
+  "IDEMPOTENT: M was measured twice in the same month, so the second generate returned the existing report for that month (content compared leaf by leaf)": 1
+ },
+ "unexplained": [],
+ "nonEconomicCount": 3705
+}

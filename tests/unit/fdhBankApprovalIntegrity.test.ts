@@ -538,7 +538,10 @@ describe('EXP-G13 owner attribution captured at upload (D-10)', () => {
     const panel = fs.readFileSync(path.join(REPO, 'components/expenses/BankStatementImportPanel.tsx'), 'utf8');
     expect(panel).toMatch(/Whose account is this\?/);
     expect(panel).toMatch(/useState<'' \| 'self' \| 'spouse' \| 'joint' \| 'smsf'>\(''\)/);
-    expect(panel).toMatch(/params\.set\('owner_role', ownerRole\)/);
+    // GP-D3 moved the query into components/expenses/bankUploadParams.ts (the panel passes ownerRole to it).
+    expect(panel).toMatch(/bankUploadParams\(\{[^}]*ownerRole[^}]*\}\)/);
+    const builder = fs.readFileSync(path.join(REPO, 'components/expenses/bankUploadParams.ts'), 'utf8');
+    expect(builder).toMatch(/params\.set\('owner_role', form\.ownerRole\)/);
     expect(panel).toMatch(/disabled=\{!file \|\| !ownerRole/);
   });
 });

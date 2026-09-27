@@ -289,6 +289,13 @@ describe('(b) bank balance -> cash asset (PO D-04)', () => {
     const after = computeAssets({ ...common, assets: [{ id: 'a1', asset_name: 'Everyday', asset_class: 'cash', current_value: 6000, currency_code: 'AUD', owner: 'joint', master_item_key: null, source_type: 'bank_statement_import', linked_liability_id: null, source_financial_account_id: 'bank' }] });
     expect(after.total).toBe(6000); // once
     expect(after.bankBalanceEvidence.accounts[0].inNetWorthAs).toEqual({ assetId: 'a1', assetName: 'Everyday' });
+    // GP-D5 (golden pair, live DEV 2026-09-27): once applied, the balance is IN Net Worth, so the
+    // "not in Net Worth" disclosure (Dashboard notice, report notInNetWorth, appendix) must not list it.
+    // Live, the Dashboard and the report still said "Bank balance per statement — not in Net Worth:
+    // $21,807.59 (2)" beside a Net Worth that already counted both balances.
+    expect(before.bankBalanceEvidence.notInNetWorthCount).toBe(1);
+    expect(after.bankBalanceEvidence.notInNetWorthCount).toBe(0);
+    expect(after.bankBalanceEvidence.total).toBe(0);
     expect(after.lines[0].provenance).toMatchObject({ kind: 'bank_statement', label: 'Imported from bank statement', accountId: 'bank' });
   });
 
@@ -352,6 +359,23 @@ describe('apply wrappers: one RPC call each, refusals passed through verbatim', 
   it('a stale batch comes back as STALE_PROPOSAL with rolledBack', async () => {
     const { client } = stub({ ok: false, code: 'STALE_PROPOSAL', error: 'changed', proposal_id: 'p2', field: 'amount', rolled_back: true });
     expect(await applyExpenseProposals(client, [{ proposalId: 'p2', decision: 'update_existing' }])).toEqual({ ok: false, code: 'STALE_PROPOSAL', error: 'changed', proposalId: 'p2', field: 'amount', rolledBack: true });
+  });
+
+  it('GP-D6: the applied cash asset gets the country the user declared for that bank account; a country already set is never overwritten', async () => {
+    const t = {
+      assets: [
+        { id: 'a-new', user_id: USER, country_code: null, source_financial_account_id: 'acc-in' },
+        { id: 'a-set', user_id: USER, country_code: 'AU', source_financial_account_id: 'acc-in' },
+      ],
+      fdh_financial_accounts: [{ id: 'acc-in', user_id: USER, country_code: 'IN', currency_code: 'INR' }],
+    };
+    const { client: base } = makeFakeSupabase(t);
+    const rpcFor = (target: string) => ({ ...base, rpc: () => Promise.resolve({ data: { ok: true, outcome: 'applied', target_entity_id: target }, error: null }) }) as unknown as PopulationClient;
+    const r = await applyBankBalanceProposal(rpcFor('a-new'), { proposalId: 'p1', decision: 'add_new' });
+    expect(r).toEqual({ ok: true, results: [{ proposalId: 'p1', outcome: 'applied', targetEntityId: 'a-new' }] });
+    expect(t.assets[0].country_code).toBe('IN'); // live DEV before the fix: null -> dropped from every per-country view
+    await applyBankBalanceProposal(rpcFor('a-set'), { proposalId: 'p2', decision: 'update_existing' });
+    expect(t.assets[1].country_code).toBe('AU');
   });
 
   it('asset: fdh15_apply_asset_proposal; transport error is WRITE_FAILED (never reported as applied)', async () => {
