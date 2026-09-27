@@ -123,7 +123,10 @@ describe('combined DEV residue SQL (renderResidueSql) on the real migration chai
     expect(committed).toBe(renderResidueSql(buildSpec()));
     expect(committed.charCodeAt(0)).not.toBe(0xfeff); // no BOM (the Supabase SQL editor rejects it)
     expect(committed).toMatch(/environment = 'production'/);
-    expect(committed.match(/get diagnostics n = row_count/g)?.length).toBe(25); // 2 restores + 23 table deletes (A 6, B 6, C 6, D 5)
+    const spec = buildSpec();
+    const steps = spec.sections.reduce((k, s) => k + (s.preUpdates?.length ?? 0) + s.deletes.length, 0);
+    expect(steps).toBe(31); // 2 restores + 29 table deletes (A 6, B 6, C 6, D 5, consolidation recheck 6)
+    expect(committed.match(/get diagnostics n = row_count/g)?.length).toBe(steps);
   });
 
   it('[NC] a production policy row -> REFUSED, nothing changed', async () => {

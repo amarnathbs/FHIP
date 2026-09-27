@@ -163,6 +163,23 @@ function rangeC() {
   };
 }
 
+/** The consolidator's own live recheck (range A, forecast.tc025, ledger A-consol, 2026-09-27): one applied
+ *  card chain the service role cannot delete (verify listed exactly these 6 rows). */
+function consolidationRecheck() {
+  const u = '60457111-1b20-4d17-aff5-ed5fdf3b8118';
+  return {
+    label: 'range A (consolidation recheck, forecast.tc025)',
+    deletes: [
+      { table: 'fhip_import_applications', userId: u, ids: ['d8b39a2c-1034-4d11-9c0e-3ad348b28dc9'] },
+      { table: 'fhip_import_proposals', userId: u, ids: ['1c97ca69-9cd4-4169-83b9-3280f628c448'] },
+      { table: 'fdh_liability_statements', userId: u, ids: ['7b2036ed-b10b-4388-b9ba-a768d29d748d'] },
+      { table: 'fdh_financial_accounts', userId: u, ids: ['27d1527b-1741-4c28-a5e5-1da52e90011a'] },
+      { table: 'liabilities', userId: u, ids: ['43fcd5dc-fbd5-4791-b1d7-df75cd94381a'] },
+      { table: 'fdh_statement_uploads', userId: u, ids: ['66b3a6eb-b408-4ccd-95ca-a9add56a37bb'] },
+    ],
+  };
+}
+
 export function buildSpec() {
   const read = (rel) => fs.readFileSync(path.join(HERE, rel), 'utf8');
   const cText = read('scaleui/dev_residue_C_liability_retirement.sql');
@@ -178,6 +195,7 @@ export function buildSpec() {
       { label: 'range B (economic oracles)', deletes: parseSimpleResidueFile(read('econ/dev_residue_B_liability_chains.sql'), 'B') },
       c,
       { label: 'range D (security review)', deletes: parseSimpleResidueFile(read('secrev/dev_residue_D_liability_chain.sql'), 'D') },
+      consolidationRecheck(),
     ],
   };
 }

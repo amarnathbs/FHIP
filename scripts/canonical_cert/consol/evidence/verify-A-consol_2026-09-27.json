@@ -1,0 +1,136 @@
+{
+  "ok": false,
+  "tablesCompared": 158,
+  "updatedRowsChecked": 1,
+  "rowDrift": [],
+  "diffs": [
+    {
+      "user": "60457111-1b20-4d17-aff5-ed5fdf3b8118",
+      "table": "fdh_financial_accounts",
+      "before": 0,
+      "after": 1,
+      "extra": [
+        "[\"27d1527b-1741-4c28-a5e5-1da52e90011a\"]"
+      ],
+      "missing": []
+    },
+    {
+      "user": "60457111-1b20-4d17-aff5-ed5fdf3b8118",
+      "table": "fdh_liability_statements",
+      "before": 0,
+      "after": 1,
+      "extra": [
+        "[\"7b2036ed-b10b-4388-b9ba-a768d29d748d\"]"
+      ],
+      "missing": []
+    },
+    {
+      "user": "60457111-1b20-4d17-aff5-ed5fdf3b8118",
+      "table": "fdh_statement_uploads",
+      "before": 0,
+      "after": 1,
+      "extra": [
+        "[\"66b3a6eb-b408-4ccd-95ca-a9add56a37bb\"]"
+      ],
+      "missing": []
+    },
+    {
+      "user": "60457111-1b20-4d17-aff5-ed5fdf3b8118",
+      "table": "fhip_import_applications",
+      "before": 0,
+      "after": 1,
+      "extra": [
+        "[\"d8b39a2c-1034-4d11-9c0e-3ad348b28dc9\"]"
+      ],
+      "missing": []
+    },
+    {
+      "user": "60457111-1b20-4d17-aff5-ed5fdf3b8118",
+      "table": "fhip_import_proposals",
+      "before": 0,
+      "after": 1,
+      "extra": [
+        "[\"1c97ca69-9cd4-4169-83b9-3280f628c448\"]"
+      ],
+      "missing": []
+    },
+    {
+      "user": "60457111-1b20-4d17-aff5-ed5fdf3b8118",
+      "table": "liabilities",
+      "before": 2,
+      "after": 3,
+      "extra": [
+        "[\"43fcd5dc-fbd5-4791-b1d7-df75cd94381a\"]"
+      ],
+      "missing": []
+    }
+  ],
+  "globalsRemaining": [],
+  "before": {
+    "60457111-1b20-4d17-aff5-ed5fdf3b8118": {
+      "rows": 1963,
+      "objects": 0,
+      "nonEmpty": [
+        "assets:3",
+        "expense_items:6",
+        "financial_health_scores:1",
+        "financial_health_recommendations:5",
+        "financial_health_component_scores:10",
+        "financial_snapshots:1",
+        "forecast_assumptions:32",
+        "forecast_profiles:1",
+        "forecast_explanations:65",
+        "forecast_runs:10",
+        "forecast_scenarios:4",
+        "goal_funding_sources:6",
+        "households:1",
+        "forecast_results:1800",
+        "income_sources:2",
+        "insurance_policies:2",
+        "liabilities:2",
+        "investments:4",
+        "retirement_accounts:2",
+        "retirement_members:1",
+        "user_entitlements:1",
+        "user_profiles:1",
+        "user_goals:3"
+      ]
+    }
+  },
+  "after": {
+    "60457111-1b20-4d17-aff5-ed5fdf3b8118": {
+      "rows": 1969,
+      "objects": 0,
+      "nonEmpty": [
+        "assets:3",
+        "expense_items:6",
+        "fdh_financial_accounts:1",
+        "fdh_liability_statements:1",
+        "fdh_statement_uploads:1",
+        "fhip_import_applications:1",
+        "fhip_import_proposals:1",
+        "financial_health_scores:1",
+        "financial_health_recommendations:5",
+        "financial_health_component_scores:10",
+        "financial_snapshots:1",
+        "forecast_assumptions:32",
+        "forecast_explanations:65",
+        "forecast_profiles:1",
+        "forecast_runs:10",
+        "forecast_scenarios:4",
+        "goal_funding_sources:6",
+        "households:1",
+        "forecast_results:1800",
+        "income_sources:2",
+        "insurance_policies:2",
+        "investments:4",
+        "liabilities:3",
+        "retirement_members:1",
+        "retirement_accounts:2",
+        "user_entitlements:1",
+        "user_goals:3",
+        "user_profiles:1"
+      ]
+    }
+  }
+}
