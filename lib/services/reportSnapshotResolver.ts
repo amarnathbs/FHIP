@@ -461,9 +461,9 @@ export function notInNetWorthFrom(snapshot: CanonicalFinancialSnapshotResult): N
     const u = snapshot.investments.unpublished;
     out.push({ label: u.label, count: u.count, total: u.total });
   }
-  if (snapshot.assets.status === 'ok' && snapshot.assets.bankBalanceEvidence.accounts.length > 0) {
+  if (snapshot.assets.status === 'ok' && snapshot.assets.bankBalanceEvidence.notInNetWorthCount > 0) {
     const b = snapshot.assets.bankBalanceEvidence;
-    out.push({ label: b.label, count: b.accounts.length, total: b.total });
+    out.push({ label: b.label, count: b.notInNetWorthCount, total: b.total });
   }
   return out;
 }

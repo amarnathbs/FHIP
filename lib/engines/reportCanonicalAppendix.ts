@@ -247,8 +247,8 @@ export function buildCanonicalAppendix(snapshot: CanonicalFinancialSnapshot): Ca
       name: l.name, detail: l.assetClass, amountNative: l.value.amountNative, currency: l.value.currency, amountReporting: l.value.amountReporting,
       provenance: l.provenance.label, counted: l.value.amountReporting !== null, note: l.value.amountReporting === null ? 'Not counted: currency cannot be converted' : null,
     }))));
-    if (assets.bankBalanceEvidence.accounts.length > 0) {
-      notInCalculations.push({ label: assets.bankBalanceEvidence.label, count: assets.bankBalanceEvidence.accounts.length, total: assets.bankBalanceEvidence.total });
+    if (assets.bankBalanceEvidence.notInNetWorthCount > 0) {
+      notInCalculations.push({ label: assets.bankBalanceEvidence.label, count: assets.bankBalanceEvidence.notInNetWorthCount, total: assets.bankBalanceEvidence.total });
     }
   } else unavailable.push('assets');
   if (investments.status === 'ok') {
