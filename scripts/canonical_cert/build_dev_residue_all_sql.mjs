@@ -34,7 +34,17 @@ export const DELETE_ORDER = ['fhip_import_applications', 'fhip_import_proposals'
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const idList = (ids) => ids.map(q).join(', ');
 
-/** Parses a certifier file of `delete from T where [user_id = 'u' and ]id in (...); -- expect N` lines. */
+/**
+ * @typedef {{ table: string, userId: string|null, ids: string[] }} ResidueDelete
+ * @typedef {{ table: string, id: string, userId: string, expect: number, set: string }} ResiduePreUpdate
+ * @typedef {{ label: string, preUpdates?: ResiduePreUpdate[], deletes: ResidueDelete[] }} ResidueSection
+ * @typedef {{ title: string, sections: ResidueSection[] }} ResidueSpec
+ */
+
+/**
+ * Parses a certifier file of `delete from T where [user_id = 'u' and ]id in (...); -- expect N` lines.
+ * @returns {ResidueDelete[]}
+ */
 export function parseSimpleResidueFile(text, label) {
   const deletes = [];
   const re = /delete from (\w+) where (?:user_id = '([0-9a-f-]{36})' and )?id in \(([^)]*)\);\s*-- expect (\d+)/g;
@@ -52,6 +62,7 @@ export function parseSimpleResidueFile(text, label) {
  * spec = { title, sections: [{ label, preUpdates?: [{ table, id, userId, set, expect }], deletes: [{ table, userId, ids }] }] }
  * Emits: DEV guard -> ownership/presence pre-check of EVERY targeted row -> updates -> deletes (DELETE_ORDER),
  * each with an asserted row count, all inside ONE transaction (any exception rolls everything back).
+ * @param {ResidueSpec} spec
  */
 export function renderResidueSql(spec) {
   const lines = [];
@@ -142,7 +153,10 @@ export function renderResidueSql(spec) {
   return `${lines.join('\n')}\n`;
 }
 
-/** Range C mirrors scaleui/dev_residue_C_liability_retirement.sql (restore + unlink + 8 deletes). */
+/**
+ * Range C mirrors scaleui/dev_residue_C_liability_retirement.sql (restore + unlink + 8 deletes).
+ * @returns {ResidueSection}
+ */
 function rangeC() {
   const u = 'e9ff2441-05bf-441d-8d2c-a7c7549d6ec7';
   return {
@@ -163,8 +177,11 @@ function rangeC() {
   };
 }
 
-/** The consolidator's own live recheck (range A, forecast.tc025, ledger A-consol, 2026-09-27): one applied
- *  card chain the service role cannot delete (verify listed exactly these 6 rows). */
+/**
+ * The consolidator's own live recheck (range A, forecast.tc025, ledger A-consol, 2026-09-27): one applied
+ * card chain the service role cannot delete (verify listed exactly these 6 rows).
+ * @returns {ResidueSection}
+ */
 function consolidationRecheck() {
   const u = '60457111-1b20-4d17-aff5-ed5fdf3b8118';
   return {
@@ -180,6 +197,7 @@ function consolidationRecheck() {
   };
 }
 
+/** @returns {ResidueSpec} */
 export function buildSpec() {
   const read = (rel) => fs.readFileSync(path.join(HERE, rel), 'utf8');
   const cText = read('scaleui/dev_residue_C_liability_retirement.sql');
