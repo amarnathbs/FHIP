@@ -987,6 +987,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   // below is still returned (it is a number in the contract), but every RATIO
   // built on it is null, so nothing downstream scores it (DC-14).
   const cashFlowComplete = cf.incomeAvailable && cf.expensesAvailable && cf.debtAvailable;
+  const expenseRatioReadable = cf.incomeAvailable && cf.expensesAvailable;
   const monthlySurplus = incomeForSurplus - totalMonthlyExpenses - debtMonthlyRepayments;
   const savingsRate = cashFlowComplete && incomeForSurplus > 0 ? monthlySurplus / incomeForSurplus : null;
   const operatingCashFlow = incomeForSurplus - essentialMonthlyExpenses;
@@ -1363,10 +1364,12 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     ratio(
       'expense_ratio',
       'Expense Ratio',
-      incomeForSurplus > 0 ? totalMonthlyExpenses / incomeForSurplus : null,
+      // Security/integrity review: never scored from an unreadable income or
+      // expense figure (its stand-in is 0, which scored 0% "good").
+      expenseRatioReadable && incomeForSurplus > 0 ? totalMonthlyExpenses / incomeForSurplus : null,
       'percent',
       '<80%',
-      incomeForSurplus === 0
+      !expenseRatioReadable || incomeForSurplus === 0
         ? 'neutral'
         : totalMonthlyExpenses / incomeForSurplus < 0.8
           ? 'good'
