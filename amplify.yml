@@ -131,6 +131,37 @@ frontend:
         # live user-facing feature 404'd and was traced back to it.
         - export NODE_OPTIONS="--max-old-space-size=5120"
         - npm run build
+        # 2026-09-28: build #246 (the Approved Upload -> Canonical User Data
+        # release) failed at the artifact-packaging step, AFTER production's
+        # migrations for that release were already applied -- with the SAME
+        # 230686720-byte ceiling as the 2026-09-06 pdf-worker incident above,
+        # this time "size of the build output (233638935) exceeds the max
+        # allowed size", an overage of only ~2.95MB. A from-scratch local
+        # build of this exact commit (fresh node_modules, no restored cache)
+        # produced a complete .next directory of only ~125MB -- under HALF
+        # of what Amplify reported, and comfortably under the limit on its
+        # own. The `cache.paths` entry below restores `.next/cache` from the
+        # PREVIOUS build before every new one runs (to speed up incremental
+        # compiles); that restored, ever-growing cache directory was never
+        # excluded from `artifacts.files: ['**/*']`, so every deploy has
+        # been shipping the accumulated incremental build cache as part of
+        # the deployed artifact, not just the real build output -- and this
+        # release (124 commits, 68,697 insertions across the whole
+        # programme) was large and broad enough to finally tip it over.
+        # Rather than rely on an unverified exclude-glob inside
+        # `artifacts.files` (this repo's own 2026-09-06 incident above found
+        # a `outputFileTracingExcludes` entry that "did not visibly take
+        # effect" locally, root cause never confirmed -- Amplify's exact
+        # glob-matching semantics for `files:` are similarly unconfirmed),
+        # this deletes the cache directory outright, immediately before
+        # Amplify packages `artifacts.files` from `baseDirectory: .next` --
+        # an empty/missing directory cannot be included by any matcher,
+        # regardless of its exact syntax. The cache is never read at
+        # runtime, so this changes nothing the app serves; the only cost is
+        # that the NEXT build after this one starts from an empty cache
+        # (slower, not incorrect) and then repopulates it for the one after
+        # that, same as this repo's very first build ever did.
+        - rm -rf .next/cache
   artifacts:
     baseDirectory: .next
     files:
