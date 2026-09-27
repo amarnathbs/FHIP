@@ -38,8 +38,9 @@ const ENTRIES: [string, Record<string, unknown>][] = [
   ['/api/liabilities', { liability_name: 'Credit card', debt_type: 'credit_card', balance: ECON.card.closing, credit_limit: ECON.card.limit, minimum_payment: ECON.card.minimum, monthly_repayment: 0, currency_code: 'AUD', country_code: 'AU', lender: 'FHIP Test Card', owner: 'self' }],
   ['/api/assets', { asset_name: 'FHIP Test Bank account', asset_class: 'cash', current_value: ECON.bankAud.closing, currency_code: 'AUD', country_code: 'AU', owner: 'self' }],
   ['/api/assets', { asset_name: 'India savings account', asset_class: 'cash', current_value: ECON.bankInr.closing, currency_code: 'INR', country_code: 'IN', owner: ECON.bankInr.owner }],
-  ['/api/investments', { investment_name: 'BHP Group Ltd', investment_type: 'shares', current_value: 10000, currency_code: 'AUD', country_code: 'AU', institution: 'FHIP Test Broker', owner: 'self', master_item_key: 'australian_shares', annual_contribution: 0, risk_profile: 'unknown' }],
-  ['/api/investments', { investment_name: 'FHIP Test Diversified ETF', investment_type: 'shares', current_value: 2500, currency_code: 'AUD', country_code: 'AU', institution: 'FHIP Test Broker', owner: 'self', annual_contribution: 0, risk_profile: 'unknown' }],
+  // One catalogue line for the share portfolio, as the Investments grid records it (one row per item
+  // type): BHP 10,000 + FHIP Test ETF 2,500 at the statement date.
+  ['/api/investments', { investment_name: 'Australian shares — FHIP Test Broker', investment_type: 'shares', current_value: 12500, currency_code: 'AUD', country_code: 'AU', institution: 'FHIP Test Broker', owner: 'self', master_item_key: 'australian_shares', annual_contribution: 0, risk_profile: 'unknown' }],
   ['/api/retirement', { account_name: ECON.superFund.name, account_type: 'super', current_balance: ECON.superFund.closing, employer_contribution: ECON.superFund.employer, contribution_frequency: 'monthly', currency_code: 'AUD', country_code: 'AU', owner: 'self' }],
 ];
 

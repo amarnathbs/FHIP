@@ -1,6 +1,6 @@
 /**
  * The query the Expenses -> "Import bank statement" panel sends to
- * `POST /api/financial-data-hub/{bank-csv|bank-pdf}/upload`.
+ * bank-CSV / bank-PDF upload routes (see the panel).
  *
  * GOLDEN PAIR GP-D3 (found live on DEV, 2026-09-27): the panel never sent the statement PERIOD, although
  * both upload routes accept and store it. A CSV carries no printed period, so the canonical read models

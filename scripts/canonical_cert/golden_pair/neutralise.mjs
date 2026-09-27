@@ -9,6 +9,10 @@
  * Every row is saved in the residue ledger (snapshotRows) BEFORE it is changed, so `residue.mjs cleanup`
  * restores it and `residue.mjs verify` checks it column by column. Only rows that exist at the ledger
  * baseline are touched (never a row a journey created).
+ *
+ * master_item_key is cleared too: the input tabs save catalogue rows by (user, master_item_key) and
+ * RESURRECT an inactive row with that key (lib/services/registry.ts), which would put a fixture row -- with
+ * its goal links and old columns -- into Household M. The ledger restores the key with the row.
  */
 import { ResidueLedger } from '../lib/residueLedger.mjs';
 import { loadDevEnv } from '../lib/env.mjs';
@@ -31,7 +35,7 @@ async function main() {
     let n = 0;
     for (const s of saved) {
       if (!baseKeys.has(s.key)) throw new Error(`${t} ${s.key} is not a baseline row -- refusing`);
-      const r = await fetch(`${url}/rest/v1/${t}?id=eq.${s.row.id}`, { method: 'PATCH', headers: h, body: JSON.stringify({ is_active: false }) });
+      const r = await fetch(`${url}/rest/v1/${t}?id=eq.${s.row.id}`, { method: 'PATCH', headers: h, body: JSON.stringify({ is_active: false, master_item_key: null }) });
       if (!r.ok) throw new Error(`${t} ${s.row.id}: HTTP ${r.status} ${await r.text()}`);
       if ((await r.json()).length === 1) n++;
     }

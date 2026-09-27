@@ -327,6 +327,23 @@ describe('apply wrappers: one RPC call each, refusals passed through verbatim', 
     expect(await applyExpenseProposals(client, [{ proposalId: 'p2', decision: 'update_existing' }])).toEqual({ ok: false, code: 'STALE_PROPOSAL', error: 'changed', proposalId: 'p2', field: 'amount', rolledBack: true });
   });
 
+  it('GP-D6: the applied cash asset gets the country the user declared for that bank account; a country already set is never overwritten', async () => {
+    const t = {
+      assets: [
+        { id: 'a-new', user_id: USER, country_code: null, source_financial_account_id: 'acc-in' },
+        { id: 'a-set', user_id: USER, country_code: 'AU', source_financial_account_id: 'acc-in' },
+      ],
+      fdh_financial_accounts: [{ id: 'acc-in', user_id: USER, country_code: 'IN', currency_code: 'INR' }],
+    };
+    const { client: base } = makeFakeSupabase(t);
+    const rpcFor = (target: string) => ({ ...base, rpc: () => Promise.resolve({ data: { ok: true, outcome: 'applied', target_entity_id: target }, error: null }) }) as unknown as PopulationClient;
+    const r = await applyBankBalanceProposal(rpcFor('a-new'), { proposalId: 'p1', decision: 'add_new' });
+    expect(r).toEqual({ ok: true, results: [{ proposalId: 'p1', outcome: 'applied', targetEntityId: 'a-new' }] });
+    expect(t.assets[0].country_code).toBe('IN'); // live DEV before the fix: null -> dropped from every per-country view
+    await applyBankBalanceProposal(rpcFor('a-set'), { proposalId: 'p2', decision: 'update_existing' });
+    expect(t.assets[1].country_code).toBe('AU');
+  });
+
   it('asset: fdh15_apply_asset_proposal; transport error is WRITE_FAILED (never reported as applied)', async () => {
     const { client, calls } = stub(null, { message: 'network' });
     const r = await applyBankBalanceProposal(client, { proposalId: 'p9', decision: 'add_new' });

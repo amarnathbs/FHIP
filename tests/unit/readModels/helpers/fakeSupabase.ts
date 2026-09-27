@@ -67,6 +67,7 @@ export interface FakeWrite extends PromiseLike<{ data: null; error: unknown }> {
 
 export interface FakeUpdate extends PromiseLike<{ data: null; error: unknown; count: number }> {
   eq(col: string, val: unknown): FakeUpdate;
+  is(col: string, val: null): FakeUpdate;
 }
 
 export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSupabaseOptions = {}) {
@@ -163,12 +164,13 @@ export function makeFakeSupabase(tables: Record<string, Row[]>, options: FakeSup
         const filters: Record<string, unknown> = {};
         const upd: FakeUpdate = {
           eq(col: string, val: unknown) { filters[col] = val; return upd; },
+          is(col: string, val: null) { filters[col] = val; return upd; },
           then(onFulfilled, onRejected) {
             const error = writeError(table);
             let matched = 0;
             if (!error) {
               for (const r of tables[table] ?? []) {
-                if (Object.entries(filters).every(([k, v]) => r[k] === v)) { Object.assign(r, patch); matched += 1; }
+                if (Object.entries(filters).every(([k, v]) => (v === null ? (r[k] ?? null) === null : r[k] === v))) { Object.assign(r, patch); matched += 1; }
               }
               updates.push({ table, patch, filters, matched });
             }
