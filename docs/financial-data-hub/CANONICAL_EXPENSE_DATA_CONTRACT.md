@@ -39,6 +39,29 @@ Every `economic_transaction_type` value maps to exactly one bucket (`ECONOMIC_TY
 7. Currency: every line keeps its own amount and currency, and is converted once with the single AUD/INR rate. A currency the app does not support (for example USD) is **never** added as if it were the reporting currency. It is left out and reported in `actual.unconverted`.
 8. Categories: FDH-2 categories are mapped to a coarse group (`housing, utilities, food, transport, health, education, lifestyle, shopping, travel, fees, insurance, tax, family, charity, other`). `expense_items.master_item_key` is mapped to the same groups. A line is **essential** only when its subcategory, or else its category, is marked `essential`.
 
+### 3a. Re-bucketing precedence (stage-3 certification, 2026-09-27)
+
+`effectiveBucket` in `lib/read-models/core/spendingRules.ts` decides the bucket of an unsplit line, in this order
+(pinned by `tests/unit/readModels/effectiveBucketPrecedence.test.ts`, which exercises all of it in one household):
+
+1. **Base bucket**: the type's bucket (rules 4/5). **Rule 10**: on an ORDINARY account, a CREDIT of a spending type
+   (expense / fee / tax / debt_interest) is a **refund**, whoever typed it -- so it never adds to spending and nets
+   only through a confirmed refund link (D-01). Not on a card/loan facility, where a credit is a repayment.
+2. A split line or a facility line keeps its base bucket.
+3. A **confirmed** settlement / internal-transfer / investment-funding link re-buckets the line **even when the user
+   categorised it** (economic-oracle fix D1: a repayment filed as "Shopping" before the card Apply counted $440).
+   Rejecting the link is how a user undoes the match.
+4. A line the user settled (`user_override`) is not re-bucketed by corroboration -- **unless** the card / loan / broker
+   statement that accounts for it was approved AFTER the user's last own decision on the line (security fix R9: SELL
+   proceeds filed as Income before the broker approval counted +15,400; now +400). The ledger decides this from
+   `fdh_transaction_corrections` (system rows excluded); an unknown decision time keeps the user's choice; a failed
+   read makes the read model unavailable.
+5. Approved corroboration (BUY -> invested, SELL -> asset sale, broker cash in/out, facility PAYMENT -> transfer).
+
+Known consequence, open PO decision (FINAL_COMPLETION_REPORT.md): on the combined basis (section 5) a group with
+covered actuals uses the actuals INSTEAD of the plan, so uncategorised imported lines (group `other`) can replace a
+whole planned `other` group.
+
 ## 4. Time window and averaging (DC-01)
 
 * The default window is the **three complete calendar months** before "today", in the household's timezone (AU is Australia/Sydney, IN is Asia/Kolkata). The current, unfinished month is never used on its own. The old Dashboard rule counted only the current UTC month, so a statement for last month counted $0.
