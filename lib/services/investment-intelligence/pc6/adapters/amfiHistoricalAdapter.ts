@@ -168,7 +168,15 @@ export class AmfiHistoricalAdapter implements HistoricalNavAdapter {
 
     for (const window of splitAmfiWindow(request.fromDate, request.toDate)) {
       const url = fundHouseUrl(window.fromDate, window.toDate, mf);
-      const res = await fetchWithRetry(url, { headers: { 'User-Agent': USER_AGENT } }, AMFI_REQUEST_OPTIONS);
+      // NAV 1 incident fix (2026-09-28): honour a caller-supplied reduced
+      // retry budget for an already-persistently-failing instrument (see
+      // HistoricalNavRequest.retryBudget) — same reasoning as the TIGZIG
+      // fallback, applied here too so a slow AMFI response cannot stack with
+      // it on the same already-known-bad instrument.
+      const retryOptions = request.retryBudget
+        ? { timeoutMs: request.retryBudget.timeoutMs, maxAttempts: request.retryBudget.maxAttempts }
+        : AMFI_REQUEST_OPTIONS;
+      const res = await fetchWithRetry(url, { headers: { 'User-Agent': USER_AGENT } }, retryOptions);
       if (!res.ok) {
         const rateLimited = res.failures.some((f) => f.includes('HTTP 429'));
         return fail(rateLimited ? 'rate_limited' : 'http_error',

@@ -22,6 +22,26 @@ export interface HistoricalNavRequest {
   fromDate: string;
   /** ISO yyyy-mm-dd, inclusive. */
   toDate: string;
+  /**
+   * NAV 1 incident fix (2026-09-28) — an already-known-persistently-failing
+   * instrument (per the caller's own attempt ledger) is asked for with a much
+   * smaller retry budget than a fresh one. Found live in production: a scheme
+   * neither AMFI nor TIGZIG will EVER publish (a leftover synthetic test
+   * fixture, AMFI code 999999) made TIGZIG's fallback retry-with-backoff run
+   * its full 6 attempts x up to 60s each, occasionally long enough that the
+   * platform killed the whole hydration invocation mid-flight -- the run's
+   * "running" batch was then only discovered abandoned 30 minutes later by
+   * the NEXT tick's stale-batch reconciliation, and that tick's own attempt
+   * was never recorded to the ledger (it never reached the `finally` that
+   * writes it). An instrument that has already failed
+   * HYDRATION_PERSISTENT_FAILURE_THRESHOLD+ times in a row does not need the
+   * full retry budget to prove it again -- one quick, bounded check is
+   * enough to notice if the provider ever starts answering, without risking
+   * the whole run. Optional: an adapter that ignores these fields keeps its
+   * own defaults (DEFAULT_FETCH_TIMEOUT_MS / 6 attempts), so this is purely
+   * additive.
+   */
+  retryBudget?: { maxAttempts: number; timeoutMs: number };
 }
 
 export interface HistoricalNavObservation {
