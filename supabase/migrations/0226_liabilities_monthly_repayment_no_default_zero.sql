@@ -1,0 +1,55 @@
+-- 0226 -- AIE-1 + Approved Upload -> Canonical Data FINAL PRODUCTION CLOSURE
+-- MISSION, part 3, mission section 7 (manual/imported credit-card
+-- consistency): DB-layer companion to the Zod fix in
+-- `lib/validation/liability.ts` (`monthly_repayment: z.number().min(0)
+-- .default(0)` -> `.optional()`, same session).
+--
+-- FINDING (independently derived this session by reading
+-- lib/read-models/liabilities.ts's D-08 revolving-card debt-service rule and
+-- lib/validation/liability.ts side by side, then confirmed against
+-- `supabase/migrations/0003_module2.sql:50`): `liabilities.monthly_repayment`
+-- has always defaulted to a genuine `0` at the database layer too --
+-- `monthly_repayment numeric(18,2) default 0 check (monthly_repayment >= 0)`
+-- -- unlike `interest_rate` and `minimum_payment` on the same table, which
+-- carry no such default and are already treated as honestly "unknown" when
+-- absent. This is the exact "error/null != 0" violation (R16,
+-- `docs/aie1-canonical-closure/CLOSURE_REGISTER.md` row R16) mission section
+-- 7 asks to close: "Missing payment information must not silently become a
+-- genuine zero."
+--
+-- The application-layer fix (Zod's `.optional()`) already stops the API
+-- route from ever sending a fabricated `0` on behalf of a user who left the
+-- field blank. This migration removes the column's own default so that any
+-- OTHER insert path bypassing the API's Zod validation (a raw SQL script, an
+-- admin tool, a future service) gets the same honest behaviour -- an
+-- omitted `monthly_repayment` becomes `null` ("not entered"), not `0`
+-- ("confirmed zero"), matching `interest_rate`/`minimum_payment`'s existing
+-- pattern exactly.
+--
+-- WHAT THIS DOES NOT DO. It does NOT touch a single existing row's stored
+-- value -- `ALTER COLUMN ... DROP DEFAULT` changes the column's default for
+-- FUTURE inserts only; it never rewrites existing data (mission section 6's
+-- "existing manual values are not silently overwritten" applies with equal
+-- force here, even though this is section 7's fix). Any liability row that
+-- already has `monthly_repayment = 0` on disk today is left exactly as
+-- stored -- this migration cannot and does not distinguish "the user
+-- genuinely told us $0" from "the old default filled it in for them" for
+-- historical rows; that ambiguity is a disclosed, pre-existing data-quality
+-- question or a UI-scoped "review your repayment amount" cleanup task, not a
+-- schema fix. It also does not touch the column's own CHECK constraint
+-- (`monthly_repayment >= 0`, still correct: a real $0 repayment, once the
+-- user actually enters it, remains a legal value) or its nullability (the
+-- column was already nullable; only the default value is removed).
+--
+-- COLLISION CHECK: 0225 is the next migration above 0224 in this repo's
+-- `supabase/migrations/` at the time this file was written (added in the
+-- same session, same mission part); a full `git ls-tree` sweep of every
+-- remote branch cached in this environment found no `0226`-or-higher
+-- migration on any branch. Re-run that sweep before this migration is ever
+-- applied.
+--
+-- PRODUCTION AUTHORITY: NONE. Drafted this session; NOT applied to DEV or
+-- production. See the closure register / handoff for the exact apply
+-- instructions.
+
+ALTER TABLE liabilities ALTER COLUMN monthly_repayment DROP DEFAULT;
