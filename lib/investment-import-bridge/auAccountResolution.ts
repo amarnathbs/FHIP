@@ -23,6 +23,7 @@ import {
   type AccountMatchResult,
   type ExistingAuInvestmentAccountCandidate,
 } from '@/lib/financial-data-hub/investment/accountMatching';
+import { ensureSelfHouseholdMember } from '@/lib/services/household/ensureSelfMember';
 
 export async function fetchAuAccountCandidates(userId: string): Promise<{ candidates: ExistingAuInvestmentAccountCandidate[]; error: string | null }> {
   const admin = createAdminClient();
@@ -81,27 +82,13 @@ export async function resolveAndPersistAuStatementAccount(userId: string, statem
 export type AuAccountOwnerChoice = { memberId: string } | { self: true };
 
 export async function resolveAuAccountOwnerMember(userId: string, owner: AuAccountOwnerChoice): Promise<{ memberId: string | null; error: string | null }> {
-  const admin = createAdminClient();
   if ('memberId' in owner) {
+    const admin = createAdminClient();
     const { data } = await admin.from('household_members').select('id, is_active').eq('id', owner.memberId).eq('user_id', userId).maybeSingle();
     if (!data || data.is_active === false) return { memberId: null, error: 'That household member was not found.' };
     return { memberId: data.id as string, error: null };
   }
-  const { data: existing } = await admin
-    .from('household_members')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('relationship', 'self')
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (existing) return { memberId: existing.id as string, error: null };
-  const { data: profile } = await admin.from('user_profiles').select('full_name').eq('user_id', userId).maybeSingle();
-  const fullName = ((profile?.full_name as string | null) ?? '').trim() || 'Me';
-  const { data: created, error } = await admin.from('household_members').insert({ user_id: userId, full_name: fullName, relationship: 'self' }).select('id').single();
-  if (error || !created) return { memberId: null, error: error?.message ?? 'Could not record you as the account holder.' };
-  return { memberId: created.id as string, error: null };
+  return ensureSelfHouseholdMember(userId);
 }
 
 /**

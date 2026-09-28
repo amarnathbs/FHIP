@@ -30,6 +30,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getUserHomeCountry } from '@/lib/services/jurisdiction';
+import { ensureSelfHouseholdMember } from '@/lib/services/household/ensureSelfMember';
 import type { Pc5HouseholdMemberForMatching } from './ownerMatching';
 
 export class UnresolvedHouseholdCountryError extends Error {
@@ -66,9 +67,22 @@ export async function resolveHouseholdCountryForUser(userId: string): Promise<st
  * existence still matters for telling "this name is unknown to this
  * household" apart from "this name belongs to a member you deactivated" —
  * a distinction a caller can only draw if it can see them.
+ *
+ * ENSURES A "SELF" MEMBER EXISTS FIRST. Before this fix, a household with
+ * zero `household_members` rows (the normal state for any user who never
+ * separately visited a "household members" screen — nothing in signup or
+ * onboarding ever created one) had no candidate at all for `matchStatementOwner`
+ * to compare against, so even a statement printing the user's own name could
+ * never resolve to `exact_match`. `ensureSelfHouseholdMember` is the same
+ * lazy, idempotent, service-role creation `resolveAuAccountOwnerMember`
+ * already uses for AU investment accounts; calling it here brings Investment
+ * Intelligence's CAS/CAMS/KFintech path to the same guarantee. It only
+ * creates the CANDIDATE — whether an extracted holder name actually matches
+ * it is still decided entirely by `matchStatementOwner`'s exact comparison.
  */
 export async function loadHouseholdMembersForMatching(userId: string): Promise<Pc5HouseholdMemberForMatching[]> {
   const admin = createAdminClient();
+  await ensureSelfHouseholdMember(userId);
   const { data } = await admin
     .from('household_members')
     .select('id, full_name, relationship, is_active')
