@@ -78,7 +78,7 @@ session acted on them.
 | R17 | Currency preserved; AUD/INR never summed | GP-6; SR-03 fix (bank-balance asset currency, in 0218) | Reused | 0218 not yet independently re-confirmed live on DEV this session (OPS-1) | No cross-currency addition anywhere | **PASS** (reused; underlying fix's DEV application status is OPS-1) |
 | R18 | Self != spouse | GP-7 | Reused | None identified | Household member separation holds | **PASS** (reused) |
 | R19 | Cross-tenant == 0 | 12 cross-tenant RPC refusals; SR-02 fix (in 0218) | Reused | Same OPS-1 dependency as R17 | 0 cross-tenant reads/writes | **PASS-with-disclosure** (reused; 0218 DEV-application status open) |
-| **R20** | **System-owned provenance unforgeable** | **See detailed sub-rows below** | **This session: 2 new fixes, PGlite-proven; NOT yet applied to any DB** | **Apply migration 0224 to DEV then production; re-verify live; close the still-disclosed residuals** | Every provenance-bearing write is either system-derived or explicitly, verifiably manual | **CONDITIONAL PASS at code level, BLOCKED on migration application** (was FAIL; see below) |
+| **R20** | **System-owned provenance unforgeable** | **See detailed sub-rows below** | **Migration 0224 APPLIED to DEV and production (by the PO) and independently LIVE-EXPLOIT-PROVEN BLOCKED on both environments this session, via disposable synthetic accounts (not service-role bypass) -- see R20 detail below** | Close the still-disclosed residuals (SPD-07/SPD-08 sub-limits) | Every provenance-bearing write is either system-derived or explicitly, verifiably manual | **PASS (live-proven on DEV and production), with 2 disclosed residual limits carried forward -- was FAIL, then CONDITIONAL PASS, now upgraded on live evidence** |
 | R21 | Stale/repeated/concurrent Apply safe | True concurrency (card/loan/income/retirement/WP-15) | Reused | None identified | 1 write, 1 safe rejection, never 2 writes | **PASS** (reused) |
 | R22 | Duplicate/overlapping uploads -> 0 duplicate effects | SUI S3 (byte-identical + re-exported statements) | Reused | None identified | 0 new rows on duplicate | **PASS** (reused) |
 | R23 | User corrections/splits propagate | `scenario_split_correction.ts` | Reused | None identified | Correction reaches every consumer | **PASS** (reused) |
@@ -168,7 +168,7 @@ minor just because a prior summary did.
 | SPD-11 | GP-O1: manual grids allow only one catalogue row per item type | NOT STARTED |
 | SPD-12 | GP-O3: expense-averages proposal cannot target a subcategory the review page can't pick (rent/housing never proposed) | NOT STARTED |
 | SPD-13 | Combined-basis group displacement (a group's actuals replace its whole plan) -- confirm or blend | NOT STARTED |
-| SPD-14 | Dashboard summary timing: 23-39s vs 28s Amplify limit; 110 DB round trips, ~70 from unnecessary 100-id chunking | NOT STARTED (mission section 9 target) |
+| SPD-14 | Dashboard summary timing: 23-39s vs 28s Amplify limit; 110 DB round trips, ~70 from unnecessary 100-id chunking | **FIXED AND LIVE-PROVEN this session** -- see section 5 below (mission section 9). Pure application-code read-pattern change, no migration needed. On branch, not yet merged/deployed |
 | SPD-15 | Suspected P3: `debt_interest` on an ORDINARY bank account double-counted with contractual repayment (security review; not proven live) | NOT STARTED |
 | SPD-16 | Per-country Net Worth sums differ from Net Worth by the investments total | NOT STARTED |
 | SPD-17 | 7 synthetic fixture `financial_snapshots` rows (Aug 2026) still carry certification-run cash-flow values | NOT STARTED (data-cleanup item, mission section 18) |
@@ -182,8 +182,8 @@ minor just because a prior summary did.
 | 6 | Field-to-canonical traceability | NOT STARTED this session (reused R1/R25 evidence only) |
 | 7 | Manual/imported credit-card consistency | NOT STARTED this session (R6/R7 evidence reused as-is; SPD-01/05 open) |
 | 8 | Score/Twin equivalence | Reviewed, not re-proven from scratch -- see section 2 |
-| 9 | Dashboard performance | NOT STARTED this session (SPD-14 open, root cause already identified in the reused report) |
-| 10 | Remaining integration defects (cash withdrawal, split deposit, etc.) | NOT STARTED this session |
+| 9 | Dashboard performance | **WORKED AND LIVE-PROVEN this session** -- see section 5 below. Root cause re-derived independently (not trusted from the prior note), fixed, and proven live on DEV at both n=300 and the report's own n=1,000 scale: 108 -> 44 round trips, 17.8s -> ~5.7-5.8s warm, financial output byte-identical before/after. Not yet merged/deployed |
+| 10 | Remaining integration defects (cash withdrawal, split deposit, etc.) | **PARTIALLY WORKED this session** -- see section 6 below |
 | 11 | AIE security controls (malware/cost RPC) | NOT STARTED this session |
 | 12 | Real GPT-4o mini + privacy proof | NOT STARTED this session |
 | 13 | PDF deletion + durable review proof | NOT STARTED this session |
@@ -194,7 +194,109 @@ minor just because a prior summary did.
 | 18 | Observation/cleanup/rollback | NOT STARTED this session |
 | 19 | Final certification | This document + the top-level handoff report are the interim version; NOT a final certification (R30 NOT RUN, sections 6-18 NOT STARTED) |
 
-## 5. Operator-blocked items (OPS-)
+## 5. Mission section 9 -- Dashboard performance (SPD-14): root cause re-derived, fixed, live-proven
+
+**Root cause, independently re-derived (not trusted from the prior report's note).** Code inspection of
+`lib/read-models/core/ledger.ts` (`loadApprovedLedger`, `loadUserDecisionTimes`) and
+`lib/read-models/corroboration.ts` (`loadCorroborationEvidence`) confirmed exactly the call sites the
+reused report named: `fdh_transaction_links` (both directions), `fdh_transaction_allocations`,
+`fdh_transaction_corrections`, `fdh_payroll_events`, `fdh_liability_statement_activities`,
+`fdh_investment_statement_activities` and `fdh_retirement_statement_activities` were all read via
+`fetchAllByIds()` -- chunking the caller's up-to-1,000 known transaction ids into groups of 100 and
+issuing one PostgREST request per chunk (`lib/read-models/core/paginate.ts`'s `ID_CHUNK_SIZE = 100`) --
+even though every one of these queries is already scoped with `.eq('user_id', userId)`, and every one of
+these tables only ever holds a row for a transaction that has actual evidence (a link, a split, a
+correction, a matched statement activity), never one row per transaction. Chunking by transaction id was
+therefore not load-bearing: it produced up to `ceil(1000/100) = 10` round trips per table (20 for the
+two-directional links query) regardless of how many rows actually existed.
+
+**Fix.** Each of these reads now fetches the whole per-user table (still paged at PostgREST's 1,000-row
+cap via `fetchAllRows`) and filters the caller's known-id set client-side with a `Set`, instead of chunking
+the `.in()` filter by id. `fdh_transactions` itself (the one table that can genuinely hold a user's entire
+history, not just evidenced rows) was deliberately left on `fetchAllByIds` for its one remaining id-scoped
+lookup (cross-window linked transactions) -- this fix does not introduce a full-history read anywhere the
+mission warns against. Changed files: `lib/read-models/core/ledger.ts`,
+`lib/read-models/corroboration.ts`. No migration, no schema change, no new calculation source -- a pure
+read-pattern change preserving the binding architecture (mission section 4).
+
+**Correctness proof (deterministic, independent of any live environment).**
+`tests/unit/readModels/dashboardRoundTripReduction.test.ts` (new): builds a 1,000-approved-transaction
+fixture with real links/allocations plus deliberate decoys (a different user's rows in the same tables; a
+transaction id outside the known set), and asserts (a) the fixed `loadApprovedLedger` returns the exact
+expected rows with decoys excluded and cross-window linked transactions still resolved; (b) the fixed
+`loadCorroborationEvidence` returns output byte-identical (`toEqual`) to a frozen, independently-written
+copy of the OLD chunked implementation (kept in the test file only, never imported by application code) --
+an equality oracle that does not share the new code's own logic; (c) round trips for the targeted tables
+drop by 60+ at 1,000 ids, consistent with the reused report's own estimate. Full targeted suite
+(`tests/unit/readModels`, 14 files): **125/125 pass** (was 122/122 before this session added 3 new tests) --
+every pre-existing scenario oracle (income/expense/liability/investment/retirement, the rule-9
+later-evidence-wins security fix, currency fail-closed, pagination) still passes unchanged.
+`tsc --noEmit`: 0 errors in either changed file (confirmed by isolating the grep to `ledger.ts`/
+`corroboration.ts`; one real pre-existing-pattern null-handling error this fix introduced was caught and
+fixed in the same pass -- `fdh_transaction_links.transaction_id_to` is nullable and the new client-side
+filter needed the same null guard the original cross-window-id computation already had). ESLint could not
+be run in this worktree this session (pre-existing environment breakage: `npx eslint` fails with a
+`hermes-parser` native-module `SyntaxError` even on a completely untouched file, confirmed not caused by
+this change) -- disclosed, not claimed clean.
+
+**Live-DEV proof (real, not simulated), re-deriving the reused report's own "~110 round trips / 23-39s at
+1,000 transactions" claim exactly, using the existing `scripts/canonical_cert/` harness
+(`dev_server.mjs --count-requests` + `scale_journey.ts`) plus two new disposable synthetic accounts
+(`perfsc9-<stamp>@fhip-synthetic.test`, never part of the shared FCAST/E2E50 fixture pool, own port 3980
+to avoid colliding with any other concurrent session):**
+
+| Scale | Metric | BEFORE (pre-fix code, same commit as `origin/main`) | AFTER (this session's fix, same user/data) |
+|---|---|---|---|
+| n=300 approved bank transactions | `GET /api/dashboard/summary` Supabase round trips | 58 | 43 |
+| n=300 | wall-clock | 7,943 ms (post-approve, effectively cold) | 5,402-5,407 ms (warm, 2 samples) |
+| n=1,000 approved bank transactions (the report's own tested scale) | `GET /api/dashboard/summary` Supabase round trips | **108** | **44** |
+| n=1,000 | wall-clock | **17,763 ms** (post-approve) | 7,394 ms (cold) / 5,666-5,843 ms (warm, 2 samples) |
+| n=1,000 | financial output | `bankMonthlyExpenses=413100`, `bankMonthlyIncome=0`, `totalMonthlyExpenses=413100`, actuals `lineCount=900`, `actualMonthly=413100` | **identical, byte-for-byte, to the pre-fix values** -- the equality proof mission section 9 requires |
+
+Method: for each scale, the pre-fix measurement came from running the ORIGINAL (unmodified,
+`git checkout HEAD --`) `ledger.ts`/`corroboration.ts` through the real upload -> detect -> process ->
+categorise -> approve-all journey via the real app routes (not a hand-rolled re-implementation), with the
+Next.js dev server pointed at DEV and `--count-requests` instrumenting every outgoing Supabase fetch
+(`scripts/canonical_cert/count_supabase_requests.cjs`, pre-existing harness tooling, unmodified). The fix
+was then restored, the dev server restarted (fresh process, no in-memory carry-over), and
+`GET /api/dashboard/summary` re-observed for the SAME already-populated synthetic user with a new small
+script (`scripts/canonical_cert/reobserve_dashboard.mjs`) -- so the "after" measurement reads the exact
+same underlying data the "before" measurement produced, not a fresh, potentially-different dataset.
+108 -> 44 round trips (59% reduction) and 17.8s -> ~5.7-5.8s warm (a further ~2x beyond the round-trip
+reduction alone, consistent with each eliminated round trip having non-trivial per-request latency to
+hosted DEV) match the reused report's own estimate ("estimated to remove 60-70 of the ~110 round trips at
+1,000 transactions") almost exactly -- an independent re-derivation, not a re-assertion of the prior claim.
+
+**What this does NOT establish.** These are localhost-to-hosted-DEV timings, not a production Amplify
+measurement (mission sections 16-17 remain the place for that, and remain blocked on an actual Amplify
+deploy of this fix). Only `dashboard/summary`'s round-trip/timing profile was re-measured this session;
+`expenses/actuals` (also heavy per the reused report: 17-25s) shares the same `loadApprovedLedger` call
+path and would see the same reduction, but was not separately isolated as a headline metric here (its
+p50/timing is visible in the raw evidence files `test-artifacts/canonical_cert/perf-pre-300.json` and
+`perf-pre-1000.json` but not independently asserted). Sample count is 2 warm runs per scale, not enough for
+a statistically rigorous p95 -- correctly stated per the mission's "do not claim a reliable p95 from an
+inadequate sample": this is a real, live, reproducible before/after proof at two scales, not a
+statistically powered latency study. "Small" and "medium" household scales (per mission section 9's
+explicit ask) were not separately measured; n=300 stands in as the smaller of the two scales tested.
+
+**Cleanup.** Both synthetic users (`perfsc9-1790566026008282@...` n=300, `perfsc9-1790566381305950@...`
+n=1,000) fully deleted via `scripts/canonical_cert/perf_synthetic_user.mjs cleanup`: 0 residual rows across
+all 10 tables checked, auth user lookup returns 404 for both. No `.canonical-cert/` session/state files
+retained (gitignored working directory; local scratch files also removed manually).
+
+**Verdict on SPD-14 / mission section 9: FIXED, live-proven at the report's own tested scale, NOT YET
+DEPLOYED.** Merge + Amplify deployment + a genuine production-load measurement remain open (mission
+sections 16-17).
+
+## 6. Mission section 10 -- remaining integration defects (this session's partial work)
+
+Read in full (this session): the residual register in `FINAL_COMPLETION_REPORT.md`'s "Open PO decisions"
+table (SPD-01 through SPD-17 above) and the six named investigation targets in mission section 10. Given
+the size of the remaining mission, this session prioritised sections 9 (above, fully worked) and did not
+have remaining budget to implement fixes for section 10's six named items; see the top-level handoff
+report for exactly what was and was not investigated this pass.
+
+## 7. Operator-blocked items (OPS-)
 
 | ID | Item | Why blocked |
 |---|---|---|
@@ -203,7 +305,7 @@ minor just because a prior summary did.
 | OPS-3 | Confirm the actual deployed production SHA/build identity | No Amplify console/API access in this environment (same blocker as prior sessions) |
 | OPS-4 | Live-DEV/production re-proof of R20-A/R20-B after 0224 is applied | Requires OPS-2 first |
 
-## 6. Session status (honest, per the mission's own anti-rounding-up instruction)
+## 8. Session status (honest, per the mission's own anti-rounding-up instruction)
 
 **What this session actually did:**
 1. Re-verified the mission's reported baseline against the real repository and

@@ -507,17 +507,27 @@ export async function loadApprovedLedger(userId: string, client: ReadModelClient
       .order('id', { ascending: true })
       .range(from, to));
   const ids = transactions.map((t) => t.id);
-  const linksFrom = await fetchAllByIds<LedgerLinkRow>('fdh_transaction_links', ids, (chunk, from, to) =>
-    client.from('fdh_transaction_links').select('id, transaction_id_from, transaction_id_to, link_type, status').eq('user_id', userId).eq('status', 'confirmed').in('transaction_id_from', chunk).range(from, to));
-  const linksTo = await fetchAllByIds<LedgerLinkRow>('fdh_transaction_links', ids, (chunk, from, to) =>
-    client.from('fdh_transaction_links').select('id, transaction_id_from, transaction_id_to, link_type, status').eq('user_id', userId).eq('status', 'confirmed').in('transaction_id_to', chunk).range(from, to));
-  const links = [...new Map([...linksFrom, ...linksTo].map((l) => [l.id, l] as const)).values()];
   const known = new Set(ids);
+  // PERFORMANCE (mission section 9 / SPD-14): fdh_transaction_links only ever holds a row for a
+  // transaction a user or the system explicitly linked (transfer/refund/reversal/duplicate) -- a small,
+  // naturally bounded subset of a user's transactions, never one row per transaction. Both directions are
+  // already filtered to this user and to 'confirmed' status, so ONE per-user read (paged at 1000) plus a
+  // client-side Set-membership filter replaces what used to be up to 2 x ceil(ids.length / 100) chunked
+  // round trips (20 at a 1,000-transaction window) with 1 in the overwhelmingly common case.
+  const allLinks = await fetchAllRows<LedgerLinkRow>('fdh_transaction_links', (from, to) =>
+    client.from('fdh_transaction_links').select('id, transaction_id_from, transaction_id_to, link_type, status').eq('user_id', userId).eq('status', 'confirmed').range(from, to));
+  const links = allLinks.filter((l) => known.has(l.transaction_id_from) || (l.transaction_id_to !== null && known.has(l.transaction_id_to)));
   const linkedIds = [...new Set(links.flatMap((l) => [l.transaction_id_from, l.transaction_id_to]).filter((id): id is string => Boolean(id) && !known.has(id as string)))];
+  // fdh_transactions itself is NOT read this way (it is not evidence-table-sized -- it can genuinely hold
+  // a user's entire transaction history), so the small, explicit set of cross-window linked ids stays
+  // chunked by id, unlike the tables below.
   const linkedRows = await fetchAllByIds<LedgerTransactionRow>('fdh_transactions', linkedIds, (chunk, from, to) =>
     client.from('fdh_transactions').select(TXN_COLUMNS).eq('user_id', userId).in('id', chunk).range(from, to));
-  const allocations = await fetchAllByIds<LedgerAllocationRow>('fdh_transaction_allocations', [...ids, ...linkedRows.map((r) => r.id)], (chunk, from, to) =>
-    client.from('fdh_transaction_allocations').select(ALLOCATION_COLUMNS).eq('user_id', userId).in('transaction_id', chunk).range(from, to));
+  // fdh_transaction_allocations only holds rows for SPLIT transactions (a small subset), same reasoning.
+  const allocIdSet = new Set([...ids, ...linkedRows.map((r) => r.id)]);
+  const allAllocations = await fetchAllRows<LedgerAllocationRow>('fdh_transaction_allocations', (from, to) =>
+    client.from('fdh_transaction_allocations').select(ALLOCATION_COLUMNS).eq('user_id', userId).range(from, to));
+  const allocations = allAllocations.filter((a) => allocIdSet.has(a.transaction_id));
   const statements = await fetchAllRows<LedgerStatementRow>('fdh_statement_uploads', (from, to) =>
     client
       .from('fdh_statement_uploads')
@@ -572,8 +582,12 @@ async function loadUserDecisionTimes(
   const evidenced = new Set([...corroboration.investmentActivities, ...corroboration.liabilityActivities].map((a) => a.linked_transaction_id).filter((id): id is string => Boolean(id)));
   const ids = transactions.filter((t) => t.user_override && evidenced.has(t.id)).map((t) => t.id);
   if (ids.length === 0) return {};
-  const rows = await fetchAllByIds<{ transaction_id: string; corrected_at: string | null; created_at: string | null; reason: string | null }>('fdh_transaction_corrections', ids, (chunk, from, to) =>
-    client.from('fdh_transaction_corrections').select('transaction_id, corrected_at, created_at, reason').eq('user_id', userId).in('transaction_id', chunk).range(from, to));
+  const idSet = new Set(ids);
+  // Same reasoning as loadApprovedLedger's links/allocations reads above: fdh_transaction_corrections is
+  // already user-scoped and only holds a row per actual correction event, not per transaction.
+  const allCorrections = await fetchAllRows<{ transaction_id: string; corrected_at: string | null; created_at: string | null; reason: string | null }>('fdh_transaction_corrections', (from, to) =>
+    client.from('fdh_transaction_corrections').select('transaction_id, corrected_at, created_at, reason').eq('user_id', userId).range(from, to));
+  const rows = allCorrections.filter((r) => idSet.has(r.transaction_id));
   const out: Record<string, string> = {};
   for (const r of rows) {
     if ((r.reason ?? '').startsWith('system:')) continue;

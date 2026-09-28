@@ -19,7 +19,7 @@
  * matchers do not always check them -- INV-G4 / G4), so a weak match can never
  * re-bucket a leg: a mismatch simply produces no corroboration.
  */
-import { fetchAllByIds, type ReadModelClient } from './core/paginate';
+import { fetchAllRows, type ReadModelClient } from './core/paginate';
 import { toMinor, type CorroborationEvidence, type CorroborationKind } from './core/spendingRules';
 
 export interface CorroborationRef extends CorroborationEvidence {
@@ -135,30 +135,54 @@ export function buildCorroborationIndex(raw: RawCorroborationEvidence, bankLegs:
   return index;
 }
 
-/** Loads the evidence rows that point at any of the given bank legs. */
+/**
+ * Loads the evidence rows that point at any of the given bank legs.
+ *
+ * PERFORMANCE (mission section 9 / SPD-14): every query here is already
+ * scoped to `user_id`, and each of these tables only ever holds a row for a
+ * transaction that has actual matched evidence (a payroll bank-match, a
+ * liability/investment/retirement activity link) -- a small, naturally
+ * bounded subset of a user's transactions, never one row per transaction.
+ * Fetching the whole per-user table (paged at 1000 rows) and filtering the
+ * known bank-leg-id set client-side therefore replaces what used to be
+ * ceil(bankTxnIds.length / 100) round trips PER TABLE (up to 10 each at a
+ * 1,000-transaction window, x 7 tables here) with 1 round trip per table in
+ * the overwhelmingly common case, with no change to which rows are returned
+ * (the .not(...,'is',null) filters below narrow the payload, but the
+ * client-side Set membership check is the actual correctness boundary, not
+ * an assumption about row counts).
+ */
 export async function loadCorroborationEvidence(userId: string, client: ReadModelClient, bankTxnIds: readonly string[]): Promise<RawCorroborationEvidence> {
   if (bankTxnIds.length === 0) return emptyCorroborationEvidence();
-  const payroll = await fetchAllByIds<PayrollEvidenceRow>('fdh_payroll_events', bankTxnIds, (chunk, from, to) =>
+  const bankIdSet = new Set(bankTxnIds);
+  const payrollAll = await fetchAllRows<PayrollEvidenceRow>('fdh_payroll_events', (from, to) =>
     client
       .from('fdh_payroll_events')
       .select('id, bank_match_transaction_id, bank_match_status, approval_status, superseded_by_payroll_event_id, currency_code, net_pay')
       .eq('user_id', userId)
-      .in('bank_match_transaction_id', chunk)
+      .not('bank_match_transaction_id', 'is', null)
       .range(from, to),
   );
-  const activity = (table: string) =>
-    fetchAllByIds<ActivityEvidenceRow>(table, bankTxnIds, (chunk, from, to) =>
+  const payroll = payrollAll.filter((r) => r.bank_match_transaction_id !== null && bankIdSet.has(r.bank_match_transaction_id));
+  const activity = async (table: string) => {
+    const rows = await fetchAllRows<ActivityEvidenceRow>(table, (from, to) =>
       client
         .from(table)
         .select('id, statement_id, activity_type, amount, currency_code, linked_transaction_id, bank_match_status')
         .eq('user_id', userId)
-        .in('linked_transaction_id', chunk)
+        .not('linked_transaction_id', 'is', null)
         .range(from, to),
     );
-  const statements = (table: string, rows: ActivityEvidenceRow[]) =>
-    fetchAllByIds<StatementApprovalRow>(table, rows.map((r) => r.statement_id), (chunk, from, to) =>
-      client.from(table).select('id, approval_status, approved_at').eq('user_id', userId).in('id', chunk).range(from, to),
+    return rows.filter((r) => r.linked_transaction_id !== null && bankIdSet.has(r.linked_transaction_id));
+  };
+  const statements = async (table: string, rows: ActivityEvidenceRow[]) => {
+    const wantedIds = new Set(rows.map((r) => r.statement_id));
+    if (wantedIds.size === 0) return [];
+    const all = await fetchAllRows<StatementApprovalRow>(table, (from, to) =>
+      client.from(table).select('id, approval_status, approved_at').eq('user_id', userId).range(from, to),
     );
+    return all.filter((s) => wantedIds.has(s.id));
+  };
   const liabilityActivities = await activity('fdh_liability_statement_activities');
   const investmentActivities = await activity('fdh_investment_statement_activities');
   const retirementActivities = await activity('fdh_retirement_statement_activities');
