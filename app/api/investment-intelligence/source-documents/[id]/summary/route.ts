@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (docErr) return bad(docErr.message);
   if (!doc) return bad('Source document not found.', 404);
 
-  const [{ data: accounts }, { data: transactions }, { data: holdings }, { data: cases }, { data: truthStatuses }] = await Promise.all([
+  const [{ data: accounts }, { data: transactions }, { data: holdings }, { data: cases }] = await Promise.all([
     supabase.from('ii_accounts').select('id, folio_number, institution_name').eq('user_id', user.id).eq('source_document_id', id),
     supabase.from('ii_transactions').select('id, account_id, instrument_id').eq('user_id', user.id).eq('source_document_id', id),
     supabase.from('ii_holding_snapshots').select('id, account_id, instrument_id, as_of_date, units, value, quality_status').eq('user_id', user.id).eq('source_document_id', id),
@@ -31,8 +31,37 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       .eq('user_id', user.id)
       .eq('source_document_id', id)
       .order('opened_at', { ascending: false }),
-    supabase.from('ii_portfolio_truth_status').select('account_id, instrument_id, status, blocking_reasons, warning_reasons').eq('user_id', user.id).eq('latest_source_document_id', id),
   ]);
+
+  // 2026-09-28 fix, found live during the owner-exception unification pass:
+  // `ii_portfolio_truth_status.latest_source_document_id` names whichever
+  // document most recently evaluated THIS (account, instrument) position —
+  // not necessarily the one currently being viewed. A statement can genuinely
+  // hold NO transactions for a position but still record it (e.g. it prints
+  // a folio's 0.000 closing balance after a full redemption recorded on an
+  // EARLIER document, or this document's own snapshot for a position gets
+  // superseded the moment a LATER document re-evaluates the same position).
+  // Filtering on `latest_source_document_id = id` made a position's "Re-
+  // evaluate" row silently vanish from THIS summary the instant any other
+  // document became the position's new "latest" — even though certifying it
+  // from this page kept working underneath (last_evaluated_at genuinely
+  // advanced every time), the row simply stopped being shown here, which
+  // reads identically to "my click did nothing" from this page. Joining
+  // instead on "did THIS document ever record a holding snapshot for this
+  // position" is the correct question for "should this position's status
+  // appear on this document's summary" — it does not depend on which
+  // document currently holds the "latest" pointer.
+  const positionPairs = new Set((holdings ?? []).map((h) => `${h.account_id as string}:${h.instrument_id as string}`));
+  const accountIdsForHoldings = [...new Set((holdings ?? []).map((h) => h.account_id as string))];
+  let truthStatuses: { account_id: string; instrument_id: string; status: string; blocking_reasons: unknown; warning_reasons: unknown }[] = [];
+  if (accountIdsForHoldings.length > 0) {
+    const { data } = await supabase
+      .from('ii_portfolio_truth_status')
+      .select('account_id, instrument_id, status, blocking_reasons, warning_reasons')
+      .eq('user_id', user.id)
+      .in('account_id', accountIdsForHoldings);
+    truthStatuses = (data ?? []).filter((t) => positionPairs.has(`${t.account_id as string}:${t.instrument_id as string}`));
+  }
 
   const distinctInstruments = new Set((transactions ?? []).map((t) => t.instrument_id)).size;
 

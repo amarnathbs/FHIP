@@ -120,13 +120,13 @@ export async function runReviewCentreRefresh(userId: string): Promise<{ created:
     // PC4 section 19: source_document_id added so the Review Centre can
     // offer a genuine "Review statement" deep link for case types that
     // actually have a self-service resolution path.
-    const rows = await fetchAllPages<{ id: string; subject_type: string; subject_id: string; discrepancy_type: string; opened_at: string; source_document_id: string | null }>((from, to) =>
-      admin.from('ii_reconciliation_cases').select('id, subject_type, subject_id, discrepancy_type, opened_at, source_document_id').eq('user_id', userId).eq('status', 'open').order('id').range(from, to)
+    const rows = await fetchAllPages<{ id: string; subject_type: string; subject_id: string; discrepancy_type: string; opened_at: string; source_document_id: string | null; discrepancy_details: Record<string, unknown> | null }>((from, to) =>
+      admin.from('ii_reconciliation_cases').select('id, subject_type, subject_id, discrepancy_type, opened_at, source_document_id, discrepancy_details').eq('user_id', userId).eq('status', 'open').order('id').range(from, to)
     );
     candidates.push(
       ...detectOpenReconciliationCases(
         userId,
-        rows.map((r) => ({ id: r.id, subjectType: r.subject_type, subjectId: r.subject_id, discrepancyType: r.discrepancy_type, openedAt: r.opened_at, sourceDocumentId: r.source_document_id })),
+        rows.map((r) => ({ id: r.id, subjectType: r.subject_type, subjectId: r.subject_id, discrepancyType: r.discrepancy_type, openedAt: r.opened_at, sourceDocumentId: r.source_document_id, discrepancyDetails: r.discrepancy_details })),
         asOfDate,
         reconRule
       )

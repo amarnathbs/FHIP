@@ -1,40 +1,53 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
-import { ResolutionCentreClient } from '@/components/pc5/ResolutionCentreClient';
+import { ResolutionHistoryClient } from '@/components/investment-intelligence/ResolutionHistoryClient';
 
 /**
- * PC5 (M4) — the guided resolution surface (K.2, K.13, K.16).
+ * 2026-09-28 owner-exception unification — this page is REPOINTED, not
+ * deleted. It used to render PC5's `ResolutionCentreClient`
+ * (`components/pc5/ResolutionCentreClient.tsx`), which reads
+ * `aie_unresolved_item` via `/api/pc5/resolutions`. That table is only
+ * populated by `lib/aie/adapters/investment-intelligence/dispatch.ts`,
+ * which zero frontend components call — the REAL upload flow
+ * (`/investment-intelligence/data`) exclusively runs
+ * `documentProcessing.ts`, which writes to `ii_reconciliation_cases`
+ * instead. So this page was permanently empty in production even with real
+ * exceptions sitting in the database (found live, 2026-09-28).
  *
- * SEPARATE FROM `/investment-intelligence/review` ON PURPOSE. That page is
- * the R9 Review Centre: deterministic ADVISORY observations over
- * already-certified data, none of which blocks anything, all of which may
- * legitimately be acknowledged or dismissed. This page is the opposite kind
- * of thing — BLOCKING questions about statements that cannot be imported
- * until they are answered, where dismissal is not permitted at all.
- * Merging them would let a user dismiss their way through a mixed queue and
- * then wonder why a statement still refused to import.
+ * The Product Owner's decision: do not switch the live pipeline to the AIE
+ * one; instead make `/investment-intelligence/review` (ReviewCentreClient)
+ * the one place OPEN exceptions of every kind are decided, and repoint
+ * THIS url — kept stable so no existing link breaks — to a HISTORY +
+ * AMENDMENT view over the same `ii_reconciliation_cases` table: what has
+ * already been decided, and a way to correct a past decision without ever
+ * erasing it (see ResolutionHistoryClient.tsx and the `/amend` route for the
+ * supersession discipline this reuses from PC5's own K.18).
+ *
+ * `components/pc5/ResolutionCentreClient.tsx`, `app/api/pc5/*` and
+ * `AIE_REVIEW_PC5_PROJECTION_ENABLED` are left in place, untouched and now
+ * unreferenced by any page — see this mission's closure report for why they
+ * were not deleted in this pass (no production authority to also verify
+ * nothing else depends on them; safe to remove in a later, dedicated pass).
  */
-export default async function InvestmentResolutionsPage({ searchParams }: { searchParams: Promise<{ run?: string }> }) {
+export default async function InvestmentResolutionsPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { run } = await searchParams;
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink">Statement questions</h1>
+        <h1 className="text-2xl font-semibold text-ink">Resolutions</h1>
         <p className="mt-1 text-sm text-muted">
-          Some statements need a decision from you before their holdings can be added to your portfolio — usually because we could not be certain whose account a
-          statement is for, or because two readings of it disagree. Nothing here is guesswork on our part: we ask rather than assume.
+          A history of decisions made on statement/owner exceptions — who a statement was assigned to, and when. Open questions are decided on the Review tab; a
+          past decision here can be amended if it turns out to be wrong.
         </p>
       </header>
       <InvestmentIntelligenceSubNav />
-      <ResolutionCentreClient runId={run} />
+      <ResolutionHistoryClient />
     </div>
   );
 }
