@@ -53,15 +53,39 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // document currently holds the "latest" pointer.
   const positionPairs = new Set((holdings ?? []).map((h) => `${h.account_id as string}:${h.instrument_id as string}`));
   const accountIdsForHoldings = [...new Set((holdings ?? []).map((h) => h.account_id as string))];
-  let truthStatuses: { account_id: string; instrument_id: string; status: string; blocking_reasons: unknown; warning_reasons: unknown }[] = [];
+  let rawTruthStatuses: { account_id: string; instrument_id: string; status: string; blocking_reasons: unknown; warning_reasons: unknown }[] = [];
   if (accountIdsForHoldings.length > 0) {
     const { data } = await supabase
       .from('ii_portfolio_truth_status')
       .select('account_id, instrument_id, status, blocking_reasons, warning_reasons')
       .eq('user_id', user.id)
       .in('account_id', accountIdsForHoldings);
-    truthStatuses = (data ?? []).filter((t) => positionPairs.has(`${t.account_id as string}:${t.instrument_id as string}`));
+    rawTruthStatuses = (data ?? []).filter((t) => positionPairs.has(`${t.account_id as string}:${t.instrument_id as string}`));
   }
+
+  // 2026-09-28 fix (found live, same pass): the Portfolio Truth list showed
+  // "Position a8b86c2e.../42c2515b..." — raw, truncated ids — instead of
+  // anything a person could recognise. The account's own `institution_name`/
+  // `folio_number` (fetched above) is scoped to accounts THIS document
+  // created, which is not always the account a shared position belongs to
+  // (see the fix immediately above), so it is re-fetched here by the exact
+  // account ids these positions reference; the instrument name is fetched
+  // the same way. Both are already-canonical, already-stored fields — no
+  // new data is derived, only joined through for display.
+  const instrumentIdsForHoldings = [...new Set((holdings ?? []).map((h) => h.instrument_id as string))];
+  const [{ data: accountsForPositions }, { data: instrumentsForPositions }] = await Promise.all([
+    accountIdsForHoldings.length > 0
+      ? supabase.from('ii_accounts').select('id, folio_number, institution_name').eq('user_id', user.id).in('id', accountIdsForHoldings)
+      : Promise.resolve({ data: [] as { id: string; folio_number: string | null; institution_name: string }[] }),
+    instrumentIdsForHoldings.length > 0 ? supabase.from('ii_instruments').select('id, instrument_name').in('id', instrumentIdsForHoldings) : Promise.resolve({ data: [] as { id: string; instrument_name: string }[] }),
+  ]);
+  const accountLabelById = new Map((accountsForPositions ?? []).map((a) => [a.id as string, (a.folio_number as string | null) ?? (a.institution_name as string)]));
+  const instrumentNameById = new Map((instrumentsForPositions ?? []).map((i) => [i.id as string, i.instrument_name as string]));
+  const truthStatuses = rawTruthStatuses.map((t) => ({
+    ...t,
+    accountLabel: accountLabelById.get(t.account_id) ?? null,
+    instrumentName: instrumentNameById.get(t.instrument_id) ?? null,
+  }));
 
   const distinctInstruments = new Set((transactions ?? []).map((t) => t.instrument_id)).size;
 
@@ -75,6 +99,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     holdings: holdings ?? [],
     reconciliationCases: cases ?? [],
     openReconciliationCaseCount: (cases ?? []).filter((c) => c.status === 'open' || c.status === 'user_reviewing').length,
-    portfolioTruthStatuses: truthStatuses ?? [],
+    portfolioTruthStatuses: truthStatuses,
   });
 }
