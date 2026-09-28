@@ -51,6 +51,13 @@ function emptyTableQuery() {
     maybeSingle: async () => ({ data: null }),
     range: async () => ({ data: [], error: null }),
     then: (resolve: (v: { data: unknown[]; error: null }) => void) => resolve({ data: [], error: null }),
+    // household_members has no rows in this fake DB, so
+    // ensureSelfHouseholdMember (lib/services/household/ensureSelfMember.ts,
+    // called from loadHouseholdMembersForMatching at dispatch time) always
+    // takes its create-on-first-need path here. This test suite is not about
+    // owner matching, so a stand-in id is enough to let dispatch proceed the
+    // same way it did before that call existed.
+    insert: () => ({ select: () => ({ single: async () => ({ data: { id: 'fake-self-member' }, error: null }) }) }),
   };
   return builder;
 }

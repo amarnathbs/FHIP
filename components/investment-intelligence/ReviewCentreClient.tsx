@@ -25,6 +25,13 @@ interface ReviewItem {
   created_at: string;
 }
 
+interface HouseholdMemberOption {
+  id: string;
+  full_name: string;
+  relationship: string;
+  is_active: boolean;
+}
+
 const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, info: 3 };
 const SEVERITY_LABEL: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low', info: 'Info' };
 
@@ -34,6 +41,20 @@ export function ReviewCentreClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'open' | 'acknowledged' | 'resolved' | 'dismissed'>('open');
   const [error, setError] = useState<string | null>(null);
+  // Owner-unmatched reconciliation cases (evidence.discrepancyType ===
+  // 'owner_unmatched', subjectType 'account') previously had NO real
+  // resolution path from this screen: the generic "Review statement" link
+  // (below) always points at the static Statements & data list, and for this
+  // case type there is nothing there to act on -- found live 2026-09-28, a
+  // dead end for any household whose members were never explicitly set up.
+  // `PATCH /api/investment-intelligence/accounts/[id]/owner` already existed
+  // and already auto-resolves the matching case; this screen simply never
+  // called it. Household members are loaded lazily, only once any open item
+  // actually needs them.
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberOption[] | null>(null);
+  const [selectedMemberByItem, setSelectedMemberByItem] = useState<Record<string, string>>({});
+  const [assigningItemId, setAssigningItemId] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<Record<string, string>>({});
 
   const load = useCallback(async (status: string) => {
     setLoading(true);
@@ -62,6 +83,12 @@ export function ReviewCentreClient() {
     };
   }, [statusFilter, load]);
 
+  useEffect(() => {
+    const needsMembers = items.some((i) => typeof i.evidence?.discrepancyType === 'string' && i.evidence.discrepancyType === 'owner_unmatched' && i.evidence.subjectType === 'account');
+    if (needsMembers) void ensureHouseholdMembersLoaded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
   async function refresh() {
     setRefreshing(true);
     try {
@@ -75,6 +102,47 @@ export function ReviewCentreClient() {
   async function act(id: string, action: 'acknowledge' | 'dismiss') {
     await fetch(`/api/investment-intelligence/review/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
     await load(statusFilter);
+  }
+
+  async function ensureHouseholdMembersLoaded() {
+    if (householdMembers !== null) return;
+    try {
+      const res = await fetch('/api/household-members');
+      const json = await res.json();
+      setHouseholdMembers(res.ok ? (json.data ?? []) : []);
+    } catch {
+      setHouseholdMembers([]);
+    }
+  }
+
+  async function assignOwner(itemId: string, accountId: string) {
+    const ownerMemberId = selectedMemberByItem[itemId];
+    if (!ownerMemberId) return;
+    setAssigningItemId(itemId);
+    setAssignError((prev) => ({ ...prev, [itemId]: '' }));
+    try {
+      const res = await fetch(`/api/investment-intelligence/accounts/${encodeURIComponent(accountId)}/owner`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerMemberId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not assign that owner.');
+      // Review items are a materialised snapshot (the same reason `refresh()`
+      // above hits /review/refresh before reloading, not just /review) --
+      // resolving the underlying ii_reconciliation_cases row does not by
+      // itself remove this item from an already-computed "open" list. Found
+      // live 2026-09-28: the assignment genuinely succeeded (verified in the
+      // database) but the item stayed on screen until a manual "Refresh
+      // observations" click, which would have looked like the fix silently
+      // failed.
+      await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
+      await load(statusFilter);
+    } catch (e) {
+      setAssignError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not assign that owner.' }));
+    } finally {
+      setAssigningItemId(null);
+    }
   }
 
   const bySeverity = [...items].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
@@ -132,7 +200,12 @@ export function ReviewCentreClient() {
           // person with only Acknowledge/Dismiss.
           const discrepancyType = typeof item.evidence?.discrepancyType === 'string' ? item.evidence.discrepancyType : null;
           const sourceDocumentId = typeof item.evidence?.sourceDocumentId === 'string' ? item.evidence.sourceDocumentId : null;
-          const hasNoResolver = discrepancyType === 'owner_unmatched';
+          const subjectType = typeof item.evidence?.subjectType === 'string' ? item.evidence.subjectType : null;
+          const subjectId = typeof item.evidence?.subjectId === 'string' ? item.evidence.subjectId : null;
+          const isOwnerUnmatchedAccount = discrepancyType === 'owner_unmatched' && subjectType === 'account' && !!subjectId;
+          // A genuine resolver now exists only for the account case above;
+          // any other discrepancy type this label was covering still has none.
+          const hasNoResolver = discrepancyType === 'owner_unmatched' && !isOwnerUnmatchedAccount;
           return (
             <li key={item.id} className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-4">
@@ -149,13 +222,44 @@ export function ReviewCentreClient() {
                   <p className="mt-2 text-xs text-muted">
                     Source: {item.source_module.replace(/_/g, ' ')} · as of {item.as_of_date}
                   </p>
-                  {statusFilter === 'open' && sourceDocumentId && (
+                  {statusFilter === 'open' && sourceDocumentId && !isOwnerUnmatchedAccount && (
                     <Link href="/investment-intelligence/data" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
                       Review statement
                     </Link>
                   )}
                   {statusFilter === 'open' && hasNoResolver && (
                     <p className="mt-2 text-xs text-amber-800">This issue requires owner/reconciliation functionality that is not yet available.</p>
+                  )}
+                  {statusFilter === 'open' && isOwnerUnmatchedAccount && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <label className="text-xs text-muted" htmlFor={`owner-select-${item.id}`}>
+                        Assign to:
+                      </label>
+                      <select
+                        id={`owner-select-${item.id}`}
+                        className="rounded-md border px-2 py-1 text-xs"
+                        value={selectedMemberByItem[item.id] ?? ''}
+                        onChange={(e) => setSelectedMemberByItem((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                        disabled={householdMembers === null}
+                      >
+                        <option value="">{householdMembers === null ? 'Loading…' : 'Choose a household member'}</option>
+                        {(householdMembers ?? [])
+                          .filter((m) => m.is_active)
+                          .map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name} ({m.relationship})
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        onClick={() => assignOwner(item.id, subjectId as string)}
+                        disabled={!selectedMemberByItem[item.id] || assigningItemId === item.id}
+                        className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
+                      >
+                        {assigningItemId === item.id ? 'Assigning…' : 'Assign'}
+                      </button>
+                      {assignError[item.id] && <p className="w-full text-xs text-red-600">{assignError[item.id]}</p>}
+                    </div>
                   )}
                 </div>
                 {statusFilter === 'open' && (
