@@ -20,6 +20,11 @@ interface SourceDocument {
   document_type: string | null;
   uploaded_at: string;
   country_code: string;
+  // 2026-09-28 fix: previously only visible after clicking into this
+  // document's own detail panel — surfaced here so the main list can show a
+  // "needs attention" signal without an extra click.
+  openReconciliationCaseCount?: number;
+  positionsNeedingAttentionCount?: number;
 }
 
 interface ReconciliationCase {
@@ -83,7 +88,19 @@ interface DocumentSummary {
   holdings: { id: string; account_id: string; instrument_id: string; as_of_date: string; units: string; value: string; quality_status: string }[];
   reconciliationCases: ReconciliationCase[];
   openReconciliationCaseCount: number;
-  portfolioTruthStatuses: { account_id: string; instrument_id: string; status: string; blocking_reasons: { code: string; message: string }[]; warning_reasons: { code: string; message: string }[] }[];
+  portfolioTruthStatuses: {
+    account_id: string;
+    instrument_id: string;
+    status: string;
+    blocking_reasons: { code: string; message: string }[];
+    warning_reasons: { code: string; message: string }[];
+    // 2026-09-28 fix: real, human-readable labels joined through server-side
+    // (account folio/institution, instrument name) — null only if the
+    // referenced row has since been archived/removed, in which case the
+    // truncated-id fallback below still applies.
+    accountLabel: string | null;
+    instrumentName: string | null;
+  }[];
 }
 
 // FS1 (dispatch section 43): a clear, user-friendly document-kind label —
@@ -180,6 +197,14 @@ export function InvestmentIntelligenceClient() {
   const [publishBusy, setPublishBusy] = useState(false);
   const [publishChoice, setPublishChoice] = useState<'new' | string>('new'); // 'new' or a candidate investmentId
   const [publishResultMessage, setPublishResultMessage] = useState<string | null>(null);
+  // 2026-09-28 fix: `unpublishPosition()`/`republishPosition()` and their
+  // route (`POST /api/investment-intelligence/publications/[id]/unpublish`)
+  // already existed and worked -- verified live -- but no component anywhere
+  // called it, so a wrongly-published position could only be corrected via
+  // direct database access. Reachable from the same preview panel that
+  // already reveals `alreadyPublished`, since that is the one place this
+  // screen already knows a publication id.
+  const [unpublishBusy, setUnpublishBusy] = useState(false);
 
   // 2026-09-20: an 'owner_unmatched' reconciliation case had no way to
   // actually be resolved — the generic Resolve button below only ever
@@ -530,6 +555,23 @@ export function InvestmentIntelligenceClient() {
     }
   }
 
+  async function handleUnpublish() {
+    if (!publishPreview?.alreadyPublished) return;
+    setUnpublishBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/investment-intelligence/publications/${publishPreview.alreadyPublished.publicationId}/unpublish`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Unpublish failed');
+      setPublishResultMessage('Unpublished. This position no longer counts toward net worth. Publish again once you are ready.');
+      if (selectedId) await loadSummary(selectedId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setUnpublishBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
@@ -610,6 +652,30 @@ export function InvestmentIntelligenceClient() {
                 </button>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={doc.status} />
+                  {/* 2026-09-28 fix: a top-level "needs attention" signal, so a
+                      person can tell something is wrong with THIS statement
+                      without clicking in first. Two independent counts,
+                      because they mean different things: an open exception
+                      (something to decide) vs. a position that is not yet
+                      certified/published (something to finish). */}
+                  {!!doc.openReconciliationCaseCount && (
+                    <button
+                      onClick={() => selectDocument(doc.id)}
+                      className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 hover:bg-red-200"
+                      title="Open reconciliation issues on this statement"
+                    >
+                      {doc.openReconciliationCaseCount} issue{doc.openReconciliationCaseCount === 1 ? '' : 's'}
+                    </button>
+                  )}
+                  {!doc.openReconciliationCaseCount && !!doc.positionsNeedingAttentionCount && (
+                    <button
+                      onClick={() => selectDocument(doc.id)}
+                      className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
+                      title="Positions from this statement are not yet certified or published"
+                    >
+                      {doc.positionsNeedingAttentionCount} position{doc.positionsNeedingAttentionCount === 1 ? '' : 's'} need attention
+                    </button>
+                  )}
                   {/* The password box is shown for 'parsed' documents too (not just
                       'password_required') so Reprocess can carry a password for an
                       encrypted file. Before this, Reprocess always called
@@ -823,49 +889,67 @@ export function InvestmentIntelligenceClient() {
                 {summary.portfolioTruthStatuses.length === 0 ? (
                   <p className="mt-1 text-sm text-gray-500">No positions evaluated yet for this statement.</p>
                 ) : (
-                  <ul className="mt-1 space-y-2">
-                    {summary.portfolioTruthStatuses.map((s) => {
-                      const holding = summary.holdings.find((h) => h.account_id === s.account_id && h.instrument_id === s.instrument_id);
-                      const canPublish = holding && (s.status === 'certified' || s.status === 'certified_with_warnings');
-                      // FS1 (dispatch sections 4, 29, 44-45): a position can be a
-                      // fully valid CURRENT holding while its historical
-                      // transaction record is honestly incomplete (a folio
-                      // statement's Opening Balance, or a holdings-only
-                      // position). This is never framed as "failed" — the
-                      // holding itself is still shown and still publishable —
-                      // but analytics relying on full history are called out
-                      // as not yet fully available, with a neutral CTA rather
-                      // than a hard requirement to re-upload anything.
-                      const incompleteHistoryWarning = (s.warning_reasons ?? []).find((w) => INCOMPLETE_HISTORY_WARNING_CODES.has(w.code));
-                      return (
-                        <li key={`${s.account_id}:${s.instrument_id}`} className="rounded border border-gray-100 px-2 py-1.5 text-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-xs text-gray-600">
-                              Position {s.account_id.slice(0, 8)}…/{s.instrument_id.slice(0, 8)}…
-                            </span>
-                            <span className="flex items-center gap-2">
-                              <StatusBadge status={s.status} />
-                              <button onClick={() => handleCertify(s.account_id, s.instrument_id)} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
-                                Re-evaluate
-                              </button>
-                              {canPublish && (
-                                <button onClick={() => openPublishPreview(holding!.id)} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
-                                  Publish to FHIP
+                  <>
+                    {/* 2026-09-28 fix: nothing previously told a person that
+                        resolving an issue above does not, by itself, do
+                        anything to this position's canonical status or net
+                        worth — Re-evaluate (recompute the status) and Publish
+                        to FHIP (make a certified position count) are two
+                        separate, required clicks. A position could sit
+                        "resolved" indefinitely with no visible next step. */}
+                    <p className="mt-1 text-xs text-gray-500">
+                      Resolving an issue above does not update a position by itself — click <strong>Re-evaluate</strong> to recompute its status, then{' '}
+                      <strong>Publish to FHIP</strong> to make a certified position count toward net worth.
+                    </p>
+                    <ul className="mt-1 space-y-2">
+                      {summary.portfolioTruthStatuses.map((s) => {
+                        const holding = summary.holdings.find((h) => h.account_id === s.account_id && h.instrument_id === s.instrument_id);
+                        const canPublish = holding && (s.status === 'certified' || s.status === 'certified_with_warnings');
+                        // FS1 (dispatch sections 4, 29, 44-45): a position can be a
+                        // fully valid CURRENT holding while its historical
+                        // transaction record is honestly incomplete (a folio
+                        // statement's Opening Balance, or a holdings-only
+                        // position). This is never framed as "failed" — the
+                        // holding itself is still shown and still publishable —
+                        // but analytics relying on full history are called out
+                        // as not yet fully available, with a neutral CTA rather
+                        // than a hard requirement to re-upload anything.
+                        const incompleteHistoryWarning = (s.warning_reasons ?? []).find((w) => INCOMPLETE_HISTORY_WARNING_CODES.has(w.code));
+                        // 2026-09-28 fix: real names instead of raw, truncated
+                        // ids ("Position a8b86c2e.../42c2515b..."). Falls back
+                        // to the truncated-id form only if the account/
+                        // instrument this position references could not be
+                        // resolved (e.g. archived) — never silently blank.
+                        const positionLabel =
+                          s.accountLabel && s.instrumentName ? `${s.instrumentName} — ${s.accountLabel}` : `Position ${s.account_id.slice(0, 8)}…/${s.instrument_id.slice(0, 8)}…`;
+                        return (
+                          <li key={`${s.account_id}:${s.instrument_id}`} className="rounded border border-gray-100 px-2 py-1.5 text-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs text-gray-600">{positionLabel}</span>
+                              <span className="flex items-center gap-2">
+                                <StatusBadge status={s.status} />
+                                <button onClick={() => handleCertify(s.account_id, s.instrument_id)} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                                  Re-evaluate
                                 </button>
-                              )}
-                            </span>
-                          </div>
-                          {incompleteHistoryWarning && (
-                            <p className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
-                              Current holdings were imported successfully. This statement does not contain the complete acquisition history, so some
-                              performance and tax calculations may remain unavailable until fuller transaction history or a consolidated statement is
-                              provided. Uploading a CAMS/KFintech consolidated account statement for this folio can fill in that history.
-                            </p>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                                {canPublish && (
+                                  <button onClick={() => openPublishPreview(holding!.id)} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
+                                    Publish to FHIP
+                                  </button>
+                                )}
+                              </span>
+                            </div>
+                            {incompleteHistoryWarning && (
+                              <p className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                                Current holdings were imported successfully. This statement does not contain the complete acquisition history, so some
+                                performance and tax calculations may remain unavailable until fuller transaction history or a consolidated statement is
+                                provided. Uploading a CAMS/KFintech consolidated account statement for this folio can fill in that history.
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
                 )}
               </div>
             </div>
@@ -942,7 +1026,17 @@ export function InvestmentIntelligenceClient() {
 
                   {publishPreview.alreadyPublished && (
                     <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
-                      This position already has an active publication. Use Refresh instead of a first-time publish.
+                      <p>This position already has an active publication ({publishPreview.alreadyPublished.status}). Use Refresh instead of a first-time publish.</p>
+                      <p className="mt-2">
+                        <button
+                          onClick={handleUnpublish}
+                          disabled={unpublishBusy}
+                          className="rounded border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          {unpublishBusy ? 'Unpublishing…' : 'Unpublish'}
+                        </button>
+                        <span className="ml-2 text-xs text-amber-700">Removes this position from net worth. It stays certified here and can be published again later.</span>
+                      </p>
                     </div>
                   )}
 

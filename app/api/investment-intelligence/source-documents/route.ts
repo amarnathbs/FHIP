@@ -20,7 +20,49 @@ export async function GET() {
     .select('id, status, original_filename, document_type, uploaded_at, checksum, country_code')
     .eq('user_id', user.id)
     .order('uploaded_at', { ascending: false });
-  return error ? bad(error.message) : ok(data);
+  if (error) return bad(error.message);
+  const documents = data ?? [];
+
+  // 2026-09-28 fix, found live: Portfolio Truth status was ONLY visible
+  // after clicking into a specific document's detail panel — a user had no
+  // way to see "does anything here need attention" from the list itself.
+  // Computed per-user (bounded: a household's own investment documents/
+  // positions, not a scan of anything cross-tenant), the same discipline
+  // reviewCentreData.ts already uses for its own per-user aggregates.
+  const docIds = documents.map((d) => d.id as string);
+  const openCaseCountByDoc = new Map<string, number>();
+  const needsAttentionByDoc = new Map<string, number>();
+  if (docIds.length > 0) {
+    const [{ data: openCases }, { data: holdings }, { data: truthStatuses }] = await Promise.all([
+      supabase.from('ii_reconciliation_cases').select('source_document_id').eq('user_id', user.id).in('status', ['open', 'user_reviewing']).in('source_document_id', docIds),
+      supabase.from('ii_holding_snapshots').select('source_document_id, account_id, instrument_id').eq('user_id', user.id).in('source_document_id', docIds),
+      supabase.from('ii_portfolio_truth_status').select('account_id, instrument_id, status').eq('user_id', user.id),
+    ]);
+    for (const c of openCases ?? []) {
+      const docId = c.source_document_id as string | null;
+      if (!docId) continue;
+      openCaseCountByDoc.set(docId, (openCaseCountByDoc.get(docId) ?? 0) + 1);
+    }
+    const statusByPosition = new Map((truthStatuses ?? []).map((t) => [`${t.account_id as string}:${t.instrument_id as string}`, t.status as string]));
+    const OK_STATUSES = new Set(['certified', 'certified_with_warnings']);
+    for (const h of holdings ?? []) {
+      const docId = h.source_document_id as string | null;
+      if (!docId) continue;
+      const status = statusByPosition.get(`${h.account_id as string}:${h.instrument_id as string}`);
+      // No truth-status row at all (never evaluated) counts as needing
+      // attention too — that is not the same as "certified".
+      if (!status || !OK_STATUSES.has(status)) {
+        needsAttentionByDoc.set(docId, (needsAttentionByDoc.get(docId) ?? 0) + 1);
+      }
+    }
+  }
+
+  const enriched = documents.map((d) => ({
+    ...d,
+    openReconciliationCaseCount: openCaseCountByDoc.get(d.id as string) ?? 0,
+    positionsNeedingAttentionCount: needsAttentionByDoc.get(d.id as string) ?? 0,
+  }));
+  return ok(enriched);
 }
 
 export async function POST(req: Request) {
