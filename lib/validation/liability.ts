@@ -19,7 +19,17 @@ const liabilityBaseSchema = z.object({
   interest_rate_type: z.enum(['fixed', 'variable']).optional(),
   fixed_rate_expiry: z.string().date().optional(),
   credit_limit: z.number().min(0).optional(),
-  monthly_repayment: z.number().min(0).default(0),
+  // Mission section 7 (2026-09-28 closure pass): was `.default(0)`, which
+  // silently turned "the user left this blank" into a genuine, indistinguishable
+  // $0 monthly repayment — the exact R16 violation ("error/null != 0") this
+  // codebase's own field-disposition discipline forbids elsewhere. A manual
+  // liability saved with no repayment figure now stores `null` (matching
+  // `interest_rate` and `minimum_payment` immediately above/below, which were
+  // already correctly `.optional()`), so `lib/read-models/liabilities.ts`'s
+  // `contractualMonthly` is honestly `null` ("not entered") rather than a
+  // fabricated `money(0, ...)` that a UI or the D-08 zero-consumption safety
+  // net (`householdDebtServiceUnderD08`) could mistake for a confirmed $0.
+  monthly_repayment: z.number().min(0).optional(),
   currency_code: z.enum(['AUD', 'INR']),
   // G6 Contract 1 — widened from ['AU','IN'] to all 6 authoritative country
   // codes; Zod-only restriction, no DB CHECK narrower than the FK. No migration.

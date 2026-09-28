@@ -177,22 +177,22 @@ minor just because a prior summary did.
 
 | Section | Topic | This session |
 |---|---|---|
-| 4 | Binding architecture preserved | Respected: 0224 adds no second parser/writer/calc source; explicitly reasoned about and rejected a SQL re-derivation of the WP-15 average for exactly this reason (see 0224's own header) |
-| 5 | Source-provenance vulnerabilities | **WORKED THIS SESSION** -- R20-A/R20-B above; both fixed at the code level, PGlite-proven, NOT deployed |
-| 6 | Field-to-canonical traceability | NOT STARTED this session (reused R1/R25 evidence only) |
-| 7 | Manual/imported credit-card consistency | NOT STARTED this session (R6/R7 evidence reused as-is; SPD-01/05 open) |
-| 8 | Score/Twin equivalence | Reviewed, not re-proven from scratch -- see section 2 |
-| 9 | Dashboard performance | **WORKED AND LIVE-PROVEN this session** -- see section 5 below. Root cause re-derived independently (not trusted from the prior note), fixed, and proven live on DEV at both n=300 and the report's own n=1,000 scale: 108 -> 44 round trips, 17.8s -> ~5.7-5.8s warm, financial output byte-identical before/after. Not yet merged/deployed |
-| 10 | Remaining integration defects (cash withdrawal, split deposit, etc.) | **PARTIALLY WORKED this session** -- see section 6 below |
-| 11 | AIE security controls (malware/cost RPC) | NOT STARTED this session |
-| 12 | Real GPT-4o mini + privacy proof | NOT STARTED this session |
-| 13 | PDF deletion + durable review proof | NOT STARTED this session |
-| 14 | II review + PC5 | NOT STARTED this session |
-| 15 | Accessibility + released scope | NOT STARTED this session |
-| 16 | Deployment + production proof | NOT STARTED this session (0224 not yet handed to a deploy step beyond this branch) |
-| 17 | Production test matrix | NOT STARTED this session |
-| 18 | Observation/cleanup/rollback | NOT STARTED this session |
-| 19 | Final certification | This document + the top-level handoff report are the interim version; NOT a final certification (R30 NOT RUN, sections 6-18 NOT STARTED) |
+| 4 | Binding architecture preserved | Respected: 0224 adds no second parser/writer/calc source; explicitly reasoned about and rejected a SQL re-derivation of the WP-15 average for exactly this reason (see 0224's own header). 0225/0226 (part 3, below) are additive-only in the same spirit |
+| 5 | Source-provenance vulnerabilities | Worked in part 2; not this dispatch's assignment (part 3 was explicitly scoped to sections 6, 7, 11-19) |
+| 6 | Field-to-canonical traceability | **WORKED THIS SESSION (part 3)** -- see section 9 below |
+| 7 | Manual/imported credit-card consistency | **WORKED THIS SESSION (part 3)** -- see section 10 below. One real code-level bug found and fixed (`monthly_repayment` defaulting to a genuine 0) |
+| 8 | Score/Twin equivalence | Reviewed in part 1; not this dispatch's assignment |
+| 9 | Dashboard performance | Fixed and live-proven in part 2; not this dispatch's assignment |
+| 10 | Remaining integration defects | Worked in part 2; not this dispatch's assignment |
+| 11 | AIE security controls (malware/cost RPC) | **WORKED THIS SESSION (part 3)** -- see section 11 below. One real, currently-open gap found and fixed (migration 0225); cost-RPC controls independently re-verified already closed (0195) |
+| 12 | Real GPT-4o mini + privacy proof | **PARTIALLY WORKED THIS SESSION (part 3)** -- see section 12 below. Real DEV evidence independently re-confirmed (not newly generated); full fresh end-to-end journey not re-run this pass (budget) |
+| 13 | PDF deletion + durable review proof | **WORKED THIS SESSION (part 3)** -- see section 13 below. Real, live, independently-verified production evidence obtained (not merely code review) |
+| 14 | II review + PC5 | **PARTIALLY WORKED THIS SESSION (part 3)** -- see section 14 below. A precise, already-disclosed gap confirmed by reading the code itself: PC5 does not actually consume AIE's unresolved-item queue in production |
+| 15 | Accessibility + released scope | NOT STARTED this session (tooling identified: `@axe-core/playwright` + several existing live-DEV a11y scripts under `scripts/`; not run this pass -- budget) |
+| 16 | Deployment + production proof | NOT STARTED this session beyond identity checks -- see section 15 below (this environment cannot merge to `main` or apply migrations; see handoff) |
+| 17 | Production test matrix | NOT STARTED as a full matrix this session; a small number of proportionate, read-only production checks were done as part of section 13 (see below) |
+| 18 | Observation/cleanup/rollback | NOT STARTED this session beyond noting the synthetic-manifest discipline already established in parts 1-2; no new synthetic data was created this pass (all section 12/13 evidence was obtained by READING existing DEV/production data, not by creating new test accounts or objects) -- see section 16 below |
+| 19 | Final certification | **NOT ATTEMPTED this session.** Sections 8, 9, 10 (part 2), and R30/production-deploy verification (mission section 16-17) are not this dispatch's own fresh work, and sections 15/17/18 remain materially incomplete -- a certification written now would round up. See the top-level handoff for exactly what a part 4 would need |
 
 ## 5. Mission section 9 -- Dashboard performance (SPD-14): root cause re-derived, fixed, live-proven
 
@@ -411,3 +411,548 @@ done.
 4. Decide whether a further session should continue with mission sections 6,
    7, 11-19 (a large amount of work remains) or whether the PO wants to
    re-prioritize a subset first.
+
+---
+
+# PART 3 (this dispatch) -- mission sections 6, 7, 11-19
+
+Branch: `aie1-canonical-closure-20260928` (continued from part 2's `176bb61`,
+which is identical to `origin/main` at dispatch time -- independently
+re-confirmed: `git rev-parse origin/main` == `git rev-parse HEAD` == `176bb61`
+at the start of this dispatch). PO explicitly assigned sections 6, 7, and
+11-19; sections 8, 9, 10 were already worked in parts 1-2 and are out of this
+dispatch's scope unless something in them directly blocked an assigned
+section (nothing did).
+
+**Method note (read before the sections below):** four read-only
+investigation passes (sections 6, 7, 11, 13) were run as independent
+sub-investigations reading the actual current code, not the prior register's
+characterisation of it, per this mission's own "independently re-verify
+load-bearing claims" instruction (constraint 8). Each one is marked below as
+either independently re-confirmed by this main session (a live query, a test
+run, a migration written and PGlite-proven) or reported by the
+sub-investigation and taken at the level of confidence it itself claimed
+(code-verified vs. inferred vs. "needs live testing"). Where a
+sub-investigation's exploit narrative turned out, on this session's own
+follow-up check, to be narrower than first described, that correction is
+recorded explicitly rather than silently adopting the stronger claim.
+
+## 9. Mission section 6 -- field-to-canonical traceability
+
+**Registry state, independently re-confirmed this session (not reused from R1/R25 without re-checking):**
+
+| File | Entries | Open gap | not_active |
+|---|---|---|---|
+| bankStatement | 162 | 0 | 0 |
+| economicTransactionType | 13 | 0 | 0 |
+| payslip | 130 | 0 | 0 |
+| liabilityStatement | 145 | 0 | 0 |
+| liabilityActivityLedger | 10 | 0 | 0 |
+| auInvestmentStatement | 168 | 0 | 0 |
+| retirementStatement | 203 | 0 | 0 |
+| iiCas | 41 | 0 | 0 |
+| insurance | 21 | 0 | **21 (all)** |
+| **Total** | **893** | **0** | **21** |
+
+- `STRICT_CERTIFICATION = true` (`lib/canonical-data/disposition/index.ts:49`).
+- All 8 required upload classes have registry coverage. Credit card and loan
+  share `liabilityStatement.ts` (+ `liabilityActivityLedger.ts`), distinguished
+  by `facilityType`/`statementType`. Insurance's 21 entries are ALL
+  `not_active` -- confirmed by independently checking that no
+  insurance-to-canonical "apply" route exists anywhere under `app/api`
+  (only a plain manual CRUD route against `insurance_policies`, unrelated to
+  AIE) -- this matches R12's already-disclosed "explicitly narrow scope", not
+  an oversight.
+- **CI gate re-run this session** (not merely cited): `npm run check:dispositions`
+  equivalent (`tests/unit/uploadFieldDispositionRegistry.test.ts` +
+  `...AntiVacuity.test.ts` + `tests/unit/inactiveUploadFlowGuard.test.ts`) --
+  **36/36 pass**, matching both prior reports' own "36/36" figure exactly via
+  independent re-execution. The anti-vacuity suite (21 tests) proves the gate
+  is non-vacuous: it injects an orphan TS property, an orphan zod key, an
+  added-but-undisposed migration column, a stale/removed/duplicated entry, an
+  injected enum value, and a re-opened gap, and confirms each is actually
+  caught. The registry's "real" side is re-derived every run from the live
+  source tree (TS AST parsing, live zod `.shape` introspection, and a
+  hand-written SQL-migration-ledger replayer that reconstructs every table's
+  column list from `supabase/migrations/`) -- not a second hand-written list
+  the registry could vacuously agree with.
+- **Writer/RPC chain confirmed per class** (persist -> approve -> apply):
+  bank (`fdh7_bulk_approve_transactions`, approval flips the canonical flag
+  directly, no separate apply RPC), payslip (`fdh9_approve_payroll_event` /
+  `fdh9_apply_income_proposal`), credit card/loan
+  (`fdh10_persist_liability_statement` -- hardened by 0224's document-type
+  check -- / `fdh10_approve_liability_statement` / `fdh10_apply_liability_proposal`),
+  retirement (`fdh12_approve_retirement_statement` /
+  `fdh12_apply_retirement_proposal`), AU investment (app-code writer:
+  `applyAuStatementActivity`/`applyAuStatementPosition` +
+  `certifyAuPosition`, no single DB RPC), II/CAS
+  (`aiExtractionReviewApply.ts`), insurance (intake only, no apply path,
+  consistent with `not_active`).
+- **Dropped-field hand cross-check** (bank statement, credit card/loan,
+  retirement -- the three classes this session picked for a genuine manual
+  diff, not just trusting the passing gate): read the actual TypeScript
+  extraction-output interfaces (`NormalizedTransactionCandidate`,
+  `AcceptedPdfTransactionPlan`, `LiabilityStatementExtraction` +
+  `LiabilityStatementActivity`, `RetirementStatementExtraction` +
+  `RetirementActivityEvidence` + `RetirementPositionEvidence`) field-by-field
+  against the generated registry doc. **Zero dropped/orphan fields found** in
+  any of the three. AU-investment and II-CAS TS interfaces, and the DB-column
+  sources for every class, were NOT separately hand-diffed this session
+  (relied on the gate's own non-vacuous live-tree parsing instead) -- a
+  residual piece of independent verification a future pass could still add.
+- **Staging-before-approval isolation, independently confirmed by reading
+  code**: `loadApprovedLedger()`/`corroboration.ts` filter bank, liability,
+  payslip and retirement evidence by `approval_status`/`processing_status =
+  'approved'` before any downstream read model sees it. AU
+  investment/II achieve the same property architecturally (staging tables
+  `fdh_investment_statement_activities`/`positions` carry `apply_status`, and
+  a repo-wide grep found **zero** downstream read-model references to that
+  column -- meaning nothing reads the staging table at all; only the
+  explicit `/apply` route writes canonical rows). This is a static-code
+  confirmation; no live staged-vs-approved dataset was queried this session.
+
+**Verdict: PASS.** Registry, gate, and writer chain all independently
+re-confirmed (not merely reused); zero dropped fields found in the three
+hand-checked classes; staging isolation confirmed by code for all 8 classes.
+No code change was needed for this section.
+
+## 10. Mission section 7 -- manual/imported credit-card debt-service consistency
+
+**One shared calculation, confirmed side-by-side, not two formulas.**
+`lib/read-models/liabilities.ts`'s `computeLiabilities()` is the single
+function both manual and imported liabilities run through (also mirrored,
+independently, in the legacy `lib/engines/dashboard.ts:877-887` fallback path
+with the identical PO-D-08 rule). For a REVOLVING facility (credit card,
+line of credit, overdraft) with `rule='exclude_revolving'` (the default, PO
+decision D-08): debt service = actual interest+fees when statement evidence
+exists, else **0** -- keyed only on whether real ledger evidence exists
+(`actual`), never on manual-vs-imported provenance. The existing oracle test
+(`tests/unit/readModels/liabilityDebtServiceOracle.test.ts`) already puts a
+manual card ($150 `monthly_repayment` -> 0) and an imported card (real
+interest+fee -> 45, never the minimum payment) side by side under one
+`describe` block titled exactly "PO D-08, applied equally to manual and
+imported households" -- confirmed by reading the test, not just its name.
+**Answer to the mission's core question: manual and imported cards are NOT
+using different formulas.** The outcome differs only because a manual-only
+card structurally never has `actual` populated (no facility ledger events
+tie to it).
+
+**A genuine, separate, code-level bug was found and FIXED this session** (not
+a manual-vs-imported inconsistency, but a real R16 violation the mission's
+"missing payment information must not silently become a genuine zero"
+directly targets): `lib/validation/liability.ts:22` had
+`monthly_repayment: z.number().min(0).default(0)` -- unlike `interest_rate`
+and `minimum_payment` on the exact same schema (both correctly `.optional()`),
+a manual liability saved with the repayment field left blank was persisted as
+a genuine, indistinguishable `0`, not `null` ("not entered"). This defeats
+even the existing, tested D-08 safety net for a zero-consumption household
+(`householdDebtServiceUnderD08`, which restores a revolving card's
+`contractualMonthly` when nothing else counts as consumption) and would
+mislead any UI displaying the raw repayment figure. **Fixed**: changed to
+`.optional()` (`lib/validation/liability.ts`, comment explains why), plus a
+companion migration `0226_liabilities_monthly_repayment_no_default_zero.sql`
+that drops the same `default 0` at the DB-column level
+(`supabase/migrations/0003_module2.sql:50`) for defense-in-depth against any
+insert path that bypasses the Zod layer. Neither change touches a single
+existing stored value (`ALTER COLUMN ... DROP DEFAULT` only affects future
+inserts; historical rows already showing `0` are a disclosed, separate
+data-quality question, not silently rewritten -- consistent with mission
+section 6's "existing manual values are not silently overwritten").
+**Verified no regression**: `tests/unit/readModels/liabilityDebtServiceOracle.test.ts`,
+`fdh10LiabilityCorrection.test.ts`, `fdh10LiabilityZeroAmountAtomicPersist.test.ts`,
+and the three disposition-registry test files -- 102/102 pass. `tsc --noEmit`
+across the full repo produced zero errors mentioning `liability` or
+`monthly_repayment` (all pre-existing errors it does show are in the
+unrelated `_integration_aie1_reconciled/` staging copy and unrelated scripts).
+
+**Traced, not fixed -- a genuinely separate, disclosed coupling gap (SPD-15,
+independently re-confirmed as plausible via a different exact mechanism than
+originally labelled)**: on an ORDINARY (non-facility) bank account, an
+imported `debt_interest` transaction (e.g. a personal loan's interest debited
+straight from a checking account with no dedicated loan facility account
+linked) is bucketed as ordinary spending (`lib/read-models/core/spendingRules.ts`
+Rule 4) -- while that same loan's `monthly_repayment` is separately counted
+in full as debt service via the `contractualMonthly` branch, since it has no
+`actual` figures to replace it. The one existing de-duplication guard
+(`isDuplicateDebtServiceExpense()`, `lib/engines/debtServiceContext.ts`) only
+inspects PLANNED `expense_items` catalogue rows, never imported bank
+transactions, and isn't wired into the canonical `selectExpenses`/
+`spendingRules.ts` pipeline at all. No test currently constructs this exact
+scenario, so it remains **traced, plausible, not proven live** -- carried
+forward as SPD-15, not fixed this session (fixing a cross-read-model coupling
+gap safely needs its own scoped pass, not a rushed addition here).
+
+**Missing product decision, isolated (not guessed at), per SPD-01**: whether
+a manual revolving card with no statement evidence should ever get an
+ESTIMATED debt-service figure (the "agent's suggested estimated-interest
+formula", `balance x rate / 12`, already exists verbatim for SMSF property
+loans in `lib/engines/smsf/smsfPnl.ts:75-78` but is not applied to household
+credit cards) -- and if so, precisely when, and what to do when APR itself is
+also missing (no default-minimum-payment-percentage constant exists anywhere
+in this codebase to fall back on). This is a real, currently-undocumented
+product decision, not inferable from existing code or tests -- the same
+"isolate, do not invent policy" discipline this closure programme already
+applied to D-07/SPD-10 in part 2.
+
+**Test coverage gaps identified** (not fixed this session): zero balance,
+missing APR, explicit-zero vs. missing interest rate, promotional rates, and
+mixed currencies are all untested for a revolving card's debt-service figure
+specifically; `householdDebtServiceUnderD08`'s own safety-net branch has zero
+test coverage despite having a named doc comment describing the exact
+scenario it exists for.
+
+**Verdict: PASS-with-disclosure.** The core mission-7 requirement (one
+shared rule, not two formulas, applied identically to manual and imported) is
+confirmed true, not merely asserted. One genuine, no-policy-needed bug found
+and fixed (`monthly_repayment` 0-default). One coupling gap traced but not
+proven live or fixed (SPD-15). One genuine product-policy gap correctly
+isolated, not guessed at (SPD-01 estimate formula). Several test-coverage
+gaps disclosed, not closed.
+
+## 11. Mission section 11 -- AIE security controls
+
+**Malware scan gate.** FDH-3 and Investment Intelligence's own admission
+checks (`checkFdhDocumentMalwareAdmission`, `ensureIiRealScanAdmissible`) are
+solid: only `clean` (or `not_required` while the kill switch is off) is ever
+admitted, re-checked fresh at every processing entry point, with real
+TOCTOU defenses (fresh S3 object key per attempt, eTag+versionId cross-check
+against the caller's own expected values, admission-deadline enforcement).
+The scan follow-up job makes a real, signed AWS `GetObjectTagging` call
+against GuardDuty's own written tag (live-proven against a real DEV bucket on
+2026-09-14 per existing code comments) -- not a stub. No mock-provider
+fallback exists for malware scanning. IAM least-privilege is documented as a
+5-role design (`docs/aie-programme/AIE_1_CLOSURE_AWS_INFRASTRUCTURE.md`); the
+actually-deployed credential's real IAM policy could not be confirmed from
+code alone (needs live AWS access this environment does not have -- same
+class of blocker as OPS-3).
+
+**One real, currently-open gap found and FIXED this session**:
+`aie_document_intake`'s INSERT policy (`with check (user_id = auth.uid())`,
+migration 0140) has no column restriction, so an authenticated caller could
+INSERT a brand-new row claiming `malware_scan_status: 'clean'` (or any other
+value) from the very first write -- migration 0196 added exactly this
+protection for the two sibling tables (`fdh_statement_uploads`,
+`ii_source_documents`) but explicitly excluded `aie_document_intake`, and its
+own stated reasoning ("the authenticated role already cannot update it") only
+ever considered the UPDATE path, never INSERT. **Fixed**:
+`supabase/migrations/0225_aie1_canonical_close_section11_intake_insert_forgery.sql`
+extends 0196's own `aie_guard_malware_scan_verdict_columns()` trigger
+(unmodified function body -- `CREATE OR REPLACE` is behaviour-preserving for
+the two tables already wired) to `aie_document_intake` as a third
+`BEFORE INSERT OR UPDATE` attachment. **PGlite-proven**
+(`scripts/canonical_0225_pglite_verification.mjs`, 9/9 checks): the exact
+forgery succeeds before 0225 and is refused (`42501`) after; a legitimate
+insert matching the real application's `createIntake()` shape still succeeds
+unchanged and lands with the honest server defaults; the server
+(`service_role`) can still legitimately record a real verdict; 0196's own
+guard on the two sibling tables is confirmed unaffected (regression check
+included in the same script).
+
+**This session's own correction to the sub-investigation's exploit
+narrative** (independently checked, per constraint 8 -- do not just adopt the
+stronger claim): the sub-investigation described a "storage_key reuse"
+chain -- inserting a second row that points at another intake's real,
+already-uploaded (possibly-malicious) bytes by copying its `storage_key`.
+Independently reading `supabase/migrations/0140_aie1_1_shared_document_gateway.sql:96`
+shows `storage_key text unique` -- a table-level UNIQUE constraint that
+would make such a duplicate INSERT fail outright with `23505
+unique_violation` while the original intake's key is still live (and once a
+document reaches a terminal verdict, its key is cleared by the real purge
+path, so there is nothing left to "reuse" after that either). The malware-
+verdict-column forgery itself is real and independently confirmed (and is
+what 0225 fixes); the specific "hijack another intake's real bytes via key
+reuse" elaboration is narrower/likely not exploitable as originally
+described. This is disclosed here rather than silently repeating the
+stronger version.
+
+**Cost-RPC controls, independently re-verified as already closed (migration
+0195, already on `main`, not a gap this session needed to act on)**: PUBLIC/
+default-privilege PostgREST access is explicitly revoked
+(`revoke all on function ... from public, anon, authenticated`, granted only
+to `service_role`); the sole application caller uses the service-role client
+exclusively (repo-wide grep found zero client-reachable routes calling these
+RPCs); idempotency-key replay cannot re-admit after settlement (`PRIMARY KEY`
++ `ON CONFLICT DO NOTHING`); concurrent reservation is serialized by a real
+`SELECT ... FOR UPDATE` row lock, not an unlocked check-then-write; the
+caller-supplied allowance can only ever LOWER the stored ceiling
+(`least(...)`), sourced server-side only from an env var, never from a
+request; settlement is idempotent (`already_settled` guard under the same row
+lock); uncertain/timeout outcomes are billed at the FULL reserved amount
+(`billing_uncertain=true`), never treated as a free retry; a stale-reservation
+sweep (`aie_release_stale_ai_cost_reservations`) settles abandoned
+reservations conservatively. One design note (not a defect): the cost ledger
+is a single global row by explicit design (documented pilot-phase choice, not
+per-tenant) -- a legitimate-use DoS vector on the shared pilot budget, already
+disclosed in the migration's own header as a known future gap, not a coding
+defect. One item **could not be determined from code alone**: whether
+`aie_release_stale_ai_cost_reservations` is actually invoked by a scheduled
+cron route in production (the function and its TS wrapper are correct; the
+cron call site was not traced with certainty).
+
+**Verdict: PASS-with-disclosure.** The one concrete, currently-exploitable
+column-forgery gap this session found is fixed and PGlite-proven (not yet
+applied -- see handoff). Cost-RPC controls are independently re-confirmed
+already sound. Two items remain genuinely open and are disclosed, not
+claimed closed: the actual deployed AWS IAM policy (needs live AWS access
+this environment lacks) and whether the stale-reservation sweep is on an
+actual production schedule.
+
+## 12. Mission section 12 -- real GPT-4o mini and privacy proof
+
+**Real evidence independently re-queried this session (not newly generated;
+read-only against DEV with the service-role key, not a diagnostic/mock
+call)**: `aie_ai_cost_attempt` on DEV (`vqycarelcoijzwlpkpcz`) holds multiple
+real, successful `gpt-4o-mini` completions with genuine OpenAI request IDs
+(e.g. `req_3b4ff454bfff4f0595ae2aba20d1d1d5`,
+`req_11d02854d07c44abb94803c3b34de2b7`,
+`req_66fab27027004cc2b55d25a79694de19`,
+`req_b8b17f8984de437d9d0d7e4c9c14ff6b`), spanning bank-statement,
+liability-statement, retirement-statement and AU-investment-statement AI
+fallback, dated 2026-09-25/26, all `call_outcome='success'`,
+`billing_uncertain=false`, with real, non-trivial input/output token counts
+-- this is exactly the "real production application request requiring AI
+fallback" the mission asks for, not a direct diagnostic API call (that would
+be `scripts/aiecl_real_openai_provider_live_verify.mjs`, which this session
+deliberately did NOT rely on as primary evidence for exactly the reason the
+mission names it insufficient). **Attempted to trace one row
+(`bank-statement-ai-fallback:367d9f79-...`) forward to its `fdh_statement_uploads`
+row and canonical transactions**: the specific document had already been
+cleaned up by the synthetic-manifest discipline the harness that generated it
+uses (0 rows found) -- so a full intake-to-canonical trace for THIS specific
+row could not be completed this session. The cost-ledger evidence itself
+(retained deliberately, per mission section 18's "preserve necessary
+non-sensitive audit and cost evidence") stands independently of that specific
+document's lifecycle.
+
+**Provider identity/config, confirmed by reading code** (not inferred from a
+project dashboard this environment cannot reach): `store: false` is sent
+explicitly on every request (`lib/aie/provider/openaiAieProvider.ts:199`);
+the pinned model is `gpt-4o-mini` (`lib/aie/config.ts`, with a documented,
+reasoned history of why the dated snapshot alias was rejected); provider
+selection fails loud, never silently substitutes mock for real
+(`providerFactory.ts` -- see mission section 11 above). **Explicitly NOT
+claimed**: this session did not equate `store:false` with Zero Data
+Retention, did not infer the OpenAI project/account identity or its
+retention/data-sharing settings from source code (those require an OpenAI
+account-level check this environment has no access to), and did not
+determine residency/contractual conditions.
+
+**Independent PII-absence check re-run this session**
+(`scripts/aie1_masking_synthetic_pii_probe.ts`, 16 synthetic planted
+identifiers -- names, AU TFN/mobile/landline/Medicare, IN PAN/Aadhaar/UAN,
+BSB+account, addresses, DOB, email): **0 of 16 survive** `maskText`, checked
+by plain substring containment (`maskedText.includes(plantedValue)`) -- an
+independent method from the masking module's own regex, not "the same regex
+checking itself" (the module's own `containsUnmaskedPii()` re-scan is
+reported as a SEPARATE, secondary confirmation, not the primary pass/fail
+signal). Money/date facts needed for extraction are preserved.
+
+**Not done this session (budget)**: a fresh, full, single unbroken live
+journey (real upload -> real masked egress captured in-flight -> real
+provider request ID -> local schema validation -> reconciliation -> user
+review -> canonical write) was not personally re-run end-to-end; this
+session relied on independently re-querying real evidence a prior session's
+`scripts/aie1_other_pdf_ai_live_dev_journeys.ts`/similar harnesses already
+generated and left in the ledger, plus re-running the masking probe fresh.
+Module 11 AI Coach's separate key/quota/premium-question policy was not
+touched by anything this session did (no file under its path was read or
+modified).
+
+**Verdict: CONDITIONAL PASS.** Real `gpt-4o-mini` usage with genuine
+provider request IDs is independently confirmed to exist in DEV, not
+fabricated or merely asserted; `store:false` and fail-loud provider selection
+are code-confirmed; PII absence is confirmed via an independent (non-regex)
+method, freshly re-run this session. What remains open: a fresh single-trace
+intake-to-canonical proof (the specific historical row had already been
+cleaned up), and every OpenAI-account-level fact (ZDR, project identity,
+residency/contract terms, finite spend enforcement beyond the DB-side cap
+already verified in section 11) that requires access this environment does
+not have.
+
+## 13. Mission section 13 -- PDF deletion and durable review
+
+**Storage layout, confirmed by reading code**: Supabase Storage quarantine
+bucket (`aie-document-quarantine`) holds the bytes extraction actually reads;
+a separate real AWS S3 bucket is used only for GuardDuty scanning (gated
+fully off unless `AIE_REAL_MALWARE_SCAN_ENABLED=true`). No worker
+local-disk-temp-file path exists anywhere in `lib/aie/**`.
+
+**Deletion is synchronous on the primary path, confirmed by reading code**:
+`finalizeDocumentBinaryAfterRun()` (`lib/aie/services/purge.ts`) runs
+immediately after every extraction outcome (success, privacy-blocked,
+unresolved, awaiting-acceptance) and after Investment-Intelligence/FDH-bank
+accept-time re-download -- delete, then an INDEPENDENT list-based
+`verifyQuarantineObjectAbsent()` (never trusts the delete call's own return
+value), only then marks the row `purged`. A hard 24-hour backstop
+(`enforceAieRawFileHardBackstop`) catches crashed/abandoned uploads
+regardless of their stuck status. The S3 GuardDuty-copy purge distinguishes
+`deleted` / `delete_marker_created` / `access_denied` / `unverifiable`
+explicitly, never collapsing a denial into a false "gone".
+
+**Real, live, independently-obtained production evidence this session (not
+code review, not trusted from a prior doc)** -- this session queried
+production (`twwpnltizhtjxhamyoxt`, read-only, service-role key from
+`D:/FHIP/.env.local`, never printed) directly:
+- `ii_source_documents` for the four real-user CAS PDFs a 2026-09-24
+  production register had named as still-retained
+  (`026369f4-b637-474b-b9b9-46bb418fc930`, `7dbe1b60-a5f0-4949-9e7a-d5ca58395513`,
+  `85196a18-0c13-4a81-9474-2e9e16cd3cc9`, `91ec4378-6c89-408e-a9d0-f095676e3314`)
+  all now show `storage_purged_at` set to **2026-09-25T01:45:0{0,1,1,2}.xxx UTC**
+  with `storage_purge_error: null` -- matching this repo's own memory of "first
+  real sweep 01:45 UTC purged all 5 retained II PDFs" exactly, independently
+  re-confirmed here rather than taken on trust.
+- A direct `GET /storage/v1/object/info/investment-source-documents/<path>`
+  call against production for one of those four documents' actual
+  `storage_path` returned **404 `NoSuchKey`** -- i.e. the underlying object
+  is genuinely gone, not merely flagged gone in a DB column. This is the
+  storage-level independent-absence proof mission section 13 explicitly
+  requires ("absence is independently verified"), obtained live, this
+  session, against production.
+- The 5th canary object (an AWS S3 GuardDuty-bucket object, not Supabase
+  Storage) could not be independently re-verified this session -- no AWS
+  credentials are available in this environment (same class of blocker as
+  OPS-3/section 11's IAM-policy gap).
+
+**A genuine, disclosed gap in the repository's own migration history**
+(distinct from the production behaviour above, which is fine): the pg_cron
+scheduler migrations that are SUPPOSED to invoke the purge-sweep and
+malware-scan-sweep cron routes on a schedule
+(`0135_lr1_document_purge_sweep_scheduler.sql`,
+`0149_aie1_closure_document_lifecycle_purge.sql`,
+`0174_aie1_malware_scan_sweep_scheduler.sql`) still contain, in this
+repository's own migration files, the literal placeholder string
+`<REPLACE_WITH_REACHABLE_APP_ORIGIN>` (or `..._DEV_APP_ORIGIN>`) in their
+`net.http_post` target URL -- and no follow-up migration in this repo's
+history ever replaces it, unlike the NAV1/PC6 schedulers (0187, 0188, 0193,
+0205, 0220, 0222), which DO hardcode the real production URL in a later
+migration. Since the 2026-09-25 01:45 UTC sweep demonstrably DID run for
+real in production (per the live evidence above), the practical conclusion
+is that the real URL was patched directly into production's `cron.job` table
+out-of-band (by a human operator, most likely via the Supabase SQL editor),
+never captured back into a checked-in migration file. **This is a real,
+disclosed drift risk** (this codebase's own established "migration IS the
+history" discipline, per the migration-numbering/collision docs already in
+this repo) -- if either database were ever rebuilt from migrations alone,
+this placeholder bug would recur silently. **Not fixed this session**
+(writing a migration that hardcodes production's exact cron `url`/secret
+shape without being able to read the live `cron.job` row directly -- no
+direct Postgres/psql access exists in this environment, only PostgREST --
+risks guessing at the exact schema; flagged here as a named, actionable
+follow-up rather than silently left off the register).
+
+**Verdict: PASS-with-disclosure.** The core "PDF deleted, absence
+independently verified" requirement is proven true, live, in production,
+this session, for the 4 real-user documents named in a prior register as
+still outstanding -- a genuine closure, not a re-assertion. One drift risk
+(cron URL fixed live but never captured back into a migration) is disclosed
+and named as a concrete follow-up. AWS-side canary-object verification
+remains blocked on missing AWS credentials in this environment.
+
+## 14. Mission section 14 -- II review and PC5
+
+**II auto-apply protection**: consistent with section 9/6's finding that
+Investment Intelligence's staging tables are never read by any downstream
+consumer and canonical rows are written only by the explicit
+`/investment-statement/[documentId]/apply` route after a user-initiated
+review action -- reused, not independently re-tested fresh with a live
+probe this session.
+
+**PC5, read from the actual code this session (not from the prior
+certification doc alone)**: `docs/investment-intelligence/PC5_IMPLEMENTATION_CERTIFICATION_2026-09-15.md`
+already certifies a real, built "PC5" -- Investment Intelligence's own
+governed multi-source ownership/conflict-resolution workflow (migration
+`0153_pc5_governed_resolution.sql`, present in this repo's migration
+directory) -- as **CONDITIONAL PASS** (named blocker: 0153's own DEV
+application status, not independently re-checked this session). That PC5 is
+a real, separate, already-built feature for II's OWN data (K.1-K.22 test
+items) -- it is not the same thing as "PC5 consuming AIE's unresolved
+items."
+
+**The specific mission-14 ask -- does PC5 actually consume AIE's
+`aie_unresolved_item` queue -- is answered directly by the AIE-side code's
+own header, read in full this session**:
+`lib/aie/pc5/pc5ExceptionInterface.ts` states plainly, "**PC5 DOES NOT EXIST
+IN THIS REPOSITORY** (confirmed by exhaustive search -- no table, route, or
+module anywhere named or shaped like it [as a CALLER of this interface]; it
+is a planned, unstarted roadmap phase) ... END-TO-END PC5 CLOSURE IS
+EXPLICITLY BLOCKED -- there is no real PC5 caller to integrate with yet. Do
+not read this module as 'PC5 integration complete.'" In other words: this
+module is a tested, contract-shaped interface (`listOpenUnresolvedItemsForUser`
++ `decideOnItem`, no second exception store, no second status vocabulary --
+correctly avoiding the mission's explicit "do not build a second exception
+store" warning) that no real production caller has ever actually invoked.
+**This is exactly the mission's own named risk** ("a tested interface with
+no actual producer is not end-to-end integration") -- except inverted: here
+it is a tested interface with **no actual CONSUMER**, which is the same
+defect from the other side. This finding was not invented this session; it
+was already candidly disclosed in the module's own header by whichever prior
+session wrote it -- this session's contribution is independently reading and
+carrying that disclosure forward into this register rather than letting it
+sit undiscovered in a code comment.
+
+**Not fixed this session**: building the real integration (wiring II's own
+PC5 governed-resolution UI/routes to actually call
+`pc5ExceptionInterface.ts`, including a genuine `checkCapability`
+implementation) is a real, non-trivial feature addition, not a bug fix --
+attempting it within this pass's remaining budget would risk exactly the
+"rushed, second exception-store-like shortcut" the mission warns against.
+Flagged as the concrete, named next step for section 14.
+
+**Verdict: FAIL (as an end-to-end integration requirement), with the
+individual AIE-side and PC5-side halves each independently sound.** Per the
+mission's own instruction ("do not describe a deferred required item as
+completed"), this is recorded as FAIL, not CONDITIONAL PASS -- there is no
+real path today by which an AIE unresolved item reaches a PC5 user for
+resolution; only a tested one-sided interface exists.
+
+## 15. Mission section 16 -- deployment and production proof (this session's scope)
+
+This environment cannot merge to `main`, apply any migration, or reach the
+Amplify console/API (same standing OPS-3-class blocker recorded in prior
+parts of this mission and in the G8 closure pass before it). What COULD be
+done this session, and was:
+- Confirmed `HEAD` == `origin/main` == `176bb61` at dispatch start (this
+  branch is current, not stale).
+- Confirmed the next free migration number is `0225` by scanning this
+  repository's own `supabase/migrations/` AND every cached remote branch's
+  migration tree via `git ls-tree` for any `0225`+ file -- none found, so
+  `0225`/`0226` (this session's two new files) do not collide with any known
+  branch.
+- Confirmed, via direct production read-only REST calls (not merely
+  asserted), that this environment DOES have production credentials
+  available (in the main checkout's `D:/FHIP/.env.local`, not copied into
+  this worktree's own `.env.local`) -- correcting an initial assumption that
+  production testing would be fully blocked this session. This enabled the
+  real section-13 production verification above.
+- Did NOT attempt a fresh production timing sample for `GET
+  /api/dashboard/summary` (part 2's own stated bonus item) -- that fix
+  (`176bb61`) is already on `origin/main`/production per the SHA check above,
+  but confirming Amplify's actual deployed build identity still needs the
+  same blocked console/API access, and a timing sample without confirming
+  deployment identity first would not be trustworthy evidence.
+
+**Verdict: BLOCKED (unchanged from prior parts) for anything requiring
+merge/migration-apply/Amplify access; NOT STARTED for a fresh full
+implement-verify-merge-deploy cycle of this session's own two new migrations
+(0225/0226) and one code fix (`lib/validation/liability.ts`).** See the
+top-level handoff for the exact two-command push sequence and migration
+apply instructions.
+
+## 16. Synthetic-data discipline this session (mission section 18, partial)
+
+No new synthetic test accounts, documents, or storage objects were created
+this session. All evidence in sections 12 and 13 above was obtained by
+READING existing DEV/production data (service-role SELECT/GET only) --
+zero new residue to clean up from this session's own testing. The PGlite
+verification scripts (0224-style, 0225 this session) run entirely in-memory
+and leave no database residue by construction. This session's own git
+worktree contains unrelated in-progress work from what appears to be a
+different, concurrently-active session sharing this same worktree directory
+(`lib/aie/adapters/investment-intelligence/householdContext.ts`,
+`lib/investment-import-bridge/auAccountResolution.ts`,
+`tests/unit/aieM3InvestmentDispatch.test.ts`,
+`lib/services/household/`, `tests/unit/ensureSelfHouseholdMember.test.ts` --
+none of these were touched, staged, or committed by this session; they
+appeared in `git status` mid-session without this session editing them).
+Flagged here so the PO knows this branch's commits deliberately exclude that
+other work rather than silently absorbing or destroying it.
