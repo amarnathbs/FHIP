@@ -131,3 +131,64 @@ describe('PO D-07 and GAP-09', () => {
     expect((await selectIncome(USER, { client, window: WINDOW })).status).toBe('unavailable');
   });
 });
+
+describe('D-07 split-salary grouping (bug fix: two deposits, neither matching alone, silently double-counted)', () => {
+  // Fixed ISO-8601 weeks (Mon-Sun) used across this block:
+  //   2026-08-03 .. 2026-08-09 = week 32
+  //   2026-08-10 .. 2026-08-16 = week 33
+  const plannedSalary = () => incomeSource('m1', 'My salary', 5000, 'monthly'); // perOccurrence = 5000 (net_amount null -> amount)
+
+  it('two same-ISO-week deposits (3,000 + 2,000) summing to the planned 5,000 are BOTH flagged as a possible duplicate of the same source', async () => {
+    const e = await run(tables(bankAug(), { income_sources: [plannedSalary()], fdh_transactions: [
+      txn({ id: 'd1', account: 'bank', statement: 's-aug', date: '2026-08-10', amount: 3000, type: 'income', category: CAT.income }),
+      txn({ id: 'd2', account: 'bank', statement: 's-aug', date: '2026-08-13', amount: 2000, type: 'income', category: CAT.income }),
+    ] }));
+    const d1 = e.actual.lines.find((l) => l.transactionId === 'd1')!;
+    const d2 = e.actual.lines.find((l) => l.transactionId === 'd2')!;
+    expect(d1.possibleDuplicateOf).toEqual([{ sourceId: 'm1', name: 'My salary' }]);
+    expect(d2.possibleDuplicateOf).toEqual([{ sourceId: 'm1', name: 'My salary' }]);
+    expect(d1.treatment).toBe('counted');
+    expect(d2.treatment).toBe('counted');
+  });
+
+  it('regression: a single deposit within 5% of the planned occurrence still matches exactly as before', async () => {
+    const e = await run(tables(bankAug(), { income_sources: [plannedSalary()], fdh_transactions: [
+      txn({ id: 'd1', account: 'bank', statement: 's-aug', date: '2026-08-10', amount: 5100, type: 'income', category: CAT.income }),
+    ] }));
+    expect(e.actual.lines[0].possibleDuplicateOf).toEqual([{ sourceId: 'm1', name: 'My salary' }]);
+  });
+
+  it('negative control: two deposits summing within 10% of the planned amount but in DIFFERENT ISO weeks are NOT grouped', async () => {
+    const e = await run(tables(bankAug(), { income_sources: [plannedSalary()], fdh_transactions: [
+      txn({ id: 'd1', account: 'bank', statement: 's-aug', date: '2026-08-09', amount: 3000, type: 'income', category: CAT.income }), // week 32
+      txn({ id: 'd2', account: 'bank', statement: 's-aug', date: '2026-08-10', amount: 2000, type: 'income', category: CAT.income }), // week 33
+    ] }));
+    const d1 = e.actual.lines.find((l) => l.transactionId === 'd1')!;
+    const d2 = e.actual.lines.find((l) => l.transactionId === 'd2')!;
+    expect(d1.possibleDuplicateOf).toEqual([]);
+    expect(d2.possibleDuplicateOf).toEqual([]);
+  });
+
+  it('two same-week deposits whose sum is outside the 10% band are NOT grouped', async () => {
+    const e = await run(tables(bankAug(), { income_sources: [plannedSalary()], fdh_transactions: [
+      txn({ id: 'd1', account: 'bank', statement: 's-aug', date: '2026-08-10', amount: 3000, type: 'income', category: CAT.income }),
+      txn({ id: 'd2', account: 'bank', statement: 's-aug', date: '2026-08-13', amount: 1200, type: 'income', category: CAT.income }), // sum 4,200 = 16% below 5,000
+    ] }));
+    const d1 = e.actual.lines.find((l) => l.transactionId === 'd1')!;
+    const d2 = e.actual.lines.find((l) => l.transactionId === 'd2')!;
+    expect(d1.possibleDuplicateOf).toEqual([]);
+    expect(d2.possibleDuplicateOf).toEqual([]);
+  });
+
+  it('3 same-week candidates: the closest-to-target pair is grouped and capped at 2 -- the leftover line is never double-grouped', async () => {
+    const e = await run(tables(bankAug(), { income_sources: [plannedSalary()], fdh_transactions: [
+      txn({ id: 'a', account: 'bank', statement: 's-aug', date: '2026-08-10', amount: 3000, type: 'income', category: CAT.income }),
+      txn({ id: 'b', account: 'bank', statement: 's-aug', date: '2026-08-11', amount: 2000, type: 'income', category: CAT.income }), // a+b = 5,000 (exact)
+      txn({ id: 'c', account: 'bank', statement: 's-aug', date: '2026-08-12', amount: 2200, type: 'income', category: CAT.income }), // a+c = 5,200 (also in band); b+c = 4,200 (out of band)
+    ] }));
+    const byId = (id: string) => e.actual.lines.find((l) => l.transactionId === id)!;
+    expect(byId('a').possibleDuplicateOf).toEqual([{ sourceId: 'm1', name: 'My salary' }]);
+    expect(byId('b').possibleDuplicateOf).toEqual([{ sourceId: 'm1', name: 'My salary' }]);
+    expect(byId('c').possibleDuplicateOf).toEqual([]); // never grouped with 'a' once 'a' is claimed by the closer pair
+  });
+});
