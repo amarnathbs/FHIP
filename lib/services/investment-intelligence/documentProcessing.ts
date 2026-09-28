@@ -34,7 +34,21 @@ import { downloadSourceDocumentObject } from './storage';
 import { purgeSourceDocumentStorage } from './sourceDocumentPurge';
 import { extractPdfText } from './pdfExtraction';
 import { parseExtractedDocument } from './parsers/registry';
-import type { ParsedInstrumentRecord } from './parsers/types';
+import type { ParsedAccountRecord, ParsedInstrumentRecord } from './parsers/types';
+// 2026-09-28 — owner-exception unification (PO decision, live production
+// walkthrough). PC5's own K.4/K.7 owner-matching comparison is REUSED
+// as-is, not reimplemented: this is the same deterministic,
+// no-fuzzy-auto-match function `lib/pc5/*` already calls to re-check a
+// decision, now ALSO called from the pipeline that actually runs on every
+// live upload (dispatch.ts, which raises the same signal into
+// `aie_unresolved_item`, is never reached by this pipeline — see this
+// mission's dispatch background for the full gap this closes). Reusing the
+// AIE adapter's household loader too (`loadHouseholdMembersForMatching`):
+// it already lazily ensures a "self" member exists and already applies the
+// correct tenant-scoping discipline, so this file does not grow a second,
+// slightly-different copy of either.
+import { matchStatementOwner, type Pc5HouseholdMemberForMatching } from '@/lib/aie/adapters/investment-intelligence/ownerMatching';
+import { loadHouseholdMembersForMatching } from '@/lib/aie/adapters/investment-intelligence/householdContext';
 import { resolveOrCreateAccount, planFolioAccountResolution } from './accountResolution';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { computeTransactionFingerprint } from './fingerprint';
@@ -583,6 +597,85 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
         severity: 'blocking',
         sourceDocumentId,
         details: { reason: 'No household member was specified for this statement at upload time.' },
+      });
+      if (caseId) reconciliationCasesOpened++;
+    }
+  } else {
+    // 2026-09-28 owner-exception unification, K.7: the user DID declare an
+    // owner for this statement — now check whether the statement's OWN
+    // printed evidence agrees. `owner_unmatched` above only ever fires on
+    // "the user said nobody"; until this pass there was no signal at all
+    // for "the user said someone, and the document disagrees" (PC4-INV-12's
+    // long-standing unenforced half — `holderName` has been parsed since R2
+    // and had zero consumers outside PC5's own aie_unresolved_item path,
+    // which this live pipeline never reaches).
+    //
+    // Per-account, not per-document: mirrors the existing owner_unmatched
+    // loop's own granularity above (one case per resolved account) rather
+    // than PC5's document-level `collapseOwnerEvidence` — this pipeline
+    // already opens one case per folio/AMC assignment for every other
+    // discrepancy type, and staying consistent with that avoids surprising
+    // a maintainer who reads this file top to bottom.
+    const declaredOwnerMemberId = doc.owner_member_id as string;
+    const accountRecordByFolio = new Map<string, ParsedAccountRecord>();
+    for (const acc of parsed.accounts) {
+      const key = acc.folioNumber ?? '__no_folio__';
+      if (!accountRecordByFolio.has(key)) accountRecordByFolio.set(key, acc);
+    }
+    let householdMembersForMatching: Pc5HouseholdMemberForMatching[] | null = null;
+    for (const assignment of resolutionPlan.assignments) {
+      const accountId = accountIdByFolioAmc.get(assignment.key);
+      if (!accountId) continue;
+      const acctRecord = accountRecordByFolio.get(assignment.folioNumber ?? '__no_folio__');
+      if (!acctRecord) continue; // no per-account holder evidence printed at all for this folio — nothing to compare
+      if (householdMembersForMatching === null) householdMembersForMatching = await loadHouseholdMembersForMatching(userId);
+      const outcome = matchStatementOwner(
+        { holderName: acctRecord.holderName, jointHolders: acctRecord.jointHolders, holdingModeRaw: acctRecord.holdingModeRaw },
+        householdMembersForMatching
+      );
+      if (outcome.kind === 'no_owner_evidence') continue; // document is silent — not a mismatch, see ownerMatching.ts's own header
+      if (outcome.kind === 'joint_holding') {
+        const caseId = await openReconciliationCase(userId, {
+          subjectType: 'account',
+          subjectId: accountId,
+          discrepancyType: 'joint_holding_allocation_required',
+          severity: 'blocking',
+          sourceDocumentId,
+          details: {
+            maskedHolderName: outcome.maskedHolderName,
+            maskedJointHolders: outcome.maskedJointHolders,
+            matchedMemberIds: outcome.matchedMemberIds,
+            declaredOwnerMemberId,
+            reason: 'This statement prints a joint holding. A single declared owner cannot be asserted without an allocation decision.',
+          },
+        });
+        if (caseId) reconciliationCasesOpened++;
+        continue;
+      }
+      const isMatchToDeclared = outcome.kind === 'exact_match' && outcome.memberId === declaredOwnerMemberId;
+      if (isMatchToDeclared) continue; // printed evidence agrees with what the user declared
+      // mismatch, ambiguous, or an exact match to a DIFFERENT member than
+      // declared (K.7: escalated, never silently re-filed under the real
+      // match) — all three are "the document disagrees", recorded together
+      // under one discrepancy_type with the outcome kind preserved in
+      // details so the Review Centre can render the right guidance.
+      const caseId = await openReconciliationCase(userId, {
+        subjectType: 'account',
+        subjectId: accountId,
+        discrepancyType: 'owner_mismatch',
+        severity: 'blocking',
+        sourceDocumentId,
+        details: {
+          outcomeKind: outcome.kind,
+          maskedHolderName: outcome.maskedHolderName,
+          declaredOwnerMemberId,
+          candidateMemberIds: outcome.kind === 'mismatch' || outcome.kind === 'ambiguous' ? outcome.candidateMemberIds : [],
+          matchedMemberId: outcome.kind === 'exact_match' ? outcome.memberId : null,
+          reason:
+            outcome.kind === 'exact_match'
+              ? 'This statement’s printed holder name matches a different household member than the one this statement was filed under.'
+              : 'This statement’s printed holder name does not match the household member it was filed under.',
+        },
       });
       if (caseId) reconciliationCasesOpened++;
     }

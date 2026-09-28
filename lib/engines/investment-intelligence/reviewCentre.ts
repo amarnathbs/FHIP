@@ -217,6 +217,13 @@ export interface ReconciliationCaseInput {
   // for a case with no source document (there currently are none, but the
   // field is honest about the possibility rather than assumed non-null).
   sourceDocumentId: string | null;
+  // 2026-09-28 owner-exception unification: the case's own
+  // `discrepancy_details` (e.g. `owner_mismatch`'s masked holder name and
+  // candidate member ids), carried through so the Review Centre UI can
+  // render real guidance instead of only the generic title/description
+  // below. Optional/nullable so every OTHER discrepancy type (which never
+  // set this before) keeps behaving exactly as it did.
+  discrepancyDetails: Record<string, unknown> | null;
 }
 export function detectOpenReconciliationCases(userId: string, cases: ReconciliationCaseInput[], asOfDate: string, rule: RuleConfig): ReviewItemCandidate[] {
   return cases.map((c) => ({
@@ -226,7 +233,7 @@ export function detectOpenReconciliationCases(userId: string, cases: Reconciliat
     complianceClassification: rule.complianceClassification,
     title: 'Unresolved portfolio reconciliation case',
     description: `A ${c.discrepancyType.replace(/_/g, ' ')} reconciliation case on this ${c.subjectType.replace('_', ' ')} is still open.`,
-    evidence: { caseId: c.id, subjectType: c.subjectType, subjectId: c.subjectId, discrepancyType: c.discrepancyType, openedAt: c.openedAt, sourceDocumentId: c.sourceDocumentId },
+    evidence: { caseId: c.id, subjectType: c.subjectType, subjectId: c.subjectId, discrepancyType: c.discrepancyType, openedAt: c.openedAt, sourceDocumentId: c.sourceDocumentId, discrepancyDetails: c.discrepancyDetails },
     sourceModule: 'ii_data_quality' as IiReviewSourceModule,
     sourceRecordId: c.id,
     sourceRecordVersion: null,

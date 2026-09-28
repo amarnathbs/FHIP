@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
 import { z } from 'zod';
@@ -12,7 +13,30 @@ import { z } from 'zod';
 // route is the missing piece: it actually sets the account's real owner,
 // then auto-resolves every open 'owner_unmatched' case for that account —
 // the correction IS the resolution, not a separate manual step.
+//
+// 2026-09-28 owner-exception unification: ALSO resolves 'owner_mismatch'
+// cases (the statement printed a holder name that did not match the
+// declared owner — see documentProcessing.ts's K.7 comparison, reusing
+// PC5's ownerMatching.ts). Setting the account's owner here is the correct
+// resolution for both case types: 'owner_unmatched' had no owner at all,
+// 'owner_mismatch' had one that disagreed with the evidence; in both cases
+// the user's fresh choice — confirming the existing assignment despite the
+// mismatch, or correcting it to the household member the statement actually
+// names — is what should stick. A genuinely PAST (already-resolved) decision
+// is never amended through this route — see
+// `/api/investment-intelligence/resolutions/[caseId]/amend`, which never
+// mutates the original resolved case (its `resolved_at`/`resolution_method`/
+// `resolved_by` stay exactly as first recorded, an immutable audit entry)
+// and instead inserts a brand-new, already-resolved case referencing the one
+// it supersedes.
+//
+// `discrepancy_details.resolvedOwnerMemberId` is stamped onto the resolved
+// case (merged, not overwritten — the original detection evidence such as
+// `outcomeKind`/`maskedHolderName`/`candidateMemberIds` stays alongside it)
+// so the Resolutions history view can show WHAT was decided, not just THAT
+// something was decided.
 const setOwnerSchema = z.object({ ownerMemberId: z.string().uuid() });
+const RESOLVABLE_BY_OWNER_ASSIGNMENT = ['owner_unmatched', 'owner_mismatch'] as const;
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: accountId } = await params;
@@ -35,22 +59,54 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (updateErr) return bad(updateErr.message);
 
   const nowIso = new Date().toISOString();
-  const { data: resolvedCases, error: resolveErr } = await supabase
+
+  // ADMIN CLIENT, DELIBERATELY, for every ii_reconciliation_cases read/write
+  // below. `discrepancy_details` is a SYSTEM-AUTHORITATIVE column —
+  // migration 0087's `ii_reconciliation_cases_assert_authoritative_write()`
+  // trigger explicitly refuses any change to it `if auth.role() =
+  // 'authenticated'` (found live 2026-09-28: the first version of this fix
+  // used the request-scoped RLS client here, which the trigger silently
+  // refused — the PATCH returned 200 with `resolvedCaseCount: 0` and no
+  // error, because this route never inspected `resolveErr` per-row; the
+  // case stayed open with no user-visible signal that anything had failed).
+  // Ownership of the target account/household member is already verified
+  // above via the RLS-scoped `supabase` client before this point is ever
+  // reached, so escalating to admin here for the case write does not widen
+  // what this route lets a caller do — it only lets the ALREADY-AUTHORISED
+  // action actually persist the one field only the system may set.
+  const admin = createAdminClient();
+
+  // Fetch each open, resolvable-by-this-action case's OWN existing details
+  // first, so the update below can MERGE resolvedOwnerMemberId into it
+  // rather than clobber the detection evidence (outcomeKind, maskedHolderName,
+  // candidateMemberIds/matchedMemberId for owner_mismatch) it already carries.
+  const { data: openCases, error: openCasesErr } = await admin
     .from('ii_reconciliation_cases')
-    .update({
-      status: 'resolved',
-      resolved_at: nowIso,
-      resolution_method: 'user_mapped_owner',
-      resolved_by: user.id,
-      resolved_by_actor_type: 'user',
-    })
+    .select('id, discrepancy_details')
     .eq('user_id', user.id)
     .eq('subject_type', 'account')
     .eq('subject_id', accountId)
-    .eq('discrepancy_type', 'owner_unmatched')
-    .eq('status', 'open')
-    .select('id');
-  if (resolveErr) return bad(resolveErr.message);
+    .in('discrepancy_type', RESOLVABLE_BY_OWNER_ASSIGNMENT)
+    .eq('status', 'open');
+  if (openCasesErr) return bad(openCasesErr.message);
+
+  let resolvedCaseCount = 0;
+  for (const c of openCases ?? []) {
+    const mergedDetails = { ...((c.discrepancy_details as Record<string, unknown> | null) ?? {}), resolvedOwnerMemberId: parsed.data.ownerMemberId };
+    const { error: resolveErr } = await admin
+      .from('ii_reconciliation_cases')
+      .update({
+        status: 'resolved',
+        resolved_at: nowIso,
+        resolution_method: 'user_mapped_owner',
+        resolved_by: user.id,
+        resolved_by_actor_type: 'user',
+        discrepancy_details: mergedDetails,
+      })
+      .eq('id', c.id as string)
+      .eq('status', 'open'); // race guard: only this row, only if still open
+    if (!resolveErr) resolvedCaseCount++;
+  }
 
   await emitAuditEvent({
     userId: user.id,
@@ -59,8 +115,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     subjectId: accountId,
     actorType: 'user',
     actorId: user.id,
-    metadata: { field: 'owner_member_id', newValue: parsed.data.ownerMemberId, resolvedCaseCount: resolvedCases?.length ?? 0 },
+    metadata: { field: 'owner_member_id', newValue: parsed.data.ownerMemberId, resolvedCaseCount },
   });
 
-  return ok({ accountId, ownerMemberId: parsed.data.ownerMemberId, resolvedCaseCount: resolvedCases?.length ?? 0 });
+  return ok({ accountId, ownerMemberId: parsed.data.ownerMemberId, resolvedCaseCount });
 }

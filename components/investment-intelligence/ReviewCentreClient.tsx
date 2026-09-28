@@ -84,7 +84,12 @@ export function ReviewCentreClient() {
   }, [statusFilter, load]);
 
   useEffect(() => {
-    const needsMembers = items.some((i) => typeof i.evidence?.discrepancyType === 'string' && i.evidence.discrepancyType === 'owner_unmatched' && i.evidence.subjectType === 'account');
+    const needsMembers = items.some(
+      (i) =>
+        typeof i.evidence?.discrepancyType === 'string' &&
+        (i.evidence.discrepancyType === 'owner_unmatched' || i.evidence.discrepancyType === 'owner_mismatch') &&
+        i.evidence.subjectType === 'account'
+    );
     if (needsMembers) void ensureHouseholdMembersLoaded();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
@@ -202,10 +207,26 @@ export function ReviewCentreClient() {
           const sourceDocumentId = typeof item.evidence?.sourceDocumentId === 'string' ? item.evidence.sourceDocumentId : null;
           const subjectType = typeof item.evidence?.subjectType === 'string' ? item.evidence.subjectType : null;
           const subjectId = typeof item.evidence?.subjectId === 'string' ? item.evidence.subjectId : null;
-          const isOwnerUnmatchedAccount = discrepancyType === 'owner_unmatched' && subjectType === 'account' && !!subjectId;
-          // A genuine resolver now exists only for the account case above;
-          // any other discrepancy type this label was covering still has none.
-          const hasNoResolver = discrepancyType === 'owner_unmatched' && !isOwnerUnmatchedAccount;
+          const details = (item.evidence?.discrepancyDetails ?? null) as Record<string, unknown> | null;
+          const maskedHolderName = typeof details?.maskedHolderName === 'string' ? details.maskedHolderName : null;
+          // 2026-09-28 owner-exception unification: 'owner_mismatch' is the
+          // sibling of 'owner_unmatched' -- the user DID declare an owner,
+          // but the statement's own printed holder name disagrees (K.7).
+          // The correct action is the SAME assign-to-household-member
+          // control (it doubles as "confirm/override" when the user decides
+          // the declared owner is right despite the mismatch, or "correct
+          // it" when the statement is right) -- see
+          // /api/investment-intelligence/accounts/[id]/owner's 2026-09-28
+          // comment for why one endpoint now resolves both case types.
+          const isOwnerAssignableAccount = (discrepancyType === 'owner_unmatched' || discrepancyType === 'owner_mismatch') && subjectType === 'account' && !!subjectId;
+          const isJointHoldingAccount = discrepancyType === 'joint_holding_allocation_required' && subjectType === 'account';
+          // A genuine resolver now exists for owner_unmatched/owner_mismatch
+          // accounts and nothing else; joint holdings are DETECTED (K.6) but
+          // deliberately not offered a one-owner "fix" here, because forcing
+          // a joint folio onto a single owner would misattribute someone
+          // else's share of it -- a real percentage-split allocation UI is
+          // not yet built (see this file's header history).
+          const hasNoResolver = (discrepancyType === 'owner_unmatched' && !isOwnerAssignableAccount) || isJointHoldingAccount;
           return (
             <li key={item.id} className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-4">
@@ -222,18 +243,28 @@ export function ReviewCentreClient() {
                   <p className="mt-2 text-xs text-muted">
                     Source: {item.source_module.replace(/_/g, ' ')} · as of {item.as_of_date}
                   </p>
-                  {statusFilter === 'open' && sourceDocumentId && !isOwnerUnmatchedAccount && (
+                  {statusFilter === 'open' && sourceDocumentId && !isOwnerAssignableAccount && (
                     <Link href="/investment-intelligence/data" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
                       Review statement
                     </Link>
                   )}
-                  {statusFilter === 'open' && hasNoResolver && (
+                  {statusFilter === 'open' && isJointHoldingAccount && (
+                    <p className="mt-2 text-xs text-amber-800">
+                      This statement prints a joint holding{maskedHolderName ? ` (${maskedHolderName})` : ''}. A single owner cannot be assumed without a percentage-split
+                      decision, which this screen does not yet support — acknowledge for now, or discard the statement from Statements &amp; data if it was filed against the
+                      wrong account.
+                    </p>
+                  )}
+                  {statusFilter === 'open' && hasNoResolver && !isJointHoldingAccount && (
                     <p className="mt-2 text-xs text-amber-800">This issue requires owner/reconciliation functionality that is not yet available.</p>
                   )}
-                  {statusFilter === 'open' && isOwnerUnmatchedAccount && (
+                  {statusFilter === 'open' && discrepancyType === 'owner_mismatch' && maskedHolderName && (
+                    <p className="mt-2 text-xs text-amber-800">This statement is printed in the name of {maskedHolderName}, which does not match who it is currently filed under.</p>
+                  )}
+                  {statusFilter === 'open' && isOwnerAssignableAccount && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <label className="text-xs text-muted" htmlFor={`owner-select-${item.id}`}>
-                        Assign to:
+                        {discrepancyType === 'owner_mismatch' ? 'Correct owner to:' : 'Assign to:'}
                       </label>
                       <select
                         id={`owner-select-${item.id}`}
