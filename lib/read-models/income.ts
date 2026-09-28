@@ -160,6 +160,24 @@ function perOccurrence(row: IncomeSourceRow): number {
   return Number(row.net_amount ?? row.amount);
 }
 
+/**
+ * ISO-8601 week key ('GGGG-Www', Mon-Sun) for a plain YYYY-MM-DD date. Used
+ * only to group same-week D-07 split-salary candidates -- see the comment at
+ * its call site in computeIncome for why a fixed calendar week (not a rolling
+ * 7-day window) is used.
+ */
+function isoWeekKey(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  // Shift to the Thursday of this ISO week (ISO weeks belong to the year of their Thursday).
+  const dayNum = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dayNum);
+  const isoYear = t.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil(((t.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${isoYear}-W${String(week).padStart(2, '0')}`;
+}
+
 export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
   const { fx, ledger } = input;
   const plannedUnconverted = emptyUnconverted();
@@ -190,25 +208,105 @@ export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
   }
 
   const actualUnconverted = emptyUnconverted();
-  const actualLines: ActualIncomeLine[] = ledger.lines
+
+  interface BaseLine {
+    l: ActualLine;
+    treatment: 'counted' | 'represented_by_planned_source';
+    representedBySourceId: string | null;
+    /** ANY payroll_event corroboration (not just an Applied one) rules out a D-07 prompt entirely. */
+    isPayrollCorroborated: boolean;
+  }
+  const baseLines: BaseLine[] = ledger.lines
     .filter((l) => l.bucket === 'income' && l.household)
     .map((l) => {
       const payroll = l.corroboratedBy.find((c) => c.kind === 'payroll_event' && appliedEventToSource.has(c.sourceId));
       if (payroll) {
-        return { ...l, treatment: 'represented_by_planned_source' as const, representedBySourceId: appliedEventToSource.get(payroll.sourceId)!, possibleDuplicateOf: [] };
+        return { l, treatment: 'represented_by_planned_source', representedBySourceId: appliedEventToSource.get(payroll.sourceId)!, isPayrollCorroborated: true };
       }
       if (l.amountReporting === null) addUnconverted(actualUnconverted, l.currency, l.amountNative);
-      const possibleDuplicateOf = l.corroboratedBy.some((c) => c.kind === 'payroll_event')
-        ? []
-        : countedPlanned
-          .filter((p) => p.currency === l.currency)
-          .filter((p) => {
-            const occ = perOccurrence(sourceById.get(p.id)!);
-            return occ > 0 && Math.abs(toMinor(occ) - toMinor(l.amountNative)) <= toMinor(occ) * 0.05;
-          })
-          .map((p) => ({ sourceId: p.id, name: p.name }));
-      return { ...l, treatment: 'counted' as const, representedBySourceId: null, possibleDuplicateOf };
+      return { l, treatment: 'counted', representedBySourceId: null, isPayrollCorroborated: l.corroboratedBy.some((c) => c.kind === 'payroll_event') };
     });
+
+  // D-07 single-line match: one actual line within 5% of one planned occurrence (unchanged).
+  const singleMatch = new Map<string, { sourceId: string; name: string }[]>();
+  for (const b of baseLines) {
+    if (b.treatment !== 'counted' || b.isPayrollCorroborated) continue;
+    const matches = countedPlanned
+      .filter((p) => p.currency === b.l.currency)
+      .filter((p) => {
+        const occ = perOccurrence(sourceById.get(p.id)!);
+        return occ > 0 && Math.abs(toMinor(occ) - toMinor(b.l.amountNative)) <= toMinor(occ) * 0.05;
+      })
+      .map((p) => ({ sourceId: p.id, name: p.name }));
+    if (matches.length > 0) singleMatch.set(b.l.key, matches);
+  }
+
+  // D-07 split-salary match: a genuinely split salary (e.g. 3,000 + 2,000 bank
+  // deposits for a 5,000 planned wage) has neither deposit alone matching the
+  // single-line 5% check, so both were silently counted as EXTRA income on top
+  // of the planned source (double-counting). Up to 2 same-currency lines that
+  // neither matched alone are grouped by same ISO-8601 week (Mon-Sun) of their
+  // transaction date -- NOT a rolling 7-day window, which would need an
+  // arbitrary choice of which line's date anchors it, and NOT by
+  // description/employer text, since a genuinely split payment can legitimately
+  // carry different bank descriptions per leg -- and accepted if their SUM is
+  // within 10% (wider than the single-line 5%, since two independent deposit
+  // amounts compound more rounding/timing slack) of a planned occurrence.
+  const pairMatch = new Map<string, { sourceId: string; name: string }[]>();
+  const pairEligible = baseLines.filter((b) => b.treatment === 'counted' && !b.isPayrollCorroborated && !singleMatch.has(b.l.key));
+  const byWeek = new Map<string, BaseLine[]>();
+  for (const b of pairEligible) {
+    const wk = `${b.l.currency}|${isoWeekKey(b.l.date)}`;
+    if (!byWeek.has(wk)) byWeek.set(wk, []);
+    byWeek.get(wk)!.push(b);
+  }
+  for (const group of byWeek.values()) {
+    if (group.length < 2) continue;
+    // Deterministic order within the group before any combinatorics: by date, then key.
+    const sorted = [...group].sort((a, c) => (a.l.date === c.l.date ? a.l.key.localeCompare(c.l.key) : a.l.date < c.l.date ? -1 : 1));
+    interface PairCandidate { i: number; j: number; matches: { sourceId: string; name: string }[]; closeness: number; earliestDate: string }
+    const pairCandidates: PairCandidate[] = [];
+    for (let i = 0; i < sorted.length; i += 1) {
+      for (let j = i + 1; j < sorted.length; j += 1) {
+        const sumMinor = toMinor(sorted[i].l.amountNative + sorted[j].l.amountNative);
+        const scored = countedPlanned
+          .filter((p) => p.currency === sorted[i].l.currency)
+          .map((p) => {
+            const occ = perOccurrence(sourceById.get(p.id)!);
+            return { p, occ, diff: occ > 0 ? Math.abs(toMinor(occ) - sumMinor) : Infinity, occMinor: toMinor(occ) };
+          })
+          .filter((s) => s.occ > 0 && s.diff <= s.occMinor * 0.1);
+        if (scored.length === 0) continue;
+        pairCandidates.push({
+          i, j,
+          matches: scored.map((s) => ({ sourceId: s.p.id, name: s.p.name })),
+          closeness: Math.min(...scored.map((s) => s.diff)),
+          earliestDate: sorted[i].l.date < sorted[j].l.date ? sorted[i].l.date : sorted[j].l.date,
+        });
+      }
+    }
+    // Tie-break when 3+ candidates in one week could each pair up more than one
+    // way: closest-to-target-sum first (there is no single objectively-correct
+    // rule here -- this favours the best-fitting pair over an arbitrary one),
+    // then earliest-dated pair, then key order, for full determinism.
+    pairCandidates.sort((a, c) => a.closeness - c.closeness || (a.earliestDate !== c.earliestDate ? (a.earliestDate < c.earliestDate ? -1 : 1) : sorted[a.i].l.key.localeCompare(sorted[c.i].l.key)));
+    const claimed = new Set<number>();
+    for (const cand of pairCandidates) {
+      if (claimed.has(cand.i) || claimed.has(cand.j)) continue;
+      claimed.add(cand.i);
+      claimed.add(cand.j);
+      pairMatch.set(sorted[cand.i].l.key, cand.matches);
+      pairMatch.set(sorted[cand.j].l.key, cand.matches);
+    }
+  }
+
+  const actualLines: ActualIncomeLine[] = baseLines.map((b) => {
+    if (b.treatment === 'represented_by_planned_source') {
+      return { ...b.l, treatment: b.treatment, representedBySourceId: b.representedBySourceId!, possibleDuplicateOf: [] };
+    }
+    const possibleDuplicateOf = singleMatch.get(b.l.key) ?? pairMatch.get(b.l.key) ?? [];
+    return { ...b.l, treatment: 'counted' as const, representedBySourceId: null, possibleDuplicateOf };
+  });
   const counted = actualLines.filter((l) => l.treatment === 'counted');
   const countedMonthly = coveredMonthlyAverage(ledger, counted);
 
