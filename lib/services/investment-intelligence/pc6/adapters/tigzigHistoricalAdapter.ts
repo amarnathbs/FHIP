@@ -107,7 +107,15 @@ export class TigzigHistoricalAdapter implements HistoricalNavAdapter {
 
     const url = `${TIGZIG_BASE_URL}?scheme=${encodeURIComponent(request.schemeIdentifier)}&since=${request.fromDate}&to=${request.toDate}`;
 
-    const result = await fetchWithRetry(url, { headers: { 'User-Agent': 'FHIP-PC6/1.0 (NAV1 selective historical adapter)' } });
+    // NAV 1 incident fix (2026-09-28): an already-persistently-failing
+    // instrument gets a much smaller retry budget (see HistoricalNavRequest.
+    // retryBudget) so a scheme TIGZIG will never resolve cannot cost the full
+    // 6-attempt x 60s backoff cascade on every run.
+    const result = await fetchWithRetry(
+      url,
+      { headers: { 'User-Agent': 'FHIP-PC6/1.0 (NAV1 selective historical adapter)' } },
+      request.retryBudget ? { maxAttempts: request.retryBudget.maxAttempts, timeoutMs: request.retryBudget.timeoutMs } : {},
+    );
 
     if (!result.ok) {
       const last = result.failures[result.failures.length - 1] ?? 'unknown failure';

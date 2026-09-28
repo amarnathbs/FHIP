@@ -585,6 +585,19 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     let instrumentRowsInserted = 0;
     let chunksCompleted = 0;
     let windowChunkCount = 0;
+    // NAV 1 incident fix (2026-09-28): an instrument already at or past the
+    // persistent-failure threshold gets a single, short-timeout attempt per
+    // provider instead of the full retry-with-backoff budget. Found live: a
+    // scheme neither provider will EVER resolve made the full TIGZIG cascade
+    // (6 attempts x up to 60s) run every 30-minute tick, occasionally long
+    // enough that the platform killed the invocation before it reached the
+    // ledger write below -- the run then sat 'running' until the NEXT tick's
+    // stale-batch reconciliation, silently losing that tick's own attempt
+    // record. A known-bad instrument does not need six retries to prove it
+    // again; one bounded check still notices if the provider starts
+    // answering, without risking the run or the write.
+    const priorFailures = ledger?.get(instrumentId)?.consecutiveFailures ?? 0;
+    const retryBudget = priorFailures >= HYDRATION_PERSISTENT_FAILURE_THRESHOLD ? { maxAttempts: 1, timeoutMs: 20_000 } : undefined;
     try {
 
       // Report every outcome finished so far before starting a fetch: if this
@@ -625,7 +638,7 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
       let floorEvidence = '';
 
       for (const chunk of windowChunks) {
-        const fetchResult = await adapter.fetchHistory({ schemeIdentifier: identifier, fromDate: chunk.fromDate, toDate: chunk.toDate });
+        const fetchResult = await adapter.fetchHistory({ schemeIdentifier: identifier, fromDate: chunk.fromDate, toDate: chunk.toDate, retryBudget });
         if (!fetchResult.ok) {
           // Only "no data here" (both providers, via the fallback adapter) AND
           // data already known NEWER than this window means the walk has gone
