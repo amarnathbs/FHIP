@@ -647,15 +647,38 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     admin.from('ii_scheme_alias_map').select('*').eq('is_active', true).order('id', { ascending: true })
   );
 
+  // Found live 2026-09-28: with the active canonical universe at its current
+  // size (14,360 ii_instruments x 27,916 ii_instrument_identifiers in
+  // production), doing 3 `.find()` scans of the whole identifiers array PER
+  // instrument here is an O(n*m) nested loop -- up to ~1.2 billion
+  // comparisons -- run on EVERY document upload regardless of that
+  // document's own size. A tiny one-scheme test statement got killed by the
+  // platform's real request-execution limit before this loop even finished,
+  // permanently wedging the parse run at 'running' (the exact failure mode
+  // this route's own maxDuration comment already documents, but from a
+  // different cause than the one it names). Grouping identifiers by
+  // instrument_id in one O(m) pass first, then doing an O(1) lookup per
+  // instrument, produces the identical existingForResolution array --
+  // "first occurrence in array order wins" per identifier type is preserved
+  // exactly, matching `.find()`'s own semantics -- in O(n+m) instead.
+  const identifiersByInstrument = new Map<string, { isin: string | null; amfi: string | null; internalCode: string | null }>();
+  for (const row of existingIdentifierRows ?? []) {
+    let entry = identifiersByInstrument.get(row.instrument_id);
+    if (!entry) {
+      entry = { isin: null, amfi: null, internalCode: null };
+      identifiersByInstrument.set(row.instrument_id, entry);
+    }
+    if (row.identifier_scheme === 'isin' && entry.isin === null) entry.isin = row.identifier_value;
+    else if (row.identifier_scheme === 'amfi_scheme_code' && entry.amfi === null) entry.amfi = row.identifier_value;
+    else if (row.identifier_scheme === 'internal_provisional' && entry.internalCode === null) entry.internalCode = row.identifier_value;
+  }
   const existingForResolution: ExistingInstrumentForResolution[] = (existingInstrumentRows ?? []).map((r) => {
-    const isin = (existingIdentifierRows ?? []).find((i) => i.instrument_id === r.id && i.identifier_scheme === 'isin')?.identifier_value ?? null;
-    const amfi = (existingIdentifierRows ?? []).find((i) => i.instrument_id === r.id && i.identifier_scheme === 'amfi_scheme_code')?.identifier_value ?? null;
-    const internalCode = (existingIdentifierRows ?? []).find((i) => i.instrument_id === r.id && i.identifier_scheme === 'internal_provisional')?.identifier_value ?? null;
+    const ids = identifiersByInstrument.get(r.id as string);
     return {
       instrumentId: r.id as string,
-      isin,
-      amfiSchemeCode: amfi,
-      internalProvisionalCode: internalCode,
+      isin: ids?.isin ?? null,
+      amfiSchemeCode: ids?.amfi ?? null,
+      internalProvisionalCode: ids?.internalCode ?? null,
       normalisedSchemeName: normaliseSchemeName(r.instrument_name as string),
       amcName: (r.amc_name as string) ?? null,
       planType: (r.plan_type as IiPlanType) ?? null,
