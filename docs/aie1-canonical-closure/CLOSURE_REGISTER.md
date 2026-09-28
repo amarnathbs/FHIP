@@ -164,7 +164,7 @@ minor just because a prior summary did.
 | SPD-07 | WP-15 forge (R20-A) -- re-derive/lock down expense-average proposal generation | **PARTIALLY ADDRESSED this session** -- see R20-A above (apply-time evidence bound, not full server-side generation lockdown) |
 | SPD-08 | SR-01 residual (R20-B) -- `fdh10_persist_liability_statement` SECURITY INVOKER, trusts caller numbers for a correctly-classed document | **PARTIALLY ADDRESSED this session** -- see R20-B above (document-class check only) |
 | SPD-09 | ~~Score/Twin fixture asymmetry~~ | **RESOLVED** (PO, 2026-09-28); independently reviewed this session, see section 2 |
-| SPD-10 | D-07: unlinked bank income credits added as "other income" with a duplicate prompt; split deposits/bonus months evade it | NOT STARTED (mission section 10 target: "split-deposit income detection") |
+| SPD-10 | D-07: unlinked bank income credits added as "other income" with a duplicate prompt; split deposits/bonus months evade it | **ROOT CAUSE PRECISELY DIAGNOSED this session** (see section 6 below): the 5%-of-full-amount match in `lib/read-models/income.ts`'s `computeIncome` never fires for a multi-leg split deposit, since no single leg is within 5% of the full planned amount. NOT FIXED -- needs a PO decision on the grouping/tolerance rule first (isolated as an explicit open decision, not guessed at) |
 | SPD-11 | GP-O1: manual grids allow only one catalogue row per item type | NOT STARTED |
 | SPD-12 | GP-O3: expense-averages proposal cannot target a subcategory the review page can't pick (rent/housing never proposed) | NOT STARTED |
 | SPD-13 | Combined-basis group displacement (a group's actuals replace its whole plan) -- confirm or blend | NOT STARTED |
@@ -288,13 +288,29 @@ retained (gitignored working directory; local scratch files also removed manuall
 DEPLOYED.** Merge + Amplify deployment + a genuine production-load measurement remain open (mission
 sections 16-17).
 
-## 6. Mission section 10 -- remaining integration defects (this session's partial work)
+## 6. Mission section 10 -- remaining integration defects (this session's investigation)
 
-Read in full (this session): the residual register in `FINAL_COMPLETION_REPORT.md`'s "Open PO decisions"
-table (SPD-01 through SPD-17 above) and the six named investigation targets in mission section 10. Given
-the size of the remaining mission, this session prioritised sections 9 (above, fully worked) and did not
-have remaining budget to implement fixes for section 10's six named items; see the top-level handoff
-report for exactly what was and was not investigated this pass.
+Each of the six named items was investigated this session by reading the actual current implementation
+(not by trusting the reused report's characterisation). Four are found ALREADY CORRECTLY CLOSED in the
+current code (verified this session, with the specific evidence each claim rests on); one is a genuine,
+precisely-diagnosed open gap; one (report-display edge cases) was not reached this session.
+
+| Item | Finding this session | Verdict |
+|---|---|---|
+| Bank cash-withdrawal classification | `lib/read-models/core/spendingRules.ts`: `cash_withdrawal` is a `NON_SPENDING_BUCKET`, labelled "Cash — spending unknown" (line ~300), excluded from the spending total, never guessed as consumption and never double-counted against a later unrelated cash spend (there is no downstream cash-spend tracking to double count against). Regression coverage: `tests/unit/readModels/expensesOracle.test.ts`, `creditOnSpendingType.test.ts`, `spendingRulesParity.test.ts`. | **ALREADY CORRECT, verified this session.** No fix needed |
+| Zero-amount liability lines / orphaned statement rows | `assertPersistableLiabilityActivities()` in `lib/financial-data-hub/services/liabilityStatementProcessingService.ts` refuses to persist ANY statement containing a non-positive-amount or invalid-split line (a controlled `invalid_state` error, "this statement was not saved" -- the whole statement, not a partial write). `supabase/migrations/0208_fdh10_atomic_liability_statement_persist.sql` makes the actual DB write ONE atomic transaction (statement + every activity + the `queued -> processing -> extracted` status steps) under a per-document advisory lock, refusing a second statement with `EVIDENCE_EXISTS` -- this is the forward-port of the exact defect the 2026-09-25 session's memory recorded (a `0.00` CSV line left an orphaned zero-activity statement row with the document stuck `queued`), now correctly renumbered and present in this branch's `supabase/migrations/` (confirmed: `0208` exists; the old `0198` number the unmerged branch used does not, exactly as 0208's own header documents doing on purpose). `tests/unit/fdh10LiabilityZeroAmountAtomicPersist.test.ts`: 15/15 pass. | **ALREADY FIXED, present in this branch's migration history, verified this session.** Not independently re-confirmed live on DEV/production this pass (that would need OPS-1-style live re-probing of 0208 specifically -- not done) |
+| Retirement lines classified UNKNOWN | `lib/financial-data-hub/retirement/activityClassification.ts`: an unmatched line becomes `UNKNOWN` with a `null` balance direction, which excludes it from the reconciliation identity -- forcing the statement to an honest `VARIANCE`/`INSUFFICIENT_DATA` result rather than a confidently wrong `RECONCILED`. Exact-code lines (a statement that already prints its own activity-type code) are matched exactly, not guessed. No amount-based guessing anywhere in the classifier. | **ALREADY CORRECT, verified this session.** Matches R24's existing PASS ("UNKNOWN never silently categorised") for the retirement domain specifically |
+| Retirement audit persistence | Confirmed the Stage 3 FINAL pass's fix (three call sites using the statement's own id instead of its uploaded-document id, breaking the `fdh_document_audit_events.document_id` FK) is present in the CURRENT code: `lib/financial-data-hub/services/retirementStatementProcessingService.ts` (2 call sites, explicit comment naming the fix) and `lib/retirement-import-bridge/retirementAccountResolution.ts`. `tests/unit/fdh12RetirementHistory.test.ts`: 22/22 pass. | **ALREADY FIXED, present in this branch, verified this session** (independently re-checked, not just trusted from the reused report) |
+| Correction / rejection / duplicate / superseded-document behaviour | Spot-checked (not a full re-audit): `tests/unit/fdh10LiabilityCorrection.test.ts`, `payslipDuplicateAndResume.test.ts`, `payslipBankRematch.test.ts` -- 62/62 pass. Consistent with the register's existing reused R21-R23 PASS rows. | **Spot-verified consistent with existing PASS evidence.** Not a full independent re-audit against every document class this session |
+| Split-deposit income detection (D-07 / SPD-10) | **Root cause precisely identified this session** (was previously only described at a summary level). `lib/read-models/income.ts`'s D-07 "possible duplicate" prompt only fires when ONE unlinked bank credit's amount is within 5% of a planned source's per-occurrence amount (`computeIncome`, the `possibleDuplicateOf` filter). A split deposit -- the same pay event landing as two or more separate bank credits (e.g. $3,000 + $2,000 for a $5,000 net-pay source) -- means NEITHER individual credit is within 5% of the full planned amount, so the flag never fires for either leg: both are silently counted as ordinary "other income" with no duplicate warning, which can overstate actual income against the planned salary it is really the same money as. This is a genuine gap, not yet fixed. | **NOT FIXED.** A correct fix requires a genuine, currently-undocumented product decision (mission section 7's own precedent for "a material formula decision genuinely absent from the approved product contract" applies equally here): what time window groups candidate split legs (same day? same statement period? same employer-description prefix?), what tolerance the GROUP sum must match the planned amount within, and how it should be surfaced (a single combined prompt across N lines, vs. per-line). Implementing a heuristic without that decision risks a worse defect (false-positive grouping of coincidentally-similar unrelated credits, silently hiding real income) more than it risks leaving the gap open. **Isolated as an explicit open decision, not silently narrowed out or guessed at.** |
+| Report-display edge cases | Not investigated this session (no specific edge case was named in the reused report beyond the general item; budget went to the other five, more concretely specified items plus section 9). | **NOT STARTED this session** |
+
+**Verdict on mission section 10 overall: PARTIALLY WORKED.** 4 of 6 named items independently verified
+already correct/fixed in the current code (not merely reused-trusted); 1 has its root cause precisely
+diagnosed with the exact reason a full fix is deferred (a genuine open product decision, not a budget
+shortcut); 1 (report-display edge cases) not reached. No new code changes were needed or made for this
+section this session -- the value delivered was verification (closing 4 items with real evidence they no
+longer needed to be treated as open) and one precise, actionable diagnosis (D-07/SPD-10).
 
 ## 7. Operator-blocked items (OPS-)
 
@@ -307,7 +323,7 @@ report for exactly what was and was not investigated this pass.
 
 ## 8. Session status (honest, per the mission's own anti-rounding-up instruction)
 
-**What this session actually did:**
+**PART 1 (earlier this session's lineage, commits through `6c0cca4`) did:**
 1. Re-verified the mission's reported baseline against the real repository and
    DEV state, found and recorded the drift (section 0 above).
 2. Built this closure register, reconciling the reported 30-item arithmetic
@@ -317,27 +333,81 @@ report for exactly what was and was not investigated this pass.
    re-litigate it.
 4. Fixed, at the code level, BOTH of R20's re-confirmed residual provenance
    gaps (migration `0224_aie1_canonical_close_r20_provenance_gaps.sql`),
-   with a real anti-vacuity PGlite proof (12/12) showing each exploit
-   succeeding before the fix and refused after, and every legitimate path
-   still working.
+   with a real anti-vacuity PGlite proof (12/12).
 
-**What this session explicitly did NOT do** (mission sections 6-19, and R30):
-field-to-canonical traceability mapping, the credit-card consistency shared
-rule, dashboard performance fix, the remaining integration defects (cash
-withdrawal/split deposit/retirement UNKNOWN/etc.), AIE security-control
-verification, real GPT-4o mini/privacy proof, PDF-deletion proof, PC5/II
-review completion, accessibility verification, actual deployment of ANY
-change (0224 sits on branch `aie1-canonical-closure-20260928`, not merged,
-not applied to any database), the full production test matrix, observation/
-rollback readiness, or a final certification. None of these are claimed done.
+**Since part 1 (recorded here, done in the current session but by the main
+session rather than this dispatch):** migration `0224` was applied to DEV and
+production by the PO, and both R20-A and R20-B were independently
+live-exploit-proven BLOCKED on BOTH environments using disposable synthetic
+accounts (full user-scoped sessions, not service-role bypass) -- cleanly
+cleaned up, zero residue. R20's register rows above are updated accordingly
+(PASS, not just CONDITIONAL PASS).
+
+**PART 2 (this dispatch) did:**
+1. Mission section 9 (dashboard performance / SPD-14): independently
+   re-derived the ~110-round-trip root cause (did not trust the prior note),
+   fixed it in `lib/read-models/core/ledger.ts` and
+   `lib/read-models/corroboration.ts` (pure read-pattern change, no
+   migration), proved it deterministically (new test file, 125/125 full
+   suite) AND live on DEV at two real scales (300 and 1,000 approved bank
+   transactions) using two disposable synthetic accounts, both fully cleaned
+   up: 108 -> 44 round trips / 17.8s -> ~5.7s warm at 1,000 transactions,
+   financial output byte-identical before/after. See section 5 above.
+2. Mission section 10 (remaining integration defects): investigated all six
+   named items. Four (cash-withdrawal classification, zero-amount liability
+   lines/orphaned rows, retirement UNKNOWN classification, retirement audit
+   persistence) independently verified ALREADY CORRECT/FIXED in the current
+   code, not merely reused-trusted from a prior report. One
+   (correction/rejection/duplicate/supersession) spot-verified consistent
+   with existing PASS evidence. One (split-deposit income detection, D-07 /
+   SPD-10) precisely root-caused (the exact reason the existing duplicate-flag
+   heuristic misses a multi-leg split deposit) but deliberately NOT fixed,
+   pending a genuine, currently-undocumented PO decision on the
+   grouping/tolerance rule. Report-display edge cases not reached. See
+   section 6 above.
+3. Confirmed no regression: `tests/unit/readModels` 125/125; full repo suite
+   9,667 passed / 20 failed / 5 skipped, and the 4 failing files (admin
+   analytics coupling detector, AI residual closure negative control, country
+   gate account-deletion route discovery, Resources R1.1 RLS timeout) were
+   independently confirmed to fail in isolation too and share no file overlap
+   with this session's changes -- pre-existing, consistent with this repo's
+   own documented "full vitest run" hazards, not introduced this session.
+   Reverted the certification-artifact files (`scripts/**/*.json`,
+   `results_table.md`) the full run rewrote, per the standing hazard note.
+4. Committed incrementally: `359a1f8` (section 9 fix + tests + register
+   updates).
+
+**What this session explicitly did NOT do** (mission sections 6, 7, 8 beyond
+the existing reviewed decision, 11-19, and R30): field-to-canonical
+traceability mapping (section 6), the credit-card manual/imported
+consistency shared rule (section 7, SPD-01/SPD-05 still open), a fresh
+from-scratch Score/Twin two-household rebuild (section 8 -- part 1's review
+of the existing proof stands, not re-litigated further), AIE security-control
+verification (section 11), real GPT-4o mini/privacy proof (section 12),
+PDF-deletion proof (section 13), PC5/II review completion (section 14),
+accessibility verification (section 15), actual deployment of ANY change to
+DEV/production (both this session's fix and migration 0224 sit on this
+branch; 0224 itself has been separately applied and live-proven by the PO as
+described above, but the branch as a whole is not merged), the full
+production test matrix (section 17), observation/rollback readiness (section
+18), or a final certification (section 19, R30). None of these are claimed
+done.
 
 **Exact next action needed from the PO:**
-1. Review migration `0224_aie1_canonical_close_r20_provenance_gaps.sql` and,
-   if acceptable, apply it to DEV first, then production (this environment
-   cannot run DDL).
-2. Merge branch `aie1-canonical-closure-20260928` to `main` (see the top-level
-   handoff message for the exact two-command sequence, since this environment
-   cannot push to `main` directly).
-3. Decide whether a further session should continue with mission sections
-   6-19 (a large amount of work remains) or whether the PO wants to
+1. Review and merge this branch (`aie1-canonical-closure-20260928`) to `main`
+   -- see the top-level handoff message for the exact two-command sequence,
+   since this environment cannot push to `main` directly. It contains: the
+   0224 provenance fix (already applied+live-proven on DEV/production
+   independently of the branch merge), this session's dashboard round-trip
+   fix (code-only, not yet applied anywhere beyond this branch), and the
+   updated closure register.
+2. After merge and Amplify deployment, a genuine production-load timing
+   measurement for `GET /api/dashboard/summary` remains open (mission
+   sections 16-17) -- this session's proof is real and live but is
+   localhost-to-hosted-DEV, not a production Amplify measurement.
+3. A product decision is needed on the split-deposit (D-07/SPD-10) grouping
+   and tolerance rule before that gap can be closed (section 6 above) --
+   isolated as an explicit open decision, not guessed at.
+4. Decide whether a further session should continue with mission sections 6,
+   7, 11-19 (a large amount of work remains) or whether the PO wants to
    re-prioritize a subset first.
