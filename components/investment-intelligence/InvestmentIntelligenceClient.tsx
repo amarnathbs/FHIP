@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fmtDate } from './dateDisplay';
 import { AiExtractionReviewPanel } from './AiExtractionReviewPanel';
 import { formatMoneyCode } from '@/lib/engines/money';
@@ -178,7 +178,17 @@ function StatusBadge({ status }: { status: string }) {
 // "genuinely done" condition and why it is extracted as a pure, separately
 // unit-tested function rather than kept inline here.
 
-export function InvestmentIntelligenceClient() {
+// 2026-09-29 fix (resolution-guidance links): a deep link INTO this page for
+// a specific document, so a "review this statement" link from elsewhere in
+// the workspace (Review Centre, Overview) lands the user directly on the
+// resolution UI for THAT document instead of the generic, unscoped list —
+// see ReviewCentreClient.tsx's "Review statement" link, which now passes
+// `?documentId=` for exactly this purpose.
+interface InvestmentIntelligenceClientProps {
+  initialDocumentId?: string | null;
+}
+
+export function InvestmentIntelligenceClient({ initialDocumentId = null }: InvestmentIntelligenceClientProps = {}) {
   const [documents, setDocuments] = useState<SourceDocument[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // M12C §11 (`CG-10`): a byte-identical re-upload is answered by the server
@@ -240,6 +250,32 @@ export function InvestmentIntelligenceClient() {
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberRelationship, setNewMemberRelationship] = useState('self');
   const [savingMember, setSavingMember] = useState(false);
+
+  // 2026-09-29 fix (resolution-guidance links): the "N issue(s)" / "N
+  // position(s) need attention" badges below already select this document
+  // and reveal its full resolution UI (reconciliation Resolve/Assign,
+  // Portfolio Truth Re-evaluate/Publish) in the "Statement detail" section —
+  // that section can render far below a long document list, so selecting a
+  // document with no visual scroll left the badge looking like it did
+  // nothing. Same fix serves the `initialDocumentId` deep-link entry point
+  // below.
+  const detailSectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (selectedId && detailSectionRef.current) {
+      detailSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedId]);
+
+  // 2026-09-29 fix (resolution-guidance links): honour a `?documentId=`
+  // deep link (see the component doc comment above) by selecting that
+  // document as soon as the page mounts, exactly as if the user had clicked
+  // it themselves. Runs once; `initialDocumentId` is a route param, not
+  // interactive state.
+  useEffect(() => {
+    if (initialDocumentId) selectDocument(initialDocumentId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDocumentId]);
 
   async function handleAddMember(caseId: string) {
     if (!newMemberName.trim()) return;
@@ -798,7 +834,7 @@ export function InvestmentIntelligenceClient() {
 
       {/* Detail panel: steps 3-8 */}
       {selectedId && (
-        <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <section ref={detailSectionRef} className="rounded-lg border border-gray-200 bg-white p-4">
           <h2 className="text-sm font-semibold text-gray-900">Statement detail</h2>
           {!summary ? (
             <p className="mt-2 text-sm text-gray-500">Loading…</p>

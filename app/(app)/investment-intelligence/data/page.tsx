@@ -18,12 +18,25 @@ import { ManualDirectPositionForm } from '@/components/investment-intelligence/M
 // sub-route is the clean option here: the import workflow is a substantial
 // stateful client component, and nesting it under an Overview that must stay
 // cheap (spec section 40) would have coupled the two.
-export default async function InvestmentIntelligenceDataPage() {
+export default async function InvestmentIntelligenceDataPage({
+  searchParams,
+}: {
+  // 2026-09-29 fix (resolution-guidance links): an optional `?documentId=`
+  // deep link, so a "needs attention" surface elsewhere in the workspace
+  // (Review Centre's "Review statement" link, e.g.) can land the user
+  // directly on the specific statement's own resolution UI instead of this
+  // page's generic, unscoped list. Read server-side and handed to the client
+  // component as a plain prop — no client-side searchParams hook needed.
+  searchParams: Promise<{ documentId?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+
+  const sp = await searchParams;
+  const initialDocumentId = typeof sp.documentId === 'string' && sp.documentId.length > 0 ? sp.documentId : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -36,7 +49,7 @@ export default async function InvestmentIntelligenceDataPage() {
         </p>
       </header>
       <InvestmentIntelligenceSubNav />
-      <InvestmentIntelligenceClient />
+      <InvestmentIntelligenceClient initialDocumentId={initialDocumentId} />
       <ManualDirectPositionForm />
     </div>
   );

@@ -50,6 +50,24 @@ export interface HoldingRow {
     status: DataQualityStatus;
     detail: string | null;
   };
+  // 2026-09-29 fix (resolution-guidance links): an 'unresolved' data-quality
+  // status previously had NO way to act on it anywhere in the UI — the row
+  // opens a read-only transaction ledger, and the badge's only affordance was
+  // a hover tooltip repeating the same sentence. `truth.latest_source_
+  // document_id` — the SAME field `reconciliationFailed` below is computed
+  // from — is whichever document most recently evaluated this exact
+  // (account, instrument) position. Since this row's own dataQuality is
+  // derived from that same truth row's CURRENT status, that document is the
+  // one that produced it, and its "Statement detail" page shows this
+  // position under Portfolio Truth status with a working Re-evaluate control
+  // regardless of whether a separate ii_reconciliation_cases row also exists
+  // for it (see source-documents/[id]/summary/route.ts's own 2026-09-28
+  // comment on why that field is NOT reliable for "which document currently
+  // shows a case for this position" in general — it is reliable here
+  // specifically because it is the same row this status came from). Null
+  // for a position assembled before any statement carried a
+  // source_document_id, or one with no recorded source document at all.
+  sourceDocumentId: string | null;
 }
 
 export interface HoldingsTableResult {
@@ -284,6 +302,7 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
       xirr: displayXirr,
       currencyCode: account.currency_code,
       dataQuality,
+      sourceDocumentId: truth.latest_source_document_id,
     });
   }
 
