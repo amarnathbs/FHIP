@@ -63,6 +63,22 @@ export interface SchemeDataset {
   navSeries: SeriesPoint[];
   /** Dated market value of the position, used for weights and drawdown. */
   valuationSeries: SeriesPoint[];
+  // Production defect found 2026-09-29: valuationSeries above is built
+  // exclusively from ii_holding_snapshots, which in production carries
+  // exactly ONE as_of_date per position (the investor's latest uploaded
+  // statement) -- never enough for TWRR (needs a start AND end valuation)
+  // or a benchmark blend, no matter how many years of daily NAV price
+  // history NAV1 has actually hydrated for the instrument. This optional
+  // field is a DERIVED (not certified) valuation series -- the investor's
+  // own certified unit ledger replayed against the daily NAV feed -- built
+  // by analyticsRepository.ts only when the position's own reconciliation
+  // supports it (complete_from_inception + unit_variance_within_tolerance).
+  // Consumers that need more than one dated valuation point (portfolio
+  // TWRR, benchmark blending, drawdown/comparison charts) should prefer
+  // this over valuationSeries when it has >= 2 points; anything that needs
+  // the certified point-in-time snapshot itself must keep using
+  // valuationSeries directly.
+  reconstructedValuationSeries?: SeriesPoint[];
 }
 
 export interface AnalyticsDataset {
@@ -285,13 +301,22 @@ function analysePortfolioCurrency(
   const annotations: DataQualityAnnotation[] = [];
 
   // Aggregate the portfolio valuation series across this currency's schemes.
+  // Prefer each scheme's derived, unit-ledger-x-NAV reconstruction over its
+  // single certified snapshot point whenever it actually has enough points
+  // to be useful -- see SchemeDataset.reconstructedValuationSeries. A
+  // portfolio's TWRR/benchmark-blend/drawdown genuinely need a valuation
+  // TIME SERIES, which a single statement snapshot per position can never
+  // provide regardless of how much NAV history exists for the instrument.
+  const schemeSeries = (s: SchemeDataset): SeriesPoint[] =>
+    s.reconstructedValuationSeries && s.reconstructedValuationSeries.length >= 2 ? s.reconstructedValuationSeries : s.valuationSeries;
+
   const allDates = new Set<number>();
-  for (const s of group) for (const p of s.valuationSeries) allDates.add(p.date.getTime());
+  for (const s of group) for (const p of schemeSeries(s)) allDates.add(p.date.getTime());
   const dates = [...allDates].sort((a, b) => a - b).map((t) => new Date(t));
 
   const valuations: ValuationPoint[] = dates.map((d) => ({
     date: d,
-    value: group.reduce((sum, s) => sum + (valueOnOrBefore(s.valuationSeries, d)?.value ?? 0), 0),
+    value: group.reduce((sum, s) => sum + (valueOnOrBefore(schemeSeries(s), d)?.value ?? 0), 0),
   }));
 
   // External flows = investor cash flows, sign-flipped to the portfolio's
@@ -399,7 +424,7 @@ function analysePortfolioCurrency(
   // ---- Blended benchmark ---------------------------------------------
   const instrumentSeries: InstrumentValuationSeries[] = group.map((s) => ({
     instrumentId: s.instrumentId,
-    points: s.valuationSeries,
+    points: schemeSeries(s),
   }));
   const blend = computeBlendedBenchmark({
     periodStart: ds.periodStart,
