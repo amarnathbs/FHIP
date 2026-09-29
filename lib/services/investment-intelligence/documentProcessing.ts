@@ -589,7 +589,52 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   const ownerUnresolved = !doc.owner_member_id;
   if (ownerUnresolved) {
-    for (const [, accountId] of accountIdByFolioAmc) {
+    // 2026-09-29 fix: a statement can print a JOINT holding even when the
+    // user declared NO owner at all at upload time. Before this fix, this
+    // branch opened 'owner_unmatched' unconditionally for every account on
+    // an owner-less statement — silently treating an undeclared JOINT
+    // holding the same as an undeclared SOLE holding. A later "assign to
+    // yourself" resolution (a single click, or a bulk operation) could then
+    // assert 100% sole economic ownership the statement itself never
+    // claimed. Reuses the exact same detector (matchStatementOwner) the
+    // owner-DECLARED branch below already uses for the equivalent check —
+    // if the statement prints no holder evidence at all, this is unchanged,
+    // correctly still 'owner_unmatched'.
+    const accountRecordByFolioForJointCheck = new Map<string, ParsedAccountRecord>();
+    for (const acc of parsed.accounts) {
+      const key = acc.folioNumber ?? '__no_folio__';
+      if (!accountRecordByFolioForJointCheck.has(key)) accountRecordByFolioForJointCheck.set(key, acc);
+    }
+    let householdMembersForJointCheck: Pc5HouseholdMemberForMatching[] | null = null;
+    for (const assignment of resolutionPlan.assignments) {
+      const accountId = accountIdByFolioAmc.get(assignment.key);
+      if (!accountId) continue;
+      const acctRecord = accountRecordByFolioForJointCheck.get(assignment.folioNumber ?? '__no_folio__');
+      if (acctRecord) {
+        if (householdMembersForJointCheck === null) householdMembersForJointCheck = await loadHouseholdMembersForMatching(userId);
+        const outcome = matchStatementOwner(
+          { holderName: acctRecord.holderName, jointHolders: acctRecord.jointHolders, holdingModeRaw: acctRecord.holdingModeRaw },
+          householdMembersForJointCheck
+        );
+        if (outcome.kind === 'joint_holding') {
+          const caseId = await openReconciliationCase(userId, {
+            subjectType: 'account',
+            subjectId: accountId,
+            discrepancyType: 'joint_holding_allocation_required',
+            severity: 'blocking',
+            sourceDocumentId,
+            details: {
+              maskedHolderName: outcome.maskedHolderName,
+              maskedJointHolders: outcome.maskedJointHolders,
+              matchedMemberIds: outcome.matchedMemberIds,
+              declaredOwnerMemberId: null,
+              reason: 'This statement prints a joint holding and no household member was specified at upload time. A single owner cannot be asserted without an allocation decision.',
+            },
+          });
+          if (caseId) reconciliationCasesOpened++;
+          continue;
+        }
+      }
       const caseId = await openReconciliationCase(userId, {
         subjectType: 'account',
         subjectId: accountId,
