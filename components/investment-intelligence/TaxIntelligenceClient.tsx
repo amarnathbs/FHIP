@@ -81,6 +81,15 @@ function fmtInr(v: number | null | undefined): string {
   return formatMoneyCode(v, 'INR');
 }
 
+// This entire page is India Income Tax Act-specific by design (LTCG/STCG
+// classification under Sections 111A/112A only exist as Indian tax law), so
+// unlike dateDisplay.ts's fmtDate() elsewhere in Investment Intelligence --
+// which was fixed 2026-09-29 to thread a real per-row currency through
+// instead of hardcoding 'INR' -- an India-only date here is the deliberately
+// correct answer, matching fmtInr()'s own hardcode immediately above rather
+// than reintroducing a bare, undocumented literal.
+const TAX_CURRENCY = 'INR';
+
 function NotAvailable({ text }: { text: string }) {
   return (
     <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600" data-testid="not-available">
@@ -274,8 +283,8 @@ export function TaxIntelligenceClient() {
                   <Fragment key={i}>
                     <tr className={d.note ? 'border-b-0' : 'border-b border-line/50'} data-testid="disposal-row">
                       <td className="py-1 pr-2">{d.instrumentName}</td>
-                      <td className="py-1 pr-2">{fmtDate(d.acquisitionDate)}</td>
-                      <td className="py-1 pr-2">{fmtDate(d.disposalDate)}</td>
+                      <td className="py-1 pr-2">{fmtDate(d.acquisitionDate, TAX_CURRENCY)}</td>
+                      <td className="py-1 pr-2">{fmtDate(d.disposalDate, TAX_CURRENCY)}</td>
                       <td className="py-1 pr-2 capitalize">{d.classification.replace('_', ' ')}</td>
                       <td className="py-1 pr-2 uppercase">{d.gainType}</td>
                       <td className="py-1 pr-2 text-right">{d.taxableGain === null ? <span className="text-slate-500">Unresolved</span> : fmtInr(d.taxableGain)}</td>
@@ -316,7 +325,7 @@ export function TaxIntelligenceClient() {
                 {lots.map((l) => (
                   <tr key={l.lotId} className="border-b border-line/50" data-testid="lot-row">
                     <td className="py-1 pr-2">{l.instrumentName}</td>
-                    <td className="py-1 pr-2">{fmtDate(l.acquisitionDate)}</td>
+                    <td className="py-1 pr-2">{fmtDate(l.acquisitionDate, TAX_CURRENCY)}</td>
                     <td className="py-1 pr-2 text-right">{l.unitsAcquired.toFixed(3)}</td>
                     <td className="py-1 pr-2 text-right">{l.unitsRemaining.toFixed(3)}</td>
                     <td className="py-1 pr-2">{l.status.replace('_', ' ')}</td>

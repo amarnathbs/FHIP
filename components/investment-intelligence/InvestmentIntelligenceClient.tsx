@@ -1058,7 +1058,7 @@ export function InvestmentIntelligenceClient() {
                     </div>
                     <div>
                       <dt className="text-xs text-gray-500">As of</dt>
-                      <dd className="font-medium text-gray-900">{publishPreview.valuationAsOfDate ? fmtDate(publishPreview.valuationAsOfDate) : '—'}</dd>
+                      <dd className="font-medium text-gray-900">{publishPreview.valuationAsOfDate ? fmtDate(publishPreview.valuationAsOfDate, publishPreview.sourceCurrency) : '—'}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-gray-500">Target register</dt>

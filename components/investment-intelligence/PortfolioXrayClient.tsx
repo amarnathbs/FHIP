@@ -158,11 +158,11 @@ export function PortfolioXrayClient() {
       {/* As-of dates — portfolio and holdings shown separately, always. */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded border border-slate-200 bg-white px-4 py-3 text-sm" data-testid="xray-as-of">
         <span className="text-muted">
-          Positions as at <strong className="text-ink">{fmtDate(data.portfolioAsOfDate)}</strong>
+          Positions as at <strong className="text-ink">{fmtDate(data.portfolioAsOfDate, currency)}</strong>
         </span>
         <span className="text-muted">
-          Fund holdings as at <strong className="text-ink">{data.holdingsAsOfDate ? fmtDate(data.holdingsAsOfDate) : 'not available'}</strong>
-          {data.oldestHoldingsDate && data.oldestHoldingsDate !== data.holdingsAsOfDate ? ` (oldest ${fmtDate(data.oldestHoldingsDate)})` : ''}
+          Fund holdings as at <strong className="text-ink">{data.holdingsAsOfDate ? fmtDate(data.holdingsAsOfDate, currency) : 'not available'}</strong>
+          {data.oldestHoldingsDate && data.oldestHoldingsDate !== data.holdingsAsOfDate ? ` (oldest ${fmtDate(data.oldestHoldingsDate, currency)})` : ''}
         </span>
         {dq && <FreshnessBadge freshness={dq.freshness} />}
         {dq && (

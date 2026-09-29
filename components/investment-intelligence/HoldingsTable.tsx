@@ -203,7 +203,7 @@ export function HoldingsTable() {
                   <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.registrar ?? '—'}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.costValue, h.currencyCode)}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{num(h.unitBalance)}</td>
-                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.navDate ? fmtDate(h.navDate) : '—'}</td>
+                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.navDate ? fmtDate(h.navDate, h.currencyCode) : '—'}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{num(h.nav, 4)}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.marketValue, h.currencyCode)}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.gainLoss, h.currencyCode)}</td>

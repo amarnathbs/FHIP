@@ -301,7 +301,7 @@ function PortfolioSection({
           Portfolio performance — {p.currencyCode}
         </h2>
         <p className="mt-1 text-sm text-muted">
-          {p.schemeCount} {p.schemeCount === 1 ? 'holding' : 'holdings'} · {money(p.totalValue, p.currencyCode)} · {fmtDate(periodStart)} to {fmtDate(asOfDate)}. All
+          {p.schemeCount} {p.schemeCount === 1 ? 'holding' : 'holdings'} · {money(p.totalValue, p.currencyCode)} · {fmtDate(periodStart, p.currencyCode)} to {fmtDate(asOfDate, p.currencyCode)}. All
           figures are shown in {p.currencyCode}, the currency these investments are actually held in.
         </p>
       </header>
@@ -383,7 +383,7 @@ function PerformanceVsBenchmarkChart({ p }: { p: PortfolioBlock }) {
       </p>
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={data}>
-          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} tickFormatter={fmtDate} />
+          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} tickFormatter={(v: string) => fmtDate(v, p.currencyCode)} />
           <YAxis tick={{ fontSize: 11 }} width={50} domain={['auto', 'auto']} />
           <Tooltip formatter={(v: number) => num(v, 1)} />
           <Legend />
@@ -418,7 +418,7 @@ function DrawdownChart({ p }: { p: PortfolioBlock }) {
       </p>
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={data}>
-          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} tickFormatter={fmtDate} />
+          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} tickFormatter={(v: string) => fmtDate(v, p.currencyCode)} />
           <YAxis tick={{ fontSize: 11 }} width={60} tickFormatter={(v: number) => pct(v, 0)} />
           <Tooltip formatter={(v: number) => pct(v)} />
           <Area type="monotone" dataKey="drawdown" stroke={PALETTE.drawdown} fill={PALETTE.drawdown} fillOpacity={0.15} isAnimationActive={false} />
@@ -564,7 +564,7 @@ function CalculationDetails({
         <div>
           <p className="font-medium text-ink">Period and data</p>
           <p>
-            {fmtDate(periodStart)} to {fmtDate(asOfDate)}, using {p.risk.frequency} observations ({p.risk.periodsPerYear} periods per year for annualisation).
+            {fmtDate(periodStart, p.currencyCode)} to {fmtDate(asOfDate, p.currencyCode)}, using {p.risk.frequency} observations ({p.risk.periodsPerYear} periods per year for annualisation).
           </p>
         </div>
         <div>
@@ -655,7 +655,7 @@ function SchemeTable({ schemes }: { schemes: SchemeBlock[] }) {
                         today's live value, and so a genuinely stale scheme
                         is visible even though the portfolio-level date at
                         the top of the page may be more recent. */}
-                    <p className="mt-0.5 text-xs font-normal text-muted">Value as of {fmtDate(s.currentValueDate)}</p>
+                    <p className="mt-0.5 text-xs font-normal text-muted">Value as of {fmtDate(s.currentValueDate, s.currencyCode)}</p>
                     {isOpen && <SchemeDetail s={s} />}
                   </td>
                   <td className="py-3 pr-4 text-muted">{s.currencyCode}</td>

@@ -211,7 +211,7 @@ export function TransactionDetailModal({
                   <tbody>
                     {ledger.rows.map((r) => (
                       <tr key={r.transactionId} className="border-b border-line align-top">
-                        <td className="py-2 pr-3 tabular-nums text-ink">{fmtDate(r.date)}</td>
+                        <td className="py-2 pr-3 tabular-nums text-ink">{fmtDate(r.date, ledger.currencyCode)}</td>
                         <td className="py-2 pr-3 text-ink">
                           {r.description}
                           {r.excludedFromXirr && <span className="ml-1 text-muted">(excluded — {r.status.replace(/_/g, ' ')})</span>}
@@ -233,7 +233,7 @@ export function TransactionDetailModal({
                     ))}
                     {ledger.terminal && (
                       <tr className="border-b border-line bg-gray-50 font-medium">
-                        <td className="py-2 pr-3 tabular-nums text-ink">{fmtDate(ledger.terminal.date)}</td>
+                        <td className="py-2 pr-3 tabular-nums text-ink">{fmtDate(ledger.terminal.date, ledger.currencyCode)}</td>
                         <td className="py-2 pr-3 text-ink">{ledger.terminal.description}</td>
                         <td className="py-2 pr-3 text-right tabular-nums text-ink" colSpan={4} />
                         <td className="py-2 pr-3 text-right tabular-nums text-ink">{money(ledger.terminal.amount, ledger.currencyCode)}</td>

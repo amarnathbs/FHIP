@@ -199,6 +199,16 @@ export function OverviewClient() {
 
   const { portfolio, dataQuality, cards, nextStep: step } = data;
   const hasAnyData = portfolio.positionCount > 0 || dataQuality.documentCount > 0;
+  // The "Valued as at" dates below are portfolio-wide and not tied to any
+  // single row, so there is no one currencyCode to thread through directly
+  // (a future mixed AUD+INR portfolio has no single "right" answer here
+  // without a broader per-user reporting-currency concept). Using the
+  // currency the largest reconstructed value is held in is the closest
+  // available signal, and degrades to fmtDate's own AUD fallback when there
+  // is no position at all.
+  const primaryCurrency = portfolio.valueByCurrency.length
+    ? portfolio.valueByCurrency.reduce((max, c) => (c.totalValue > max.totalValue ? c : max)).currencyCode
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -224,9 +234,9 @@ export function OverviewClient() {
                 label="What you hold"
                 value={portfolio.instrumentClasses.length ? portfolio.instrumentClasses.map((c) => CLASS_LABEL[c] ?? c).join(', ') : '—'}
               />
-              <Stat label="Valued as at" value={portfolio.latestAsOfDate ? fmtDate(portfolio.latestAsOfDate) : 'Not available'} sub={
+              <Stat label="Valued as at" value={portfolio.latestAsOfDate ? fmtDate(portfolio.latestAsOfDate, primaryCurrency) : 'Not available'} sub={
                 portfolio.oldestAsOfDate && portfolio.oldestAsOfDate !== portfolio.latestAsOfDate
-                  ? `oldest position as at ${fmtDate(portfolio.oldestAsOfDate)}`
+                  ? `oldest position as at ${fmtDate(portfolio.oldestAsOfDate, primaryCurrency)}`
                   : undefined
               } />
             </div>
