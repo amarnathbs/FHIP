@@ -26,6 +26,8 @@ import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmar
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
+import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
+import type { IiTransactionType } from './types';
 
 /**
  * Transaction types that represent money leaving the investor (cost).
@@ -116,11 +118,17 @@ export async function loadAnalyticsDataset(
     account_id: string;
     history_completeness: string | null;
     status: string;
+    // Needed to gate the unit-weighted valuation-series reconstruction
+    // (unitWeightedValuation.ts): a position's certified unit ledger is
+    // only trustworthy enough to replay against the daily NAV feed when its
+    // own reconciliation actually confirmed the running balance agrees with
+    // the statement's printed closing units.
+    unit_variance_within_tolerance: boolean | null;
   }
   const truthRows = await fetchAllRows<TruthRow>(() =>
     supabase
       .from('ii_portfolio_truth_status')
-      .select('instrument_id, account_id, history_completeness, status')
+      .select('instrument_id, account_id, history_completeness, status, unit_variance_within_tolerance')
       .eq('user_id', userId)
       .order('id', { ascending: true })
   );
@@ -132,11 +140,12 @@ export async function loadAnalyticsDataset(
     gross_amount: number;
     currency_code: string;
     status: string;
+    units: number | null;
   }
   const txRows = await fetchAllRows<TxRow>(() =>
     supabase
       .from('ii_transactions')
-      .select('instrument_id, transaction_type, transaction_date, gross_amount, currency_code, status')
+      .select('instrument_id, transaction_type, transaction_date, gross_amount, currency_code, status, units')
       .eq('user_id', userId)
       // Secondary order on id: transaction_date alone is not unique across a
       // user's instruments, and an unstable tie-break across page boundaries
@@ -258,6 +267,14 @@ export async function loadAnalyticsDataset(
 
   // ---- Assemble per-scheme datasets -----------------------------------
   const completenessByInstrument = new Map<string, string | null>();
+  // Gate for unitWeightedValuation.ts: a position's unit ledger is only
+  // trustworthy enough to replay against the daily NAV feed when EVERY
+  // truth-status row for that instrument confirms the reconciled running
+  // balance agreed with the statement's printed closing units — the same
+  // "weakest governs" discipline as history_completeness above. Unknown
+  // (null, not yet evaluated) is treated as NOT reliable rather than
+  // assumed fine.
+  const unitLedgerReliableByInstrument = new Map<string, boolean>();
   for (const r of truthRows ?? []) {
     // If a user holds the same instrument in several accounts, the WEAKEST
     // completeness governs — never the most flattering one.
@@ -267,6 +284,10 @@ export async function loadAnalyticsDataset(
       r.instrument_id as string,
       existing === undefined ? next : weakestCompleteness(existing, next)
     );
+
+    const iid = r.instrument_id as string;
+    const reliable = r.unit_variance_within_tolerance === true;
+    unitLedgerReliableByInstrument.set(iid, (unitLedgerReliableByInstrument.get(iid) ?? true) && reliable);
   }
 
   const schemes: SchemeDataset[] = [];
@@ -372,6 +393,33 @@ export async function loadAnalyticsDataset(
       });
     }
 
+    // Production defect found 2026-09-29: valuationSeries above is a single
+    // certified snapshot point in the overwhelming common case (confirmed
+    // live: every row in production's ii_holding_snapshots has exactly one
+    // as_of_date per position), so TWRR/benchmark-blend/drawdown can never
+    // get the start-and-end valuation series they need from it alone, no
+    // matter how deep NAV1's own daily price history goes for the
+    // instrument. Reconstruct a derived valuation series from the position's
+    // own certified unit ledger x the daily NAV feed already loaded above —
+    // but ONLY when that ledger is trustworthy enough to replay: a
+    // since-inception history with a reconciliation that has actually
+    // confirmed the running unit balance agrees with the statement. A
+    // position that does not meet this bar keeps exactly its prior
+    // single-snapshot valuationSeries (unchanged behaviour, no regression).
+    const unitLedgerEligible =
+      completenessByInstrument.get(instrumentId) === 'complete_from_inception' &&
+      (unitLedgerReliableByInstrument.get(instrumentId) ?? false);
+    const reconstructedValuationSeries = unitLedgerEligible
+      ? buildUnitWeightedValuationSeries(
+          txs.map((t) => ({
+            date: toDate(t.transaction_date as string),
+            transactionType: t.transaction_type as IiTransactionType,
+            units: t.units === null ? null : Number(t.units),
+          })),
+          navSeriesForInstrument
+        )
+      : [];
+
     schemes.push({
       instrumentId,
       instrumentName: inst.instrument_name as string,
@@ -387,6 +435,7 @@ export async function loadAnalyticsDataset(
       currentValueDate,
       navSeries: navSeriesForInstrument,
       valuationSeries,
+      reconstructedValuationSeries,
     });
   }
 
