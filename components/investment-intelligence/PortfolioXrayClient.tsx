@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie } from 'recharts';
 import { fmtDate } from './dateDisplay';
+import { buildAmcPieSlices } from './amcConcentrationChart';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
@@ -22,6 +23,11 @@ import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 // and nothing suggests buying, selling, or switching a fund.
 
 const SECTOR_COLOURS = ['#2563EB', '#0F766E', '#B45309', '#7C3AED', '#BE123C', '#0369A1', '#4D7C0F', '#A21CAF', '#C2410C', '#475569'];
+// Neutral slate tone for a grouped "Other" slice -- deliberately outside the
+// categorical SECTOR_COLOURS ramp so an aggregate bucket never reads as a
+// distinguished category of its own, matching this file's existing use of
+// slate tones for neutral/non-classified states (e.g. OverlapPanel's shade()).
+const AMC_OTHER_COLOUR = '#94A3B8';
 
 interface Bucket {
   key: string;
@@ -408,16 +414,58 @@ export function PortfolioXrayClient() {
           <section className="rounded-lg border border-slate-200 bg-white p-5">
             <h2 className="text-base font-semibold text-ink">Fund house concentration</h2>
             {data.amcConcentration?.status === 'ok' ? (
-              <ul className="mt-3 space-y-1 text-sm">
-                {data.amcConcentration.buckets.map((b) => (
-                  <li key={b.amcId} className="flex justify-between">
-                    <span className="text-slate-700">
-                      {b.amcName} <span className="text-xs text-muted">({b.schemeCount} scheme{b.schemeCount === 1 ? '' : 's'})</span>
-                    </span>
-                    <span className="font-medium text-ink">{fmtPct(b.weight)}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-3 grid gap-6 lg:grid-cols-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-ink">By weight</h3>
+                  {(() => {
+                    const slices = buildAmcPieSlices(data.amcConcentration.buckets);
+                    return (
+                      <>
+                        <div className="mt-2 h-56 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={slices} dataKey="weight" nameKey="name" cx="50%" cy="50%" outerRadius={80} isAnimationActive={false}>
+                                {slices.map((s, i) => (
+                                  <Cell key={s.key} fill={s.isOther ? AMC_OTHER_COLOUR : SECTOR_COLOURS[i % SECTOR_COLOURS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(v: number) => fmtPct(v)} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <ul className="mt-2 space-y-1 text-xs">
+                          {slices.map((s, i) => (
+                            <li key={s.key} className="flex items-center justify-between gap-2">
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                <span
+                                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: s.isOther ? AMC_OTHER_COLOUR : SECTOR_COLOURS[i % SECTOR_COLOURS.length] }}
+                                  aria-hidden="true"
+                                />
+                                <span className="truncate text-slate-700" title={s.name}>{s.name}</span>
+                              </span>
+                              <span className="shrink-0 font-medium text-ink">{fmtPct(s.weight)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    );
+                  })()}
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-ink">All fund houses</h3>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {data.amcConcentration.buckets.map((b) => (
+                      <li key={b.amcId} className="flex justify-between">
+                        <span className="text-slate-700">
+                          {b.amcName} <span className="text-xs text-muted">({b.schemeCount} scheme{b.schemeCount === 1 ? '' : 's'})</span>
+                        </span>
+                        <span className="font-medium text-ink">{fmtPct(b.weight)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             ) : (
               <div className="mt-3">
                 <DataUnavailable title="Fund house concentration is not available" detail={data.amcConcentration?.detail} />
