@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { fmtDate } from './dateDisplay';
 import { TransactionDetailModal } from './TransactionDetailModal';
 
@@ -50,6 +51,11 @@ interface HoldingRowView {
   xirr: XirrOutcomeView;
   currencyCode: string;
   dataQuality: DataQuality;
+  // 2026-09-29 fix (resolution-guidance links): see holdingsRepository.ts's
+  // matching field comment. Used below to link an 'unresolved' row straight
+  // to the statement that can actually be resolved, instead of leaving the
+  // badge's tooltip as the only information the user gets.
+  sourceDocumentId: string | null;
 }
 
 interface HoldingsApiPayload {
@@ -215,6 +221,28 @@ export function HoldingsTable() {
                     <span className={`inline-block rounded border px-2 py-0.5 text-xs font-medium ${badge.className}`} title={h.dataQuality.detail ?? undefined}>
                       {badge.label}
                     </span>
+                    {/* 2026-09-29 fix (resolution-guidance links): 'unresolved'
+                        previously had no path forward at all — the row click
+                        only opens a read-only ledger, and the badge's tooltip
+                        just repeats the same sentence. The reconciliation
+                        case for this scheme lives against its source
+                        statement, which already has real Resolve/Assign/
+                        Re-evaluate actions (Statements & data) — linked
+                        directly here rather than leaving the person to find
+                        that statement themselves. Not shown for
+                        'ai_corrected': that status is already a resolved
+                        outcome, informational only. stopPropagation so the
+                        link navigates instead of also opening the row's
+                        ledger modal underneath it. */}
+                    {h.dataQuality.status === 'unresolved' && h.sourceDocumentId && (
+                      <Link
+                        href={`/investment-intelligence/data?documentId=${encodeURIComponent(h.sourceDocumentId)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 block text-xs font-medium text-primary hover:underline"
+                      >
+                        Resolve on statement
+                      </Link>
+                    )}
                   </td>
                 </tr>
               );

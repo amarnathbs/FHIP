@@ -298,7 +298,23 @@ export function ReviewCentreClient() {
                     Source: {item.source_module.replace(/_/g, ' ')} · as of {item.as_of_date}
                   </p>
                   {statusFilter === 'open' && sourceDocumentId && !isOwnerAssignableAccount && !isDiscardableDocument && (
-                    <Link href="/investment-intelligence/data" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
+                    // 2026-09-29 fix (resolution-guidance links): this used to
+                    // link to the generic, unscoped Statements & data list,
+                    // leaving the person to find the right statement among
+                    // however many they have uploaded themselves -- exactly
+                    // the "here's a number, go hunt for where to fix it"
+                    // pattern the rest of this fix removes elsewhere.
+                    // `?documentId=` (read server-side by that page, see its
+                    // own 2026-09-29 comment) opens the correct statement's
+                    // detail panel directly, scrolled into view. Still gated
+                    // on !isDiscardableDocument (2026-09-29, real resolution
+                    // actions fix) -- that case gets its own dedicated
+                    // Discard action below instead of this generic link.
+                    <Link
+                      href={`/investment-intelligence/data?documentId=${encodeURIComponent(sourceDocumentId)}`}
+                      className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
+                    >
+
                       Review statement
                     </Link>
                   )}

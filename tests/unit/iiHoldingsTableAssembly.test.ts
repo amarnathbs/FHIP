@@ -77,6 +77,10 @@ describe('loadHoldingsTable', () => {
     expect(h.returnPct).toBeCloseTo(0.5, 6);
     expect(h.dataQuality.status).toBe('ok');
     expect(h.xirr.status).toBe('CALCULATED');
+    // 2026-09-29 fix (resolution-guidance links): carried through so the
+    // client can deep-link back to the statement that produced this
+    // position — see HoldingsTable.tsx's "Resolve on statement" link.
+    expect(h.sourceDocumentId).toBe('doc-1');
   });
 
   it('withholds numeric figures and shows an "unresolved" data-quality badge for a scheme that fails reconciliation, with the AI-fallback flag left at its default (disabled)', async () => {
@@ -141,6 +145,12 @@ describe('loadHoldingsTable', () => {
     expect(h.gainLoss).toBeNull();
     expect(h.returnPct).toBeNull();
     expect(h.xirr.status).not.toBe('CALCULATED');
+    // 2026-09-29 fix (resolution-guidance links): this is precisely the case
+    // that previously had no resolution path from this table at all — the
+    // source document id must survive so HoldingsTable.tsx can link the
+    // "unresolved" badge straight to the statement's own Resolve/Assign
+    // actions instead of leaving only a hover tooltip.
+    expect(h.sourceDocumentId).toBe('doc-2');
   });
 
   it('uses the PC6 scheme-master canonical name over the RTA-parsed name when a current scheme-master row exists (2026-09-20)', async () => {
