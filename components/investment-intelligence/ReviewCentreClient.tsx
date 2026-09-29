@@ -55,6 +55,21 @@ export function ReviewCentreClient() {
   const [selectedMemberByItem, setSelectedMemberByItem] = useState<Record<string, string>>({});
   const [assigningItemId, setAssigningItemId] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<Record<string, string>>({});
+  // 2026-09-29 "more resolution actions" audit: production data (read-only
+  // check, twwpnltizhtjxhamyoxt) showed 'unsupported_document'/
+  // 'document_corrupt'/'parse_incomplete' as the next-highest-value real gap
+  // after owner_unmatched/owner_mismatch (3 open unsupported_document cases
+  // at the time of the audit) -- all three are documents that failed BEFORE
+  // any account/transaction was ever created for them (see
+  // documentProcessing.ts) and can never succeed on a retry of the same
+  // uploaded bytes. "Acknowledge" never told the user that, or that
+  // re-uploading a corrected file is the only way forward -- see
+  // /api/investment-intelligence/source-documents/[id]/discard's header for
+  // the full rationale, including why ambiguous_instrument and the
+  // cross_source_* types were checked and found to have ZERO occurrences
+  // ever in production, and so were not given a bespoke action here.
+  const [discardingItemId, setDiscardingItemId] = useState<string | null>(null);
+  const [discardError, setDiscardError] = useState<Record<string, string>>({});
 
   const load = useCallback(async (status: string) => {
     setLoading(true);
@@ -150,6 +165,31 @@ export function ReviewCentreClient() {
     }
   }
 
+  async function discardDocument(itemId: string, sourceDocumentId: string) {
+    if (!window.confirm('This document could not be processed and has no automatic retry path. Discard it? You can re-upload a corrected file afterwards.')) return;
+    setDiscardingItemId(itemId);
+    setDiscardError((prev) => ({ ...prev, [itemId]: '' }));
+    try {
+      const res = await fetch(`/api/investment-intelligence/source-documents/${encodeURIComponent(sourceDocumentId)}/discard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not discard that document.');
+      // Same reason assignOwner() above hits /review/refresh before reloading
+      // -- ii_review_items is a materialised snapshot of ii_reconciliation_cases,
+      // not the same table, so resolving the case does not by itself remove
+      // this item from an already-computed "open" list.
+      await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
+      await load(statusFilter);
+    } catch (e) {
+      setDiscardError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not discard that document.' }));
+    } finally {
+      setDiscardingItemId(null);
+    }
+  }
+
   const bySeverity = [...items].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
   const counts = items.reduce<Record<string, number>>((acc, i) => ({ ...acc, [i.severity]: (acc[i.severity] ?? 0) + 1 }), {});
 
@@ -220,6 +260,20 @@ export function ReviewCentreClient() {
           // comment for why one endpoint now resolves both case types.
           const isOwnerAssignableAccount = (discrepancyType === 'owner_unmatched' || discrepancyType === 'owner_mismatch') && subjectType === 'account' && !!subjectId;
           const isJointHoldingAccount = discrepancyType === 'joint_holding_allocation_required' && subjectType === 'account';
+          // 2026-09-29: 'document_password_required' already has a real,
+          // working, auto-resolving fix -- InvestmentIntelligenceClient.tsx's
+          // "Submit password & process" flow on the Data tab (found live: a
+          // successful reparse already auto-resolves this exact case via
+          // documentProcessing.ts's 'auto_resolved_on_reparse' path). The gap
+          // was never a missing mechanism, only that this screen never told
+          // the user it existed -- so this is guidance to the existing flow,
+          // not a new one.
+          const isPasswordRequiredDocument = discrepancyType === 'document_password_required' && !!sourceDocumentId;
+          // These three are permanently dead ends for the uploaded file (see
+          // the discard route's header) -- a genuine "Discard" action is
+          // offered instead of the generic Acknowledge/Dismiss, which never
+          // touched the document's own status or told the user to re-upload.
+          const isDiscardableDocument = (discrepancyType === 'unsupported_document' || discrepancyType === 'document_corrupt' || discrepancyType === 'parse_incomplete') && !!sourceDocumentId;
           // A genuine resolver now exists for owner_unmatched/owner_mismatch
           // accounts and nothing else; joint holdings are DETECTED (K.6) but
           // deliberately not offered a one-owner "fix" here, because forcing
@@ -243,10 +297,34 @@ export function ReviewCentreClient() {
                   <p className="mt-2 text-xs text-muted">
                     Source: {item.source_module.replace(/_/g, ' ')} · as of {item.as_of_date}
                   </p>
-                  {statusFilter === 'open' && sourceDocumentId && !isOwnerAssignableAccount && (
+                  {statusFilter === 'open' && sourceDocumentId && !isOwnerAssignableAccount && !isDiscardableDocument && (
                     <Link href="/investment-intelligence/data" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
                       Review statement
                     </Link>
+                  )}
+                  {statusFilter === 'open' && isPasswordRequiredDocument && (
+                    <p className="mt-2 text-xs text-amber-800">
+                      This statement is password-protected. Open it from Statements &amp; data above, enter the password and click &quot;Submit password &amp; process&quot; —
+                      this issue clears automatically once the document opens successfully.
+                    </p>
+                  )}
+                  {statusFilter === 'open' && isDiscardableDocument && (
+                    <div className="mt-2 flex flex-col items-start gap-2">
+                      <p className="text-xs text-amber-800">
+                        {discrepancyType === 'unsupported_document' && 'This file’s format could not be identified and it cannot be processed as uploaded.'}
+                        {discrepancyType === 'document_corrupt' && 'This file could not be read (it may be corrupted) and cannot be processed as uploaded.'}
+                        {discrepancyType === 'parse_incomplete' && 'This statement could not be fully read and cannot be processed as uploaded.'}
+                        {' '}Re-uploading the same file will fail again the same way — discard it, then upload a corrected file from Statements &amp; data if you have one.
+                      </p>
+                      <button
+                        onClick={() => discardDocument(item.id, sourceDocumentId as string)}
+                        disabled={discardingItemId === item.id}
+                        className="rounded-md border px-2 py-1 text-xs font-medium text-red-700 disabled:opacity-50"
+                      >
+                        {discardingItemId === item.id ? 'Discarding…' : 'Discard this document'}
+                      </button>
+                      {discardError[item.id] && <p className="text-xs text-red-600">{discardError[item.id]}</p>}
+                    </div>
                   )}
                   {statusFilter === 'open' && isJointHoldingAccount && (
                     <p className="mt-2 text-xs text-amber-800">
