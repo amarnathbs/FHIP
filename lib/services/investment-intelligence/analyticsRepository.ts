@@ -314,9 +314,35 @@ export async function loadAnalyticsDataset(
     }
 
     const valuationSeries: SeriesPoint[] = snaps.map((s) => ({ date: toDate(s.as_of_date as string), value: Number(s.value) }));
+    // `snaps` is a filtered subset of snapRows, which was queried ordered
+    // ascending by as_of_date (then id) — filtering preserves that order, so
+    // the last element is this instrument's latest certified snapshot.
+    const latestSnap = snaps.length ? snaps[snaps.length - 1] : undefined;
     const latest = valuationSeries.length ? valuationSeries[valuationSeries.length - 1] : undefined;
-    const currentValue = latest?.value ?? 0;
-    const currentValueDate = latest?.date ?? asOfDate;
+
+    let currentValue = latest?.value ?? 0;
+    let currentValueDate = latest?.date ?? asOfDate;
+
+    // Mark-to-market against the daily NAV feed (NAV1 / pc6_selective
+    // historical hydration writes ii_prices_nav every day). A certified
+    // statement snapshot only captures value as of the investor's last
+    // upload, so left alone `currentValue`/`currentValueDate` stay frozen at
+    // that stale statement date even while the platform's own daily price
+    // job has since moved on — the production bug reported on the
+    // Performance tab. `navByInstrument`'s per-instrument list is a
+    // subsequence of navRows, which was queried ordered ascending by
+    // price_date (then id), so its last element is this instrument's latest
+    // NAV point. When that NAV point postdates the latest snapshot, mark the
+    // position to market: current value becomes (units held as of that
+    // latest snapshot) x (that later NAV price), dated to the NAV point.
+    // When there is no later NAV price, or no snapshot at all, behaviour is
+    // unchanged from before this fix.
+    const navSeriesForInstrument = navByInstrument.get(instrumentId) ?? [];
+    const latestNav = navSeriesForInstrument.length ? navSeriesForInstrument[navSeriesForInstrument.length - 1] : undefined;
+    if (latestSnap && latest && latestNav && latestNav.date.getTime() > latest.date.getTime()) {
+      currentValue = Number(latestSnap.units) * latestNav.value;
+      currentValueDate = latestNav.date;
+    }
 
     // Terminal synthetic flow: the position's current value, positive.
     // Needed by both scheme-level and portfolio-level calculations, so it
@@ -359,7 +385,7 @@ export async function loadAnalyticsDataset(
       externalCashFlowsExcludingTerminal,
       currentValue,
       currentValueDate,
-      navSeries: navByInstrument.get(instrumentId) ?? [],
+      navSeries: navSeriesForInstrument,
       valuationSeries,
     });
   }
