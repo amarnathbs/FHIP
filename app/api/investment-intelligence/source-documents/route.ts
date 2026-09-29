@@ -6,6 +6,7 @@ import { validateUploadedFile, generateObjectKey, uploadSourceDocumentObject } f
 import { scanUploadedPdfForAdmission, uploadAdmissionFailureMessage } from '@/lib/services/investment-intelligence/uploadAdmission';
 import { createHash } from 'crypto';
 import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from '@/lib/services/investment-intelligence/realScanAdmission';
+import { computeSourceDocumentCounts, EMPTY_SOURCE_DOCUMENT_COUNTS, type SourceDocumentCounts } from '@/lib/services/investment-intelligence/sourceDocumentEnrichment';
 
 // Real upload path: multipart form-data with a "file" part and a "meta"
 // JSON part. Service-role storage write happens only AFTER an
@@ -30,37 +31,38 @@ export async function GET() {
   // positions, not a scan of anything cross-tenant), the same discipline
   // reviewCentreData.ts already uses for its own per-user aggregates.
   const docIds = documents.map((d) => d.id as string);
-  const openCaseCountByDoc = new Map<string, number>();
-  const needsAttentionByDoc = new Map<string, number>();
+  let countsByDoc = new Map<string, SourceDocumentCounts>();
   if (docIds.length > 0) {
     const [{ data: openCases }, { data: holdings }, { data: truthStatuses }] = await Promise.all([
       supabase.from('ii_reconciliation_cases').select('source_document_id').eq('user_id', user.id).in('status', ['open', 'user_reviewing']).in('source_document_id', docIds),
-      supabase.from('ii_holding_snapshots').select('source_document_id, account_id, instrument_id').eq('user_id', user.id).in('source_document_id', docIds),
+      supabase.from('ii_holding_snapshots').select('id, source_document_id, account_id, instrument_id').eq('user_id', user.id).in('source_document_id', docIds),
       supabase.from('ii_portfolio_truth_status').select('account_id, instrument_id, status').eq('user_id', user.id),
     ]);
-    for (const c of openCases ?? []) {
-      const docId = c.source_document_id as string | null;
-      if (!docId) continue;
-      openCaseCountByDoc.set(docId, (openCaseCountByDoc.get(docId) ?? 0) + 1);
-    }
-    const statusByPosition = new Map((truthStatuses ?? []).map((t) => [`${t.account_id as string}:${t.instrument_id as string}`, t.status as string]));
-    const OK_STATUSES = new Set(['certified', 'certified_with_warnings']);
-    for (const h of holdings ?? []) {
-      const docId = h.source_document_id as string | null;
-      if (!docId) continue;
-      const status = statusByPosition.get(`${h.account_id as string}:${h.instrument_id as string}`);
-      // No truth-status row at all (never evaluated) counts as needing
-      // attention too — that is not the same as "certified".
-      if (!status || !OK_STATUSES.has(status)) {
-        needsAttentionByDoc.set(docId, (needsAttentionByDoc.get(docId) ?? 0) + 1);
-      }
-    }
+
+    // "Previously processed" grouping (Statements & data list, 2026-09-29 fix):
+    // certified alone does not mean published — a position can sit fully
+    // certified for weeks waiting on the user's explicit Publish click (R3,
+    // spec sections 41-42). A document only counts as genuinely finished once
+    // EVERY holding it produced has an active `ii_fhip_publications` row,
+    // checked directly off `canonical_position_id` (== ii_holding_snapshots.id,
+    // enforced unique) rather than re-deriving it from account/instrument —
+    // that FK is the actual publish record, not an inference.
+    const holdingIds = (holdings ?? []).map((h) => h.id as string);
+    const { data: publications } = holdingIds.length
+      ? await supabase.from('ii_fhip_publications').select('canonical_position_id, status').eq('user_id', user.id).eq('status', 'published').in('canonical_position_id', holdingIds)
+      : { data: [] as { canonical_position_id: string; status: string }[] };
+
+    countsByDoc = computeSourceDocumentCounts({
+      openCases: (openCases ?? []) as { source_document_id: string | null }[],
+      holdings: (holdings ?? []) as { id: string; source_document_id: string | null; account_id: string; instrument_id: string }[],
+      truthStatuses: (truthStatuses ?? []) as { account_id: string; instrument_id: string; status: string }[],
+      publications: (publications ?? []) as { canonical_position_id: string; status: string }[],
+    });
   }
 
   const enriched = documents.map((d) => ({
     ...d,
-    openReconciliationCaseCount: openCaseCountByDoc.get(d.id as string) ?? 0,
-    positionsNeedingAttentionCount: needsAttentionByDoc.get(d.id as string) ?? 0,
+    ...(countsByDoc.get(d.id as string) ?? EMPTY_SOURCE_DOCUMENT_COUNTS),
   }));
   return ok(enriched);
 }

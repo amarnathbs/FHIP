@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { fmtDate } from './dateDisplay';
 import { AiExtractionReviewPanel } from './AiExtractionReviewPanel';
 import { formatMoneyCode } from '@/lib/engines/money';
+import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -25,6 +26,13 @@ interface SourceDocument {
   // "needs attention" signal without an extra click.
   openReconciliationCaseCount?: number;
   positionsNeedingAttentionCount?: number;
+  // 2026-09-29 fix: how many holdings this document produced, and how many
+  // of those are actively published to FHIP (ii_fhip_publications.status =
+  // 'published', keyed off the real canonical_position_id FK — not
+  // inferred). Used to decide "Previously processed" grouping below;
+  // "certified" alone is not "done" — the user still had to click Publish.
+  totalHoldingsCount?: number;
+  publishedHoldingsCount?: number;
 }
 
 interface ReconciliationCase {
@@ -166,6 +174,10 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[status] ?? 'bg-gray-100 text-gray-700'}`}>{STATUS_LABEL[status] ?? status}</span>;
 }
 
+// See lib/investment-intelligence/sourceDocumentGrouping.ts for the exact
+// "genuinely done" condition and why it is extracted as a pure, separately
+// unit-tested function rather than kept inline here.
+
 export function InvestmentIntelligenceClient() {
   const [documents, setDocuments] = useState<SourceDocument[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +190,11 @@ export function InvestmentIntelligenceClient() {
   // Surfaced as a notice, not an error: nothing failed.
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 2026-09-29 fix: "Previously processed" section (see isFullyProcessed
+  // above) — collapsed by default, same show/hide convention as the
+  // Investments tab's "import history" (components/investments/
+  // ImportedInvestmentStatements.tsx), rather than inventing a new pattern.
+  const [showProcessed, setShowProcessed] = useState(false);
   const [summary, setSummary] = useState<DocumentSummary | null>(null);
   const [passwordInputs, setPasswordInputs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
@@ -572,6 +589,114 @@ export function InvestmentIntelligenceClient() {
     }
   }
 
+  // Plain helper, not a nested component: called directly as
+  // renderDocumentRow(doc) below rather than used as a JSX element type, so
+  // it carries no separate component identity across renders — extracting
+  // it as an actual component would remount this row's own password
+  // <input> (and drop its focus) on every keystroke, since typing into it
+  // sets state on this very component.
+  function renderDocumentRow(doc: SourceDocument) {
+    return (
+      <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+        <button className="text-left text-sm font-medium text-gray-900 hover:underline" onClick={() => selectDocument(doc.id)}>
+          {doc.original_filename}
+        </button>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={doc.status} />
+          {/* 2026-09-28 fix: a top-level "needs attention" signal, so a
+              person can tell something is wrong with THIS statement
+              without clicking in first. Two independent counts,
+              because they mean different things: an open exception
+              (something to decide) vs. a position that is not yet
+              certified/published (something to finish). */}
+          {!!doc.openReconciliationCaseCount && (
+            <button
+              onClick={() => selectDocument(doc.id)}
+              className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 hover:bg-red-200"
+              title="Open reconciliation issues on this statement"
+            >
+              {doc.openReconciliationCaseCount} issue{doc.openReconciliationCaseCount === 1 ? '' : 's'}
+            </button>
+          )}
+          {!doc.openReconciliationCaseCount && !!doc.positionsNeedingAttentionCount && (
+            <button
+              onClick={() => selectDocument(doc.id)}
+              className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
+              title="Positions from this statement are not yet certified or published"
+            >
+              {doc.positionsNeedingAttentionCount} position{doc.positionsNeedingAttentionCount === 1 ? '' : 's'} need attention
+            </button>
+          )}
+          {/* The password box is shown for 'parsed' documents too (not just
+              'password_required') so Reprocess can carry a password for an
+              encrypted file. Before this, Reprocess always called
+              handleProcess(id, true) with no way to supply one -- for any
+              password-protected document that had already succeeded once,
+              clicking Reprocess was GUARANTEED to fail immediately (no
+              password sent), which then corrupted the document's own
+              status via handleExtractionFailure (see documentProcessing.ts
+              for the full incident writeup) even though the earlier
+              successful extraction's data was untouched in the database.
+              Left blank, it behaves exactly as before for a document that
+              was never password-protected. */}
+          {(doc.status === 'password_required' || doc.status === 'parsed') && (
+            <input
+              type="password"
+              placeholder="Document password"
+              value={passwordInputs[doc.id] ?? ''}
+              onChange={(e) => setPasswordInputs((prev) => ({ ...prev, [doc.id]: e.target.value }))}
+              className="rounded border border-gray-300 px-2 py-1 text-xs"
+            />
+          )}
+          {doc.status === 'ai_review_pending' && (
+            <button
+              onClick={() => handleProcess(doc.id)}
+              disabled={processing === doc.id}
+              className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200 disabled:opacity-50"
+            >
+              {processing === doc.id ? 'Loading…' : 'Review AI-extracted data'}
+            </button>
+          )}
+          {doc.status !== 'parsed' && doc.status !== 'archived' && doc.status !== 'superseded' && doc.status !== 'ai_review_pending' && (
+            <button
+              onClick={() => handleProcess(doc.id)}
+              disabled={processing === doc.id}
+              className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+            >
+              {processing === doc.id ? 'Processing…' : doc.status === 'password_required' ? 'Submit password & process' : 'Process'}
+            </button>
+          )}
+          {doc.status === 'parsed' && (
+            <button
+              onClick={() => {
+                // A document that already succeeded is, by design, meant to
+                // be processed once -- Reprocess is for the rare deliberate
+                // case (a parser fix ships, or something looks wrong), not
+                // a casual click. This confirmation is the guard against
+                // exactly the accidental click that caused the 2026-09-06
+                // incident, now that the password box above also makes a
+                // genuine reprocess of a protected file actually work.
+                if (window.confirm('This statement has already been processed successfully. Reprocess it anyway?')) {
+                  handleProcess(doc.id, true);
+                }
+              }}
+              disabled={processing === doc.id}
+              className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+            >
+              {processing === doc.id ? 'Processing…' : 'Reprocess'}
+            </button>
+          )}
+        </div>
+      </li>
+    );
+  }
+
+  // 2026-09-29 fix: see lib/investment-intelligence/sourceDocumentGrouping.ts
+  // for the exact condition. Computed fresh each render off `documents` —
+  // cheap (a handful of documents per user) and always consistent with what
+  // was just fetched, rather than tracked as separate state that could drift.
+  const { active: activeDocuments, previouslyProcessed: previouslyProcessedDocuments } = partitionSourceDocumentsByProcessedState(documents ?? []);
+
   return (
     <div className="space-y-6">
       {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
@@ -643,104 +768,33 @@ export function InvestmentIntelligenceClient() {
           <p className="mt-2 text-sm text-gray-500">Loading…</p>
         ) : documents.length === 0 ? (
           <p className="mt-2 text-sm text-gray-500">No statements uploaded yet.</p>
+        ) : activeDocuments.length === 0 ? (
+          <p className="mt-2 text-sm text-gray-500">
+            Nothing needs your attention right now — every statement you&apos;ve uploaded has been processed and published. See &ldquo;Previously
+            processed&rdquo; below.
+          </p>
         ) : (
-          <ul className="mt-3 divide-y divide-gray-100">
-            {documents.map((doc) => (
-              <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <button className="text-left text-sm font-medium text-gray-900 hover:underline" onClick={() => selectDocument(doc.id)}>
-                  {doc.original_filename}
-                </button>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={doc.status} />
-                  {/* 2026-09-28 fix: a top-level "needs attention" signal, so a
-                      person can tell something is wrong with THIS statement
-                      without clicking in first. Two independent counts,
-                      because they mean different things: an open exception
-                      (something to decide) vs. a position that is not yet
-                      certified/published (something to finish). */}
-                  {!!doc.openReconciliationCaseCount && (
-                    <button
-                      onClick={() => selectDocument(doc.id)}
-                      className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 hover:bg-red-200"
-                      title="Open reconciliation issues on this statement"
-                    >
-                      {doc.openReconciliationCaseCount} issue{doc.openReconciliationCaseCount === 1 ? '' : 's'}
-                    </button>
-                  )}
-                  {!doc.openReconciliationCaseCount && !!doc.positionsNeedingAttentionCount && (
-                    <button
-                      onClick={() => selectDocument(doc.id)}
-                      className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
-                      title="Positions from this statement are not yet certified or published"
-                    >
-                      {doc.positionsNeedingAttentionCount} position{doc.positionsNeedingAttentionCount === 1 ? '' : 's'} need attention
-                    </button>
-                  )}
-                  {/* The password box is shown for 'parsed' documents too (not just
-                      'password_required') so Reprocess can carry a password for an
-                      encrypted file. Before this, Reprocess always called
-                      handleProcess(id, true) with no way to supply one -- for any
-                      password-protected document that had already succeeded once,
-                      clicking Reprocess was GUARANTEED to fail immediately (no
-                      password sent), which then corrupted the document's own
-                      status via handleExtractionFailure (see documentProcessing.ts
-                      for the full incident writeup) even though the earlier
-                      successful extraction's data was untouched in the database.
-                      Left blank, it behaves exactly as before for a document that
-                      was never password-protected. */}
-                  {(doc.status === 'password_required' || doc.status === 'parsed') && (
-                    <input
-                      type="password"
-                      placeholder="Document password"
-                      value={passwordInputs[doc.id] ?? ''}
-                      onChange={(e) => setPasswordInputs((prev) => ({ ...prev, [doc.id]: e.target.value }))}
-                      className="rounded border border-gray-300 px-2 py-1 text-xs"
-                    />
-                  )}
-                  {doc.status === 'ai_review_pending' && (
-                    <button
-                      onClick={() => handleProcess(doc.id)}
-                      disabled={processing === doc.id}
-                      className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200 disabled:opacity-50"
-                    >
-                      {processing === doc.id ? 'Loading…' : 'Review AI-extracted data'}
-                    </button>
-                  )}
-                  {doc.status !== 'parsed' && doc.status !== 'archived' && doc.status !== 'superseded' && doc.status !== 'ai_review_pending' && (
-                    <button
-                      onClick={() => handleProcess(doc.id)}
-                      disabled={processing === doc.id}
-                      className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                    >
-                      {processing === doc.id ? 'Processing…' : doc.status === 'password_required' ? 'Submit password & process' : 'Process'}
-                    </button>
-                  )}
-                  {doc.status === 'parsed' && (
-                    <button
-                      onClick={() => {
-                        // A document that already succeeded is, by design, meant to
-                        // be processed once -- Reprocess is for the rare deliberate
-                        // case (a parser fix ships, or something looks wrong), not
-                        // a casual click. This confirmation is the guard against
-                        // exactly the accidental click that caused the 2026-09-06
-                        // incident, now that the password box above also makes a
-                        // genuine reprocess of a protected file actually work.
-                        if (window.confirm('This statement has already been processed successfully. Reprocess it anyway?')) {
-                          handleProcess(doc.id, true);
-                        }
-                      }}
-                      disabled={processing === doc.id}
-                      className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                    >
-                      {processing === doc.id ? 'Processing…' : 'Reprocess'}
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <ul className="mt-3 divide-y divide-gray-100">{activeDocuments.map((doc) => renderDocumentRow(doc))}</ul>
         )}
       </section>
+
+      {/* 2026-09-29 fix: a fully processed, certified-and-published statement
+          used to stay in the list above forever, competing for attention
+          with anything still actionable. Moved here instead of deleted or
+          hidden with no way back — the row, its detail panel, and its full
+          audit trail all still work exactly as before, on request. Same
+          collapsed-by-default show/hide convention as the Investments tab's
+          "import history" (components/investments/ImportedInvestmentStatements.tsx). */}
+      {previouslyProcessedDocuments.length > 0 && (
+        <section className="rounded-lg border border-gray-200 bg-white p-4">
+          <button type="button" aria-expanded={showProcessed} onClick={() => setShowProcessed((v) => !v)} className="text-sm text-gray-700 underline">
+            {showProcessed ? 'Hide' : 'Show'} previously processed statements ({previouslyProcessedDocuments.length})
+          </button>
+          {showProcessed && (
+            <ul className="mt-3 divide-y divide-gray-100 opacity-75">{previouslyProcessedDocuments.map((doc) => renderDocumentRow(doc))}</ul>
+          )}
+        </section>
+      )}
 
       {/* Detail panel: steps 3-8 */}
       {selectedId && (
