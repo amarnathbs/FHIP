@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { fmtDate, fmtDateTime } from './dateDisplay';
 
 // 2026-09-28 owner-exception unification, item 4 of the Product Owner's
 // decision: the "Resolutions" tab becomes a HISTORY + AMENDMENT view, not
@@ -34,6 +35,7 @@ interface ResolutionItem {
   maskedHolderName: string | null;
   outcomeKind: string | null;
   reason: string | null;
+  accountCurrencyCode: string | null;
 }
 
 interface HouseholdMemberOption {
@@ -150,8 +152,8 @@ export function ResolutionHistoryClient() {
                   {item.previousOwnerName ? <> — previously {item.previousOwnerName}</> : null}
                 </p>
                 <p className="mt-2 text-xs text-muted">
-                  {item.status === 'resolved' ? 'Resolved' : 'Dismissed'} {item.resolvedAt ? new Date(item.resolvedAt).toLocaleString() : ''} · opened{' '}
-                  {new Date(item.openedAt).toLocaleDateString()}
+                  {item.status === 'resolved' ? 'Resolved' : 'Dismissed'} {item.resolvedAt ? fmtDateTime(item.resolvedAt, item.accountCurrencyCode) : ''} · opened{' '}
+                  {fmtDate(item.openedAt, item.accountCurrencyCode)}
                   {item.resolvedByActorType ? ` · by ${item.resolvedByActorType}` : ''}
                 </p>
 

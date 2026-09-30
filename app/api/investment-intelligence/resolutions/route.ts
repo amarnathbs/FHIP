@@ -66,8 +66,10 @@ export async function GET(req: Request) {
       ? admin.from('household_members').select('id, full_name').eq('user_id', user.id).in('id', [...memberIds])
       : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
     accountIds.size > 0
-      ? admin.from('ii_accounts').select('id, folio_number, institution_name, account_number_masked').eq('user_id', user.id).in('id', [...accountIds])
-      : Promise.resolve({ data: [] as { id: string; folio_number: string | null; institution_name: string; account_number_masked: string | null }[] }),
+      ? admin.from('ii_accounts').select('id, folio_number, institution_name, account_number_masked, currency_code').eq('user_id', user.id).in('id', [...accountIds])
+      : Promise.resolve({
+          data: [] as { id: string; folio_number: string | null; institution_name: string; account_number_masked: string | null; currency_code: string }[],
+        }),
   ]);
   const memberNameById = new Map((memberRows ?? []).map((m) => [m.id as string, m.full_name as string]));
   const accountById = new Map((accountRows ?? []).map((a) => [a.id as string, a]));
@@ -100,6 +102,15 @@ export async function GET(req: Request) {
       resolvedByActorType: c.resolved_by_actor_type,
       sourceDocumentId: c.source_document_id,
       accountLabel: account ? (account.folio_number ?? account.account_number_masked ?? '(no folio number)') + ' · ' + account.institution_name : null,
+      // 2026-09-30: the account's own currency, threaded through the same
+      // way every other Investment Intelligence component sources its
+      // date-formatting currency (see dateDisplay.ts) -- ResolutionHistoryClient
+      // uses this for fmtDate()/fmtDateTime() instead of the browser's default
+      // locale format. Only ever set for subject_type='account' cases, which
+      // is every amendable case and the large majority of this history view;
+      // fmtDate()/fmtDateTime() fall back to AUD when it's null, same as
+      // every other caller with no currency context.
+      accountCurrencyCode: account?.currency_code ?? null,
       amendable: (c.discrepancy_type === 'owner_unmatched' || c.discrepancy_type === 'owner_mismatch') && c.subject_type === 'account' && !supersededCaseIds.has(c.id as string),
       amendsCaseId: amendsCaseIdByCaseId.get(c.id as string) ?? null,
       isSuperseded: supersededCaseIds.has(c.id as string),
