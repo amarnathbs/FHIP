@@ -149,6 +149,44 @@ export async function loadBenchmarkSeriesById(
   return out;
 }
 
+export interface BenchmarkCoverageSummary {
+  totalSchemes: number;
+  /** Mapped to a benchmark whose licence status does not block a real comparison. */
+  mappedCount: number;
+  /** Mapped, but the mapped benchmark's own licence_status blocks ingestion (e.g. NSE/BSE indices today). */
+  licenceBlockedCount: number;
+  /** No benchmark mapping exists for this scheme at all. */
+  unmappedCount: number;
+}
+
+/**
+ * Coarse coverage counts for a set of held schemes — used where a full
+ * per-row comparable is unnecessary (e.g. Portfolio X-Ray's scheme-level
+ * summary) but a fabricated "0% mapped" would still be dishonest if it hid a
+ * real, licence-blocked mapping. Never counts a licence-blocked mapping as
+ * either "mapped" (it produces no real comparison) or "unmapped" (a mapping
+ * genuinely exists and was evidenced) — mission BENCH-1 section 6's
+ * distinction between a real gap and a real-but-blocked one.
+ */
+export function summarizeBenchmarkCoverage(ctx: InstrumentBenchmarkContext, instrumentIds: string[], asOfDate: Date): BenchmarkCoverageSummary {
+  let mappedCount = 0;
+  let licenceBlockedCount = 0;
+  for (const id of instrumentIds) {
+    const mappings = ctx.mappingsByInstrument.get(id);
+    const mapping = mappings ? resolveBenchmarkForDate(mappings, id, asOfDate) : undefined;
+    if (!mapping) continue; // unmapped — counted by subtraction below
+    const meta = ctx.metaByBenchmarkId.get(mapping.benchmarkId);
+    if (meta && BLOCKED_LICENCE_STATUSES.has(meta.licenceStatus ?? 'unknown')) licenceBlockedCount += 1;
+    else mappedCount += 1;
+  }
+  return {
+    totalSchemes: instrumentIds.length,
+    mappedCount,
+    licenceBlockedCount,
+    unmappedCount: instrumentIds.length - mappedCount - licenceBlockedCount,
+  };
+}
+
 /**
  * Resolve ONE holding's benchmark comparable, honestly. Never guesses a
  * benchmark, never fabricates a 0% for missing data (mission sections 11-12).
