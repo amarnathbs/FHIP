@@ -1,5 +1,59 @@
 # BENCH-1 — Stage B1 Discovery (2026-09-30)
 
+> **2026-09-30 continuation addendum (same day, PO-authorized second pass) — read this first.**
+> Everything below this notice is the ORIGINAL B1 pass and is left unedited for the record, but two
+> of its findings turned out to be incomplete or wrong once more of the repository's history was
+> read, and real B2-onward work was done in the same dispatch. Corrections and new work:
+>
+> 1. **A prior mission (PC6, 2026-09-15) already built almost all of BENCH-1's buildable B2-B4
+>    scope to CONDITIONAL PASS**, blocked on the identical two decisions this mission calls
+>    PO-PC6-1 (index licensing) and PO-PC6-2 (risk-free methodology). See
+>    `docs/investment-intelligence/PC6_MARKET_DATA_CERTIFICATION_2026-09-15.md` — 174/174 tests,
+>    real AMFI data, effective-dated mapping with audited override, quality/staleness/correction
+>    machinery, a full provider registry (`lib/config/investment-intelligence/pc6ReferenceSources.ts`)
+>    that already models `nse_index_tri`/`bse_index`/`india_risk_free` as governed BLOCKED sources,
+>    and an eight-panel Admin surface (`app/(app)/admin/investment-intelligence/reference-data-quality`)
+>    already compliant with the Admin standard. **This was not found in the original B1 pass** —
+>    an important miss, since a future dispatch re-proposing this machinery from scratch would be
+>    pure duplication. Read that certification document in full before writing any new benchmark
+>    schema, adapter, or admin surface.
+> 2. **Migration `0155` (PC6) is now applied to BOTH DEV and production** — re-verified this
+>    session by selecting `return_type`/`licence_status`/`lifecycle_status` columns and the
+>    `ii_benchmark_category_defaults`/`ii_risk_free_methodology` tables directly against production;
+>    all returned HTTP 200. The original B1 finding (and PC6's own 2026-09-15 report) said 0155 was
+>    NOT applied anywhere — an operator evidently applied `0153`-`0155` between then and now. This
+>    resolves PC6's blocker C-1.
+> 3. **The original B1 claim that `OverviewClient.tsx` has "no real benchmark wiring" was wrong.**
+>    It already renders an honest benchmark-coverage sentence via the Performance card's `detail`
+>    text (`lib/investment-intelligence/analysisAvailability.ts`'s `performanceAvailability()`,
+>    driven by `overviewSummary.ts`'s already-existing `instrumentsWithBenchmarkCount` signal) —
+>    e.g. *"Benchmark comparison is not available — none of your schemes is mapped to a benchmark."*
+>    The original B1 grep only searched the component file itself for the literal word "benchmark"
+>    and missed that the text is server-computed and passed through generically. No code change was
+>    needed for Overview.
+> 4. **DEV cleanup performed** (PO-authorized, with full trace/ledger): the 14 synthetic
+>    `ii_benchmarks` + 199 `ii_benchmark_series` + 14 `ii_instrument_benchmarks` rows identified
+>    below were deleted from DEV after a positive dependency trace confirmed no other row or table
+>    referenced them. See `docs/investment-intelligence/evidence/bench1_dev_synthetic_cleanup_2026_09_30/MUTATION_LEDGER.md`.
+>    DEV and production now both read 0 rows across all three tables.
+> 5. **Real code shipped this dispatch** (B5 work, ahead of where B1 alone would leave things):
+>    `lib/services/investment-intelligence/benchmarkCoverage.ts` (shared, batch-query benchmark
+>    resolver reusing the certified R4 `benchmarkEngine`/`benchmarkService` — no arithmetic
+>    reimplemented), wired into `HoldingsTable.tsx` (new Benchmark column, honest
+>    unavailable states) and `PortfolioXrayClient.tsx` (scheme-level coverage sentence). Also
+>    `lib/services/investment-intelligence/pc6/csvBenchmarkImporter.ts`, the licensed-CSV interim
+>    ingestion channel mission §8/§13 asks for, with a licence-status gate that refuses to let a CSV
+>    become a way around PO-PC6-1. See the commit history on this branch for full detail; not
+>    repeated here to avoid the two documents drifting.
+> 6. **Still not done**: an Admin route/UI/capability for the CSV importer (needs its own
+>    four-layer Admin Standard compliance work); real vendor/licence procurement (still blocked,
+>    web fetch to the three reference pages failed again on retry — see updated `SOURCE_DECISION.md`);
+>    recurring cron ingestion (PC6 already built this machinery for NAV; a benchmark-specific
+>    schedule was not built or re-verified this session, and none should be registered against a
+>    still-licence-blocked source in any case).
+>
+> The rest of this document is the original, unedited B1 pass.
+
 Branch: `feat/bench1-benchmark-data-discovery-20260930` (off `origin/main` @ `bbd63ce`).
 Scope reached this dispatch: **B1 only** (discovery + baseline verification), plus the
 source-decision scaffold (`SOURCE_DECISION.md`) that mission §3 asks for as an early artifact.

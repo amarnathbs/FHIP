@@ -1,7 +1,35 @@
 # BENCH-1 — Source Decision (India Mutual Fund Benchmark Data)
 
 Status: **DRAFT / DECISION PACK ONLY — no commercial commitment made or authorized.**
-Prepared: 2026-09-30, as part of BENCH-1 discovery (stage B1).
+Prepared: 2026-09-30, as part of BENCH-1 discovery (stage B1). Updated same day (continuation
+dispatch) after a second attempt to reach the official reference pages and after finding that a
+prior mission (PC6, 2026-09-15) already reached the identical blocked conclusion independently.
+
+**PC6 cross-reference (found after this document's first draft).** A separate prior mission
+(`docs/investment-intelligence/PC6_MARKET_DATA_CERTIFICATION_2026-09-15.md`) already investigated
+this exact question on 2026-09-15 and recorded, as `BLOCKER PO-PC6-1`: NIFTY belongs to NSE Indices
+Ltd, SENSEX to BSE/Asia Index, neither is open data, and the legacy unauthenticated
+`niftyindices.com/Backpage.aspx/getTotalReturnIndexString` endpoint "now returns the HTML site shell
+rather than data, so there is not even a technical path, let alone a licensed one." That mission also
+registered both indices as `licence_required` sources in
+`lib/config/investment-intelligence/pc6ReferenceSources.ts`, which refuses to build a fetch URL for
+either (`buildUrl()` throws). This document's own independent fetch attempts below reached the same
+practical outcome from a different angle (network-level failure rather than a data response), which
+is corroborating rather than contradictory: whether the block is "returns no data" or "cannot even
+connect," the practical conclusion — no real Indian index level can be ingested without a licence —
+is the same, reached twice, independently, five months apart.
+
+**Second retry, this same continuation dispatch.** Per PO authorization, the three official
+reference pages were fetched again:
+- `https://www.amfiindia.com/otherdata/listofbenchmarkindices` — `ECONNREFUSED` (connection refused
+  at the IP layer), same failure mode as the first attempt and as PC6's own 2026-09-15 finding that
+  `www.amfiindia.com` was unreachable from a build environment while `portal.amfiindia.com` was not
+  (this document did not additionally try the portal host for this specific benchmark-list page,
+  since AMFI's portal mirrors its NAV files, not its benchmark-index list page).
+- `https://www.niftyindices.com/terms-of-use` — timed out (60s) on both attempts.
+- `https://www.niftyindices.com/offerings/data-subscription` — `ECONNRESET` on the first attempt.
+No terms, pricing, or entitlement text was retrieved on either attempt. Nothing below is invented to
+fill that gap.
 
 This document exists to give the Product Owner what is needed to choose a benchmark-data
 source. No purchase, vendor outreach, paid signup, or production activation has occurred or is
