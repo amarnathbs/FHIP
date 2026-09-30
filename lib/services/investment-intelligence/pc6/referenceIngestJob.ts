@@ -37,6 +37,15 @@
 //   (and no instrument added since) returns 'skipped_unchanged_source'
 //   without opening a batch or touching job control -- so the rest of the
 //   window's ticks cost a fetch and a handful of small reads.
+//
+// POST-CHANGEOVER ONLY (2026-10-01). The daily NAVAll path writes data dated
+// on/after the NAV 1 changeover date C and nothing older for an unprotected
+// instrument: NAVAll.txt carries each scheme's LATEST NAV, so a dormant
+// scheme's years-old final row would otherwise be re-created after every
+// retention cleanup. Skipped records are counted (counts.skippedPreChangeover,
+// batch notes.skipped_pre_changeover) and the filter fails OPEN when the
+// policy cannot be read. See dailyPreChangeoverFilter.ts. The nav-history
+// (backfill / hydration) path is unaffected.
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { parseNavAll, parseNavHistory, fingerprintBytes, type AmfiParseResult } from './amfiParser';
@@ -62,6 +71,7 @@ import { writeSchemeMasterRows } from './schemeMasterWriter';
 import { fetchAllRows } from '../pagination';
 import { createWriteBudget, resolveBudgetMs, type WriteBudget } from './ingestBudget';
 import { ExistingStateLookupError, loadExistingObservations, type NavPair } from './exactPairLookup';
+import { appliesToSource as preChangeoverFilterApplies, loadPreChangeoverFilterContext, partitionPreChangeover } from './dailyPreChangeoverFilter';
 
 /** How long a 'running' batch may sit with no terminal status before a later invocation treats it as abandoned rather than still in flight. */
 export const STALE_RUNNING_BATCH_MINUTES = 15;
@@ -125,6 +135,15 @@ export interface IngestJobResult {
     inserted: number;
     unchanged: number;
     superseded: number;
+    /**
+     * Daily NAVAll records dated before the NAV 1 changeover date C that were
+     * deliberately NOT written (the daily job owns post-changeover data only;
+     * pre-C history belongs to selective hydration). Resolved records of an
+     * unprotected instrument only -- see dailyPreChangeoverFilter.ts. Always 0
+     * when the filter did not apply (other source, no policy, dry-run of a
+     * different path); notes.pre_changeover_filter says why.
+     */
+    skippedPreChangeover: number;
     /** Planned inserts not attempted in this invocation (budget). */
     remainingInserts: number;
     /** Planned corrections not attempted in this invocation (budget). */
@@ -138,7 +157,7 @@ export interface IngestJobResult {
 
 const EMPTY_COUNTS: IngestJobResult['counts'] = {
   sourceBytes: 0, parsedAccepted: 0, parsedRejected: 0, resolved: 0,
-  unresolved: 0, inserted: 0, unchanged: 0, superseded: 0,
+  unresolved: 0, inserted: 0, unchanged: 0, superseded: 0, skippedPreChangeover: 0,
   remainingInserts: 0, remainingCorrections: 0,
 };
 
@@ -349,6 +368,10 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
   }
 
   const resolutionReads = startResolutionReads();
+  // The daily NAVAll price path only: the changeover date and protected set.
+  // Started here so the reads overlap the batch open and the parse; settled
+  // into a value (never throws), so a failure fails OPEN at step 5.
+  const preChangeoverReads = preChangeoverFilterApplies(source) ? loadPreChangeoverFilterContext(db) : null;
 
   // --- 3. Open the batch ledger row ----------------------------------------
   const { data: batch, error: batchErr } = await db
@@ -371,6 +394,11 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
   }
   const batchId = batch.id as string;
   mark('batchOpen');
+
+  // Telemetry for the pre-changeover filter, merged into the batch notes by
+  // finish() so the run record explains why N parsed rows were not written
+  // (or why the filter did not apply). Null until step 5 decides.
+  let preChangeoverNote: Record<string, unknown> | null = null;
 
   const finish = async (
     status: IngestJobResult['status'],
@@ -397,7 +425,12 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
       source_sha256: sha,
       source_byte_length: counts.sourceBytes || null,
       ...extra,
-      notes: { ...extraNotes, timings_ms: t, remaining: { inserts: counts.remainingInserts, corrections: counts.remainingCorrections } },
+      notes: {
+        ...extraNotes,
+        timings_ms: t,
+        remaining: { inserts: counts.remainingInserts, corrections: counts.remainingCorrections },
+        ...(preChangeoverNote ? { skipped_pre_changeover: counts.skippedPreChangeover, pre_changeover_filter: preChangeoverNote } : {}),
+      },
     }).eq('id', batchId);
 
     // Job-control bookkeeping: success clears the failure streak, failure
@@ -422,7 +455,10 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
       }).eq('job_key', args.jobKey);
     }
 
-    return { ...base, batchId, status, detail, counts, sourceSha256: sha, alerts, timings: timings() };
+    const fullDetail = counts.skippedPreChangeover > 0
+      ? `${detail} ${counts.skippedPreChangeover} pre-changeover record(s) not written (dated before the NAV 1 changeover date; the daily job owns post-changeover data only).`
+      : detail;
+    return { ...base, batchId, status, detail: fullDetail, counts, sourceSha256: sha, alerts, timings: timings() };
   };
 
   if (!fetched.ok) {
@@ -537,12 +573,44 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     );
   }
 
+  // --- 5b. The daily job owns post-changeover data only ----------------------
+  // NAVAll.txt carries each scheme's LATEST NAV, so a dormant scheme's final,
+  // years-old row would otherwise be re-written whenever it is missing (the
+  // defect behind the 1,276 residue rows of 2026-09-30). Drop resolved,
+  // unprotected records dated before the changeover date BEFORE the pair
+  // lookup, so they are neither read nor planned nor counted as inserts.
+  // Fails open (no filtering) when the policy or the protected set cannot be
+  // determined. See dailyPreChangeoverFilter.ts.
+  let recordsToPlan = parsed.records;
+  let skippedPreChangeover = 0;
+  if (preChangeoverReads) {
+    const load = await preChangeoverReads;
+    if (load.ok) {
+      const part = partitionPreChangeover(parsed.records, index, load.context);
+      recordsToPlan = part.records;
+      skippedPreChangeover = part.skipped;
+      preChangeoverNote = {
+        applied: true,
+        changeover_date: load.context.changeoverDate,
+        policy_version: load.context.policyVersion,
+        skipped: part.skipped,
+        kept_protected: part.keptProtected,
+        kept_unresolved: part.keptUnresolved,
+        protected_instruments: load.context.protectedInstrumentIds.size,
+      };
+    } else {
+      preChangeoverNote = { applied: false, reason: load.reason, detail: load.detail.slice(0, 300) };
+    }
+    mark('preChangeoverFilter');
+  }
+  const planParsed: AmfiParseResult = recordsToPlan === parsed.records ? parsed : { ...parsed, records: recordsToPlan };
+
   // Existing state for EXACTLY the (instrument, date) pairs this run could
   // touch, so idempotency is decided against the database rather than
   // assumed. See exactPairLookup.ts for why this is no longer
   // "instrument IN (...) AND date IN (every date in the file)".
   const pairs: NavPair[] = [];
-  for (const r of parsed.records) {
+  for (const r of recordsToPlan) {
     const instrumentId = index.byAmfiCode.get(r.amfiSchemeCode) ?? (r.isinGrowthOrPayout ? index.byIsin.get(r.isinGrowthOrPayout) : undefined);
     if (instrumentId) pairs.push({ instrumentId, priceDate: r.navDate });
   }
@@ -557,7 +625,7 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
   readPhaseMs = clock() - startedAtMs;
   mark('existingLookup');
 
-  const plan = planImport({ parsed, index, existing, currencyCode: source.currencyCode });
+  const plan = planImport({ parsed: planParsed, index, existing, currencyCode: source.currencyCode });
 
   const counts: IngestJobResult['counts'] = {
     ...readCounts,
@@ -566,6 +634,7 @@ export async function runReferenceIngest(args: IngestJobArgs): Promise<IngestJob
     inserted: 0,
     unchanged: plan.counts.unchanged,
     superseded: 0,
+    skippedPreChangeover,
   };
 
   if (args.dryRun) {

@@ -62,7 +62,14 @@ export class FakeDb {
     return new FakeQuery(this, table);
   }
 
-  rpc(fn: string, args: Record<string, unknown>) {
+  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string; code?: string } | null }> {
+    // migration 0189: `returns table (instrument_id uuid)`, read as a query
+    // (.select().order().range()) by the pre-changeover filter. Backed by the
+    // table named 'rpc:pc6_user_held_instrument_ids' so a test seeds it like
+    // any other table; unseeded it is an empty set.
+    // Typed as the promise the other functions return (RpcClient), but it
+    // is really the chainable builder, which is thenable.
+    if (fn === 'pc6_user_held_instrument_ids') return new FakeQuery(this, 'rpc:pc6_user_held_instrument_ids') as unknown as ReturnType<FakeDb['rpc']>;
     const exec = () => {
       this.advance(this.cost(`rpc:${fn}`));
       if (this.rpcError) return { data: null, error: this.rpcError };
