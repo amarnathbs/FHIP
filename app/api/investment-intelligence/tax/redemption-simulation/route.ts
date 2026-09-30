@@ -139,7 +139,12 @@ export async function POST(request: Request) {
       exitLoadBreakdown: hypotheticalExitLoad,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Unknown error';
-    return bad(`Redemption simulation could not be calculated: ${message}`, 500);
+    // Document2 closure finding #16: do not interpolate the engine's raw
+    // error message (may embed an internal lot/event id, see
+    // tax/summary/route.ts's catch block for the full rationale) into the
+    // user-facing body. Preserved server-side for debugging only.
+    const rawMessage = e instanceof Error ? e.message : 'Unknown error';
+    console.error('[investment-intelligence/tax/redemption-simulation] simulation failed', { error: rawMessage });
+    return bad('Redemption simulation could not be completed because your transaction or lot history is inconsistent. Please review your Investment Intelligence statements for missing or conflicting data.', 500);
   }
 }
