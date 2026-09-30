@@ -1,0 +1,29 @@
+{
+  "runTag": "aie1closure-prod-1790807234859",
+  "projectRef": "twwpnltizhtjxhamyoxt",
+  "app": "https://app.financialhealthplatform.com",
+  "startedAt": "2026-09-30T22:27:14.859Z",
+  "userId": "a5462eae-9dd9-4c33-b492-10bd3e4c06b7",
+  "sessionMinted": true,
+  "uploadDocumentId": "17fd6291-b041-48ea-870a-ed48a3d60982",
+  "scan": {
+    "status": "clean",
+    "processingStatus": "queued",
+    "scanWaitMs": 4967,
+    "sweepAttempts": 1,
+    "sweepSecretPresent": true
+  },
+  "BLOCKED": {
+    "step": "AI fallback pilot-cohort admission",
+    "reason": "cohort_denied",
+    "detail": "This synthetic account is not on production's AIE_PILOT_COHORT_EMAILS/_USER_IDS allowlist, and this environment cannot edit Amplify env vars to add it (no console/API access). The gate itself worked correctly and honestly -- the AI-fallback PIPELINE beyond this gate could not be exercised by this run.",
+    "auditEvent": {
+      "event_type": "bank_statement_ai_fallback_not_usable",
+      "metadata": {
+        "reason": "cohort_denied",
+        "nativePipelineStatus": "unsupported_layout"
+      },
+      "created_at": "2026-09-30T22:27:25.413822+00:00"
+    }
+  }
+}
