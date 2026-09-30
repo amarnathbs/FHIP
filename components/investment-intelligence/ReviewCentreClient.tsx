@@ -65,11 +65,42 @@ export function ReviewCentreClient() {
   // uploaded bytes. "Acknowledge" never told the user that, or that
   // re-uploading a corrected file is the only way forward -- see
   // /api/investment-intelligence/source-documents/[id]/discard's header for
-  // the full rationale, including why ambiguous_instrument and the
-  // cross_source_* types were checked and found to have ZERO occurrences
-  // ever in production, and so were not given a bespoke action here.
+  // the full rationale, including why (at the time) ambiguous_instrument and
+  // the cross_source_* types were checked and found to have ZERO occurrences
+  // ever in production, and so were not given a bespoke action then.
+  // 2026-09-30 update: ambiguous_instrument now HAS a real fix action (see
+  // below) — a Review issue must have a genuine resolution path regardless
+  // of current case volume (the Product Owner's own rule, Document2 final
+  // non-benchmark closure #3).
   const [discardingItemId, setDiscardingItemId] = useState<string | null>(null);
   const [discardError, setDiscardError] = useState<Record<string, string>>({});
+  // Document2 final non-benchmark closure #3 (2026-09-30): 'ambiguous_instrument'
+  // previously had NO real resolution path (Acknowledge/Dismiss only) —
+  // confirmed by discovery to be a genuine, disclosed gap. The candidate
+  // instruments (real display names, never raw ids) were recorded on the
+  // case itself at detection time (documentProcessing.ts/
+  // aiExtractionReviewApply.ts), so this screen needs no extra lookup.
+  const [selectedInstrumentByItem, setSelectedInstrumentByItem] = useState<Record<string, string>>({});
+  const [resolvingInstrumentItemId, setResolvingInstrumentItemId] = useState<string | null>(null);
+  const [resolveInstrumentError, setResolveInstrumentError] = useState<Record<string, string>>({});
+  // Document2 final non-benchmark closure #4 (2026-09-30): a genuine
+  // explicit conflict-choice action for 'cross_source_conflict'/
+  // 'cross_source_review_required' — see
+  // reconciliation-cases/[id]/resolve-cross-source's header for the full
+  // category-D rationale (the exact/high-confidence duplicate siblings are
+  // already auto-resolved by the system and never reach this screen open).
+  const [resolvingCrossSourceItemId, setResolvingCrossSourceItemId] = useState<string | null>(null);
+  const [resolveCrossSourceError, setResolveCrossSourceError] = useState<Record<string, string>>({});
+  // Document2 final non-benchmark closure #10 (2026-09-30): a genuine
+  // resolution path for 'transaction_unclassified' — see
+  // reconciliation-cases/[id]/resolve-classification's header for why this
+  // matters more than most: a MATERIAL (high-severity) instance is a real
+  // certification blocker, and no re-classification action existed before
+  // this one despite an earlier report's claim otherwise.
+  const RECLASSIFY_TYPES = ['purchase', 'sip', 'redemption', 'switch_in', 'switch_out', 'dividend', 'reinvestment', 'transfer', 'merger', 'fee', 'tax', 'adjustment', 'stp_in', 'stp_out', 'swp', 'transfer_in', 'transfer_out', 'reversal', 'segregation', 'bonus', 'split', 'sale'] as const;
+  const [selectedClassificationByItem, setSelectedClassificationByItem] = useState<Record<string, string>>({});
+  const [resolvingClassificationItemId, setResolvingClassificationItemId] = useState<string | null>(null);
+  const [resolveClassificationError, setResolveClassificationError] = useState<Record<string, string>>({});
 
   const load = useCallback(async (status: string) => {
     setLoading(true);
@@ -162,6 +193,75 @@ export function ReviewCentreClient() {
       setAssignError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not assign that owner.' }));
     } finally {
       setAssigningItemId(null);
+    }
+  }
+
+  async function resolveAmbiguousInstrument(itemId: string, caseId: string) {
+    const resolvedInstrumentId = selectedInstrumentByItem[itemId];
+    if (!resolvedInstrumentId) return;
+    setResolvingInstrumentItemId(itemId);
+    setResolveInstrumentError((prev) => ({ ...prev, [itemId]: '' }));
+    try {
+      const res = await fetch(`/api/investment-intelligence/reconciliation-cases/${encodeURIComponent(caseId)}/resolve-instrument`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolvedInstrumentId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not resolve this instrument.');
+      // Same reason assignOwner()/discardDocument() above hit /review/refresh
+      // before reloading -- ii_review_items is a materialised snapshot, not
+      // the same table as ii_reconciliation_cases, so resolving the case (and
+      // the reprocess this route already performs) does not by itself remove
+      // this item from an already-computed "open" list.
+      await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
+      await load(statusFilter);
+    } catch (e) {
+      setResolveInstrumentError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not resolve this instrument.' }));
+    } finally {
+      setResolvingInstrumentItemId(null);
+    }
+  }
+
+  async function resolveCrossSource(itemId: string, caseId: string, decision: 'confirmed_duplicate' | 'confirmed_distinct') {
+    setResolvingCrossSourceItemId(itemId);
+    setResolveCrossSourceError((prev) => ({ ...prev, [itemId]: '' }));
+    try {
+      const res = await fetch(`/api/investment-intelligence/reconciliation-cases/${encodeURIComponent(caseId)}/resolve-cross-source`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not record that decision.');
+      await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
+      await load(statusFilter);
+    } catch (e) {
+      setResolveCrossSourceError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not record that decision.' }));
+    } finally {
+      setResolvingCrossSourceItemId(null);
+    }
+  }
+
+  async function resolveClassification(itemId: string, caseId: string) {
+    const transactionType = selectedClassificationByItem[itemId];
+    if (!transactionType) return;
+    setResolvingClassificationItemId(itemId);
+    setResolveClassificationError((prev) => ({ ...prev, [itemId]: '' }));
+    try {
+      const res = await fetch(`/api/investment-intelligence/reconciliation-cases/${encodeURIComponent(caseId)}/resolve-classification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionType }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not classify this transaction.');
+      await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
+      await load(statusFilter);
+    } catch (e) {
+      setResolveClassificationError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not classify this transaction.' }));
+    } finally {
+      setResolvingClassificationItemId(null);
     }
   }
 
@@ -274,13 +374,47 @@ export function ReviewCentreClient() {
           // offered instead of the generic Acknowledge/Dismiss, which never
           // touched the document's own status or told the user to re-upload.
           const isDiscardableDocument = (discrepancyType === 'unsupported_document' || discrepancyType === 'document_corrupt' || discrepancyType === 'parse_incomplete') && !!sourceDocumentId;
+          // Document2 final closure #3 (2026-09-30): 'ambiguous_instrument'
+          // now has a real resolution path — the case's own recorded
+          // candidates (real names, never raw ids), a select + Resolve
+          // action that reprocesses the source document immediately.
+          const caseId = typeof item.evidence?.caseId === 'string' ? item.evidence.caseId : null;
+          const ambiguousCandidates = Array.isArray(details?.candidates) ? (details!.candidates as { instrumentId: string; displayName: string; amcName: string | null; isin: string | null }[]) : [];
+          const isAmbiguousInstrumentCase = discrepancyType === 'ambiguous_instrument' && !!caseId && ambiguousCandidates.length > 0;
+          // Document2 final closure #4: the two cross-source discrepancy
+          // types that are ever left OPEN (the exact/high-confidence
+          // duplicate siblings auto-resolve at creation and never reach this
+          // list) — a genuine explicit conflict-choice action.
+          const isCrossSourceConflictCase = (discrepancyType === 'cross_source_conflict' || discrepancyType === 'cross_source_review_required') && !!caseId && typeof details?.newTransactionId === 'string';
+          // Document2 final closure #10: 'transaction_unclassified' — see
+          // reconciliation-cases/[id]/resolve-classification's header.
+          const isClassifiableTransaction = discrepancyType === 'transaction_unclassified' && !!caseId && typeof details?.newTransactionId === 'string';
+          // 'transaction_missing_from_restatement' never blocks anything
+          // (severity is always 'medium', never in evaluateCertification's
+          // blocking-severity set) and nothing was ever deleted or changed —
+          // it is genuinely informational, not a silent "figure it out"
+          // dead end, so it gets its own explicit no-action-needed message
+          // rather than the generic hasNoResolver text.
+          // 'other' (severity always 'info') is the AI-fallback path's own
+          // "valuation recorded, no transaction fabricated" note — genuinely
+          // informational for the identical reason
+          // transaction_missing_from_restatement is: nothing is blocked and
+          // nothing needs undoing, only explaining.
+          const isInformationalMissingRestatement = discrepancyType === 'transaction_missing_from_restatement' || discrepancyType === 'other';
           // A genuine resolver now exists for owner_unmatched/owner_mismatch
-          // accounts and nothing else; joint holdings are DETECTED (K.6) but
-          // deliberately not offered a one-owner "fix" here, because forcing
-          // a joint folio onto a single owner would misattribute someone
-          // else's share of it -- a real percentage-split allocation UI is
-          // not yet built (see this file's header history).
-          const hasNoResolver = (discrepancyType === 'owner_unmatched' && !isOwnerAssignableAccount) || isJointHoldingAccount;
+          // accounts, ambiguous_instrument, cross_source_conflict/
+          // cross_source_review_required, and transaction_unclassified;
+          // joint holdings are DETECTED (K.6) but deliberately not offered a
+          // one-owner "fix" here, because forcing a joint folio onto a
+          // single owner would misattribute someone else's share of it -- a
+          // real percentage-split allocation UI is not yet built (see this
+          // file's header history).
+          const hasNoResolver =
+            (discrepancyType === 'owner_unmatched' && !isOwnerAssignableAccount) ||
+            isJointHoldingAccount ||
+            (discrepancyType === 'ambiguous_instrument' && !isAmbiguousInstrumentCase) ||
+            ((discrepancyType === 'cross_source_conflict' || discrepancyType === 'cross_source_review_required') && !isCrossSourceConflictCase) ||
+            (discrepancyType === 'transaction_unclassified' && !isClassifiableTransaction);
           return (
             <li key={item.id} className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-4">
@@ -351,6 +485,107 @@ export function ReviewCentreClient() {
                   )}
                   {statusFilter === 'open' && hasNoResolver && !isJointHoldingAccount && (
                     <p className="mt-2 text-xs text-amber-800">This issue requires owner/reconciliation functionality that is not yet available.</p>
+                  )}
+                  {statusFilter === 'open' && isAmbiguousInstrumentCase && (
+                    <div className="mt-2 flex flex-col items-start gap-2">
+                      <p className="text-xs text-amber-800">
+                        This statement’s scheme could not be matched to a single canonical instrument. Choose the correct one below — the statement will be re-checked automatically once you save.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="text-xs text-muted" htmlFor={`instrument-select-${item.id}`}>
+                          Correct instrument:
+                        </label>
+                        <select
+                          id={`instrument-select-${item.id}`}
+                          className="rounded-md border px-2 py-1 text-xs"
+                          value={selectedInstrumentByItem[item.id] ?? ''}
+                          onChange={(e) => setSelectedInstrumentByItem((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                        >
+                          <option value="">Choose an instrument</option>
+                          {ambiguousCandidates.map((c) => (
+                            <option key={c.instrumentId} value={c.instrumentId}>
+                              {c.displayName}
+                              {c.amcName ? ` — ${c.amcName}` : ''}
+                              {c.isin ? ` (${c.isin})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => resolveAmbiguousInstrument(item.id, caseId as string)}
+                          disabled={!selectedInstrumentByItem[item.id] || resolvingInstrumentItemId === item.id}
+                          className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
+                        >
+                          {resolvingInstrumentItemId === item.id ? 'Resolving…' : 'Resolve'}
+                        </button>
+                      </div>
+                      {resolveInstrumentError[item.id] && <p className="w-full text-xs text-red-600">{resolveInstrumentError[item.id]}</p>}
+                    </div>
+                  )}
+                  {statusFilter === 'open' && isCrossSourceConflictCase && (
+                    <div className="mt-2 flex flex-col items-start gap-2">
+                      <p className="text-xs text-amber-800">
+                        A different statement recorded a transaction that may be the same real-world event as one already on file, but the details don’t match closely enough to
+                        be sure automatically. Is this the same transaction, recorded twice?
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => resolveCrossSource(item.id, caseId as string, 'confirmed_duplicate')}
+                          disabled={resolvingCrossSourceItemId === item.id}
+                          className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
+                        >
+                          Yes, same transaction
+                        </button>
+                        <button
+                          onClick={() => resolveCrossSource(item.id, caseId as string, 'confirmed_distinct')}
+                          disabled={resolvingCrossSourceItemId === item.id}
+                          className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
+                        >
+                          No, these are different transactions
+                        </button>
+                      </div>
+                      {resolveCrossSourceError[item.id] && <p className="w-full text-xs text-red-600">{resolveCrossSourceError[item.id]}</p>}
+                    </div>
+                  )}
+                  {statusFilter === 'open' && isClassifiableTransaction && (
+                    <div className="mt-2 flex flex-col items-start gap-2">
+                      <p className="text-xs text-amber-800">
+                        This transaction’s type could not be automatically identified{details?.description ? ` (“${String(details.description)}”)` : ''}. Choose the correct type
+                        below to clear this issue.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="text-xs text-muted" htmlFor={`classify-select-${item.id}`}>
+                          Transaction type:
+                        </label>
+                        <select
+                          id={`classify-select-${item.id}`}
+                          className="rounded-md border px-2 py-1 text-xs"
+                          value={selectedClassificationByItem[item.id] ?? ''}
+                          onChange={(e) => setSelectedClassificationByItem((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                        >
+                          <option value="">Choose a type</option>
+                          {RECLASSIFY_TYPES.map((t) => (
+                            <option key={t} value={t}>
+                              {t.replace(/_/g, ' ')}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => resolveClassification(item.id, caseId as string)}
+                          disabled={!selectedClassificationByItem[item.id] || resolvingClassificationItemId === item.id}
+                          className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
+                        >
+                          {resolvingClassificationItemId === item.id ? 'Saving…' : 'Save classification'}
+                        </button>
+                      </div>
+                      {resolveClassificationError[item.id] && <p className="w-full text-xs text-red-600">{resolveClassificationError[item.id]}</p>}
+                    </div>
+                  )}
+                  {statusFilter === 'open' && isInformationalMissingRestatement && (
+                    <p className="mt-2 text-xs text-muted">
+                      {discrepancyType === 'other'
+                        ? 'Informational only — no action needed. A valuation was recorded for this position without transaction-level detail; no transaction was fabricated to explain it.'
+                        : 'Informational only — no action needed. A transaction FHIP already had on file for this position wasn’t re-confirmed by this newer statement. Nothing has been changed or removed.'}
+                    </p>
                   )}
                   {statusFilter === 'open' && discrepancyType === 'owner_mismatch' && maskedHolderName && (
                     <p className="mt-2 text-xs text-amber-800">This statement is printed in the name of {maskedHolderName}, which does not match who it is currently filed under.</p>

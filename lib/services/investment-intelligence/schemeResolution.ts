@@ -103,6 +103,22 @@ export function resolveScheme(
   // 4. Normalised scheme name + plan/option + AMC + country — heuristic,
   // lower confidence than an exact identifier match, but still a
   // DETERMINISTIC exact-string match on the normalised name (not fuzzy).
+  //
+  // REAL DEFECT FOUND AND FIXED (Document2 final non-benchmark closure,
+  // 2026-09-30): this comment has always said "+ AMC" but the filter below
+  // never actually checked `e.amcName` — only name/plan/option/country. Two
+  // different fund houses can legitimately publish a scheme whose name
+  // normalises identically with the same plan/option (a generic label like
+  // "liquid fund - growth (direct plan)" is common across AMCs) — without
+  // this check they were spuriously reported AMBIGUOUS (or worse, silently
+  // cross-matched to a real instrument from the WRONG AMC) even though the
+  // AMC field the caller supplied already disambiguates them. `e.amcName`
+  // is nullable on legacy/provisional instrument rows (a scheme created
+  // before this field was populated) — treated the same way the alias map's
+  // own AMC field already is at step 5 below (null = "not yet known",
+  // matches any AMC) rather than as a hard non-match, so this fix can only
+  // ever REDUCE false ambiguity, never introduce a new false negative for
+  // already-working matches.
   {
     const matches = uniq(
       existing
@@ -111,7 +127,8 @@ export function resolveScheme(
             e.normalisedSchemeName === query.normalisedSchemeName &&
             e.planType === query.planType &&
             e.optionType === query.optionType &&
-            e.countryCode === query.countryCode
+            e.countryCode === query.countryCode &&
+            (e.amcName === null || e.amcName === query.amcName)
         )
         .map((e) => e.instrumentId)
     );

@@ -1,6 +1,7 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
+import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
 import { z } from 'zod';
 
 /**
@@ -34,12 +35,20 @@ import { z } from 'zod';
  * Centre's own next refresh) sees the corrected value on its next read,
  * exactly as it would after the original resolution.
  *
- * Only 'owner_unmatched' / 'owner_mismatch' cases are amendable in this
- * pass — see the GET .../resolutions route's header for why other
- * discrepancy types are shown in history but not offered this action.
+ * 'owner_unmatched' / 'owner_mismatch' cases are amended by re-setting the
+ * account's owner (as above). `ambiguous_instrument` cases (Document2 final
+ * closure #3, 2026-09-30) are amended by re-choosing the canonical
+ * instrument from the SAME candidate list the original case recorded — the
+ * body's discriminant is which field is present (`ownerMemberId` vs
+ * `resolvedInstrumentId`), matching `resolvedInstrumentId`'s own one-time
+ * resolution route (`reconciliation-cases/[id]/resolve-instrument`) exactly,
+ * so there is exactly one validation rule for "which instruments may this
+ * case ever resolve to" in the whole module. Other discrepancy types are
+ * still shown in history, for a complete record, but with no amend action
+ * offered — see the GET .../resolutions route's header.
  */
-const amendSchema = z.object({ ownerMemberId: z.string().uuid() });
-const AMENDABLE_DISCREPANCY_TYPES = ['owner_unmatched', 'owner_mismatch'] as const;
+const amendSchema = z.union([z.object({ ownerMemberId: z.string().uuid() }), z.object({ resolvedInstrumentId: z.string().uuid() })]);
+const OWNER_AMENDABLE_DISCREPANCY_TYPES = ['owner_unmatched', 'owner_mismatch'] as const;
 
 export async function POST(req: Request, { params }: { params: Promise<{ caseId: string }> }) {
   const { caseId } = await params;
@@ -57,10 +66,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
     .eq('user_id', user.id)
     .maybeSingle();
   if (!priorCase) return bad('Resolution not found.', 404);
-  if (priorCase.subject_type !== 'account') return bad('This resolution type cannot be amended here.', 422);
-  if (!AMENDABLE_DISCREPANCY_TYPES.includes(priorCase.discrepancy_type as (typeof AMENDABLE_DISCREPANCY_TYPES)[number])) {
-    return bad('This resolution type cannot be amended here.', 422);
-  }
   if (priorCase.status !== 'resolved' && priorCase.status !== 'dismissed') {
     return bad('Only a decided (resolved or dismissed) case can be amended. An open case should be decided from the Review tab instead.', 422);
   }
@@ -75,6 +80,65 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
     .limit(1)
     .maybeSingle();
   if (newerAmendment) return bad('This decision has already been amended by a later one. Amend the most recent decision instead.', 409, 'already_amended');
+
+  if ('resolvedInstrumentId' in parsed.data) {
+    if (priorCase.discrepancy_type !== 'ambiguous_instrument') return bad('This resolution type cannot be amended here.', 422);
+    const details = (priorCase.discrepancy_details as Record<string, unknown> | null) ?? {};
+    const candidateInstrumentIds = Array.isArray(details.candidateInstrumentIds) ? (details.candidateInstrumentIds as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+    if (!candidateInstrumentIds.includes(parsed.data.resolvedInstrumentId)) {
+      return bad('That instrument is not one of the candidates offered for this issue.', 422);
+    }
+    const sourceDocumentId = priorCase.subject_id as string;
+    const nowIso = new Date().toISOString();
+    const previousResolvedInstrumentId = (details.resolvedInstrumentId as string | undefined) ?? null;
+
+    const { data: newCase, error: insertErr } = await admin
+      .from('ii_reconciliation_cases')
+      .insert({
+        user_id: user.id,
+        subject_type: priorCase.subject_type,
+        subject_id: sourceDocumentId,
+        discrepancy_type: 'ambiguous_instrument',
+        severity: 'high',
+        source_document_id: sourceDocumentId,
+        discrepancy_details: { ...details, amendsCaseId: caseId, previousResolvedInstrumentId, resolvedInstrumentId: parsed.data.resolvedInstrumentId, reason: 'User amendment of a prior decision, from the Resolutions history view.' },
+        status: 'resolved',
+        resolved_at: nowIso,
+        resolution_method: 'user_mapped_instrument',
+        resolved_by: user.id,
+        resolved_by_actor_type: 'user',
+      })
+      .select('id')
+      .single();
+    if (insertErr || !newCase) return bad(insertErr?.message ?? 'Could not record the amendment.');
+
+    await emitAuditEvent({
+      userId: user.id,
+      eventType: 'user_correction',
+      subjectType: 'ii_instruments',
+      subjectId: parsed.data.resolvedInstrumentId,
+      actorType: 'user',
+      actorId: user.id,
+      metadata: { field: 'ambiguous_instrument', newValue: parsed.data.resolvedInstrumentId, previousValue: previousResolvedInstrumentId, amendsCaseId: caseId, newCaseId: newCase.id },
+    });
+
+    let reprocessed = false;
+    let reprocessError: string | null = null;
+    try {
+      const result = await processSourceDocument({ userId: user.id, userEmail: user.email ?? null, sourceDocumentId, forceReparse: true });
+      reprocessed = result.ok;
+      if (!result.ok) reprocessError = result.error ?? 'Reprocessing did not complete successfully.';
+    } catch (e) {
+      reprocessError = e instanceof Error ? e.message : 'Reprocessing failed unexpectedly.';
+    }
+
+    return ok({ resolvedInstrumentId: parsed.data.resolvedInstrumentId, newCaseId: newCase.id, amendsCaseId: caseId, reprocessed, reprocessError });
+  }
+
+  if (priorCase.subject_type !== 'account') return bad('This resolution type cannot be amended here.', 422);
+  if (!OWNER_AMENDABLE_DISCREPANCY_TYPES.includes(priorCase.discrepancy_type as (typeof OWNER_AMENDABLE_DISCREPANCY_TYPES)[number])) {
+    return bad('This resolution type cannot be amended here.', 422);
+  }
 
   const accountId = priorCase.subject_id as string;
   const { data: account } = await admin.from('ii_accounts').select('id, owner_member_id').eq('id', accountId).eq('user_id', user.id).maybeSingle();

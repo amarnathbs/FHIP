@@ -28,6 +28,12 @@ import { recertifyPosition } from './documentProcessing';
 import { detectMissingTransactions } from './missingTransactionDetection';
 import { openReconciliationCase } from './reconciliationCases';
 import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
+import {
+  findResolvedAmbiguousInstrumentOverride,
+  auditUserResolvedAmbiguousInstrument,
+  type InstrumentResolutionSignature,
+  type AmbiguousInstrumentCandidate,
+} from './ambiguousInstrumentResolution';
 import { purgeSourceDocumentStorage } from './sourceDocumentPurge';
 import type { AieExtractedHolding } from './aiFallbackDocumentExtraction';
 import type { IiTransactionType, IiPlanType, IiOptionType } from './types';
@@ -199,13 +205,32 @@ async function writeAcceptedReview(
     accountsTouched.add(accountId);
 
     const normalisedSchemeName = normaliseSchemeName(holding.schemeName);
+    const signature: InstrumentResolutionSignature = {
+      isin: holding.isin,
+      amfiSchemeCode: null,
+      normalisedSchemeName,
+      amcName: holding.amcName ?? null,
+      planType: 'not_applicable',
+      optionType: 'not_applicable',
+      countryCode,
+    };
+    // Document2 final closure #3 — same override consultation as
+    // documentProcessing.ts's deterministic path (see
+    // ambiguousInstrumentResolution.ts): an earlier explicit user resolution
+    // for this exact scheme always wins over resolveScheme()'s own
+    // deterministic (and therefore otherwise-repeating) ambiguity.
+    const overrideInstrumentId = await findResolvedAmbiguousInstrumentOverride(admin, userId, signature);
+
+    let instrumentId: string | null = overrideInstrumentId;
+    if (overrideInstrumentId) {
+      await auditUserResolvedAmbiguousInstrument(userId, overrideInstrumentId, null, holding.schemeName);
+    } else {
     const outcome = resolveScheme(
       { isin: holding.isin, amfiSchemeCode: null, internalProvisionalCode: null, normalisedSchemeName, amcName: holding.amcName ?? '', planType: 'not_applicable', optionType: 'not_applicable', countryCode },
       existingForResolution,
       aliasRows
     );
 
-    let instrumentId: string | null = null;
     if (outcome.kind === 'resolved') {
       instrumentId = outcome.instrumentId;
     } else if (outcome.kind === 'unresolved') {
@@ -241,15 +266,27 @@ async function writeAcceptedReview(
       }
     } else {
       // ambiguous — never guess; flag for a human, skip this holding.
+      const candidates: AmbiguousInstrumentCandidate[] = outcome.candidateInstrumentIds.map((id) => {
+        const found = existingForResolution.find((e) => e.instrumentId === id);
+        return {
+          instrumentId: id,
+          displayName: existingInstrumentRows.find((r) => r.id === id)?.instrument_name ?? holding.schemeName,
+          amcName: found?.amcName ?? null,
+          isin: found?.isin ?? null,
+          planType: found?.planType ?? null,
+          optionType: found?.optionType ?? null,
+        };
+      });
       await openReconciliationCase(userId, {
         subjectType: 'account',
         subjectId: accountId,
         discrepancyType: 'ambiguous_instrument',
         severity: 'high',
         sourceDocumentId: review.source_document_id as string,
-        details: { scheme: holding.schemeName, matchedVia: outcome.matchedVia, candidateInstrumentIds: outcome.candidateInstrumentIds, reason: outcome.reason, source: 'ai_extraction_review' },
+        details: { scheme: holding.schemeName, matchedVia: outcome.matchedVia, candidateInstrumentIds: outcome.candidateInstrumentIds, candidates, reason: outcome.reason, source: 'ai_extraction_review', signature },
       });
       continue;
+    }
     }
     if (!instrumentId) continue;
     schemesTouched.add(instrumentId);
