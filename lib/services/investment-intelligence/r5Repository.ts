@@ -347,6 +347,30 @@ export async function loadXrayDataset(
     .in('id', instrumentIds);
   const instrumentMeta = new Map((instrumentRows ?? []).map((r) => [r.id as string, r]));
 
+  // AMC/fund-house concentration (R9 finding #9): ii_instruments.amc_name is
+  // not reliably populated (confirmed empty/null for every real production
+  // mutual-fund instrument as of 2026-09-30), but ii_scheme_master — the
+  // scheme-resolution engine's own output, keyed by instrument_id, one
+  // current row per instrument (`effective_to is null`) — already carries a
+  // real AMC name (AMFI-sourced, migration 0191). Previously this function
+  // hardcoded amcId/amcName to null on every position, so
+  // calculateAmcConcentration() always saw zero attributed value and
+  // silently returned status:'unavailable' for every real user regardless
+  // of the 84debc5 pie-chart UI. There is no separate AMC-entity id space in
+  // this schema, so the (trimmed) amc_name itself is used as the stable
+  // bucket key, matching calculateAmcConcentration()'s own
+  // amcId-must-be-truthy grouping contract.
+  const { data: schemeAmcRows } = await supabase
+    .from('ii_scheme_master')
+    .select('instrument_id, amc_name')
+    .in('instrument_id', instrumentIds)
+    .is('effective_to', null);
+  const amcNameByInstrument = new Map<string, string>();
+  for (const r of schemeAmcRows ?? []) {
+    const name = (r.amc_name as string | null)?.trim();
+    if (name) amcNameByInstrument.set(r.instrument_id as string, name);
+  }
+
   // R12: 'equity' joins the eligible set (spec section 48 — direct equity
   // must contribute to concentration/sector/market-cap without fund-style
   // look-through; it is added as a position here, and
@@ -370,8 +394,8 @@ export async function loadXrayDataset(
         // FX-converted here (spec section 101, R0_CROSS_BORDER_CONTRACT).
         value: Number(r.value),
         currencyCode: r.currency_code,
-        amcId: null,
-        amcName: null,
+        amcId: amcNameByInstrument.get(r.instrument_id) ?? null,
+        amcName: amcNameByInstrument.get(r.instrument_id) ?? null,
       };
     });
 

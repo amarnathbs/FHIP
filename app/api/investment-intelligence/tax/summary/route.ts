@@ -148,7 +148,20 @@ export async function GET(request: Request) {
   } catch (e) {
     // Clean error handling: a failure surfaces as an explicit error, never
     // as a zero-valued result a caller could mistake for a real calculation.
-    const message = e instanceof Error ? e.message : 'Unknown error';
-    return bad(`Tax simulation could not be calculated: ${message}`, 500);
+    //
+    // Document2 closure finding #16 (2026-09-30): taxLotEngine.ts/
+    // taxOrchestrator.ts throw messages that embed raw internal identifiers
+    // (`acquisition event ${sourceEventId}`, `lot ${lotId} over-consumed`,
+    // `disposal ${sourceEventId}`, `instrument ${instrumentKey}`) — this
+    // route used to interpolate that message verbatim into the user-facing
+    // body, so a real engine failure could show a database event/lot id
+    // straight to the end user (TaxIntelligenceClient.tsx renders `error`
+    // directly). The raw detail is still fully preserved server-side for
+    // debugging; only the CLIENT-facing string is now a clean, generic
+    // explanation with no internal identifier, matching the pattern this
+    // finding's own example message uses.
+    const rawMessage = e instanceof Error ? e.message : 'Unknown error';
+    console.error('[investment-intelligence/tax/summary] tax simulation failed', { userId: user.id, error: rawMessage });
+    return bad('Tax calculation could not be completed because your transaction or lot history is inconsistent. Please review your Investment Intelligence statements for missing or conflicting data.', 500);
   }
 }
