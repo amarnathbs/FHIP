@@ -24,6 +24,12 @@ import { schemeReconciliationFailed, getAiFallbackReconciliation, describeUnmask
 import { insufficientHistory, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
 import { unitDeltaForTransaction, type ReconciliationTransactionInput } from './reconciliation';
 import { computeCostValue, type CostBasisTransaction } from './costBasis';
+import {
+  loadInstrumentBenchmarkContext,
+  loadBenchmarkSeriesById,
+  resolveHoldingBenchmarkComparable,
+  type BenchmarkCoverageOutcome,
+} from './benchmarkCoverage';
 
 type XirrOutcome = CalculationOutcome<{ rate: number }>;
 
@@ -68,6 +74,14 @@ export interface HoldingRow {
   // for a position assembled before any statement carried a
   // source_document_id, or one with no recorded source document at all.
   sourceDocumentId: string | null;
+  // BENCH-1 (2026-09-30): the scheme's exact primary benchmark, its
+  // comparable return over the same window this row's own cost basis was
+  // built from, or an honest unavailable reason (BENCHMARK_MAPPING_MISSING /
+  // BENCHMARK_HISTORY_INCOMPLETE) -- never a fabricated 0% and never a
+  // guessed index (mission BENCH-1 section 12). Reuses the same certified
+  // resolveBenchmarkForDate/benchmarkWindowReturn PerformanceClient already
+  // uses; no benchmark arithmetic is reimplemented here.
+  benchmark: BenchmarkCoverageOutcome;
 }
 
 export interface HoldingsTableResult {
@@ -113,6 +127,7 @@ interface CostTxRow {
   transaction_type: string;
   gross_amount: number;
   units: number | null;
+  transaction_date: string;
 }
 
 export async function loadHoldingsTable(supabase: SupabaseClient, userId: string): Promise<HoldingsTableResult> {
@@ -175,14 +190,21 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
   // correct choice for this display-only purpose.
   const { data: costTxRows } = await supabase
     .from('ii_transactions')
-    .select('account_id, instrument_id, transaction_type, gross_amount, units')
+    .select('account_id, instrument_id, transaction_type, gross_amount, units, transaction_date')
     .eq('user_id', userId)
     .order('transaction_date', { ascending: true })
     .order('id', { ascending: true });
   const costValueByPosition = new Map<string, number>();
   const txsByPosition = new Map<string, CostBasisTransaction[]>();
+  // BENCH-1: earliest transaction date per position, used ONLY as the start
+  // of the benchmark comparison window below. Rows are already ordered by
+  // transaction_date ascending (see the query above), so the first hit per
+  // key is genuinely the earliest -- the same "first hit wins" pattern this
+  // file already uses for latestSnapshotByPosition (descending order there).
+  const earliestTxDateByPosition = new Map<string, string>();
   for (const t of (costTxRows ?? []) as CostTxRow[]) {
     const key = `${t.account_id}:${t.instrument_id}`;
+    if (!earliestTxDateByPosition.has(key)) earliestTxDateByPosition.set(key, t.transaction_date);
     const unitsNum = t.units === null ? null : Number(t.units);
     const delta = Number(
       unitDeltaForTransaction({
@@ -207,6 +229,13 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
     ? await supabase.from('ii_source_documents').select('id, source_detected').in('id', sourceDocIds)
     : { data: [] as Array<{ id: string; source_detected: string | null }> };
   const registrarBySourceDoc = new Map((sourceDocRows ?? []).map((d) => [d.id, d.source_detected]));
+
+  // BENCH-1: one batch query for every held instrument's benchmark mapping,
+  // then one batch query for exactly the benchmark series those mappings
+  // resolved to -- never one query per row, and never the whole catalogue.
+  const benchmarkCtx = await loadInstrumentBenchmarkContext(supabase, instrumentIds);
+  const mappedBenchmarkIds = [...new Set([...benchmarkCtx.mappingsByInstrument.values()].flat().map((m) => m.benchmarkId))];
+  const benchmarkSeriesById = await loadBenchmarkSeriesById(supabase, mappedBenchmarkIds);
 
   const holdings: HoldingRow[] = [];
 
@@ -284,6 +313,15 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
       }
     }
 
+    const earliestTxDate = earliestTxDateByPosition.get(key);
+    const benchmark = resolveHoldingBenchmarkComparable(
+      benchmarkCtx,
+      truth.instrument_id,
+      earliestTxDate ? new Date(earliestTxDate) : null,
+      snapshot?.as_of_date ? new Date(snapshot.as_of_date) : null,
+      benchmarkSeriesById
+    );
+
     holdings.push({
       accountId: truth.account_id,
       instrumentId: truth.instrument_id,
@@ -303,6 +341,7 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
       currencyCode: account.currency_code,
       dataQuality,
       sourceDocumentId: truth.latest_source_document_id,
+      benchmark,
     });
   }
 

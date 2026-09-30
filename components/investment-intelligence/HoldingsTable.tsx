@@ -10,7 +10,11 @@ import { TransactionDetailModal } from './TransactionDetailModal';
 // The "Holdings" table, matching the Product Owner's own reference
 // workbook's Holdings tab column-for-column: Folio No., ISIN, Scheme Code,
 // Scheme Name, Cost Value, Unit Balance, NAV Date, NAV, Market Value,
-// Registrar, Gain/(Loss), Return %, XIRR. Additive to the existing
+// Registrar, Gain/(Loss), Return %, XIRR, plus a BENCH-1 (2026-09-30)
+// addition — a Benchmark column showing this scheme's exact primary
+// benchmark and comparable return, or an honest "Unavailable" with its
+// reason (mission BENCH-1 section 12) — never blank, never a fabricated
+// 0%. Additive to the existing
 // "Scheme performance" table (SchemeTable in PerformanceClient.tsx, kept
 // unchanged) — that table answers "how did this scheme perform against its
 // benchmark", this one answers "what do I actually hold, at what cost, and
@@ -30,6 +34,18 @@ interface DataQuality {
 interface XirrOutcomeView {
   status: string;
   value?: { rate: number };
+  detail?: string;
+}
+
+// BENCH-1 (2026-09-30): mirrors CalculationOutcome<BenchmarkComparable> from
+// holdingsRepository.ts/benchmarkCoverage.ts. status is 'CALCULATED' only
+// when a real, licensed benchmark series actually covered this row's window
+// -- every other status (BENCHMARK_MAPPING_MISSING, BENCHMARK_HISTORY_INCOMPLETE
+// via qualityFlag) renders as an honest "Unavailable" with its own reason,
+// never a blank cell and never a fabricated 0%.
+interface BenchmarkOutcomeView {
+  status: string;
+  value?: { benchmarkKey: string; benchmarkLabel: string; pointToPointReturn: number };
   detail?: string;
 }
 
@@ -56,6 +72,7 @@ interface HoldingRowView {
   // to the statement that can actually be resolved, instead of leaving the
   // badge's tooltip as the only information the user gets.
   sourceDocumentId: string | null;
+  benchmark: BenchmarkOutcomeView;
 }
 
 interface HoldingsApiPayload {
@@ -180,6 +197,7 @@ export function HoldingsTable() {
               <th className="py-2 pr-4 font-medium text-right">Gain/(Loss)</th>
               <th className="py-2 pr-4 font-medium text-right">Return %</th>
               <th className="py-2 pr-4 font-medium text-right">XIRR</th>
+              <th className="py-2 pr-4 font-medium whitespace-nowrap">Benchmark</th>
               <th className="py-2 pr-4 font-medium">Data quality</th>
             </tr>
           </thead>
@@ -216,6 +234,17 @@ export function HoldingsTable() {
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{pct(h.returnPct)}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">
                     {h.xirr.status === 'CALCULATED' && h.xirr.value ? pct(h.xirr.value.rate) : '—'}
+                  </td>
+                  <td className="py-3 pr-4 whitespace-nowrap">
+                    {h.benchmark.status === 'CALCULATED' && h.benchmark.value ? (
+                      <span title={`${h.benchmark.value.benchmarkLabel} — comparable return over this holding's own window`}>
+                        {h.benchmark.value.benchmarkKey} {pct(h.benchmark.value.pointToPointReturn)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted" title={h.benchmark.detail ?? 'No benchmark comparison is available for this scheme.'}>
+                        Unavailable
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 pr-4">
                     <span className={`inline-block rounded border px-2 py-0.5 text-xs font-medium ${badge.className}`} title={h.dataQuality.detail ?? undefined}>
