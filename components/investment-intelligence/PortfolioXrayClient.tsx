@@ -58,6 +58,15 @@ interface XrayResponse {
     mixedDateSpreadDays: number | null;
     statement: string;
   };
+  // BENCH-1 (2026-09-30): scheme-level benchmark coverage, independent of
+  // look-through availability -- present even when `available` is false,
+  // since it needs no fund-holdings disclosure at all.
+  schemeBenchmarkCoverage?: {
+    totalSchemes: number;
+    mappedCount: number;
+    licenceBlockedCount: number;
+    unmappedCount: number;
+  };
   topHoldings?: Array<{
     canonicalId: string;
     name: string;
@@ -179,6 +188,23 @@ export function PortfolioXrayClient() {
       </div>
 
       {dq && <p className="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" data-testid="xray-coverage-statement">{dq.statement}</p>}
+
+      {/* BENCH-1: honest per-scheme benchmark coverage. Never a bare "0%" --
+          a licence-blocked mapping is stated explicitly rather than folded
+          into "unmapped", so a real (if unusable) mapping is never hidden. */}
+      {data.schemeBenchmarkCoverage && (
+        <p className="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" data-testid="xray-benchmark-coverage">
+          Benchmark coverage:{' '}
+          {data.schemeBenchmarkCoverage.mappedCount} of {data.schemeBenchmarkCoverage.totalSchemes} scheme
+          {data.schemeBenchmarkCoverage.totalSchemes === 1 ? '' : 's'} {data.schemeBenchmarkCoverage.totalSchemes === 1 ? 'has' : 'have'} a usable benchmark comparison.
+          {data.schemeBenchmarkCoverage.licenceBlockedCount > 0
+            ? ` ${data.schemeBenchmarkCoverage.licenceBlockedCount} more ${data.schemeBenchmarkCoverage.licenceBlockedCount === 1 ? 'is' : 'are'} mapped but the benchmark's data is not yet licensed for use.`
+            : ''}
+          {data.schemeBenchmarkCoverage.unmappedCount > 0
+            ? ` ${data.schemeBenchmarkCoverage.unmappedCount} ${data.schemeBenchmarkCoverage.unmappedCount === 1 ? 'has' : 'have'} no benchmark mapped yet.`
+            : ''}
+        </p>
+      )}
 
       {(data.warnings ?? []).length > 0 && (
         <ul className="space-y-1 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

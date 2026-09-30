@@ -4,6 +4,7 @@ import { loadXrayDataset, persistR5Results } from '@/lib/services/investment-int
 import { runXrayAnalytics, summariseXrayDataQuality } from '@/lib/engines/investment-intelligence/xray/xrayOrchestrator';
 import { XRAY_ENGINE_VERSION } from '@/lib/engines/investment-intelligence/r5Versioning';
 import { TOP_HOLDINGS_ALLOWED_N } from '@/lib/config/investment-intelligence/xrayThresholds';
+import { loadInstrumentBenchmarkContext, summarizeBenchmarkCoverage } from '@/lib/services/investment-intelligence/benchmarkCoverage';
 
 // R5 — Portfolio X-Ray for the authenticated user.
 //
@@ -58,6 +59,15 @@ export async function GET(request: Request) {
     const dataQuality = summariseXrayDataQuality(result);
     const available = result.lookThrough.status === 'ok';
 
+    // BENCH-1 (2026-09-30): scheme-level benchmark coverage, additive to the
+    // existing look-through analysis and computed independently of it (this
+    // reads plain reference tables, never runs a second engine pass). A
+    // licence-blocked mapping is never folded into "mapped" or "unmapped" --
+    // see benchmarkCoverage.ts's own contract.
+    const xraySchemeInstrumentIds = [...new Set(dataset.positions.map((p) => p.fundInstrumentId))];
+    const benchmarkCtx = await loadInstrumentBenchmarkContext(supabase, xraySchemeInstrumentIds);
+    const schemeBenchmarkCoverage = summarizeBenchmarkCoverage(benchmarkCtx, xraySchemeInstrumentIds, new Date(result.asOfDate));
+
     if (available) {
       await persistR5Results(user.id, [
         {
@@ -98,6 +108,7 @@ export async function GET(request: Request) {
       dataQuality,
       currencyCode: result.lookThrough.currencyCode,
       totalPortfolioValue: result.lookThrough.totalPortfolioValue,
+      schemeBenchmarkCoverage,
       // Scheme-level analyses remain valid even with zero look-through
       // coverage, because they need no holdings disclosure at all.
       schemeConcentration: result.schemeConcentration,
