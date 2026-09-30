@@ -358,8 +358,29 @@ export async function loadAnalyticsDataset(
     // latest snapshot) x (that later NAV price), dated to the NAV point.
     // When there is no later NAV price, or no snapshot at all, behaviour is
     // unchanged from before this fix.
+    //
+    // Regression-proof finding (2026-09-30, golden-fixture audit, PO item 8):
+    // this NAV read has no date filter at all -- it is every ii_prices_nav
+    // row for the instrument, and picking "the last element" is only safe
+    // because every row in production is guaranteed non-future-dated by
+    // trg_ii_prices_nav_no_future_date (migration 0155). That DB trigger was
+    // the ONLY thing standing between a stray future-dated row (a clock-skew
+    // artefact, a direct service-role insert that bypassed the importer, or
+    // simply a caller that passed a genuinely historical `asOfDate` for a
+    // point-in-time query) and this code silently marking a position to
+    // market using a price dated after "now". Bounding the candidate to
+    // `<= asOfDate` costs nothing in the normal case (real NAV rows are never
+    // future-dated) and adds the defense-in-depth the DB trigger alone does
+    // not give the application layer -- see GOLD-008 in
+    // tests/unit/iiNavMarkToMarketGoldenFixtures.test.ts.
     const navSeriesForInstrument = navByInstrument.get(instrumentId) ?? [];
-    const latestNav = navSeriesForInstrument.length ? navSeriesForInstrument[navSeriesForInstrument.length - 1] : undefined;
+    let latestNav: SeriesPoint | undefined;
+    for (let i = navSeriesForInstrument.length - 1; i >= 0; i--) {
+      if (navSeriesForInstrument[i].date.getTime() <= asOfDate.getTime()) {
+        latestNav = navSeriesForInstrument[i];
+        break;
+      }
+    }
     if (latestSnap && latest && latestNav && latestNav.date.getTime() > latest.date.getTime()) {
       currentValue = Number(latestSnap.units) * latestNav.value;
       currentValueDate = latestNav.date;
