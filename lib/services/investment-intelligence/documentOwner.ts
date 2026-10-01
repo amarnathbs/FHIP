@@ -39,7 +39,8 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { recordAllocationGroup, listActiveAllocations } from '@/lib/pc5/allocationStore';
+import { applyAccountOwnerChange, loadAccountOwnership } from './accountOwnership';
+import type { AccountOwnership, ValidatedOwner } from './ownerModel';
 import type { Pc5AllocationEntry } from '@/lib/pc5/types';
 import { emitAuditEvent } from './audit';
 import { matchStatementOwner, type Pc5HouseholdMemberForMatching } from '@/lib/aie/adapters/investment-intelligence/ownerMatching';
@@ -143,27 +144,43 @@ function allocationEntriesFor(owner: DocumentOwner): Pc5AllocationEntry[] {
   return [{ ownerMemberId: owner.ownerMemberId as string, basisPoints: 10000 }];
 }
 
-export async function setAccountOwner(userId: string, accountId: string, owner: DocumentOwner, hadAllocations: boolean, admin: Admin = createAdminClient()): Promise<{ ok: boolean; error: string | null }> {
-  const { error } = await admin
-    .from('ii_accounts')
-    .update({ owner_member_id: owner.kind === 'member' ? owner.ownerMemberId : null })
-    .eq('id', accountId)
-    .eq('user_id', userId);
-  if (error) return { ok: false, error: error.message };
-
-  // Entity / joint owners live in the allocation table. A member-owned account
-  // only needs one when an earlier allocation must be superseded.
-  if (owner.kind !== 'member' || hadAllocations) {
-    const written = await recordAllocationGroup({
-      userId,
-      iiAccountId: accountId,
-      entries: allocationEntriesFor(owner),
-      ownerRole: owner.ownerRole,
-      source: 'user',
-    });
-    if (!written.ok) return { ok: false, error: written.detail };
+/** The canonical model's ValidatedOwner for an owner the user chose at upload (already validated by admission). */
+export function documentOwnerToValidatedOwner(owner: DocumentOwner): ValidatedOwner {
+  if (owner.kind === 'joint') {
+    const entries = (owner.allocations ?? []).map((a) => ({ ...a }));
+    const shares = entries.map((e) => (e.ownerMemberId ? { memberId: e.ownerMemberId, basisPoints: e.basisPoints } : { businessEntityId: e.ownerBusinessEntityId as string, basisPoints: e.basisPoints }));
+    return { kind: 'joint', shares, hasEntity: shares.some((s) => !!s.businessEntityId), ownerRole: 'joint', entries, pointerMemberId: null };
   }
-  return { ok: true, error: null };
+  if (owner.kind === 'entity') {
+    const id = owner.ownerBusinessEntityId as string;
+    return { kind: 'entity', shares: [{ businessEntityId: id, basisPoints: 10000 }], hasEntity: true, ownerRole: owner.ownerRole, entries: [{ ownerBusinessEntityId: id, basisPoints: 10000 }], pointerMemberId: null };
+  }
+  const id = owner.ownerMemberId as string;
+  return { kind: 'member', shares: [{ memberId: id, basisPoints: 10000 }], hasEntity: false, ownerRole: owner.ownerRole, entries: [{ ownerMemberId: id, basisPoints: 10000 }], pointerMemberId: id };
+}
+
+/** The upload-owner signature (see ownerSignature) of an account's EFFECTIVE ownership as the canonical model derives it. */
+export function signatureOfOwnership(o: AccountOwnership): string | null {
+  if (o.kind === 'unassigned') return null;
+  return ownerSignature({
+    allocations: o.shares.length > 1 ? o.shares.map((s) => ({ ownerMemberId: s.memberId ?? null, ownerBusinessEntityId: s.businessEntityId ?? null, basisPoints: s.basisPoints })) : null,
+    memberId: o.shares.length === 1 ? o.shares[0].memberId ?? null : null,
+    entityId: o.shares.length === 1 ? o.shares[0].businessEntityId ?? null : null,
+  });
+}
+
+/**
+ * Sets an account's owner THROUGH the canonical owner-change writer (accountOwnership.applyAccountOwnerChange).
+ * There is exactly one allocation writer for ii_accounts: it validates idempotency, refuses to re-own an
+ * already-published account under an entity, supersedes (never edits) an allocation group, keeps the
+ * sole-member pointer consistent, resolves the owner-exception cases the choice may resolve, and audits.
+ * (`hadAllocations` and `admin` are kept for call-site compatibility; the canonical writer derives both.)
+ */
+export async function setAccountOwner(userId: string, accountId: string, owner: DocumentOwner, hadAllocations: boolean, admin: Admin = createAdminClient()): Promise<{ ok: boolean; error: string | null }> {
+  void hadAllocations;
+  void admin;
+  const result = await applyAccountOwnerChange({ userId, accountId, owner: documentOwnerToValidatedOwner(owner), amend: false });
+  return result.ok ? { ok: true, error: null } : { ok: false, error: result.message };
 }
 
 export async function ownerNames(userId: string, admin: Admin): Promise<Map<string, string>> {
@@ -225,18 +242,12 @@ export async function applyDocumentOwnerToAccounts(
       continue;
     }
 
-    const [{ data: row }, allocations] = await Promise.all([
-      admin.from('ii_accounts').select('owner_member_id').eq('id', acc.accountId).eq('user_id', userId).maybeSingle(),
-      listActiveAllocations(userId, acc.accountId),
-    ]);
-    const existing = ownerSignature({
-      memberId: (row?.owner_member_id as string | null | undefined) ?? null,
-      allocations: allocations.map((a) => ({ ownerMemberId: a.ownerMemberId, ownerBusinessEntityId: a.ownerBusinessEntityId, basisPoints: a.allocationBasisPoints })),
-    });
+    const loaded = await loadAccountOwnership(admin, userId, acc.accountId);
+    const existing = loaded ? signatureOfOwnership(loaded.ownership) : null;
     const plan = planAccountOwner(existing, selected);
     if (plan === 'noop') continue;
     if (plan === 'apply') {
-      const set = await setAccountOwner(userId, acc.accountId, owner, allocations.length > 0, admin);
+      const set = await setAccountOwner(userId, acc.accountId, owner, false, admin);
       if (!set.ok) throw new Error(`could not record the owner on an existing account: ${set.error}`);
       review.appliedAccountIds.push(acc.accountId);
       continue;
@@ -302,8 +313,7 @@ export async function confirmOwnerChange(
 
   const changed: string[] = [];
   for (const t of targets) {
-    const allocations = await listActiveAllocations(userId, t.accountId);
-    const set = await setAccountOwner(userId, t.accountId, owner, allocations.length > 0, admin);
+    const set = await setAccountOwner(userId, t.accountId, owner, false, admin);
     if (!set.ok) return { ok: false, status: 500, message: 'Could not change the owner of one of the folios. Nothing further was changed.' };
     changed.push(t.accountId);
     await emitAuditEvent({

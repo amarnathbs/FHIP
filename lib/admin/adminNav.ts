@@ -96,6 +96,14 @@ export const LOOKTHROUGH_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Underlying Fund Holdings Quality', href: '/admin/investment-intelligence/lookthrough-data-quality' },
 ];
 
+// Admin Premium grant (migration 0231): the entitlement-management destination.
+// One real screen behind it. A SEPARATE group from every other capability: the
+// ability to allocate Premium (a money-affecting entitlement) is not implied by,
+// and does not imply, Resources, Reference Data, Look-Through or any other grant.
+export const ENTITLEMENT_ITEMS: { label: string; href: string }[] = [
+  { label: 'Premium Access', href: '/admin/entitlements' },
+];
+
 // -- Capability contract ---------------------------------------------------
 
 /**
@@ -125,6 +133,14 @@ export interface AdminCapabilities {
    * named capabilities for two surfaces (Standard §2).
    */
   lookthroughDataQuality: boolean;
+  /**
+   * Admin Premium grant (migration 0231) — allocate / extend / revoke admin
+   * Premium. Backed by admin_users.can_manage_premium_entitlements and the
+   * is_premium_entitlement_admin() predicate. Deliberately NOT implied by
+   * `isAdmin` (Super Admin) and NOT implied by any other capability (Standard
+   * §2/§3).
+   */
+  entitlementManagement: boolean;
 }
 
 /**
@@ -141,6 +157,7 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   resourceAnalytics: false,
   referenceDataQuality: false,
   lookthroughDataQuality: false,
+  entitlementManagement: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -172,6 +189,7 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     resourceAnalytics: readBooleanField(source, 'resourceAnalytics'),
     referenceDataQuality: readBooleanField(source, 'referenceDataQuality'),
     lookthroughDataQuality: readBooleanField(source, 'lookthroughDataQuality'),
+    entitlementManagement: readBooleanField(source, 'entitlementManagement'),
   };
 }
 
@@ -219,6 +237,7 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.resourceDiscoveryAdmin ? [{ label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.lookthroughDataQuality ? [{ label: 'Fund Look-Through', items: LOOKTHROUGH_DATA_ITEMS, matchMode: 'exact' as const }] : []),
+    ...(capabilities.entitlementManagement ? [{ label: 'Entitlements', items: ENTITLEMENT_ITEMS, matchMode: 'exact' as const }] : []),
   ];
 }
 

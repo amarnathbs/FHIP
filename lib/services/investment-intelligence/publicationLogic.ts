@@ -175,6 +175,17 @@ export function resolveAnnualContribution(confirmedAnnualPlan: number | null | u
 // ---------------------------------------------------------------------------
 export interface EligibilityInput {
   ownerMemberId: string | null; // resolved household_members.id, or null if unresolved
+  /**
+   * 2026-10-01 entity + joint owners. The account's EFFECTIVE ownership kind.
+   * Omitted (every pre-existing caller/test) = the old behaviour, decided by
+   * `ownerMemberId` alone.
+   *   - 'entity', or a 'joint' split with any entity share: NOT publishable to
+   *     personal Net Worth (PO entity-separation ruling 2026-09-21).
+   *   - 'joint' between household members only: the owner counts as resolved
+   *     (published once, with the 'joint' owner role) even though there is no
+   *     single member id.
+   */
+  ownership?: { kind: 'unassigned' | 'member' | 'entity' | 'joint'; hasEntity: boolean };
   instrumentClass: IiInstrumentClass;
   accountType: IiAccountType;
   portfolioTruthStatus: string; // ii_portfolio_truth_status.status
@@ -190,7 +201,12 @@ export function evaluateEligibility(input: EligibilityInput): IiEligibilityResul
   const blocking: IiEligibilityReason[] = [];
   const warning: IiEligibilityReason[] = [];
 
-  if (!input.ownerMemberId) {
+  if (input.ownership && input.ownership.kind !== 'unassigned' && input.ownership.hasEntity) {
+    blocking.push({
+      code: 'OWNER_IS_BUSINESS_ENTITY',
+      message: 'This account is owned by a trust, HUF or company (or shared with one). Entity holdings are kept separate from your personal Net Worth and are not published to it.',
+    });
+  } else if (!input.ownerMemberId && input.ownership?.kind !== 'joint') {
     blocking.push({ code: 'OWNER_UNRESOLVED', message: 'The statement holder could not be safely mapped to an existing household member.' });
   }
   if (!isProductionCertifiedAssetClass(input.instrumentClass)) {

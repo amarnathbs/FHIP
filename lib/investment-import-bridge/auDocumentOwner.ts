@@ -18,8 +18,8 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { listActiveAllocations } from '@/lib/pc5/allocationStore';
-import { ownerSignature, planAccountOwner, setAccountOwner, signatureOfDocumentOwner, type DocumentOwner } from '@/lib/services/investment-intelligence/documentOwner';
+import { loadAccountOwnership } from '@/lib/services/investment-intelligence/accountOwnership';
+import { planAccountOwner, setAccountOwner, signatureOfDocumentOwner, signatureOfOwnership, type DocumentOwner } from '@/lib/services/investment-intelligence/documentOwner';
 import { createAuInvestmentAccount, type AuAccountOwnerChoice } from './auAccountResolution';
 
 export interface StoredUploadOwner {
@@ -87,17 +87,11 @@ export async function applyUploadOwnerToExistingAuAccount(userId: string, accoun
   const owner = toDocumentOwner(stored);
   if (!owner) return 'unchanged';
   const admin = createAdminClient();
-  const [{ data: row }, allocations] = await Promise.all([
-    admin.from('ii_accounts').select('owner_member_id').eq('id', accountId).eq('user_id', userId).maybeSingle(),
-    listActiveAllocations(userId, accountId),
-  ]);
-  const existing = ownerSignature({
-    memberId: (row as { owner_member_id?: string | null } | null)?.owner_member_id ?? null,
-    allocations: allocations.map((a) => ({ ownerMemberId: a.ownerMemberId, ownerBusinessEntityId: a.ownerBusinessEntityId, basisPoints: a.allocationBasisPoints })),
-  });
+  const loaded = await loadAccountOwnership(admin, userId, accountId);
+  const existing = loaded ? signatureOfOwnership(loaded.ownership) : null;
   const plan = planAccountOwner(existing, signatureOfDocumentOwner(owner));
   if (plan === 'noop') return 'unchanged';
   if (plan === 'conflict' && !confirm) return 'conflict';
-  const set = await setAccountOwner(userId, accountId, owner, allocations.length > 0, admin);
+  const set = await setAccountOwner(userId, accountId, owner, false, admin);
   return set.ok ? 'applied' : 'conflict';
 }

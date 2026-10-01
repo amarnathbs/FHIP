@@ -13,6 +13,7 @@
 // flipping the switch and the next request being refused.
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { countEffectivePremium } from '@/lib/services/entitlementWindow';
 import type { AITaskType } from '@/lib/ai/providers/types';
 import type { ModelTier } from '@/lib/ai/modelRegistry';
 
@@ -425,7 +426,8 @@ export async function buildUsageDashboard(billingPeriod: string): Promise<AiUsag
   const [ledgerRes, controlsRes, entitledRes, admissionsRes, eventsRes, runsRes] = await Promise.all([
     admin.from('ai_usage_ledger').select('*').eq('billing_period', billingPeriod),
     getPlatformControls(),
-    admin.from('user_entitlements').select('user_id', { count: 'exact', head: true }).eq('plan_tier', 'premium'),
+    // Admin Premium grant (0231): Premium TODAY (inside the validity window).
+    countEffectivePremium(admin),
     admin.from('ai_admission_events').select('deny_reason, decision').eq('billing_period', billingPeriod),
     admin.from('ai_operational_events').select('severity').gte('created_at', `${billingPeriod}-01T00:00:00Z`),
     admin.from('ai_runs').select('execution_status').gte('created_at', `${billingPeriod}-01T00:00:00Z`),

@@ -63,10 +63,14 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getUserFullExperienceHomeCountry, type FullExperienceCountryCode } from '@/lib/services/jurisdiction';
 import { mapRelationshipToOwner } from '@/lib/services/investment-intelligence/publicationLogic';
 import type { HouseholdMemberRelationship } from '@/lib/services/investment-intelligence/types';
-import { BUSINESS_ENTITY_TYPE_REQUIRED_COUNTRY, type BusinessEntityType } from '@/lib/validation/businessEntity';
-import { businessEntityOwnerRole } from '@/lib/pc5/optionSets';
-import { validateAllocation } from '@/lib/pc5/jointAllocation';
+import type { BusinessEntityType } from '@/lib/validation/businessEntity';
 import type { Pc5AllocationEntry } from '@/lib/pc5/types';
+// ONE ownership model (PO-OBU-04). Who may be an owner -- belongs to the user, active, HUF only for an
+// India-confirmed user, a joint split exactly 100% -- is decided by the canonical model every owner
+// mutation uses (Investment Intelligence's ownerModel.validateOwnerSelection). This module adds only what
+// admission needs on top: the per-FLOW policy (which kinds / roles a document type can carry), SMSF
+// (which is not a business entity), and a required-owner / wire-format layer. It restates none of the rules.
+import { validateOwnerSelection as validateCanonicalOwner, type OwnerChoiceContext, type OwnerFailure } from '@/lib/services/investment-intelligence/ownerModel';
 import type { Owner } from '@/lib/constants';
 import { ownerSelectionSchema, type OwnerFlow, type OwnerSelection } from './ownerSelection';
 
@@ -218,11 +222,56 @@ interface ResolvedPart {
   label: string;
 }
 
+function toCanonicalContext(ctx: OwnerContext): OwnerChoiceContext {
+  return {
+    homeCountry: ctx.homeCountry,
+    members: ctx.members.map((m) => ({ id: m.id, full_name: m.fullName, relationship: m.relationship, is_active: m.isActive })),
+    entities: ctx.entities.map((e) => ({ id: e.id, name: e.name, entity_type: e.entityType, is_active: e.isActive })),
+  };
+}
+
+/** Maps a canonical-model failure to this module's admission codes and wording. */
+function fromCanonical(f: OwnerFailure, lines?: ReadonlyArray<{ basisPoints: number }>): Fail {
+  switch (f.code) {
+    case 'OWNER_MEMBER_NOT_FOUND':
+      return fail('owner_not_found', 'That household member was not found.');
+    case 'OWNER_ENTITY_NOT_FOUND':
+      return fail('owner_not_found', 'That entity was not found.');
+    case 'OWNER_MEMBER_INACTIVE':
+      return fail('owner_inactive', 'That household member is no longer active. Reactivate them before choosing them as an owner.');
+    case 'OWNER_ENTITY_INACTIVE':
+      return fail('owner_inactive', 'That entity is no longer active. Reactivate it before choosing it as an owner.');
+    case 'OWNER_ENTITY_TYPE_UNAVAILABLE_FOR_COUNTRY':
+      return fail('owner_not_allowed_for_country', 'A Hindu Undivided Family (HUF) can only be the owner of documents for accounts confirmed in India.', 403);
+    case 'JOINT_REQUIRES_TWO_OWNERS':
+      return fail('joint_needs_two_owners', 'A joint statement needs at least two owners. For one owner, choose that owner instead.');
+    case 'JOINT_ALLOCATION_INVALID':
+      switch (f.reason) {
+        case 'duplicate_owner':
+          return fail('joint_duplicate_owner', 'The same owner appears more than once in the joint split.');
+        case 'out_of_range_basis_points':
+          return lines?.some((l) => l.basisPoints <= 0)
+            ? fail('joint_zero_share', 'Every joint owner needs a share above zero. Remove an owner who has no share.')
+            : fail('joint_share_invalid', 'A joint share must be between 0.01% and 100%.');
+        case 'non_integer_basis_points':
+          return fail('joint_share_invalid', 'A joint share could not be read. Use up to two decimal places.');
+        case 'total_not_100_percent':
+          return fail('joint_total_not_100', 'The joint shares must add up to exactly 100%.');
+        case 'owner_identity_missing_or_ambiguous':
+          return fail('joint_owner_identity', 'Each joint owner must be exactly one household member or one entity.');
+        default:
+          return fail('joint_allocation_required', 'A joint statement needs each owner and their percentage share, adding up to 100%.');
+      }
+    default:
+      return fail('owner_invalid', 'The owner choice was not understood. Please choose the owner again.');
+  }
+}
+
 function resolveMember(ctx: OwnerContext, policy: OwnerFlowPolicy, memberId: string): ResolvedPart | Fail {
-  const member = ctx.members.find((m) => m.id === memberId);
-  if (!member) return fail('owner_not_found', 'That household member was not found.');
-  if (!member.isActive) return fail('owner_inactive', `${member.fullName || 'That household member'} is no longer active. Reactivate them before choosing them as an owner.`);
-  const role = mapRelationshipToOwner(member.relationship) as Owner;
+  const canonical = validateCanonicalOwner({ kind: 'member', member_id: memberId }, toCanonicalContext(ctx));
+  if (!canonical.ok) return fromCanonical(canonical);
+  const member = ctx.members.find((m) => m.id === memberId) as OwnerContextMember;
+  const role = canonical.owner.ownerRole as Owner;
   if (!policy.allowedMemberRoles.includes(role)) {
     return fail('owner_not_allowed_for_flow', `${member.fullName || 'That household member'} cannot be chosen as the owner of this kind of document.`);
   }
@@ -230,24 +279,16 @@ function resolveMember(ctx: OwnerContext, policy: OwnerFlowPolicy, memberId: str
 }
 
 function resolveEntity(ctx: OwnerContext, policy: OwnerFlowPolicy, entityId: string): ResolvedPart | Fail {
-  const entity = ctx.entities.find((e) => e.id === entityId);
-  if (!entity) return fail('owner_not_found', 'That entity was not found.');
-  if (!entity.isActive) return fail('owner_inactive', `${entity.name} is no longer active. Reactivate it before choosing it as an owner.`);
+  const canonical = validateCanonicalOwner({ kind: 'entity', business_entity_id: entityId }, toCanonicalContext(ctx));
+  if (!canonical.ok) return fromCanonical(canonical);
+  const entity = ctx.entities.find((e) => e.id === entityId) as OwnerContextEntity;
   if (policy.allowedEntityTypes.length === 0) {
     return fail('owner_not_allowed_for_flow', policy.entityRefusalReason ?? 'Entities cannot be chosen for this kind of document.');
   }
   if (!policy.allowedEntityTypes.includes(entity.entityType)) {
     return fail('owner_not_allowed_for_flow', `${entity.name} cannot be chosen as the owner of this kind of document.`);
   }
-  const requiredCountry = BUSINESS_ENTITY_TYPE_REQUIRED_COUNTRY[entity.entityType];
-  if (requiredCountry && ctx.homeCountry !== requiredCountry) {
-    return fail(
-      'owner_not_allowed_for_country',
-      'A Hindu Undivided Family (HUF) can only be the owner of documents for accounts confirmed in India.',
-      403,
-    );
-  }
-  return { ownerRole: businessEntityOwnerRole(entity.entityType), memberId: null, entityId: entity.id, entityType: entity.entityType, label: entity.name };
+  return { ownerRole: canonical.owner.ownerRole as Owner, memberId: null, entityId: entity.id, entityType: entity.entityType, label: entity.name };
 }
 
 /** PURE. See the file header for every rule. */
@@ -301,7 +342,6 @@ export function validateOwnerSelectionAgainst(ctx: OwnerContext, input: unknown,
       }
       if (raw.length < 2) return fail('joint_needs_two_owners', 'A joint statement needs at least two owners. For one owner, choose that owner instead.');
 
-      const entries: Pc5AllocationEntry[] = [];
       const labels: string[] = [];
       for (const e of raw) {
         const hasMember = Boolean(e.memberId);
@@ -312,34 +352,17 @@ export function validateOwnerSelectionAgainst(ctx: OwnerContext, input: unknown,
         const part = hasMember ? resolveMember(ctx, policy, e.memberId as string) : resolveEntity(ctx, policy, e.entityId as string);
         if (isFail(part)) return part;
         labels.push(part.label);
-        entries.push({
-          ...(part.memberId ? { ownerMemberId: part.memberId } : { ownerBusinessEntityId: part.entityId as string }),
-          basisPoints: e.basisPoints,
-        } as Pc5AllocationEntry);
       }
-      const checked = validateAllocation(entries);
-      if (!checked.ok) {
-        switch (checked.reason) {
-          case 'duplicate_owner':
-            return fail('joint_duplicate_owner', 'The same owner appears more than once in the joint split.');
-          case 'out_of_range_basis_points': {
-            const bp = entries[(checked as { index: number }).index]?.basisPoints;
-            if (bp !== undefined && bp <= 0) return fail('joint_zero_share', 'Every joint owner needs a share above zero. Remove an owner who has no share.');
-            return fail('joint_share_invalid', 'A joint share must be between 0.01% and 100%.');
-          }
-          case 'non_integer_basis_points':
-            return fail('joint_share_invalid', 'A joint share could not be read. Use up to two decimal places.');
-          case 'total_not_100_percent':
-            return fail('joint_total_not_100', 'The joint shares must add up to exactly 100%.');
-          case 'owner_identity_missing_or_ambiguous':
-            return fail('joint_owner_identity', 'Each joint owner must be exactly one household member or one entity.');
-          default:
-            return fail('joint_allocation_required', 'A joint statement needs each owner and their percentage share, adding up to 100%.');
-        }
-      }
+      // The split itself (no duplicate owner, no zero / fractional share, exactly 10000 bp) is the canonical
+      // model's rule, so an upload and an owner amendment can never disagree about what a valid split is.
+      const canonical = validateCanonicalOwner(
+        { kind: 'joint', allocations: raw.map((e) => ({ ...(e.memberId ? { member_id: e.memberId } : { business_entity_id: e.entityId as string }), basis_points: e.basisPoints })) },
+        toCanonicalContext(ctx),
+      );
+      if (!canonical.ok) return fromCanonical(canonical, raw);
       return {
         ok: true,
-        owner: { kind: 'joint', ownerRole: 'joint', ownerMemberId: null, ownerBusinessEntityId: null, entityType: null, allocations: checked.entries, label: `Joint (${labels.join(', ')})` },
+        owner: { kind: 'joint', ownerRole: 'joint', ownerMemberId: null, ownerBusinessEntityId: null, entityType: null, allocations: canonical.owner.entries as Pc5AllocationEntry[], label: `Joint (${labels.join(', ')})` },
       };
     }
   }

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ownerClassField, resolveOwnerClassScope } from '@/lib/services/investment-intelligence/ownerClassScope';
 import { loadAnalyticsDataset } from '@/lib/services/investment-intelligence/analyticsRepository';
 import { runAnalytics } from '@/lib/engines/investment-intelligence/analyticsOrchestrator';
 import { attachUnrecoverableHistoryDisclosure, type CoverageGapSummary } from '@/lib/engines/investment-intelligence/navCoverageDisclosure';
@@ -33,7 +34,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const rootClient = await createClient();
+    const scope = await resolveOwnerClassScope(request, rootClient, user.id);
+    if (!scope.ok) return scope.response;
+    const supabase = scope.client;
     const { dataset, warnings, empty } = await loadAnalyticsDataset(supabase, user.id, {
       periodStart: periodStart ?? undefined,
       asOfDate: asOfDate ?? undefined,
@@ -42,6 +46,7 @@ export async function GET(request: Request) {
     if (empty || !dataset) {
       return ok({
         empty: true,
+        ownerClass: ownerClassField(scope),
         warnings,
         message: 'No investment positions are available yet, so performance analytics cannot be calculated.',
       });
@@ -49,7 +54,7 @@ export async function GET(request: Request) {
 
     const results = runAnalytics(dataset);
     const disclosedResults = await withUnrecoverableHistoryDisclosure(results);
-    return ok({ empty: false, warnings, results: disclosedResults });
+    return ok({ empty: false, ownerClass: ownerClassField(scope), warnings, results: disclosedResults });
   } catch (e) {
     // Clean error handling (spec section 105): a failure surfaces as an
     // explicit error, never as a zero-valued or partially-populated result
