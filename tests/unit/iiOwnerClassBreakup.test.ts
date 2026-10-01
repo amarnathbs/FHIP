@@ -183,7 +183,7 @@ describe('scopeClientToAccounts: the certified loaders run unchanged on one clas
     const { client } = makeFakeSupabase(base());
     const scoped = scopeClientToAccounts(client, ['a-asha']);
     for (const w of ['insert', 'update', 'upsert', 'delete']) {
-      expect(() => (scoped.from('ii_transactions') as Record<string, () => unknown>)[w]()).toThrow(/read-only/);
+      expect(() => (scoped.from('ii_transactions') as unknown as Record<string, () => unknown>)[w]()).toThrow(/read-only/);
     }
   });
 });
