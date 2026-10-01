@@ -84,11 +84,24 @@ export function deriveReportNavDependencyInputs(
   // defended against rather than assumed) can never produce a duplicate
   // input the upsert would otherwise silently collapse in an unpredictable
   // order.
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   const push = (instrumentId: string, basis: ReportNavDependencyBasis, earliestTransactionDate?: string | null) => {
     const key = `${instrumentId}|${basis}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    const at = seen.get(key);
+    if (at !== undefined) {
+      // India MF Investment Report: a second chapter can legitimately depend
+      // on the same (instrument, basis). Keep the WIDER protective window —
+      // the earlier of the two dates, and unbounded (null) if either side is
+      // unbounded — never first-wins, which could silently shrink a pin.
+      const cur = inputs[at].earliestTransactionDate;
+      if (basis !== 'rolling_return_window' && (cur === undefined || cur === null || earliestTransactionDate === undefined || earliestTransactionDate === null)) {
+        inputs[at] = { ...inputs[at], earliestTransactionDate: null };
+      } else if (basis !== 'rolling_return_window' && earliestTransactionDate && cur && earliestTransactionDate < cur) {
+        inputs[at] = { ...inputs[at], earliestTransactionDate };
+      }
+      return;
+    }
+    seen.set(key, inputs.length);
     inputs.push({ instrumentId, basis, reportAsOfDate, earliestTransactionDate });
   };
 
@@ -111,6 +124,20 @@ export function deriveReportNavDependencyInputs(
   if (premium.taxAndCost) {
     for (const [instrumentId, date] of Object.entries(premium.taxAndCost.earliestAcquisitionDateByInstrument)) {
       push(instrumentId, 'tax_lot_fifo', date);
+    }
+  }
+
+  // India Mutual Fund Investment Report (table-style section). It reads each
+  // fund's NAV history twice over: current value uses the latest NAV on or
+  // before the as-of date, and the per-folio XIRR runs over the recorded cash
+  // flows since the fund's first transaction. That is exactly the
+  // 'xirr_since_inception' contract (earliest real transaction -> as-of date),
+  // so the section is pinned with that basis — no new basis value (and no
+  // migration) is needed. For a holding with no transactions the map carries
+  // the earlier of its statement date and the NAV date actually used.
+  if (premium.indiaMf?.status === 'ok') {
+    for (const [instrumentId, date] of Object.entries(premium.indiaMf.report.earliestTransactionDateByInstrument)) {
+      push(instrumentId, 'xirr_since_inception', date);
     }
   }
 

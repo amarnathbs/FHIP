@@ -29,6 +29,7 @@ import {
   type ReportTaxData,
   type ReportReviewData,
 } from '@/lib/services/investmentIntelligenceReportData';
+import { loadIndiaMfReportForReport, type ReportIndiaMfData } from '@/lib/services/investment-intelligence/indiaMfReportData';
 
 export interface ReportProfile {
   fullName: string | null;
@@ -128,6 +129,14 @@ export interface PremiumSourceData {
   xray: ReportXrayData | null;
   taxAndCost: ReportTaxData | null;
   reviewItems: ReportReviewData | null;
+  // India Mutual Fund Investment Report (one table-style section, broken up
+  // per owner). null = NOT APPLICABLE: the user holds no INR mutual-fund
+  // folio, so the section is not built at all (not shown as "unavailable").
+  // Gated on actual India MF holdings, NOT on home country — an Australian
+  // user with an Indian folio gets it. { status: 'error' } = the user does
+  // hold India funds but the read failed; the section says so and shows no
+  // partial table.
+  indiaMf?: ReportIndiaMfData | null;
 }
 
 export interface ReportSourceData {
@@ -337,6 +346,7 @@ export async function resolveReportSourceData(
       xray,
       taxAndCost,
       reviewItems,
+      indiaMf,
     ] = await Promise.all([
       // FDH-16 fix (FDH16-DEF-001, same root cause as dashboardData.ts):
       // these queries had no .range()/.limit() and were silently subject
@@ -389,6 +399,10 @@ export async function resolveReportSourceData(
       loadXrayForReport(userId, supabase).catch(() => null),
       loadTaxForReport(userId, supabase).catch(() => null),
       loadReviewItemsForReport(userId).catch(() => null),
+      // India MF Investment Report. Returns null when the user holds no INR
+      // mutual fund; its own try/catch turns a read failure into
+      // { status: 'error' } — the .catch is defence in depth only.
+      loadIndiaMfReportForReport(userId, supabase, new Date().toISOString().slice(0, 10)).catch(() => null),
     ]);
 
     const historyByMonth = new Map<string, { onTrackCount: number; activeCount: number }>();
@@ -418,6 +432,7 @@ export async function resolveReportSourceData(
       xray,
       taxAndCost,
       reviewItems,
+      indiaMf,
     };
   }
 

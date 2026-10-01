@@ -339,7 +339,7 @@ export interface IndiaMfReport {
   footnotes: ReportFootnote[];
   excluded: { nonInrMutualFundPositions: number; nonMutualFundPositions: number };
   notSummedNote: string;
-  /** Earliest recorded transaction date across all rows, for NAV pinning. */
+  /** Earliest date each fund's NAV history matters for (first recorded transaction), for NAV pinning. */
   earliestTransactionDateByInstrument: Record<string, string>;
 }
 
@@ -981,7 +981,15 @@ export function buildIndiaMfReport(input: IndiaMfReportInput): IndiaMfReport | n
     if (metrics.flags.noTransactions && !snapshotByKey.has(key)) continue;
     positions.push(metrics);
     positionOwners.set(key, resolveOwners(account, instrumentId, input.allocations, valuationDate));
-    const earliest = txns.filter((t) => t.status !== 'reversed' && t.status !== 'review_required').map((t) => t.date).sort()[0];
+    // Earliest date this fund's NAV history matters for (NAV pinning): the
+    // first recorded transaction; for a holding with no transactions, the
+    // earlier of its statement date and the NAV date actually used.
+    let earliest: string | undefined = txns.filter((t) => t.status !== 'reversed' && t.status !== 'review_required').map((t) => t.date).sort()[0];
+    if (!earliest) {
+      const snap = snapshotByKey.get(key);
+      const candidates = [snap?.asOfDate, metrics.latestNavDate].filter((d): d is string => Boolean(d));
+      earliest = candidates.sort()[0];
+    }
     if (earliest) {
       const cur = earliestTransactionDateByInstrument[instrumentId];
       if (!cur || earliest < cur) earliestTransactionDateByInstrument[instrumentId] = earliest;

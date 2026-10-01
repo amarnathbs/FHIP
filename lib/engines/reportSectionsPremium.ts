@@ -41,6 +41,7 @@ const PREMIUM_SECTION_TITLES: Record<PremiumSectionCode, string> = {
   sip_contribution: 'Contribution (SIP) Behaviour',
   portfolio_xray: 'Portfolio X-Ray & Diversification',
   tax_and_cost: 'Tax & Cost Intelligence',
+  india_mf_investment_report: 'Mutual Fund Investment Report',
   priority_review_items: 'Priority Review Items',
   appendices: 'Appendices — Recorded Data',
 };
@@ -811,6 +812,54 @@ export function buildTaxAndCost(source: ReportSourceData, premium: PremiumSource
   };
 }
 
+// India Mutual Fund Investment Report — ONE table-style section inside the
+// monthly report, broken up per owner (Self, Spouse, HUF, Trust, Company,
+// Unallocated). Classification: OBSERVATION (R10_COMPLIANCE_AND_LANGUAGE.md) —
+// records what the uploaded statements and published NAVs show; no advice, no
+// projection, no tax computation. The section's data IS the pure module's
+// result (lib/engines/investment-intelligence/indiaMfReport.ts); nothing is
+// recalculated here (Rule 15).
+//
+// Returns NULL — the section is not built, not listed, not shown as
+// "unavailable" — unless the user actually holds India (INR) mutual funds.
+// That is the whole eligibility rule: premium plan tier (already implied,
+// premium sections only run for a premium report) AND India MF holdings.
+// Home country is deliberately NOT consulted.
+export function buildIndiaMfInvestmentReport(source: ReportSourceData, premium: PremiumSourceData): BuiltSection | null {
+  const loaded = premium.indiaMf;
+  if (!loaded) return null;
+  if (loaded.status === 'error') {
+    return empty('india_mf_investment_report', 33, 'The Mutual Fund Investment Report could not be produced because your investment records could not be read just now. No partial table is shown — regenerate the report to try again.');
+  }
+  const { report } = loaded;
+  const ownerCount = report.sections.length;
+  const positionCount = report.sections.reduce((n, s) => n + s.rows.length, 0);
+  const partial = report.sections.reduce((n, s) => n + s.tiles.partialPositions, 0);
+  return {
+    sectionCode: 'india_mf_investment_report',
+    sectionTitle: PREMIUM_SECTION_TITLES.india_mf_investment_report,
+    displayOrder: 33,
+    sectionStatus: 'included',
+    sectionData: { report },
+    narrativeText:
+      `Your Indian mutual fund holdings are listed below as at ${report.valuationDate}, one table for each owner (${ownerCount} owner section${ownerCount === 1 ? '' : 's'}, ${positionCount} holding${positionCount === 1 ? '' : 's'}). ` +
+      `Each table shows what your uploaded statements record — purchases, switches, redemptions and dividends — against the latest published NAV.` +
+      (partial > 0 ? ` ${partial} holding${partial === 1 ? '' : 's'} rest${partial === 1 ? 's' : ''} on partial transaction history and carr${partial === 1 ? 'ies' : 'y'} a visible basis marker.` : ''),
+    chartData: null,
+    sourceReferences: {
+      module: 'india-mf-investment-report',
+      version: report.version,
+      valuationDate: report.valuationDate,
+      sensexDate: report.indices.sensex.date,
+      niftyDate: report.indices.nifty.date,
+    },
+    confidenceLevel: null,
+    limitationText:
+      'Observation only: this is a record of your uploaded statements and published NAVs, not personal financial or tax advice. Amounts are in Indian rupees. ' +
+      report.notSummedNote,
+  };
+}
+
 const REVIEW_SEVERITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
 export function buildPriorityReviewItems(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
@@ -908,5 +957,7 @@ export function buildPremiumSections(source: ReportSourceData, isFirstReport: bo
     buildTaxAndCost(source, premium),
     buildPriorityReviewItems(source, premium),
     buildAppendices(source, premium),
-  ];
+    // Conditional section: absent entirely unless the user holds INR mutual funds.
+    buildIndiaMfInvestmentReport(source, premium),
+  ].filter((s): s is BuiltSection => s !== null);
 }
