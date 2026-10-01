@@ -5,6 +5,14 @@ import { iiSourceDocumentUploadMetaSchema } from '@/lib/validation/investment-in
 import { validateUploadedFile, generateObjectKey, uploadSourceDocumentObject } from '@/lib/services/investment-intelligence/storage';
 import { scanUploadedPdfForAdmission, uploadAdmissionFailureMessage } from '@/lib/services/investment-intelligence/uploadAdmission';
 import { createHash } from 'crypto';
+import { validateOwnerSelection } from '@/lib/ownership/validateOwnerSelection';
+import {
+  identicalUploadMessage,
+  isMissingOwnerColumnError,
+  legacyOwnerColumnsFor,
+  ownerColumnsFor,
+  verdictForIdenticalUpload,
+} from '@/lib/services/investment-intelligence/uploadOwner';
 import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from '@/lib/services/investment-intelligence/realScanAdmission';
 import { computeSourceDocumentCounts, EMPTY_SOURCE_DOCUMENT_COUNTS, type SourceDocumentCounts } from '@/lib/services/investment-intelligence/sourceDocumentEnrichment';
 
@@ -88,6 +96,14 @@ export async function POST(req: Request) {
   const parsedMeta = iiSourceDocumentUploadMetaSchema.safeParse(meta);
   if (!parsedMeta.success) return badValidation(parsedMeta.error, 422);
 
+  // Owner-before-upload (Phase 1): the owner is REQUIRED and validated server-side
+  // against THIS user's own household members / entities and their authoritative
+  // home country -- never against a country taken from this request. Checked
+  // before the file is read, so a missing owner costs nothing.
+  const ownerVerdict = await validateOwnerSelection(user.id, parsedMeta.data.owner, 'ii_cas');
+  if (!ownerVerdict.ok) return bad(ownerVerdict.message, ownerVerdict.status, ownerVerdict.code);
+  const owner = ownerVerdict.owner;
+
   const validation = validateUploadedFile({ filename: file.name, mimeType: file.type, sizeBytes: file.size });
   if (!validation.ok) return bad(validation.error!, 422);
 
@@ -124,8 +140,36 @@ export async function POST(req: Request) {
   // Re-upload detection (unique(user_id, checksum) where checksum is not
   // null) — deterministic, explainable behaviour for the identical file
   // uploaded twice (spec section 31).
-  const { data: existing } = await supabase.from('ii_source_documents').select('id, status').eq('user_id', user.id).eq('checksum', checksum).maybeSingle();
-  if (existing) return ok({ ...existing, deduplicated: true });
+  // Owner-before-upload (decision 6): the same bytes under a DIFFERENT owner is
+  // refused, naming the first owner -- never silently ignored (the user's new
+  // answer would be discarded) and never silently reassigned. `select('*')`, so
+  // a database one migration behind simply has no owner columns on the row.
+  let existing: Record<string, unknown> | null = null;
+  {
+    const wide = await supabase.from('ii_source_documents').select('*').eq('user_id', user.id).eq('checksum', checksum).maybeSingle();
+    existing = (wide.data as Record<string, unknown> | null) ?? null;
+  }
+  if (existing) {
+    const verdict = await verdictForIdenticalUpload(user.id, existing, owner);
+    if (verdict.kind !== 'same_owner') {
+      return Response.json(
+        { error: 'identical_upload_different_owner', message: identicalUploadMessage(verdict, owner.label), existing_document_id: existing.id },
+        { status: 409 },
+      );
+    }
+    return ok({ id: existing.id, status: existing.status, deduplicated: true });
+  }
+
+  // Entity / joint owners need the 0236 owner columns. Probe BEFORE writing to
+  // storage so a database one migration behind never stores a file whose owner
+  // it cannot record. (A member-owned upload needs only the long-standing
+  // owner_member_id column and still works.)
+  if (owner.kind !== 'member') {
+    const probe = await supabase.from('ii_source_documents').select('owner_role, owner_business_entity_id, owner_allocation').limit(1);
+    if (probe.error && isMissingOwnerColumnError(probe.error.message)) {
+      return bad('Choosing a trust, HUF, company or joint owner is not available yet on this system. Choose a person for now.', 503, 'owner_storage_unavailable');
+    }
+  }
 
   const objectKey = generateObjectKey(user.id, file.name);
   const { error: uploadErr } = await uploadSourceDocumentObject(objectKey, bytes, file.type);
@@ -138,26 +182,27 @@ export async function POST(req: Request) {
     sourceId = (sourceRow?.id as string) ?? null;
   }
 
-  const { data: doc, error: insertErr } = await supabase
-    .from('ii_source_documents')
-    .insert({
-      user_id: user.id,
-      owner_member_id: parsedMeta.data.ownerMemberId ?? null,
-      country_code: parsedMeta.data.countryCode,
-      source_id: sourceId,
-      status: 'uploaded',
-      checksum,
-      storage_path: objectKey,
-      original_filename: file.name,
-      mime_type: file.type,
-      file_size: file.size,
-      document_type: parsedMeta.data.documentType,
-      statement_period_start: parsedMeta.data.statementPeriodStart ?? null,
-      statement_period_end: parsedMeta.data.statementPeriodEnd ?? null,
-      statement_as_of_date: parsedMeta.data.statementAsOfDate ?? null,
-    })
-    .select()
-    .single();
+  const baseRow = {
+    user_id: user.id,
+    country_code: parsedMeta.data.countryCode,
+    source_id: sourceId,
+    status: 'uploaded',
+    checksum,
+    storage_path: objectKey,
+    original_filename: file.name,
+    mime_type: file.type,
+    file_size: file.size,
+    document_type: parsedMeta.data.documentType,
+    statement_period_start: parsedMeta.data.statementPeriodStart ?? null,
+    statement_period_end: parsedMeta.data.statementPeriodEnd ?? null,
+    statement_as_of_date: parsedMeta.data.statementAsOfDate ?? null,
+  };
+  let inserted = await supabase.from('ii_source_documents').insert({ ...baseRow, ...ownerColumnsFor(owner) }).select().single();
+  // A member-owned upload survives a database that predates the 0236 columns.
+  if (inserted.error && owner.kind === 'member' && isMissingOwnerColumnError(inserted.error.message)) {
+    inserted = await supabase.from('ii_source_documents').insert({ ...baseRow, ...legacyOwnerColumnsFor(owner) }).select().single();
+  }
+  const { data: doc, error: insertErr } = inserted;
   if (insertErr || !doc) return bad(insertErr?.message ?? 'Could not record uploaded document', 500);
 
   await emitAuditEvent({
@@ -167,7 +212,7 @@ export async function POST(req: Request) {
     subjectId: doc.id as string,
     actorType: 'user',
     actorId: user.id,
-    metadata: { sourceDocumentId: doc.id, originalFilename: file.name, fileSize: file.size },
+    metadata: { sourceDocumentId: doc.id, originalFilename: file.name, fileSize: file.size, ownerKind: owner.kind, ownerRole: owner.ownerRole },
   });
 
   // AIE-1 final completion (2026-09-25): the real S3 + GuardDuty scan of the

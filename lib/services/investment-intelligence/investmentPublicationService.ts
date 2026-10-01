@@ -193,6 +193,11 @@ interface PositionContext {
   instrument: IiInstrumentRow;
   truth: PortfolioTruthRow | null;
   member: HouseholdMemberRow | null;
+  /** Owner-before-upload: the account has no single household-member owner but
+   * IS owned (by a trust / HUF / company, or jointly) -- recorded in
+   * ii_ownership_allocation. Such a position is deliberately not published into
+   * the personal investment totals. */
+  ownerHeldByEntityOrJoint: boolean;
   openLots: TaxLotRow[];
   hasBlockingReconciliation: boolean;
 }
@@ -231,6 +236,17 @@ async function loadPositionContext(supabase: SupabaseServerClient, userId: strin
     member = (data as unknown as HouseholdMemberRow | null) ?? null;
   }
 
+  let ownerHeldByEntityOrJoint = false;
+  if (!member) {
+    const { count } = await supabase
+      .from('ii_ownership_allocation')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('ii_account_id', snapshot.account_id)
+      .eq('status', 'active');
+    ownerHeldByEntityOrJoint = (count ?? 0) > 0;
+  }
+
   // R6-P0: unbounded before. Open tax lots for ONE position drive the
   // published COST BASIS, and a daily/weekly SIP held for a few years opens
   // well over 1000 lots in a single scheme. Silent truncation understates cost
@@ -257,7 +273,7 @@ async function loadPositionContext(supabase: SupabaseServerClient, userId: strin
     .eq('severity', 'blocking')
     .maybeSingle();
 
-  return { snapshot, account, instrument, truth, member, openLots: (openLotsRaw as unknown as TaxLotRow[]) ?? [], hasBlockingReconciliation: !!blockingCase };
+  return { snapshot, account, instrument, truth, member, ownerHeldByEntityOrJoint, openLots: (openLotsRaw as unknown as TaxLotRow[]) ?? [], hasBlockingReconciliation: !!blockingCase };
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +286,7 @@ export async function checkEligibility(userId: string, positionId: string): Prom
 
   const eligibility = evaluateEligibility({
     ownerMemberId: ctx.member?.id ?? null,
+    ownerHeldByEntityOrJoint: ctx.ownerHeldByEntityOrJoint,
     instrumentClass: ctx.instrument.instrument_class as IiInstrumentClass,
     accountType: ctx.account.account_type,
     portfolioTruthStatus: ctx.truth?.status ?? 'pending',
@@ -296,6 +313,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
   const instrumentClass = instrument.instrument_class as IiInstrumentClass;
   const eligibility = evaluateEligibility({
     ownerMemberId: member?.id ?? null,
+    ownerHeldByEntityOrJoint: ctx.ownerHeldByEntityOrJoint,
     instrumentClass,
     accountType: account.account_type,
     portfolioTruthStatus: truth?.status ?? 'pending',
@@ -436,6 +454,7 @@ export async function publishPosition(userId: string, positionId: string, option
   const instrumentClass = instrument.instrument_class as IiInstrumentClass;
   const eligibility = evaluateEligibility({
     ownerMemberId: member?.id ?? null,
+    ownerHeldByEntityOrJoint: ctx.ownerHeldByEntityOrJoint,
     instrumentClass,
     accountType: account.account_type,
     portfolioTruthStatus: truth?.status ?? 'pending',

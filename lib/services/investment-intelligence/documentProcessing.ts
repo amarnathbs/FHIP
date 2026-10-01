@@ -50,6 +50,7 @@ import type { ParsedAccountRecord, ParsedInstrumentRecord } from './parsers/type
 import { matchStatementOwner, type Pc5HouseholdMemberForMatching } from '@/lib/aie/adapters/investment-intelligence/ownerMatching';
 import { loadHouseholdMembersForMatching } from '@/lib/aie/adapters/investment-intelligence/householdContext';
 import { resolveOrCreateAccount, planFolioAccountResolution } from './accountResolution';
+import { applyDocumentOwnerToAccounts, computeHolderNameWarnings, readDocumentOwner, saveOwnerReview, type ApplyAccount } from './documentOwner';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { computeTransactionFingerprint } from './fingerprint';
 import { reconcilePosition, determineHistoryCompleteness, evaluateDerivedZeroUnitClosure, type ReconciliationTransactionInput } from './reconciliation';
@@ -574,6 +575,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // parsed evidence, keyed by DISTINCT (folio, amcName) pairs.
   const resolutionPlan = planFolioAccountResolution({ accounts: parsed.accounts, transactions: parsed.transactions, holdings: parsed.holdings });
   const accountIdByFolioAmc = new Map<string, string>(); // key = assignment.key (accountResolutionKey(folioNumber, amcName))
+  const resolvedAccountsForOwner: ApplyAccount[] = [];
   let reconciliationCasesOpened = 0;
 
   for (const assignment of resolutionPlan.assignments) {
@@ -589,12 +591,37 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     });
     if (resolved.accountId) {
       accountIdByFolioAmc.set(assignment.key, resolved.accountId);
+      resolvedAccountsForOwner.push({ accountId: resolved.accountId, created: resolved.created, folioNumber: assignment.folioNumber, institutionName: assignment.amcName });
       await emitAuditEvent({ userId, eventType: 'account_resolved', subjectType: 'ii_accounts', subjectId: resolved.accountId, actorType: 'system', metadata: { folioNumber: assignment.folioNumber, amcName: assignment.amcName, created: resolved.created, parseRunId } });
     }
   }
 
-  const ownerUnresolved = !doc.owner_member_id;
-  if (ownerUnresolved) {
+  // Owner-before-upload (Phase 1): a document uploaded with an owner chosen up
+  // front (owner_selection_source = 'user_selected') never raises owner_unmatched
+  // -- the owner is known. The chosen owner is applied to every folio (never
+  // overwriting a DIFFERENT existing owner; that is recorded for the user to
+  // confirm), and a printed holder name that disagrees is a NON-BLOCKING warning
+  // instead of a blocking case. Documents uploaded before this change carry no
+  // such owner and fall through to the unchanged legacy branches below.
+  const documentOwner = readDocumentOwner(doc as Record<string, unknown>);
+  const ownerUnresolved = !documentOwner && !doc.owner_member_id;
+  if (documentOwner) {
+    const ownerReview = await applyDocumentOwnerToAccounts(userId, sourceDocumentId, documentOwner, resolvedAccountsForOwner);
+    if (documentOwner.kind === 'member' && parsed.accounts.length > 0) {
+      // Advisory only: a printed holder name that disagrees with the chosen
+      // member is a NON-BLOCKING warning, never a case.
+      const membersForWarnings = await loadHouseholdMembersForMatching(userId);
+      ownerReview.warnings.push(
+        ...computeHolderNameWarnings({
+          declaredOwnerMemberId: documentOwner.ownerMemberId as string,
+          assignments: resolutionPlan.assignments.map((a) => ({ folioNumber: a.folioNumber, accountId: accountIdByFolioAmc.get(a.key) ?? null })),
+          parsedAccounts: parsed.accounts,
+          members: membersForWarnings,
+        })
+      );
+    }
+    await saveOwnerReview(userId, sourceDocumentId, ownerReview);
+  } else if (ownerUnresolved) {
     // 2026-09-29 fix: a statement can print a JOINT holding even when the
     // user declared NO owner at all at upload time. Before this fix, this
     // branch opened 'owner_unmatched' unconditionally for every account on
@@ -1645,7 +1672,19 @@ export async function recertifyPosition(userId: string, accountId: string, instr
   const sourceDocumentId = (latestSnapshot?.source_document_id as string | null) ?? (account.source_document_id as string | null) ?? accountId;
 
   const config = await loadActiveReconciliationConfig();
-  const ownerUnresolved = !account.owner_member_id;
+  // Owner-before-upload: an account owned by a trust / HUF / company, or jointly,
+  // has no single owner_member_id but its owner IS resolved -- it is recorded in
+  // ii_ownership_allocation. Only an account with neither is unresolved.
+  let ownerUnresolved = !account.owner_member_id;
+  if (ownerUnresolved) {
+    const { count: activeAllocationCount } = await admin
+      .from('ii_ownership_allocation')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('ii_account_id', accountId)
+      .eq('status', 'active');
+    if ((activeAllocationCount ?? 0) > 0) ownerUnresolved = false;
+  }
 
   const { data: instrumentCases } = await admin
     .from('ii_reconciliation_cases')

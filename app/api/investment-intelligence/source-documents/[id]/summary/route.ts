@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { describeDocumentOwner } from '@/lib/services/investment-intelligence/documentOwner';
 
 // R2 — "retrieve parse summary" (spec section 51). Shows exactly what
 // spec section 31 requires the minimal UI to display: statement source,
@@ -87,6 +88,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     instrumentName: instrumentNameById.get(t.instrument_id) ?? null,
   }));
 
+  // Owner-before-upload (Phase 1): who this statement was filed under, plus any
+  // NON-BLOCKING owner warnings and owner changes still waiting for the user's
+  // confirmation. A separate `select('*')`, so a database one migration behind
+  // (no owner columns) simply reports nothing chosen at upload.
+  const { data: ownerRow } = await supabase.from('ii_source_documents').select('*').eq('id', id).eq('user_id', user.id).maybeSingle();
+  const ownerSummary = await describeDocumentOwner(user.id, (ownerRow as Record<string, unknown> | null) ?? null);
+
   const distinctInstruments = new Set((transactions ?? []).map((t) => t.instrument_id)).size;
 
   return ok({
@@ -100,5 +108,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     reconciliationCases: cases ?? [],
     openReconciliationCaseCount: (cases ?? []).filter((c) => c.status === 'open' || c.status === 'user_reviewing').length,
     portfolioTruthStatuses: truthStatuses,
+    owner: ownerSummary,
   });
 }

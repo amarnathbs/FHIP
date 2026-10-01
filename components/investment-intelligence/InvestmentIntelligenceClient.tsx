@@ -5,6 +5,8 @@ import { fmtDate } from './dateDisplay';
 import { AiExtractionReviewPanel } from './AiExtractionReviewPanel';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping';
+import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import { ownerSelectionToMeta, type OwnerSelection } from '@/lib/ownership/ownerSelection';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -87,6 +89,16 @@ interface DocumentSummary {
     statement_period_end: string | null;
     statement_as_of_date: string | null;
     original_filename: string;
+  };
+  /** Owner-before-upload (Phase 1): who the statement was filed under. */
+  owner?: {
+    chosenAtUpload: boolean;
+    ownerRole: string | null;
+    label: string | null;
+    review: {
+      conflicts: { accountId: string; folioNumber: string | null; institutionName: string | null; existingOwner: string; selectedOwner: string }[];
+      warnings: { accountId: string; kind: string; maskedHolderName: string | null; message: string }[];
+    } | null;
   };
   accountsFound: number;
   accounts: { id: string; folio_number: string | null; institution_name: string }[];
@@ -217,6 +229,10 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   const [sourceKey, setSourceKey] = useState<'cams' | 'kfintech'>('cams');
   const [countryCode] = useState<'IN'>('IN');
   const [uploading, setUploading] = useState(false);
+  // Owner-before-upload (Phase 1): who the statement belongs to, chosen BEFORE
+  // the file is sent (no default). The Upload button stays disabled until set.
+  const [owner, setOwner] = useState<OwnerSelection | null>(null);
+  const [confirmingOwner, setConfirmingOwner] = useState(false);
 
   // R3 — Publish to FHIP flow state.
   const [publishPreview, setPublishPreview] = useState<PublicationPreview | null>(null);
@@ -397,7 +413,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    if (!file || !owner) return;
     setUploading(true);
     setError(null);
     setNotice(null);
@@ -410,6 +426,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
           sourceKey,
           documentType: 'cas_statement',
           countryCode,
+          ...ownerSelectionToMeta(owner),
         })
       );
       const res = await fetch('/api/investment-intelligence/source-documents', { method: 'POST', body: form });
@@ -435,6 +452,28 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setUploading(false);
+    }
+  }
+
+  // Owner-before-upload (decision 2): the user EXPLICITLY confirms moving
+  // folios that were already filed under a different owner. Nothing changes
+  // without this call.
+  async function handleConfirmOwnerChange(documentId: string, accountIds: string[]) {
+    setConfirmingOwner(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/investment-intelligence/source-documents/${documentId}/confirm-owner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountIds }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not change the owner.');
+      await loadSummary(documentId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setConfirmingOwner(false);
     }
   }
 
@@ -746,6 +785,9 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-gray-900">Step 1 — Upload a statement</h2>
         <form onSubmit={handleUpload} className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="w-full max-w-xl">
+            <OwnerSelector flow="ii_cas" idPrefix="ii-owner" value={owner} onChange={setOwner} disabled={uploading} />
+          </div>
           <div>
             {/* AIE-1 final completion (2026-09-25): axe `select-name` (critical)
                 -- the label was not associated with the control. */}
@@ -780,7 +822,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               className="mt-1 block text-sm"
             />
           </div>
-          <button type="submit" disabled={!file || uploading} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+          <button type="submit" disabled={!file || !owner || uploading} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
             {uploading ? 'Uploading…' : 'Upload'}
           </button>
         </form>
@@ -852,7 +894,47 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                     Statement period: {summary.document.statement_period_start ?? '?'} to {summary.document.statement_period_end ?? '?'}
                   </p>
                 )}
+                {summary.owner?.chosenAtUpload && summary.owner.label && (
+                  <p className="text-xs text-gray-500" data-testid="document-owner">
+                    Filed under: <span className="font-medium text-gray-800">{summary.owner.label}</span>
+                  </p>
+                )}
               </div>
+
+              {/* Owner-before-upload (Phase 1): non-blocking owner notes. */}
+              {summary.owner?.review && (summary.owner.review.warnings.length > 0 || summary.owner.review.conflicts.length > 0) && (
+                <div className="space-y-2" data-testid="owner-review">
+                  {summary.owner.review.warnings.map((w, i) => (
+                    <p key={`${w.accountId}-${i}`} role="status" className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      {w.message}
+                      {w.maskedHolderName ? ` (printed name: ${w.maskedHolderName})` : ''}
+                    </p>
+                  ))}
+                  {summary.owner.review.conflicts.length > 0 && (
+                    <div role="alert" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <p className="font-medium">
+                        {summary.owner.review.conflicts.length === 1 ? 'A folio on this statement is already filed under a different owner.' : `${summary.owner.review.conflicts.length} folios on this statement are already filed under a different owner.`}{' '}
+                        They were left exactly as they were.
+                      </p>
+                      <ul className="mt-1 list-disc pl-5">
+                        {summary.owner.review.conflicts.map((c) => (
+                          <li key={c.accountId}>
+                            {c.folioNumber ?? c.institutionName ?? 'Folio'}: now {c.existingOwner}; you chose {c.selectedOwner}
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        disabled={confirmingOwner}
+                        onClick={() => handleConfirmOwnerChange(summary.document.id, summary.owner!.review!.conflicts.map((c) => c.accountId))}
+                        className="mt-2 rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                      >
+                        {confirmingOwner ? 'Changing�' : `Change these folios to ${summary.owner.label ?? 'the owner I chose'}`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Step 5: Portfolio extracted */}
               <div>
