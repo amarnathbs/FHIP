@@ -73,6 +73,16 @@ export function createInMemoryDb(): InMemoryDb {
       not: (c: string, op: string, v: unknown) => { filters.push((r) => (op === 'is' ? (v === null ? r[c] !== null && r[c] !== undefined : r[c] !== v) : r[c] !== v)); return chain; },
       in: (c: string, vs: unknown[]) => { filters.push((r) => vs.includes(r[c])); return chain; },
       gte: (c: string, v: unknown) => { filters.push((r) => String(r[c]) >= String(v)); return chain; },
+      // .is(col, null) -- IS NULL (2026-10-01, owner-change routes).
+      is: (c: string, v: unknown) => { filters.push((r) => (v === null ? r[c] === null || r[c] === undefined : r[c] === v)); return chain; },
+      // .contains(jsonbCol, { k: v }) -- shallow jsonb containment (2026-10-01: the Resolutions amend route's "already amended" check).
+      contains: (c: string, v: Record<string, unknown>) => {
+        filters.push((r) => {
+          const o = r[c] as Record<string, unknown> | null | undefined;
+          return !!o && Object.entries(v).every(([k, val]) => o[k] === val);
+        });
+        return chain;
+      },
       order: (col: string, o?: { ascending?: boolean }) => { orderBy = { col, asc: o?.ascending !== false }; return chain; },
       limit: (n: number) => { limitN = n; return chain; },
       returns: () => chain,
