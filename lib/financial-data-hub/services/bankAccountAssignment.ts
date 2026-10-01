@@ -72,6 +72,7 @@ import { computeAccountFingerprint, normaliseMaskedIdentifier } from '../bank-cs
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { BankOwnerConflictError, decideAccountOwnerWrite } from './bankOwnerAttribution';
 import { downloadDocumentObject } from './storage';
+import { checkFdhDocumentMalwareAdmission } from './malwareScanGate';
 
 type Row = Record<string, unknown>;
 
@@ -90,6 +91,12 @@ export type AccountAssignmentHow = 'user_selected' | 'auto_single_account' | 'au
 export interface StatementIdentity {
   institutionName: string | null;
   lastDigits: string | null;
+  /**
+   * The canonical institution CODE of the certified adapter that recognised this statement (e.g. 'cba',
+   * 'hdfc_bank') -- the same code the FDH institution master (fdh_financial_institutions.institution_code)
+   * is keyed by. Present only when a certified adapter named a bank; never derived from free text.
+   */
+  institutionCode?: string | null;
 }
 
 export type AccountResolution =
@@ -211,8 +218,35 @@ export function decideAutoAssignment(input: {
   return { kind: 'ask', reason: input.candidateIds.length > 1 ? 'several_accounts' : 'nothing_read' };
 }
 
-function sameInstitution(a: unknown, b: unknown): boolean {
-  return ((a as string | null | undefined) ?? null) === ((b as string | null | undefined) ?? null);
+/**
+ * PO-OBU-06. Resolves the canonical institution id from a certified adapter's institution CODE and the
+ * statement's country, against the FDH institution master (fdh_financial_institutions, seeded by FDH-2).
+ * Returns null when the code is not in the master -- an id is never invented and never derived from free text.
+ */
+export async function resolveInstitutionIdByCode(countryCode: string | null | undefined, institutionCode: string | null | undefined): Promise<string | null> {
+  if (!countryCode || !institutionCode) return null;
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from('fdh_financial_institutions')
+    .select('id')
+    .eq('country_code', countryCode)
+    .eq('institution_code', institutionCode)
+    .eq('active', true)
+    .maybeSingle();
+  return ((data as { id?: string } | null)?.id as string | undefined) ?? null;
+}
+
+/**
+ * Whether an account may take a statement. A statement uploaded with an institution is matched exactly. One
+ * uploaded WITHOUT (the Expenses panel never sends one) is matched on the institution the certified adapter
+ * resolved: an account of that institution, or a LEGACY account with no institution (never rewritten, only
+ * offered). An account of a DIFFERENT institution never matches, so two banks with the same currency and the
+ * same last digits stay two accounts.
+ */
+function institutionCompatible(accountInstitution: unknown, docInstitution: unknown, resolvedInstitution: string | null): boolean {
+  if (docInstitution) return accountInstitution === docInstitution;
+  if (resolvedInstitution) return !accountInstitution || accountInstitution === resolvedInstitution;
+  return !accountInstitution;
 }
 
 function toCandidate(a: Row): AccountCandidate {
@@ -234,6 +268,10 @@ export async function readStatementIdentityFromStoredFile(document: Row): Promis
   try {
     const key = document.raw_document_storage_reference as string | null | undefined;
     if (!key) return null;
+    // Malware-scan boundary: this reader parses the stored bytes, so it is a processing entry point like the
+    // bank / payslip / liability services and runs the SAME admission check BEFORE it reads them. A document the
+    // scan blocked, timed out on, or (with the real scan on) never scanned is not parsed -- the user is simply asked.
+    if (!checkFdhDocumentMalwareAdmission(document as { malware_scan_status?: string | null; error_code?: string | null }).admitted) return null;
 
     if (document.source_type === 'csv') {
       const download = await downloadDocumentObject(key);
@@ -242,7 +280,7 @@ export async function readStatementIdentityFromStoredFile(document: Row): Promis
       const detection = detectBankCsvFormat(download.bytes);
       // A generic (country-neutral) adapter names no bank: say nothing rather than "Generic CSV".
       const adapter = detection.status === 'detected' ? detection.adapter : null;
-      return adapter && adapter.institutionCode ? { institutionName: adapter.displayName, lastDigits: null } : null;
+      return adapter && adapter.institutionCode ? { institutionName: adapter.displayName, lastDigits: null, institutionCode: adapter.institutionCode } : null;
     }
 
     if (document.source_type !== 'pdf_native' || document.error_code === 'password_required') return null;
@@ -257,7 +295,8 @@ export async function readStatementIdentityFromStoredFile(document: Row): Promis
     if (detection.status !== 'detected' || !detection.adapter) return null;
     const { extractPdfStatementMetadata } = await import('../bank-pdf/metadata');
     const masked = extractPdfStatementMetadata(fullText, detection.adapter).maskedAccountIdentifier;
-    return { institutionName: detection.adapter.displayName, lastDigits: trailingDigits(masked) };
+    const code = (detection.adapter as { institutionCode?: string | null }).institutionCode;
+    return { institutionName: detection.adapter.displayName, lastDigits: trailingDigits(masked), ...(code ? { institutionCode: code } : {}) };
   } catch {
     return null; // never fail the resolution because the statement could not be read -- the user is simply asked
   }
@@ -294,8 +333,26 @@ export async function resolveStatementAccount(
     .eq('user_id', userId)
     .eq('currency_code', currency)
     .order('created_at', { ascending: true });
-  const sameCurrencyAccounts = ((accountRows ?? []) as Row[]).filter((a) => sameInstitution(a.institution_id, doc.institution_id));
-  const candidates = sameCurrencyAccounts.filter((a) => a.status !== 'closed' && a.status !== 'archived');
+  const allCurrencyAccounts = (accountRows ?? []) as Row[];
+
+  // The statement is read at most once, and only when it carries no institution of its own.
+  let identityCache: StatementIdentity | null | undefined;
+  const readIdentityOnce = async (): Promise<StatementIdentity | null> => {
+    if (identityCache === undefined) identityCache = await (deps.readIdentity ?? readStatementIdentityFromStoredFile)(doc);
+    return identityCache;
+  };
+  const docInstitutionId = (doc.institution_id as string | null | undefined) ?? null;
+  let resolvedInstitutionId: string | null = null;
+  let institutionResolved = false;
+  const resolveInstitution = async (): Promise<string | null> => {
+    if (docInstitutionId) return docInstitutionId;
+    if (!institutionResolved) {
+      institutionResolved = true;
+      const identity = await readIdentityOnce();
+      resolvedInstitutionId = await resolveInstitutionIdByCode(doc.country_code as string | null, identity?.institutionCode ?? null);
+    }
+    return resolvedInstitutionId;
+  };
 
   // ---- already assigned: idempotent for the same account, never a silent move ----
   const alreadyAssigned = (doc.financial_account_id as string | null) ?? null;
@@ -303,7 +360,7 @@ export async function resolveStatementAccount(
     if (input.accountId && input.accountId !== alreadyAssigned) {
       throw new BankAccountAssignmentError('already_assigned_to_other', 'This statement is already assigned to a different account. It was not moved.');
     }
-    const current = sameCurrencyAccounts.find((a) => a.id === alreadyAssigned) ?? null;
+    const current = allCurrencyAccounts.find((a) => a.id === alreadyAssigned) ?? null;
     if (input.newAccountDigits) {
       const digits = normaliseDigits(input.newAccountDigits);
       const fingerprint = computeAccountFingerprint({ userId, institutionId: (doc.institution_id as string | null) ?? null, currencyCode: currency, maskedIdentifierNormalised: digits });
@@ -315,13 +372,18 @@ export async function resolveStatementAccount(
     return { status: 'assigned', financialAccountId: alreadyAssigned, how: 'already_assigned', account: current ? summary(current) : { displayName: 'Your account', lastDigits: null } };
   }
 
+  // Which institution this statement belongs to: its own, or the one the certified adapter resolved. Only now
+  // (not assigned yet) is it needed.
+  const institutionId = await resolveInstitution();
+  const candidates = allCurrencyAccounts.filter((a) => institutionCompatible(a.institution_id, docInstitutionId, institutionId) && a.status !== 'closed' && a.status !== 'archived');
+
   // ---- the user picked an existing account ----
   if (input.accountId) {
     const { data: picked } = await admin.from('fdh_financial_accounts').select('*').eq('id', input.accountId).eq('user_id', userId).maybeSingle();
     if (!picked) throw new BankAccountAssignmentError('account_not_found', 'That account was not found.'); // another user's id looks exactly like this
     const account = picked as Row;
     if (account.currency_code !== currency) throw new BankAccountAssignmentError('currency_mismatch', `That account is in ${String(account.currency_code)}, but this statement is in ${currency}.`);
-    if (!sameInstitution(account.institution_id, doc.institution_id)) throw new BankAccountAssignmentError('institution_mismatch', 'That account belongs to a different institution than this statement.');
+    if (!institutionCompatible(account.institution_id, docInstitutionId, institutionId)) throw new BankAccountAssignmentError('institution_mismatch', 'That account belongs to a different institution than this statement.');
     if (account.status === 'closed' || account.status === 'archived') throw new BankAccountAssignmentError('account_not_found', 'That account is no longer open.');
     return assign(userId, doc, account, 'user_selected', input.confirmOwnerChange === true);
   }
@@ -329,7 +391,7 @@ export async function resolveStatementAccount(
   // ---- the user accepted / typed a new account's last digits ----
   if (input.newAccountDigits) {
     const digits = normaliseDigits(input.newAccountDigits);
-    const fingerprint = computeAccountFingerprint({ userId, institutionId: (doc.institution_id as string | null) ?? null, currencyCode: currency, maskedIdentifierNormalised: digits });
+    const fingerprint = computeAccountFingerprint({ userId, institutionId, currencyCode: currency, maskedIdentifierNormalised: digits });
     const existing = candidates.find((a) => a.account_fingerprint === fingerprint);
     if (existing) return assign(userId, doc, existing, 'user_selected', input.confirmOwnerChange === true);
     const ownerRole = (doc.owner_role as string | null | undefined) ?? null;
@@ -338,7 +400,7 @@ export async function resolveStatementAccount(
       .insert({
         user_id: userId,
         household_id: null,
-        institution_id: (doc.institution_id as string | null) ?? null,
+        institution_id: institutionId,
         account_type: 'transaction',
         country_code: (doc.country_code as string | null) ?? 'AU',
         currency_code: currency,
@@ -355,12 +417,15 @@ export async function resolveStatementAccount(
   }
 
   // ---- automatic, only where deterministic ----
-  const identity = await (deps.readIdentity ?? readStatementIdentityFromStoredFile)(doc);
+  const identity = await readIdentityOnce();
   const printedDigits = identity?.lastDigits && identity.lastDigits.length >= 4 ? identity.lastDigits : null;
   const candidateViews = candidates.map((a) => ({ id: a.id as string, displayName: ((a.display_name as string | null) ?? '').trim(), maskedIdentifier: (a.masked_identifier as string | null) ?? null }));
   const rawMatches = matchPrintedIdentifier(printedDigits, candidateViews);
   const matches = narrowByInstitutionName(rawMatches, candidateViews, identity?.institutionName ?? null);
-  const decision = decideAutoAssignment({ candidateIds: candidateViews.map((c) => c.id), printedPresent: printedDigits !== null, printedMatches: matches });
+  // When the bank is KNOWN, "the only account" means the only account OF THAT BANK: a legacy account with no
+  // institution is still offered in the picker but is never claimed on the strength of being the only one.
+  const autoCandidateIds = institutionId ? candidates.filter((a) => a.institution_id === institutionId).map((a) => a.id as string) : candidateViews.map((c) => c.id);
+  const decision = decideAutoAssignment({ candidateIds: autoCandidateIds, printedPresent: printedDigits !== null, printedMatches: matches });
   if (decision.kind === 'assign') {
     const account = candidates.find((a) => a.id === decision.accountId)!;
     return assign(userId, doc, account, decision.how, input.confirmOwnerChange === true);
@@ -400,7 +465,7 @@ async function assign(userId: string, doc: Row, account: Row, how: AccountAssign
   // concurrent choices cannot both win.
   const { data: claimed } = await admin
     .from('fdh_statement_uploads')
-    .update({ financial_account_id: account.id, updated_at: new Date().toISOString() })
+    .update({ financial_account_id: account.id, ...(!doc.institution_id && account.institution_id ? { institution_id: account.institution_id } : {}), updated_at: new Date().toISOString() })
     .eq('id', documentId)
     .eq('user_id', userId)
     .is('financial_account_id', null)

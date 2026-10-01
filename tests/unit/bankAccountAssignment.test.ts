@@ -119,6 +119,98 @@ describe('pure rules', () => {
   });
 });
 
+// PO-OBU-06 -- the canonical institution master. The Expenses panel never sends an institution_id; the SERVER derives
+// it from the certified adapter's institution CODE (fdh_financial_institutions, seeded by FDH-2), never from free text.
+const INST_CBA = '10000000-0000-4000-8000-0000000000c1';
+const INST_WBC = '10000000-0000-4000-8000-0000000000c2';
+const seedInstitutions = () => {
+  h.db.insert('fdh_financial_institutions', { id: INST_CBA, country_code: 'AU', institution_code: 'cba', institution_name: 'Commonwealth Bank', institution_type: 'bank', active: true });
+  h.db.insert('fdh_financial_institutions', { id: INST_WBC, country_code: 'AU', institution_code: 'westpac', institution_name: 'Westpac', institution_type: 'bank', active: true });
+};
+const read = (code: string | null, name: string | null, digits: string | null) => async (): Promise<StatementIdentity | null> => ({ institutionName: name, lastDigits: digits, ...(code ? { institutionCode: code } : {}) });
+const seedSecondStatement = () =>
+  h.db.insert('fdh_statement_uploads', { id: DOC_B, user_id: A, source_type: 'pdf_native', document_type: 'bank_statement', currency_code: 'AUD', country_code: 'AU', institution_id: null, financial_account_id: null, processing_status: 'queued', review_status: 'not_required', certification_status: null, owner_role: null, raw_document_storage_reference: 'k/doc2.pdf', error_code: null });
+
+describe('PO-OBU-06: institution derived from the certified adapter code', () => {
+  it('two banks with the same currency AND the same last 4 digits stay TWO accounts, each with its own institution', async () => {
+    seedInstitutions();
+    seedStatement();
+    const first = await resolveStatementAccount(A, DOC, { newAccountDigits: '1234', newAccountName: 'Commonwealth Bank' }, { readIdentity: read('cba', 'Commonwealth Bank', '1234') });
+    expect(first).toMatchObject({ status: 'assigned', how: 'new_account' });
+    seedSecondStatement();
+    const second = await resolveStatementAccount(A, DOC_B, { newAccountDigits: '1234', newAccountName: 'Westpac' }, { readIdentity: read('westpac', 'Westpac', '1234') });
+    expect(second).toMatchObject({ status: 'assigned', how: 'new_account' });
+    const accounts = h.db.rows('fdh_financial_accounts');
+    expect(accounts).toHaveLength(2);
+    expect(accounts.map((a) => a.institution_id).sort()).toEqual([INST_CBA, INST_WBC].sort());
+    expect(new Set(accounts.map((a) => a.account_fingerprint)).size).toBe(2);
+    expect(doc(DOC).financial_account_id).not.toBe(doc(DOC_B).financial_account_id);
+    expect(doc(DOC).institution_id).toBe(INST_CBA);
+    expect(doc(DOC_B).institution_id).toBe(INST_WBC);
+  });
+
+  it('a REPEAT upload from the same bank finds its existing account silently (printed digits + resolved institution)', async () => {
+    seedInstitutions();
+    seedStatement();
+    await resolveStatementAccount(A, DOC, { newAccountDigits: '1234', newAccountName: 'Commonwealth Bank' }, { readIdentity: read('cba', 'Commonwealth Bank', '1234') });
+    seedSecondStatement();
+    const again = await resolveStatementAccount(A, DOC_B, {}, { readIdentity: read('cba', 'Commonwealth Bank', '1234') });
+    expect(again).toMatchObject({ status: 'assigned', how: 'auto_printed_identifier' });
+    expect(h.db.rows('fdh_financial_accounts')).toHaveLength(1);
+  });
+
+  it('a Westpac statement is NOT offered the CBA account (a different institution never matches), and picking it is refused', async () => {
+    seedInstitutions();
+    seedAccount(ACC1, { institution_id: INST_CBA, masked_identifier: '****1234', display_name: 'Commonwealth Bank', account_fingerprint: computeAccountFingerprint({ userId: A, institutionId: INST_CBA, currencyCode: 'AUD', maskedIdentifierNormalised: '****1234' }) });
+    seedStatement();
+    const r = await resolveStatementAccount(A, DOC, {}, { readIdentity: read('westpac', 'Westpac', '1234') });
+    expect(r).toMatchObject({ status: 'needs_choice', reason: 'new_account_suggested' });
+    expect((r as { candidates: unknown[] }).candidates).toHaveLength(0);
+    expect(doc().financial_account_id).toBeNull();
+    await expect(resolveStatementAccount(A, DOC, { accountId: ACC1 }, { readIdentity: read('westpac', 'Westpac', '1234') })).rejects.toMatchObject({ code: 'institution_mismatch' });
+  });
+
+  it('LEGACY accounts (no institution) stay candidates: matched by digits, never rewritten, and a lone legacy account is not auto-claimed for a KNOWN bank', async () => {
+    seedInstitutions();
+    seedAccount(ACC1, { masked_identifier: '****1234', display_name: 'Commonwealth Bank' });
+    seedStatement();
+    const matched = await resolveStatementAccount(A, DOC, {}, { readIdentity: read('cba', 'Commonwealth Bank', '1234') });
+    expect(matched).toMatchObject({ status: 'assigned', financialAccountId: ACC1, how: 'auto_printed_identifier' });
+    expect(acct(ACC1).institution_id).toBeNull();
+    seedSecondStatement();
+    const noDigits = await resolveStatementAccount(A, DOC_B, {}, { readIdentity: read('cba', 'Commonwealth Bank', null) });
+    expect(noDigits.status).toBe('needs_choice');
+  });
+
+  it('an adapter code that is not in the institution master resolves to NOTHING (no id is invented); the name/digits fallback still works', async () => {
+    seedStatement();
+    const r = await resolveStatementAccount(A, DOC, { newAccountDigits: '1234', newAccountName: 'Mystery Bank' }, { readIdentity: read('not_in_master', 'Mystery Bank', '1234') });
+    expect(r).toMatchObject({ status: 'assigned', how: 'new_account' });
+    expect(h.db.rows('fdh_financial_accounts')[0].institution_id).toBeNull();
+  });
+
+  it('the master is keyed by country AND code: another country\'s institution of the same code is not used', async () => {
+    h.db.insert('fdh_financial_institutions', { id: INST_CBA, country_code: 'IN', institution_code: 'cba', institution_name: 'Not Australian', institution_type: 'bank', active: true });
+    seedStatement();
+    await resolveStatementAccount(A, DOC, { newAccountDigits: '1234' }, { readIdentity: read('cba', 'Commonwealth Bank', '1234') });
+    expect(h.db.rows('fdh_financial_accounts')[0].institution_id).toBeNull();
+  });
+
+  it('the identity reader returns the adapter code and still never a full number', async () => {
+    h.download = async () => ({ ok: true, bytes: new Uint8Array([1]) });
+    vi.resetModules();
+    vi.doMock('@/lib/financial-data-hub/bank-pdf/textExtraction', () => ({ extractPdfPages: async () => ({ ok: true, pages: ['x'], pageCount: 1 }) }));
+    vi.doMock('@/lib/financial-data-hub/bank-pdf/detection', () => ({ detectPdfBankAdapter: () => ({ status: 'detected', adapter: { displayName: 'Commonwealth Bank', institutionCode: 'cba' } }) }));
+    vi.doMock('@/lib/financial-data-hub/bank-pdf/metadata', () => ({ extractPdfStatementMetadata: () => ({ maskedAccountIdentifier: '4111222233335678' }) }));
+    const mod = await import('@/lib/financial-data-hub/services/bankAccountAssignment');
+    const got = await mod.readStatementIdentityFromStoredFile({ source_type: 'pdf_native', raw_document_storage_reference: 'k', error_code: null });
+    expect(got).toEqual({ institutionName: 'Commonwealth Bank', lastDigits: '335678', institutionCode: 'cba' });
+    vi.doUnmock('@/lib/financial-data-hub/bank-pdf/textExtraction');
+    vi.doUnmock('@/lib/financial-data-hub/bank-pdf/detection');
+    vi.doUnmock('@/lib/financial-data-hub/bank-pdf/metadata');
+  });
+});
+
 describe('auto resolution: only where deterministic', () => {
   it('EXACT MATCH reuses silently: the printed last digits match one account', async () => {
     seedAccount(ACC1, { masked_identifier: '****1111', display_name: 'ANZ' });
@@ -438,6 +530,22 @@ describe('PRIVACY: the digits read off a statement never reach logs, audit rows,
     const src = fs.readFileSync(path.resolve(__dirname, '../../lib/financial-data-hub/services/bankAccountAssignment.ts'), 'utf8');
     expect(src).not.toMatch(/openai|anthropic|aiProvider|requestBankStatementAiExtraction|fetch\(/i);
     expect(src).not.toMatch(/console\./);
+  });
+
+  it('MALWARE BOUNDARY: a document the scan blocked / never cleared is NOT read; the same document once clean IS read', async () => {
+    let downloads = 0;
+    h.download = async () => { downloads++; return { ok: false, message: 'gone' }; };
+    for (const row of [
+      { malware_scan_status: 'blocked' },
+      { malware_scan_status: 'pending' },
+      { malware_scan_status: 'scan_failed' },
+      { malware_scan_status: 'clean', error_code: 'malware_detected' },
+    ]) {
+      expect(await readStatementIdentityFromStoredFile({ source_type: 'pdf_native', raw_document_storage_reference: 'k', error_code: null, ...row })).toBeNull();
+    }
+    expect(downloads).toBe(0); // no bytes were fetched for any of them
+    await readStatementIdentityFromStoredFile({ source_type: 'pdf_native', raw_document_storage_reference: 'k', error_code: null, malware_scan_status: 'clean' });
+    expect(downloads).toBe(1); // CONTROL: the clean one reaches storage, so the gate is what stopped the others
   });
 
   it('a password-protected PDF and an unreadable file are not read at all; a generic CSV adapter names no bank', async () => {
