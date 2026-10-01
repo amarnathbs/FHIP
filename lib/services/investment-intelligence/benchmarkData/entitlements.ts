@@ -75,7 +75,8 @@ export type BenchmarkAction = keyof typeof ACTION_REQUIRED_RIGHTS;
 export function entitlementGrants(e: EntitlementRecord, right: BenchmarkRight, on: string): boolean {
   if (e.status !== 'approved') return false;
   const inTerm = on >= e.validFrom && (e.validTo === null || on <= e.validTo);
-  const retained = e.postExpiryStorage === 'retain';
+  // Post-expiry retention applies ONLY after the term has ended (never before validFrom).
+  const retained = e.postExpiryStorage === 'retain' && e.validTo !== null && on > e.validTo;
   switch (right) {
     case 'ingest_manual':
       return e.allowManualIngest && inTerm;

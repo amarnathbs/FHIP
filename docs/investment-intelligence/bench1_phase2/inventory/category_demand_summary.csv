@@ -1,0 +1,14 @@
+sub_category,category_groups,held_scheme_rows_distinct_all,held_families_distinct_all,held_scheme_rows_excluding_test_fixtures,held_families_excluding_test_fixtures,held_scheme_rows_in_prod,held_families_in_prod,held_scheme_rows_in_dev,unresolved_identity_rows,earliest_required_from_date_all,earliest_required_from_date_excluding_test_fixtures,earliest_required_from_tx_rule_excluding_test_fixtures,earliest_nav_on_file_excluding_test_fixtures,latest_holding_date,rows_with_current_mapping
+Large Cap Fund,Equity Scheme;Equity Schemes,5,4,5,4,5,4,1,0,2006-03-24,2006-03-24,2013-09-07,2006-04-03,2026-09-18,0
+Flexi Cap Fund,Equity Scheme,4,3,4,3,3,3,1,0,2006-03-24,2006-03-24,2022-12-02,2006-04-03,2026-09-18,0
+Mid Cap Fund,Equity Scheme;Equity Schemes,3,3,3,3,3,3,0,0,2006-03-24,2006-03-24,2015-08-11,2006-04-03,2026-09-04,0
+(no scheme master: category unresolved),,36,14,1,1,0,0,36,36,2016-04-30,2018-12-22,2018-12-22,,2025-01-01,0
+Contra Fund,Equity Scheme,1,1,1,1,1,1,0,0,2006-03-24,2006-03-24,2022-11-21,2006-04-03,2026-09-04,0
+Dividend Yield Fund,Equity Schemes,1,1,1,1,1,1,0,0,2014-05-09,2014-05-09,2022-11-27,2014-05-19,2026-09-04,0
+Dynamic Asset Allocation or Balanced Advantage,Hybrid Scheme,1,1,1,1,1,1,0,0,2006-03-24,2006-03-24,2018-05-22,2006-04-03,2026-09-04,0
+FoF Domestic,Other Scheme,1,1,1,1,1,1,0,0,2011-10-23,2011-10-23,2026-01-06,2011-11-02,2026-09-04,0
+Large & Mid Cap Fund,Equity Schemes,1,1,1,1,0,0,1,0,2012-12-23,2012-12-23,2025-01-22,2013-01-02,2025-06-30,0
+Multi Asset Allocation,Hybrid Scheme,1,1,1,1,1,1,0,0,2006-03-24,2006-03-24,2026-01-26,2006-04-03,2026-09-04,0
+Sectoral Fund,Equity Schemes,1,1,1,1,1,1,0,0,2006-03-24,2006-03-24,2007-12-07,2006-04-03,2026-09-04,0
+Sectoral/ Thematic,Equity Scheme,1,1,1,1,1,1,0,0,2006-03-24,2006-03-24,2015-09-26,2006-04-03,2026-09-04,0
+Small Cap Fund,Equity Scheme,1,1,1,1,1,1,0,0,2014-06-20,2014-06-20,2026-01-02,2014-06-30,2026-09-04,0

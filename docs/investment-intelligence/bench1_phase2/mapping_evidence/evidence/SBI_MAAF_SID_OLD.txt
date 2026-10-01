@@ -1,0 +1,6 @@
+DOCUMENT: SID - SBI Multi Asset Allocation Fund (older SID)
+URL: https://www.sbimf.com/docs/default-source/lists/sid_kim/sid---sbi-multi-asset-allocation-fund.pdf?sfvrsn=6d062113_0
+DOCUMENT DATE: 2023-04-28
+RETRIEVED: 2026-10-01
+EXCERPT (short quote/paraphrase, <=30 words):
+benchmarked to '45% CRISIL 10 year Gilt Index +40%NIFTY 50 TRI+15% Price of Gold'

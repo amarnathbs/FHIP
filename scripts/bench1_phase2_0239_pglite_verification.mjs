@@ -188,6 +188,9 @@ check('EXPIRED, post_expiry_storage=retain + post_expiry_calculation: calculatio
 await db.exec(`update ii_benchmark_entitlements set post_expiry_storage = 'delete' where id = '${entB.id}'`);
 check('EXPIRED, post_expiry_storage=delete: calculation and storage both false', !(await allowed('TEST_B_TRI', 'calculation')) && !(await allowed('TEST_B_TRI', 'storage')));
 await db.exec(`update ii_benchmark_entitlements set valid_to = null, post_expiry_storage = 'retain' where id = '${entB.id}'`);
+await db.exec(`update ii_benchmark_entitlements set valid_from = current_date + 30 where id = '${entB.id}'`);
+check('BEFORE valid_from nothing is granted (post-expiry retention does not apply before the term starts)', !(await allowed('TEST_B_TRI', 'calculation')) && !(await allowed('TEST_B_TRI', 'storage')));
+await db.exec(`update ii_benchmark_entitlements set valid_from = date '2020-01-01' where id = '${entB.id}'`);
 // variant mismatch -> false
 const noVar = (await rpc(U.CATALOGUE, 'upsert_benchmark_catalogue_entry', catEntry('TEST_NOVARIANT', { return_type: null, return_variant: null }))).rows[0]?.r;
 r = await rpc(U.CATALOGUE, 'propose_benchmark_entitlement', ent('TEST_A_TRI', { benchmark_id: noVar }));

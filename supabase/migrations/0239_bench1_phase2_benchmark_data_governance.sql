@@ -294,7 +294,8 @@ create or replace function benchmark_entitlement_grants(e ii_benchmark_entitleme
 returns boolean language plpgsql immutable set search_path = public as $$
 declare
   in_term boolean := p_on >= e.valid_from and (e.valid_to is null or p_on <= e.valid_to);
-  retained boolean := e.post_expiry_storage = 'retain';
+  -- Post-expiry retention applies ONLY after the term has ended (never before valid_from).
+  retained boolean := e.post_expiry_storage = 'retain' and e.valid_to is not null and p_on > e.valid_to;
 begin
   if e.status <> 'approved' then return false; end if;
   case p_right

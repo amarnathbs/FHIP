@@ -1,0 +1,20 @@
+FETCH ATTEMPT LOG - 2026-10-01 (times approximate UTC from shell clock; WebFetch ran just before 08:15Z)
+AMFI (www.amfiindia.com, resolves to 14.143.46.156)
+ - WebFetch https://www.amfiindia.com/otherdata                           -> ECONNREFUSED 14.143.46.156:443
+ - WebFetch https://www.amfiindia.com/otherdata/listofbenchmarkindices     -> ECONNREFUSED 14.143.46.156:443
+ - curl https://www.amfiindia.com/otherdata (08:16Z)                       -> connect timeout ~21s, no HTTP response
+ - curl https://www.amfiindia.com/ , /otherdata/listofbenchmarkindices, https://amfiindia.com/, http://www.amfiindia.com/ (08:22Z) -> no response (timeouts)
+ - WebFetch https://www.amfiindia.com/research-information/other-data (08:28Z) and .../other-data/zcollatedprcbenchmarks (08:30Z) -> ECONNREFUSED
+ - curl /research-information/other-data, /polling/amfi/fund-performance, /importantupdates (08:30Z) -> no response
+ - Browser pane navigate to /otherdata/listofbenchmarkindices -> "denied or failed"
+ - portal.amfiindia.com (14.143.46.157): https://portal.amfiindia.com/ -> HTTP 200 but it is the AMFI member login ("Welcome to AMFI", maintenance banner); NOT a data page. portal.amfiindia.com/spages/13662.pdf, /spages/CompositeBondIndex.pdf -> HTTP 200 PDFs (AMC SID, CRISIL factsheet hosted by AMFI).
+ NO AMFI www page content was read first-hand. Everything about the AMFI benchmark lists comes from search-engine result summaries and press coverage (secondary).
+NSE Indices (www.niftyindices.com)
+ - WebFetch terms-of-use, reports/historical-data, offerings/data-subscription -> timeout of 60000ms (each)
+ - curl same three URLs (08:18Z) -> HTTP 200 (93,766 / 110,615 / 79,755 bytes); also robots.txt, disclaimer, offerings/index-licensing, resources/authorized-data-vendors, resources/index-concepts/total-return-index + faqs, reports/benchmark-riskometer, reports/index-factsheet, Factsheet/ind_nifty50.pdf, BenchmarkCodes/nifty_indices_benchmark_codes.pdf -> HTTP 200. reports/benchmark-codes and reports/eod-index-file -> HTTP 200 shell containing a 404 error page (menu links point to non-existent pages).
+ - Browser pane read of reports/historical-data: OK (static helper text only; no query run, no download).
+BSE Index Services (www.bseindices.com): curl 200 but Angular shell with no text; Browser pane rendered pages OK (home, terms-of-use, indices-details/code/22). Methodology PDFs (/Downloads/BSE_Indices_Methodology.pdf Sept-2026; /Downloads/Methodology_Doc/BSE_Indices_Methodology.pdf Apr-2024) and press release PDF -> HTTP 200. www.asiaindex.co.in/legal_disclaimers.html -> HTTP 200 but now serves a generic placeholder page (not owner content); ignored.
+CRISIL: https://www.crisil.com/en/home/what-we-do/financial-products/indices.html -> redirects to https://intelligence.crisil.com/en/homepage/what-we-do/research/indices.html (200). Terms https://www.crisil.com/en/home/website-terms-of-use.html 200; methodology PDF 200; factsheet PDF 200; xlsx HEAD 200 (content not downloaded).
+S&P DJI (spglobal.com/spdji data-downloads, disclaimers): HTTP 403. MSCI: end-of-day-data-search page is an iframe to app2.msci.com (not opened); legal/terms-of-use 200 (client-contract TOU, generic).
+SEBI (www.sebi.gov.in) circular pages + PDFs: 200.
+WebSearch results are secondary/unverified and flagged as such throughout.

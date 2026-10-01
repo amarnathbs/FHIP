@@ -23,13 +23,12 @@
 // POST is preview-or-commit and runs under the CALLER'S OWN session client, so
 // the database function authorises with auth.uid(); the service-role client is
 // deliberately not used anywhere in this file.
-import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { ok, bad, badValidation } from '@/lib/api';
+import { ok, bad } from '@/lib/api';
 import { adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { requireMarketIndexAdmin } from '@/lib/services/investment-intelligence/marketIndex/marketIndexAdmin';
-import { MARKET_INDEX_KEY_LIST, MARKET_INDEX_LABELS, MARKET_INDEX_STALE_AFTER_DAYS, MARKET_INDEX_DAILY_JOB_KEY, MARKET_INDEX_FEED_ENV_FLAG, type MarketIndexKey } from '@/lib/config/investment-intelligence/marketIndexConfig';
-import { ATTESTATION_TEXT, commitIndexUpload, planIndexUpload, type UploadPlan } from '@/lib/services/investment-intelligence/marketIndex/indexUploadService';
+import { MARKET_INDEX_KEY_LIST, MARKET_INDEX_LABELS, MARKET_INDEX_STALE_AFTER_DAYS, MARKET_INDEX_DAILY_JOB_KEY, MARKET_INDEX_FEED_ENV_FLAG } from '@/lib/config/investment-intelligence/marketIndexConfig';
+import { ATTESTATION_TEXT } from '@/lib/services/investment-intelligence/marketIndex/indexUploadService';
 import { INDEX_CSV_MAX_BYTES } from '@/lib/services/investment-intelligence/marketIndex/indexCsvParser';
 import { assessFreshness } from '@/lib/services/investment-intelligence/pc6/referenceDataQuality';
 
@@ -120,90 +119,14 @@ export const GET = adminRoute(async () => {
   });
 });
 
-const bodySchema = z.object({
-  action: z.enum(['preview', 'commit']),
-  indexKey: z.enum(MARKET_INDEX_KEY_LIST as unknown as [MarketIndexKey, ...MarketIndexKey[]]),
-  fileName: z.string().min(1).max(255),
-  csvText: z.string().min(1).max(INDEX_CSV_MAX_BYTES + 1024),
-  includeWeekendRows: z.boolean().optional(),
-  skipConflicts: z.boolean().optional(),
-  attested: z.boolean().optional(),
-  attestationText: z.string().max(2000).optional(),
-  expectedSha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
-});
-
-function previewPayload(plan: UploadPlan) {
-  const a = plan.analysis;
-  const values = a.accepted.map((r) => r.close);
-  return {
-    parserLayout: a.layout,
-    fileSha256: plan.fileSha256,
-    fileBytes: plan.fileBytes,
-    totalDataRows: a.totalDataRows,
-    acceptedRows: a.accepted.length,
-    weekendHeldBack: a.weekendHeldBack.length,
-    weekendSample: a.weekendHeldBack.slice(0, 20),
-    rejectedRows: a.rejected.length,
-    rejectedSample: a.rejected.slice(0, 100),
-    identicalDuplicatesCollapsed: a.identicalDuplicatesCollapsed,
-    otherIndexRowsIgnored: a.otherIndexRowsIgnored,
-    largeMoves: a.largeMoves.slice(0, 50),
-    dateFrom: a.dateFrom,
-    dateTo: a.dateTo,
-    min: values.length ? Math.min(...values) : null,
-    max: values.length ? Math.max(...values) : null,
-    firstRows: a.accepted.slice(0, 5),
-    lastRows: a.accepted.slice(-5),
-    willInsert: plan.newRows.length,
-    identicalToPublished: plan.identicalExisting,
-    conflicts: plan.conflicts.slice(0, 100),
-    conflictCount: plan.conflicts.length,
-    includeWeekendRows: plan.includeWeekendRows,
-    skipConflicts: plan.skipConflicts,
-    blockers: plan.blockers,
-    warnings: plan.warnings,
-    canCommit: plan.blockers.length === 0,
-  };
-}
-
-export const POST = adminRoute(async (req: Request) => {
+// SUPERSEDED (BENCH-1 Phase 2). The earlier single-step upload wrote series rows on an attestation
+// checkbox alone and called commit_market_index_upload(), which migration 0239 revokes from
+// authenticated sessions because it bypassed the per-right entitlement gate. All uploads now go
+// through the ONE staged pipeline at /api/admin/investment-intelligence/benchmark-data/upload
+// (stage -> validate -> approve -> publish, bound to checksum + staging digest + entitlement).
+// Authentication is still checked first so an unauthenticated caller receives 401, not 410.
+export const POST = adminRoute(async () => {
   const { forbidden } = await requireMarketIndexAdmin();
   if (forbidden) return forbidden;
-
-  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return badValidation(parsed.error, 422);
-  const input = parsed.data;
-  if (Buffer.byteLength(input.csvText, 'utf8') > INDEX_CSV_MAX_BYTES) return bad(`The file is larger than ${INDEX_CSV_MAX_BYTES / 1024 / 1024} MB.`, 413);
-
-  const supabase = await createClient();
-  const todayIso = new Date().toISOString().slice(0, 10);
-
-  if (input.action === 'preview') {
-    const plan = await planIndexUpload(supabase, { indexKey: input.indexKey, csvText: input.csvText, todayIso, includeWeekendRows: input.includeWeekendRows, skipConflicts: input.skipConflicts });
-    return ok(previewPayload(plan));
-  }
-
-  try {
-    const outcome = await commitIndexUpload(supabase, {
-      indexKey: input.indexKey,
-      csvText: input.csvText,
-      todayIso,
-      includeWeekendRows: input.includeWeekendRows,
-      skipConflicts: input.skipConflicts,
-      fileName: input.fileName,
-      attested: input.attested === true,
-      attestationText: input.attestationText ?? '',
-      expectedSha256: input.expectedSha256,
-    });
-    if (outcome.status === 'refused') return Response.json({ error: outcome.blockers.join(' '), code: 'VALIDATION_FAILED', blockers: outcome.blockers }, { status: 422 });
-    return ok(outcome);
-  } catch (e) {
-    const err = e as { code?: string; message?: string };
-    // The database function's own refusals: 42501 = not authorised (a caller
-    // who passed the API guard but lost the capability in between, or called
-    // with a stale session) -> 403, never a success.
-    if (err?.code === '42501') return bad('Market index data admin access required', 403);
-    if (err?.code === '23505') return Response.json({ error: 'A date in this file already holds a different published value; nothing was written.', code: 'CONFLICT' }, { status: 409 });
-    return safeDbError(err, 'market index commit');
-  }
+  return Response.json({ error: 'Superseded by /api/admin/investment-intelligence/benchmark-data/upload', code: 'SUPERSEDED' }, { status: 410 });
 });

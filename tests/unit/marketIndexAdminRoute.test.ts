@@ -112,23 +112,25 @@ describe('page layer (s4): a direct navigation is redirected, not rendered empty
   it('lets the capability holder through', async () => {
     await expect(requireMarketIndexAdminPage()).resolves.toMatchObject({ id: ME });
   });
-  it('the page file calls the guard before rendering', () => {
-    const page = fs.readFileSync(path.join(ROOT, 'app/(app)/admin/investment-intelligence/market-index-data/page.tsx'), 'utf8');
-    expect(page.indexOf('await requireMarketIndexAdminPage()')).toBeGreaterThan(-1);
-    expect(page.indexOf('await requireMarketIndexAdminPage()')).toBeLessThan(page.indexOf('<MarketIndexDataClient'));
+  it('BENCH-1 Phase 2: the page file (and its alias) call the benchmark-data guard before rendering the generalised client', () => {
+    for (const f of ['app/(app)/admin/investment-intelligence/market-index-data/page.tsx', 'app/(app)/admin/investment-intelligence/benchmark-data/page.tsx']) {
+      const page = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      expect(page.indexOf("await requireBenchmarkPage('view')"), f).toBeGreaterThan(-1);
+      expect(page.indexOf("await requireBenchmarkPage('view')"), f).toBeLessThan(page.indexOf('<BenchmarkDataClient'));
+    }
   });
 });
 
 describe('navigation layer (s2/s4): visible only with its own capability', () => {
   const allOthers: AdminCapabilities = { ...NO_ADMIN_CAPABILITIES, resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true, referenceDataQuality: true, lookthroughDataQuality: true };
   it('the group appears only when marketIndexDataUpload is true — every other capability true, and it is still hidden', () => {
-    expect(buildAdminNavGroups(true, allOthers).map((g) => g.label)).not.toContain('Market Index Data');
+    expect(buildAdminNavGroups(true, { ...allOthers, referenceDataQuality: false }).map((g) => g.label)).not.toContain('Benchmark Data');
     const g = buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, marketIndexDataUpload: true });
-    expect(g.map((x) => x.label)).toEqual(['Market Index Data']);
-    expect(g[0].items).toEqual([{ label: 'Market Index Data', href: '/admin/investment-intelligence/market-index-data' }]);
+    expect(g.map((x) => x.label)).toEqual(['Benchmark Data']);
+    expect(g[0].items).toEqual([{ label: 'Benchmark Data', href: '/admin/investment-intelligence/market-index-data' }]);
   });
-  it('is not implied by the PC6 or PC7 capabilities, nor by isAdmin', () => {
-    expect(buildAdminNavGroups(true, { ...NO_ADMIN_CAPABILITIES, referenceDataQuality: true, lookthroughDataQuality: true }).map((g) => g.label)).not.toContain('Market Index Data');
+  it('is not implied by the PC7 capability, nor by isAdmin (PC6 read-only view reuses it as the VIEW capability only)', () => {
+    expect(buildAdminNavGroups(true, { ...NO_ADMIN_CAPABILITIES, lookthroughDataQuality: true }).map((g) => g.label)).not.toContain('Benchmark Data');
   });
   it('the capability parser is strictly === true and defaults closed', () => {
     expect(parseAdminCapabilities({ data: { capabilities: { marketIndexDataUpload: 'yes' } } }).marketIndexDataUpload).toBe(false);
@@ -145,7 +147,7 @@ describe('navigation layer (s2/s4): visible only with its own capability', () =>
   });
 });
 
-describe('capability holder: preview writes nothing, commit needs the attestation', () => {
+describe('capability holder: GET status still works; the single-step POST is superseded (410)', () => {
   it('GET returns status and never another admin\'s identifier (s9), plus the feed switch state', async () => {
     const res = await GET();
     expect(res.status).toBe(200);
@@ -159,84 +161,16 @@ describe('capability holder: preview writes nothing, commit needs the attestatio
     expect(body.dailyFeed.termsWarning).toMatch(/NSE and BSE restrict/);
     expect(body.attestationText).toBe(ATTESTATION_TEXT);
   });
-  it('preview parses and reports but calls no RPC and no write', async () => {
-    const res = await POST(post({ action: 'preview', ...baseBody }));
-    expect(res.status).toBe(200);
-    const d = (await res.json()).data;
-    expect(d.acceptedRows).toBe(2);
-    expect(d.willInsert).toBe(2);
-    expect(d.canCommit).toBe(true);
-    expect(d.fileSha256).toMatch(/^[0-9a-f]{64}$/);
+  it('BENCH-1 Phase 2: POST is GONE (410 SUPERSEDED) after the auth check, calls no RPC and no write - the attestation-only path no longer exists', async () => {
+    const res = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: ATTESTATION_TEXT }));
+    expect(res.status).toBe(410);
+    expect((await res.json()).code).toBe('SUPERSEDED');
     expect(mockRpc).not.toHaveBeenCalled();
     expect(mockAdminClientUsed).not.toHaveBeenCalled();
   });
-  it('REFUSED (422) without the attestation: no RPC is called', async () => {
-    const res = await POST(post({ action: 'commit', ...baseBody }));
-    expect(res.status).toBe(422);
-    expect((await res.json()).error).toMatch(/attestation/i);
-    expect(mockRpc).not.toHaveBeenCalled();
-  });
-  it('REFUSED (422) with a ticked box but altered attestation wording', async () => {
-    const res = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: 'ok' }));
-    expect(res.status).toBe(422);
-    expect(mockRpc).not.toHaveBeenCalled();
-  });
-  it('REFUSED when the file changed between preview and commit', async () => {
-    const res = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: ATTESTATION_TEXT, expectedSha256: 'f'.repeat(64) }));
-    expect(res.status).toBe(422);
-    expect(mockRpc).not.toHaveBeenCalled();
-  });
-  it('commit with the attestation calls the RPC under the CALLER\'s session with the exact attestation text and only the new rows', async () => {
-    mockRpc.mockResolvedValue({ data: { already_committed: false, batch_id: 'b1', inserted: 2, identical: 0 }, error: null });
-    const res = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: ATTESTATION_TEXT }));
-    expect(res.status).toBe(200);
-    expect(mockRpc).toHaveBeenCalledTimes(1);
-    const [name, args] = mockRpc.mock.calls[0];
-    expect(name).toBe('commit_market_index_upload');
-    expect(args).toMatchObject({ p_benchmark_key: 'IN_NIFTY_50_PRI', p_attested: true, p_attestation_text: ATTESTATION_TEXT, p_file_name: 'n.csv' });
-    expect(args.p_rows).toEqual([{ date: '2024-03-04', close: 22405.6 }, { date: '2024-03-05', close: 22356.3 }]);
-    expect(mockAdminClientUsed).not.toHaveBeenCalled();
-  });
-  it('the database refusing (42501) is surfaced as 403, never as success', async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'market index upload: not authorised' } });
-    const res = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: ATTESTATION_TEXT }));
-    expect(res.status).toBe(403);
-  });
-  it('a database conflict (23505) is a 409 with a safe message', async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { code: '23505', message: 'internal detail about ii_benchmark_series' } });
-    const res = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: ATTESTATION_TEXT }));
-    expect(res.status).toBe(409);
-    expect(JSON.stringify(await res.json())).not.toContain('ii_benchmark_series');
-  });
-  it('idempotent re-upload: when every row is already published the commit is a no-op and the RPC is not called', async () => {
-    db = fakeSupabase({
-      ii_benchmarks: [{ id: 'b-n', benchmark_key: 'IN_NIFTY_50_PRI' }],
-      ii_benchmark_series: [
-        { benchmark_id: 'b-n', series_date: '2024-03-04', value: 22405.6, quality_status: 'ok' },
-        { benchmark_id: 'b-n', series_date: '2024-03-05', value: 22356.3, quality_status: 'ok' },
-      ],
-    });
-    const res = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: ATTESTATION_TEXT }));
-    expect(res.status).toBe(200);
-    expect((await res.json()).data.status).toBe('noop');
-    expect(mockRpc).not.toHaveBeenCalled();
-  });
-  it('a different value for a published date blocks the commit unless the operator chose to skip conflicts, and is never overwritten either way', async () => {
-    db = fakeSupabase({
-      ii_benchmarks: [{ id: 'b-n', benchmark_key: 'IN_NIFTY_50_PRI' }],
-      ii_benchmark_series: [{ benchmark_id: 'b-n', series_date: '2024-03-04', value: 11111, quality_status: 'ok' }],
-    });
-    const blocked = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: ATTESTATION_TEXT }));
-    expect(blocked.status).toBe(422);
-    expect(mockRpc).not.toHaveBeenCalled();
-    mockRpc.mockResolvedValue({ data: { already_committed: false, batch_id: 'b2', inserted: 1, identical: 0 }, error: null });
-    const skipped = await POST(post({ action: 'commit', ...baseBody, attested: true, attestationText: ATTESTATION_TEXT, skipConflicts: true }));
-    expect(skipped.status).toBe(200);
-    expect(mockRpc.mock.calls[0][1].p_rows).toEqual([{ date: '2024-03-05', close: 22356.3 }]);
-  });
-  it('a malformed body is a 422, an unknown index is a 422', async () => {
-    expect((await POST(post({ action: 'preview', indexKey: 'IN_NIFTY_50_TRI', fileName: 'x', csvText: CSV }))).status).toBe(422);
-    expect((await POST(new Request('http://test/x', { method: 'POST', body: 'not json' }))).status).toBe(422);
+  it('an unauthenticated caller still gets 401 (not 410) on POST', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    expect((await POST(post({ action: 'commit', ...baseBody }))).status).toBe(401);
   });
 });
 

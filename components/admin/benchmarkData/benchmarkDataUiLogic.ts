@@ -168,6 +168,18 @@ export const RETURN_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }
   { value: 'OTHER', label: 'Other (use for net total return)' },
 ];
 
+export const ASSET_CLASS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'equity', label: 'Equity' },
+  { value: 'debt', label: 'Debt' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'gold', label: 'Gold' },
+  { value: 'silver', label: 'Silver' },
+  { value: 'commodity', label: 'Commodity' },
+  { value: 'international_equity', label: 'International equity' },
+  { value: 'money_market', label: 'Money market' },
+  { value: 'other', label: 'Other' },
+];
+
 export const RELATIONSHIP_OPTIONS: ReadonlyArray<{ value: 'primary' | 'secondary' | 'category_average'; label: string }> = [
   { value: 'primary', label: 'Primary benchmark (declared by the scheme)' },
   { value: 'secondary', label: 'Secondary benchmark' },
@@ -1076,10 +1088,10 @@ export function lockedWhenVerified(): ReadonlyArray<keyof CatalogueFormState> {
 export function validateCatalogueForm(f: CatalogueFormState): Record<string, string> {
   const e: Record<string, string> = {};
   if (!BENCHMARK_KEY_PATTERN.test(f.benchmarkKey)) e.benchmarkKey = 'The key must be 3 to 64 characters: capital letters A-Z, digits 0-9 and underscores only.';
-  if (f.officialName.trim().length < 3) e.officialName = 'Enter the exact official name.';
+  if (f.officialName.trim().length < 2) e.officialName = 'Enter the exact official name.';
   if (f.ownerName.trim().length < 2) e.ownerName = 'Enter the index owner.';
-  if (f.officialIdentifier.trim().length < 2) e.officialIdentifier = 'Enter the official identifier (for example the index code).';
-  if (f.assetClass.trim().length < 2) e.assetClass = 'Enter the asset class.';
+  if (f.officialIdentifier.trim().length > 100) e.officialIdentifier = 'The official identifier can be at most 100 characters.';
+  if (!ASSET_CLASS_OPTIONS.some((o) => o.value === f.assetClass)) e.assetClass = 'Choose the asset class.';
   if (!/^[A-Za-z]{2}$/.test(f.countryCode.trim())) e.countryCode = 'Enter the two-letter country code, such as IN.';
   if (!isValidCurrency(f.currencyCode)) e.currencyCode = 'Enter the three-letter currency code, such as INR.';
   if (!RETURN_TYPE_OPTIONS.some((o) => o.value === f.returnType)) e.returnType = 'Choose the return type.';
@@ -1094,7 +1106,7 @@ export function validateCatalogueForm(f: CatalogueFormState): Record<string, str
   for (const k of ['methodologyUrl', 'sourceUrl'] as const) {
     if (f[k].trim() && !isHttpUrl(f[k])) e[k] = 'Enter a full web address starting with https://';
   }
-  if (f.evidenceRef.trim().length < 3) e.evidenceRef = 'Say where the facts above come from (a document title or reference).';
+  if (f.evidenceRef.trim().length < 5) e.evidenceRef = 'Say where the facts above come from (a document title or reference).';
   if (!f.evidenceRetrievedAt.trim()) e.evidenceRetrievedAt = 'Enter the date you retrieved the evidence.';
   return e;
 }
@@ -1102,32 +1114,33 @@ export function validateCatalogueForm(f: CatalogueFormState): Record<string, str
 export function buildCatalogueBody(f: CatalogueFormState): Record<string, string | number | null> {
   const t = (v: string) => (v.trim() === '' ? null : v.trim());
   return {
-    benchmarkKey: f.benchmarkKey.trim(),
-    label: f.label.trim() || f.officialName.trim(),
-    officialName: f.officialName.trim(),
-    ownerName: f.ownerName.trim(),
-    officialIdentifier: f.officialIdentifier.trim(),
-    assetClass: f.assetClass.trim(),
-    countryCode: f.countryCode.trim().toUpperCase(),
-    currencyCode: f.currencyCode.trim().toUpperCase(),
-    returnType: f.returnType,
-    returnVariant: f.returnVariant,
-    baseDate: t(f.baseDate),
-    baseValue: f.baseValue.trim() === '' ? null : Number(f.baseValue),
-    launchDate: t(f.launchDate),
-    historyStartDate: t(f.historyStartDate),
-    historyClass: f.historyClass,
-    backtestedThrough: t(f.backtestedThrough),
-    calendarCode: t(f.calendarCode),
-    methodologyUrl: t(f.methodologyUrl),
-    sourceUrl: t(f.sourceUrl),
-    evidenceRef: f.evidenceRef.trim(),
-    evidenceRetrievedAt: t(f.evidenceRetrievedAt),
+    benchmark_key: f.benchmarkKey.trim(),
+    benchmark_label: f.label.trim() || f.officialName.trim(),
+    official_name: f.officialName.trim(),
+    owner_name: f.ownerName.trim(),
+    official_identifier: t(f.officialIdentifier),
+    asset_class: f.assetClass,
+    country_code: t(f.countryCode.toUpperCase()),
+    currency_code: f.currencyCode.trim().toUpperCase(),
+    return_type: f.returnType,
+    return_variant: f.returnVariant,
+    base_date: t(f.baseDate),
+    base_value: f.baseValue.trim() === '' ? null : Number(f.baseValue),
+    launch_date: t(f.launchDate),
+    history_start_date: t(f.historyStartDate),
+    history_class: f.historyClass,
+    backtested_through: t(f.backtestedThrough),
+    calendar_code: t(f.calendarCode),
+    methodology_url: t(f.methodologyUrl),
+    source_url: t(f.sourceUrl),
+    evidence_ref: f.evidenceRef.trim(),
+    evidence_retrieved_at: t(f.evidenceRetrievedAt),
   };
 }
 
 export const MIN_NOTE = 10;
 export const MIN_CORRECTION_REASON = 20;
+export const MIN_APPROVAL_NOTE = 5;
 
 export function noteProblem(v: string, min: number, what: string): string | null {
   return v.trim().length >= min ? null : `${what} must be at least ${min} characters.`;
@@ -1184,7 +1197,7 @@ export function validateEntitlementForm(f: EntitlementFormState): Record<string,
   }
   for (const k of ['dataFrom', 'dataTo'] as const) if (f[k].trim() && !isIsoDate(f[k].trim())) e[k] = 'Use a valid date, or leave empty for no limit.';
   if (!e.dataFrom && !e.dataTo && f.dataFrom.trim() && f.dataTo.trim() && f.dataTo.trim() < f.dataFrom.trim()) e.dataTo = 'The last data date cannot be before the first.';
-  if (f.evidenceReference.trim().length < 3) e.evidenceReference = 'Give a document title or reference that supports this permission.';
+  if (f.evidenceReference.trim().length < 5) e.evidenceReference = 'Give a document title or reference that supports this permission.';
   if (f.evidenceUrl.trim() && !isHttpUrl(f.evidenceUrl)) e.evidenceUrl = 'Enter a full web address starting with https://';
   if (f.kind === 'public_use_permission') {
     if (!f.evidenceUrl.trim()) e.evidenceUrl = 'A public-use permission needs the web address of the document that grants it.';
@@ -1199,28 +1212,28 @@ export function validateEntitlementForm(f: EntitlementFormState): Record<string,
 export function buildEntitlementBody(f: EntitlementFormState, row: Pick<CatalogueRowView, 'id' | 'returnVariant' | 'currencyCode'>): Record<string, unknown> {
   const t = (v: string) => (v.trim() === '' ? null : v.trim());
   return {
-    benchmarkId: row.id,
-    kind: f.kind,
-    returnVariant: row.returnVariant,
-    currencyCode: row.currencyCode,
-    allowManualIngest: f.rights.ingestManual,
-    allowAutomation: f.rights.automation,
-    allowStorage: f.rights.storage,
-    allowCalculation: f.rights.calculation,
-    allowCustomerDisplay: f.rights.customerDisplay,
-    allowReportExport: f.rights.reportExport,
-    dataFrom: t(f.dataFrom),
-    dataTo: t(f.dataTo),
-    validFrom: f.validFrom.trim(),
-    validTo: t(f.validTo),
-    postExpiryStorage: f.postExpiryStorage,
-    postExpiryCalculation: f.postExpiryCalculation,
-    postExpiryDisplay: f.postExpiryDisplay,
-    evidenceReference: f.evidenceReference.trim(),
-    evidenceUrl: t(f.evidenceUrl),
-    evidenceDocumentDate: t(f.evidenceDocumentDate),
-    evidenceRetrievedAt: t(f.evidenceRetrievedAt),
-    attributionText: t(f.attributionText),
+    benchmark_id: row.id,
+    entitlement_kind: f.kind,
+    return_variant: row.returnVariant,
+    currency_code: row.currencyCode,
+    allow_manual_ingest: f.rights.ingestManual,
+    allow_automation: f.rights.automation,
+    allow_storage: f.rights.storage,
+    allow_calculation: f.rights.calculation,
+    allow_customer_display: f.rights.customerDisplay,
+    allow_report_export: f.rights.reportExport,
+    data_from: t(f.dataFrom),
+    data_to: t(f.dataTo),
+    valid_from: f.validFrom.trim(),
+    valid_to: t(f.validTo),
+    post_expiry_storage: f.postExpiryStorage,
+    post_expiry_calculation: f.postExpiryCalculation,
+    post_expiry_display: f.postExpiryDisplay,
+    evidence_reference: f.evidenceReference.trim(),
+    evidence_url: t(f.evidenceUrl),
+    evidence_document_date: t(f.evidenceDocumentDate),
+    evidence_retrieved_at: t(f.evidenceRetrievedAt),
+    attribution_text: t(f.attributionText),
     notes: t(f.notes),
   };
 }
@@ -1240,7 +1253,7 @@ export function entitlementActions(e: Pick<EntitlementRightsView, 'status' | 'pr
 }
 
 export function canApproveEntitlementNow(a: { note: string; proposedByMe: boolean; selfApprovalAck: boolean }): { ok: boolean; reason: string } {
-  const n = noteProblem(a.note, MIN_NOTE, 'The approval note');
+  const n = noteProblem(a.note, MIN_APPROVAL_NOTE, 'The approval note');
   if (n) return { ok: false, reason: n };
   if (a.proposedByMe && !a.selfApprovalAck) return { ok: false, reason: 'You proposed this record yourself. Tick the self-approval confirmation to approve your own proposal.' };
   return { ok: true, reason: '' };
@@ -1291,24 +1304,24 @@ export function validateMappingForm(f: MappingFormState): Record<string, string>
   return e;
 }
 
-export function buildMappingBody(f: MappingFormState): Record<string, string | null> {
+export function buildMappingBody(f: MappingFormState, benchmarkId: string | null): Record<string, string | null> {
   const t = (v: string) => (v.trim() === '' ? null : v.trim());
   return {
-    instrumentId: f.instrumentId.trim(),
-    benchmarkKey: t(f.benchmarkKey),
-    proposedBenchmarkName: f.proposedBenchmarkName.trim(),
-    relationshipType: f.relationshipType,
-    effectiveFrom: f.effectiveFrom.trim(),
-    effectiveTo: t(f.effectiveTo),
-    evidenceSource: f.evidenceSource,
-    evidenceUrl: f.evidenceUrl.trim(),
-    evidenceTitle: t(f.evidenceTitle),
-    evidenceDocumentDate: f.evidenceDocumentDate.trim(),
-    evidenceRetrievedAt: f.evidenceRetrievedAt.trim(),
-    evidenceExcerpt: t(f.evidenceExcerpt),
-    resolutionMethod: f.resolutionMethod,
+    instrument_id: f.instrumentId.trim(),
+    benchmark_id: benchmarkId,
+    proposed_benchmark_name: f.proposedBenchmarkName.trim(),
+    relationship_type: f.relationshipType,
+    effective_from: f.effectiveFrom.trim(),
+    effective_to: t(f.effectiveTo),
+    evidence_source: f.evidenceSource,
+    evidence_url: f.evidenceUrl.trim(),
+    evidence_title: t(f.evidenceTitle),
+    evidence_document_date: f.evidenceDocumentDate.trim(),
+    evidence_retrieved_at: f.evidenceRetrievedAt.trim(),
+    evidence_excerpt: t(f.evidenceExcerpt),
+    resolution_method: f.resolutionMethod,
     confidence: f.confidence,
-    ambiguityReason: t(f.ambiguityReason),
+    ambiguity_reason: t(f.ambiguityReason),
   };
 }
 

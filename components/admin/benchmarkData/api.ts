@@ -55,30 +55,56 @@ export function useUnmountSignal(): () => AbortSignal {
 
 export type LoadState<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error'; failure: ApiFailure };
 
-/** GET `url` and unwrap `{ data }`. Reload with `reload()`. */
+/** GET `url` and unwrap `{ data }`. Reload with `reload()`. Previously loaded data stays on screen while a reload runs. */
 export function useLoad<T>(url: string | null, action: string): { state: LoadState<T>; reload: () => void } {
-  const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  const [res, setRes] = useState<{ key: string; value: Exclude<LoadState<T>, { status: 'loading' }> } | null>(null);
   const [tick, setTick] = useState(0);
+  const key = `${url ?? ''}|${tick}`;
   useEffect(() => {
     if (!url) return;
     const ac = new AbortController();
-    setState((s) => (s.status === 'ready' ? s : { status: 'loading' }));
     (async () => {
       const r = await apiCall(url, { signal: ac.signal });
       if (ac.signal.aborted || r.aborted) return;
       if (!r.ok) {
-        setState({ status: 'error', failure: failureOf(r, action) });
+        setRes({ key, value: { status: 'error', failure: failureOf(r, action) } });
         return;
       }
       const data = r.body && 'data' in r.body ? (r.body.data as T) : null;
       if (data === null || data === undefined) {
-        setState({ status: 'error', failure: { kind: 'error', message: 'The server answered in an unexpected shape, so nothing is shown rather than something wrong.', restart: false, retryable: true } });
+        setRes({ key, value: { status: 'error', failure: { kind: 'error', message: 'The server answered in an unexpected shape, so nothing is shown rather than something wrong.', restart: false, retryable: true } } });
         return;
       }
-      setState({ status: 'ready', data });
+      setRes({ key, value: { status: 'ready', data } });
     })();
     return () => ac.abort();
-  }, [url, action, tick]);
+  }, [url, action, key]);
   const reload = useCallback(() => setTick((t) => t + 1), []);
+  const state: LoadState<T> = res && (res.value.status === 'ready' || res.key === key) ? res.value : { status: 'loading' };
   return { state, reload };
+}
+
+export type Say = (kind: 'success' | 'failure', message: string) => void;
+
+/** POST JSON, announce the outcome, and report the plain-language message back (used for inline display too). */
+export function usePost(say: Say): { busy: boolean; post: (path: string, json: unknown, okMessage: string, action: string) => Promise<{ ok: boolean; message: string; body: Record<string, unknown> | null }> } {
+  const signal = useUnmountSignal();
+  const [busy, setBusy] = useState(false);
+  const post = useCallback(
+    async (path: string, json: unknown, okMessage: string, action: string) => {
+      setBusy(true);
+      const r = await apiCall(path, { method: 'POST', json, signal: signal() });
+      if (r.aborted) return { ok: false, message: '', body: null };
+      setBusy(false);
+      if (r.ok) {
+        say('success', okMessage);
+        return { ok: true, message: okMessage, body: r.body };
+      }
+      const message = failureOf(r, action).message;
+      say('failure', message);
+      return { ok: false, message, body: r.body };
+    },
+    [say, signal]
+  );
+  return { busy, post };
 }

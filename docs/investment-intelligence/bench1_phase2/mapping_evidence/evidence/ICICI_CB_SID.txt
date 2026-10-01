@@ -1,0 +1,6 @@
+DOCUMENT: ICICI Prudential Corporate Bond Fund - SID
+URL: https://www.icicipruamc.com/blob/downloads/Scheme%20Information%20Document(SID)/ICICI%20Prudential%20Corporate%20Bond%20Fund%20New.pdf
+DOCUMENT DATE: 2025-10-24
+RETRIEVED: 2026-10-01
+EXCERPT (short quote/paraphrase, <=30 words):
+'AMFI Tier I Benchmark - NIFTY Corporate Bond Index A-II'; changed from CRISIL Corporate Bond B-II Index w.e.f. March 12, 2024

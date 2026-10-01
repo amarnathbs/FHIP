@@ -195,7 +195,7 @@ export function TextField({ label, value, onChange, hint, error, required, disab
   const id = useId();
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} required={required}>
-      <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} maxLength={maxLength} list={list} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint && `${id}-hint`, error && `${id}-error`)} className={INPUT} />
+      <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} maxLength={maxLength} list={list} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={INPUT} />
     </FieldShell>
   );
 }
@@ -204,7 +204,7 @@ export function TextAreaField({ label, value, onChange, hint, error, required, d
   const id = useId();
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} required={required}>
-      <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={rows} disabled={disabled} maxLength={maxLength} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint && `${id}-hint`, error && `${id}-error`)} className={INPUT} />
+      <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={rows} disabled={disabled} maxLength={maxLength} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={INPUT} />
     </FieldShell>
   );
 }
@@ -218,7 +218,7 @@ export function SelectField({ label, value, onChange, options, placeholder = 'Ch
   const id = useId();
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} required={required}>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint && `${id}-hint`, error && `${id}-error`)} className={INPUT}>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={INPUT}>
         <option value="">{placeholder}</option>
         {options.map((o) => (
           <option key={o.value} value={o.value}>

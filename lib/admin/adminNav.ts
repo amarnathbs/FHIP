@@ -101,7 +101,7 @@ export const LOOKTHROUGH_DATA_ITEMS: { label: string; href: string }[] = [
 // WRITES data: an operator trusted to read ingest health is not thereby trusted
 // to upload index values.
 export const MARKET_INDEX_DATA_ITEMS: { label: string; href: string }[] = [
-  { label: 'Market Index Data', href: '/admin/investment-intelligence/market-index-data' },
+  { label: 'Benchmark Data', href: '/admin/investment-intelligence/market-index-data' },
 ];
 
 // -- Capability contract ---------------------------------------------------
@@ -142,6 +142,12 @@ export interface AdminCapabilities {
    * (Standard section 2).
    */
   marketIndexDataUpload: boolean;
+  /** BENCH-1 Phase 2 (migration 0239) - each independently named; none implies another or the upload capability. */
+  benchmarkDataView: boolean;
+  benchmarkDataPublish: boolean;
+  benchmarkDataCorrect: boolean;
+  benchmarkCatalogueManage: boolean;
+  benchmarkEntitlementApprove: boolean;
 }
 
 /**
@@ -159,6 +165,11 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   referenceDataQuality: false,
   lookthroughDataQuality: false,
   marketIndexDataUpload: false,
+  benchmarkDataView: false,
+  benchmarkDataPublish: false,
+  benchmarkDataCorrect: false,
+  benchmarkCatalogueManage: false,
+  benchmarkEntitlementApprove: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -191,6 +202,11 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     referenceDataQuality: readBooleanField(source, 'referenceDataQuality'),
     lookthroughDataQuality: readBooleanField(source, 'lookthroughDataQuality'),
     marketIndexDataUpload: readBooleanField(source, 'marketIndexDataUpload'),
+    benchmarkDataView: readBooleanField(source, 'benchmarkDataView'),
+    benchmarkDataPublish: readBooleanField(source, 'benchmarkDataPublish'),
+    benchmarkDataCorrect: readBooleanField(source, 'benchmarkDataCorrect'),
+    benchmarkCatalogueManage: readBooleanField(source, 'benchmarkCatalogueManage'),
+    benchmarkEntitlementApprove: readBooleanField(source, 'benchmarkEntitlementApprove'),
   };
 }
 
@@ -238,7 +254,11 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.resourceDiscoveryAdmin ? [{ label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.lookthroughDataQuality ? [{ label: 'Fund Look-Through', items: LOOKTHROUGH_DATA_ITEMS, matchMode: 'exact' as const }] : []),
-    ...(capabilities.marketIndexDataUpload ? [{ label: 'Market Index Data', items: MARKET_INDEX_DATA_ITEMS, matchMode: 'exact' as const }] : []),
+    // Benchmark Data (BENCH-1 Phase 2): shown when ANY of its separately named capabilities is held. Each is
+    // evaluated independently; this is UX only - every route, page and RPC enforces its own capability.
+    ...(capabilities.marketIndexDataUpload || capabilities.benchmarkDataView || capabilities.benchmarkDataPublish || capabilities.benchmarkDataCorrect || capabilities.benchmarkCatalogueManage || capabilities.benchmarkEntitlementApprove
+      ? [{ label: 'Benchmark Data', items: MARKET_INDEX_DATA_ITEMS, matchMode: 'exact' as const }]
+      : []),
   ];
 }
 

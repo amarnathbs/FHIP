@@ -1,0 +1,17 @@
+Retrieved 2026-10-01 via curl, HTTP 200 (public SEBI documents). Paraphrase + short phrases only.
+1) SEBI circular SEBI/HO/IMD/DF3/CIR/P/2018/04, 4 Jan 2018, "Benchmarking of Scheme's performance to Total Return Index"
+   Page: https://www.sebi.gov.in/legal/circulars/jan-2018/benchmarking-of-scheme-s-performance-to-total-return-index_37273.html
+   PDF : https://www.sebi.gov.in/sebi_data/attachdocs/jan-2018/1515066187290.pdf
+   - MFs must disclose benchmark index name(s) in scheme related documents (para 1).
+   - Scheme performance to be benchmarked to the TRI variant of the chosen index (para 3(b)); selection aligned with investment objective, asset allocation, strategy (3(a)).
+   - Where TRI not available for whole period, use composite CAGR = PRI until TRI start date, TRI thereafter, with a mandated disclosure footnote (3(c)). Worked example uses TRI available from 30 Jun 1999.
+   - Para 4: applicable to all schemes of MFs w.e.f. 1 Feb 2018.
+2) SEBI circular SEBI/HO/IMD/IMD-II DF3/P/CIR/2021/652, 27 Oct 2021, "Guiding Principles for bringing uniformity in Benchmarks of Mutual Fund Schemes"
+   Page: https://www.sebi.gov.in/legal/circulars/oct-2021/guiding-principles-for-bringing-uniformity-in-benchmarks-of-mutual-fund-schemes_53539.html
+   PDF : https://www.sebi.gov.in/sebi_data/attachdocs/oct-2021/1635332770473.pdf
+   - Two-tier structure; first tier reflects category, second tier (optional) reflects style/strategy; "All the benchmarks followed should necessarily be Total Return Indices."
+   - Debt: one broad market index per index provider per category (e.g. NIFTY or CRISIL ultra short duration). Equity: one per provider per category (e.g. S&P BSE 100 or NSE 100 for large cap). Hybrid/solution: single broad benchmark. Thematic/sectoral: single. Index funds/ETFs: single benchmark (replicated index). FoF: underlying scheme's benchmark if single-fund FoF, else broad market index.
+   - AMFI advised to publish first-tier benchmarks within one month; debt (PRC matrix) by 1 Dec 2021. Framework effective 1 Dec 2021 (para 3(a)) and 1 Jan 2022 (para 3(b)).
+3) Press/secondary (NOT authoritative; context only): CafeMutual 1 Dec 2021 article says AMFI released tier-1 list on that date; Business Standard 31 Mar 2022 headline "AMFI lists first tier benchmarks" (search result title only).
+   https://cafemutual.com/news/industry/23378-amfi-releases-tier-1-benchmark-list-for-mutual-fund-schemes
+4) SEBI Master Circular for Mutual Funds, SEBI/HO/IMD/IMD-PoD-1/P/CIR/2024/90, 27 Jun 2024 (found via search; hosted copy https://www.taurusmutualfund.com/sites/default/files/downloads/SEBI_Master_Circular_for_MF_27_6_2024.pdf). Not read in full.

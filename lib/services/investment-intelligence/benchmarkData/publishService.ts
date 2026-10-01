@@ -76,6 +76,7 @@ export async function publishBenchmarkImport(supabase: SupabaseClient, req: Publ
     if (failure.kind === 'stale') await supabase.rpc('record_benchmark_import_failure', { p_job: req.jobId, p_code: 'STALE', p_detail: failure.message });
     return failure;
   }
+  if (!data) return { status: 'failed', kind: 'unavailable', httpStatus: 503, message: 'The benchmark import service returned no result.', code: null };
   const r = data as { already_published: boolean; job_id: string; batch_id: string; inserted: number; revived: number; corrected: number; identical_skipped: number; date_from: string; date_to: string };
   return {
     status: 'published',
@@ -89,6 +90,7 @@ export type RollbackOutcome = { status: 'rolled_back'; alreadyRolledBack: boolea
 export async function rollbackBenchmarkImport(supabase: SupabaseClient, jobId: string, reason: string): Promise<RollbackOutcome> {
   const { data, error } = await supabase.rpc('rollback_benchmark_import', { p_job: jobId, p_reason: reason });
   if (error) return mapRpcError(error);
+  if (!data) return { status: 'failed', kind: 'unavailable', httpStatus: 503, message: 'The benchmark import service returned no result.', code: null };
   const r = data as { already_rolled_back: boolean; restored?: number; retracted?: number };
   return { status: 'rolled_back', alreadyRolledBack: r.already_rolled_back === true, restored: r.restored ?? 0, retracted: r.retracted ?? 0 };
 }
