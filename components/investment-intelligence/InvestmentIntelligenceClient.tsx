@@ -58,6 +58,8 @@ interface PublicationPreview {
   sourceCurrency: string | null;
   valuationAsOfDate: string | null;
   certifiedValue: number | null;
+  /** What Net Worth will count: units x latest eligible NAV (or the statement value, labelled), with its date. */
+  currentValuation: { value: number; basis: 'market_nav' | 'statement' | 'redeemed'; units: number | null; nav: number | null; navDate: string | null; stale: boolean; statementValue: number | null; note: string } | null;
   costBaseStatus: string;
   costBaseValue: number | null;
   annualContributionStatus: string;
@@ -1103,6 +1105,19 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                       <dt className="text-xs text-gray-500">Certified value ({publishPreview.sourceCurrency})</dt>
                       <dd className="font-medium text-gray-900">{formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)}</dd>
                     </div>
+                    {publishPreview.currentValuation && (
+                      <div>
+                        <dt className="text-xs text-gray-500">Counted in net worth ({publishPreview.sourceCurrency})</dt>
+                        <dd className="font-medium text-gray-900">{formatMoney(publishPreview.currentValuation.value, publishPreview.sourceCurrency)}</dd>
+                        <dd className="text-xs text-gray-500">
+                          {publishPreview.currentValuation.basis === 'market_nav'
+                            ? `Latest NAV ${publishPreview.currentValuation.nav === null ? '' : formatMoney(publishPreview.currentValuation.nav, publishPreview.sourceCurrency)} dated ${publishPreview.currentValuation.navDate ? fmtDate(publishPreview.currentValuation.navDate, publishPreview.sourceCurrency) : '—'}${publishPreview.currentValuation.stale ? ' (stale)' : ''}`
+                            : publishPreview.currentValuation.basis === 'redeemed'
+                              ? 'Redeemed (0 units)'
+                              : `Statement value (no newer NAV on file)${publishPreview.currentValuation.stale ? ', stale' : ''}`}
+                        </dd>
+                      </div>
+                    )}
                     <div>
                       <dt className="text-xs text-gray-500">As of</dt>
                       <dd className="font-medium text-gray-900">{publishPreview.valuationAsOfDate ? fmtDate(publishPreview.valuationAsOfDate, publishPreview.sourceCurrency) : '—'}</dd>
@@ -1166,8 +1181,8 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Net-worth impact</p>
                       <p className="mt-1 text-gray-800">
                         {publishChoice !== 'new'
-                          ? `Existing manual value ${formatMoney(publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0, publishPreview.sourceCurrency)} superseded by certified value ${formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)} — net change ${formatMoney((publishPreview.certifiedValue ?? 0) - (publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0), publishPreview.sourceCurrency)}.`
-                          : `New position adds ${formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)} to net worth.`}
+                          ? `Existing manual value ${formatMoney(publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0, publishPreview.sourceCurrency)} superseded by ${publishPreview.currentValuation ? 'the value counted in net worth' : 'certified value'} ${formatMoney(publishPreview.currentValuation?.value ?? publishPreview.certifiedValue, publishPreview.sourceCurrency)} — net change ${formatMoney((publishPreview.currentValuation?.value ?? publishPreview.certifiedValue ?? 0) - (publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0), publishPreview.sourceCurrency)}.`
+                          : `New position adds ${formatMoney(publishPreview.currentValuation?.value ?? publishPreview.certifiedValue, publishPreview.sourceCurrency)} to net worth.`}
                       </p>
                     </div>
                   )}

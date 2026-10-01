@@ -26,7 +26,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
-import { ensurePublishedValuesCurrent } from './publishedValueRemark';
+import { ensurePublishedValuesCurrent, valueSnapshotAtCurrentNav, type PublicationCurrentValuation } from './publishedValueRemark';
 import { loadAccountOwnership } from './accountOwnership';
 import type { AccountOwnership } from './ownerModel';
 import { getFxRateAudInr } from '@/lib/services/dashboardData';
@@ -75,6 +75,7 @@ interface HoldingSnapshotRow {
   account_id: string;
   instrument_id: string;
   as_of_date: string;
+  units: number | string;
   value: number;
   currency_code: string;
   quality_status: string;
@@ -176,6 +177,12 @@ export interface PublicationPreview {
   sourceCurrency: string | null;
   valuationAsOfDate: string | null;
   certifiedValue: number | null;
+  /**
+   * 2026-10-02: what Net Worth will actually count for this position (units x latest eligible NAV, or the
+   * certified statement value, labelled), with its NAV date. null for a non-mutual-fund or when NAVs cannot
+   * be read. `certifiedValue` stays the immutable certified statement value.
+   */
+  currentValuation: PublicationCurrentValuation | null;
   costBaseStatus: string;
   costBaseValue: number | null;
   annualContributionStatus: 'confirmed_user_plan' | 'none';
@@ -205,7 +212,7 @@ interface PositionContext {
 async function loadPositionContext(supabase: SupabaseServerClient, userId: string, positionId: string): Promise<PositionContext | { error: string }> {
   const { data: snapshotRaw, error: snapErr } = await supabase
     .from('ii_holding_snapshots')
-    .select('id, account_id, instrument_id, as_of_date, value, currency_code, quality_status, created_at')
+    .select('id, account_id, instrument_id, as_of_date, units, value, currency_code, quality_status, created_at')
     .eq('id', positionId)
     .eq('user_id', userId)
     .maybeSingle();
@@ -379,14 +386,23 @@ export async function buildPreview(userId: string, positionId: string): Promise<
   const fxRate = await getFxRateAudInr(supabase);
   const { data: profile } = await supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).maybeSingle();
   const householdCurrency = (profile?.preferred_currency as string) ?? 'AUD';
-  const baseCurrency = computeBaseCurrencyPreview(snapshot.value, snapshot.currency_code, householdCurrency, fxRate);
+  // The figure Net Worth will count (NAV-valued), not just the frozen statement value.
+  const currentValuation = await valueSnapshotAtCurrentNav(supabase, userId, {
+    accountId: account.id,
+    instrumentId: instrument.id,
+    instrumentClass,
+    currencyCode: snapshot.currency_code,
+    snapshot: { asOfDate: snapshot.as_of_date, units: Number(snapshot.units), value: Number(snapshot.value) },
+  });
+  const countedValue = currentValuation?.value ?? snapshot.value;
+  const baseCurrency = computeBaseCurrencyPreview(countedValue, snapshot.currency_code, householdCurrency, fxRate);
 
   let financialImpact: IiFinancialImpact | null = null;
   if (eligibility.status !== 'NOT_ELIGIBLE') {
     const topCandidate = duplicateCandidates[0];
     financialImpact = calculateFinancialImpact({
-      currentIncludedValue: existingPub ? snapshot.value : topCandidate ? 0 : 0,
-      newPublishedValue: snapshot.value,
+      currentIncludedValue: existingPub ? countedValue : topCandidate ? 0 : 0,
+      newPublishedValue: countedValue,
       manualValueBeingSuperseded: 0, // preview shows 0 until the user CONFIRMS a specific link — never assumed
       currency: snapshot.currency_code,
     });
@@ -414,6 +430,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
       sourceCurrency: snapshot.currency_code,
       valuationAsOfDate: snapshot.as_of_date,
       certifiedValue: snapshot.value,
+      currentValuation,
       costBaseStatus,
       costBaseValue,
       annualContributionStatus: annualContribution.source,
@@ -691,7 +708,16 @@ export async function publishPosition(userId: string, positionId: string, option
     metadata: { positionId, publishedRowId, target, action, correlationId: options.correlationId ?? null },
   });
 
-  const financialImpact = calculateFinancialImpact({ currentIncludedValue: action === 'REPLACE_LINK_EXISTING' ? manualValueBeingSuperseded : 0, newPublishedValue: snapshot.value, manualValueBeingSuperseded, currency: snapshot.currency_code });
+  // The value Net Worth now counts for this row (NAV-valued), read back; the certified value if it cannot be read.
+  let countedNow = snapshot.value;
+  try {
+    const { data: marked } = await supabase.from('investments').select('current_value').eq('id', publishedRowId).eq('user_id', userId).maybeSingle();
+    const n = Number((marked as { current_value?: unknown } | null)?.current_value);
+    if (marked && Number.isFinite(n)) countedNow = n;
+  } catch {
+    /* keep the certified value */
+  }
+  const financialImpact = calculateFinancialImpact({ currentIncludedValue: action === 'REPLACE_LINK_EXISTING' ? manualValueBeingSuperseded : 0, newPublishedValue: countedNow, manualValueBeingSuperseded, currency: snapshot.currency_code });
 
   return { publicationId: pub.id as string, publishedRowId, action, financialImpact, error: null };
 }

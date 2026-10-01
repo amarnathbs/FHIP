@@ -24,6 +24,10 @@
 --      basis, units, NAV, dates, reason, trigger, fingerprint, rule version).
 --      Written by the service role only (no authenticated INSERT/UPDATE/DELETE
 --      policy, exactly like ii_audit_events); the owner may read their own rows.
+--      API roles are also explicitly revoked insert/update/delete, and an UPDATE
+--      trigger makes a written row immutable for every role (append-only).
+--      (Amended 2026-10-02, before this file was applied anywhere: the revoke and
+--      the immutability trigger were added after the first draft.)
 --
 -- WHAT THIS DELIBERATELY DOES NOT DO
 --   * It does not touch `ii_fhip_publications`: `published_value` stays the
@@ -112,3 +116,26 @@ alter table ii_investment_value_revisions enable row level security;
 drop policy if exists "read own ii_investment_value_revisions" on ii_investment_value_revisions;
 create policy "read own ii_investment_value_revisions" on ii_investment_value_revisions
   for select using (auth.uid() = user_id);
+
+-- Defence in depth: the API roles get no write privilege at all on the revision
+-- log (the default privileges Supabase grants in `public` would otherwise leave
+-- the RLS layer as the only barrier).
+revoke insert, update, delete, truncate on ii_investment_value_revisions from anon, authenticated;
+
+-- Immutable once written (AMENDED 2026-10-02 before any application of this file,
+-- see docs/investment-intelligence/NETWORTH_NAV_REMARK_REPORT.md): a revision row
+-- can never be changed, by anyone, the service role included. DELETE is
+-- deliberately NOT blocked: rows must still disappear when their investment or
+-- user is deleted (ON DELETE CASCADE) and when an operator purges them.
+create or replace function ii_investment_value_revisions_immutable() returns trigger
+language plpgsql as $$
+begin
+  raise exception 'ii_investment_value_revisions is append-only: a revision row cannot be updated'
+    using errcode = 'restrict_violation';
+end;
+$$;
+
+drop trigger if exists trg_ii_investment_value_revisions_immutable on ii_investment_value_revisions;
+create trigger trg_ii_investment_value_revisions_immutable
+  before update on ii_investment_value_revisions
+  for each row execute function ii_investment_value_revisions_immutable();

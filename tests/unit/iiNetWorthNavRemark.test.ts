@@ -584,17 +584,27 @@ describe('ownership: a joint position is ONE row and ONE value; entity-owned acc
     expect(check).toThrow(/RULE-15: a joint position must count once \(expected 1000000, got 2000000\)/);
   });
 
-  it('a joint split is attributed by percentage by the owner-edit branch when it is merged: 600,000 + 400,000 of the SAME re-marked value', async () => {
-    const { existsSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const file = join(process.cwd(), 'lib/services/investment-intelligence/ownerAttribution.ts');
-    if (!existsSync(file)) return; // composes after feat/owner-entity-joint-edit-resolutions-20261001 is merged
-    // A variable specifier: this module does not exist until the owner-edit branch is merged, so it must not be resolved statically.
-    const { attributeByBasisPoints } = (await import(/* @vite-ignore */ file.split('\\').join('/'))) as { attributeByBasisPoints: (v: number, s: Array<{ key: string; basisPoints: number }>) => Array<{ amount: number }> | null };
-    const t = addPosition(emptyTables(), { id: 'j', owner: 'joint', units: 10000, value: 900000, navs: [{ date: '2026-09-30', price: 100 }] });
-    await remark(t);
-    const split = attributeByBasisPoints(Number(row(t, 'inv-j').current_value), [{ key: 'member-1', basisPoints: 6000 }, { key: 'member-2', basisPoints: 4000 }]);
-    expect(split?.map((s) => s.amount)).toEqual([600000, 400000]);
+  describe('joint split through the REAL owner-edit read model (ownerShares): 600,000 + 400,000 of the SAME re-marked 1,000,000', () => {
+    const check = async (variant: Variant) => {
+      const t = addPosition(emptyTables(), { id: 'j', owner: 'joint', units: 10000, value: 900000, navs: [{ date: '2026-09-30', price: 100 }] });
+      await remark(t, variant);
+      const r = row(t, 'inv-j');
+      const m = computeInvestments({
+        investments: [{ id: 'inv-j', investment_name: 'Joint fund', investment_type: 'managed_fund', current_value: Number(r.current_value), currency_code: 'INR', owner: 'joint', master_item_key: 'managed_funds', source_type: 'investment_intelligence_published', ii_canonical_account_id: 'acc-j', ii_canonical_instrument_id: 'inst-j', ii_value_as_of: r.ii_value_as_of as string, ii_valuation_basis: r.ii_valuation_basis as string, ii_valuation_units: r.ii_valuation_units as number, ii_valuation_nav: r.ii_valuation_nav as number }],
+        snapshots: [], publications: [], fx: fxContext('INR', 56, 'IN'), today: TODAY,
+        jointSharesByAccount: new Map([['acc-j', [{ ownerMemberId: 'member-1', basisPoints: 6000 }, { ownerMemberId: 'member-2', basisPoints: 4000 }]]]),
+      });
+      const shares = m.lines[0].ownerShares?.map((s) => s.amountNative) ?? [];
+      if (shares[0] !== 600000 || shares[1] !== 400000) fail('RULE-16', `the joint split must divide the NAV-valued 1000000 as 600000 / 400000 (got ${JSON.stringify(shares)})`);
+      if (m.publishedTotal !== 1000000 || m.householdPublishedTotal !== 1000000) fail('RULE-16', `the household total must stay 1000000, never 2000000 (got ${m.publishedTotal} / ${m.householdPublishedTotal})`);
+      if (shares[0] + shares[1] !== m.publishedTotal) fail('RULE-16', 'the shares must add back to the single counted value');
+    };
+    it('real code', async () => {
+      await expect(check('real')).resolves.toBeUndefined();
+    });
+    it('NEGATIVE CONTROL: a NAV-blind re-mark divides 900,000 (540,000 / 360,000) and fails by name', async () => {
+      await expect(check('no_nav')).rejects.toThrow(/RULE-16: the joint split must divide the NAV-valued 1000000 as 600000 \/ 400000/);
+    });
   });
 
   it('entity-owned: the account is skipped (value unchanged, counted in skipped.entity_owned) while a personal position beside it is re-marked; personal Net Worth carries only the personal one', async () => {
@@ -634,5 +644,30 @@ describe('revision history: one row per landed change, with its inputs, reason a
     expect(row(t, 'inv-a').current_value).toBe(11500);
     expect(b.revisions.map((r) => [r.reason, r.previous_value, r.new_value])).toEqual([['nav_update', 11200, 11500]]);
     expect(a.revisions).toHaveLength(1);
+  });
+});
+
+// ===========================================================================
+// RULE-17 (PO decision 2026-10-02): a pure NAV re-mark must NOT bump
+// investments.updated_at (it would flag every stored monthly report stale daily).
+// ===========================================================================
+describe('RULE-17 a NAV re-mark stamps its own column and leaves updated_at alone', () => {
+  const check = async (mutateUpdatedAt: boolean) => {
+    const t = oracleTables([{ date: '2026-09-30', price: 112 }]);
+    const run = await remark(t);
+    if (mutateUpdatedAt) {
+      // The modelled bug: the payload also carries updated_at.
+      for (const u of run.db.updates) u.payload.updated_at = '2026-10-02T00:00:00.000Z';
+    }
+    const payloads = run.db.updates.filter((u) => u.table === 'investments').map((u) => u.payload);
+    if (payloads.length !== 1 || 'updated_at' in payloads[0]) fail('RULE-17', 'the re-mark must not write updated_at');
+    if (row(t, 'inv-a').updated_at !== '2026-09-01T00:00:00.000Z') fail('RULE-17', `updated_at moved (${String(row(t, 'inv-a').updated_at)})`);
+    if (typeof payloads[0].ii_valuation_remarked_at !== 'string') fail('RULE-17', 'the re-mark must stamp ii_valuation_remarked_at');
+  };
+  it('real code: one UPDATE, ii_valuation_remarked_at stamped, updated_at unchanged', async () => {
+    await expect(check(false)).resolves.toBeUndefined();
+  });
+  it('NEGATIVE CONTROL: a payload that carries updated_at fails by name', async () => {
+    await expect(check(true)).rejects.toThrow(/RULE-17: the re-mark must not write updated_at/);
   });
 });

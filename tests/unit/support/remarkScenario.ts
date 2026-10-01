@@ -85,6 +85,7 @@ export function addPosition(tables: Record<string, Row[]>, spec: PositionSpec): 
     current_value: spec.rowValue ?? value,
     currency_code: currency,
     ii_publication_id: `pub-${spec.id}`,
+    updated_at: '2026-09-01T00:00:00.000Z',
     ii_canonical_account_id: acc,
     ii_canonical_instrument_id: inst,
     ii_value_as_of: null,

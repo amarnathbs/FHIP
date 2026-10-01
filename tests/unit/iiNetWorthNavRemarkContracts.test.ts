@@ -35,7 +35,7 @@ function lintMigration(sql: string): string[] {
   const v: string[] = [];
   if (/\bdrop\s+(constraint|table|column|policy\s+(?!if exists))/.test(code.replace(/drop policy if exists/g, ''))) v.push('MIG-1: drops an existing object');
   if (/\balter\s+table\s+\w+\s+alter\s+column/.test(code)) v.push('MIG-2: alters an existing column');
-  if (/\b(delete\s+from|truncate|update\s+\w+\s+set)\b/.test(code)) v.push('MIG-3: rewrites existing data (a backfill)');
+  if (/\b(delete\s+from|update\s+\w+\s+set)\b|(^|;)\s*truncate\s/.test(code)) v.push('MIG-3: rewrites existing data (a backfill)');
   for (const m of code.matchAll(/add\s+column\s+(?!if not exists)/g)) v.push(`MIG-4: add column without if not exists at ${m.index}`);
   if (/create\s+table\s+(?!if not exists)/.test(code)) v.push('MIG-5: create table without if not exists');
   if (/create\s+policy[^;]*for\s+(insert|update|delete|all)\b/.test(code)) v.push('MIG-6: grants a write policy on the revision table');
@@ -149,6 +149,25 @@ describe('wiring: every Net Worth entry point evaluates the published funds firs
     // no second NAV rule: the planner never inspects NAV quality, currency or dates itself
     expect(planner).not.toMatch(/quality_?status\s*(===|!==)/i);
     expect(planner).not.toMatch(/currencyCode\s*(===|!==)\s*\w+\.currencyCode/);
+  });
+
+  it('a pure NAV re-mark never writes updated_at (PO 2026-10-02: it would flag stored monthly reports stale daily); it stamps its own column', () => {
+    const check = (src: string) => {
+      const code = src.replace(/\/\/[^\n]*/g, '');
+      if (/updated_at/.test(code)) throw new Error('RULE WIRE-3: the re-mark must not touch updated_at');
+      if (!/ii_valuation_remarked_at: new Date\(\)\.toISOString\(\)/.test(code)) throw new Error('RULE WIRE-3: the re-mark must stamp ii_valuation_remarked_at');
+    };
+    const src = read('lib/services/investment-intelligence/publishedValueRemark.ts');
+    expect(() => check(src)).not.toThrow();
+    expect(() => check(src.replace('ii_valuation_remarked_at: new Date().toISOString() })', 'ii_valuation_remarked_at: new Date().toISOString(), updated_at: new Date().toISOString() })'))).toThrow(/WIRE-3: the re-mark must not touch updated_at/);
+  });
+
+  it('the publication preview and the publish result use the NAV-valued figure (PO 2026-10-02)', () => {
+    const src = read('lib/services/investment-intelligence/investmentPublicationService.ts');
+    expect(src).toContain('valueSnapshotAtCurrentNav(supabase, userId, {');
+    expect(src).toContain('newPublishedValue: countedValue,');
+    expect(src).toContain('newPublishedValue: countedNow,');
+    expect(src).toContain('published_value: snapshot.value,'); // the publication row still records the certified value
   });
 
   it('no caching layer sits between the register and Net Worth (nothing to invalidate)', () => {

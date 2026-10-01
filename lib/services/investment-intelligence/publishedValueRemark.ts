@@ -30,6 +30,13 @@
 //     (service-role insert, like ii_audit_events), so the history of what Net
 //     Worth used, and why it moved, is queryable.
 //
+// NO `updated_at` BUMP (PO decision 2026-10-02). A stored monthly report is
+// flagged stale when a register row's updated_at moves after the report was
+// generated; a daily NAV move would then flag every household's report stale
+// every day. The re-mark therefore stamps its OWN column,
+// `ii_valuation_remarked_at`, and leaves `updated_at` alone. (Publish, refresh and
+// republish still change updated_at: those are real changes to the position.)
+//
 // Reads are batched per call: investments, publications, snapshots,
 // instruments, entity allocations, NAV candidates -- a fixed number of queries,
 // never one per holding.
@@ -37,7 +44,8 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NavObservationRow, UnitMovementInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
-import { planRowRemark, REMARK_RULE_VERSION, type RemarkRowInput, type RemarkSkipReason } from '@/lib/engines/investment-intelligence/valuation/publishedRowRemark';
+import { planRowRemark, REMARK_RULE_VERSION, roundRegisterAmount, type RemarkRowInput, type RemarkSkipReason } from '@/lib/engines/investment-intelligence/valuation/publishedRowRemark';
+import { valueHoldingAsOf, type HoldingValuation } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import { fetchAllRows } from './pagination';
 import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey, todayIsoDate } from './currentValuationLoader';
 
@@ -307,7 +315,7 @@ export async function remarkPublishedInvestments(
 
       let update = client
         .from('investments')
-        .update({ ...plan.columns, ii_valuation_remarked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .update({ ...plan.columns, ii_valuation_remarked_at: new Date().toISOString() })
         .eq('id', row.id)
         .eq('user_id', userId)
         .eq('source_type', 'investment_intelligence_published')
@@ -373,5 +381,56 @@ export async function ensurePublishedValuesCurrent(userId: string, client: Clien
   } catch (error) {
     console.error('[nav-remark] unexpected failure', { trigger, message: error instanceof Error ? error.message : String(error) });
     return { ...emptySummary(), error: 'unexpected_failure' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Publication preview: what Net Worth WILL show for this position (PO decision
+// 2026-10-02: "show the NAV-valued figure with its NAV date in the publish
+// preview and financialImpact"). READ-ONLY: it values the snapshot about to be
+// published with the very same shared rule the re-mark applies after publication
+// (certified units + this folio's later transactions, latest eligible NAV), so
+// the preview and the register can never disagree.
+// ---------------------------------------------------------------------------
+export interface PublicationCurrentValuation {
+  /** The amount Net Worth will count (rounded to the register's 2 decimals). */
+  value: number;
+  basis: Exclude<HoldingValuation['basis'], 'unavailable'>;
+  units: number | null;
+  nav: number | null;
+  /** The NAV's own date (or the statement date for a statement-valued position). */
+  navDate: string | null;
+  stale: boolean;
+  /** The certified statement value, for contrast. */
+  statementValue: number | null;
+  note: string;
+}
+
+/** Fail-soft: null for a non-mutual-fund, an unreadable NAV table, or no valuation. Never throws. */
+export async function valueSnapshotAtCurrentNav(
+  client: Client,
+  userId: string,
+  input: { accountId: string; instrumentId: string; instrumentClass: string; currencyCode: string; snapshot: { asOfDate: string; units: number; value: number } },
+  asOfDate?: string
+): Promise<PublicationCurrentValuation | null> {
+  if (input.instrumentClass !== 'mutual_fund') return null;
+  try {
+    const since = input.snapshot.asOfDate.slice(0, 10);
+    const [navs, movements] = await Promise.all([
+      loadNavCandidatesSince(client as unknown as SupabaseClient, [input.instrumentId], since),
+      loadUnitMovementsSince(client as unknown as SupabaseClient, userId, since, [input.instrumentId]),
+    ]);
+    const v = valueHoldingAsOf({
+      statements: [{ asOfDate: since, units: input.snapshot.units, value: input.snapshot.value, currencyCode: input.currencyCode }],
+      navs: navs.get(input.instrumentId) ?? [],
+      asOfDate: (asOfDate ?? todayIsoDate()).slice(0, 10),
+      currencyCode: input.currencyCode,
+      pointInTime: false,
+      unitMovements: movements.get(positionKey(input.accountId, input.instrumentId)) ?? [],
+    });
+    if (v.basis === 'unavailable' || v.marketValue === null) return null;
+    return { value: roundRegisterAmount(v.marketValue), basis: v.basis, units: v.units, nav: v.nav, navDate: v.navDate, stale: v.stale, statementValue: v.statementValue, note: v.note };
+  } catch {
+    return null;
   }
 }

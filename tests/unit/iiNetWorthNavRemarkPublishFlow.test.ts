@@ -39,7 +39,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 }));
 vi.mock('@/lib/services/investment-intelligence/audit', () => ({ emitAuditEvent: vi.fn().mockResolvedValue({ error: null }) }));
 
-import { publishPosition, refreshPosition, republishPosition, unpublishPosition } from '@/lib/services/investment-intelligence/investmentPublicationService';
+import { buildPreview, publishPosition, refreshPosition, republishPosition, unpublishPosition } from '@/lib/services/investment-intelligence/investmentPublicationService';
 
 const USER = 'user-1';
 
@@ -58,6 +58,8 @@ function baseTables(): Record<string, Row[]> {
     ii_reconciliation_cases: [],
     ii_ownership_allocation: [],
     ii_transactions: [],
+    user_profiles: [{ user_id: USER, preferred_currency: 'INR' }],
+    forecast_global_assumptions: [],
     ii_prices_nav: [{ id: 'nav-1', instrument_id: 'inst-1', price_date: '2026-09-30', price: 112, currency_code: 'INR', quality_status: 'ok' }],
   };
 }
@@ -181,5 +183,50 @@ describe('NEGATIVE CONTROLS for exactly-once', () => {
     };
     expect(await insertSecond(false)).toBeNull();
     expect(await insertSecond(true)).toMatchObject({ code: '23505' });
+  });
+});
+
+// ===========================================================================
+// Publication preview and financialImpact show the NAV-valued figure (PO 2026-10-02).
+// ===========================================================================
+describe('publish preview: the figure Net Worth will count, with its NAV date, equals what publication then writes', () => {
+  const run = async (hideNavs: boolean) => {
+    const t = baseTables();
+    const view = hideNavs ? { ...t, ii_prices_nav: [] } : t;
+    const db = makeFakeDb(view, { uniqueActivePosition: true });
+    hoisted.client = db.client;
+    const { preview, error } = await buildPreview(USER, 'snap-1');
+    if (error || !preview) throw new Error(`preview failed: ${error}`);
+    const cv = preview.currentValuation;
+    if (!cv || cv.value !== 11200 || cv.basis !== 'market_nav' || cv.nav !== 112 || cv.navDate !== '2026-09-30') {
+      throw new Error(`RULE PV-1: the preview must show the NAV-valued figure (expected 11200 / market_nav / NAV 112 / 2026-09-30, got ${JSON.stringify(cv)})`);
+    }
+    if (preview.financialImpact?.newPublishedValue !== 11200 || preview.financialImpact?.netChange !== 11200) {
+      throw new Error(`RULE PV-1: financialImpact must use the counted value (got ${JSON.stringify(preview.financialImpact)})`);
+    }
+    return { preview, t, db };
+  };
+
+  it('real code: counted 11,200 at NAV 112 dated 2026-09-30; certified value stays 10,000; impact +11,200; publication then writes exactly that figure', async () => {
+    const { preview, t } = await run(false);
+    expect(preview.certifiedValue).toBe(10000);
+    expect(preview.currentValuation).toMatchObject({ value: 11200, basis: 'market_nav', units: 100, statementValue: 10000, stale: false });
+    const res = await publishPosition(USER, 'snap-1');
+    expect(res.error).toBeNull();
+    expect(registerRows(t)[0].current_value).toBe(preview.currentValuation?.value);
+    expect(res.financialImpact).toMatchObject({ newPublishedValue: 11200, netChange: 11200 });
+  });
+
+  it('NEGATIVE CONTROL: a preview that cannot see NAVs shows the statement value and fails the same check by name', async () => {
+    await expect(run(true)).rejects.toThrow(/RULE PV-1: the preview must show the NAV-valued figure/);
+  });
+
+  it('no newer NAV: the preview says statement value (never a NAV) and impact equals the certified value', async () => {
+    const t = baseTables();
+    t.ii_prices_nav.length = 0;
+    hoisted.client = makeFakeDb(t, { uniqueActivePosition: true }).client;
+    const { preview } = await buildPreview(USER, 'snap-1');
+    expect(preview?.currentValuation).toMatchObject({ value: 10000, basis: 'statement' });
+    expect(preview?.financialImpact?.newPublishedValue).toBe(10000);
   });
 });
