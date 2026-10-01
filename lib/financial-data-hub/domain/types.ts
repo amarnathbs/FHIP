@@ -376,6 +376,8 @@ export interface FdhStatementUpload extends FdhOwnership {
   owner_business_entity_id?: string | null;
   owner_role?: string | null;
   owner_selection_source?: string | null;
+  /** Joint split chosen before upload (basis points), when the document is joint-owned with percentages. */
+  owner_allocation?: unknown;
 
   // --- R7 (migration 0064) ---------------------------------------------
   delimiter_detected: string | null;

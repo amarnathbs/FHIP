@@ -296,10 +296,10 @@ describe('the owner write never costs the account link', () => {
 });
 
 describe('purge keeps the owner columns', () => {
-  it('buildStatementUploadPurgePatch never names an owner column; the retained list is exactly the four', () => {
+  it('buildStatementUploadPurgePatch never names an owner column; the retained list is exactly the five (incl. the joint split)', () => {
     const patch = buildStatementUploadPurgePatch('2026-10-01T00:00:00Z');
     for (const col of PURGE_RETAINED_STATEMENT_UPLOAD_COLUMNS) expect(Object.keys(patch)).not.toContain(col);
-    expect([...PURGE_RETAINED_STATEMENT_UPLOAD_COLUMNS].sort()).toEqual(['owner_business_entity_id', 'owner_member_id', 'owner_role', 'owner_selection_source']);
+    expect([...PURGE_RETAINED_STATEMENT_UPLOAD_COLUMNS].sort()).toEqual(['owner_allocation', 'owner_business_entity_id', 'owner_member_id', 'owner_role', 'owner_selection_source']);
     // CONTROL: the purge patch DOES clear the raw columns, so "does not name" is meaningful.
     expect(Object.keys(patch)).toEqual(expect.arrayContaining(['raw_document_storage_reference', 'original_filename_sanitised']));
   });

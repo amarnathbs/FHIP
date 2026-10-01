@@ -45,6 +45,7 @@ export const PURGE_RETAINED_STATEMENT_UPLOAD_COLUMNS = [
   'owner_business_entity_id',
   'owner_role',
   'owner_selection_source',
+  'owner_allocation',
 ] as const satisfies readonly (keyof FdhStatementUpload)[];
 
 /**
