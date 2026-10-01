@@ -36,7 +36,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { NavObservationRow } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
+import type { NavObservationRow, UnitMovementInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import { planRowRemark, REMARK_RULE_VERSION, type RemarkRowInput, type RemarkSkipReason } from '@/lib/engines/investment-intelligence/valuation/publishedRowRemark';
 import { fetchAllRows } from './pagination';
 import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey, todayIsoDate } from './currentValuationLoader';
@@ -256,8 +256,8 @@ export async function remarkPublishedInvestments(
           rowCurrency: row.currency_code,
           rowCurrentValue: Number(row.current_value),
           previous: {
-            fingerprint: row.ii_valuation_fingerprint,
-            basis: row.ii_valuation_basis,
+            fingerprint: row.ii_valuation_fingerprint ?? null,
+            basis: row.ii_valuation_basis ?? null,
             units: numOrNull(row.ii_valuation_units),
             nav: numOrNull(row.ii_valuation_nav),
             asOf: row.ii_value_as_of ? String(row.ii_value_as_of).slice(0, 10) : null,
@@ -270,16 +270,22 @@ export async function remarkPublishedInvestments(
     }
     if (inputs.length === 0) return summary;
 
-    // This user's unit movements dated after the oldest certified statement, grouped
-    // per folio: ONE batched read (zero rows in the common case). The shared rule
-    // applies each folio's own cut-off, so Net Worth counts exactly the units the
-    // Holdings table counts.
-    const movementsByFolio = since === null ? new Map<string, never[]>() : await loadUnitMovementsSince(client as unknown as SupabaseClient, userId, since);
+    const navInstrumentIds = [...new Set(inputs.filter((i) => i.input.instrumentClass === 'mutual_fund' && !i.input.entityOwned).map((i) => i.input.instrumentId))];
+
+    // This user's unit movements, for THESE funds only, dated after the oldest
+    // certified statement, grouped per folio: batched reads (zero rows in the
+    // common case). The shared rule applies each folio's own cut-off, so Net Worth
+    // counts exactly the units the Holdings table counts.
+    const movementsByFolio = new Map<string, UnitMovementInput[]>();
+    if (since !== null) {
+      for (const ids of chunk(navInstrumentIds)) {
+        for (const [k, v] of await loadUnitMovementsSince(client as unknown as SupabaseClient, userId, since, ids)) movementsByFolio.set(k, v);
+      }
+    }
     for (const entry of inputs) {
       entry.input.unitMovements = movementsByFolio.get(positionKey(entry.input.accountId, entry.input.instrumentId)) ?? [];
     }
 
-    const navInstrumentIds = [...new Set(inputs.filter((i) => i.input.instrumentClass === 'mutual_fund' && !i.input.entityOwned).map((i) => i.input.instrumentId))];
     const navsByInstrument = new Map<string, NavObservationRow[]>();
     for (const ids of chunk(navInstrumentIds)) {
       const part = await loadNavCandidatesSince(client as unknown as SupabaseClient, ids, since);
@@ -306,7 +312,7 @@ export async function remarkPublishedInvestments(
         .eq('user_id', userId)
         .eq('source_type', 'investment_intelligence_published')
         .eq('is_active', true);
-      update = row.ii_valuation_fingerprint === null ? update.is('ii_valuation_fingerprint', null) : update.eq('ii_valuation_fingerprint', row.ii_valuation_fingerprint);
+      update = (row.ii_valuation_fingerprint ?? null) === null ? update.is('ii_valuation_fingerprint', null) : update.eq('ii_valuation_fingerprint', row.ii_valuation_fingerprint);
       const { data: landed, error: updateError } = await update.select('id');
       if (updateError) {
         if (isReadOnlyBlock(updateError)) {

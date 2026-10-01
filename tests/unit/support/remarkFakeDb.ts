@@ -19,6 +19,8 @@ export interface FakeDbOptions {
   failUpdate?: { message: string; code?: string };
   /** Runs just before an update is applied: lets a test simulate a concurrent writer. */
   onBeforeUpdate?: (table: string, rows: Row[]) => void;
+  /** Enforce migration 0042's uidx_ii_fhip_publications_one_active_position (one 'published' row per account+instrument). */
+  uniqueActivePosition?: boolean;
 }
 
 export interface FakeDb {
@@ -89,6 +91,20 @@ export function makeFakeDb(tables: Record<string, Row[]>, opts: FakeDbOptions = 
         if (op === 'is' && val === null) add(col, (r) => r[col] !== null && r[col] !== undefined);
         return b;
       },
+      gt(col: string, val: string) {
+        add(col, (r) => (r[col] as string) > val);
+        return b;
+      },
+      limit() {
+        return b;
+      },
+      single() {
+        const r = sorted()[0] ?? null;
+        return Promise.resolve({ data: r, error: r ? null : { message: 'no row' } });
+      },
+      maybeSingle() {
+        return Promise.resolve({ data: sorted()[0] ?? null, error: null });
+      },
       gte(col: string, val: string) {
         add(col, (r) => (r[col] as string) >= val);
         return b;
@@ -110,10 +126,26 @@ export function makeFakeDb(tables: Record<string, Row[]>, opts: FakeDbOptions = 
         returning = false;
         return b;
       },
-      insert(row: Row) {
-        db.inserts.push({ table, row });
-        (tables[table] ??= []).push(row);
-        return Promise.resolve({ data: null, error: null });
+      insert(input: Row) {
+        const row: Row = { id: `${table}-${(tables[table]?.length ?? 0) + 1}-${db.inserts.length + 1}`, ...input };
+        const violation =
+          opts.uniqueActivePosition === true &&
+          table === 'ii_fhip_publications' &&
+          row.status === 'published' &&
+          (tables[table] ?? []).some((r) => r.status === 'published' && r.account_id === row.account_id && r.instrument_id === row.instrument_id);
+        const error = violation ? { message: 'duplicate key value violates unique constraint "uidx_ii_fhip_publications_one_active_position"', code: '23505' } : null;
+        if (!violation) {
+          db.inserts.push({ table, row });
+          (tables[table] ??= []).push(row);
+        }
+        const result = { data: violation ? null : row, error };
+        const ib: Record<string, unknown> = {
+          select: () => ib,
+          single: () => Promise.resolve(result),
+          maybeSingle: () => Promise.resolve(result),
+          then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve({ data: null, error }).then(res, rej),
+        };
+        return ib;
       },
       then(resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) {
         if (pendingUpdate) {

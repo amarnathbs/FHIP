@@ -127,13 +127,17 @@ export function groupUnitMovements(rows: readonly UnitMovementDbRow[]): Map<stri
 export async function loadUnitMovementsSince(
   supabase: SupabaseClient,
   userId: string,
-  sinceIso: string | null
+  sinceIso: string | null,
+  /** Optional: restrict to these instruments (the Net Worth re-mark only needs its own funds; <= 100 ids per call). */
+  instrumentIds?: readonly string[]
 ): Promise<Map<string, UnitMovementInput[]>> {
+  if (instrumentIds && instrumentIds.length === 0) return new Map();
   const rows = await fetchAllRows<UnitMovementDbRow>(() => {
     let q = supabase
       .from('ii_transactions')
       .select('account_id, instrument_id, transaction_type, transaction_date, units, status')
       .eq('user_id', userId);
+    if (instrumentIds) q = q.in('instrument_id', [...instrumentIds]);
     if (sinceIso) q = q.gt('transaction_date', sinceIso);
     return q.order('transaction_date', { ascending: true }).order('id', { ascending: true });
   });
