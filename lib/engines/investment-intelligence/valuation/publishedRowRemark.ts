@@ -12,8 +12,9 @@
 //
 //   current_value = units x latest eligible NAV, where
 //     * units come from the position's OWN certified snapshot (the one the
-//       active publication points at) -- never from a later unpublished
-//       statement, never from the register row;
+//       active publication points at) plus that folio's own unit movements
+//       transacted after the snapshot (shared rule 8, multi-folio fix) -- never
+//       from a later unpublished statement, never from the register row;
 //     * "latest eligible NAV" and its fallback to the statement value are
 //       decided by valueHoldingAsOf() in ./currentHoldingValuation.ts -- the
 //       ONE rule shared with Holdings / X-Ray / Overview / Performance. This
@@ -42,6 +43,7 @@ import {
   valueHoldingAsOf,
   type HoldingValuation,
   type NavObservationRow,
+  type UnitMovementInput,
   type ValuationBasis,
 } from './currentHoldingValuation';
 
@@ -83,6 +85,8 @@ export interface RemarkRowInput {
   entityOwned: boolean;
   /** The position's own certified snapshot (ii_holding_snapshots row the active publication names). */
   certified: { asOfDate: string; units: number; value: number; currencyCode: string } | null;
+  /** This folio's own signed unit movements (the shared rule counts only those dated after the certified snapshot). */
+  unitMovements: readonly UnitMovementInput[];
 }
 
 export type RemarkUpdateReason = 'baseline' | 'nav_update' | 'nav_correction' | 'units_changed' | 'drift_correction';
@@ -161,14 +165,17 @@ export function planRowRemark(row: RemarkRowInput, navs: readonly NavObservation
     asOfDate,
     currencyCode: row.rowCurrency,
     pointInTime: false,
+    unitMovements: row.unitMovements,
   });
   if (valuation.basis === 'unavailable' || valuation.marketValue === null) return { action: 'skip', reason: 'no_valuation' };
 
   const newValue = roundRegisterAmount(valuation.marketValue);
+  // The units that were actually valued: the certified units plus any applied later movements.
+  const valuedUnits = valuation.units ?? row.certified.units;
   const fingerprint = remarkFingerprint({
     publicationId: row.publicationId,
     statementAsOf: row.certified.asOfDate.slice(0, 10),
-    units: row.certified.units,
+    units: valuedUnits,
     basis: valuation.basis,
     navDate: valuation.navDate,
     nav: valuation.navSource === 'market' ? valuation.nav : null,
@@ -190,7 +197,7 @@ export function planRowRemark(row: RemarkRowInput, navs: readonly NavObservation
       current_value: newValue,
       ii_value_as_of: valuation.valuationDate,
       ii_valuation_basis: valuation.basis,
-      ii_valuation_units: row.certified.units,
+      ii_valuation_units: valuedUnits,
       // The stored NAV is the one that PRODUCED the value: the market NAV, or
       // the statement-implied NAV for a statement-basis row (units > 0).
       ii_valuation_nav: valuation.nav,

@@ -39,7 +39,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NavObservationRow } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import { planRowRemark, REMARK_RULE_VERSION, type RemarkRowInput, type RemarkSkipReason } from '@/lib/engines/investment-intelligence/valuation/publishedRowRemark';
 import { fetchAllRows } from './pagination';
-import { loadNavCandidatesSince, todayIsoDate } from './currentValuationLoader';
+import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey, todayIsoDate } from './currentValuationLoader';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = { from(table: string): any };
@@ -264,10 +264,20 @@ export async function remarkPublishedInvestments(
           },
           entityOwned: entityAccountIds.has(pub.account_id),
           certified,
+          unitMovements: [],
         },
       });
     }
     if (inputs.length === 0) return summary;
+
+    // This user's unit movements dated after the oldest certified statement, grouped
+    // per folio: ONE batched read (zero rows in the common case). The shared rule
+    // applies each folio's own cut-off, so Net Worth counts exactly the units the
+    // Holdings table counts.
+    const movementsByFolio = since === null ? new Map<string, never[]>() : await loadUnitMovementsSince(client as unknown as SupabaseClient, userId, since);
+    for (const entry of inputs) {
+      entry.input.unitMovements = movementsByFolio.get(positionKey(entry.input.accountId, entry.input.instrumentId)) ?? [];
+    }
 
     const navInstrumentIds = [...new Set(inputs.filter((i) => i.input.instrumentClass === 'mutual_fund' && !i.input.entityOwned).map((i) => i.input.instrumentId))];
     const navsByInstrument = new Map<string, NavObservationRow[]>();
