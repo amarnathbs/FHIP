@@ -1,6 +1,6 @@
 # Net Worth follows the latest eligible NAV: inventory, design, implementation, proof
 
-Branch `feat/networth-current-nav-remark-20261001`, cut from `fix/document2-finding5-nav-stripe-types-20261001` (`398a0cb`) and, at the Product Owner's instruction, merged with `fix/ii-multifolio-performance-xray-20261001` (`484af09`). Not pushed, not merged to `main`. No production write, no DEV write. Benchmark (BENCH-1) work is excluded.
+Branch `feat/networth-current-nav-remark-20261001`, cut from `fix/document2-finding5-nav-stripe-types-20261001` (`398a0cb`) and, at the Product Owner's instruction, merged with `fix/ii-multifolio-performance-xray-20261001` (`484af09`) and then with `origin/main` at `cb68717` (which already contains the owner-edit branch `a669ba1` and the Finding #5 + multi-folio fixes). **Section 9 (update 2026-10-02) supersedes anything below that it contradicts.** Not pushed, not merged to `main`. No production write, no DEV write. Benchmark (BENCH-1) work is excluded.
 
 **Evidence labels.** *code-complete*: the change exists and compiles (`tsc` clean). *test-proven*: unit tests with named negative controls pass. *DEV-verified* / *production-verified*: observed on a running environment. **Nothing in this report is DEV-verified or production-verified.** No signed-in browser and no database session (DEV or production) was available, and migration `0240` has been delivered but not applied anywhere. The human check is `docs/investment-intelligence/NETWORTH_NAV_REMARK_UI_CHECK_PROTOCOL.md`.
 
@@ -180,7 +180,7 @@ All on this branch; line endings preserved (the touched files are LF).
 
 **Not verified (not hidden).**
 - No browser, DEV or production session: **DEV-verified: no. production-verified: no.** The migration has not been applied anywhere, so no real database has executed it, and the `ii_investment_value_revisions` insert path (service-role client) has run only against test doubles.
-- The compare-and-set, the unique-index behaviour and RLS are proven against doubles, not Postgres. (The repository has PGlite harnesses for chain-replay proofs; I did not build one for this migration. A `scripts/*_pglite_verification.mjs` for 0240 is a reasonable follow-up.)
+- The compare-and-set and the application's unique-index handling are proven against doubles, not Postgres. **The migration itself IS now proven on PGlite** (section 9.4): clean replay of every migration before 0240, anti-vacuity, RLS, service-role insert, immutability, idempotent re-apply. PGlite is not the managed Supabase platform: DEV/production application remains unverified.
 - `tests/live-dev` suites were not run.
 
 ---
@@ -204,14 +204,54 @@ State at authoring time (and re-checked at the end): `origin/main` highest `0231
 2. **Write on read and extra queries** for households with published funds (section 2). Net Worth tolerates a failed or blocked write: the row keeps its last labelled value (`M11_READONLY` AI-context clients are reported, never thrown).
 3. **A newer certified statement that has not been published.** Net Worth values the published position's own certified units plus the folio's later transactions. If the user imported a newer statement without refreshing the publication and the transactions between are not in `ii_transactions`, Holdings (newest statement) and Net Worth (published statement + transactions) can differ in units until the user refreshes. Not changed here.
 4. **Units after the statement with no newer NAV** are priced at the statement's own NAV and stay labelled `statement` (the multi-folio decision the PO already accepted).
-5. **Publication preview and `financialImpact`** still show the certified statement value; Net Worth then shows the NAV-valued figure after the first evaluation. Not changed (a candidate follow-up: show the NAV-valued figure in the preview).
+5. ~~Publication preview and `financialImpact` show the certified statement value~~ **Resolved 2026-10-02 (section 9.3):** the preview and the publish result now show the NAV-valued figure with its NAV date.
 6. **"Imported, not yet in Net Worth"** stays statement-valued, so a position's value can step from its statement value to its NAV value at the moment it is published.
 7. **Equity and ETF** published positions are not re-marked (there is no price series for them in this schema); they keep their certified value and are counted in `skipped.not_mutual_fund`.
 8. **Performance cost of unit movements**: one extra bounded read of the user's transactions for these funds after the oldest certified statement (normally zero rows).
 
-**Open PO decisions.**
-1. Accept the chosen mechanism (read-triggered re-mark, no scheduler) or request a scheduled sweep after NAV ingestion as well (needs a separate migration, secret and a PO-present activation).
-2. Confirm that Net Worth for a folio uses the **published** statement's units plus later transactions (limit 3), or whether a newer unpublished statement should drive it.
-3. Whether the daily "stale monthly report" effect (decision 4 below) is acceptable, or the re-mark should not bump `updated_at` (then a stored report would not be flagged stale when a NAV moves the value).
-4. Show the NAV-valued figure in the publication preview and in `financialImpact`.
-5. Apply `0240` to DEV, run the UI check protocol, then production.
+**PO decisions.** All four open decisions were answered on 2026-10-02 (section 9.1). The only remaining step: apply `0240` to DEV, run the UI check protocol, then production.
+
+---
+
+## 9. Update 2026-10-02: merge with `origin/main`, PO decisions, PGlite proof
+
+### 9.1 PO decisions received
+
+1. **Accepted:** read-triggered re-mark, no scheduler, for now.
+2. **Confirmed as built:** units = the published statement's units plus that folio's later transactions.
+3. **No `updated_at` bump on a pure NAV re-mark** (it would flag stored monthly reports stale daily). Implemented: the re-mark's `UPDATE` carries `ii_valuation_remarked_at` and no `updated_at` (a test and a static contract assert it; a mutation of the real source that adds `updated_at` fails them). The valuation-timestamp column already existed in `0240` (`ii_valuation_remarked_at`), so **no new column was needed**. **`0240` was nevertheless AMENDED** (it is not applied anywhere): see 9.4, a revoke and an immutability trigger were added to it. Publish, refresh and republish still change `updated_at`, because they are real changes to the position.
+4. **Done:** the publication preview and the publish result show the NAV-valued figure with its NAV date (9.3).
+
+### 9.2 Merge of `origin/main` (`cb68717`) and the hotspots
+
+`git merge origin/main` produced exactly the two textual conflicts predicted in section 5.1, nothing else:
+
+| File | Resolution |
+|---|---|
+| `lib/read-models/investments.ts` | kept both. Imports (`attributeByBasisPoints` + the valuation helpers), `InvestmentLineValuation` and `InvestmentOwnerShare`, the `InvestmentLine` fields `valuation?` and `ownerShares?`, the per-line computation (my `valuation` and their joint split side by side), and the returned object (`valuationSummary` and `entityHeldExcludedCount`). `loadInvestmentRows` (mine) and `loadInvestmentInputs` (theirs) are different functions and merged automatically. |
+| `lib/services/investment-intelligence/investmentPublicationService.ts` | import block: kept both (`ensurePublishedValuesCurrent...` and `loadAccountOwnership` / `AccountOwnership`). The three one-line re-mark calls merged without conflict next to their `ownership` / `resolvePublicationOwner` changes. |
+| `lib/services/reportSnapshotResolver.ts` | confirmed: merged automatically (my import and call are in separate hunks from their `iiScope` / `ownerBreakup`). |
+
+The joint 600,000 / 400,000 test is now **unconditional** and runs through the REAL owner-edit read model (`computeInvestments` with `jointSharesByAccount`, `ownerShares`): the re-marked 1,000,000 (10,000 units x NAV 100) divides 600,000 + 400,000, `publishedTotal` and `householdPublishedTotal` stay 1,000,000. Negative control: a NAV-blind re-mark divides 900,000 (540,000 / 360,000) and fails with `RULE-16`.
+
+### 9.3 Publish preview and `financialImpact`
+
+New read-only helper `valueSnapshotAtCurrentNav` (in `publishedValueRemark.ts`) applies the same shared rule as the re-mark (certified units + that folio's later transactions, latest eligible NAV). `buildPreview` returns `currentValuation` (value, basis, units, NAV, NAV date, stale flag, statement value, note); `financialImpact` and the base-currency preview use the counted value; `certifiedValue` stays the immutable statement value. `publishPosition` returns a `financialImpact` built from the value the register row actually holds after the re-mark (read back). The Investment Intelligence publish dialog shows "Counted in net worth" with the NAV and its date, and the net-worth impact sentence uses it. For a non-mutual-fund or an unreadable NAV table the field is null and the previous behaviour (certified value) applies. Tests (`iiNetWorthNavRemarkPublishFlow`): preview 11,200 at NAV 112 dated 2026-09-30, impact +11,200, certified value 10,000, and the publication then writes exactly the previewed figure; no newer NAV: statement value, impact 10,000; negative control: a preview that cannot see NAVs fails `RULE PV-1`.
+
+### 9.4 Migration `0240` amended, and proven on PGlite
+
+**Amendment (stated plainly):** `0240_networth_current_nav_remark.sql` was edited after its first draft. It had not been applied to DEV or production, so this is not an edit of an applied migration. Added: `revoke insert, update, delete, truncate on ii_investment_value_revisions from anon, authenticated` (defence in depth over Supabase's default grants) and a `before update` trigger `trg_ii_investment_value_revisions_immutable` that refuses any UPDATE of a written revision for every role including the service role (DELETE is deliberately allowed so rows still disappear by `ON DELETE CASCADE` or an operator purge). Still additive and idempotent; no existing CHECK is recreated or widened. No new column.
+
+**PGlite proof:** `scripts/networth_0240_pglite_verification.mjs`, run by `tests/unit/iiNetWorthNavRemarkMigration0240Pglite.test.ts`. It replays all **211 migrations before 0240 from an empty database**, seeds two tenants with one published fund row each, proves every claim ABSENT first, applies 0240, checks, applies it a second time. **44 named checks, all pass**, including: the six `investments` columns exist and are NULLable and every pre-existing row has them NULL (no backfill; `current_value` and `updated_at` unchanged); the basis CHECK accepts exactly `market_nav` / `statement` / `redeemed`; the owner can write the valuation columns of their own row and not another tenant's (RLS); the revision table has RLS on and exactly one policy, SELECT-only; the service role can insert; tenant A sees only their own revisions; an authenticated INSERT (own or other tenant) is refused `42501`; authenticated UPDATE / DELETE have no privilege; anon sees nothing and cannot insert; a written revision cannot be updated, even by the service role; the reason / new_value / basis / trigger CHECKs and the foreign key hold; deleting an investment cascades to its revisions; **re-applying 0240 is a no-op** (a schema fingerprint over constraints, indexes, triggers, functions, columns and policies is identical, and no row moves), with an anti-vacuity check that the fingerprint did differ before vs after 0240. **Negative control:** a deliberately broken copy of 0240 (immutability trigger removed, policy widened to `for all`, RLS not enabled) is run through the same script and must fail, by name, `... row level security ENABLED`, `... exactly one policy exists and it is SELECT-only` and `append-only: an UPDATE of a written revision is refused`. It does.
+
+### 9.5 Verification after the merge
+
+- **Full targeted run after the merge: 62 files, 907 tests, 906 pass, 1 failure.** The one failure was my own migration-lint test (its `truncate` pattern matched the new `revoke ... truncate` line); fixed, and the four Net Worth suites re-run afterwards: **4 files, 91 tests, all pass**. The PGlite proof test (2 tests: the real run and the broken-copy control) passed in the 62-file run.
+- **What the 62 files cover:** the 4 Net Worth suites + the PGlite migration test; the owner-edit suites (`iiOwner*` including `iiOwnerSeparationReaders` and `iiOwnerModel`, `iiJointValueAttribution`, `iiJointHoldingOnUnownedStatement`, `iiAmbiguousInstrumentResolve`, `iiCrossSourceConflictResolve`, `iiTransactionClassificationResolve`, `iiResolutionGuidanceLinksUiContract`); the Finding #5 suites, the 10-point golden suite (`iiNavMarkToMarketGoldenFixtures`, `iiNavMarkToMarket`, `iiPortfolioTwrrValuationReconstruction`), `iiMultiFolioAggregation`, `iiHoldingsTableAssembly`; the publish exactly-once suites (`iiR3NetWorthCertification`, `iiR3DedupScenarioMatrix`, `iiR3ManualReconciliation`, `iiR3PublicationLogic`, `iiR3ProvenanceClosure`, `iiR3RepublishFieldRestoration`, `iiPublishing`, `lrFi3NetWorthContributionExactlyOnce`, `fdh11AuPublishJourney`, `fdh11AddToNetWorthCorrelationId`, `iiPc1F1FifoAccountScope`, `iiZeroUnitClosureReconciliation`); `tests/unit/readModels/**` and the report / dashboard / downstream-snapshot suites. The repo-walking `dashboardCanonicalReadModel` test passed this time.
+- **Mutation of the real source** (adding `updated_at` to the re-mark's update): 2 tests fail (`RULE-17`, `WIRE-3`); restored, tree clean.
+- **`tsc --noEmit -p .`:** only the pre-existing `canonicalCertResidueAllSql.test.ts(127,75)` TS18046. (An intermediate run flagged two possibly-undefined lines in my new joint test; fixed.) **ESLint** on all 23 touched and new files (and again on the three test files edited afterwards): exit 0, zero warnings.
+- Still **not DEV-verified and not production-verified**; `0240` is not applied anywhere.
+
+### 9.6 Migration number re-scan
+
+**`0240` is still free and still unique.** Re-scanned on 2026-10-02 after fetching `origin`: (1) every ref in the repository: `git log --all --name-only -- 'supabase/migrations/02[4-9]*' 'supabase/migrations/0[3-9]*'` lists this branch's `0240` and **one new file: `0241_bench1_phase2_benchmark_data_governance.sql`** (BENCH-1 has renumbered its governance migration from `0239` to `0241`); (2) every directory under `.claude/worktrees`: `0230` (agent-af49d3506f497098a, m117-latency-validator), `0231` (admin-premium-grant, amplify-size, doc2-cert-kit, owner-before-upload, and now this worktree via `origin/main`), `0232` (bench1-phase2, india-mf-report), `0236` (owner-before-upload), `0237` / `0238` (admin-premium-grant), `0241` (bench1-phase2), and `0240` only here; (3) `origin/main` highest is `0231`. So the order on disk will be `0240` (this change) then `0241` (BENCH-1); nothing else claims `0240`. Re-scan once more at merge time.

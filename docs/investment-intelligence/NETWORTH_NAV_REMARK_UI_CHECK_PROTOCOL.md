@@ -6,7 +6,7 @@ For a person with a signed-in browser and read access to the database. Nothing i
 - DEV (`vqycarelcoijzwlpkpcz`): every step, including the optional NAV-correction step (section 6).
 - Production (`twwpnltizhtjxhamyoxt`): **read-only steps only** (sections 1 to 5 and 7). Never edit `ii_prices_nav` or any other row in production for this check.
 
-**What changed (so you know what to expect).** A published India mutual fund position still reaches `investments` exactly once and `ii_fhip_publications.published_value` still records the certified statement value. The one register row's `current_value` is now kept equal to `units x latest eligible NAV` (the same rule as the Holdings table), re-evaluated whenever Net Worth, the Investments list, a report, or a publish/refresh/republish touches it. Each landed change appends a row to `ii_investment_value_revisions`.
+**What changed (so you know what to expect).** A published India mutual fund position still reaches `investments` exactly once and `ii_fhip_publications.published_value` still records the certified statement value. The one register row's `current_value` is now kept equal to `units x latest eligible NAV` (the same rule as the Holdings table), re-evaluated whenever Net Worth, the Investments list, a report, or a publish/refresh/republish touches it. Each landed change appends a row to `ii_investment_value_revisions`. A pure NAV re-mark does **not** change `investments.updated_at` (it stamps `ii_valuation_remarked_at` instead), so stored monthly reports are not flagged stale just because a NAV moved. The Investment Intelligence publish dialog now shows "Counted in net worth" (the NAV-valued figure with its NAV date) beside the certified value.
 
 **Prerequisite.** Migration `0240_networth_current_nav_remark.sql` is applied to the database you are checking (see the report, section 7). Without it the app falls back to the old frozen value and shows no NAV labels. Check:
 
@@ -90,6 +90,8 @@ Record: Dashboard Net Worth ____, Investments panel total ____, Holdings total _
    select count(*) from ii_fhip_publications where user_id = '<USER_ID>' and instrument_id = '<INSTRUMENT_ID>' and account_id = '<ACCOUNT_ID>' and status = 'published';
    ```
    Expected: revision count identical before and after the reloads (no write when nothing changed); exactly **1** active register row; exactly **1** published publication.
+1b. `updated_at` is not bumped by a NAV re-mark: run `select updated_at, ii_valuation_remarked_at from investments where id = '<INVESTMENT_ID>';` before and after a reload that changes the value (DEV: after changing a NAV). Expected: `ii_valuation_remarked_at` moves, `updated_at` does not.
+1c. Publish preview: in Investment Intelligence open the publish dialog for a not-yet-published fund. Expected: "Counted in net worth" = units x latest eligible NAV (or the statement value, labelled), with the NAV date; "Certified value" is the statement value; the net-worth impact sentence uses the counted figure. After publishing, the register row's `current_value` equals the previewed counted figure.
 2. Revision history for the fund (read-only):
    ```sql
    select created_at, reason, remark_trigger, previous_value, new_value, previous_basis, new_basis, units, nav, value_as_of, statement_as_of, statement_value
