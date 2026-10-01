@@ -5,8 +5,8 @@ import subprocess, sys, json, os
 
 WT = os.environ.get('OWNER_WT', os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')))  # repo / worktree root
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, 'mutation_results.json')  # written next to this script; run from any cwd
-OWNER_TESTS = ['tests/unit/iiOwnerModel.test.ts', 'tests/unit/iiOwnerChangeRoutes.test.ts', 'tests/unit/iiOwnerSeparationReaders.test.ts', 'tests/unit/iiOwnerChangeDialogUi.test.ts']
+OUT = os.path.join(HERE, '..', '..', 'docs', 'ownership', 'owner_change_mutation_results.json')
+OWNER_TESTS = ['tests/unit/iiOwnerModel.test.ts', 'tests/unit/iiOwnerChangeRoutes.test.ts', 'tests/unit/iiOwnerSeparationReaders.test.ts', 'tests/unit/iiOwnerChangeDialogUi.test.ts', 'tests/unit/iiJointValueAttribution.test.ts', 'tests/unit/iiOwnerClassBreakup.test.ts', 'tests/unit/iiOwnerClassUi.test.ts', 'tests/unit/iiOwnerClassRoutes.test.ts', 'tests/unit/iiOwnerClassReport.test.ts']
 
 ACC = 'lib/services/investment-intelligence/accountOwnership.ts'
 MODEL = 'lib/services/investment-intelligence/ownerModel.ts'
@@ -26,8 +26,8 @@ MS = [
  ('M09 apply rewrites already-resolved cases (immutability broken)', ACC, [
    ("    .in('discrepancy_type', [...types])\n    .eq('status', 'open');", "    .in('discrepancy_type', [...types])\n    .in('status', ['open', 'resolved']);"),
    (".eq('id', c.id)\n      .eq('status', 'open'); // race guard: only this row, only if still open", ".eq('id', c.id);")]),
- ('M10 PATCH lets a sole owner resolve a joint-holding case', PATCH_ROUTE, [("theCase.discrepancy_type === 'joint_holding_allocation_required' && validated.owner.kind !== 'joint'", "false")]),
- ('M11 amend lets a joint case be amended to a sole owner', AMEND_ROUTE, [("if (priorCase.discrepancy_type === 'joint_holding_allocation_required' && validated.owner.kind !== 'joint') {", "if (false) {")]),
+ ('M10 PATCH lets a sole owner resolve a joint-holding case', PATCH_ROUTE, [("    if (jointFailure) return bad(jointFailure.message, jointFailure.status, jointFailure.code);", "    if (false) return bad(jointFailure.message, jointFailure.status, jointFailure.code);")]),
+ ('M11 amend lets a joint case be amended to a sole owner', AMEND_ROUTE, [("  if (jointFailure) return bad(jointFailure.message, jointFailure.status, jointFailure.code);", "  if (false) return bad(jointFailure.message, jointFailure.status, jointFailure.code);")]),
  ('M12 accepted change writes NO audit row', ACC, [("  if (!unchanged || resolvedCaseIds.length > 0) {", "  if (false) {")]),
  ('M13 audit written even for a no-op replay', ACC, [("  if (!unchanged || resolvedCaseIds.length > 0) {", "  if (true) {")]),
  ('M14 audit metadata leaks a name', MODEL, [

@@ -84,8 +84,10 @@
   "mutation": "M09 apply rewrites already-resolved cases (immutability broken)",
   "file": "lib/services/investment-intelligence/accountOwnership.ts",
   "failed": [
+   "PATCH accounts/[id]/owner -- \"this is not a joint holding\" (PO decision 2026-10-01) replay is idempotent: the second identical request changes nothing and adds no audit row",
    "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [replay idempotency]: the same joint change sent twice yields ONE allocation set and ONE audit row",
    "POST resolutions/[caseId]/amend -- immutability and history NEGATIVE CONTROL [immutability]: amending inserts a NEW resolved row; the original row is byte-for-byte unchanged",
+   "POST resolutions/[caseId]/amend -- immutability and history a resolved joint case can be amended to a SOLE owner only with confirm_not_joint (recorded on the new row); then amended back to a split",
    "POST resolutions/[caseId]/amend -- immutability and history the Resolutions history shows entity and joint decisions with labels and shares, never raw ids, and marks the superseded one"
   ],
   "error": null
@@ -94,7 +96,8 @@
   "mutation": "M10 PATCH lets a sole owner resolve a joint-holding case",
   "file": "app/api/investment-intelligence/accounts/[id]/owner/route.ts",
   "failed": [
-   "PATCH accounts/[id]/owner -- joint splits NEGATIVE CONTROL [joint case needs a joint owner]: with case_id, a sole-owner choice is refused and the case stays OPEN"
+   "PATCH accounts/[id]/owner -- joint splits NEGATIVE CONTROL [joint case needs a joint owner]: with case_id, a sole-owner choice is refused and the case stays OPEN",
+   "PATCH accounts/[id]/owner -- \"this is not a joint holding\" (PO decision 2026-10-01) NEGATIVE CONTROL [needs the second confirmation]: confirm:true alone, or confirm_not_joint:false, leaves the joint case OPEN and writes nothing"
   ],
   "error": null
  },
@@ -102,7 +105,8 @@
   "mutation": "M11 amend lets a joint case be amended to a sole owner",
   "file": "app/api/investment-intelligence/resolutions/[caseId]/amend/route.ts",
   "failed": [
-   "POST resolutions/[caseId]/amend -- immutability and history a resolved JOINT case can be amended to another joint split, but not to a sole owner"
+   "POST resolutions/[caseId]/amend -- immutability and history a resolved JOINT case can be amended to another joint split, but not to a sole owner",
+   "POST resolutions/[caseId]/amend -- immutability and history a resolved joint case can be amended to a SOLE owner only with confirm_not_joint (recorded on the new row); then amended back to a split"
   ],
   "error": null
  },
