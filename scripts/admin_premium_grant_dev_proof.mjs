@@ -28,6 +28,13 @@
 // (exactly 3 succeed, count never exceeds max), then the code is disabled. promo_codes rows are
 // never deleted (trigger) so the disabled code and its audit rows remain on DEV by design.
 //
+// PART 3 (only if the reminders migration 0238 is also applied; skipped with a notice otherwise):
+// promo default access length is 30 days; the expiry-reminder SEND-ONCE ledger via the
+// service-role claim/record functions with a synthetic user (p_only_user, so no real DEV user
+// can be claimed): claimed once, a rerun claims nothing, a failure is retried as the SAME row,
+// a paid user is never claimed, users cannot call the functions. NO E-MAIL IS SENT by this
+// script and the kill switch is NOT touched (it must still read disabled).
+//
 // RUN:  node scripts/admin_premium_grant_dev_proof.mjs
 // ENV (read from the process environment or .env.local): NEXT_PUBLIC_SUPABASE_URL
 //   (must be the DEV project), NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
@@ -205,6 +212,51 @@ try {
 
     const off = await promoAdminC.rpc('admin_disable_promo_code', { p_id: made.data?.id, p_reason: 'DEV proof finished, disabling' });
     check('the code is disabled at the end', !off.error, `(${off.error?.message ?? 'ok'})`);
+
+    // ---------------------------------------------------------------- part 3
+    const ctl = await svc.from('premium_reminder_job_control').select('enabled').eq('job_key', 'expiry_email').maybeSingle();
+    if (ctl.error) {
+      console.log('\n(part 3 skipped: reminders migration 0238 not applied on DEV)');
+    } else {
+      console.log('\n=== promo default access length ===');
+      const dflt = await promoAdminC.rpc('admin_create_promo_code', { p_code: null, p_duration_days: null, p_max_redemptions: 1, p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: 'DEV proof default' });
+      check('a code created without a duration defaults to 30 days', dflt.data?.duration_days === 30 && dflt.data?.ends_if_redeemed_today === day(30), `(${dflt.error?.message ?? JSON.stringify(dflt.data)})`);
+      if (dflt.data?.id) await promoAdminC.rpc('admin_disable_promo_code', { p_id: dflt.data.id, p_reason: 'DEV proof finished, disabling' });
+
+      console.log('\n=== expiry reminders (send-once ledger; nothing is e-mailed) ===');
+      check('the kill switch ships DISABLED (and this script did not change it)', ctl.data?.enabled === false, `(enabled=${ctl.data?.enabled})`);
+      const due = await mkUser('rem');
+      const paid = await mkUser('rempaid');
+      const retry = await mkUser('remretry');
+      for (const u of [due, retry]) {
+        await svc.from('user_entitlements').update({ plan_tier: 'premium', entitlement_source: 'admin_grant', effective_from: day(-100), effective_to: day(10), admin_grant_ends_on: day(10), reserve_source: 'admin_grant' }).eq('user_id', u.id);
+      }
+      await svc.from('user_entitlements').update({ plan_tier: 'premium', entitlement_source: 'payment', effective_from: day(-100), effective_to: day(10), admin_grant_ends_on: day(10), reserve_source: 'admin_grant' }).eq('user_id', paid.id);
+      const claimFor = (u) => svc.rpc('premium_reminder_claim', { p_today: day(0), p_thresholds: [30], p_batch: 50, p_max_attempts: 3, p_retry_after_minutes: 60, p_only_user: u.id });
+
+      const first = await claimFor(due);
+      check('a due admin-granted entitlement is claimed once, with its own address', first.data?.length === 1 && first.data[0].email === due.email, `(${first.error?.message ?? first.data?.length})`);
+      const second = await claimFor(due);
+      check('an immediate rerun claims nothing (send-once)', !second.error && second.data?.length === 0, `(${second.error?.message ?? second.data?.length})`);
+      const rec = await svc.rpc('premium_reminder_record', { p_ledger_id: first.data?.[0]?.ledger_id, p_ok: true, p_message_id: 'dev-proof-not-a-real-message', p_error: null, p_retry_after_minutes: 60, p_max_attempts: 3 });
+      check('recording the (simulated) send succeeds, and a late failure cannot flip it', rec.data === true && (await svc.rpc('premium_reminder_record', { p_ledger_id: first.data?.[0]?.ledger_id, p_ok: false, p_message_id: null, p_error: 'late', p_retry_after_minutes: 60, p_max_attempts: 3 })).data === false);
+      check('after it is sent nothing is claimed again', (await claimFor(due)).data?.length === 0);
+      check('a PAID user is never claimed', (await claimFor(paid)).data?.length === 0);
+
+      const r1 = await claimFor(retry);
+      await svc.rpc('premium_reminder_record', { p_ledger_id: r1.data?.[0]?.ledger_id, p_ok: false, p_message_id: null, p_error: 'resend_http_500', p_retry_after_minutes: 60, p_max_attempts: 3 });
+      check('a failed send is not retried before its delay', (await claimFor(retry)).data?.length === 0);
+      await svc.from('premium_expiry_email_ledger').update({ next_attempt_at: new Date(Date.now() - 60000).toISOString() }).eq('user_id', retry.id);
+      const r2 = await claimFor(retry);
+      check('after the delay the SAME ledger row is retried (attempt 2), not a new one', r2.data?.length === 1 && r2.data[0].ledger_id === r1.data?.[0]?.ledger_id && r2.data[0].attempt === 2, `(${JSON.stringify(r2.data?.map((r) => r.attempt))})`);
+      const rows = await svc.from('premium_expiry_email_ledger').select('id').eq('user_id', retry.id);
+      check('still exactly one ledger row for the retried reminder', rows.data?.length === 1);
+
+      const userClaim = await targetC.rpc('premium_reminder_claim', { p_today: day(0), p_thresholds: [30], p_batch: 5, p_max_attempts: 3, p_retry_after_minutes: 60, p_only_user: null });
+      check('a user cannot call the claim function', !!userClaim.error, `(${userClaim.error?.message})`);
+      const userLedger = await targetC.from('premium_expiry_email_ledger').select('id').limit(1);
+      check('a user cannot read the ledger', !!userLedger.error || (userLedger.data ?? []).length === 0);
+    }
   }
 } catch (e) {
   fail += 1;

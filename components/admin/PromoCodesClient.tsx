@@ -93,7 +93,7 @@ export function PromoCodesClient() {
     setActionError(null);
     setNotice(null);
     try {
-      const created = await fetchJson<{ code: string }>('/api/admin/promo-codes', {
+      const created = await fetchJson<{ code: string; duration_days?: number; ends_if_redeemed_today?: string }>('/api/admin/promo-codes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -104,7 +104,11 @@ export function PromoCodesClient() {
           note: note.trim() === '' ? undefined : note,
         }),
       });
-      setNotice(`Promo code created: ${formatPromoCode(created.code)}. Copy it now; it is also shown in the list below to promo-code admins.`);
+      const days = created.duration_days ?? durationDays;
+      const endsIfToday = created.ends_if_redeemed_today ?? addDaysIso(today, days);
+      setNotice(
+        `Promo code created: ${formatPromoCode(created.code)}. Each redemption gives ${days} day(s) of Premium; a user redeeming it today would have access until ${endsIfToday}. Copy the code now; it is also shown in the list below to promo-code admins.`
+      );
       setCode('');
       setNote('');
       setReload((k) => k + 1);
@@ -168,7 +172,7 @@ export function PromoCodesClient() {
           </div>
           <div>
             <label htmlFor="promo-duration" className="block text-xs font-medium text-muted">
-              Duration in days (1 to {PROMO_MAX_DURATION_DAYS})
+              Access length in days (1 to {PROMO_MAX_DURATION_DAYS}; default {PROMO_DEFAULT_DURATION_DAYS} = one month)
             </label>
             <input
               id="promo-duration"
@@ -202,7 +206,7 @@ export function PromoCodesClient() {
           </div>
           <div>
             <label htmlFor="promo-expiry" className="block text-xs font-medium text-muted">
-              Code can be redeemed until (inclusive)
+              Code can be redeemed until (inclusive): the code&apos;s own redemption window, separate from the access length above
             </label>
             <div className="mt-1 flex flex-wrap items-center gap-3">
               <input

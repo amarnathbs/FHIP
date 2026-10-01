@@ -205,14 +205,14 @@ describe('expiry reminders — pure rules', () => {
 describe('promo request validation (route layer, before the database)', () => {
   const valid = (over: Record<string, unknown> = {}) => ({ durationDays: 365, maxRedemptions: 100, expiresOn: day(60), ...over });
 
-  it('duration 1..365 (365 accepted, 366 refused), default 365; finite max by default; unlimited and no-expiry only when chosen explicitly', async () => {
+  it('duration 1..365 (365 accepted, 366 refused), default 30 (one month); finite max by default; unlimited and no-expiry only when chosen explicitly', async () => {
     const { parseCreatePromoRequest: parse } = await import('@/lib/services/promoCodes');
     expect(parse(valid({ durationDays: 365 }), TODAY).ok).toBe(true);
     expect(parse(valid({ durationDays: 366 }), TODAY)).toMatchObject({ ok: false, code: 'PROMO_DURATION_INVALID' });
     expect(parse(valid({ durationDays: 0 }), TODAY)).toMatchObject({ ok: false, code: 'PROMO_DURATION_INVALID' });
     expect(parse(valid({ durationDays: 30.5 }), TODAY)).toMatchObject({ ok: false });
     const d = parse({ expiresOn: day(60) }, TODAY);
-    expect(d.ok && d.value).toMatchObject({ durationDays: 365, maxRedemptions: 100, unlimited: false });
+    expect(d.ok && d.value).toMatchObject({ durationDays: 30, maxRedemptions: 100, unlimited: false }); // access length defaults to one month
     expect(parse({ durationDays: 30, noExpiry: true, unlimited: true }, TODAY)).toMatchObject({ ok: true, value: { maxRedemptions: null, expiresOn: null } });
     expect(parse(valid({ expiresOn: undefined }), TODAY)).toMatchObject({ ok: false, code: 'PROMO_EXPIRY_INVALID' }); // no silent "never expires"
     expect(parse(valid({ unlimited: true }), TODAY)).toMatchObject({ ok: false, code: 'PROMO_MAX_INVALID' }); // not both

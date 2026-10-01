@@ -39,11 +39,11 @@ Migration: `supabase/migrations/0237_admin_promo_codes_extension_cap_expiry_summ
 
 ## 3. Promo codes — design
 
-**Data (all RLS-enabled; users can read none of it):** `promo_codes` (code stored normalised, masked `code_hint`, `duration_days` 1..365 default 365, `max_redemptions` nullable, `redemption_count`, `expires_on`, note, status), `promo_code_redemptions` (unique per user per code), append-only `promo_code_events` (create / disable / redeem), `promo_redemption_attempts` (rate-limit ledger). `promo_codes` rows can never be deleted (trigger); events are append-only (trigger, also TRUNCATE).
+**Data (all RLS-enabled; users can read none of it):** `promo_codes` (code stored normalised, masked `code_hint`, `duration_days` 1..365 default **30** (changed by migration 0238; 0237 originally defaulted to 365), `max_redemptions` nullable, `redemption_count`, `expires_on`, note, status), `promo_code_redemptions` (unique per user per code), append-only `promo_code_events` (create / disable / redeem), `promo_redemption_attempts` (rate-limit ledger). `promo_codes` rows can never be deleted (trigger); events are append-only (trigger, also TRUNCATE).
 
 **Capability:** `admin_users.can_manage_promo_codes` + `is_promo_code_admin()`, **separate from `can_manage_premium_entitlements`** (Standard §3): holding either never confers the other, not implied by Super Admin; nobody holds it by default. Nav: separate group "Promo Codes" (`promoCodeManagement`) at `/admin/entitlements/promo-codes`. Layers: DB (functions + RLS), API (`requirePromoCodeAdmin`), page (`requirePromoCodeAdminPage`), nav.
 
-**Admin surface** (`/admin/entitlements/promo-codes`, `/api/admin/promo-codes*`): create (code admin-chosen or generated; duration <= 365 default 365; **max redemptions finite by default (100), unlimited only by an explicit "Unlimited" choice; expiry date default +90 days, no expiry only by an explicit choice**; optional note), list (state: active / disabled / expired / exhausted), disable (mandatory reason, audited, stops future redemptions only — Premium already granted is not revoked), audit trail view.
+**Admin surface** (`/admin/entitlements/promo-codes`, `/api/admin/promo-codes*`): create (code admin-chosen or generated; access length <= 365, **default 30 days (one month)** per the later PO decision (see section 12); **max redemptions finite by default (100), unlimited only by an explicit "Unlimited" choice; expiry date default +90 days, no expiry only by an explicit choice**; optional note), list (state: active / disabled / expired / exhausted), disable (mandatory reason, audited, stops future redemptions only — Premium already granted is not revoked), audit trail view.
 
 **Codes:** 31-character unambiguous alphabet `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O/1/I/L), 6–24 characters; admin-chosen codes obey the same alphabet; generated codes are 10 characters from the database CSPRNG (`gen_random_uuid`, rejection-sampled, no modulo bias). Case-insensitive; whitespace, hyphens and underscores ignored; TypeScript and SQL normalisers are tested to agree.
 
@@ -76,7 +76,7 @@ Migration: `supabase/migrations/0237_admin_promo_codes_extension_cap_expiry_summ
 - **Pure, tested function** `computeEntitlementReminder(row, today)` (`lib/services/entitlementReminder.ts`): only for source `admin_grant` / `promo_code`; ends within 30 days -> `expiring_30`; within 7 days (including the last day) -> `expiring_7` (the urgent notice replaces the other; one notice at a time); after the end date -> `lapsed` for 30 days, then nothing. **Never for paid Premium, legacy/unknown source, free users, missing rows, or a window that has not started.**
 - **A user never sees another user's notice:** the loader reads only the row whose `user_id` equals the authenticated session user (on the user's own session client, so RLS is a second guard), and the function takes that single row.
 - **Wording:** names the source honestly ("granted by FHIP" / "from a promo code") and the real ways to continue: subscribe from the Plans section on the Profile page (where a plan exists for the user's region) or contact FHIP support and ask for access to be reviewed. No billing flow is invented. Dismissal is remembered per threshold in the browser (optional convenience).
-- **Email reminders: NOT built.** The only email path in the repo is the contact form and signup (Resend); there is no scheduled notification mailer and no sent-reminder ledger, so an email reminder would need new scheduling infrastructure plus an idempotency table, which is beyond "follow the existing mailer conventions". In-app only, as the brief allowed.
+- **E-mail reminders: superseded.** The first version of this report said they were not built; the PO then brought them into scope and they ARE built, disabled by default: see section 12.
 - Limitation: a lapsed notice is shown for 30 days after the end date; a user who never opens the app in that window sees nothing.
 
 ## 6. Migration number and collision-scan evidence
@@ -137,7 +137,7 @@ Run with `npx vitest run <file>` from the worktree.
 - **Clauses and proof:** §2/§3 (separate capability, no implication in either direction): route tests ("entitlement-only admin -> 403", "promo-only admin refused on entitlement routes"), `/api/admin/me` independence test, nav test, PGlite "each capability opens ONLY its own functions". §4 four layers: DB (PGlite database-bypass calls as authenticated / anon / service_role; RLS on every promo table), API (route tests), page (`requirePromoCodeAdminPage`), nav. §13 fail closed: guards deny on read error; reminder loader fails soft to "no notice" (advisory UX, never a grant). §11 exports: none built (static guard). §9: approved by the PO (section 1). §14 scope: only the promo/reminder/extension-cap surface plus the webhook `reserve_source` fix needed so a promo reserve is restored correctly. §15 docs: this report; rollback in the migration header; future-review owner: PO.
 - **Exceptions requested (§16):** none.
 
-## 9. PO apply steps
+## 9. PO apply steps (original, for 0237 alone — SUPERSEDED by the ordered list in section 13, which includes 0238)
 
 Prerequisite: 0231 applied first (it is the base of this migration).
 
@@ -167,9 +167,128 @@ Prerequisite: 0231 applied first (it is the base of this migration).
 ## 10. Known limitations / decisions still needed
 
 1. **Per-IP limit needs a secret** (`PROMO_IP_HASH_SECRET` or `CRON_SECRET` already set in production); confirm which to use.
-2. In-app reminders only; **email reminders need new scheduling + idempotency infrastructure** — decide whether to fund that.
+2. (Answered by the PO: e-mail reminders are in scope; built disabled by default, see section 12.)
 3. A user who has an active admin grant and enters a code that would not extend it gets the generic "cannot be used" (deliberate: a distinct message would be an enumeration oracle); the form's static helper text explains the rule.
 4. Redemption by a user holding a not-yet-lapsed **manually SQL-set** Premium is refused as "paid" (indistinguishable from paid).
 5. Reminder timing is UTC dates; a lapsed notice lasts 30 days.
 6. Disabled promo codes and their audit rows are permanent by design.
 7. Not exercised: true concurrent redemption (see section 0).
+
+
+## 11. PO decisions (second round) — recorded
+
+1. Per-IP secret: OK. Documented below (section 13) and `amplify.yml` now forwards `PROMO_IP_HASH_SECRET` and the `PREMIUM_REMINDER_` prefix.
+2. **E-mail reminders are in scope** — built (section 12), disabled by default.
+3. Allowance-reset semantics confirmed as described in section 2. **Promo access length now defaults to 1 month (30 days)** (section 12.1).
+4. Confirmed: a user holding an active grant who enters a code that adds nothing gets the generic "This code cannot be used."
+5. The PO applies migrations themselves: ordered list in section 13.
+
+## 12. New work (migration 0238, a separate commit)
+
+**Migration 0238 is NEW; 0237 (not yet applied anywhere) and 0231 (applied on DEV and production) are untouched.**
+
+### 12.1 Promo access length defaults to 30 days
+
+I read the PO's words as **access length** (what a redeemer receives) and ALSO kept the other reading as its own field, so both exist and are separate in the admin form:
+
+| Admin field | Meaning | Default | Limit |
+|---|---|---|---|
+| **Access length** (`duration_days`) | how many days of Premium a redemption grants | **30** (was 365) | 1..365 |
+| **Code can be redeemed until** (`expires_on`) | the code's own redemption window | +90 days in the form; "no expiry" only by explicit choice | any future date |
+
+`admin_create_promo_code()` is replaced in place (same signature) and the column default moved to 30. The create confirmation now shows the end date: "Each redemption gives N day(s) of Premium; a user redeeming it today would have access until <date>" (the function returns `ends_if_redeemed_today`). Existing codes keep their stored duration. A 30-day promo redeemed today gets no "30 days left" e-mail (a window must be longer than the threshold to be reminded at it).
+
+### 12.2 Expiry e-mail reminders (disabled by default)
+
+- **Who / when:** admin-granted or promo Premium only (never paid), to the entitlement's own user only, **30 days before the end date** (default). The thresholds are ONE named list, `PREMIUM_EXPIRY_EMAIL_THRESHOLD_DAYS = [30]` in `lib/services/premiumExpiryReminderEmail.ts`; adding 7 (`[30, 7]`) enables the optional second e-mail with no other change. When several thresholds apply only the most urgent is sent, so enabling late never sends two at once. Plus the existing in-app banners (unchanged).
+- **Mailer:** the repo's existing production path, Resend over HTTPS with `RESEND_API_KEY`, as the Contact form does (`app/api/contact/route.ts`). Sender: `PREMIUM_REMINDER_FROM_EMAIL`, else `CONTACT_FROM_EMAIL`, else the Contact route's default domain address. No new provider or dependency. The mailer is **injected** (`Mailer` interface); no test can send mail and **no real e-mail was sent**.
+- **Copy:** plain text, observation style, transactional: "Your complimentary Premium access on FHIP ends on <date> (in N days)...", the real continuation paths (Plans section of the Profile page; contact FHIP support to ask for a review), a line that it is a service message not marketing. The date uses the repo's canonical formatter `formatDateShort` keyed by the user's country (AU `dd/mm/yyyy`, India `dd-mm-yyyy`; anything else falls back to the AU form). No promo code, no name, no user id, no amount, no tracking.
+- **Send-once ledger** `premium_expiry_email_ledger` (user, source, end date, threshold, status, attempts, provider message id or short error; **no address, body or code**) with a UNIQUE key `(user_id, entitlement_source, ends_on, threshold_days)`. `premium_reminder_claim()` (service_role only) inserts new rows with `ON CONFLICT DO NOTHING` and returns only the rows that call inserted (plus failed rows it re-claims), so a rerun, retry or overlapping cron cannot claim the same reminder twice. An extension changes the end date, which opens a new window (a new reminder is legitimate); the same window never is.
+- **Failures:** recorded (`failed`, short non-identifying error such as `resend_http_500`), retried **as the same ledger row** after a delay (attempt n waits n x 60 minutes), at most **3 attempts** (named constants), then `abandoned`. A failed row is voided, not retried, if the entitlement has since become paid or its end date changed. A row stuck `pending` (worker died mid-send, outcome unknown) becomes `unknown` after 30 minutes and is **never re-sent** (at-most-once beats a possible duplicate for an unknown outcome — a stated trade-off). `premium_reminder_record()` can only settle a pending row, so a late or duplicate result cannot flip a sent row. Resend's `Idempotency-Key` header (per ledger id) is sent as extra best-effort protection; the ledger is the real guarantee.
+- **Schedule:** `pg_cron` + `net.http_post` hourly (`17 * * * *`) to `https://app.financialhealthplatform.com/api/premium/cron/expiry-reminders`, authenticated with `x-cron-secret` = the Vault secret `premium_reminder_cron_secret` (same convention as the purge/malware sweeps, migrations 0135/0149/0174/0228). **Registered only on a database that carries the operator marker row `platform_deployment_environment.environment = 'production'`** (table created `if not exists`, same definition as the sibling migrations); DEV/fresh/PGlite registers nothing, so a DEV database can never schedule a call to the production origin (tested both ways). The route (`POST /api/premium/cron/expiry-reminders`) checks the shared `CRON_SECRET`.
+- **Kill switch / disabled by default:** `premium_reminder_job_control` row `expiry_email` ships `enabled = false`. The runner reads it on every run and treats a missing row, a read error, or anything but literal `true` as disabled: nothing is claimed and nothing is sent. It also claims nothing if the mailer is not configured (no ledger row is burned for an unsendable mail). The switch is a database row (no deploy to flip it).
+
+### 12.3 Tests for 0238 (all green)
+
+- `tests/unit/premiumExpiryReminderPglite.test.ts` — **24 tests** (real Postgres replay).
+- `tests/unit/premiumExpiryReminderRunner.test.ts` — **17 tests** (fake DB, injected mailer, injected fetch).
+- `tests/unit/adminPromoCodesPglite.test.ts` / `adminPromoCodesService.test.ts` updated for the 30-day default and for mutating the CURRENT `admin_create_promo_code` text (from 0238).
+- Combined run of the five promo/reminder/grant suites on a healthy `node_modules`: **207 tests passed**.
+
+| Rule (PO list) | Negative control — assertion that goes red |
+|---|---|
+| Not sent for paid Premium | source filter removed -> `paid Premium is never claimed` (the ledger's own CHECK on the source is the independent backstop that refuses the row); runner: a claim row that is not admin/promo or has no address is never mailed; no-check runner -> `a paid entitlement is never e-mailed` |
+| Not sent twice (rerun / overlap) | duplicate checks removed -> `an immediate rerun / overlapping run must claim nothing` (the UNIQUE key then fires by name `uq_premium_expiry_email_window`) |
+| Not sent for another user | claim joined to the wrong address -> `the address must belong to the entitlement's own user`; free users excluded (positive) |
+| Threshold boundaries (31 no; 30, 15, 1, 0 yes; ended no; short window; most-urgent-only) | boundary made strict -> `exactly 30 days left must be claimed` |
+| Disabled flag sends nothing | switch ignored -> `a disabled job must not send` (simulated broken runner); fail-closed on missing / error / `'true'` / `1` / throw (positive) |
+| Mailer failure recorded and retried but not duplicated | `record()` allowed to settle any row -> `a settled row cannot be settled again`; bounded budget (3 -> abandoned), void-on-payment, unknown-after-30-min (positive) |
+| DEV environment guard | schedule block without the marker check -> `DEV (no production marker row) must register no cron job`; with the marker: one hourly job at the production URL using the vault secret, idempotent |
+| Mailer cannot send in tests | not configured -> never calls fetch; success / HTTP failure / network error map to short non-identifying results (positive) |
+| Cron route auth | missing / wrong / empty secret -> 401 and nothing happens; enabled -> counts only, no address in the response (positive) |
+
+Not exercised: true simultaneous cron runs (PGlite is single-connection; the UNIQUE key is the database guarantee), and a real Resend send (deliberately never done).
+
+## 13. ORDERED PO APPLY LIST — DEV (then production)
+
+Preconditions: 0231 is already applied on DEV and production. Apply on **DEV first**, in this order, each in the Supabase SQL editor. All three are idempotent.
+
+**Step 1 — 0237** `supabase/migrations/0237_admin_promo_codes_extension_cap_expiry_summary.sql`
+- Verify:
+  ```sql
+  select column_name from information_schema.columns where table_schema='public' and table_name='user_entitlements'
+    and column_name in ('admin_grant_extension_count','reserve_source','promo_code_id');            -- 3 rows
+  select column_name from information_schema.columns where table_schema='public' and table_name='admin_users' and column_name='can_manage_promo_codes';  -- 1 row
+  select count(*) from pg_proc where pronamespace='public'::regnamespace and proname in
+    ('premium_grant_max_extensions','admin_create_promo_code','admin_disable_promo_code','admin_list_promo_codes',
+     'admin_promo_code_events','redeem_promo_code_for_user','admin_entitlement_expiry_summary','is_promo_code_admin');   -- 8
+  select has_function_privilege('authenticated','public.redeem_promo_code_for_user(uuid,text,text)','execute');  -- false
+  ```
+- Rollback: the SQL in the 0237 header (drops the promo audit trail; export `promo_code_events` first) — and then also roll back step 2 first.
+
+**Step 2 — 0238** `supabase/migrations/0238_premium_expiry_email_reminders.sql`
+- Verify:
+  ```sql
+  select enabled from premium_reminder_job_control where job_key='expiry_email';                         -- false
+  select count(*) from pg_proc where pronamespace='public'::regnamespace and proname in ('premium_reminder_claim','premium_reminder_record');  -- 2
+  select column_default from information_schema.columns where table_name='promo_codes' and column_name='duration_days';   -- 30
+  select has_function_privilege('authenticated','public.premium_reminder_claim(date,int[],int,int,int,uuid)','execute');   -- false
+  select jobname from cron.job where jobname='premium-expiry-email-reminders';                           -- 0 rows on DEV (production-only)
+  ```
+- Rollback: the SQL in the 0238 header (unschedule the job, drop the two functions and the two tables, restore the 365 column default; re-run 0237's `admin_create_promo_code` to restore its default). Export `premium_expiry_email_ledger` first.
+
+**Step 3 — capabilities** (nobody has them by default; the PO names the people):
+```sql
+update admin_users set can_manage_premium_entitlements = true where user_id = (select id from auth.users where email = '<admin email>');
+update admin_users set can_manage_promo_codes          = true where user_id = (select id from auth.users where email = '<admin email>');
+```
+
+**Step 4 — DEV proof:** `node scripts/admin_premium_grant_dev_proof.mjs` — ONE script, parts 1–3 (grant lifecycle; extension cap + promo incl. 8-way parallel redemption; 30-day default + the reminder ledger via synthetic users). Refuses any project but DEV, never touches the kill switch, **sends no e-mail**, cleans up (append-only audit rows remain; ledger rows cascade with the synthetic users).
+
+**Step 5 — production (later, after merge approval):** apply 0231 (done), 0237, 0238 in that order. Then:
+1. **Environment variables on Amplify** (server-side; `amplify.yml` forwards them): `PROMO_IP_HASH_SECRET` (any long random string; without it AND without `CRON_SECRET` the per-IP rate limit is off, the per-user limit stays on), `RESEND_API_KEY` and `CONTACT_FROM_EMAIL` (already forwarded and used by the Contact page), `APP_BASE_URL` (already forwarded; used for the two links in the e-mail), optional `PREMIUM_REMINDER_FROM_EMAIL`. `CRON_SECRET` already exists.
+2. **Production marker row** (once per project): `insert into platform_deployment_environment (environment) values ('production') on conflict (environment) do nothing;` then re-run the last `do $$ ... $$` block of 0238 (idempotent) to register the hourly job.
+3. **Vault secret** (never committed): `select vault.create_secret('<the CRON_SECRET value>', 'premium_reminder_cron_secret');`
+4. **Enable the e-mails only when ready** (default stays OFF): `update premium_reminder_job_control set enabled = true, disabled_reason = null, updated_at = now() where job_key = 'expiry_email';` — to stop: set `enabled = false`.
+5. Verify the job: `select jobname, schedule, command from cron.job where jobname = 'premium-expiry-email-reminders';` (command must contain the production URL) and, after the first hourly run, `select jobname, status, return_message, start_time from cron.job_run_details jrd join cron.job j on j.jobid = jrd.jobid where j.jobname = 'premium-expiry-email-reminders' order by start_time desc limit 5;`
+
+## 14. Migration numbers (0238) and collision-scan evidence
+
+New migration **0238**, above everything found. Scanned immediately before the commit, after a fresh `git fetch origin --prune`: every local and remote ref (796 refs) with `git ls-tree`, plus the working directory of the main checkout, every worktree under `D:\FHIP\.claude\worktrees` and the temp worktrees. Claimed elsewhere: **0232** (market index data: on a ref and in the `india-mf-report` and `bench1-phase2` worktrees), **0236** (owner-before-upload, on a ref and in its worktree); this branch's own 0231 and 0237. Nothing above 0237 anywhere. Sibling branches (owner-edit etc.) may still claim 0233-0235 or 0238+ later: whoever merges second renumbers; nothing else references the number (the 0238 header names itself, and the tests locate the file by its name suffix, not its number).
+
+The CHECK-constraint trap does not apply to 0238: it adds new tables and replaces two functions it needs; it drops and recreates **no** CHECK constraint on any existing table.
+
+## 15. What was and was not verified (this round)
+
+- **Code-complete; DB rules verified on isolated PGlite replays; app layer unit-tested** (above). **Not DEV-verified, not production-verified**; the DEV proof script's part 3 was added and has **never been run**.
+- **Never sent:** no real e-mail was sent anywhere; the Resend path was exercised only with an injected `fetch`.
+- Screens (promo form default and confirmation text) not rendered in a browser.
+- **Healthy-tree re-run (supersedes the section 7 toolchain caveat):** on the repaired shared `node_modules`, `tsc --noEmit` reports **0 errors** across the whole repo, `eslint` reports **0 problems** on every touched/new file, and 20 test files (832 tests: the five promo/reminder/grant suites, the migration-version guards and the existing entitlement/admin/country/AI suites) passed, apart from two cold-import timeouts under heavy machine load that passed in isolation (94/94).
+
+## 16. Decisions still needed from the PO
+
+1. **Names for the two capabilities** (step 3) — and who receives `PROMO_IP_HASH_SECRET`/Amplify changes.
+2. **When to enable the e-mails** (step 5.4) after a DEV rehearsal; whether to add the optional 7-day e-mail (`[30, 7]`).
+3. **Sender address:** set `PREMIUM_REMINDER_FROM_EMAIL`, or accept the Contact sender (a "FHIP Contact Form" display name unless `CONTACT_FROM_EMAIL` is changed).
+4. **Unknown-outcome policy:** a reminder whose send outcome is unknown (worker died mid-send) is never re-sent — accept, or prefer a possible duplicate over a possible miss.
+5. A user with an unusual end date (window shorter than 30 days, e.g. the 30-day default promo) gets no 30-day e-mail by design; the 7-day option or the in-app banners cover them — confirm.

@@ -37,6 +37,11 @@ const SHIM = path.join(SUPABASE_ROOT, '..', 'scripts', 'db-rebuild-check', 'shim
 const LATEST_NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_admin_promo_codes_extension_cap_expiry_summary.sql'));
 if (!LATEST_NAME) throw new Error('promo / extension-cap migration not found');
 const MIGRATION = fs.readFileSync(path.join(MIG_DIR, LATEST_NAME), 'utf8');
+// admin_create_promo_code() is replaced in place by the reminders migration (30-day default access length), so
+// its negative controls mutate and restore THAT text, never the 0237 text (restoring 0237 would revert the default).
+const REMINDERS_NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_premium_expiry_email_reminders.sql'));
+if (!REMINDERS_NAME) throw new Error('premium expiry reminders migration not found');
+const MIGRATION_REMINDERS = fs.readFileSync(path.join(MIG_DIR, REMINDERS_NAME), 'utf8');
 
 const ENT_ADMIN = 'aaaaaaaa-0000-0000-0000-00000000b001'; // can_manage_premium_entitlements only
 const PROMO_ADMIN = 'aaaaaaaa-0000-0000-0000-00000000b002'; // can_manage_promo_codes only
@@ -47,14 +52,14 @@ let db: PGlite;
 let counter = 0;
 type Json = Record<string, unknown>;
 
-function extractFn(name: string): string {
-  const m = MIGRATION.match(new RegExp(`create or replace function (?:public\\.)?${name}\\([\\s\\S]*?\\n\\$fn\\$;`));
+function extractFn(name: string, source: string = MIGRATION): string {
+  const m = source.match(new RegExp(`create or replace function (?:public\\.)?${name}\\([\\s\\S]*?\\n\\$fn\\$;`));
   if (!m) throw new Error(`could not extract ${name}`);
   return m[0];
 }
 const MANAGE_FN = extractFn('admin_manage_premium_entitlement');
 const REDEEM_FN = extractFn('redeem_promo_code_for_user');
-const CREATE_FN = extractFn('admin_create_promo_code');
+const CREATE_FN = extractFn('admin_create_promo_code', MIGRATION_REMINDERS);
 const WEBHOOK_FN = extractFn('apply_subscription_entitlement_event');
 const SUMMARY_FN = extractFn('admin_entitlement_expiry_summary');
 
@@ -350,9 +355,11 @@ describe('creating codes', () => {
     await expectCode(createPromo(PROMO_ADMIN, { duration: 0 }), 'PROMO_DURATION_INVALID');
     expect((await createPromo(PROMO_ADMIN, { duration: 365 })).duration_days).toBe(365);
   }
-  it('duration must be 1..365 (365 accepted, 366 refused) and defaults to 365', async () => {
+  it('duration must be 1..365 (365 accepted, 366 refused) and defaults to 30 (one month)', async () => {
     await assertDuration();
-    expect((await createPromo(PROMO_ADMIN, { duration: null })).duration_days).toBe(365);
+    const dflt = await createPromo(PROMO_ADMIN, { duration: null });
+    expect(dflt.duration_days, 'access length defaults to one month').toBe(30);
+    expect(dflt.ends_if_redeemed_today).toBe(await addDays(30));
   });
   it('NEGATIVE CONTROL — with the duration check removed the function no longer reports it (assertion "expected rejection with PROMO_DURATION_INVALID" goes red; the table CHECK is the only backstop)', async () => {
     await withMutation(

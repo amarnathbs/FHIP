@@ -134,7 +134,18 @@ frontend:
         # does for that pipeline. Every one of these flags still defaults OFF
         # when unset, so today's production behaviour is unchanged either
         # way; this only makes the switches operable at all.
-        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ -e STRIPE_ -e RAZORPAY_ -e II_AI_FALLBACK_ >> .env.production
+        #
+        # Premium promo codes / expiry e-mails (2026-10-01): `PROMO_IP_HASH_SECRET`
+        # (the HMAC key for the per-IP redemption rate limit, falls back to
+        # CRON_SECRET above) and `PREMIUM_REMINDER_FROM_EMAIL` (optional sender for
+        # the expiry reminder e-mails, falls back to CONTACT_FROM_EMAIL above) were
+        # new server-only names that would NOT have reached the runtime without
+        # being listed -- without PROMO_IP_HASH_SECRET AND without CRON_SECRET the
+        # per-IP limit silently turns off (the per-user limit still applies). The
+        # `PREMIUM_REMINDER_` prefix is forwarded as a whole so any future paired
+        # variable for that job travels with it. (The reminder job's own kill
+        # switch is a database row, not an environment variable, and ships OFF.)
+        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e PROMO_IP_HASH_SECRET -e PREMIUM_REMINDER_ -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ -e STRIPE_ -e RAZORPAY_ -e II_AI_FALLBACK_ >> .env.production
         - env | grep -e NEXT_PUBLIC_ >> .env.production
         # 2026-09-19: the last two deploys both failed here with
         # "FATAL ERROR: Ineffective mark-compacts near heap limit ...

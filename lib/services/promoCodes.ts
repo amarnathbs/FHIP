@@ -17,7 +17,8 @@ export const PROMO_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const PROMO_CODE_MIN_LENGTH = 6;
 export const PROMO_CODE_MAX_LENGTH = 24;
 export const PROMO_MAX_DURATION_DAYS = 365;
-export const PROMO_DEFAULT_DURATION_DAYS = 365;
+/** Access length a code grants when the admin does not choose one: one month (PO decision). The code's own REDEMPTION WINDOW is the separate expiry date. */
+export const PROMO_DEFAULT_DURATION_DAYS = 30;
 export const PROMO_DEFAULT_MAX_REDEMPTIONS = 100;
 export const PROMO_MAX_REDEMPTIONS_CEILING = 1_000_000;
 export const PROMO_NOTE_MAX_LENGTH = 500;
