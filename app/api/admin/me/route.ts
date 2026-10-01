@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/server';
 import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
 import { PC7_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc7/lookthroughDataAdmin';
 import { PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY } from '@/lib/services/premiumEntitlementAdmin';
+import { PROMO_CODE_ADMIN_CAPABILITY } from '@/lib/services/promoCodeAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -90,6 +91,26 @@ async function canManagePremiumEntitlements(): Promise<boolean> {
   }
 }
 
+/**
+ * Promo codes (migration 0237) — its own independent read, NOT derived from
+ * entitlementManagement or Super Admin (Standard §2/§3). Fails closed.
+ */
+async function canManagePromoCodes(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(PROMO_CODE_ADMIN_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return data?.[PROMO_CODE_ADMIN_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
+
 // Lets the nav know which Admin groups to show, without exposing any admin
 // data itself — a logged-out, non-admin, non-Resources-role caller just gets
 // all-false flags, never a 403 (the actual admin/Resources routes still
@@ -141,6 +162,7 @@ export async function GET() {
       referenceDataQuality: await canViewReferenceDataQuality(),
       lookthroughDataQuality: await canViewLookthroughDataQuality(),
       entitlementManagement: await canManagePremiumEntitlements(),
+      promoCodeManagement: await canManagePromoCodes(),
     },
   });
 }

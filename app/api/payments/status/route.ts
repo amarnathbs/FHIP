@@ -10,6 +10,7 @@ import { plansForBillingCountry } from '@/lib/services/paymentPlanCatalogue';
 import { isKnownCountry } from '@/lib/services/jurisdiction';
 import { utcToday } from '@/lib/services/entitlementWindow';
 import { describePlanStatus } from '@/lib/services/entitlementPlanStatus';
+import { computeEntitlementReminder } from '@/lib/services/entitlementReminder';
 
 export async function GET() {
   const { user, unauthenticated } = await requireUser();
@@ -41,6 +42,11 @@ export async function GET() {
     entitlement ? { ...entitlement, entitlement_source: sourceRow?.entitlement_source ?? null, admin_grant_ends_on: sourceRow?.admin_grant_ends_on ?? null } : null,
     utcToday()
   );
+  // Expiry reminder for the signed-in user's own time-limited Premium (admin grant / promo code).
+  // Pure function of this user's own row; null source (paid, legacy or pre-migration) never yields one.
+  const reminder = entitlement
+    ? computeEntitlementReminder({ ...entitlement, entitlement_source: sourceRow?.entitlement_source ?? null }, utcToday())
+    : computeEntitlementReminder(null, utcToday());
 
   const billingCountry = profile?.billing_country ?? null;
   const billingConfirmed = Boolean(profile?.billing_country_confirmed_at);
@@ -53,9 +59,19 @@ export async function GET() {
     // matching what the gates themselves enforce.
     planTier: plan.planTier,
     planLabel: plan.label,
-    entitlementSource: plan.kind === 'premium_admin_grant' || plan.kind === 'admin_grant_lapsed' ? 'admin_grant' : entitlement ? 'payment' : null,
+    entitlementSource:
+      plan.kind === 'premium_admin_grant' || plan.kind === 'admin_grant_lapsed'
+        ? 'admin_grant'
+        : plan.kind === 'premium_promo' || plan.kind === 'promo_lapsed'
+          ? 'promo_code'
+          : entitlement
+            ? 'payment'
+            : null,
     adminGrantEndsOn: plan.kind === 'premium_admin_grant' || plan.kind === 'admin_grant_lapsed' ? plan.grantEndsOn : null,
     adminGrantLapsed: plan.kind === 'admin_grant_lapsed',
+    promoEndsOn: plan.kind === 'premium_promo' || plan.kind === 'promo_lapsed' ? plan.grantEndsOn : null,
+    promoLapsed: plan.kind === 'promo_lapsed',
+    reminder: reminder.kind === 'none' ? null : { kind: reminder.kind, title: reminder.title, message: reminder.message, endsOn: reminder.endsOn, days: reminder.days },
     provider: entitlement?.provider ?? null,
     subscriptionStatus: entitlement?.subscription_status ?? null,
     priceId: entitlement?.price_id ?? null,

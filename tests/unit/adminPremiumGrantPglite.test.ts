@@ -30,7 +30,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SUPABASE_ROOT = path.resolve(HERE, '..', '..', 'supabase');
 const MIG_DIR = path.join(SUPABASE_ROOT, 'migrations');
 const SHIM = path.join(SUPABASE_ROOT, '..', 'scripts', 'db-rebuild-check', 'shim.sql');
-const MIGRATION_0231 = fs.readFileSync(path.join(MIG_DIR, '0231_admin_premium_entitlement_grants.sql'), 'utf8');
+// The CURRENT definitions of the manage and webhook functions live in the promo/extension-cap migration
+// (it replaces them in place), so the negative controls mutate and then restore THAT text; restoring the
+// 0231 text would silently downgrade the function under test.
+const LATEST_NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_admin_promo_codes_extension_cap_expiry_summary.sql'));
+if (!LATEST_NAME) throw new Error('promo / extension-cap migration not found');
+const MIGRATION_LATEST = fs.readFileSync(path.join(MIG_DIR, LATEST_NAME), 'utf8');
 const MIGRATION_0115 = fs.readFileSync(path.join(MIG_DIR, '0115_module11_1_ai_entitlements_quotas_cost_controls.sql'), 'utf8');
 
 const ADMIN = 'aaaaaaaa-0000-0000-0000-00000000a001'; // holds can_manage_premium_entitlements
@@ -48,8 +53,8 @@ function extractFn(sql: string, name: string): string {
   if (!m) throw new Error(`could not extract ${name}`);
   return m[0];
 }
-const MANAGE_FN = extractFn(MIGRATION_0231, 'admin_manage_premium_entitlement');
-const WEBHOOK_FN = extractFn(MIGRATION_0231, 'apply_subscription_entitlement_event');
+const MANAGE_FN = extractFn(MIGRATION_LATEST, 'admin_manage_premium_entitlement');
+const WEBHOOK_FN = extractFn(MIGRATION_LATEST, 'apply_subscription_entitlement_event');
 const AI_STATE_FN = extractFn(MIGRATION_0115, 'ai_entitlement_state');
 
 async function newUser(label = 'u'): Promise<string> {
@@ -479,7 +484,7 @@ describe('a genuine paid entitlement is never clobbered through the grant UI', (
   it('NEGATIVE CONTROL — with the paid-protection removed a grant overwrites a paying customer (assertion "paid row untouched / grant refused" goes red)', async () => {
     await withMutation(
       MANAGE_FN,
-      (s) => s.replace(/if v_paid_active then\s+raise exception 'ENTITLEMENT_PAID_ACTIVE' using errcode = 'P0001';\s+end if;\s+if v_admin_active then/, 'if v_admin_active then'),
+      (s) => s.replace(/if v_paid_active then raise exception 'ENTITLEMENT_PAID_ACTIVE' using errcode = 'P0001'; end if;\s+if v_managed_active then raise exception 'ENTITLEMENT_GRANT_ALREADY_ACTIVE'/, "if v_managed_active then raise exception 'ENTITLEMENT_GRANT_ALREADY_ACTIVE'"),
       async () => {
         await expectAssertionFails(assertPaidProtected, 'expected rejection with ENTITLEMENT_PAID_ACTIVE');
       }
@@ -553,7 +558,7 @@ describe('Stripe/Razorpay webhook merge — payment never shortens or silently d
   });
 
   it('NEGATIVE CONTROL — a webhook that leaves the grant end date on a paying customer fails (assertion "paying customer must not be cut off at the admin grant expiry" goes red)', async () => {
-    await withMutation(WEBHOOK_FN, (s) => s.replace(/v_src  := 'payment';\n    v_to   := null;/, "v_src  := 'payment';"), async () => {
+    await withMutation(WEBHOOK_FN, (s) => s.replace("v_tier := 'premium'; v_src := 'payment'; v_to := null;", "v_tier := 'premium'; v_src := 'payment';"), async () => {
       await expectAssertionFails(assertPaymentMerge, 'a paying customer must not be cut off at the admin grant expiry');
     });
   });

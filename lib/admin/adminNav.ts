@@ -104,6 +104,13 @@ export const ENTITLEMENT_ITEMS: { label: string; href: string }[] = [
   { label: 'Premium Access', href: '/admin/entitlements' },
 ];
 
+// Promo codes (migration 0237): the promo-code management destination. A SEPARATE
+// capability and a SEPARATE group from Entitlements: deciding which codes exist is
+// not the same duty as granting an individual user Premium (Standard §3).
+export const PROMO_CODE_ITEMS: { label: string; href: string }[] = [
+  { label: 'Promo Codes', href: '/admin/entitlements/promo-codes' },
+];
+
 // -- Capability contract ---------------------------------------------------
 
 /**
@@ -141,6 +148,12 @@ export interface AdminCapabilities {
    * §2/§3).
    */
   entitlementManagement: boolean;
+  /**
+   * Promo codes (migration 0237) — create / list / disable promo codes. Backed by
+   * admin_users.can_manage_promo_codes and is_promo_code_admin(). NOT implied by
+   * `isAdmin`, and NOT implied by `entitlementManagement` (or vice versa).
+   */
+  promoCodeManagement: boolean;
 }
 
 /**
@@ -158,6 +171,7 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   referenceDataQuality: false,
   lookthroughDataQuality: false,
   entitlementManagement: false,
+  promoCodeManagement: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -190,6 +204,7 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     referenceDataQuality: readBooleanField(source, 'referenceDataQuality'),
     lookthroughDataQuality: readBooleanField(source, 'lookthroughDataQuality'),
     entitlementManagement: readBooleanField(source, 'entitlementManagement'),
+    promoCodeManagement: readBooleanField(source, 'promoCodeManagement'),
   };
 }
 
@@ -238,6 +253,7 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.lookthroughDataQuality ? [{ label: 'Fund Look-Through', items: LOOKTHROUGH_DATA_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.entitlementManagement ? [{ label: 'Entitlements', items: ENTITLEMENT_ITEMS, matchMode: 'exact' as const }] : []),
+    ...(capabilities.promoCodeManagement ? [{ label: 'Promo Codes', items: PROMO_CODE_ITEMS, matchMode: 'exact' as const }] : []),
   ];
 }
 

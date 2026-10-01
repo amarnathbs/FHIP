@@ -18,9 +18,13 @@ interface PaymentStatus {
   planTier: 'free' | 'premium';
   /** Server-composed, honest plan wording (e.g. "Premium (granted by FHIP admin, ends 12 Oct 2026)"). */
   planLabel?: string;
-  entitlementSource?: 'payment' | 'admin_grant' | null;
+  entitlementSource?: 'payment' | 'admin_grant' | 'promo_code' | null;
   adminGrantEndsOn?: string | null;
   adminGrantLapsed?: boolean;
+  promoEndsOn?: string | null;
+  promoLapsed?: boolean;
+  /** Expiry reminder for the user's own admin-granted / promo Premium; null for paid Premium and everyone else. */
+  reminder?: { kind: 'expiring_30' | 'expiring_7' | 'lapsed'; title: string | null; message: string | null; endsOn: string | null; days: number | null } | null;
   provider: 'stripe' | 'razorpay' | null;
   subscriptionStatus: string | null;
   priceId: string | null;
@@ -70,6 +74,9 @@ export function BillingPanel() {
   const [countryError, setCountryError] = useState<string | null>(null);
   const [checkoutBusy, setCheckoutBusy] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoResult, setPromoResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function loadStatus() {
     const data = await fetchJson<PaymentStatus>('/api/payments/status');
@@ -110,6 +117,31 @@ export function BillingPanel() {
     }
   }
 
+  async function redeemPromo() {
+    setPromoBusy(true);
+    setPromoResult(null);
+    try {
+      const res = await fetch('/api/payments/promo/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const endsOn = json?.data?.endsOn as string | undefined;
+        setPromoResult({ ok: true, text: endsOn ? `Promo code applied. Your Premium access runs until ${endsOn}.` : 'Promo code applied.' });
+        setPromoCode('');
+        await loadStatus();
+      } else {
+        setPromoResult({ ok: false, text: json?.message ?? 'This code cannot be used.' });
+      }
+    } catch {
+      setPromoResult({ ok: false, text: 'Could not apply the code. Please try again.' });
+    } finally {
+      setPromoBusy(false);
+    }
+  }
+
   async function startCheckout(priceId: string) {
     setCheckoutBusy(priceId);
     setCheckoutError(null);
@@ -140,7 +172,7 @@ export function BillingPanel() {
       <div>
         <p className="text-sm text-ink">
           Plan: <span className="font-medium">{status.planLabel ?? (status.planTier === 'premium' ? 'Premium' : 'Free')}</span>
-          {status.subscriptionStatus && status.entitlementSource !== 'admin_grant' && (
+          {status.subscriptionStatus && status.entitlementSource !== 'admin_grant' && status.entitlementSource !== 'promo_code' && (
             <span className="ml-2 text-muted">({SUBSCRIPTION_STATUS_LABEL[status.subscriptionStatus] ?? status.subscriptionStatus})</span>
           )}
         </p>
@@ -148,6 +180,53 @@ export function BillingPanel() {
           <p className="mt-1 text-xs text-muted">
             {status.cancelAtPeriodEnd ? 'Ends' : 'Renews'} {new Date(status.currentPeriodEnd).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' })}
             {' · '}via {status.provider === 'stripe' ? 'Stripe' : 'Razorpay'}
+          </p>
+        )}
+      </div>
+
+      {status.reminder && status.reminder.message && (
+        <div role="status" className="rounded border border-trust/30 bg-trust/5 p-3 text-sm">
+          <p className="font-medium text-ink">{status.reminder.title}</p>
+          <p className="mt-1 text-muted">{status.reminder.message}</p>
+        </div>
+      )}
+
+      <div>
+        <label htmlFor="promo-code-input" className="block text-xs font-medium text-muted">
+          Promo code
+        </label>
+        <p id="promo-code-helper" className="mt-1 text-xs text-muted">
+          Have a promo code? Enter it to get Premium for the period the code allows (never more than one year from today). A code cannot be
+          applied on top of a paid subscription, and it will not shorten Premium you already have.
+        </p>
+        <form
+          className="mt-2 flex flex-wrap items-center gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void redeemPromo();
+          }}
+        >
+          <input
+            id="promo-code-input"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={64}
+            aria-describedby="promo-code-helper"
+            className="rounded border px-3 py-2 text-sm uppercase"
+          />
+          <button
+            type="submit"
+            disabled={promoBusy || promoCode.trim().length === 0}
+            className="rounded-full border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5 disabled:opacity-50"
+          >
+            {promoBusy ? 'Applying…' : 'Apply code'}
+          </button>
+        </form>
+        {promoResult && (
+          <p role={promoResult.ok ? 'status' : 'alert'} className={`mt-2 text-sm ${promoResult.ok ? 'text-trust' : 'text-risk'}`}>
+            {promoResult.text}
           </p>
         )}
       </div>

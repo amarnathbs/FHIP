@@ -7,7 +7,7 @@
 
 import { effectivePlanTier, type EntitlementWindowRow } from '@/lib/services/entitlementWindow';
 
-export type PlanStatusKind = 'free' | 'premium_paid' | 'premium_admin_grant' | 'admin_grant_lapsed';
+export type PlanStatusKind = 'free' | 'premium_paid' | 'premium_admin_grant' | 'admin_grant_lapsed' | 'premium_promo' | 'promo_lapsed';
 
 export interface PlanStatusInput extends EntitlementWindowRow {
   entitlement_source?: string | null;
@@ -34,6 +34,7 @@ export function formatIsoDate(isoDate: string): string {
 export function describePlanStatus(row: PlanStatusInput | null | undefined, today: string): PlanStatus {
   const planTier = effectivePlanTier(row, today);
   const isAdminGrant = row?.entitlement_source === 'admin_grant';
+  const isPromo = row?.entitlement_source === 'promo_code';
   const endsOn = row?.effective_to ?? row?.admin_grant_ends_on ?? null;
 
   if (planTier === 'premium') {
@@ -45,7 +46,24 @@ export function describePlanStatus(row: PlanStatusInput | null | undefined, toda
         grantEndsOn: endsOn,
       };
     }
+    if (isPromo && endsOn) {
+      return {
+        kind: 'premium_promo',
+        planTier,
+        label: `Premium (promo code, ends ${formatIsoDate(endsOn)})`,
+        grantEndsOn: endsOn,
+      };
+    }
     return { kind: 'premium_paid', planTier, label: 'Premium', grantEndsOn: null };
+  }
+
+  if (isPromo && row?.plan_tier === 'premium' && endsOn && endsOn < today) {
+    return {
+      kind: 'promo_lapsed',
+      planTier,
+      label: `Free (your Premium access from a promo code ended ${formatIsoDate(endsOn)})`,
+      grantEndsOn: endsOn,
+    };
   }
 
   if (isAdminGrant && row?.plan_tier === 'premium' && endsOn && endsOn < today) {

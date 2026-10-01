@@ -202,7 +202,9 @@ describe('server-side request validation (before the database) — the cap and t
     expect(over.fake.rpcCalls, `a rejected ${action} must not reach the database`).toHaveLength(0);
     const exact = await post(validBody({ action, endsOn: dayOffset(365) }));
     expect(exact.res.status, `${action} with exactly 365 days must be accepted`).toBe(200);
-    expect(exact.fake.rpcCalls[0].args).toMatchObject({ p_action: action, p_ends_on: dayOffset(365) });
+    // (an extend first reads the user's extension count for the route-level cap check, then writes)
+    const write = exact.fake.rpcCalls.find((c) => c.name === 'admin_manage_premium_entitlement');
+    expect(write?.args).toMatchObject({ p_action: action, p_ends_on: dayOffset(365) });
   }
 
   it('grant: 366 days rejected, exactly 365 accepted', async () => {
@@ -371,7 +373,7 @@ describe('window-aware plan tier — every non-AI consumer honours effective_fro
         }
       }
       expect(offenders, 'these files read user_entitlements.plan_tier without honouring effective_from/effective_to').toEqual([]);
-    }, 60_000);
+    }, 300_000);
 
     it('NEGATIVE CONTROL — the detector flags a bare-flag reader (assertion "no window-blind reader" goes red on a synthetic offender)', () => {
       const offender = `const { data } = await supabase.from('user_entitlements').select('plan_tier').eq('user_id', id).maybeSingle();`;

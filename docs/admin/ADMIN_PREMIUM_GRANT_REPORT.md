@@ -14,6 +14,19 @@ Migration: `supabase/migrations/0231_admin_premium_entitlement_grants.sql` — *
 | Anything on production | **NOT production-verified.** Production was not touched or queried. |
 | The admin page in a browser | **not rendered or visually verified** (no authenticated session with the new capability exists anywhere, and the repo has no DOM test environment). `tsc` and `eslint` only. |
 
+## 0b. PO decisions received after this report (2026-10-01)
+
+Recorded in full in `ADMIN_PROMO_CODES_AND_REMINDERS_REPORT.md` (a separate commit on top of this one; this commit stands alone).
+
+| Decision from section 11 | PO answer |
+|---|---|
+| 1. Who gets `can_manage_premium_entitlements` | Only people the PO names; default unchanged (nobody until the PO runs the update). |
+| 2. Standard §9 (emails shown; pseudonymous ids retained after account deletion) | **APPROVED by the Product Owner.** The "Unapproved item" in section 5 is now approved. |
+| 3. Lifetime cap on chained extensions | Max **5 extensions per grant** (implemented in the follow-up commit, migration 0237). |
+| 4. Refuse (no override) on paid Premium; refuse self-grants | **APPROVED**: keep refusing. |
+| 5. Expiry notifications | In scope: in-app reminders and an admin monthly summary built in the follow-up commit; email reminders not built (no existing scheduled mailer). |
+| 6. Production `effective_to` check query | Acknowledged. |
+
 ## 1. What was asked, and what was built
 
 PO request: let an admin allocate Premium to a user who has not paid online, for up to one year from the date of allocation, extendable by an admin.

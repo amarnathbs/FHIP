@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/ui/AppShell';
 import { createClient } from '@/lib/supabase/server';
 import { assertCountryConfirmedForUser, shouldRedirectToConfirmCountry } from '@/lib/services/countryGate';
+import { getOwnEntitlementReminder } from '@/lib/services/premiumNotice';
+import { PremiumAccessNotice } from '@/components/billing/PremiumAccessNotice';
 
 // AppShell lives here (not wrapped individually in each page.tsx) so the
 // sidebar survives client-side navigation instead of unmounting and
@@ -60,5 +62,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/confirm-country');
   }
 
-  return <AppShell>{children}</AppShell>;
+  // Expiry notice for time-limited Premium (admin grant / promo code): computed from the signed-in
+  // user's OWN entitlement row only, by a pure function; never shown for paid Premium. Fails soft to
+  // "no notice" (see lib/services/premiumNotice.ts).
+  const reminder = await getOwnEntitlementReminder(supabase as never, user.id);
+
+  return (
+    <AppShell>
+      {reminder.kind !== 'none' && reminder.key && reminder.title && reminder.message && (
+        <PremiumAccessNotice noticeKey={reminder.key} kind={reminder.kind} title={reminder.title} message={reminder.message} />
+      )}
+      {children}
+    </AppShell>
+  );
 }

@@ -15,6 +15,15 @@ import { ENTITLEMENT_GRANT_MAX_DAYS, addDaysIso, isValidIsoDate } from '@/lib/se
 export const MANAGE_ACTIONS = ['grant', 'extend', 'revoke'] as const;
 export type ManageAction = (typeof MANAGE_ACTIONS)[number];
 
+/**
+ * Maximum successful admin extensions per grant. ONE named constant on the TypeScript side; the
+ * database's single source is premium_grant_max_extensions() (migration 0237) and a test asserts they
+ * agree. Definitions (see the migration header and the report): a "grant" is one allocation (admin
+ * Grant or promo redemption); an "extension" is one successful admin Extend on it; the counter resets
+ * when a new grant starts (Grant after Revoke/lapse, or a promo redemption) and Revoke clears it.
+ */
+export const MAX_EXTENSIONS_PER_GRANT = 5;
+
 export const REASON_MIN_LENGTH = 10;
 export const REASON_MAX_LENGTH = 1000;
 
@@ -110,7 +119,7 @@ const RPC_ERRORS: Record<string, { status: number; message: string }> = {
     message: `The end date cannot be more than ${ENTITLEMENT_GRANT_MAX_DAYS} days after today.`,
   },
   ENTITLEMENT_QUERY_TOO_SHORT: { status: 422, message: 'Enter at least 3 characters of an email, or a full user id.' },
-  ENTITLEMENT_FILTER_INVALID: { status: 422, message: 'filter must be expiring, active or lapsed.' },
+  ENTITLEMENT_FILTER_INVALID: { status: 422, message: 'filter/source is not one of the allowed values.' },
   ENTITLEMENT_USER_NOT_FOUND: { status: 404, message: 'No such user.' },
   ENTITLEMENT_SELF_TARGET: { status: 422, message: 'You cannot change your own entitlement.' },
   ENTITLEMENT_PAID_ACTIVE: {
@@ -120,6 +129,10 @@ const RPC_ERRORS: Record<string, { status: number; message: string }> = {
   },
   ENTITLEMENT_GRANT_ALREADY_ACTIVE: { status: 409, message: 'This user already has an active admin grant. Use Extend to change its end date.' },
   ENTITLEMENT_NO_ADMIN_GRANT: { status: 409, message: 'This user has no admin grant to extend or revoke. Use Grant.' },
+  ENTITLEMENT_EXTENSION_LIMIT_REACHED: {
+    status: 409,
+    message: `This grant has already been extended ${MAX_EXTENSIONS_PER_GRANT} times, which is the limit. To give further access, Revoke it and then Grant again (both actions are audited).`,
+  },
   ENTITLEMENT_EXTENSION_NOT_LATER: {
     status: 422,
     message: 'An extension must set an end date later than the current end date. To end access sooner, use Revoke.',
@@ -150,6 +163,8 @@ export interface ManageResult {
   effective_from: string | null;
   effective_to: string | null;
   admin_grant_ends_on: string | null;
+  extension_count?: number;
+  extensions_remaining?: number;
 }
 
 /**
@@ -171,6 +186,10 @@ export function callSearchUsers(client: RpcClient, query: string) {
 
 export function callListGrants(client: RpcClient, filter: 'expiring' | 'active' | 'lapsed', withinDays: number) {
   return client.rpc('admin_list_premium_grants', { p_filter: filter, p_within_days: withinDays });
+}
+
+export function callExpirySummary(client: RpcClient, source: 'admin_grant' | 'promo_code' | null) {
+  return client.rpc('admin_entitlement_expiry_summary', { p_source: source });
 }
 
 export function callHistory(client: RpcClient, userId: string, limit = 50) {

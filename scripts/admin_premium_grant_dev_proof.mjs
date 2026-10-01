@@ -22,6 +22,12 @@
 //      admin_entitlement_events is APPEND-ONLY by design, so its handful of rows
 //      for the deleted synthetic users remain and are reported.
 //
+// PART 2 (only if the promo / extension-cap migration 0237 is also applied; skipped with a
+// notice otherwise): extension cap (5 allowed, 6th refused), promo create -> redeem ->
+// generic refusal for a bogus code -> PARALLEL redemption of a max-3 code by 8 synthetic users
+// (exactly 3 succeed, count never exceeds max), then the code is disabled. promo_codes rows are
+// never deleted (trigger) so the disabled code and its audit rows remain on DEV by design.
+//
 // RUN:  node scripts/admin_premium_grant_dev_proof.mjs
 // ENV (read from the process environment or .env.local): NEXT_PUBLIC_SUPABASE_URL
 //   (must be the DEV project), NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
@@ -150,6 +156,56 @@ try {
   check('history holds exactly grant, extend, revoke (newest first); rejected calls left no row', !hist.error && JSON.stringify((hist.data ?? []).map((r) => r.action)) === JSON.stringify(['revoke', 'extend', 'grant']), `(${hist.error?.message ?? (hist.data ?? []).map((r) => r.action).join(',')})`);
   const nonAdminHist = await targetC.rpc('admin_premium_entitlement_history', { p_target_user_id: target.id, p_limit: 50 });
   check('a non-admin cannot read the history', !!nonAdminHist.error);
+  // ------------------------------------------------------------------ part 2
+  const promoProbe = await svc.from('admin_users').select('can_manage_promo_codes').limit(1);
+  if (promoProbe.error) {
+    console.log('\n(part 2 skipped: migration 0237 not applied on DEV)');
+  } else {
+    console.log('\n=== extension cap (5 per grant) ===');
+    const cap = await mkUser('cap');
+    const capGrant = await adminC.rpc('admin_manage_premium_entitlement', { p_action: 'grant', p_target_user_id: cap.id, p_ends_on: day(10), p_reason: 'DEV proof: extension cap check' });
+    check('grant for the cap check', !capGrant.error, `(${capGrant.error?.message ?? 'ok'})`);
+    let okExt = 0;
+    for (let i = 1; i <= 5; i += 1) {
+      const r = await adminC.rpc('admin_manage_premium_entitlement', { p_action: 'extend', p_target_user_id: cap.id, p_ends_on: day(10 + i * 10), p_reason: `DEV proof: extension ${i} of 5` });
+      if (!r.error) okExt += 1;
+    }
+    check('five extensions succeed', okExt === 5, `(${okExt})`);
+    const sixth = await adminC.rpc('admin_manage_premium_entitlement', { p_action: 'extend', p_target_user_id: cap.id, p_ends_on: day(200), p_reason: 'DEV proof: sixth extension' });
+    check('the sixth extension is refused', !!sixth.error && /EXTENSION_LIMIT_REACHED/.test(sixth.error.message), `(${sixth.error?.message})`);
+
+    console.log('\n=== promo codes ===');
+    await svc.from('admin_users').update({ can_manage_promo_codes: true }).eq('user_id', admin.id);
+    const promoAdminC = await sessionClient(admin);
+    const made = await promoAdminC.rpc('admin_create_promo_code', {
+      p_code: null, p_duration_days: 365, p_max_redemptions: 3, p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: 'DEV proof code',
+    });
+    check('a promo admin can create a code (generated, 10 chars)', !made.error && typeof made.data?.code === 'string' && made.data.code.length === 10, `(${made.error?.message ?? 'ok'})`);
+    const tooLong = await promoAdminC.rpc('admin_create_promo_code', { p_code: null, p_duration_days: 366, p_max_redemptions: 3, p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: null });
+    check('366-day promo is refused', !!tooLong.error && /DURATION_INVALID/.test(tooLong.error.message), `(${tooLong.error?.message})`);
+    const notPromoAdmin = await targetC.rpc('admin_create_promo_code', { p_code: null, p_duration_days: 30, p_max_redemptions: 3, p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: null });
+    check('a non-admin cannot create a code', !!notPromoAdmin.error);
+    const direct = await targetC.rpc('redeem_promo_code_for_user', { p_user_id: target.id, p_code: made.data?.code, p_ip_hash: null });
+    check('a user cannot call the redeem function directly', !!direct.error, `(${direct.error?.message})`);
+
+    const redeemers = [];
+    for (let i = 0; i < 8; i += 1) redeemers.push(await mkUser(`red${i}`));
+    const results = await Promise.all(redeemers.map((u) => svc.rpc('redeem_promo_code_for_user', { p_user_id: u.id, p_code: made.data.code, p_ip_hash: null })));
+    const succeeded = results.filter((r) => r.data?.ok === true).length;
+    const refused = results.filter((r) => r.data?.ok === false && r.data?.code === 'PROMO_CODE_UNUSABLE').length;
+    check('PARALLEL: exactly 3 of 8 simultaneous redemptions of a max-3 code succeed', succeeded === 3 && refused === 5, `(ok=${succeeded}, unusable=${refused})`);
+    const listed = await promoAdminC.rpc('admin_list_promo_codes');
+    const mine = (listed.data ?? []).find((r) => r.id === made.data?.id);
+    check('redemption_count never exceeds max_redemptions', mine?.redemption_count === 3, `(count=${mine?.redemption_count})`);
+    const bogus = await svc.rpc('redeem_promo_code_for_user', { p_user_id: redeemers[0].id, p_code: 'NOSUCHCODE22', p_ip_hash: null });
+    check('a bogus code gets the same generic verdict as an exhausted one', bogus.data?.code === 'PROMO_CODE_UNUSABLE' || bogus.data?.code === 'PROMO_ALREADY_REDEEMED', `(${bogus.data?.code})`);
+    const okUser = redeemers[results.findIndex((r) => r.data?.ok === true)];
+    const state = await aiState(okUser.id);
+    check('a redeemer is not premium_required', state.reason !== 'premium_required', `(eligible=${state.eligible}, reason=${state.reason})`);
+
+    const off = await promoAdminC.rpc('admin_disable_promo_code', { p_id: made.data?.id, p_reason: 'DEV proof finished, disabling' });
+    check('the code is disabled at the end', !off.error, `(${off.error?.message ?? 'ok'})`);
+  }
 } catch (e) {
   fail += 1;
   console.log(`  FAIL  unexpected error: ${e.message}`);

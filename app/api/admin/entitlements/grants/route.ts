@@ -15,7 +15,14 @@
 
 import { adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { requirePremiumEntitlementAdmin } from '@/lib/services/premiumEntitlementAdmin';
-import { callListGrants, callManageEntitlement, mapEntitlementRpcError, parseManageRequest } from '@/lib/services/premiumGrantAdmin';
+import {
+  callListGrants,
+  callManageEntitlement,
+  callSearchUsers,
+  mapEntitlementRpcError,
+  parseManageRequest,
+  MAX_EXTENSIONS_PER_GRANT,
+} from '@/lib/services/premiumGrantAdmin';
 import { utcToday } from '@/lib/services/entitlementWindow';
 import { createClient } from '@/lib/supabase/server';
 import { ok, bad } from '@/lib/api';
@@ -56,6 +63,20 @@ export const POST = adminRoute(async (req: Request) => {
   if (!parsed.ok) return bad(parsed.message, parsed.status, parsed.code);
 
   const supabase = await createClient();
+
+  // EXTENSION CAP, route layer (the database function is authoritative and re-checks under a row
+  // lock). Reading the current count first gives the admin an immediate, specific refusal and means a
+  // request over the limit never reaches the write path. A failed lookup is NOT treated as "under the
+  // limit": the request simply proceeds to the database, which enforces the cap itself.
+  if (parsed.value.action === 'extend') {
+    const lookup = await callSearchUsers(supabase, parsed.value.userId);
+    const row = Array.isArray(lookup.data) ? (lookup.data as { user_id?: string; extension_count?: number; entitlement_source?: string }[]).find((r) => r.user_id === parsed.value.userId) : undefined;
+    if (row && row.entitlement_source !== 'payment' && typeof row.extension_count === 'number' && row.extension_count >= MAX_EXTENSIONS_PER_GRANT) {
+      const mapped = mapEntitlementRpcError({ message: 'ENTITLEMENT_EXTENSION_LIMIT_REACHED' });
+      if (mapped) return bad(mapped.message, mapped.status, mapped.code);
+    }
+  }
+
   const { data, error } = await callManageEntitlement(supabase, parsed.value);
   if (error) {
     const mapped = mapEntitlementRpcError(error);

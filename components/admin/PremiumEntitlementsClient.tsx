@@ -9,7 +9,7 @@
 // here is trusted — a request that breaks a rule is refused server-side with an
 // explicit error, which this component simply displays.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ENTITLEMENT_GRANT_MAX_DAYS, maxGrantEndDate, utcToday } from '@/lib/services/entitlementWindow';
 import { REASON_MIN_LENGTH } from '@/lib/services/premiumGrantAdmin';
 
@@ -17,18 +17,47 @@ interface UserRow {
   user_id: string;
   email: string | null;
   plan_tier: 'free' | 'premium';
-  entitlement_source: 'payment' | 'admin_grant';
+  entitlement_source: 'payment' | 'admin_grant' | 'promo_code';
   effective_from: string | null;
   effective_to: string | null;
   admin_grant_ends_on: string | null;
   subscription_status: string | null;
   provider: string | null;
   entitlement_active: boolean;
+  extension_count: number;
+  extensions_remaining: number;
 }
+
+interface SummaryRow {
+  user_id: string;
+  email: string | null;
+  entitlement_source: 'admin_grant' | 'promo_code';
+  effective_to: string;
+  days_remaining: number;
+  bucket: 'expired_this_month' | 'expiring_this_month';
+  extension_count: number;
+  extensions_remaining: number;
+}
+
+interface Summary {
+  as_of: string;
+  month: string;
+  counts: {
+    expired_this_month: number;
+    expiring_this_month: number;
+    by_source: Record<'admin_grant' | 'promo_code', { expired: number; expiring: number }>;
+  };
+  rows: SummaryRow[];
+}
+
+const SOURCE_LABEL: Record<string, string> = { admin_grant: 'Admin grant', promo_code: 'Promo code', payment: 'Paid / other' };
 
 interface GrantRow {
   user_id: string;
   email: string | null;
+  entitlement_source: 'admin_grant' | 'promo_code';
+  extension_count: number;
+  extensions_remaining: number;
   effective_from: string | null;
   effective_to: string | null;
   days_remaining: number;
@@ -67,10 +96,12 @@ function fmt(isoDate: string | null): string {
 }
 
 function describeState(u: UserRow): string {
-  if (u.entitlement_source === 'admin_grant') {
+  if (u.entitlement_source === 'admin_grant' || u.entitlement_source === 'promo_code') {
+    const what = u.entitlement_source === 'promo_code' ? 'promo code' : 'admin grant';
+    const ext = u.extensions_remaining > 0 ? `${u.extensions_remaining} extension(s) left` : 'extension limit reached';
     return u.entitlement_active
-      ? `Premium — admin grant, ends ${fmt(u.effective_to)}`
-      : `Free — admin grant lapsed ${fmt(u.effective_to)} (can be extended)`;
+      ? `Premium — ${what}, ends ${fmt(u.effective_to)} (${ext})`
+      : `Free — ${what} lapsed ${fmt(u.effective_to)} (${ext})`;
   }
   if (u.entitlement_active) {
     return u.admin_grant_ends_on
@@ -85,13 +116,26 @@ export function PremiumEntitlementsClient() {
   const maxEnd = maxGrantEndDate(today);
 
   const [filter, setFilter] = useState<GrantFilter>('expiring');
-  const [grants, setGrants] = useState<GrantRow[] | null>(null);
-  const [grantsError, setGrantsError] = useState<string | null>(null);
+  const [grantsReload, setGrantsReload] = useState(0);
+  // The list is stored WITH the key it was loaded for; a different current key means "loading".
+  const [loadedGrants, setLoadedGrants] = useState<{ key: string; rows: GrantRow[] } | null>(null);
+  const [grantsFailure, setGrantsFailure] = useState<{ key: string; message: string } | null>(null);
+  const grantsKey = `${filter}:${grantsReload}`;
+  const grants = loadedGrants && loadedGrants.key === grantsKey ? loadedGrants.rows : null;
+  const grantsError = grantsFailure && grantsFailure.key === grantsKey ? grantsFailure.message : null;
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserRow[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+
+  const [summarySource, setSummarySource] = useState<'' | 'admin_grant' | 'promo_code'>('');
+  const [summaryReload, setSummaryReload] = useState(0);
+  const [loadedSummary, setLoadedSummary] = useState<{ key: string; data: Summary } | null>(null);
+  const [summaryFailure, setSummaryFailure] = useState<{ key: string; message: string } | null>(null);
+  const summaryKey = `${summarySource}:${summaryReload}`;
+  const summary = loadedSummary && loadedSummary.key === summaryKey ? loadedSummary.data : null;
+  const summaryError = summaryFailure && summaryFailure.key === summaryKey ? summaryFailure.message : null;
 
   const [selected, setSelected] = useState<UserRow | null>(null);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
@@ -103,20 +147,35 @@ export function PremiumEntitlementsClient() {
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
 
-  const loadGrants = useCallback(async (f: GrantFilter) => {
-    setGrants(null);
-    setGrantsError(null);
-    try {
-      const data = await fetchJson<{ grants: GrantRow[] }>(`/api/admin/entitlements/grants?filter=${f}&withinDays=30`);
-      setGrants(data.grants);
-    } catch (e) {
-      setGrantsError(e instanceof Error ? e.message : 'Could not load grants');
-    }
-  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchJson<{ grants: GrantRow[] }>(`/api/admin/entitlements/grants?filter=${filter}&withinDays=30`);
+        if (!cancelled) setLoadedGrants({ key: `${filter}:${grantsReload}`, rows: data.grants });
+      } catch (e) {
+        if (!cancelled) setGrantsFailure({ key: `${filter}:${grantsReload}`, message: e instanceof Error ? e.message : 'Could not load grants' });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, grantsReload]);
 
   useEffect(() => {
-    void loadGrants(filter);
-  }, [filter, loadGrants]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchJson<Summary>(`/api/admin/entitlements/summary${summarySource ? `?source=${summarySource}` : ''}`);
+        if (!cancelled) setLoadedSummary({ key: `${summarySource}:${summaryReload}`, data });
+      } catch (e) {
+        if (!cancelled) setSummaryFailure({ key: `${summarySource}:${summaryReload}`, message: e instanceof Error ? e.message : 'Could not load the monthly summary' });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [summarySource, summaryReload]);
 
   async function search(q: string) {
     setSearching(true);
@@ -163,7 +222,8 @@ export function PremiumEntitlementsClient() {
       setConfirmRevoke(false);
       await selectUser(selected.user_id);
       setNotice(action === 'grant' ? 'Premium granted.' : action === 'extend' ? 'Grant extended.' : 'Grant revoked.');
-      void loadGrants(filter);
+      setGrantsReload((k) => k + 1);
+      setSummaryReload((k) => k + 1);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'The change was refused.');
     } finally {
@@ -173,7 +233,9 @@ export function PremiumEntitlementsClient() {
 
   const reasonOk = reason.trim().length >= REASON_MIN_LENGTH;
   const dateOk = endsOn >= today && endsOn <= maxEnd;
-  const isAdminGrant = selected?.entitlement_source === 'admin_grant';
+  // "Managed" = an admin grant OR a promo-code entitlement (both are time-limited and admin-extendable).
+  const isAdminGrant = !!selected && selected.entitlement_source !== 'payment';
+  const extensionsExhausted = isAdminGrant && !!selected && selected.extensions_remaining <= 0;
   const protectedPaid = !!selected && selected.entitlement_active && !isAdminGrant;
 
   return (
@@ -186,6 +248,72 @@ export function PremiumEntitlementsClient() {
           extension). Every change needs a reason and is recorded in an audit trail.
         </p>
       </div>
+
+      <section aria-labelledby="summary-heading" className="space-y-3">
+        <h2 id="summary-heading" className="text-lg font-medium text-ink">
+          This month{summary ? ` (${summary.month})` : ''}: expired and expiring
+        </h2>
+        <p className="text-xs text-muted">
+          Admin grants and promo-code entitlements whose last day falls in the current month (UTC). Revoked entitlements and paying customers are
+          not listed. On-screen only: there is no export of this list.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor="summary-source" className="text-xs font-medium text-muted">
+            Source
+          </label>
+          <select
+            id="summary-source"
+            value={summarySource}
+            onChange={(e) => setSummarySource(e.target.value as '' | 'admin_grant' | 'promo_code')}
+            className="rounded border px-2 py-1 text-sm"
+          >
+            <option value="">All sources</option>
+            <option value="admin_grant">Admin grant</option>
+            <option value="promo_code">Promo code</option>
+          </select>
+          {summary && (
+            <p className="text-sm text-ink">
+              <span className="font-medium">{summary.counts.expired_this_month}</span> expired this month ·{' '}
+              <span className="font-medium">{summary.counts.expiring_this_month}</span> expiring in the rest of this month
+            </p>
+          )}
+        </div>
+        {summaryError && <p role="alert" className="text-sm text-risk">{summaryError}</p>}
+        {summary === null && !summaryError && <p className="text-sm text-muted">Loading…</p>}
+        {summary !== null && summary.rows.length === 0 && <p className="text-sm text-muted">Nothing expired or expiring this month for this source.</p>}
+        {summary !== null && summary.rows.length > 0 && (
+          <div className="overflow-x-auto rounded-card border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+                <tr>
+                  <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Source</th>
+                  <th className="px-3 py-2">Last day</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Extensions left</th>
+                  <th className="px-3 py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.rows.map((r) => (
+                  <tr key={r.user_id} className="border-t">
+                    <td className="px-3 py-2">{r.email ?? '(account no longer exists)'}</td>
+                    <td className="px-3 py-2">{SOURCE_LABEL[r.entitlement_source]}</td>
+                    <td className="px-3 py-2">{fmt(r.effective_to)}</td>
+                    <td className="px-3 py-2">{r.bucket === 'expired_this_month' ? 'Expired' : `Expires in ${r.days_remaining} day(s)`}</td>
+                    <td className="px-3 py-2">{r.extensions_remaining}</td>
+                    <td className="px-3 py-2">
+                      <button type="button" onClick={() => void selectUser(r.user_id)} className="text-xs font-medium text-trust hover:underline">
+                        History / Extend
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section aria-labelledby="grants-heading" className="space-y-3">
         <h2 id="grants-heading" className="text-lg font-medium text-ink">
@@ -220,8 +348,10 @@ export function PremiumEntitlementsClient() {
               <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
                 <tr>
                   <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Source</th>
                   <th className="px-3 py-2">Ends</th>
                   <th className="px-3 py-2">Days left</th>
+                  <th className="px-3 py-2">Extensions left</th>
                   <th className="px-3 py-2">Action</th>
                 </tr>
               </thead>
@@ -229,8 +359,10 @@ export function PremiumEntitlementsClient() {
                 {grants.map((g) => (
                   <tr key={g.user_id} className="border-t">
                     <td className="px-3 py-2">{g.email ?? '(account no longer exists)'}</td>
+                    <td className="px-3 py-2">{SOURCE_LABEL[g.entitlement_source]}</td>
                     <td className="px-3 py-2">{fmt(g.effective_to)}</td>
                     <td className="px-3 py-2">{g.state === 'lapsed' ? 'Lapsed' : g.days_remaining}</td>
+                    <td className="px-3 py-2">{g.extensions_remaining}</td>
                     <td className="px-3 py-2">
                       <button type="button" onClick={() => void selectUser(g.user_id)} className="text-xs font-medium text-trust hover:underline">
                         Manage
@@ -348,6 +480,11 @@ export function PremiumEntitlementsClient() {
                   className="mt-1 w-full max-w-xl rounded border px-3 py-2 text-sm"
                 />
               </div>
+              {extensionsExhausted && (
+                <p className="text-sm text-risk">
+                  This grant has reached the extension limit. To give further access, Revoke it and then Grant again (both actions are audited).
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-3">
                 {!isAdminGrant && (
                   <button
@@ -363,7 +500,7 @@ export function PremiumEntitlementsClient() {
                   <>
                     <button
                       type="button"
-                      disabled={busy || !reasonOk || !dateOk}
+                      disabled={busy || !reasonOk || !dateOk || extensionsExhausted}
                       onClick={() => void submit('extend')}
                       className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                     >
