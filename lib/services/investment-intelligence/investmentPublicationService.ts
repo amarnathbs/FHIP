@@ -27,6 +27,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
 import { ensurePublishedValuesCurrent } from './publishedValueRemark';
+import { loadAccountOwnership } from './accountOwnership';
+import type { AccountOwnership } from './ownerModel';
 import { getFxRateAudInr } from '@/lib/services/dashboardData';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { fetchAllRows } from './pagination';
@@ -194,6 +196,8 @@ interface PositionContext {
   instrument: IiInstrumentRow;
   truth: PortfolioTruthRow | null;
   member: HouseholdMemberRow | null;
+  /** 2026-10-01: the account's EFFECTIVE owner (sole member / entity / joint split / unassigned). */
+  ownership: AccountOwnership;
   openLots: TaxLotRow[];
   hasBlockingReconciliation: boolean;
 }
@@ -226,9 +230,17 @@ async function loadPositionContext(supabase: SupabaseServerClient, userId: strin
   const instrument = instrumentRaw as unknown as IiInstrumentRow;
   const truth = (truthRaw as unknown as PortfolioTruthRow | null) ?? null;
 
+  // Effective ownership: an active entity / joint allocation group decides
+  // when present (owner_member_id is null for those, by design); otherwise the
+  // sole-member pointer. Anything unreadable falls back to the pointer alone,
+  // i.e. exactly the pre-2026-10-01 behaviour.
+  const loadedOwnership = await loadAccountOwnership(supabase, userId, account.id);
+  const ownership: AccountOwnership = loadedOwnership?.ownership ?? (account.owner_member_id ? { kind: 'member', shares: [{ memberId: account.owner_member_id, basisPoints: 10000 }], hasEntity: false } : { kind: 'unassigned' });
+  const soleMemberId = ownership.kind === 'member' ? (ownership.shares[0].memberId ?? null) : null;
+
   let member: HouseholdMemberRow | null = null;
-  if (account.owner_member_id) {
-    const { data } = await supabase.from('household_members').select('id, relationship, full_name').eq('id', account.owner_member_id).eq('user_id', userId).maybeSingle();
+  if (soleMemberId) {
+    const { data } = await supabase.from('household_members').select('id, relationship, full_name').eq('id', soleMemberId).eq('user_id', userId).maybeSingle();
     member = (data as unknown as HouseholdMemberRow | null) ?? null;
   }
 
@@ -258,8 +270,17 @@ async function loadPositionContext(supabase: SupabaseServerClient, userId: strin
     .eq('severity', 'blocking')
     .maybeSingle();
 
-  return { snapshot, account, instrument, truth, member, openLots: (openLotsRaw as unknown as TaxLotRow[]) ?? [], hasBlockingReconciliation: !!blockingCase };
+  return { snapshot, account, instrument, truth, member, ownership, openLots: (openLotsRaw as unknown as TaxLotRow[]) ?? [], hasBlockingReconciliation: !!blockingCase };
 }
+
+/** The owner ROLE a position is published under, from its effective ownership. A joint split between members only is published once as 'joint'; an entity-owned one is never published (eligibility blocks it first). */
+function resolvePublicationOwner(ctx: Pick<PositionContext, 'member' | 'ownership'>): FhipOwner | null {
+  if (ctx.member) return mapRelationshipToOwner(ctx.member.relationship);
+  if (ctx.ownership.kind === 'joint' && !ctx.ownership.hasEntity) return 'joint';
+  return null;
+}
+
+const eligibilityOwnership = (o: AccountOwnership) => ({ kind: o.kind, hasEntity: o.kind === 'unassigned' ? false : o.hasEntity });
 
 // ---------------------------------------------------------------------------
 // Eligibility (spec section 10) — read-only.
@@ -271,6 +292,7 @@ export async function checkEligibility(userId: string, positionId: string): Prom
 
   const eligibility = evaluateEligibility({
     ownerMemberId: ctx.member?.id ?? null,
+    ownership: eligibilityOwnership(ctx.ownership),
     instrumentClass: ctx.instrument.instrument_class as IiInstrumentClass,
     accountType: ctx.account.account_type,
     portfolioTruthStatus: ctx.truth?.status ?? 'pending',
@@ -297,6 +319,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
   const instrumentClass = instrument.instrument_class as IiInstrumentClass;
   const eligibility = evaluateEligibility({
     ownerMemberId: member?.id ?? null,
+    ownership: eligibilityOwnership(ctx.ownership),
     instrumentClass,
     accountType: account.account_type,
     portfolioTruthStatus: truth?.status ?? 'pending',
@@ -306,7 +329,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
     currencyCode: snapshot.currency_code,
   });
 
-  const resolvedOwner = member ? mapRelationshipToOwner(member.relationship) : null;
+  const resolvedOwner = resolvePublicationOwner(ctx);
   const masterItemKey = mapInstrumentClassToMasterItemKey(instrumentClass, account.country_code);
   const targetRegister = computePublicationTarget(instrumentClass, account.account_type);
 
@@ -437,6 +460,7 @@ export async function publishPosition(userId: string, positionId: string, option
   const instrumentClass = instrument.instrument_class as IiInstrumentClass;
   const eligibility = evaluateEligibility({
     ownerMemberId: member?.id ?? null,
+    ownership: eligibilityOwnership(ctx.ownership),
     instrumentClass,
     accountType: account.account_type,
     portfolioTruthStatus: truth?.status ?? 'pending',
@@ -474,7 +498,7 @@ export async function publishPosition(userId: string, positionId: string, option
   }
 
   // Duplicate review gate (spec section 11 — controlled flow, never silent).
-  const resolvedOwner = member ? mapRelationshipToOwner(member.relationship) : null;
+  const resolvedOwner = resolvePublicationOwner(ctx);
   const masterItemKey = mapInstrumentClassToMasterItemKey(instrumentClass, account.country_code);
   let duplicateCandidates: IiDuplicateCandidate[] = [];
   if (!options.linkToExistingInvestmentId && resolvedOwner) {

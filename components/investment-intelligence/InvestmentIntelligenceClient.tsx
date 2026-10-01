@@ -360,16 +360,22 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   async function handleAssignOwner(caseObj: ReconciliationCase) {
     const ownerMemberId = ownerSelections[caseObj.id];
     if (!ownerMemberId) return;
+    // 2026-10-01: the owner route now refuses any owner change that is not
+    // explicitly confirmed (`confirm: true`). This inline control only ever
+    // assigns a household member; trusts / HUFs / companies and joint splits are
+    // chosen on the Review and Resolutions tabs (OwnerChangeDialog).
+    const memberName = householdMembers.find((m) => m.id === ownerMemberId)?.full_name ?? 'this household member';
+    if (!window.confirm(`Assign this account to ${memberName}? Its holdings and transactions are not changed or recalculated - only who they are attributed to. You can amend this later from the Resolutions tab.`)) return;
     setError(null);
     setAssigningOwner(caseObj.id);
     try {
       const res = await fetch(`/api/investment-intelligence/accounts/${caseObj.subject_id}/owner`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerMemberId }),
+        body: JSON.stringify({ ownerMemberId, confirm: true }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not assign owner');
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not assign owner');
       if (selectedId) await loadSummary(selectedId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -961,7 +967,12 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                           {open && c.discrepancy_type === 'document_password_required' && (
                             <span className="text-xs text-gray-500">Enter the document password above and Reprocess — this clears automatically once it opens.</span>
                           )}
-                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'document_password_required' && (
+                          {open && c.discrepancy_type === 'joint_holding_allocation_required' && (
+                            <a href="/investment-intelligence/review" className="text-xs font-medium text-primary hover:underline">
+                              Split ownership on the Review tab
+                            </a>
+                          )}
+                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'joint_holding_allocation_required' && c.discrepancy_type !== 'document_password_required' && (
                             <button onClick={() => handleResolveCase(c.id)} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
                               Resolve
                             </button>

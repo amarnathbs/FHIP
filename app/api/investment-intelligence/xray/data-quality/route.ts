@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ownerClassField, resolveOwnerClassScope } from '@/lib/services/investment-intelligence/ownerClassScope';
 import { loadXrayDataset } from '@/lib/services/investment-intelligence/r5Repository';
 import { runXrayAnalytics, summariseXrayDataQuality } from '@/lib/engines/investment-intelligence/xray/xrayOrchestrator';
 import { HOLDINGS_FRESHNESS_DAYS, COVERAGE_THRESHOLDS, MIXED_DATE_SPREAD_DAYS, XRAY_THRESHOLD_CONFIG_VERSION } from '@/lib/config/investment-intelligence/xrayThresholds';
@@ -23,7 +24,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const rootClient = await createClient();
+    const scope = await resolveOwnerClassScope(request, rootClient, user.id);
+    if (!scope.ok) return scope.response;
+    const supabase = scope.client;
     const { dataset, warnings, empty } = await loadXrayDataset(supabase, user.id, { asOfDate: asOfRaw ?? undefined });
 
     const thresholds = {
@@ -36,6 +40,7 @@ export async function GET(request: Request) {
     if (empty || !dataset) {
       return ok({
         empty: true,
+        ownerClass: ownerClassField(scope),
         warnings,
         thresholds,
         message: 'No mutual-fund or ETF positions are available yet, so there is no X-Ray coverage to report.',
@@ -47,6 +52,7 @@ export async function GET(request: Request) {
 
     return ok({
       empty: false,
+      ownerClass: ownerClassField(scope),
       warnings,
       thresholds,
       dataQuality: summary,

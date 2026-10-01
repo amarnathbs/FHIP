@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ownerClassField, resolveOwnerClassScope } from '@/lib/services/investment-intelligence/ownerClassScope';
 import { loadXrayDataset } from '@/lib/services/investment-intelligence/r5Repository';
 import { runXrayAnalytics, runPairOverlap } from '@/lib/engines/investment-intelligence/xray/xrayOrchestrator';
 
@@ -32,11 +33,14 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const rootClient = await createClient();
+    const scope = await resolveOwnerClassScope(request, rootClient, user.id);
+    if (!scope.ok) return scope.response;
+    const supabase = scope.client;
     const { dataset, warnings, empty } = await loadXrayDataset(supabase, user.id, { asOfDate: asOfRaw ?? undefined });
 
     if (empty || !dataset) {
-      return ok({ empty: true, warnings, message: 'No mutual-fund or ETF positions are available yet, so fund overlap cannot be calculated.' });
+      return ok({ empty: true, ownerClass: ownerClassField(scope), warnings, message: 'No mutual-fund or ETF positions are available yet, so fund overlap cannot be calculated.' });
     }
 
     if (fundA && fundB) {

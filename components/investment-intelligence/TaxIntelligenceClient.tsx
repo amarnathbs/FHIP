@@ -2,6 +2,8 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import { fmtDate } from './dateDisplay';
+import { OwnerClassBar } from './OwnerClassBar';
+import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { formatMoneyCode } from '@/lib/engines/money';
 
 // R6-FINAL — India Tax & Cost Intelligence UX (spec Section 27).
@@ -107,6 +109,18 @@ const TAXPAYER_TYPES = [
 ];
 
 export function TaxIntelligenceClient() {
+  // 2026-10-01 owner classes: the default is the explicit consolidated (macro) view; picking a class re-mounts the
+  // content (key) so it fetches that class's own analysis. Nothing is added across classes.
+  const [ownerClass, setOwnerClass] = useState(ALL_OWNER_CLASSES);
+  return (
+    <div>
+      <OwnerClassBar value={ownerClass} onChange={setOwnerClass} />
+      <TaxIntelligenceClientInner key={ownerClass} ownerClass={ownerClass} />
+    </div>
+  );
+}
+
+function TaxIntelligenceClientInner({ ownerClass }: { ownerClass: string }) {
   const [summary, setSummary] = useState<TaxSummaryResponse | null>(null);
   const [lots, setLots] = useState<TaxLotView[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,11 +138,11 @@ export function TaxIntelligenceClient() {
   // convention: every state update here happens after an await).
   async function fetchTaxData(overrideTaxpayerType?: string) {
     const qs = overrideTaxpayerType ? `?taxpayerType=${encodeURIComponent(overrideTaxpayerType)}` : '';
-    const res = await fetch(`/api/investment-intelligence/tax/summary${qs}`);
+    const res = await fetch(withOwnerClass(`/api/investment-intelligence/tax/summary${qs}`, ownerClass));
     const body = await res.json();
     if (!res.ok) throw new Error(body?.error ?? 'Request failed');
     setSummary(body.data as TaxSummaryResponse);
-    const lotsRes = await fetch('/api/investment-intelligence/tax/lots');
+    const lotsRes = await fetch(withOwnerClass('/api/investment-intelligence/tax/lots', ownerClass));
     const lotsBody = await lotsRes.json();
     if (lotsRes.ok) setLots((lotsBody.data?.lots as TaxLotView[]) ?? []);
   }
@@ -150,12 +164,12 @@ export function TaxIntelligenceClient() {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/investment-intelligence/tax/summary');
+        const res = await fetch(withOwnerClass('/api/investment-intelligence/tax/summary', ownerClass));
         const body = await res.json();
         if (cancelled) return;
         if (!res.ok) throw new Error(body?.error ?? 'Request failed');
         setSummary(body.data as TaxSummaryResponse);
-        const lotsRes = await fetch('/api/investment-intelligence/tax/lots');
+        const lotsRes = await fetch(withOwnerClass('/api/investment-intelligence/tax/lots', ownerClass));
         const lotsBody = await lotsRes.json();
         if (!cancelled && lotsRes.ok) setLots((lotsBody.data?.lots as TaxLotView[]) ?? []);
       } catch (e) {
@@ -167,7 +181,7 @@ export function TaxIntelligenceClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerClass]);
 
   async function runSimulation() {
     setSimLoading(true);

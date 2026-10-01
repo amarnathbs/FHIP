@@ -8,6 +8,8 @@ import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { plansForBillingCountry } from '@/lib/services/paymentPlanCatalogue';
 import { isKnownCountry } from '@/lib/services/jurisdiction';
+import { utcToday } from '@/lib/services/entitlementWindow';
+import { describePlanStatus } from '@/lib/services/entitlementPlanStatus';
 
 export async function GET() {
   const { user, unauthenticated } = await requireUser();
@@ -19,12 +21,26 @@ export async function GET() {
     supabase.from('user_profiles').select('billing_country, billing_country_confirmed_at').eq('user_id', user.id).maybeSingle(),
     supabase
       .from('user_entitlements')
-      .select('plan_tier, provider, subscription_status, price_id, current_period_end, cancel_at_period_end')
+      .select('plan_tier, effective_from, effective_to, provider, subscription_status, price_id, current_period_end, cancel_at_period_end')
       .eq('user_id', user.id)
       .maybeSingle(),
   ]);
   if (profileError) return bad(profileError.message);
   if (entitlementError) return bad(entitlementError.message);
+
+  // Admin Premium grant (migration 0231): source columns. Read separately and
+  // tolerantly so this endpoint keeps working if it is deployed before the
+  // migration is applied (the columns do not exist yet -> grant fields absent,
+  // everything else unchanged). Never an error for the user.
+  const { data: sourceRow } = await supabase
+    .from('user_entitlements')
+    .select('entitlement_source, admin_grant_ends_on')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const plan = describePlanStatus(
+    entitlement ? { ...entitlement, entitlement_source: sourceRow?.entitlement_source ?? null, admin_grant_ends_on: sourceRow?.admin_grant_ends_on ?? null } : null,
+    utcToday()
+  );
 
   const billingCountry = profile?.billing_country ?? null;
   const billingConfirmed = Boolean(profile?.billing_country_confirmed_at);
@@ -33,7 +49,13 @@ export async function GET() {
   return ok({
     billingCountry,
     billingConfirmed,
-    planTier: entitlement?.plan_tier ?? 'free',
+    // Window-aware: an expired time-limited entitlement reads as 'free' here,
+    // matching what the gates themselves enforce.
+    planTier: plan.planTier,
+    planLabel: plan.label,
+    entitlementSource: plan.kind === 'premium_admin_grant' || plan.kind === 'admin_grant_lapsed' ? 'admin_grant' : entitlement ? 'payment' : null,
+    adminGrantEndsOn: plan.kind === 'premium_admin_grant' || plan.kind === 'admin_grant_lapsed' ? plan.grantEndsOn : null,
+    adminGrantLapsed: plan.kind === 'admin_grant_lapsed',
     provider: entitlement?.provider ?? null,
     subscriptionStatus: entitlement?.subscription_status ?? null,
     priceId: entitlement?.price_id ?? null,

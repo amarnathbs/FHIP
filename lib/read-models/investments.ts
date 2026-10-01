@@ -11,6 +11,12 @@
  *    added to the published total (no double count once it is published, and
  *    no silent inclusion before the user confirms -- D-05).
  *
+ * ENTITY SEPARATION (PO ruling 2026-09-21, wired 2026-10-01): an account whose
+ * active ownership allocation includes a business-entity share (Family Trust /
+ * HUF / Company) is NOT personal Net Worth and is never offered to it, so its
+ * snapshots are excluded from the "Imported, not yet in Net Worth" bucket too
+ * (only counted in `entityHeldExcludedCount`, never added to any total).
+ *
  * A position is "published" when an active investments row carries its
  * (ii_canonical_account_id, ii_canonical_instrument_id), or an
  * ii_fhip_publications row with status 'published' names one of its
@@ -19,6 +25,7 @@
 import '@/lib/serverOnly';
 import { loadFxContext, toReporting, type FxContext, type ReportingCurrency } from './core/currency';
 import { fetchAllRows, type ReadModelClient } from './core/paginate';
+import { attributeByBasisPoints } from '@/lib/services/investment-intelligence/ownerAttribution';
 import { addUnconverted, emptyUnconverted, isHouseholdOwner, provenance, ReadModelUnavailableError, roundMoney, toUnavailable, type MoneyValue, type Provenance, type ReadModelResult, type UnconvertedTally } from './core/types';
 import { describeStoredValuation, summarisePublishedValuations, type PublishedValuationSummary, type StoredValuationTag } from '@/lib/engines/investment-intelligence/valuation/publishedRowRemark';
 
@@ -79,6 +86,15 @@ export interface InvestmentLineValuation {
   ageDays: number | null;
 }
 
+/** One owner's share of a position published ONCE for a joint split (2026-10-01). Amounts add back to the line's value exactly. */
+export interface InvestmentOwnerShare {
+  ownerMemberId: string;
+  basisPoints: number;
+  amountNative: number;
+  /** null when the line's currency is not convertible (same rule as the line itself). */
+  amountReporting: number | null;
+}
+
 export interface InvestmentLine {
   id: string;
   name: string;
@@ -94,6 +110,13 @@ export interface InvestmentLine {
   provenance: Provenance;
   /** Present only for a published mutual-fund line that the NAV re-mark has evaluated. */
   valuation?: InvestmentLineValuation;
+  /**
+   * Present only for a position published from an account jointly owned by
+   * household members: the SAME single value divided by the ownership split
+   * (1,000,000 at 60/40 -> 600,000 / 400,000). Never an extra contribution: the
+   * line is still counted once in `publishedTotal` / `householdPublishedTotal`.
+   */
+  ownerShares?: InvestmentOwnerShare[];
 }
 
 export interface UnpublishedHolding {
@@ -110,6 +133,8 @@ export const UNPUBLISHED_BUCKET_LABEL = 'Imported, not yet in Net Worth';
 export interface InvestmentsReadModelData {
   /** Published mutual funds: how many are at the latest NAV, at a statement value, redeemed or stale, and the as-of range. */
   valuationSummary: PublishedValuationSummary;
+  /** Positions left out of the personal "not yet in Net Worth" bucket because an entity owns (a share of) their account. Never added to a total. */
+  entityHeldExcludedCount: number;
   reportingCurrency: ReportingCurrency;
   lines: InvestmentLine[];
   /** All owners -- the Net Worth figure. */
@@ -136,6 +161,10 @@ export function computeInvestments(input: {
   investments: readonly InvestmentRow[];
   snapshots: readonly HoldingSnapshotRow[];
   publications: readonly PublicationRow[];
+  /** Accounts with an active entity ownership share. Optional: absent = none (the pre-2026-10-01 behaviour). */
+  entityOwnedAccountIds?: ReadonlySet<string>;
+  /** Accounts jointly owned by household members only: active split per account (shares total 10000). Optional. */
+  jointSharesByAccount?: ReadonlyMap<string, readonly { ownerMemberId: string; basisPoints: number }[]>;
   fx: FxContext;
   /** ISO date used to decide staleness; defaults to today (UTC). Injectable for tests. */
   today?: string;
@@ -151,6 +180,12 @@ export function computeInvestments(input: {
     const valuation: InvestmentLineValuation | null = stored && described
       ? { basis: stored.basis as InvestmentLineValuation['basis'], asOf: stored.asOf, units: stored.units, nav: stored.nav, tag: described.tag, label: described.label, stale: described.stale, ageDays: described.ageDays }
       : null;
+    const jointShares = row.ii_canonical_account_id ? input.jointSharesByAccount?.get(row.ii_canonical_account_id) : undefined;
+    const nativeSplit = jointShares ? attributeByBasisPoints(Number(row.current_value), jointShares.map((s) => ({ key: s.ownerMemberId, basisPoints: s.basisPoints }))) : null;
+    const reportingSplit = jointShares && amountReporting !== null ? attributeByBasisPoints(amountReporting, jointShares.map((s) => ({ key: s.ownerMemberId, basisPoints: s.basisPoints }))) : null;
+    const ownerShares: InvestmentOwnerShare[] | undefined = nativeSplit
+      ? nativeSplit.map((s, i) => ({ ownerMemberId: s.key, basisPoints: s.basisPoints, amountNative: s.amount, amountReporting: reportingSplit ? reportingSplit[i].amount : null }))
+      : undefined;
     return {
       id: row.id, name: row.investment_name, investmentType: row.investment_type, masterItemKey: row.master_item_key,
       owner: row.owner, household: isHouseholdOwner(row.owner),
@@ -159,6 +194,7 @@ export function computeInvestments(input: {
       annualContribution: row.annual_contribution == null ? null : Number(row.annual_contribution),
       provenance: row.source_type === 'investment_intelligence_published' ? provenance('investment_intelligence') : provenance('manual'),
       ...(valuation ? { valuation } : {}),
+      ...(ownerShares ? { ownerShares } : {}),
     };
   });
   const valuationSummary = summarisePublishedValuations(
@@ -185,8 +221,13 @@ export function computeInvestments(input: {
     if (!cur || s.as_of_date > cur.as_of_date || (s.as_of_date === cur.as_of_date && (s.created_at ?? '') > (cur.created_at ?? ''))) latest.set(k, s);
   }
   const holdings: UnpublishedHolding[] = [];
+  let entityHeldExcludedCount = 0;
   for (const [k, s] of latest) {
     if (published.has(k) || Number(s.units) <= 0) continue;
+    if (input.entityOwnedAccountIds?.has(s.account_id)) {
+      entityHeldExcludedCount += 1;
+      continue;
+    }
     const amountReporting = toReporting(Number(s.value), s.currency_code, fx);
     if (amountReporting === null) addUnconverted(unconverted, s.currency_code, Number(s.value));
     holdings.push({ accountId: s.account_id, instrumentId: s.instrument_id, snapshotId: s.id, asOfDate: s.as_of_date, units: Number(s.units), value: { amountNative: Number(s.value), currency: s.currency_code, amountReporting } });
@@ -195,6 +236,7 @@ export function computeInvestments(input: {
   const sum = (vals: (number | null)[]) => r(vals.reduce<number>((s, v) => s + (v ?? 0), 0));
   return {
     valuationSummary,
+    entityHeldExcludedCount,
     reportingCurrency: fx.reportingCurrency,
     lines,
     publishedTotal: sum(lines.map((l) => l.value.amountReporting)),
@@ -246,7 +288,42 @@ export async function loadInvestmentInputs(userId: string, client: ReadModelClie
       .eq('user_id', userId)
       .order('canonical_position_id', { ascending: true })
       .range(from, to));
-  return { investments, snapshots, publications };
+  // Accounts owned (even partly) by a business entity: kept out of the personal
+  // "imported, not yet in Net Worth" bucket. Account-grain active rows only.
+  //
+  // DELIBERATELY NOT FAIL-CLOSED, unlike every other read here: this feeds only
+  // the INFORMATIONAL unpublished bucket (never publishedTotal / any total), and
+  // an entity owner can only exist if `ii_ownership_allocation` (migration 0153)
+  // does -- so "table unreadable" correctly degrades to "no entity-owned
+  // accounts" (the exact pre-2026-10-01 behaviour) rather than taking the whole
+  // Investments read model, and every Net Worth figure built on it, offline.
+  type AllocRow = { ii_account_id: string; owner_member_id: string | null; owner_business_entity_id: string | null; allocation_basis_points: number; ii_instrument_id: string | null };
+  let allocRows: AllocRow[] = [];
+  try {
+    allocRows = await fetchAllRows<AllocRow>('ii_ownership_allocation', (from, to) =>
+      client
+        .from('ii_ownership_allocation')
+        .select('id, ii_account_id, owner_member_id, owner_business_entity_id, allocation_basis_points, ii_instrument_id')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('id', { ascending: true })
+        .range(from, to));
+  } catch {
+    allocRows = [];
+  }
+  const accountGrain = allocRows.filter((r) => (r.ii_instrument_id ?? null) === null);
+  const entityOwnedAccountIds = new Set(accountGrain.filter((r) => r.owner_business_entity_id).map((r) => r.ii_account_id));
+  // Joint splits between household members only, and only when the group is a complete 100%
+  // (a malformed split is never used to divide a value).
+  const byAccount = new Map<string, AllocRow[]>();
+  for (const r of accountGrain) byAccount.set(r.ii_account_id, [...(byAccount.get(r.ii_account_id) ?? []), r]);
+  const jointSharesByAccount = new Map<string, { ownerMemberId: string; basisPoints: number }[]>();
+  for (const [accountId, group] of byAccount) {
+    if (group.length < 2 || group.some((r) => !r.owner_member_id || r.owner_business_entity_id)) continue;
+    if (group.reduce((s, r) => s + r.allocation_basis_points, 0) !== 10000) continue;
+    jointSharesByAccount.set(accountId, group.map((r) => ({ ownerMemberId: r.owner_member_id as string, basisPoints: r.allocation_basis_points })));
+  }
+  return { investments, snapshots, publications, entityOwnedAccountIds, jointSharesByAccount };
 }
 
 /** THE Investments selector. Any failed read -> { status: 'unavailable' }. */

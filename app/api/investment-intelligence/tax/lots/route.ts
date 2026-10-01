@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ownerClassField, resolveOwnerClassScope } from '@/lib/services/investment-intelligence/ownerClassScope';
 import { loadTaxDataset } from '@/lib/services/investment-intelligence/taxRepository';
 import { runTaxSimulation } from '@/lib/engines/investment-intelligence/tax/taxOrchestrator';
 
@@ -23,10 +24,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const rootClient = await createClient();
+    const scope = await resolveOwnerClassScope(request, rootClient, user.id);
+    if (!scope.ok) return scope.response;
+    const supabase = scope.client;
     const { dataset, warnings, empty } = await loadTaxDataset(supabase, user.id, { asOfDate: asOfRaw ?? undefined });
     if (empty || !dataset) {
-      return ok({ empty: true, warnings, lots: [] });
+      return ok({ empty: true, ownerClass: ownerClassField(scope), warnings, lots: [] });
     }
 
     const acquisitions = [...dataset.acquisitionsByInstrument.values()].flat();

@@ -1,0 +1,264 @@
+[
+ {
+  "mutation": "M01 cross-tenant member accepted",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- confirmation and tenant isolation NEGATIVE CONTROL [cross-tenant owner ids]: user B's member and entity ids are rejected, nothing written, no audit",
+   "POST resolutions/[caseId]/amend -- immutability and history NEGATIVE CONTROL [amend validation is the same function]: cross-tenant owner, HUF for an AU user and a bad total are all refused with no new row",
+   "validateOwnerSelection -- single owners NEGATIVE CONTROL [cross-tenant member]: a member id that is not in THIS user's rows is \"not found\", with no existence leak",
+   "validateOwnerSelection -- joint splits NEGATIVE CONTROL [cross-tenant inside a joint]: one foreign id fails the WHOLE split as not-found, before the maths"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M02 inactive member accepted",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- confirmation and tenant isolation NEGATIVE CONTROL [inactive member]: refused with 422, nothing written",
+   "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [audit]: an accepted change writes an audit row with before/after (ids + basis points only); a rejected one writes none",
+   "validateOwnerSelection -- single owners NEGATIVE CONTROL [inactive member]: an inactive member is refused, not silently resurrected",
+   "validateOwnerSelection -- joint splits NEGATIVE CONTROL [inactive inside a joint]: an inactive member fails the whole split"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M03 HUF country gate removed",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- entity owners NEGATIVE CONTROL [HUF India-only]: an HUF owner is refused for an AU user (403) and ACCEPTED for an India user",
+   "POST resolutions/[caseId]/amend -- immutability and history NEGATIVE CONTROL [amend validation is the same function]: cross-tenant owner, HUF for an AU user and a bad total are all refused with no new row",
+   "validateOwnerSelection -- single owners NEGATIVE CONTROL [HUF is India-only]: an HUF owner is refused for an AU user, a generic-country user and an unresolved country",
+   "validateOwnerSelection -- single owners the HUF gate also applies INSIDE a joint split"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M04 foreign / absent entity accepted (company-only-if-owned, cross-tenant entity)",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- confirmation and tenant isolation NEGATIVE CONTROL [cross-tenant owner ids]: user B's member and entity ids are rejected, nothing written, no audit",
+   "PATCH accounts/[id]/owner -- entity owners NEGATIVE CONTROL [company only if the user has one]: refused when the user has no company, accepted when they do",
+   "validateOwnerSelection -- single owners NEGATIVE CONTROL [cross-tenant entity]: an entity id that is not in this user's rows is \"not found\"",
+   "validateOwnerSelection -- single owners NEGATIVE CONTROL [company only if the user has one]: assigning to a company when the user has none is refused"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M05 joint allocation maths skipped (total / duplicate / zero)",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "validateOwnerSelection -- joint splits NEGATIVE CONTROL [total must be exactly 10000]: 9999 and 10001 are refused, never scaled",
+   "validateOwnerSelection -- joint splits NEGATIVE CONTROL [no duplicate owner]: the same member twice is refused",
+   "validateOwnerSelection -- joint splits NEGATIVE CONTROL [no zero share]: a 0% owner is refused rather than dropped",
+   "validateOwnerSelection -- joint splits NEGATIVE CONTROL [fractional basis points]: a share with more than two decimal places in percent is refused"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M06 PATCH does not require confirm",
+  "file": "app/api/investment-intelligence/accounts/[id]/owner/route.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- confirmation and tenant isolation NEGATIVE CONTROL [explicit confirm]: a request without confirm:true is refused and writes NOTHING",
+   "PATCH accounts/[id]/owner -- confirmation and tenant isolation the legacy { ownerMemberId } body still works, but only with confirm:true"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M07 amend does not require confirm",
+  "file": "app/api/investment-intelligence/resolutions/[caseId]/amend/route.ts",
+  "failed": [
+   "POST resolutions/[caseId]/amend -- immutability and history NEGATIVE CONTROL [amend needs confirm]: without confirm:true nothing is written"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M08 replay not idempotent (always writes a new allocation group)",
+  "file": "lib/services/investment-intelligence/accountOwnership.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [replay idempotency]: the same joint change sent twice yields ONE allocation set and ONE audit row",
+   "PATCH accounts/[id]/owner -- idempotency and audit replaying an entity change is idempotent too"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M09 apply rewrites already-resolved cases (immutability broken)",
+  "file": "lib/services/investment-intelligence/accountOwnership.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- \"this is not a joint holding\" (PO decision 2026-10-01) replay is idempotent: the second identical request changes nothing and adds no audit row",
+   "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [replay idempotency]: the same joint change sent twice yields ONE allocation set and ONE audit row",
+   "POST resolutions/[caseId]/amend -- immutability and history NEGATIVE CONTROL [immutability]: amending inserts a NEW resolved row; the original row is byte-for-byte unchanged",
+   "POST resolutions/[caseId]/amend -- immutability and history a resolved joint case can be amended to a SOLE owner only with confirm_not_joint (recorded on the new row); then amended back to a split",
+   "POST resolutions/[caseId]/amend -- immutability and history the Resolutions history shows entity and joint decisions with labels and shares, never raw ids, and marks the superseded one"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M10 PATCH lets a sole owner resolve a joint-holding case",
+  "file": "app/api/investment-intelligence/accounts/[id]/owner/route.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- joint splits NEGATIVE CONTROL [joint case needs a joint owner]: with case_id, a sole-owner choice is refused and the case stays OPEN",
+   "PATCH accounts/[id]/owner -- \"this is not a joint holding\" (PO decision 2026-10-01) NEGATIVE CONTROL [needs the second confirmation]: confirm:true alone, or confirm_not_joint:false, leaves the joint case OPEN and writes nothing"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M11 amend lets a joint case be amended to a sole owner",
+  "file": "app/api/investment-intelligence/resolutions/[caseId]/amend/route.ts",
+  "failed": [
+   "POST resolutions/[caseId]/amend -- immutability and history a resolved JOINT case can be amended to another joint split, but not to a sole owner",
+   "POST resolutions/[caseId]/amend -- immutability and history a resolved joint case can be amended to a SOLE owner only with confirm_not_joint (recorded on the new row); then amended back to a split"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M12 accepted change writes NO audit row",
+  "file": "lib/services/investment-intelligence/accountOwnership.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- entity owners assigns a Family Trust: one 100% allocation row, owner_member_id stays null, open owner case resolved, one audit row",
+   "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [replay idempotency]: the same joint change sent twice yields ONE allocation set and ONE audit row",
+   "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [audit]: an accepted change writes an audit row with before/after (ids + basis points only); a rejected one writes none"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M13 audit written even for a no-op replay",
+  "file": "lib/services/investment-intelligence/accountOwnership.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [replay idempotency]: the same joint change sent twice yields ONE allocation set and ONE audit row"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M14 audit metadata leaks a name",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [no PII in audit]: no audit row or case detail contains a person's name, the folio, or the masked holder text",
+   "effective ownership + idempotency key audit shape carries ids and basis points ONLY -- no names, no folio, no PAN"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M15 account tenant scope removed from loadAccountOwnership",
+  "file": "lib/services/investment-intelligence/accountOwnership.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- confirmation and tenant isolation NEGATIVE CONTROL [account tenant isolation]: another user's account is 404 and nothing is written",
+   "GET accounts/[id]/owner -- dialog data NEGATIVE CONTROL [cross-user isolation]: another user's account is 404, and user B sees only B's options",
+   "effective-ownership loaders NEGATIVE CONTROL [tenant scope]: another user's account is not loadable, and their allocations are not seen"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M16 published-account entity guard removed",
+  "file": "lib/services/investment-intelligence/accountOwnership.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- entity owners NEGATIVE CONTROL [entity separation]: an account already published to personal Net Worth cannot be moved under an entity (409), nothing written",
+   "POST resolutions/[caseId]/amend -- immutability and history an amend refused by the published-account rule leaves NO amendment row behind"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M17 entity-owned holdings offered to personal Net Worth (read model)",
+  "file": "lib/read-models/investments.ts",
+  "failed": [
+   "Investments read model: entity separation (PO ruling 2026-09-21) an entity-owned account's holdings are NOT offered to personal Net Worth; a personal account's still are; no total includes them",
+   "Investments read model: entity separation (PO ruling 2026-09-21) a joint split that includes an entity share is excluded too; a members-only joint split and a SUPERSEDED entity row are not"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M18 entity-owned account publishable (eligibility)",
+  "file": "lib/services/investment-intelligence/publicationLogic.ts",
+  "failed": [
+   "entity separation in publication eligibility (PO ruling 2026-09-21) NEGATIVE CONTROL [entity-owned never publishes]: an entity-owned account is NOT_ELIGIBLE with OWNER_IS_BUSINESS_ENTITY, even though it is otherwise perfect",
+   "entity separation in publication eligibility (PO ruling 2026-09-21) a joint split that includes an entity share is also blocked"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M19 AU ownerRecorded reads only the pointer",
+  "file": "lib/investment-import-bridge/auAccountResolution.ts",
+  "failed": [
+   "AU import-bridge readers (they used to test !owner_member_id) describeAuAccounts: an entity-owned account reports ownerRecorded=true; NEGATIVE CONTROL: an untouched account stays false"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M20 HUF offered to a non-India user in the picker",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "GET accounts/[id]/owner -- dialog data returns the caller's own current owner and options only; an AU user is not offered the HUF",
+   "owner options offered to the user self first, then members, then entities; HUF is NOT offered to a non-India user; inactive are not offered"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M21 UI: >2 decimals accepted as a percentage",
+  "file": "components/investment-intelligence/ownerChange.ts",
+  "failed": [
+   "parsePercentToBasisPoints \".5\" -> 50",
+   "parsePercentToBasisPoints NEGATIVE CONTROL: \"33.333\" is rejected (null)"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M22 UI: joint total not checked",
+  "file": "components/investment-intelligence/ownerChange.ts",
+  "failed": [
+   "evaluateJointDraft NEGATIVE CONTROL [total]: 60 + 30 is invalid and the message says how much is left",
+   "evaluateJointDraft NEGATIVE CONTROL [over 100%] is invalid",
+   "selectionFromChoice / nextOwnershipView NEGATIVE CONTROL: no choice, and an invalid joint, produce no selection (so \"Review change\" stays disabled)",
+   "OwnerChangeDialog markup (react-dom/server) joint editor: rows, percentage inputs, the running total and \"Split equally\""
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M23 UI: confirm enabled for a published -> entity move",
+  "file": "components/investment-intelligence/OwnerChangeDialog.tsx",
+  "failed": [
+   "OwnerChangeDialog markup (react-dom/server) confirm step for an already-published account moving under an entity: the confirm button is DISABLED and the reason is shown"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M24 effective ownership ignores the allocation (pointer only)",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- idempotency and audit NEGATIVE CONTROL [replay idempotency]: the same joint change sent twice yields ONE allocation set and ONE audit row",
+   "PATCH accounts/[id]/owner -- idempotency and audit replaying an entity change is idempotent too",
+   "GET accounts/[id]/owner -- dialog data shows an entity / joint current owner with readable labels and shares",
+   "POST resolutions/[caseId]/amend -- immutability and history the Resolutions history shows entity and joint decisions with labels and shares, never raw ids, and marks the superseded one",
+   "effective ownership + idempotency key an active allocation is authoritative over the pointer: one entity row = entity, two rows = joint",
+   "effective ownership + idempotency key ownershipKey is order-independent and distinguishes different shares (drives replay idempotency)",
+   "effective ownership + idempotency key audit shape carries ids and basis points ONLY -- no names, no folio, no PAN",
+   "effective ownership + idempotency key describeOwnership resolves readable labels from the user's own rows",
+   "effective-ownership loaders NEGATIVE CONTROL [null is not \"unresolved\"]: an entity-owned account has a null pointer but is DECIDED; an untouched null account is unassigned"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M25 member choice leaves the pointer unset",
+  "file": "lib/services/investment-intelligence/accountOwnership.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- confirmation and tenant isolation the legacy { ownerMemberId } body still works, but only with confirm:true",
+   "PATCH accounts/[id]/owner -- entity owners moving from an entity back to a member supersedes the entity allocation (kept as history) and restores the member pointer",
+   "POST resolutions/[caseId]/amend -- immutability and history NEGATIVE CONTROL [immutability]: amending inserts a NEW resolved row; the original row is byte-for-byte unchanged"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M26 upload pipeline re-opens owner cases on decided accounts",
+  "file": "lib/services/investment-intelligence/documentProcessing.ts",
+  "failed": [
+   "documentProcessing / certification readers (structural: the pipeline needs a real statement to run) the upload pipeline skips owner exceptions on an account whose owner is already decided as entity / joint, and does not count it as an unresolved owner"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M27 generic Resolve closes a joint-holding case with no owner decision",
+  "file": "app/api/investment-intelligence/reconciliation-cases/[id]/resolve/route.ts",
+  "failed": [
+   "POST reconciliation-cases/[id]/resolve (the generic \"mark resolved\" route) NEGATIVE CONTROL [no bypass]: a joint-holding case cannot be closed without an owner decision; it stays open and nothing is written"
+  ],
+  "error": null
+ }
+]

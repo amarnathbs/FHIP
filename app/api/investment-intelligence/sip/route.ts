@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ownerClassField, resolveOwnerClassScope } from '@/lib/services/investment-intelligence/ownerClassScope';
 import { loadSipDataset, attachAttributableInflows, persistR5Results } from '@/lib/services/investment-intelligence/r5Repository';
 import { runSipAnalytics } from '@/lib/engines/investment-intelligence/sip/sipOrchestrator';
 import { SIP_ENGINE_VERSION } from '@/lib/engines/investment-intelligence/r5Versioning';
@@ -33,12 +34,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const rootClient = await createClient();
+    const scope = await resolveOwnerClassScope(request, rootClient, user.id);
+    if (!scope.ok) return scope.response;
+    const supabase = scope.client;
     const { dataset, warnings, empty } = await loadSipDataset(supabase, user.id, { asOfDate: asOfRaw ?? undefined });
 
     if (empty || !dataset) {
       return ok({
         empty: true,
+        ownerClass: ownerClassField(scope),
         warnings,
         message: 'No investment transactions are available yet, so recurring-contribution analysis cannot be produced.',
       });
@@ -51,7 +56,7 @@ export async function GET(request: Request) {
 
     // Persist derived results (service-role; never from a request body).
     // A persistence failure never blocks a correct answer.
-    const persistence = await persistR5Results(
+    const persistence = scope.active ? { persisted: 0, error: null as string | null } : await persistR5Results(
       user.id,
       result.analytics.flatMap((a) => [
         {
@@ -83,6 +88,7 @@ export async function GET(request: Request) {
 
     return ok({
       empty: false,
+      ownerClass: ownerClassField(scope),
       warnings: persistence.error ? [...warnings, { scope: 'persistence', detail: `Results could not be stored (${persistence.error}); the figures shown were recomputed from certified inputs.` }] : warnings,
       asOfDate: result.asOfDate,
       engineVersion: result.engineVersion,
