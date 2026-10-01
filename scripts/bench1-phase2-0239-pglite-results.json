@@ -1,0 +1,1161 @@
+{
+  "migration": "0239_bench1_phase2_benchmark_data_governance.sql",
+  "generatedBy": "scripts/bench1_phase2_0239_pglite_verification.mjs",
+  "note": "PGlite verification only; 0239 is NOT applied to DEV or production. All data is synthetic fixture data inside an in-memory database.",
+  "pass": 192,
+  "fail": 0,
+  "results": [
+    {
+      "id": "B1P2-PG-001",
+      "verdict": "PASS",
+      "label": "0239 re-applies cleanly (idempotent)",
+      "detail": "second application was a no-op"
+    },
+    {
+      "id": "B1P2-PG-002",
+      "verdict": "PASS",
+      "label": "four NEW capability columns exist and default FALSE",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-003",
+      "verdict": "PASS",
+      "label": "the migration granted NO capability to anyone (no \"all admins\" auto-grant)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-004",
+      "verdict": "PASS",
+      "label": "global and write kill switches ship DISABLED",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-005",
+      "verdict": "PASS",
+      "label": "0239 registers NO pg_cron schedule",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-006",
+      "verdict": "PASS",
+      "label": "no licence_status value was invented (constraint text still the 0155 four)",
+      "detail": "CHECK ((licence_status = ANY (ARRAY['public_open'::text, 'licence_required'::text, 'licensed_held'::text, 'unknown'::text])))"
+    },
+    {
+      "id": "B1P2-PG-007",
+      "verdict": "PASS",
+      "label": "EXECUTE grants: publish for authenticated not anon; lease + feed service_role only; 0232 single-step upload RPC REVOKED from authenticated",
+      "detail": "{\"a\":false,\"b\":true,\"c\":false,\"d\":true,\"e\":false,\"f\":false}"
+    },
+    {
+      "id": "B1P2-PG-008",
+      "verdict": "PASS",
+      "label": "REFUSED: a plain user creating a catalogue entry",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-009",
+      "verdict": "PASS",
+      "label": "REFUSED: an admin WITHOUT the catalogue capability",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-010",
+      "verdict": "PASS",
+      "label": "REFUSED: a view-only (PC6) admin cannot write the catalogue",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-011",
+      "verdict": "PASS",
+      "label": "catalogue admin creates draft TEST_A_TRI",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-012",
+      "verdict": "PASS",
+      "label": "catalogue admin creates draft TEST_B_TRI",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-013",
+      "verdict": "PASS",
+      "label": "REFUSED: variant inconsistent with return_type (PRI + total_return) by CHECK",
+      "detail": "SQLSTATE 23514"
+    },
+    {
+      "id": "B1P2-PG-014",
+      "verdict": "PASS",
+      "label": "REFUSED: verified status without verifier/evidence (CHECK, even for the owner role)",
+      "detail": "SQLSTATE 23514"
+    },
+    {
+      "id": "B1P2-PG-015",
+      "verdict": "PASS",
+      "label": "REFUSED: verification without a note of >= 10 chars",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-016",
+      "verdict": "PASS",
+      "label": "catalogue admin verifies TEST_A_TRI",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-017",
+      "verdict": "PASS",
+      "label": "catalogue admin verifies TEST_B_TRI",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-018",
+      "verdict": "PASS",
+      "label": "catalogue admin verifies TEST_P_PRI",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-019",
+      "verdict": "PASS",
+      "label": "REFUSED: the variant of a VERIFIED benchmark is immutable (55000); the row is unchanged (identity is never loosely re-matched)",
+      "detail": "SQLSTATE 55000 {\"return_variant\":\"total_return\",\"catalogue_status\":\"verified\"}"
+    },
+    {
+      "id": "B1P2-PG-020",
+      "verdict": "PASS",
+      "label": "editing a verified entry drops it back to DRAFT (verification cleared) until re-verified",
+      "detail": "{\"catalogue_status\":\"draft\",\"verified_by\":null}"
+    },
+    {
+      "id": "B1P2-PG-021",
+      "verdict": "PASS",
+      "label": "re-verification works",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-022",
+      "verdict": "PASS",
+      "label": "direct UPDATE of ii_benchmarks by the catalogue admin changes nothing (no write policy; RPC is the only path)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-023",
+      "verdict": "PASS",
+      "label": "no entitlement row => EVERY right is false (fail closed)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-024",
+      "verdict": "PASS",
+      "label": "REFUSED: a plain user proposing an entitlement",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-025",
+      "verdict": "PASS",
+      "label": "REFUSED: an approver WITHOUT the catalogue capability proposing (capabilities are separate)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-026",
+      "verdict": "PASS",
+      "label": "REFUSED: proposal whose variant differs from the catalogue row",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-027",
+      "verdict": "PASS",
+      "label": "REFUSED: calculation right without the storage right (rights coherence CHECK)",
+      "detail": "SQLSTATE 23514"
+    },
+    {
+      "id": "B1P2-PG-028",
+      "verdict": "PASS",
+      "label": "REFUSED: a public-use permission without document evidence (a checkbox is not evidence)",
+      "detail": "SQLSTATE 23514"
+    },
+    {
+      "id": "B1P2-PG-029",
+      "verdict": "PASS",
+      "label": "a DRAFT entitlement grants nothing",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-030",
+      "verdict": "PASS",
+      "label": "REFUSED: the catalogue admin approving without the approver capability",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-031",
+      "verdict": "PASS",
+      "label": "REFUSED: proposer approving their own record without the explicit self-approval acknowledgement",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-032",
+      "verdict": "PASS",
+      "label": "independent approver approves",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-033",
+      "verdict": "PASS",
+      "label": "approved: ingest, storage, calculation, display, export all true; automation false (each right separate)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-034",
+      "verdict": "PASS",
+      "label": "an unknown right name is an error, never a silent false",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-035",
+      "verdict": "PASS",
+      "label": "data-date scope: unbounded entitlement covers any range",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-036",
+      "verdict": "PASS",
+      "label": "a rights-narrow record: calculation true, ingest false, display false",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-037",
+      "verdict": "PASS",
+      "label": "out-of-scope: a range starting before data_from is NOT allowed",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-038",
+      "verdict": "PASS",
+      "label": "EXPIRED, post_expiry_storage=retain + post_expiry_calculation: calculation still allowed (historical retention honoured, no blanket deletion), ingestion NOT",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-039",
+      "verdict": "PASS",
+      "label": "EXPIRED, post_expiry_storage=delete: calculation and storage both false",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-040",
+      "verdict": "PASS",
+      "label": "REFUSED: an entitlement for a catalogue row with no declared variant (complete the catalogue entry first)",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-041",
+      "verdict": "PASS",
+      "label": "catalogue variant (price) differs from the entitlement variant (total_return) => no right (a price entitlement is not a TRI entitlement)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-042",
+      "verdict": "PASS",
+      "label": "restored variant => right returns",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-043",
+      "verdict": "PASS",
+      "label": "public_open style: a PRICE entitlement for the price benchmark works for its own benchmark only",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-044",
+      "verdict": "PASS",
+      "label": "every entitlement proposal/approval wrote a governance event",
+      "detail": "events=6"
+    },
+    {
+      "id": "B1P2-PG-045",
+      "verdict": "PASS",
+      "label": "RLS: a plain user cannot read entitlement records (contract references stay private)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-046",
+      "verdict": "PASS",
+      "label": "RLS: a view-only admin can read them (vacuity guard)",
+      "detail": "rows=3"
+    },
+    {
+      "id": "B1P2-PG-047",
+      "verdict": "PASS",
+      "label": "benchmark_entitled_actions gives a PLAIN signed-in user only booleans + scope (no contract data)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-048",
+      "verdict": "PASS",
+      "label": "REFUSED: anon calling benchmark_entitled_actions",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-049",
+      "verdict": "PASS",
+      "label": "ordinary user sees entitled series (A: 2 rows, P: 1 row) and NOT the superseded row and NOT the un-entitled IN_NIFTY_50_PRI",
+      "detail": "[{\"benchmark_key\":\"TEST_A_TRI\",\"d\":\"2024-01-02\"},{\"benchmark_key\":\"TEST_A_TRI\",\"d\":\"2024-01-03\"},{\"benchmark_key\":\"TEST_P_PRI\",\"d\":\"2024-01-02\"}]"
+    },
+    {
+      "id": "B1P2-PG-050",
+      "verdict": "PASS",
+      "label": "vacuity guard: the viewer capability sees ALL rows (5 incl. the superseded and un-entitled ones)",
+      "detail": "rows=5"
+    },
+    {
+      "id": "B1P2-PG-051",
+      "verdict": "PASS",
+      "label": "NEGATIVE CONTROL: after revoking A's entitlement the ordinary user can no longer read A's series (revocation is effective at the DB layer)",
+      "detail": "[{\"benchmark_key\":\"TEST_P_PRI\",\"d\":\"2024-01-02\"}]"
+    },
+    {
+      "id": "B1P2-PG-052",
+      "verdict": "PASS",
+      "label": "and benchmark_right_allowed(A, calculation) is false after revoke",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-053",
+      "verdict": "PASS",
+      "label": "REFUSED: a plain user revoking an entitlement",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-054",
+      "verdict": "PASS",
+      "label": "REFUSED: direct INSERT into ii_benchmark_series by an authenticated user",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-055",
+      "verdict": "PASS",
+      "label": "REFUSED: direct INSERT into ii_benchmark_series even by a publisher (only the RPC publishes)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-056",
+      "verdict": "PASS",
+      "label": "REFUSED: a plain user creating an import job",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-057",
+      "verdict": "PASS",
+      "label": "REFUSED: a view-only admin creating an import job (view-only restriction)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-058",
+      "verdict": "PASS",
+      "label": "REFUSED: a publisher WITHOUT the upload capability cannot stage (upload and publish are separate)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-059",
+      "verdict": "PASS",
+      "label": "REFUSED: an upload naming a benchmark that is not in the catalogue (an upload never creates one)",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-060",
+      "verdict": "PASS",
+      "label": "REFUSED: upload form variant (price) differs from the catalogue variant (total_return)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-061",
+      "verdict": "PASS",
+      "label": "REFUSED: upload form currency differs from the catalogue currency",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-062",
+      "verdict": "PASS",
+      "label": "REFUSED: no source reference (original URL / delivery reference is required)",
+      "detail": "SQLSTATE 23514"
+    },
+    {
+      "id": "B1P2-PG-063",
+      "verdict": "PASS",
+      "label": "REFUSED: a correction job without a reason of >= 20 chars",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-064",
+      "verdict": "PASS",
+      "label": "REFUSED at staging: future date",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-065",
+      "verdict": "PASS",
+      "label": "REFUSED at staging: zero value",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-066",
+      "verdict": "PASS",
+      "label": "REFUSED at staging: negative value",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-067",
+      "verdict": "PASS",
+      "label": "REFUSED at staging: benchmark outside the job",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-068",
+      "verdict": "PASS",
+      "label": "REFUSED at staging: pre-1900 date",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-069",
+      "verdict": "PASS",
+      "label": "AFTER the refusals: no rows were staged",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-070",
+      "verdict": "PASS",
+      "label": "REFUSED: a different admin (even with the upload capability) staging into someone else's job",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-071",
+      "verdict": "PASS",
+      "label": "REFUSED: duplicate (benchmark, date) inside the staged rows (23505) and nothing written",
+      "detail": "SQLSTATE 23505"
+    },
+    {
+      "id": "B1P2-PG-072",
+      "verdict": "PASS",
+      "label": "uploader can cancel own job",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-073",
+      "verdict": "PASS",
+      "label": "stage + finalize: 3 new rows, 0 hard errors, eligible (entitlement grants ingest+storage)",
+      "detail": "{\"eligible\":true,\"rows_new\":3,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-27\",\"from\":\"2024-03-25\",\"eligible\":true,\"entitlement_id\":\"16a368df-f627-4971-b921-f66a412a15d8\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"bcf1e3ad43437ec608cbfa5043c6b0a06397a0d51ff1b2593cb508514e8d3df0\",\"rows_correction\":0,\"hard_error_total\":0}"
+    },
+    {
+      "id": "B1P2-PG-074",
+      "verdict": "PASS",
+      "label": "REFUSED: the staging admin WITHOUT the publish capability publishing",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-075",
+      "verdict": "PASS",
+      "label": "REFUSED: a view-only admin publishing",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-076",
+      "verdict": "PASS",
+      "label": "REFUSED: a corrector (no publish capability) publishing NEW history (capabilities are separate)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-077",
+      "verdict": "PASS",
+      "label": "REFUSED: a plain user publishing",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-078",
+      "verdict": "PASS",
+      "label": "REFUSED: a user with no auth/admin row at all publishing",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-079",
+      "verdict": "PASS",
+      "label": "REFUSED (stale): wrong file checksum",
+      "detail": "SQLSTATE 40001"
+    },
+    {
+      "id": "B1P2-PG-080",
+      "verdict": "PASS",
+      "label": "REFUSED (stale): wrong staging digest (a preview that is not the validated staging version)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-081",
+      "verdict": "PASS",
+      "label": "REFUSED: approved counts differ from the previewed counts",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-082",
+      "verdict": "PASS",
+      "label": "AFTER all those refusals nothing was published",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-083",
+      "verdict": "PASS",
+      "label": "NEGATIVE CONTROL: staged rows edited after validation => digest mismatch refused (40001)",
+      "detail": "SQLSTATE 40001"
+    },
+    {
+      "id": "B1P2-PG-084",
+      "verdict": "PASS",
+      "label": "REFUSED: entitlement REVOKED between staging and publication (42501) and nothing published",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-085",
+      "verdict": "PASS",
+      "label": "REFUSED: entitlement EXPIRED between staging and publication",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-086",
+      "verdict": "PASS",
+      "label": "REFUSED: staged date range falls OUTSIDE the entitlement data scope",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-087",
+      "verdict": "PASS",
+      "label": "REFUSED: entitlement allows storage/calculation but NOT ingestion (rights are evaluated separately)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-088",
+      "verdict": "PASS",
+      "label": "REFUSED: publisher capability REVOKED between staging and publication",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-089",
+      "verdict": "PASS",
+      "label": "publish succeeds for an independent publisher: 3 inserted, atomic",
+      "detail": "{\"job_id\":\"900e18e9-cc70-4e65-8757-bb9cf7d5a261\",\"date_to\":\"2024-03-27\",\"revived\":0,\"batch_id\":\"3b4c56cf-cd1a-4cb8-925c-cd7792bfc1fb\",\"inserted\":3,\"corrected\":0,\"date_from\":\"2024-03-25\",\"already_published\":false,\"identical_skipped\":0}"
+    },
+    {
+      "id": "B1P2-PG-090",
+      "verdict": "PASS",
+      "label": "ledger: ii_reference_import_batches row written (benchmark_level, succeeded, 3 inserted, sha, date range, actor in notes)",
+      "detail": "{\"batch_kind\":\"benchmark_level\",\"status\":\"succeeded\",\"rows_inserted\":3,\"rows_read\":3,\"source_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"f\":\"2024-03-25\",\"t\":\"2024-03-27\",\"notes\":{\"mode\":\"new_history\",\"staged_by\":\"11111111-0000-0000-0000-000000000001\",\"benchmarks\":[\"TEST_A_TRI\"],\"published_by\":\"11111111-0000-0000-0000-000000000002\",\"source_owner\":\"Fixture Owner\",\"history_class\":\"live\",\"import_job_id\":\"900e18e9-cc70-4e65-8757-bb9cf7d5a261\",\"source_reference\":\"https://example.test/delivery\"}}"
+    },
+    {
+      "id": "B1P2-PG-091",
+      "verdict": "PASS",
+      "label": "series rows carry lineage: revision 1, job id, batch id, history class, currency",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-092",
+      "verdict": "PASS",
+      "label": "job row: published, publisher recorded, not self-published, approved counts bound",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-093",
+      "verdict": "PASS",
+      "label": "complete audit evidence: created + validated + published events for the job",
+      "detail": "events=3"
+    },
+    {
+      "id": "B1P2-PG-094",
+      "verdict": "PASS",
+      "label": "ingestion state: latest_valid_data_date updated by the publish (2024-03-27) and last_manual_import_at set",
+      "detail": "{\"d\":\"2024-03-27\",\"m\":true}"
+    },
+    {
+      "id": "B1P2-PG-095",
+      "verdict": "PASS",
+      "label": "IDEMPOTENT: publishing the same job again returns the stored result, writes nothing, adds no ledger row",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-096",
+      "verdict": "PASS",
+      "label": "re-staging the same data: all 3 rows classify identical (no new rows) and the job records duplicate_of",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-097",
+      "verdict": "PASS",
+      "label": "REFUSED: publishing the exact same file again (23505, no duplicate import, no duplicate ledger/audit)",
+      "detail": "SQLSTATE 23505"
+    },
+    {
+      "id": "B1P2-PG-098",
+      "verdict": "PASS",
+      "label": "new_history with a DIFFERENT value for a published date: classified conflict => hard error, not publishable",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-099",
+      "verdict": "PASS",
+      "label": "REFUSED: publication with a hard validation error (22023); the valid row is NOT silently published",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-100",
+      "verdict": "PASS",
+      "label": "REFUSED: file-level hard errors reported at validation block publication",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-101",
+      "verdict": "PASS",
+      "label": "REFUSED: a required review acknowledgement (large_moves) not given",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-102",
+      "verdict": "PASS",
+      "label": "REFUSED: same admin staging and publishing without the explicit self-publish acknowledgement (separation of duties)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-103",
+      "verdict": "PASS",
+      "label": "with the explicit acknowledgement self-publish works and is RECORDED as self_published",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-104",
+      "verdict": "PASS",
+      "label": "two concurrent jobs staged for the same new date with different values: both look valid at preview time",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-105",
+      "verdict": "PASS",
+      "label": "first publishes",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-106",
+      "verdict": "PASS",
+      "label": "REFUSED (stale, 40001): the second concurrent import is detected, the first value stands, nothing partial written",
+      "detail": "SQLSTATE 40001, value=1010"
+    },
+    {
+      "id": "B1P2-PG-107",
+      "verdict": "PASS",
+      "label": "failure bookkeeping marks the job stale (recoverable: re-stage)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-108",
+      "verdict": "PASS",
+      "label": "REFUSED at create: a multi job mixing a total_return and a price benchmark under one declared variant",
+      "detail": "SQLSTATE 22023"
+    },
+    {
+      "id": "B1P2-PG-109",
+      "verdict": "PASS",
+      "label": "multi-benchmark job: eligibility is evaluated PER benchmark (B has no ingest right => eligible=false)",
+      "detail": "{\"TEST_A_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":true,\"entitlement_id\":\"16a368df-f627-4971-b921-f66a412a15d8\"},\"TEST_B_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":false,\"entitlement_id\":\"9c366bb4-ca2e-4e46-8fb1-c5aafb00ed89\"}}"
+    },
+    {
+      "id": "B1P2-PG-110",
+      "verdict": "PASS",
+      "label": "TRANSACTION ROLLBACK: the multi job is refused as a whole; the entitled benchmark A got NO rows either",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-111",
+      "verdict": "PASS",
+      "label": "TRUE MID-WRITE ROLLBACK: a failure on the 2nd inserted row leaves NO partial rows, NO ledger row, and the job still validated (safe retry possible)",
+      "detail": "zz test: forced failure mid-publish"
+    },
+    {
+      "id": "B1P2-PG-112",
+      "verdict": "PASS",
+      "label": "SAFE RETRY: after the fault is removed the same job publishes once, with exactly one ledger row and one set of rows",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-113",
+      "verdict": "PASS",
+      "label": "chunked staging (100-row chunks) finalizes with the full row count; nothing is canonical until publish",
+      "detail": "rows=318"
+    },
+    {
+      "id": "B1P2-PG-114",
+      "verdict": "PASS",
+      "label": "CHUNK FAILURE: a job interrupted before finalize cannot be published (55000) and published nothing",
+      "detail": "SQLSTATE 55000"
+    },
+    {
+      "id": "B1P2-PG-115",
+      "verdict": "PASS",
+      "label": "REFUSED: staging more rows after finalize (job is validated, not staging)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-116",
+      "verdict": "PASS",
+      "label": "the 300+-row chunked job publishes atomically",
+      "detail": "{\"job_id\":\"d202298f-620c-4734-b837-453f695831af\",\"date_to\":\"2024-03-20\",\"revived\":0,\"batch_id\":\"b177e83a-ce95-4449-ae1b-40487dee5a87\",\"inserted\":318,\"corrected\":0,\"date_from\":\"2023-01-02\",\"already_published\":false,\"identical_skipped\":0}"
+    },
+    {
+      "id": "B1P2-PG-117",
+      "verdict": "PASS",
+      "label": "correction job: the differing row classifies as correction (before 1005.5 -> after 1006)",
+      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-26\",\"from\":\"2024-03-26\",\"eligible\":true,\"entitlement_id\":\"16a368df-f627-4971-b921-f66a412a15d8\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"a493f007ff63ee6ed66bfb195608d108ccd799638899ea5e8fb70f87f3a8f3ee\",\"rows_correction\":1,\"hard_error_total\":0}"
+    },
+    {
+      "id": "B1P2-PG-118",
+      "verdict": "PASS",
+      "label": "REFUSED: a publisher WITHOUT the correction capability publishing a correction (separate permission)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-119",
+      "verdict": "PASS",
+      "label": "and the published level is unchanged (silent overwrite impossible)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-120",
+      "verdict": "PASS",
+      "label": "the corrector publishes the correction",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-121",
+      "verdict": "PASS",
+      "label": "revision 2 holds the corrected level 1006 and points at the correction job",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-122",
+      "verdict": "PASS",
+      "label": "revision evidence in ii_reference_corrections: before (1005.5, rev 1) / after (1006, rev 2), actor, reason",
+      "detail": "{\"previous_value\":{\"value\":1005.5,\"revision_no\":1,\"data_version\":\"bench1-upload-v1\",\"import_job_id\":\"900e18e9-cc70-4e65-8757-bb9cf7d5a261\"},\"new_value\":{\"value\":1006,\"revision_no\":2,\"import_job_id\":\"99fa5164-b81c-4ae6-9e09-8c8910162e68\"},\"actor_kind\":\"admin\",\"reason\":\"Source issued a corrected close for 26 Mar 2024 (fixture)\",\"correction_kind\":\"source_correction\"}"
+    },
+    {
+      "id": "B1P2-PG-123",
+      "verdict": "PASS",
+      "label": "a correction for a date with no published row is a hard error (missing_target), not an insert",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-124",
+      "verdict": "PASS",
+      "label": "REFUSED: rollback without the correction capability",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-125",
+      "verdict": "PASS",
+      "label": "REFUSED: rollback with a reason under 20 characters",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-126",
+      "verdict": "PASS",
+      "label": "rollback restores the prior level through governance (new revision 3), audited",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-127",
+      "verdict": "PASS",
+      "label": "after rollback: level 1005.5 again, revision 3 (history is preserved, never rewritten)",
+      "detail": "{\"v\":1005.5,\"rev\":3}"
+    },
+    {
+      "id": "B1P2-PG-128",
+      "verdict": "PASS",
+      "label": "rolled-back job is marked rolled_back and its ledger batch is marked rolled_back",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-129",
+      "verdict": "PASS",
+      "label": "IDEMPOTENT: a second rollback is a no-op",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-130",
+      "verdict": "PASS",
+      "label": "a new-history job for two later dates publishes",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-131",
+      "verdict": "PASS",
+      "label": "rollback of a new-history job RETRACTS (soft, quality_status=superseded; no row is deleted)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-132",
+      "verdict": "PASS",
+      "label": "retracted rows are invisible to ordinary readers (R4/R5 would never see them)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-133",
+      "verdict": "PASS",
+      "label": "re-staging the retracted dates classifies them as revive (counted as new)",
+      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-06-04\",\"from\":\"2024-06-03\",\"eligible\":true,\"entitlement_id\":\"16a368df-f627-4971-b921-f66a412a15d8\"}},\"rows_revive\":2,\"rows_identical\":0,\"staging_digest\":\"c973c12810ae4cbf616fbcc15e800a6d1851320e6b533f2f14dc4cdd0cbefbde\",\"rows_correction\":0,\"hard_error_total\":0}"
+    },
+    {
+      "id": "B1P2-PG-134",
+      "verdict": "PASS",
+      "label": "revive publishes with a new revision",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-135",
+      "verdict": "PASS",
+      "label": "REFUSED: rolling back a job whose rows were later revised (55000); data unchanged",
+      "detail": "SQLSTATE 55000"
+    },
+    {
+      "id": "B1P2-PG-136",
+      "verdict": "PASS",
+      "label": "REFUSED: UPDATE on the governance event log (append-only, even for the owner)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-137",
+      "verdict": "PASS",
+      "label": "REFUSED: DELETE on the governance event log",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-138",
+      "verdict": "PASS",
+      "label": "REFUSED: TRUNCATE on the governance event log",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-139",
+      "verdict": "PASS",
+      "label": "RLS: a plain user sees zero import jobs / rows / errors / events",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-140",
+      "verdict": "PASS",
+      "label": "RLS vacuity guard: the view-only admin sees them",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-141",
+      "verdict": "PASS",
+      "label": "REFUSED: direct INSERT of an import job by an admin (the RPC is the only path)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-142",
+      "verdict": "PASS",
+      "label": "REFUSED: a plain user proposing a mapping",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-143",
+      "verdict": "PASS",
+      "label": "REFUSED: a proposal without an evidence URL (table CHECK)",
+      "detail": "SQLSTATE 23502"
+    },
+    {
+      "id": "B1P2-PG-144",
+      "verdict": "PASS",
+      "label": "REFUSED: an evidence source type outside the allow-list",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-145",
+      "verdict": "PASS",
+      "label": "catalogue admin proposes a mapping with evidence",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-146",
+      "verdict": "PASS",
+      "label": "REFUSED: a plain user approving a mapping",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-147",
+      "verdict": "PASS",
+      "label": "REFUSED: approval without a review note of >= 10 chars",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-148",
+      "verdict": "PASS",
+      "label": "approval creates the canonical effective-dated mapping WITH evidence, basis scheme_disclosed, reviewer recorded",
+      "detail": "{\"mapping_basis\":\"scheme_disclosed\",\"evidence_url\":\"https://example.test/sid.pdf\",\"dd\":\"2020-03-15\",\"resolution_method\":\"deterministic_exact\",\"reviewed_by\":\"11111111-0000-0000-0000-000000000004\",\"benchmark_id\":\"7a29e232-6250-4778-89ad-e6c2e721cdd6\",\"ef\":\"2020-04-01\"}"
+    },
+    {
+      "id": "B1P2-PG-149",
+      "verdict": "PASS",
+      "label": "REFUSED: a benchmark CHANGE overlapping the open primary mapping without an explicit reviewed close (23P01)",
+      "detail": "SQLSTATE 23P01"
+    },
+    {
+      "id": "B1P2-PG-150",
+      "verdict": "PASS",
+      "label": "with p_close_previous the OLD mapping is closed at the day before (history keeps its meaning) and the new one starts",
+      "detail": "{\"et\":\"2023-03-31\"}"
+    },
+    {
+      "id": "B1P2-PG-151",
+      "verdict": "PASS",
+      "label": "DATABASE rule: a direct service-role INSERT of an overlapping PRIMARY mapping is refused (23P01)",
+      "detail": "SQLSTATE 23P01"
+    },
+    {
+      "id": "B1P2-PG-152",
+      "verdict": "PASS",
+      "label": "a SECONDARY mapping may coexist with a primary one",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-153",
+      "verdict": "PASS",
+      "label": "REFUSED: an admin session calling the auto-publish RPC (service role only)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-154",
+      "verdict": "PASS",
+      "label": "AUTO-PUBLISH: deterministic, high-confidence, authoritative evidence, verified benchmark => published",
+      "detail": "{\"mapping_id\":\"e75894e8-d46c-4b3d-a491-9ccc0b3bd8e6\",\"auto_published\":true}"
+    },
+    {
+      "id": "B1P2-PG-155",
+      "verdict": "PASS",
+      "label": "NOT auto-published (ambiguity reason present): routed to admin review",
+      "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
+    },
+    {
+      "id": "B1P2-PG-156",
+      "verdict": "PASS",
+      "label": "NOT auto-published (medium confidence): routed to admin review",
+      "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
+    },
+    {
+      "id": "B1P2-PG-157",
+      "verdict": "PASS",
+      "label": "NOT auto-published (admin_judgement method): routed to admin review",
+      "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
+    },
+    {
+      "id": "B1P2-PG-158",
+      "verdict": "PASS",
+      "label": "NOT auto-published (evidence source \"other\"): routed to admin review",
+      "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
+    },
+    {
+      "id": "B1P2-PG-159",
+      "verdict": "PASS",
+      "label": "NOT auto-published (secondary relationship): routed to admin review",
+      "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
+    },
+    {
+      "id": "B1P2-PG-160",
+      "verdict": "PASS",
+      "label": "NOT auto-published: the benchmark is only a DRAFT catalogue entry (must be verified)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-161",
+      "verdict": "PASS",
+      "label": "REFUSED: even an admin cannot approve a mapping to an unverified catalogue entry (22023)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-162",
+      "verdict": "PASS",
+      "label": "reject records the decision and creates no mapping",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-163",
+      "verdict": "PASS",
+      "label": "REFUSED: a plain user setting the ingestion mode",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-164",
+      "verdict": "PASS",
+      "label": "REFUSED: automation cannot be enabled without an approved AUTOMATION entitlement (a licence for storage/calculation is not automation permission)",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-165",
+      "verdict": "PASS",
+      "label": "manual_import mode can be set with a reason",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-166",
+      "verdict": "PASS",
+      "label": "REFUSED: an authenticated admin claiming an ingestion lease (service role only)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-167",
+      "verdict": "PASS",
+      "label": "lease: first claimant wins",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-168",
+      "verdict": "PASS",
+      "label": "SINGLE-FLIGHT: an overlapping second runner is refused while the lease is live",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-169",
+      "verdict": "PASS",
+      "label": "LEASE EXPIRY: an expired lease can be taken over",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-170",
+      "verdict": "PASS",
+      "label": "REFUSED: a lease TTL under 30 seconds",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-171",
+      "verdict": "PASS",
+      "label": "releasing someone else's lease is a no-op",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-172",
+      "verdict": "PASS",
+      "label": "WATERMARKS: an empty HTTP 200 moves last_attempt_at but NOT last_successful_run_at, and counts as a failure",
+      "detail": "{\"last_attempt_at\":\"2026-10-01T09:12:55.947Z\",\"last_successful_run_at\":null,\"consecutive_failures\":1,\"last_run_status\":\"empty_response\",\"d\":\"2024-12-31\"}"
+    },
+    {
+      "id": "B1P2-PG-173",
+      "verdict": "PASS",
+      "label": "success moves last_successful_run_at and clears the failure streak; the completeness watermark is CLAMPED to the latest valid data date (cannot claim coverage beyond real data)",
+      "detail": "{\"last_successful_run_at\":\"2026-10-01T09:12:55.961Z\",\"consecutive_failures\":0,\"d\":\"2024-12-31\",\"w\":\"2024-12-31\"}"
+    },
+    {
+      "id": "B1P2-PG-174",
+      "verdict": "PASS",
+      "label": "every attempt is in the run history",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-175",
+      "verdict": "PASS",
+      "label": "REFUSED by CHECK: a watermark beyond latest_valid_data_date (even for the owner role)",
+      "detail": "SQLSTATE 23514"
+    },
+    {
+      "id": "B1P2-PG-176",
+      "verdict": "PASS",
+      "label": "REFUSED by CHECK: automation_enabled while the mode is not automated",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-177",
+      "verdict": "PASS",
+      "label": "REFUSED: the feed write path while the global/write kill switches are OFF (55000)",
+      "detail": "SQLSTATE 55000"
+    },
+    {
+      "id": "B1P2-PG-178",
+      "verdict": "PASS",
+      "label": "REFUSED: kill switches on but the benchmark is not in automated mode (55000)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-179",
+      "verdict": "PASS",
+      "label": "with an approved AUTOMATION entitlement the mode can be set automated",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-180",
+      "verdict": "PASS",
+      "label": "feed write succeeds only when ALL gates pass (kill switches on, automated, entitlement)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-181",
+      "verdict": "PASS",
+      "label": "feed never overwrites: the differing value is counted as a conflict, the published value stands, the new day is inserted",
+      "detail": "{\"batch_id\":\"f9ba741d-1c55-4651-92ec-86089905cf2c\",\"inserted\":1,\"identical\":0,\"conflicts_skipped\":1}"
+    },
+    {
+      "id": "B1P2-PG-182",
+      "verdict": "PASS",
+      "label": "REFUSED: after the automation grant is revoked the feed write is refused (42501)",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-183",
+      "verdict": "PASS",
+      "label": "REFUSED: the WRITE kill switch alone stops writes (55000)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-184",
+      "verdict": "PASS",
+      "label": "REFUSED: an admin session cannot call the feed write path at all",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-185",
+      "verdict": "PASS",
+      "label": "REFUSED: the 0232 single-step upload RPC is no longer executable by an authenticated admin (permission denied)",
+      "detail": "permission denied for function commit_market_index_upload"
+    },
+    {
+      "id": "B1P2-PG-186",
+      "verdict": "PASS",
+      "label": "REFUSED: the 0232 feed RPC now requires an approved automation+storage entitlement for the index (42501) and wrote nothing",
+      "detail": "SQLSTATE 42501"
+    },
+    {
+      "id": "B1P2-PG-187",
+      "verdict": "PASS",
+      "label": "REFUSED: an admin session writing the demand table (service role only)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-188",
+      "verdict": "PASS",
+      "label": "service role upserts aggregate demand (no user detail by construction)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-189",
+      "verdict": "PASS",
+      "label": "the demand table has NO user/account/holding identifier column",
+      "detail": "benchmark_id,required_from,required_from_investor,required_to,scheme_count,family_count,demand_basis,demand_version,computed_at"
+    },
+    {
+      "id": "B1P2-PG-190",
+      "verdict": "PASS",
+      "label": "REFUSED: an admin session calling the expiry job (service role only)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-191",
+      "verdict": "PASS",
+      "label": "service role expiry: stale validated jobs become expired and their staged rows are purged",
+      "detail": "{\"expired_jobs\":5,\"purged_staged_rows\":7}"
+    },
+    {
+      "id": "B1P2-PG-192",
+      "verdict": "PASS",
+      "label": "expiry never touches canonical published rows",
+      "detail": "rows=329"
+    }
+  ]
+}

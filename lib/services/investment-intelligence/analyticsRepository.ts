@@ -26,6 +26,7 @@ import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmar
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
+import { accessAllows, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
 import type { IiTransactionType } from './types';
 
@@ -101,7 +102,7 @@ function toDate(s: string): Date {
 export async function loadAnalyticsDataset(
   supabase: SupabaseClient,
   userId: string,
-  opts: { periodStart?: Date; asOfDate?: Date } = {}
+  opts: { periodStart?: Date; asOfDate?: Date; benchmarkAccessNeed?: AccessNeed } = {}
 ): Promise<LoadResult> {
   const warnings: LoadWarning[] = [];
   const asOfDate = opts.asOfDate ?? new Date();
@@ -252,9 +253,27 @@ export async function loadAnalyticsDataset(
         .order('series_date', { ascending: true })
         .order('id', { ascending: true })
     );
+    // BENCH-1 Phase 2: the central entitlement gate. A benchmark may feed a
+    // customer-visible comparison only when an approved entitlement permits BOTH
+    // calculation AND display; its series is also confined to the entitled
+    // data-date scope. Blocked benchmarks contribute no series, which the
+    // certified engines already report honestly (never a fabricated 0%).
+    const { access: benchmarkAccess, error: accessError } = await loadBenchmarkAccess(supabase, benchmarkIds);
+    const accessNeed: AccessNeed = opts.benchmarkAccessNeed ?? 'display_comparison';
+    const blockedBenchmarks = benchmarkIds.filter((id) => !accessAllows(benchmarkAccess.get(id), accessNeed));
+    if (blockedBenchmarks.length > 0) {
+      warnings.push({
+        scope: 'benchmark',
+        detail: accessError
+          ? 'Benchmark entitlements could not be checked, so no benchmark comparison is shown.'
+          : `${blockedBenchmarks.length} benchmark(s) have no approved entitlement for ${accessNeed === 'export' ? 'calculation, display and report/export use' : 'calculation and display'}, so no comparison against them is shown.`,
+      });
+    }
     for (const r of seriesRows) {
       if (r.quality_status && r.quality_status !== 'ok') continue;
       const id = r.benchmark_id as string;
+      const grant = benchmarkAccess.get(id);
+      if (!accessAllows(grant, accessNeed) || !grant || !inDataScope(grant, r.series_date as string)) continue;
       benchmarkSeriesById[id] = benchmarkSeriesById[id] ?? [];
       benchmarkSeriesById[id].push({ date: toDate(r.series_date as string), value: Number(r.value) });
       if (r.data_version) benchmarkDataVersion = r.data_version as string;

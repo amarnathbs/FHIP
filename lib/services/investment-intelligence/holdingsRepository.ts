@@ -235,7 +235,7 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
   // resolved to -- never one query per row, and never the whole catalogue.
   const benchmarkCtx = await loadInstrumentBenchmarkContext(supabase, instrumentIds);
   const mappedBenchmarkIds = [...new Set([...benchmarkCtx.mappingsByInstrument.values()].flat().map((m) => m.benchmarkId))];
-  const benchmarkSeriesById = await loadBenchmarkSeriesById(supabase, mappedBenchmarkIds);
+  const benchmarkSeriesById = await loadBenchmarkSeriesById(supabase, mappedBenchmarkIds, benchmarkCtx.accessByBenchmarkId);
 
   const holdings: HoldingRow[] = [];
 

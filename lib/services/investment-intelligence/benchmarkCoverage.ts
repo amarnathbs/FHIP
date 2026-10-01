@@ -14,9 +14,10 @@
 // HONESTY CONTRACT (mission sections 11-12; matches calculationStatus.ts's
 // existing CalculationOutcome vocabulary used everywhere else in this tab):
 //   - no mapping row at all                     -> BENCHMARK_MAPPING_MISSING
-//   - mapping exists but the benchmark's licence
-//     is not clear to ingest (licence_required /
-//     po_decision_required)                     -> BENCHMARK_HISTORY_INCOMPLETE
+//   - mapping exists but NO approved entitlement
+//     permits calculation + customer display
+//     (BENCH-1 Phase 2: per-right entitlement
+//     records, NOT ii_benchmarks.licence_status)  -> BENCHMARK_HISTORY_INCOMPLETE
 //   - mapping + licence clear, but no published
 //     series covers the requested window        -> BENCHMARK_HISTORY_INCOMPLETE
 //   - real data on both ends                     -> CALCULATED
@@ -30,6 +31,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveBenchmarkForDate, type BenchmarkMapping } from '@/lib/engines/investment-intelligence/benchmarkEngine';
 import { benchmarkWindowReturn, type SeriesPoint } from '@/lib/engines/investment-intelligence/benchmarkService';
 import { missingReferenceData, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
+import { accessAllows, blockedReason, clampToScope, loadBenchmarkAccess, type BenchmarkAccess, type BenchmarkAccessMap } from './benchmarkAccess';
 
 export interface BenchmarkComparable {
   benchmarkKey: string;
@@ -54,6 +56,10 @@ interface BenchmarkMeta {
 export interface InstrumentBenchmarkContext {
   mappingsByInstrument: Map<string, BenchmarkMapping[]>;
   metaByBenchmarkId: Map<string, BenchmarkMeta>;
+  /** BENCH-1 Phase 2: per-benchmark entitlement decision (fail closed: a missing entry = no access). */
+  accessByBenchmarkId: BenchmarkAccessMap;
+  /** Set when the entitlement lookup itself failed; every benchmark is then reported blocked. */
+  accessError: string | null;
 }
 
 interface RawMappingRow {
@@ -71,9 +77,6 @@ interface RawMappingRow {
   } | null;
 }
 
-/** Reasons a benchmark's own licence status blocks a real comparison — see ii_benchmarks.licence_status (migration 0155). */
-const BLOCKED_LICENCE_STATUSES = new Set(['licence_required', 'po_decision_required', 'unknown']);
-
 /**
  * Batch-load PRIMARY benchmark mappings for every instrument the caller
  * passes in, in exactly one query regardless of holding count. An instrument
@@ -86,7 +89,7 @@ export async function loadInstrumentBenchmarkContext(
 ): Promise<InstrumentBenchmarkContext> {
   const mappingsByInstrument = new Map<string, BenchmarkMapping[]>();
   const metaByBenchmarkId = new Map<string, BenchmarkMeta>();
-  if (instrumentIds.length === 0) return { mappingsByInstrument, metaByBenchmarkId };
+  if (instrumentIds.length === 0) return { mappingsByInstrument, metaByBenchmarkId, accessByBenchmarkId: new Map(), accessError: null };
 
   const { data, error } = await supabase
     .from('ii_instrument_benchmarks')
@@ -121,7 +124,8 @@ export async function loadInstrumentBenchmarkContext(
       });
     }
   }
-  return { mappingsByInstrument, metaByBenchmarkId };
+  const { access, error: accessError } = await loadBenchmarkAccess(supabase, [...metaByBenchmarkId.keys()]);
+  return { mappingsByInstrument, metaByBenchmarkId, accessByBenchmarkId: access, accessError };
 }
 
 /**
@@ -131,7 +135,8 @@ export async function loadInstrumentBenchmarkContext(
  */
 export async function loadBenchmarkSeriesById(
   supabase: SupabaseClient,
-  benchmarkIds: string[]
+  benchmarkIds: string[],
+  access?: BenchmarkAccessMap
 ): Promise<Map<string, SeriesPoint[]>> {
   const out = new Map<string, SeriesPoint[]>();
   if (benchmarkIds.length === 0) return out;
@@ -146,6 +151,17 @@ export async function loadBenchmarkSeriesById(
     list.push({ date: new Date(row.series_date), value: Number(row.value) });
     out.set(row.benchmark_id, list);
   }
+  if (access) {
+    // BENCH-1 Phase 2: only entitled benchmarks, only inside the entitled data-date scope.
+    for (const [id, points] of [...out]) {
+      const grant = access.get(id);
+      if (!accessAllows(grant, 'display_comparison')) {
+        out.delete(id);
+        continue;
+      }
+      out.set(id, clampToScope(points, grant, (p) => p.date.toISOString().slice(0, 10)));
+    }
+  }
   return out;
 }
 
@@ -153,7 +169,7 @@ export interface BenchmarkCoverageSummary {
   totalSchemes: number;
   /** Mapped to a benchmark whose licence status does not block a real comparison. */
   mappedCount: number;
-  /** Mapped, but the mapped benchmark's own licence_status blocks ingestion (e.g. NSE/BSE indices today). */
+  /** Mapped, but no approved entitlement permits calculation + display (BENCH-1 Phase 2: per-right entitlements, not licence_status). */
   licenceBlockedCount: number;
   /** No benchmark mapping exists for this scheme at all. */
   unmappedCount: number;
@@ -175,8 +191,7 @@ export function summarizeBenchmarkCoverage(ctx: InstrumentBenchmarkContext, inst
     const mappings = ctx.mappingsByInstrument.get(id);
     const mapping = mappings ? resolveBenchmarkForDate(mappings, id, asOfDate) : undefined;
     if (!mapping) continue; // unmapped — counted by subtraction below
-    const meta = ctx.metaByBenchmarkId.get(mapping.benchmarkId);
-    if (meta && BLOCKED_LICENCE_STATUSES.has(meta.licenceStatus ?? 'unknown')) licenceBlockedCount += 1;
+    if (!accessAllows(ctx.accessByBenchmarkId.get(mapping.benchmarkId), 'display_comparison')) licenceBlockedCount += 1;
     else mappedCount += 1;
   }
   return {
@@ -213,11 +228,9 @@ export function resolveHoldingBenchmarkComparable(
     return missingReferenceData('BENCHMARK_MAPPING_MISSING', 'No benchmark mapping is in effect for this scheme on the relevant date.');
   }
   const meta = ctx.metaByBenchmarkId.get(mapping.benchmarkId);
-  if (meta && BLOCKED_LICENCE_STATUSES.has(meta.licenceStatus ?? 'unknown')) {
-    return missingReferenceData(
-      'BENCHMARK_HISTORY_INCOMPLETE',
-      `${meta.label} requires a data licence that has not yet been obtained; no comparison is available.`
-    );
+  const grant: BenchmarkAccess | undefined = ctx.accessByBenchmarkId.get(mapping.benchmarkId);
+  if (!accessAllows(grant, 'display_comparison')) {
+    return missingReferenceData('BENCHMARK_HISTORY_INCOMPLETE', blockedReason(meta?.label ?? mapping.benchmarkKey, grant, 'display_comparison', ctx.accessError));
   }
   const series = benchmarkSeriesById.get(mapping.benchmarkId) ?? [];
   const windowResult = benchmarkWindowReturn(series, windowStart, windowEnd);

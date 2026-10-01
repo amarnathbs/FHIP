@@ -29,6 +29,7 @@ import type { XrayDataset } from '@/lib/engines/investment-intelligence/xray/xra
 import type { FundHoldingsSnapshot, PortfolioFundPosition, SnapshotHolding } from '@/lib/engines/investment-intelligence/xray/lookThrough';
 import type { DebtExposureLine } from '@/lib/engines/investment-intelligence/xray/debtXray';
 import { fetchAllRows } from './pagination';
+import { accessAllows, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import type { Observation } from '@/lib/engines/investment-intelligence/sip/dateAlignment';
 
 export interface LoadWarning {
@@ -75,7 +76,7 @@ function todayIso(): string {
 export async function loadSipDataset(
   supabase: SupabaseClient,
   userId: string,
-  options: { asOfDate?: string } = {}
+  options: { asOfDate?: string; benchmarkAccessNeed?: AccessNeed } = {}
 ): Promise<R5LoadResult<SipDataset>> {
   const warnings: LoadWarning[] = [];
 
@@ -168,7 +169,7 @@ export async function loadSipDataset(
 
   // Benchmark resolution is entirely server-side. The client cannot name a
   // benchmark id (spec section 97).
-  const benchmarkByInstrument = await loadBenchmarkSeries(supabase, instrumentIds, warnings);
+  const benchmarkByInstrument = await loadBenchmarkSeries(supabase, instrumentIds, warnings, options.benchmarkAccessNeed ?? 'display_comparison');
 
   // Attributable inflows, grouped by (account, instrument) then matched to
   // series keys by the caller's series detection. Here we key by the
@@ -233,7 +234,8 @@ export function attachAttributableInflows(dataset: SipDataset, seriesKeys: strin
 async function loadBenchmarkSeries(
   supabase: SupabaseClient,
   instrumentIds: string[],
-  warnings: LoadWarning[]
+  warnings: LoadWarning[],
+  accessNeed: AccessNeed = 'display_comparison'
 ): Promise<SipDataset['benchmarkByInstrument']> {
   const out: SipDataset['benchmarkByInstrument'] = new Map();
   if (instrumentIds.length === 0) return out;
@@ -269,9 +271,22 @@ async function loadBenchmarkSeries(
       .order('series_date', { ascending: true })
   );
 
+  // BENCH-1 Phase 2: central entitlement gate (calculation AND display) + entitled data-date scope.
+  const { access: benchmarkAccess, error: accessError } = await loadBenchmarkAccess(supabase, benchmarkIds);
+  const blockedBenchmarkIds = benchmarkIds.filter((id) => !accessAllows(benchmarkAccess.get(id), accessNeed));
+  if (blockedBenchmarkIds.length > 0) {
+    warnings.push({
+      scope: 'benchmark',
+      detail: accessError
+        ? 'Benchmark entitlements could not be checked, so no benchmark comparison is shown.'
+        : `${blockedBenchmarkIds.length} benchmark(s) have no approved entitlement for calculation and display, so no comparison against them is shown.`,
+    });
+  }
   const seriesByBenchmark = new Map<string, Observation[]>();
   for (const r of seriesRows) {
     if (r.quality_status === 'superseded' || r.quality_status === 'duplicate_flagged') continue;
+    const grant = benchmarkAccess.get(r.benchmark_id);
+    if (!grant || !accessAllows(grant, accessNeed) || !inDataScope(grant, r.series_date)) continue;
     const list = seriesByBenchmark.get(r.benchmark_id) ?? [];
     list.push({ date: r.series_date, value: Number(r.value) });
     seriesByBenchmark.set(r.benchmark_id, list);

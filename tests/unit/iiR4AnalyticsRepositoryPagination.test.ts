@@ -99,6 +99,14 @@ function makeSupabaseMock(tables: Record<string, MockRow[]>): SupabaseClient {
     from(table: string) {
       return makeQueryBuilder(tables[table] ?? []);
     },
+    // BENCH-1 Phase 2: every benchmark in these fixtures is entitled (calculation + display); the
+    // pagination behaviour under test is unrelated to entitlement.
+    rpc(name: string, args?: { p_benchmark_ids?: string[] }) {
+      if (name === 'benchmark_entitled_actions') {
+        return Promise.resolve({ data: (args?.p_benchmark_ids ?? []).map((id) => ({ benchmark_id: id, can_calculate: true, can_display: true, can_export: true, data_from: null, data_to: null })), error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
+    },
   } as unknown as SupabaseClient;
 }
 

@@ -167,8 +167,18 @@ export function makeFakeSupabase(
 
   handle.client = {
     from,
-    rpc(name: string) {
-      return Promise.resolve({ data: null, error: readsFail(name) ? DB_ERROR : null });
+    rpc(name: string, args?: { p_benchmark_ids?: string[] }) {
+      if (readsFail(name)) return Promise.resolve({ data: null, error: DB_ERROR });
+      // BENCH-1 Phase 2: the consumer entitlement gate. A fixture opts a benchmark in through the
+      // `__benchmark_access` pseudo-table ({ benchmark_id, can_calculate, can_display, can_export, data_from, data_to });
+      // anything not listed is returned as NO access (fail closed) - exactly like the real function.
+      if (name === 'benchmark_entitled_actions') {
+        const grants = (tables.__benchmark_access ?? []) as Row[];
+        const ids = args?.p_benchmark_ids ?? [];
+        const out = ids.map((id) => grants.find((g) => g.benchmark_id === id) ?? { benchmark_id: id, can_calculate: false, can_display: false, can_export: false, data_from: null, data_to: null });
+        return Promise.resolve({ data: out, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
     },
     auth: {
       getUser() {

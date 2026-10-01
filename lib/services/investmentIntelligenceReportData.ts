@@ -56,7 +56,9 @@ export async function loadInvestmentPerformanceForReport(
   supabase: SupabaseServerClient
 ): Promise<ReportPerformanceData | null> {
   try {
-    const { dataset, warnings, empty } = await loadAnalyticsDataset(supabase, userId, {});
+    // BENCH-1 Phase 2: a report/export is a stricter use than an on-screen comparison - it needs the
+    // separate report/export right on every benchmark it draws on (otherwise the benchmark is left out).
+    const { dataset, warnings, empty } = await loadAnalyticsDataset(supabase, userId, { benchmarkAccessNeed: 'export' });
     if (empty || !dataset) return null;
     const results = runAnalytics(dataset);
     const earliestCashFlowDateByInstrument: Record<string, string> = {};
@@ -93,7 +95,7 @@ export interface ReportSipData {
 
 export async function loadSipForReport(userId: string, supabase: SupabaseServerClient): Promise<ReportSipData | null> {
   try {
-    const { dataset, warnings, empty } = await loadSipDataset(supabase, userId, {});
+    const { dataset, warnings, empty } = await loadSipDataset(supabase, userId, { benchmarkAccessNeed: 'export' });
     if (empty || !dataset) return null;
     // Mirrors app/api/investment-intelligence/sip/route.ts's exact two-pass
     // sequence: detection must run once before inflows can be attributed to

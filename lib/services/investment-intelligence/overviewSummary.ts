@@ -23,6 +23,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DISPOSAL_TYPES } from './taxRepository';
 import { fetchAllRows } from './pagination';
+import { accessAllows, loadBenchmarkAccess } from './benchmarkAccess';
 import type { OverviewSignals } from '@/lib/investment-intelligence/analysisAvailability';
 
 /**
@@ -202,7 +203,7 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
       (async () => {
         const { data, error } = await supabase
           .from('ii_instrument_benchmarks')
-          .select('instrument_id')
+          .select('instrument_id, benchmark_id')
           .in('instrument_id', heldInstrumentIds)
           .limit(COVERAGE_PROBE_LIMIT);
         if (error) throw new Error(`ii_instrument_benchmarks: ${error.message}`);
@@ -228,7 +229,19 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
       (LOOK_THROUGH_INSTRUMENT_CLASSES as readonly string[]).includes(r.instrument_class as string)
     ).length;
     instrumentsWithNavCount = new Set(navRows.map((r) => r.instrument_id as string)).size;
-    instrumentsWithBenchmarkCount = new Set(benchmarkRows.map((r) => r.instrument_id as string)).size;
+    // BENCH-1 Phase 2: a held scheme counts as having a benchmark ONLY when its mapped benchmark is
+    // actually usable - an approved entitlement permits calculation + display AND published levels
+    // exist. A mapping to a blocked or empty benchmark is a mapping, not coverage, so the Overview
+    // never claims comparison availability that the Performance/SIP/Holdings screens cannot deliver.
+    const mappedBenchmarkIds = [...new Set(benchmarkRows.map((r) => r.benchmark_id as string))];
+    const { access } = await loadBenchmarkAccess(supabase, mappedBenchmarkIds);
+    const usableBenchmarkIds = new Set<string>();
+    for (const id of mappedBenchmarkIds) {
+      if (!accessAllows(access.get(id), 'display_comparison')) continue;
+      const { count } = await supabase.from('ii_benchmark_series').select('id', { count: 'exact', head: true }).eq('benchmark_id', id);
+      if ((count ?? 0) > 0) usableBenchmarkIds.add(id);
+    }
+    instrumentsWithBenchmarkCount = new Set(benchmarkRows.filter((r) => usableBenchmarkIds.has(r.benchmark_id as string)).map((r) => r.instrument_id as string)).size;
     instrumentsWithFundHoldingsCount = new Set(fundHoldingRows.map((r) => r.fund_instrument_id as string)).size;
   }
 
