@@ -10,6 +10,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
 import { PC7_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc7/lookthroughDataAdmin';
+import { PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY } from '@/lib/services/premiumEntitlementAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -65,6 +66,30 @@ async function canViewLookthroughDataQuality(): Promise<boolean> {
   }
 }
 
+/**
+ * Admin Premium grant (migration 0231) — the entitlement-management capability.
+ *
+ * Its own independent read, deliberately not derived from any other capability
+ * or from Super Admin (Standard §2/§3). FAILS CLOSED: any error, a logged-out
+ * caller, a missing row or a missing COLUMN (migration not yet applied) yields
+ * false — an unapplied migration must never become a grant.
+ */
+async function canManagePremiumEntitlements(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return data?.[PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
+
 // Lets the nav know which Admin groups to show, without exposing any admin
 // data itself — a logged-out, non-admin, non-Resources-role caller just gets
 // all-false flags, never a 403 (the actual admin/Resources routes still
@@ -115,6 +140,7 @@ export async function GET() {
       resourceAnalytics: canViewResourceAnalytics(current),
       referenceDataQuality: await canViewReferenceDataQuality(),
       lookthroughDataQuality: await canViewLookthroughDataQuality(),
+      entitlementManagement: await canManagePremiumEntitlements(),
     },
   });
 }

@@ -8,6 +8,15 @@ function makeFakeAdmin(entitlementRows: Record<string, unknown>[]) {
   const updates: Record<string, unknown>[] = [];
   return {
     client: {
+      // Migration 0231 moved the webhook's entitlement write into the
+      // apply_subscription_entitlement_event() RPC. This fake models a database
+      // where 0231 has NOT been applied (PGRST202 = function not found), so the
+      // tests below keep proving the legacy status -> plan_tier mapping that the
+      // deploy-order fallback still runs. The RPC path itself is covered in
+      // tests/unit/adminPremiumGrantStripeInteraction.test.ts.
+      rpc() {
+        return Promise.resolve({ error: { code: 'PGRST202', message: 'function not found' } });
+      },
       from(table: string) {
         if (table !== 'user_entitlements') throw new Error(`unexpected table: ${table}`);
         let filtered = [...entitlementRows];

@@ -53,7 +53,39 @@ export interface EntitlementUpsertParams {
  */
 export async function applySubscriptionEvent(params: EntitlementUpsertParams): Promise<void> {
   const admin = createAdminClient();
-  const planTier = PREMIUM_SUBSCRIPTION_STATUSES.has(params.subscriptionStatus) ? 'premium' : 'free';
+  const confersPremium = PREMIUM_SUBSCRIPTION_STATUSES.has(params.subscriptionStatus);
+  const planTier = confersPremium ? 'premium' : 'free';
+
+  // Admin Premium grant (migration 0231). A provider event must never shorten,
+  // cut off or silently downgrade an admin-allocated entitlement, and a payment
+  // must win over a grant sensibly. That merge happens atomically in the
+  // database (row-locked) rather than as a read-then-write here, so it cannot
+  // race an admin grant/extend/revoke:
+  //   - a premium event sets source='payment' and clears the live window's end
+  //     date (otherwise the grant's effective_to would end a PAYING customer's
+  //     Premium on the grant's expiry date);
+  //   - a non-premium event (cancelled / abandoned checkout) restores an
+  //     unexpired admin grant held in reserve instead of dropping to free.
+  const { error: rpcError } = await admin.rpc('apply_subscription_entitlement_event', {
+    p_user_id: params.userId,
+    p_provider: params.provider,
+    p_provider_customer_id: params.providerCustomerId,
+    p_provider_subscription_id: params.providerSubscriptionId,
+    p_confers_premium: confersPremium,
+    p_subscription_status: params.subscriptionStatus,
+    p_price_id: params.priceId,
+    p_current_period_end: params.currentPeriodEnd,
+    p_cancel_at_period_end: params.cancelAtPeriodEnd,
+  });
+  if (!rpcError) return;
+
+  // Deploy-order safety: if this code is live before migration 0231 has been
+  // applied the function does not exist yet (PostgREST PGRST202 / Postgres
+  // 42883). Fall back to the pre-0231 behaviour rather than failing every
+  // webhook delivery. That is only safe because, before 0231, no admin grants
+  // can exist. Any OTHER error is a real failure and is thrown so the provider retries.
+  const missingFunction = rpcError.code === 'PGRST202' || rpcError.code === '42883';
+  if (!missingFunction) throw new Error(`applySubscriptionEvent: ${rpcError.message}`);
 
   const { error } = await admin
     .from('user_entitlements')

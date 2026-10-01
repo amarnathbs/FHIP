@@ -9,8 +9,12 @@
 // HONEST LIMITATION. A "billing month" here is the UTC calendar month. This
 // codebase has no subscription/billing system at all: no Stripe/Paddle
 // integration, no subscriptions table, no period columns, and
-// user_entitlements.effective_from/effective_to are written by nothing and
+// user_entitlements.effective_from/effective_to were written by nothing and
 // read by nothing. There is therefore no subscriber anniversary to anchor to.
+// (Update, migration 0231: the admin Premium grant now writes effective_from /
+// effective_to, and every plan_tier reader honours them — see
+// lib/services/entitlementWindow.ts. They are still not a billing anniversary,
+// so the billing month below remains the UTC calendar month.)
 // This matches ai_usage_ledger.billing_period, which Module 11.0 already
 // defined as a UTC calendar month.
 //
