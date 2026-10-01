@@ -35,6 +35,7 @@ import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { downloadDocumentObject } from './storage';
 import { recordDocumentAuditEvent } from './auditLog';
+import { purgeRawDocumentAfterAiConfirm } from './purge';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { detectAuInvestmentCsvFormat } from '../investment/detection';
 import { extractAuTransactionsFromCsv, extractAuPositionsFromCsv, summariseExtractionWarnings } from '../investment/csvExtraction';
@@ -897,6 +898,9 @@ export async function confirmAiAuInvestmentFallback(
     if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
   }
+
+  // PO decision 2026-10-01: the structured result is durable, so the raw upload goes now (best effort, never throws).
+  await purgeRawDocumentAfterAiConfirm(userId, documentId);
 
   return {
     document,

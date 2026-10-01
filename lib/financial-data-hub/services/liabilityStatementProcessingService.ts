@@ -52,6 +52,7 @@ import {
 import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { recordDocumentAuditEvent } from './auditLog';
+import { purgeRawDocumentAfterAiConfirm } from './purge';
 import { downloadDocumentObject } from './storage';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { extractLiabilityStatement } from '../liability/statementIntake';
@@ -939,12 +940,16 @@ export async function confirmAiLiabilityFallback(
   }
 
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_confirmed', actorType: 'user' });
+  let confirmed: UploadLiabilityStatementResult;
   try {
-    return await persistConfirmedLiabilityDraft(userId, documentId, document, reviewed, facilityType);
+    confirmed = await persistConfirmedLiabilityDraft(userId, documentId, document, reviewed, facilityType);
   } catch (e) {
     if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
   }
+  // PO decision 2026-10-01: the structured result is durable, so the raw upload goes now (best effort, never throws).
+  await purgeRawDocumentAfterAiConfirm(userId, documentId);
+  return confirmed;
 }
 
 async function persistConfirmedLiabilityDraft(

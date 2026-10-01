@@ -37,6 +37,7 @@ import {
   statementUploadsRepository,
 } from '../repositories';
 import { recordDocumentAuditEvent } from './auditLog';
+import { purgeRawDocumentAfterAiConfirm } from './purge';
 import { downloadDocumentObject } from './storage';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import {
@@ -1192,12 +1193,16 @@ export async function confirmAiBankStatementFallback(
     warningCount: Array.isArray(issued?.warnings) ? issued.warnings.length : 0,
     rowsRead: Array.isArray(issued?.rows) ? issued.rows.length : reviewed.rows.length,
   };
+  let confirmed: ProcessBankPdfResult;
   try {
-    return await confirmClaimedBankStatementDraft(userId, documentId, document, reviewed, aiContext);
+    confirmed = await confirmClaimedBankStatementDraft(userId, documentId, document, reviewed, aiContext);
   } catch (e) {
     if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
   }
+  // PO decision 2026-10-01: the structured result is durable, so the raw upload goes now (best effort, never throws).
+  await purgeRawDocumentAfterAiConfirm(userId, documentId);
+  return confirmed;
 }
 
 async function confirmClaimedBankStatementDraft(

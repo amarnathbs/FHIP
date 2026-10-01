@@ -222,6 +222,26 @@ export async function documentsWithPendingAiFallbackDrafts(documentIds: string[]
   return new Set(((data ?? []) as Array<{ statement_upload_id: string }>).map((r) => r.statement_upload_id));
 }
 
+/**
+ * 2026-10-01: true when the user has CONFIRMED the AI-fallback draft for this
+ * document (the claim succeeded and was not released). Used only as the
+ * durability condition for purging the raw file at confirm time. Scoped by
+ * document AND user. An error or a missing table reads as false, so a purge is
+ * never triggered on uncertain evidence (the 50-minute backstop remains).
+ */
+export async function hasConfirmedAiFallbackDraft(userId: string, documentId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('fdh_ai_fallback_drafts')
+    .select('id')
+    .eq('statement_upload_id', documentId)
+    .eq('user_id', userId)
+    .eq('status', 'confirmed')
+    .limit(1);
+  if (error) return false;
+  return ((data ?? []) as unknown[]).length > 0;
+}
+
 /** 2026-09-25: the user said an AI reading "doesn't look right". Its pending
  * draft is marked `discarded` so it is no longer offered to resume (and can
  * no longer be confirmed). Scoped by document AND user; reports whether a

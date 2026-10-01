@@ -50,6 +50,7 @@ import { statementUploadsRepository, documentAuditEventsRepository } from '../re
 // surface in the product.
 import { checkPasswordAttemptRateLimit } from '../bank-pdf/password';
 import { recordDocumentAuditEvent } from './auditLog';
+import { purgeRawDocumentAfterAiConfirm } from './purge';
 import { downloadDocumentObject } from './storage';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { extractPdfPages } from '../bank-pdf/textExtraction';
@@ -648,12 +649,16 @@ export async function confirmAiPayslipFallback(userId: string, documentId: strin
   }
 
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_confirmed', actorType: 'user' });
+  let confirmed: ProcessPayslipResult;
   try {
-    return await persistPayrollEvidence(userId, documentId, document, extraction);
+    confirmed = await persistPayrollEvidence(userId, documentId, document, extraction);
   } catch (e) {
     if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
   }
+  // PO decision 2026-10-01: the structured result is durable, so the raw upload goes now (best effort, never throws).
+  await purgeRawDocumentAfterAiConfirm(userId, documentId);
+  return confirmed;
 }
 
 export async function persistPayrollEvidence(

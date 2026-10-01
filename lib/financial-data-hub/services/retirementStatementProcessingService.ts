@@ -45,6 +45,7 @@ import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { downloadDocumentObject } from './storage';
 import { recordDocumentAuditEvent } from './auditLog';
+import { purgeRawDocumentAfterAiConfirm } from './purge';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { detectRetirementCsvFormat } from '../retirement/detection';
 import { extractRetirementStatement } from '../retirement/extraction';
@@ -701,12 +702,16 @@ export async function confirmAiRetirementFallback(
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_confirmed', actorType: 'user' });
 
   const smsf = detectSmsf(smsfContext.fundName ?? extraction.fundName, smsfContext.statementTextSample);
+  let confirmed: UploadRetirementStatementResult;
   try {
-    return await persistRetirementEvidence({ userId, document, ex: extraction, smsf });
+    confirmed = await persistRetirementEvidence({ userId, document, ex: extraction, smsf });
   } catch (e) {
     if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
   }
+  // PO decision 2026-10-01: the structured result is durable, so the raw upload goes now (best effort, never throws).
+  await purgeRawDocumentAfterAiConfirm(userId, documentId);
+  return confirmed;
 }
 
 /**

@@ -42,7 +42,7 @@ import { deleteDocumentObject, verifyDocumentObjectAbsent } from './storage';
 import { assertPurgeTransition, isAllowedPurgeTransition, isPurgeEligible } from '../domain/documentLifecycle';
 import { buildStatementUploadPurgePatch } from '../domain/privacy';
 import { decideRawFileBackstopAction } from '../domain/rawFileBackstop';
-import { documentsWithPendingAiFallbackDrafts } from './aiFallbackDrafts';
+import { documentsWithPendingAiFallbackDrafts, hasConfirmedAiFallbackDraft } from './aiFallbackDrafts';
 
 /** Statuses at which the document's structured evidence is already persisted
  * (AIE-1 final completion, 2026-09-25 -- see rawFileBackstop.ts). */
@@ -95,6 +95,70 @@ export async function scheduleApprovedDocumentPurge(document: FdhStatementUpload
     eventType: 'document_purge_scheduled',
     actorType: 'system',
   });
+}
+
+export type ConfirmPurgeOutcome = PurgeAttemptResult | { status: 'skipped'; reason: string };
+
+/**
+ * PO decision 2026-10-01 ("purge on confirm"). Once a user has CONFIRMED an
+ * AI-fallback draft and its structured result is durably written, the raw
+ * upload is no longer needed: delete it now instead of waiting up to ~55
+ * minutes for the hard backstop. A production journey on 2026-10-01 showed the
+ * raw PDF still stored after confirm with no purge scheduled
+ * (raw_document_purge_status='not_required', purge_due_at null), because the
+ * AI-fallback confirm path never called any scheduler.
+ *
+ * Deliberately independent of processing_status. `scheduleApprovedDocumentPurge`
+ * requires 'approved'; the liability / retirement / investment confirm paths
+ * leave the document 'queued' while the evidence awaits approval, and the
+ * purge itself (buildStatementUploadPurgePatch) never touches processing_status.
+ * The durability condition is instead "a confirmed fdh_ai_fallback_drafts row
+ * exists for this document and user" (the claim succeeded and was not released).
+ *
+ * Best effort and NEVER throws: the confirm has already succeeded, and a purge
+ * problem must not turn it into a failure. Any failure leaves the row 'pending'
+ * or 'failed' (retried by the 5-minute sweep) and the 50-minute backstop as the
+ * safety net. Idempotent; a purged, in-progress or legal-hold row is untouched.
+ */
+export async function purgeRawDocumentAfterAiConfirm(userId: string, documentId: string): Promise<ConfirmPurgeOutcome> {
+  try {
+    if (!(await hasConfirmedAiFallbackDraft(userId, documentId))) {
+      return { status: 'skipped', reason: 'no_confirmed_draft' };
+    }
+    const admin = createAdminClient();
+    const { data } = await admin.from('fdh_statement_uploads').select('*').eq('id', documentId).eq('user_id', userId).maybeSingle();
+    const doc = data as FdhStatementUpload | null;
+    if (!doc) return { status: 'skipped', reason: 'not_found' };
+    if (!doc.raw_document_storage_reference) return { status: 'skipped', reason: 'no_raw_object' };
+
+    let current = doc;
+    if (doc.raw_document_purge_status === 'not_required' || doc.raw_document_purge_status === 'failed') {
+      const nowIso = new Date().toISOString();
+      assertPurgeTransition(doc.raw_document_purge_status, 'pending');
+      await admin
+        .from('fdh_statement_uploads')
+        .update({
+          raw_document_purge_status: 'pending',
+          raw_document_purge_due_at: nowIso,
+          purge_reason: 'ai_fallback_confirmed_durable_result',
+        })
+        .eq('id', doc.id);
+      await recordDocumentAuditEvent({
+        userId: doc.user_id,
+        documentId: doc.id,
+        eventType: 'document_purge_scheduled',
+        actorType: 'system',
+        metadata: { reason: 'ai_fallback_confirmed' },
+      });
+      current = { ...doc, raw_document_purge_status: 'pending', raw_document_purge_due_at: nowIso };
+    } else if (doc.raw_document_purge_status !== 'pending') {
+      return { status: 'skipped', reason: `purge_status_${doc.raw_document_purge_status}` };
+    }
+    return await runPurgeAttempt(current);
+  } catch (e) {
+    console.error(`purgeRawDocumentAfterAiConfirm failed for document ${documentId}: ${e instanceof Error ? e.message : String(e)}`);
+    return { status: 'skipped', reason: 'error' };
+  }
 }
 
 /**
