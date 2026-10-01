@@ -8,6 +8,7 @@ import {
 } from '@/lib/financial-data-hub/services/payslipProcessingService';
 import { approvePayrollEventAtomic } from '@/lib/import-bridge/applyIncomeProposalAtomic';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
+import { getDocumentOwner, reconcileRequestedOwner } from '@/lib/financial-data-hub/services/documentOwnerRequest';
 
 // WP-09. Every field is optional so an older client (an empty POST) keeps
 // working: owner defaults to 'self' inside the RPC, and a payslip that needs
@@ -51,6 +52,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   const payrollEventId = await getPayrollEventIdForDocument(user.id, documentId);
   if (!payrollEventId) return bad('No payroll evidence has been extracted from this document yet.', 404);
 
+  // Owner-before-upload (Phase 2): the owner chosen BEFORE uploading is the default and the lock.
+  // An approval that names a different owner is refused; one that names none takes the document's.
+  const uploadOwner = await getDocumentOwner(user.id, documentId);
+  const ownerGate = reconcileRequestedOwner(uploadOwner, body.income_owner);
+  if (!ownerGate.ok) return Response.json({ error: ownerGate.message, code: ownerGate.code }, { status: ownerGate.status });
+  const incomeOwner: 'self' | 'spouse' | undefined = ownerGate.role === 'spouse' ? 'spouse' : ownerGate.role === 'self' ? 'self' : body.income_owner;
+
   // Review gate, checked here as well as in the RPC so the pre-0210 fallback
   // (one-argument RPC) is gated too.
   const review = await getPayrollEventForReview(user.id, payrollEventId);
@@ -64,7 +72,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   }
 
   const result = await approvePayrollEventAtomic(payrollEventId, {
-    incomeOwner: body.income_owner,
+    incomeOwner,
     acknowledgeReview: body.acknowledge_review,
   });
   if (!result.ok) {

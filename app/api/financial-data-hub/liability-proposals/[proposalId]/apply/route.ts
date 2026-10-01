@@ -6,6 +6,7 @@ import {
   LIABILITY_IMPORT_OWNERS,
   statusForLiabilityApplyError,
 } from '@/lib/import-bridge/applyLiabilityProposalAtomic';
+import { getLiabilityProposalDocumentOwner, reconcileRequestedOwner } from '@/lib/financial-data-hub/services/documentOwnerRequest';
 
 const bodySchema = z.object({
   decision: z.enum(LIABILITY_APPLY_DECISIONS),
@@ -37,11 +38,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ proposa
   const parsed = bodySchema.safeParse(rawBody);
   if (!parsed.success) return bad('Invalid request body.', 422);
 
+  // Owner-before-upload (Phase 2): the owner chosen before uploading the statement is the default and
+  // the lock. An apply that names a different owner is refused; one that names none takes the document's.
+  const uploadOwner = await getLiabilityProposalDocumentOwner(user.id, proposalId);
+  const ownerGate = reconcileRequestedOwner(uploadOwner, parsed.data.owner);
+  if (!ownerGate.ok) return Response.json({ error: ownerGate.message, code: ownerGate.code }, { status: ownerGate.status });
+  const owner = (LIABILITY_IMPORT_OWNERS as readonly string[]).includes(ownerGate.role ?? '') ? (ownerGate.role as (typeof LIABILITY_IMPORT_OWNERS)[number]) : parsed.data.owner;
+
   const result = await applyLiabilityProposalAtomic({
     proposalId,
     decision: parsed.data.decision,
     selectedFields: parsed.data.selectedFields,
-    owner: parsed.data.owner,
+    owner,
     acknowledgeUnclassified: parsed.data.acknowledgeUnclassified,
   });
 

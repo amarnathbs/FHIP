@@ -44,6 +44,15 @@ function choiceOf(value: OwnerSelection | null): string {
   return value.kind;
 }
 
+const HELP_TEXT: Record<OwnerFlow, string> = {
+  bank: 'Joint accounts count in full to your household. An SMSF’s transactions are kept with the fund, not your household spending.',
+  ii_cas: 'Every holding on this statement is filed under the owner you choose. You can adjust a single folio later.',
+  payslip: 'The payslip is recorded as this person’s income.',
+  liability: 'Joint loans and cards count in full to your household. An SMSF’s borrowing is kept with the fund, not your personal debt.',
+  retirement: 'The statement is recorded against this person’s super or provident fund account.',
+  au_investment: 'Every holding on this statement is filed under the owner you choose. For a joint account, enter each owner’s share.',
+};
+
 export interface OwnerSelectorProps {
   flow: OwnerFlow;
   value: OwnerSelection | null;
@@ -175,7 +184,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
 
   // A bank statement can only be owned by a spouse/partner besides you, so
   // offering "child" there would add a person who then cannot be chosen.
-  const relationships = flow === 'bank' ? RELATIONSHIPS.filter((r) => r.value === 'spouse' || r.value === 'partner') : RELATIONSHIPS;
+  const relationships = flow !== 'ii_cas' ? RELATIONSHIPS.filter((r) => r.value === 'spouse' || r.value === 'partner') : RELATIONSHIPS;
   const jointDraft = useMemo(() => evaluateJointDraft(allRows), [allRows]);
   const showPercentages = choice === 'joint' && options?.joint.requiresPercentages === true;
   const selectId = `${idPrefix}-select`;
@@ -219,9 +228,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
       </select>
 
       <span id={helpId} className="mt-1 block text-xs text-muted">
-        {flow === 'bank'
-          ? 'Joint accounts count in full to your household. An SMSF’s transactions are kept with the fund, not your household spending.'
-          : 'Every holding on this statement is filed under the owner you choose. You can adjust a single folio later.'}
+        {HELP_TEXT[flow]}
         {options?.entityNotice ? ` ${options.entityNotice}` : ''}
       </span>
 
@@ -280,7 +287,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
         <p className="mt-2 text-xs text-muted">Percentage shares are not used for bank statements — a joint account counts in full to your household.</p>
       )}
 
-      {flow === 'bank' && options && !options.members.some((m) => m.ownerRole === 'spouse') && (
+      {flow !== 'ii_cas' && options && !options.members.some((m) => m.ownerRole === 'spouse') && (
         <p className="mt-2 text-xs text-muted" data-testid="no-spouse-hint">
           No spouse or partner is on your household yet. To choose them, add them below — they are saved as a real household member and then selected.
         </p>
@@ -289,7 +296,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
       <div className="mt-2">
         {!addOpen ? (
           <button type="button" className="text-xs text-gray-600 underline" onClick={() => setAddOpen(true)} disabled={disabled}>
-            Add household member{flow === 'bank' ? ' (spouse or partner)' : ''}
+            Add household member{flow !== 'ii_cas' ? ' (spouse or partner)' : ''}
           </button>
         ) : (
           <div className="flex flex-wrap items-end gap-2">

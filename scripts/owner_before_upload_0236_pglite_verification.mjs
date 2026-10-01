@@ -90,7 +90,7 @@ const before = await inventory();
   check('second run changes nothing: constraints, triggers and policies identical', afterFirst.c === afterSecond.c && afterFirst.t === afterSecond.t && afterFirst.p === afterSecond.p);
   check('RLS untouched: the policy inventory is identical BEFORE and AFTER 0236', before.p === afterSecond.p);
   const added = JSON.parse(afterSecond.c).filter((r) => /_0236$/.test(r.conname)).length;
-  check('11 new named constraints (5 on uploads, 6 on ii_source_documents)', added === 11, `found ${added}`);
+  check('12 new named constraints (6 on uploads, 6 on ii_source_documents)', added === 12, `found ${added}`);
 }
 
 // ---- seed ---------------------------------------------------------------------
@@ -138,6 +138,10 @@ const iiDoc = (cols, vals) => `insert into ii_source_documents (user_id, country
   check('NEGATIVE: a single-owner "joint" split is refused', codeOf(await errOf(db, iiDoc(jointCols, `'joint', 'user_selected', ${alloc([{ ownerMemberId: MEM_A, basisPoints: 10000 }])}`))) === '23514');
   check('NEGATIVE: an element naming both a member and an entity is refused', codeOf(await errOf(db, iiDoc(jointCols, `'joint', 'user_selected', ${alloc([{ ownerMemberId: MEM_A, ownerBusinessEntityId: ENT_A, basisPoints: 5000 }, { ownerMemberId: MEM_A2, basisPoints: 5000 }])}`))) === '23514');
   check('NEGATIVE: a user-selected JOINT document with NO allocation is refused', codeOf(await errOf(db, iiDoc('owner_role, owner_selection_source', `'joint', 'user_selected'`))) === '23514');
+  // fdh_statement_uploads carries a joint split too (AU investment): same shape rule
+  check('a valid joint split on fdh_statement_uploads (6000 + 4000) is accepted', (await errOf(db, up('owner_role, owner_selection_source, owner_allocation', `'joint', 'user_selected', ${alloc(good)}`))) === null);
+  check('NEGATIVE: a 9999 joint split on fdh_statement_uploads is refused (chk_fdh_uploads_owner_joint_alloc_0236)', codeOf(await errOf(db, up('owner_role, owner_allocation', `'joint', ${alloc([{ ownerMemberId: MEM_A, basisPoints: 5999 }, { ownerMemberId: MEM_A2, basisPoints: 4000 }])}`))) === '23514');
+  check('a bank / liability joint with NO split is still accepted (percentages are not used there)', (await errOf(db, up('owner_role, owner_selection_source', `'joint', 'user_selected'`))) === null);
 }
 
 // ---- 4. cross-tenant trigger ------------------------------------------------------

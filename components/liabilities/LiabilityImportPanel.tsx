@@ -22,6 +22,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { statementPeriodError } from '@/components/expenses/bankUploadParams';
+import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import { ownerSelectionToQuery, type OwnerSelection } from '@/lib/ownership/ownerSelection';
 import { ACTIVITY_LEDGER_OUTCOME, BLOCKER_LABELS, OWNER_CHOICES, describeExtractionWarning } from './liabilityLedgerCopy';
 import {
   waitForDocumentToLeaveValidating,
@@ -429,6 +431,11 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   // debits a repayment could be (G4 picker).
   const [hasTarget, setHasTarget] = useState(false);
   const [owner, setOwner] = useState<Owner>('self');
+  // Owner-before-upload (Phase 2): whose card or loan this is, chosen BEFORE uploading with the shared selector
+  // (a real household member, joint, or an SMSF in Australia; never a bare role). `uploadOwnerRole` is what the
+  // server recorded: it is then the apply-step owner and cannot be changed there (a different one is refused).
+  const [uploadOwner, setUploadOwner] = useState<OwnerSelection | null>(null);
+  const [uploadOwnerRole, setUploadOwnerRole] = useState<Owner | null>(null);
   const [acknowledgeUnclassified, setAcknowledgeUnclassified] = useState(false);
   const [blockers, setBlockers] = useState<{ activityId: string; reason: string }[]>([]);
   const [bankCandidates, setBankCandidates] = useState<BankCandidate[]>([]);
@@ -498,6 +505,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     setCorrectionNotice(null);
     setHasTarget(false);
     setOwner('self');
+    setUploadOwnerRole(null);
     setAcknowledgeUnclassified(false);
     setBlockers([]);
     setBankCandidates([]);
@@ -763,7 +771,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   }
 
   async function handleUpload() {
-    if (!file) return;
+    if (!file || !uploadOwner) return;
     setBusy(true);
     setPhase('uploading');
     setMessage(null);
@@ -773,6 +781,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         country_code: country,
         currency_code: currency,
       });
+      ownerSelectionToQuery(params, uploadOwner);
       if (institutionName) params.set('institution_name', institutionName);
       if (maskedIdentifier) params.set('masked_identifier', maskedIdentifier);
       if (openingBalance) params.set('opening_balance', openingBalance);
@@ -796,9 +805,14 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       });
       const { ok, json } = await readJson(res);
       if (!ok) {
-        setMessage(json.error ?? 'We could not process this statement.');
+        setMessage(json.message ?? json.error ?? 'We could not process this statement.');
         setPhase('unable_to_read');
         return;
+      }
+      const recordedOwner = json.data?.owner_role as string | undefined;
+      if (recordedOwner && OWNER_CHOICES.some((o) => o.value === recordedOwner)) {
+        setOwner(recordedOwner as Owner);
+        setUploadOwnerRole(recordedOwner as Owner);
       }
 
       // Real-malware-gate async fix (2026-09-21): the upload route now
@@ -1146,6 +1160,9 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           </div>
           <p className="text-xs text-muted">A month counts in your averages only when a statement covers the whole month.</p>
           {statementPeriodError(periodStart, periodEnd) && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">{statementPeriodError(periodStart, periodEnd)}</p>}
+          <div className="max-w-md">
+            <OwnerSelector flow="liability" idPrefix="liability-owner" value={uploadOwner} onChange={setUploadOwner} disabled={busy} />
+          </div>
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Statement file (CSV)</span>
             <input type="file" accept="text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -1157,7 +1174,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <button
               type="button"
               onClick={handleUpload}
-              disabled={!file || busy || uploadEnabled !== true || statementPeriodError(periodStart, periodEnd) !== null}
+              disabled={!file || !uploadOwner || busy || uploadEnabled !== true || statementPeriodError(periodStart, periodEnd) !== null}
               className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
             >
               Upload statement
@@ -1620,7 +1637,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           {decision !== 'reject_statement' && (
             <label className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-medium">Whose {isCreditCard ? 'card' : 'loan'} is this?</span>
-              <select value={owner} onChange={(e) => setOwner(e.target.value as Owner)} className="rounded border border-gray-300 px-2 py-1">
+              <select value={owner} onChange={(e) => setOwner(e.target.value as Owner)} disabled={uploadOwnerRole !== null} title={uploadOwnerRole ? 'Chosen when you uploaded this statement' : undefined} className="rounded border border-gray-300 px-2 py-1 disabled:opacity-70">
                 {OWNER_CHOICES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </label>

@@ -28,6 +28,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { normaliseProposedFields, type ProposedField } from '@/lib/import-bridge/proposedFieldShape';
 import { PayslipDetails } from '@/components/income/PayslipDetails';
+import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import type { OwnerSelection } from '@/lib/ownership/ownerSelection';
 import { fieldReasonText, reviewReasonText } from '@/lib/income/payslipProposalText';
 import {
   waitForDocumentToLeaveValidating,
@@ -347,6 +349,11 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   // WP-09. Whose payslip this is (GAP-05) -- chosen at upload, confirmed at
   // review, recorded at approval and fixed from then on.
   const [incomeOwner, setIncomeOwner] = useState<'self' | 'spouse'>('self');
+  // Owner-before-upload (Phase 2): who the payslip belongs to is chosen BEFORE it is uploaded, with the
+  // shared selector (a real household member, never a bare role), and fixed from then on. `uploadOwnerRole`
+  // is what the server recorded; a payslip uploaded before this change has none and keeps the review-time choice.
+  const [owner, setOwner] = useState<OwnerSelection | null>(null);
+  const [uploadOwnerRole, setUploadOwnerRole] = useState<'self' | 'spouse' | null>(null);
   // The user has looked at the figures this payslip flagged for review.
   const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
   // GAP-15: an earlier payslip this one revises, and whether it replaces it.
@@ -512,11 +519,14 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     setComponents(Array.isArray(json.data.components) ? (json.data.components as Record<string, unknown>[]) : []);
     setRevisionOf((json.data.revision_of as RevisionOf | null | undefined) ?? null);
     if (loaded.income_owner === 'spouse' || loaded.income_owner === 'self') setIncomeOwner(loaded.income_owner);
+    const uploaded = json.data.upload_owner_role as string | null | undefined;
+    setUploadOwnerRole(uploaded === 'spouse' || uploaded === 'self' ? uploaded : null);
+    if (uploaded === 'spouse' || uploaded === 'self') setIncomeOwner(uploaded);
     setPhase('review');
   }
 
   async function handleUpload() {
-    if (!file) return;
+    if (!file || !owner) return;
     setBusy(true);
     setPhase('uploading');
     setMessage(null);
@@ -527,13 +537,14 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         body: JSON.stringify({
           document_type: 'payslip',
           source_type: 'pdf_native',
+          owner,
           country_code: country,
           declared_mime_type: 'application/pdf',
           declared_file_size_bytes: file.size,
         }),
       });
       const { ok: sessionOk, json: sessionJson } = await readJson(sessionRes);
-      if (!sessionOk) throw new Error(sessionJson.error ?? 'Could not start upload');
+      if (!sessionOk) throw new Error(sessionJson.message ?? sessionJson.error ?? 'Could not start upload');
 
       const completeRes = await fetch(
         `/api/financial-data-hub/documents/upload-sessions/${sessionJson.data.session_id}/complete`,
@@ -663,7 +674,9 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          income_owner: incomeOwner,
+          // A payslip uploaded with an owner takes that owner on the server (and a different one is refused);
+          // only a legacy payslip with no upload owner still names it here.
+          ...(uploadOwnerRole ? {} : { income_owner: incomeOwner }),
           acknowledge_review: reviewAcknowledged,
           replaces_earlier: Boolean(revisionOf) && replacesEarlier,
         }),
@@ -898,17 +911,9 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
               <option value="IN">India</option>
             </select>
           </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted">Whose payslip is this?</span>
-            <select
-              className="w-full max-w-xs rounded border border-gray-300 px-3 py-2"
-              value={incomeOwner}
-              onChange={(e) => setIncomeOwner(e.target.value === 'spouse' ? 'spouse' : 'self')}
-            >
-              <option value="self">Mine</option>
-              <option value="spouse">My spouse&apos;s</option>
-            </select>
-          </label>
+          <div className="max-w-md">
+            <OwnerSelector flow="payslip" idPrefix="payslip-owner" value={owner} onChange={setOwner} disabled={busy} />
+          </div>
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Payslip file (PDF, up to 20MB)</span>
             <input
@@ -921,7 +926,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           <button
             type="button"
             onClick={handleUpload}
-            disabled={!file || busy || uploadEnabled !== true}
+            disabled={!file || !owner || busy || uploadEnabled !== true}
             className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Upload payslip
@@ -1119,6 +1124,10 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           {event.approval_status === 'approved' ? (
             <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">
               This payroll evidence has been approved{event.income_owner === 'spouse' ? ' as your spouse’s income' : ''}.
+            </p>
+          ) : uploadOwnerRole ? (
+            <p className="rounded bg-gray-50 px-3 py-2 text-sm text-gray-800" data-testid="payslip-owner-fixed">
+              This payslip was uploaded as {uploadOwnerRole === 'spouse' ? 'your spouse’s' : 'your'} income. It will only update that person&apos;s income.
             </p>
           ) : (
             <fieldset className="space-y-2 text-sm">

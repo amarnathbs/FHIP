@@ -20,6 +20,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import { ownerSelectionToQuery, type OwnerSelection } from '@/lib/ownership/ownerSelection';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -257,6 +259,8 @@ export function AuInvestmentStatementImportPanel({
   const [institutionName, setInstitutionName] = useState('');
   const [maskedAccountIdentifier, setMaskedAccountIdentifier] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  // Owner-before-upload (Phase 2): chosen BEFORE uploading (Self / Spouse / Joint with shares), never a bare role.
+  const [uploadOwner, setUploadOwner] = useState<OwnerSelection | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(resumeDocumentId ?? null);
   const [message, setMessage] = useState<string | null>(null);
   const [statement, setStatement] = useState<Statement | null>(null);
@@ -358,7 +362,10 @@ export function AuInvestmentStatementImportPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeDocumentId]);
 
-  function ownerBody(): { owner_self: true } | { owner_member_id: string } {
+  function ownerBody(): { owner_self: true } | { owner_member_id: string } | Record<string, never> {
+    // Owner-before-upload (Phase 2): a statement uploaded with an owner takes that owner on the server (and a
+    // different one is refused), so nothing is named here; only a legacy statement still chooses at this step.
+    if (uploadOwner) return {};
     return ownerChoice === 'self' ? { owner_self: true } : { owner_member_id: ownerChoice };
   }
 
@@ -507,12 +514,13 @@ export function AuInvestmentStatementImportPanel({
   }
 
   async function handleUpload() {
-    if (!file) return;
+    if (!file || !uploadOwner) return;
     setBusy(true);
     setPhase('uploading');
     setMessage(null);
     try {
       const params = new URLSearchParams({ csv_kind: csvKind, currency_code: 'AUD' });
+      ownerSelectionToQuery(params, uploadOwner);
       if (institutionName) params.set('institution_name', institutionName);
       if (maskedAccountIdentifier) params.set('masked_account_identifier', maskedAccountIdentifier);
 
@@ -523,7 +531,7 @@ export function AuInvestmentStatementImportPanel({
       });
       const { ok, json } = await readJson(res);
       if (!ok) {
-        setMessage(json.error ?? 'We could not process this statement.');
+        setMessage(json.message ?? json.error ?? 'We could not process this statement.');
         setPhase('unable_to_read');
         return;
       }
@@ -867,11 +875,14 @@ export function AuInvestmentStatementImportPanel({
               <input className="w-full rounded border border-gray-300 px-3 py-2" value={maskedAccountIdentifier} onChange={(e) => setMaskedAccountIdentifier(e.target.value)} />
             </label>
           </div>
+          <div className="max-w-md">
+            <OwnerSelector flow="au_investment" idPrefix="au-investment-owner" value={uploadOwner} onChange={setUploadOwner} disabled={busy} />
+          </div>
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Statement file (CSV)</span>
             <input type="file" accept="text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
-          <button type="button" onClick={handleUpload} disabled={!file || busy || uploadEnabled !== true} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
+          <button type="button" onClick={handleUpload} disabled={!file || !uploadOwner || busy || uploadEnabled !== true} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
             Upload statement
           </button>
         </div>

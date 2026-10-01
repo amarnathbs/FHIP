@@ -137,6 +137,8 @@ export interface OwnerFlowPolicy {
   jointAllocation: 'required' | 'forbidden';
   /** Why entities are not offered, shown to the user / report. */
   entityRefusalReason?: string;
+  /** Why SMSF is not offered for this flow (it is a separate workspace, not an owner label). */
+  smsfRefusalReason?: string;
 }
 
 export const OWNER_FLOW_POLICIES: Record<OwnerFlow, OwnerFlowPolicy> = {
@@ -147,6 +149,51 @@ export const OWNER_FLOW_POLICIES: Record<OwnerFlow, OwnerFlowPolicy> = {
     jointAllocation: 'forbidden',
     entityRefusalReason:
       'Trust, HUF and company statements cannot be imported here yet: bank transactions are counted in your household spending and income, and entity money must stay separate from your personal totals.',
+  },
+  // ---- Phase 2 ------------------------------------------------------------
+  // Income: a payslip is a person's income. The Income architecture records the owner as
+  // 'self' | 'spouse' (income_sources.owner / fdh_payroll_events.income_owner, 0207/0210);
+  // it has no SMSF, trust, HUF or company income isolation, so none is offered.
+  payslip: {
+    allowedKinds: ['member'],
+    allowedMemberRoles: ['self', 'spouse'],
+    allowedEntityTypes: [],
+    jointAllocation: 'forbidden',
+    entityRefusalReason: 'Income from a company, trust or HUF cannot be imported here yet: it would need its own separate income records, so it is not mixed into your personal income.',
+    smsfRefusalReason: 'An SMSF does not receive payslips. Choose the person the payslip belongs to.',
+  },
+  // Liabilities: only owners the canonical Liabilities model separates correctly today
+  // (fdh_financial_accounts.owner_role self/spouse/joint/smsf; isHouseholdOwner excludes
+  // smsf). Company / trust / HUF debt is refused until entity debt isolation exists, so no
+  // entity debt can enter personal DTI / DSR.
+  liability: {
+    allowedKinds: ['member', 'joint', 'smsf'],
+    allowedMemberRoles: ['self', 'spouse'],
+    allowedEntityTypes: [],
+    jointAllocation: 'forbidden',
+    entityRefusalReason: 'Company, trust and HUF loans and cards cannot be imported here yet: entity debt must stay out of your personal debt ratios until it has its own separate records.',
+  },
+  // Retirement: super belongs to a person (the Retirement model's members). An SMSF is its own
+  // workspace with its own balances; a generic "owner" label on a statement must never create
+  // a second copy of SMSF value, so SMSF is not an owner here.
+  retirement: {
+    allowedKinds: ['member'],
+    allowedMemberRoles: ['self', 'spouse'],
+    allowedEntityTypes: [],
+    jointAllocation: 'forbidden',
+    entityRefusalReason: 'Retirement statements belong to a person. Companies, trusts and HUFs do not hold super or provident fund accounts.',
+    smsfRefusalReason: 'A self-managed super fund is managed in the SMSF section of the Retirement page, not by importing a statement under an owner label.',
+  },
+  // AU investment statements: Self / Spouse / Joint (percentages required, same allocation
+  // model as the CAS). Entity-held AU holdings stay out until the entity investment
+  // architecture keeps them out of personal holdings.
+  au_investment: {
+    allowedKinds: ['member', 'joint'],
+    allowedMemberRoles: ['self', 'spouse'],
+    allowedEntityTypes: [],
+    jointAllocation: 'required',
+    entityRefusalReason: 'Investments held by a company, trust or SMSF cannot be imported here yet: they must stay out of your personal holdings until they have their own separate records.',
+    smsfRefusalReason: 'SMSF holdings are managed in the SMSF section, not by importing a statement under an owner label.',
   },
   ii_cas: {
     allowedKinds: ['member', 'entity', 'joint'],
@@ -216,6 +263,9 @@ export function validateOwnerSelectionAgainst(ctx: OwnerContext, input: unknown,
   if (!policy.allowedKinds.includes(selection.kind)) {
     if (selection.kind === 'entity') {
       return fail('owner_not_allowed_for_flow', policy.entityRefusalReason ?? 'Entities cannot be chosen for this kind of document.');
+    }
+    if (selection.kind === 'smsf' && policy.smsfRefusalReason) {
+      return fail('owner_not_allowed_for_flow', policy.smsfRefusalReason);
     }
     return fail('owner_not_allowed_for_flow', 'That owner type cannot be chosen for this kind of document.');
   }

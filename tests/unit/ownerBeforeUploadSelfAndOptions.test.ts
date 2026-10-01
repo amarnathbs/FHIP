@@ -72,7 +72,7 @@ describe('GET /api/ownership/options never writes', () => {
     h.user = null;
     expect((await get('bank')).status).toBe(401);
     h.user = { id: A };
-    expect((await get('payslip')).status).toBe(422);
+    expect((await get('not_a_flow')).status).toBe(422);
   });
 });
 
@@ -122,8 +122,8 @@ describe('the selector: Self first, then the read; no role-only Spouse (PO-OBU-0
     // no role-only value anywhere in the selector
     expect(selector).not.toMatch(/<option value="spouse"|handleChoice\('spouse'\)|kind: 'spouse'/);
   });
-  it('bank restricts the inline relationship choices to spouse / partner', () => {
-    expect(selector).toMatch(/flow === 'bank' \? RELATIONSHIPS\.filter\(\(r\) => r\.value === 'spouse' \|\| r\.value === 'partner'\)/);
+  it('every restricted flow (bank, payslip, liability, retirement, AU investment) limits the inline relationship choices to spouse / partner', () => {
+    expect(selector).toMatch(/flow !== 'ii_cas' \? RELATIONSHIPS\.filter\(\(r\) => r\.value === 'spouse' \|\| r\.value === 'partner'\)/);
   });
   it('the wire format can only name a real member id: a role is not a selection', () => {
     expect(ownerSelectionSchema.safeParse({ kind: 'member', role: 'spouse' }).success).toBe(false);

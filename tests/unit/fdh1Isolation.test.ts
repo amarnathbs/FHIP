@@ -805,6 +805,12 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // still has no account (`.is('financial_account_id', null)`).
       path.join(FDH_LIB, 'services', 'bankOwnerAttribution.ts'),
       path.join(FDH_LIB, 'services', 'bankAccountAssignment.ts'),
+      // Owner-before-upload Phase 2 adds a FIFTEENTH: documentOwnerRequest.ts, the shared owner handling for
+      // payslip / liability / retirement / AU-investment uploads. It writes only the owner columns of a document
+      // row the caller's own upload just created (tolerant of a database without 0236), reads the caller's own
+      // earlier documents to refuse the identical file under a different owner, and reads the caller's own
+      // document owner at the canonical-write gates. Every query is `.eq('user_id', userId)`.
+      path.join(FDH_LIB, 'services', 'documentOwnerRequest.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

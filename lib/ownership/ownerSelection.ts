@@ -34,8 +34,9 @@ import { z } from 'zod';
 export const OWNER_SELECTION_KINDS = ['member', 'entity', 'joint', 'smsf'] as const;
 export type OwnerSelectionKind = (typeof OWNER_SELECTION_KINDS)[number];
 
-/** The upload flows that take an owner. Phase 1 ships the first two only. */
-export const OWNER_FLOWS = ['bank', 'ii_cas'] as const;
+/** The upload flows that take an owner. Phase 1: bank, ii_cas. Phase 2: payslip,
+ * liability, retirement, au_investment (see OWNER_FLOW_POLICIES for what each can carry). */
+export const OWNER_FLOWS = ['bank', 'ii_cas', 'payslip', 'liability', 'retirement', 'au_investment'] as const;
 export type OwnerFlow = (typeof OWNER_FLOWS)[number];
 
 export function isOwnerFlow(value: unknown): value is OwnerFlow {

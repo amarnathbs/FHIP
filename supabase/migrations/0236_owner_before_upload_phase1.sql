@@ -8,7 +8,8 @@
 --
 -- WHAT THIS ADDS (everything nullable, no rewrite, no backfill):
 --   fdh_statement_uploads   owner_member_id, owner_business_entity_id,
---                           owner_role, owner_selection_source
+--                           owner_role, owner_selection_source,
+--                           owner_allocation (jsonb; joint split, AU investment)
 --   ii_source_documents     owner_business_entity_id, owner_role,
 --                           owner_selection_source, owner_allocation (jsonb),
 --                           owner_review (jsonb)
@@ -68,7 +69,8 @@ alter table public.fdh_statement_uploads
   add column if not exists owner_member_id uuid references public.household_members(id) on delete set null,
   add column if not exists owner_business_entity_id uuid references public.business_entities(id) on delete set null,
   add column if not exists owner_role text,
-  add column if not exists owner_selection_source text;
+  add column if not exists owner_selection_source text,
+  add column if not exists owner_allocation jsonb;
 
 comment on column public.fdh_statement_uploads.owner_role is
   'Owner-before-upload (0236): the canonical FHIP owner role the user chose for THIS document (lib/constants OWNER_VALUES). NULL = not recorded (legacy). Never nulled by the purge lifecycle.';
@@ -152,6 +154,13 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'chk_fdh_uploads_owner_chosen_has_role_0236' and conrelid = 'public.fdh_statement_uploads'::regclass) then
     alter table public.fdh_statement_uploads add constraint chk_fdh_uploads_owner_chosen_has_role_0236
       check (owner_selection_source is distinct from 'user_selected' or owner_role is not null);
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'chk_fdh_uploads_owner_joint_alloc_0236' and conrelid = 'public.fdh_statement_uploads'::regclass) then
+    -- A user-selected JOINT document with percentages (AU investment) must carry a valid split;
+    -- any stored split must be valid. (A bank / liability joint carries no split: owner_allocation stays NULL.)
+    alter table public.fdh_statement_uploads add constraint chk_fdh_uploads_owner_joint_alloc_0236
+      check (owner_allocation is null or public.owner_before_upload_allocation_ok(owner_allocation));
   end if;
 
   -- ii_source_documents
