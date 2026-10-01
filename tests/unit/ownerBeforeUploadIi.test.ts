@@ -221,11 +221,18 @@ describe('DECISION 6: the identical file under a different owner is rejected', (
     expect(r.json.message).toMatch(/no owner was recorded/);
     expect(docs()[0].owner_member_id).toBeNull();
   });
-  it("another user's identical file never matches", async () => {
+  it("P1: the same bytes uploaded by ANOTHER user tell this user NOTHING (no 409, no owner name, no id, no 'deduplicated')", async () => {
     const bytes = new TextEncoder().encode('%PDF-1.4 fake cas statement one');
     const { createHash } = await import('crypto');
-    h.db.insert('ii_source_documents', { id: 'f0000000-0000-4000-8000-000000000002', user_id: B, status: 'parsed', checksum: createHash('sha256').update(bytes).digest('hex'), owner_member_id: MEM_B, owner_role: 'self', owner_selection_source: 'user_selected' });
-    expect((await post({ owner: { kind: 'member', memberId: SELF } })).status).toBe(200);
+    const B_DOC = 'f0000000-0000-4000-8000-000000000002';
+    h.db.insert('ii_source_documents', { id: B_DOC, user_id: B, status: 'parsed', checksum: createHash('sha256').update(bytes).digest('hex'), owner_member_id: MEM_B, owner_role: 'self', owner_selection_source: 'user_selected' });
+    const withB = await post({ owner: { kind: 'member', memberId: SELF } });
+    expect(withB.status).toBe(200);
+    expect(withB.json.data.deduplicated).toBeUndefined();
+    expect(withB.json.data.id).not.toBe(B_DOC);
+    expect(JSON.stringify(withB.json)).not.toMatch(new RegExp(`${B_DOC}|Bob|identical|already uploaded`));
+    expect(docs().filter((d) => d.user_id === A)).toHaveLength(1);
+    expect(h.storageCalls).toBe(1); // stored normally: B's upload is invisible to A
   });
 });
 

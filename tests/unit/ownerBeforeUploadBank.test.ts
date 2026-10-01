@@ -227,9 +227,28 @@ describe('DECISION 6: the identical file under a different owner is rejected, ne
     h.db.insert('fdh_statement_uploads', { id: 'f0000000-0000-4000-8000-000000000002', user_id: A, source_type: 'csv', document_type: 'bank_statement', processing_status: 'approved', file_hash: sha256Hex(CSV), financial_account_id: null });
     expect((await post('csv', { owner: self })).status).toBe(200);
   });
-  it("another user's identical file never matches (tenant scoped)", async () => {
-    h.db.insert('fdh_statement_uploads', { id: 'f0000000-0000-4000-8000-000000000003', user_id: B, source_type: 'csv', document_type: 'bank_statement', processing_status: 'approved', file_hash: sha256Hex(CSV), owner_role: 'smsf', owner_selection_source: 'user_selected' });
-    expect((await post('csv', { owner: self })).status).toBe(200);
+  it("P1: the same bytes uploaded by ANOTHER user tell this user NOTHING (no 409, no owner, no existence signal)", async () => {
+    const B_DOC = 'f0000000-0000-4000-8000-000000000003';
+    h.db.insert('fdh_statement_uploads', { id: B_DOC, user_id: B, source_type: 'csv', document_type: 'bank_statement', processing_status: 'approved', certification_status: 'certified', processing_completed_at: '2026-09-01T00:00:00Z', file_hash: sha256Hex(CSV), owner_role: 'smsf', owner_selection_source: 'user_selected' });
+    const withB = await post('csv', { owner: self });
+    expect(withB.status).toBe(200);
+    expect(withB.json.data.duplicate_of_document_id).toBeNull(); // the "already imported" signal is user-scoped
+    const text = JSON.stringify(withB.json);
+    expect(text).not.toContain(B_DOC);
+    expect(text).not.toMatch(/smsf|identical|already uploaded/i);
+    // The response is the SAME as when nobody else has uploaded those bytes (apart from generated ids).
+    h.db = createFakeDb();
+    h.seq = 0;
+    h.db.insert('user_profiles', { user_id: A, country_of_residence: 'AU' });
+    h.db.insert('household_members', { id: MEM_SELF, user_id: A, full_name: 'Anil', relationship: 'self', is_active: true });
+    const without = await post('csv', { owner: self });
+    const shape = (j: any) => JSON.stringify(j, (k, v) => (/_id$/.test(k) ? '<id>' : v));
+    expect(shape(withB.json)).toBe(shape(without.json));
+    // The shared rule that decides "already imported" is user-scoped too.
+    const { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } = await import('@/lib/financial-data-hub/services/identicalUpload');
+    const mine = h.db.rows('fdh_statement_uploads')[0];
+    h.db.insert('fdh_statement_uploads', { id: B_DOC, user_id: B, source_type: 'csv', document_type: 'bank_statement', processing_status: 'approved', certification_status: 'certified', processing_completed_at: '2026-09-01T00:00:00Z', file_hash: sha256Hex(CSV), created_at: '2026-01-01T00:00:00Z' });
+    expect(await findEarlierIdenticalUpload(A, mine.id as string, IDENTICAL_UPLOAD_SPECS.bank)).toBeNull();
   });
 });
 
