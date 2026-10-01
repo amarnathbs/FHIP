@@ -10,6 +10,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
 import { PC7_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc7/lookthroughDataAdmin';
+import { MARKET_INDEX_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/marketIndex/marketIndexAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -65,6 +66,30 @@ async function canViewLookthroughDataQuality(): Promise<boolean> {
   }
 }
 
+/**
+ * Market Index Data upload capability (migration 0232). Its own independent
+ * read — never derived from the PC6/PC7 reads above or from isAdmin: this
+ * capability WRITES data, those only read (Standard section 2).
+ *
+ * FAILS CLOSED: any error, a logged-out caller, a missing row or a missing
+ * COLUMN (0232 not applied) yields false.
+ */
+async function canUploadMarketIndexData(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(MARKET_INDEX_ADMIN_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return (data as unknown as Record<string, unknown> | null)?.[MARKET_INDEX_ADMIN_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
+
 // Lets the nav know which Admin groups to show, without exposing any admin
 // data itself — a logged-out, non-admin, non-Resources-role caller just gets
 // all-false flags, never a 403 (the actual admin/Resources routes still
@@ -115,6 +140,7 @@ export async function GET() {
       resourceAnalytics: canViewResourceAnalytics(current),
       referenceDataQuality: await canViewReferenceDataQuality(),
       lookthroughDataQuality: await canViewLookthroughDataQuality(),
+      marketIndexDataUpload: await canUploadMarketIndexData(),
     },
   });
 }

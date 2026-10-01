@@ -4,8 +4,13 @@
 // the double returns rows ONLY when the loader asked for them.
 type Row = Record<string, unknown>;
 
-export function fakeSupabase(tables: Record<string, Row[]>, opts: { failTable?: string } = {}) {
+export function fakeSupabase(
+  tables: Record<string, Row[]>,
+  opts: { failTable?: string; rpc?: (name: string, args: Record<string, unknown>) => { data?: unknown; error?: { code?: string; message?: string } | null } } = {}
+) {
   const calls: Array<{ table: string; eq: Array<[string, unknown]> }> = [];
+  const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const updates: Array<{ table: string; values: Row; eq: Array<[string, unknown]> }> = [];
   function from(table: string) {
     const state = { filters: [] as Array<(r: Row) => boolean>, order: [] as Array<[string, boolean]>, limit: Infinity, from: 0, to: Infinity, single: false, eq: [] as Array<[string, unknown]> };
     const run = () => {
@@ -26,6 +31,11 @@ export function fakeSupabase(tables: Record<string, Row[]>, opts: { failTable?: 
         return b;
       },
       neq: (c: string, v: unknown) => (state.filters.push((r) => r[c] !== v), b),
+      gte: (c: string, v: string) => (state.filters.push((r) => (r[c] as string) >= v), b),
+      update: (values: Row) => {
+        updates.push({ table, values, eq: state.eq });
+        return b;
+      },
       lte: (c: string, v: string) => (state.filters.push((r) => (r[c] as string) <= v), b),
       in: (c: string, vs: unknown[]) => (state.filters.push((r) => vs.includes(r[c])), b),
       is: (c: string, v: unknown) => (state.filters.push((r) => (r[c] ?? null) === v), b),
@@ -40,5 +50,10 @@ export function fakeSupabase(tables: Record<string, Row[]>, opts: { failTable?: 
     };
     return b;
   }
-  return { client: { from } as unknown as import('@supabase/supabase-js').SupabaseClient, calls };
+  const rpc = (name: string, args: Record<string, unknown>) => {
+    rpcCalls.push({ name, args });
+    const r = opts.rpc ? opts.rpc(name, args) : { data: null, error: null };
+    return Promise.resolve({ data: r.data ?? null, error: r.error ?? null });
+  };
+  return { client: { from, rpc } as unknown as import('@supabase/supabase-js').SupabaseClient, calls, rpcCalls, updates };
 }

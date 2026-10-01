@@ -96,6 +96,14 @@ export const LOOKTHROUGH_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Underlying Fund Holdings Quality', href: '/admin/investment-intelligence/lookthrough-data-quality' },
 ];
 
+// Market Index Data: the Nifty 50 / BSE Sensex upload surface (migration 0232).
+// A SEPARATE group from Reference Data because it is a separate capability that
+// WRITES data: an operator trusted to read ingest health is not thereby trusted
+// to upload index values.
+export const MARKET_INDEX_DATA_ITEMS: { label: string; href: string }[] = [
+  { label: 'Market Index Data', href: '/admin/investment-intelligence/market-index-data' },
+];
+
 // -- Capability contract ---------------------------------------------------
 
 /**
@@ -125,6 +133,15 @@ export interface AdminCapabilities {
    * named capabilities for two surfaces (Standard §2).
    */
   lookthroughDataQuality: boolean;
+  /**
+   * Market Index Data upload (migration 0232) — upload of historical Nifty 50 /
+   * BSE Sensex closing values and the upload ledger. Backed by
+   * admin_users.can_upload_market_index_data and is_market_index_data_admin().
+   * Deliberately NOT implied by `isAdmin`, `referenceDataQuality` or
+   * `lookthroughDataQuality`: this capability WRITES data, those only read
+   * (Standard section 2).
+   */
+  marketIndexDataUpload: boolean;
 }
 
 /**
@@ -141,6 +158,7 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   resourceAnalytics: false,
   referenceDataQuality: false,
   lookthroughDataQuality: false,
+  marketIndexDataUpload: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -172,6 +190,7 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     resourceAnalytics: readBooleanField(source, 'resourceAnalytics'),
     referenceDataQuality: readBooleanField(source, 'referenceDataQuality'),
     lookthroughDataQuality: readBooleanField(source, 'lookthroughDataQuality'),
+    marketIndexDataUpload: readBooleanField(source, 'marketIndexDataUpload'),
   };
 }
 
@@ -219,6 +238,7 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.resourceDiscoveryAdmin ? [{ label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.lookthroughDataQuality ? [{ label: 'Fund Look-Through', items: LOOKTHROUGH_DATA_ITEMS, matchMode: 'exact' as const }] : []),
+    ...(capabilities.marketIndexDataUpload ? [{ label: 'Market Index Data', items: MARKET_INDEX_DATA_ITEMS, matchMode: 'exact' as const }] : []),
   ];
 }
 
