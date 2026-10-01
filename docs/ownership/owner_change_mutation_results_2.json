@@ -1,0 +1,132 @@
+[
+ {
+  "mutation": "M28 not-joint override needs no second confirmation",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- joint splits NEGATIVE CONTROL [joint case needs a joint owner]: with case_id, a sole-owner choice is refused and the case stays OPEN",
+   "PATCH accounts/[id]/owner -- \"this is not a joint holding\" (PO decision 2026-10-01) NEGATIVE CONTROL [needs the second confirmation]: confirm:true alone, or confirm_not_joint:false, leaves the joint case OPEN and writes nothing",
+   "POST resolutions/[caseId]/amend -- immutability and history a resolved JOINT case can be amended to another joint split, but not to a sole owner",
+   "POST resolutions/[caseId]/amend -- immutability and history a resolved joint case can be amended to a SOLE owner only with confirm_not_joint (recorded on the new row); then amended back to a split",
+   "case rules NOT-JOINT [PO 2026-10-01]: a sole owner resolves a joint-holding case only with the explicit flag"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M29 a sole owner resolves a joint case without the flag (apply)",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "PATCH accounts/[id]/owner -- joint splits without case_id, a sole-owner choice never resolves an open joint-holding case",
+   "PATCH accounts/[id]/owner -- \"this is not a joint holding\" (PO decision 2026-10-01) without case_id the flag alone resolves the account joint case; without the flag it does not",
+   "case rules NOT-JOINT [PO 2026-10-01]: a sole owner resolves a joint-holding case only with the explicit flag",
+   "case rules a joint holding is resolved ONLY by a joint split; owner_unmatched / owner_mismatch by any owner"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M30 attribution accepts a split that is not 10000",
+  "file": "lib/services/investment-intelligence/ownerAttribution.ts",
+  "failed": [
+   "attributeByBasisPoints (pure oracle) NEGATIVE CONTROL [never fabricates]: a split that is not exactly 10000, has a zero / fractional share, or is empty returns null"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M31 attribution drops the rounding remainder (shares do not add back)",
+  "file": "lib/services/investment-intelligence/ownerAttribution.ts",
+  "failed": [
+   "attributeByBasisPoints (pure oracle) an indivisible amount never drifts: 0.0001 across two owners gives 0.0001 + 0 (largest remainder, earlier owner first)"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M32 read model divides an incomplete (not 10000) joint group",
+  "file": "lib/read-models/investments.ts",
+  "failed": [],
+  "error": null
+ },
+ {
+  "mutation": "M33 owner-class scope forgets ii_transactions",
+  "file": "lib/services/investment-intelligence/ownerClass.ts",
+  "failed": [
+   "scopeClientToAccounts: the certified loaders run unchanged on one class's rows the SUM of the per-class cash-flow inputs equals the consolidated input (no row lost, none duplicated); each class sees only its own",
+   "scopeClientToAccounts: the certified loaders run unchanged on one class's rows NEGATIVE CONTROL [scope is what narrows]: the unscoped client sees both accounts; an empty scope sees none",
+   "scopeClientToAccounts: the certified loaders run unchanged on one class's rows tables without an account column pass through; account-scoped tables are narrowed",
+   "loadOwnerClassScopeForReport with an entity account -> a read-only client narrowed to the non-entity accounts, and the breakup lists both classes",
+   "SIP route: a per-class run never persists the loader receives a client narrowed to the class's accounts (not the raw client)"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M34 scoped client allows writes (a per-class run could persist)",
+  "file": "lib/services/investment-intelligence/ownerClass.ts",
+  "failed": [
+   "scopeClientToAccounts: the certified loaders run unchanged on one class's rows NEGATIVE CONTROL [read-only]: a scoped client refuses every write, so a per-class run can never overwrite consolidated results"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M35 entity-shared account classified as plain joint (personal-looking)",
+  "file": "lib/services/investment-intelligence/ownerClass.ts",
+  "failed": [
+   "classifyOwnership sole member -> personal member:<id>; sole entity -> entity:<id>; members-only split -> joint; split with an entity -> entity_shared; none -> unallocated",
+   "buildOwnerBreakup: separate tables per owner class + an explicit macro line one row per owner class, in a stable order: personal members, joint, entities, shared-with-entity, unallocated",
+   "buildOwnerBreakup: separate tables per owner class + an explicit macro line each class has its OWN totals (hand-computed)",
+   "buildOwnerBreakup: separate tables per owner class + an explicit macro line joint and entity-shared classes show each owner's attributed part, dividing by basis points and adding back exactly"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M36 macro line double-counts",
+  "file": "lib/services/investment-intelligence/ownerClass.ts",
+  "failed": [
+   "buildOwnerBreakup: separate tables per owner class + an explicit macro line the macro line is explicit, labelled, and EXACTLY the sum of the classes (each position once, never 2x)",
+   "loaders (DB-shaped fake) loadOwnerBreakup uses the LATEST snapshot per position, never another tenant's, and its macro line equals the sum of classes",
+   "ownerBreakupNarrative ends with the explicit macro line (each position once, labelled not a personal total) and says the chapters cover personal and joint only",
+   "loadOwnerClassScopeForReport with an entity account -> a read-only client narrowed to the non-entity accounts, and the breakup lists both classes",
+   "OwnerBreakupTable (Overview) NEGATIVE CONTROL [never silently summed]: the personal table does not contain the trust, and the macro line is separate, labelled and explained"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M37 report chapters run on the unscoped client",
+  "file": "lib/services/reportSnapshotResolver.ts",
+  "failed": [
+   "wiring (structural) the report resolver runs the four II chapters on the scoped client and stores the breakup"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M38 a per-class SIP run persists over the consolidated rows",
+  "file": "app/api/investment-intelligence/sip/route.ts",
+  "failed": [
+   "SIP route: a per-class run never persists consolidated run persists (control); a scoped run does not, and says which class it is",
+   "every analysis tab is wired to the owner-class selector (structural) NEGATIVE CONTROL [no persistence from a scoped run]: the three persisting routes skip persistence when a class is active"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M39 incomplete allocation group trusted as an owner",
+  "file": "lib/services/investment-intelligence/ownerModel.ts",
+  "failed": [
+   "classifyOwnership AGREES WITH THE INDIA MF REPORT: an incomplete split (not 10000) and an unknown owner id are both Unallocated, never silently personal"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M40 a foreign / unknown owner class is accepted",
+  "file": "lib/services/investment-intelligence/ownerClassScope.ts",
+  "failed": [
+   "resolveOwnerClassScope NEGATIVE CONTROL [tenant isolation]: another user's class key, and an unknown key, are 404 OWNER_CLASS_NOT_FOUND",
+   "SIP route: a per-class run never persists NEGATIVE CONTROL [unknown class]: a foreign key is refused before any loader runs"
+  ],
+  "error": null
+ },
+ {
+  "mutation": "M41 report does not exclude entity data",
+  "file": "lib/services/investment-intelligence/ownerClassReportScope.ts",
+  "failed": [
+   "loadOwnerClassScopeForReport with an entity account -> a read-only client narrowed to the non-entity accounts, and the breakup lists both classes"
+  ],
+  "error": null
+ }
+]

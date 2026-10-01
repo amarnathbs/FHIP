@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie } from 'recharts';
 import { fmtDate } from './dateDisplay';
+import { OwnerClassBar } from './OwnerClassBar';
+import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { buildAmcPieSlices } from './amcConcentrationChart';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
@@ -130,6 +132,18 @@ function FreshnessBadge({ freshness }: { freshness: string }) {
 }
 
 export function PortfolioXrayClient() {
+  // 2026-10-01 owner classes: the default is the explicit consolidated (macro) view; picking a class re-mounts the
+  // content (key) so it fetches that class's own analysis. Nothing is added across classes.
+  const [ownerClass, setOwnerClass] = useState(ALL_OWNER_CLASSES);
+  return (
+    <div>
+      <OwnerClassBar value={ownerClass} onChange={setOwnerClass} />
+      <PortfolioXrayClientInner key={ownerClass} ownerClass={ownerClass} />
+    </div>
+  );
+}
+
+function PortfolioXrayClientInner({ ownerClass }: { ownerClass: string }) {
   const [data, setData] = useState<XrayResponse | null>(null);
   const [overlap, setOverlap] = useState<OverlapResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +156,7 @@ export function PortfolioXrayClient() {
     let cancelled = false;
     void (async () => {
       try {
-        const [xr, ov] = await Promise.all([fetch('/api/investment-intelligence/xray'), fetch('/api/investment-intelligence/xray/overlap')]);
+        const [xr, ov] = await Promise.all([fetch(withOwnerClass('/api/investment-intelligence/xray', ownerClass)), fetch(withOwnerClass('/api/investment-intelligence/xray/overlap', ownerClass))]);
         const xb = await xr.json();
         const ob = await ov.json();
         if (cancelled) return;
@@ -158,7 +172,7 @@ export function PortfolioXrayClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerClass]);
 
   if (loading) return <p className="text-sm text-muted">Loading portfolio X-Ray…</p>;
   if (error) return <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Could not load portfolio X-Ray: {error}</div>;

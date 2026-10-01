@@ -129,7 +129,7 @@ const QUALITY_BADGE: Record<DataQuality['status'], { label: string; className: s
   unresolved: { label: 'Data quality issue', className: 'bg-amber-50 text-amber-800 border-amber-200' },
 };
 
-export function HoldingsTable() {
+export function HoldingsTable({ ownerClass = 'all' }: { ownerClass?: string } = {}) {
   const [payload, setPayload] = useState<HoldingsApiPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,7 +139,7 @@ export function HoldingsTable() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/investment-intelligence/holdings');
+        const res = await fetch(ownerClass && ownerClass !== 'all' ? `/api/investment-intelligence/holdings?ownerClass=${encodeURIComponent(ownerClass)}` : '/api/investment-intelligence/holdings');
         const json = await res.json();
         if (cancelled) return;
         if (!res.ok) setError(json.error ?? 'Holdings could not be loaded.');
@@ -153,7 +153,7 @@ export function HoldingsTable() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerClass]);
 
   if (loading) return <p className="text-sm text-muted">Loading holdings…</p>;
   if (error) return <p className="rounded-card border border-risk bg-white p-4 text-sm text-risk">{error}</p>;

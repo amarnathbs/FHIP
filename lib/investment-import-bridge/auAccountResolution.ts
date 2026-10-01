@@ -24,6 +24,7 @@ import {
   type ExistingAuInvestmentAccountCandidate,
 } from '@/lib/financial-data-hub/investment/accountMatching';
 import { ensureSelfHouseholdMember } from '@/lib/services/household/ensureSelfMember';
+import { loadDecidedOwnershipAccountIds } from '@/lib/services/investment-intelligence/accountOwnership';
 
 export async function fetchAuAccountCandidates(userId: string): Promise<{ candidates: ExistingAuInvestmentAccountCandidate[]; error: string | null }> {
   const admin = createAdminClient();
@@ -135,7 +136,11 @@ export async function confirmExistingAuStatementAccount(
   if (!statement) return { accountId: null, error: 'Statement not found.' };
   const { data: account } = await admin.from('ii_accounts').select('id, owner_member_id').eq('id', accountId).eq('user_id', userId).eq('country_code', 'AU').eq('status', 'active').maybeSingle();
   if (!account) return { accountId: null, error: 'That investment account was not found.' };
-  if (owner && !account.owner_member_id) {
+  // 2026-10-01: an entity / joint-owned account has owner_member_id = null BY
+  // DESIGN -- its owner is already decided in the active allocation group, so a
+  // statement match must not "fill in" a sole member over it.
+  const decidedOwnership = owner && !account.owner_member_id ? await loadDecidedOwnershipAccountIds(admin, userId, [accountId]) : new Set<string>();
+  if (owner && !account.owner_member_id && !decidedOwnership.has(accountId)) {
     const set = await setAuAccountOwner(userId, accountId, owner);
     if (set.error) return { accountId: null, error: set.error };
   }
@@ -161,11 +166,13 @@ export async function describeAuAccounts(userId: string, accountIds: readonly st
     .eq('user_id', userId)
     .eq('country_code', 'AU')
     .in('id', [...accountIds]);
+  const decided = await loadDecidedOwnershipAccountIds(admin, userId, accountIds);
   return ((data ?? []) as { id: string; institution_name: string | null; account_number_masked: string | null; owner_member_id: string | null }[]).map((a) => ({
     accountId: a.id,
     institutionName: a.institution_name,
     maskedAccountIdentifier: a.account_number_masked,
-    ownerRecorded: Boolean(a.owner_member_id),
+    // An entity / joint owner is a recorded owner too (owner_member_id is null for those).
+    ownerRecorded: Boolean(a.owner_member_id) || decided.has(a.id),
   }));
 }
 

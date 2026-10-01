@@ -1,7 +1,10 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
+import { applyAccountOwnerChange, loadAccountOwnership, loadOwnerChoiceContext } from '@/lib/services/investment-intelligence/accountOwnership';
+import { describeOwnership, isOwnerCaseType, jointCaseOwnerFailure, ownerChangeRequestSchema, ownershipAuditShape, resolutionMethodFor, validateOwnerSelection } from '@/lib/services/investment-intelligence/ownerModel';
 import { z } from 'zod';
 
 /**
@@ -35,8 +38,19 @@ import { z } from 'zod';
  * Centre's own next refresh) sees the corrected value on its next read,
  * exactly as it would after the original resolution.
  *
- * 'owner_unmatched' / 'owner_mismatch' cases are amended by re-setting the
- * account's owner (as above). `ambiguous_instrument` cases (Document2 final
+ * 'owner_unmatched' / 'owner_mismatch' / 'joint_holding_allocation_required'
+ * cases are amended by re-setting the account's owner (as above).
+ *
+ * 2026-10-01 entity + joint owners: the new owner may be a household member, a
+ * business entity (Family Trust / Company / HUF-India-only), or a joint split
+ * with percentages (basis points, exactly 10000) -- body
+ * `{ owner: {...}, confirm: true }`, the same contract as `PATCH
+ * .../accounts/[id]/owner`, validated by the SAME function against rows loaded
+ * for this user. The amendment still INSERTS a new, already-resolved case; the
+ * amended case row is never touched. A joint-holding case can only be amended
+ * to a joint split. Replaying the same amendment is refused with 409
+ * already_amended, so it can never create a second allocation set.
+ * `ambiguous_instrument` cases (Document2 final
  * closure #3, 2026-09-30) are amended by re-choosing the canonical
  * instrument from the SAME candidate list the original case recorded — the
  * body's discriminant is which field is present (`ownerMemberId` vs
@@ -47,15 +61,21 @@ import { z } from 'zod';
  * still shown in history, for a complete record, but with no amend action
  * offered — see the GET .../resolutions route's header.
  */
-const amendSchema = z.union([z.object({ ownerMemberId: z.string().uuid() }), z.object({ resolvedInstrumentId: z.string().uuid() })]);
-const OWNER_AMENDABLE_DISCREPANCY_TYPES = ['owner_unmatched', 'owner_mismatch'] as const;
+const instrumentAmendSchema = z.object({ resolvedInstrumentId: z.string().uuid() });
 
 export async function POST(req: Request, { params }: { params: Promise<{ caseId: string }> }) {
   const { caseId } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
-  const parsed = amendSchema.safeParse(await req.json());
-  if (!parsed.success) return badValidation(parsed.error, 422);
+  const rawBody = await req.json().catch(() => null);
+  const isInstrumentAmend = !!rawBody && typeof rawBody === 'object' && 'resolvedInstrumentId' in rawBody;
+  const instrumentParsed = isInstrumentAmend ? instrumentAmendSchema.safeParse(rawBody) : null;
+  if (instrumentParsed && !instrumentParsed.success) return badValidation(instrumentParsed.error, 422);
+  const ownerParsed = isInstrumentAmend ? null : ownerChangeRequestSchema.safeParse(rawBody);
+  if (ownerParsed && !ownerParsed.success) return badValidation(ownerParsed.error, 422);
+  if (ownerParsed?.success && ownerParsed.data.confirm !== true) {
+    return bad('Please confirm the owner change before saving it.', 422, 'OWNER_CHANGE_NOT_CONFIRMED');
+  }
 
   const admin = createAdminClient();
 
@@ -81,7 +101,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
     .maybeSingle();
   if (newerAmendment) return bad('This decision has already been amended by a later one. Amend the most recent decision instead.', 409, 'already_amended');
 
-  if ('resolvedInstrumentId' in parsed.data) {
+  if (instrumentParsed?.success) {
+    const parsed = instrumentParsed;
     if (priorCase.discrepancy_type !== 'ambiguous_instrument') return bad('This resolution type cannot be amended here.', 422);
     const details = (priorCase.discrepancy_details as Record<string, unknown> | null) ?? {};
     const candidateInstrumentIds = Array.isArray(details.candidateInstrumentIds) ? (details.candidateInstrumentIds as unknown[]).filter((x): x is string => typeof x === 'string') : [];
@@ -135,21 +156,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
     return ok({ resolvedInstrumentId: parsed.data.resolvedInstrumentId, newCaseId: newCase.id, amendsCaseId: caseId, reprocessed, reprocessError });
   }
 
+  if (!ownerParsed?.success) return bad('This resolution type cannot be amended here.', 422);
   if (priorCase.subject_type !== 'account') return bad('This resolution type cannot be amended here.', 422);
-  if (!OWNER_AMENDABLE_DISCREPANCY_TYPES.includes(priorCase.discrepancy_type as (typeof OWNER_AMENDABLE_DISCREPANCY_TYPES)[number])) {
-    return bad('This resolution type cannot be amended here.', 422);
-  }
+  if (!isOwnerCaseType(priorCase.discrepancy_type)) return bad('This resolution type cannot be amended here.', 422);
 
   const accountId = priorCase.subject_id as string;
-  const { data: account } = await admin.from('ii_accounts').select('id, owner_member_id').eq('id', accountId).eq('user_id', user.id).maybeSingle();
-  if (!account) return bad('Account not found.', 404);
+  const currentOwnership = await loadAccountOwnership(admin, user.id, accountId);
+  if (!currentOwnership) return bad('Account not found.', 404);
 
-  const { data: member } = await admin.from('household_members').select('id').eq('id', parsed.data.ownerMemberId).eq('user_id', user.id).maybeSingle();
-  if (!member) return bad('Household member not found.', 404);
+  const userClient = await createClient();
+  const ctx = await loadOwnerChoiceContext(user.id, userClient);
+  const validated = validateOwnerSelection(ownerParsed.data.owner, ctx);
+  if (!validated.ok) return bad(validated.message, validated.status, validated.code);
+  const jointFailure = jointCaseOwnerFailure(priorCase.discrepancy_type as string, validated.owner.kind, ownerParsed.data.confirm_not_joint);
+  if (jointFailure) return bad(jointFailure.message, jointFailure.status, jointFailure.code);
+  const notJointConfirmed = ownerParsed.data.confirm_not_joint === true && validated.owner.kind !== 'joint';
 
-  const previousOwnerMemberId = (account.owner_member_id as string | null) ?? null;
+  // Apply the ownership change FIRST: if it is refused (e.g. an entity owner
+  // for an already-published account) no amendment row is left behind
+  // claiming a decision that did not take effect.
+  const applied = await applyAccountOwnerChange({ userId: user.id, accountId, owner: validated.owner, amend: true, caseId, notJointConfirmed });
+  if (!applied.ok) return bad(applied.message, applied.status, applied.code);
+
+  const previousOwnerMemberId = currentOwnership.pointerMemberId;
   const nowIso = new Date().toISOString();
-
   const { data: newCase, error: insertErr } = await admin
     .from('ii_reconciliation_cases')
     .insert({
@@ -162,32 +192,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
       discrepancy_details: {
         ...((priorCase.discrepancy_details as Record<string, unknown> | null) ?? {}),
         amendsCaseId: caseId,
+        // Legacy member-only keys stay populated for a sole-member result so older readers keep working.
         previousOwnerMemberId,
-        resolvedOwnerMemberId: parsed.data.ownerMemberId,
+        resolvedOwnerMemberId: validated.owner.kind === 'member' ? validated.owner.pointerMemberId : null,
+        previousOwner: ownershipAuditShape(applied.before),
+        resolvedOwner: ownershipAuditShape(applied.after),
+        ...(notJointConfirmed && priorCase.discrepancy_type === 'joint_holding_allocation_required' ? { notJointConfirmed: true } : {}),
         reason: 'User amendment of a prior decision, from the Resolutions history view.',
       },
       status: 'resolved',
       resolved_at: nowIso,
-      resolution_method: 'user_amended_owner',
+      resolution_method: resolutionMethodFor(validated.owner.kind, true),
       resolved_by: user.id,
       resolved_by_actor_type: 'user',
     })
     .select('id')
     .single();
-  if (insertErr || !newCase) return bad(insertErr?.message ?? 'Could not record the amendment.');
-
-  const { error: updateErr } = await admin.from('ii_accounts').update({ owner_member_id: parsed.data.ownerMemberId }).eq('id', accountId).eq('user_id', user.id);
-  if (updateErr) return bad(updateErr.message);
+  if (insertErr || !newCase) return bad(insertErr?.message ?? 'Could not record the amendment. The owner was updated; retry to record it in history.');
 
   await emitAuditEvent({
     userId: user.id,
     eventType: 'user_correction',
-    subjectType: 'ii_accounts',
-    subjectId: accountId,
+    subjectType: 'ii_reconciliation_cases',
+    subjectId: newCase.id as string,
     actorType: 'user',
     actorId: user.id,
-    metadata: { field: 'owner_member_id', newValue: parsed.data.ownerMemberId, previousValue: previousOwnerMemberId, amendsCaseId: caseId, newCaseId: newCase.id },
+    metadata: { field: 'ownership_amendment', ...(notJointConfirmed ? { notJointConfirmed: true } : {}), amendsCaseId: caseId, newCaseId: newCase.id, accountId, before: ownershipAuditShape(applied.before), after: ownershipAuditShape(applied.after) },
   });
 
-  return ok({ accountId, ownerMemberId: parsed.data.ownerMemberId, newCaseId: newCase.id, amendsCaseId: caseId });
+  return ok({
+    accountId,
+    owner: describeOwnership(applied.after, ctx),
+    ownerMemberId: validated.owner.pointerMemberId,
+    newCaseId: newCase.id,
+    amendsCaseId: caseId,
+    changed: applied.changed,
+    allocationGroupId: applied.allocationGroupId,
+    republishRecommended: applied.republishRecommended,
+  });
 }

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ownerClassField, resolveOwnerClassScope } from '@/lib/services/investment-intelligence/ownerClassScope';
 import { loadTaxDataset, persistTaxLots, persistTaxLotConsumptions, persistCapitalGainsComputations, loadTaxProfile, toTaxProfileInput } from '@/lib/services/investment-intelligence/taxRepository';
 import { runTaxSimulation } from '@/lib/engines/investment-intelligence/tax/taxOrchestrator';
 import type { TaxpayerType } from '@/lib/engines/investment-intelligence/tax/taxProfile';
@@ -48,7 +49,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const rootClient = await createClient();
+    const scope = await resolveOwnerClassScope(request, rootClient, user.id);
+    if (!scope.ok) return scope.response;
+    const supabase = scope.client;
     const { dataset, warnings, empty } = await loadTaxDataset(supabase, user.id, { asOfDate: asOfRaw ?? undefined });
 
     if (empty || !dataset) {
@@ -105,12 +109,15 @@ export async function GET(request: Request) {
     // Lots must be persisted first — ii_capital_gains_computations.lot_id
     // is a not-null FK into ii_tax_lots (see persistTaxLots's header for the
     // defect this fixes).
-    const lotsPersistence = await persistTaxLots(user.id, result.lots);
-    const consumptionsPersistence = await persistTaxLotConsumptions(user.id, result.disposalResults);
-    const persistence = await persistCapitalGainsComputations(user.id, result.disposalResults, result.exitLoadResults);
+    // A per-owner-class run is read-only: it must never persist over the consolidated rows.
+    const noPersist = { persisted: 0, error: null as string | null };
+    const lotsPersistence = scope.active ? noPersist : await persistTaxLots(user.id, result.lots);
+    const consumptionsPersistence = scope.active ? noPersist : await persistTaxLotConsumptions(user.id, result.disposalResults);
+    const persistence = scope.active ? noPersist : await persistCapitalGainsComputations(user.id, result.disposalResults, result.exitLoadResults);
 
     return ok({
       empty: false,
+      ownerClass: ownerClassField(scope),
       classification: result.classification,
       disclaimer: result.disclaimer,
       residencyNote: result.residencyNote ?? null,

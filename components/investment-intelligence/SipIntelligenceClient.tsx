@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { fmtDate } from './dateDisplay';
+import { OwnerClassBar } from './OwnerClassBar';
+import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
@@ -120,6 +122,18 @@ function ActivityBadge({ status }: { status: string }) {
 }
 
 export function SipIntelligenceClient() {
+  // 2026-10-01 owner classes: the default is the explicit consolidated (macro) view; picking a class re-mounts the
+  // content (key) so it fetches that class's own analysis. Nothing is added across classes.
+  const [ownerClass, setOwnerClass] = useState(ALL_OWNER_CLASSES);
+  return (
+    <div>
+      <OwnerClassBar value={ownerClass} onChange={setOwnerClass} />
+      <SipIntelligenceClientInner key={ownerClass} ownerClass={ownerClass} />
+    </div>
+  );
+}
+
+function SipIntelligenceClientInner({ ownerClass }: { ownerClass: string }) {
   const [data, setData] = useState<SipResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,7 +147,7 @@ export function SipIntelligenceClient() {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/investment-intelligence/sip');
+        const res = await fetch(withOwnerClass('/api/investment-intelligence/sip', ownerClass));
         const body = await res.json();
         if (cancelled) return;
         if (!res.ok) throw new Error(body?.error ?? 'Request failed');
@@ -147,7 +161,7 @@ export function SipIntelligenceClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerClass]);
 
   async function runSimulation(seriesKey: string) {
     setSimLoading(true);

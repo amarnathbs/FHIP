@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
+import type { OwnerBreakup } from '@/lib/services/investment-intelligence/ownerClass';
+import { loadOwnerClassScopeForReport } from '@/lib/services/investment-intelligence/ownerClassReportScope';
 import { loadDashboard, getFxRateAudInr, fetchAllRows, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { loadHealthScore, type HealthScorePayload } from '@/lib/services/healthScoreData';
 import { loadResilience, type ResiliencePayload } from '@/lib/services/resilienceData';
@@ -128,6 +130,12 @@ export interface PremiumSourceData {
   xray: ReportXrayData | null;
   taxAndCost: ReportTaxData | null;
   reviewItems: ReportReviewData | null;
+  /**
+   * 2026-10-01 owner classes: every owner class as its own item + the explicit macro line (null when the
+   * household has a single owner class or the classes could not be read). When the user has trust / HUF /
+   * company holdings the four chapters above were produced WITHOUT them (see loadOwnerClassScopeForReport).
+   */
+  ownerBreakup?: OwnerBreakup | null;
 }
 
 export interface ReportSourceData {
@@ -326,6 +334,9 @@ export async function resolveReportSourceData(
   // just hidden in the UI, to avoid paying for data a free report never renders.
   let premium: PremiumSourceData | null = null;
   if (planTier === 'premium') {
+    // 2026-10-01 owner classes: entity-owned (trust / HUF / company) holdings are never silently summed into the
+    // personal chapters. A user with none gets the unscoped client: behaviour identical to before.
+    const iiScope = await loadOwnerClassScopeForReport(userId, supabase).catch(() => ({ client: supabase, breakup: null as OwnerBreakup | null }));
     const [
       investmentsRes,
       insuranceRes,
@@ -384,10 +395,10 @@ export async function resolveReportSourceData(
       // null internally (spec section 39) — the .catch() here is defence
       // in depth only, so one chapter's failure can never abort the whole
       // premium report generation.
-      loadInvestmentPerformanceForReport(userId, supabase).catch(() => null),
-      loadSipForReport(userId, supabase).catch(() => null),
-      loadXrayForReport(userId, supabase).catch(() => null),
-      loadTaxForReport(userId, supabase).catch(() => null),
+      loadInvestmentPerformanceForReport(userId, iiScope.client).catch(() => null),
+      loadSipForReport(userId, iiScope.client).catch(() => null),
+      loadXrayForReport(userId, iiScope.client).catch(() => null),
+      loadTaxForReport(userId, iiScope.client).catch(() => null),
       loadReviewItemsForReport(userId).catch(() => null),
     ]);
 
@@ -418,6 +429,7 @@ export async function resolveReportSourceData(
       xray,
       taxAndCost,
       reviewItems,
+      ownerBreakup: iiScope.breakup,
     };
   }
 

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { fmtDate, fmtDateTime } from './dateDisplay';
+import { OwnerChangeDialog, type OwnerSubmitExtra, type OwnerSubmitResult } from './OwnerChangeDialog';
+import { apiErrorMessage, type OwnerSelectionBody, type OwnershipView } from './ownerChange';
 
 // 2026-09-28 owner-exception unification, item 4 of the Product Owner's
 // decision: the "Resolutions" tab becomes a HISTORY + AMENDMENT view, not
@@ -13,6 +15,13 @@ import { fmtDate, fmtDateTime } from './dateDisplay';
 // statement's account belongs to, without ever mutating the original
 // decision (see the /amend route's header for the supersession discipline
 // this mirrors from PC5's own K.18).
+//
+// 2026-10-01: an amendment (and the original decision shown here) can now be
+// a household member, a trust / HUF / company, or a joint split with
+// percentages -- chosen in OwnerChangeDialog, whose second step is an explicit
+// confirmation. A decided joint-holding case is amendable too (to another
+// joint split). The history row for an entity / joint decision shows the
+// owners with their shares, never raw ids.
 
 interface ResolutionItem {
   id: string;
@@ -30,19 +39,15 @@ interface ResolutionItem {
   isSuperseded: boolean;
   resolvedOwnerName: string | null;
   previousOwnerName: string | null;
+  resolvedOwner?: OwnershipView | null;
+  previousOwner?: OwnershipView | null;
+  matchedMemberIds?: string[];
   declaredOwnerName: string | null;
   matchedOwnerName: string | null;
   maskedHolderName: string | null;
   outcomeKind: string | null;
   reason: string | null;
   accountCurrencyCode: string | null;
-}
-
-interface HouseholdMemberOption {
-  id: string;
-  full_name: string;
-  relationship: string;
-  is_active: boolean;
 }
 
 const DISCREPANCY_LABEL: Record<string, string> = {
@@ -55,11 +60,7 @@ export function ResolutionHistoryClient() {
   const [items, setItems] = useState<ResolutionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberOption[] | null>(null);
   const [amendingId, setAmendingId] = useState<string | null>(null);
-  const [selectedMemberByCase, setSelectedMemberByCase] = useState<Record<string, string>>({});
-  const [submittingId, setSubmittingId] = useState<string | null>(null);
-  const [amendError, setAmendError] = useState<Record<string, string>>({});
   const [amendSuccess, setAmendSuccess] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
@@ -78,47 +79,36 @@ export function ResolutionHistoryClient() {
   }, []);
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    (async () => {
+      await load();
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
-  async function ensureHouseholdMembersLoaded() {
-    if (householdMembers !== null) return;
-    try {
-      const res = await fetch('/api/household-members');
-      const json = await res.json();
-      setHouseholdMembers(res.ok ? (json.data ?? []) : []);
-    } catch {
-      setHouseholdMembers([]);
-    }
-  }
-
-  async function startAmend(caseId: string) {
+  function startAmend(caseId: string) {
     setAmendingId(caseId);
-    setAmendError((prev) => ({ ...prev, [caseId]: '' }));
     setAmendSuccess((prev) => ({ ...prev, [caseId]: '' }));
-    await ensureHouseholdMembersLoaded();
   }
 
-  async function submitAmend(caseId: string) {
-    const ownerMemberId = selectedMemberByCase[caseId];
-    if (!ownerMemberId) return;
-    setSubmittingId(caseId);
-    setAmendError((prev) => ({ ...prev, [caseId]: '' }));
+  // `confirm: true` is the explicit confirmation from the dialog's second step.
+  async function submitAmend(caseId: string, owner: OwnerSelectionBody, extra?: OwnerSubmitExtra): Promise<OwnerSubmitResult> {
     try {
       const res = await fetch(`/api/investment-intelligence/resolutions/${encodeURIComponent(caseId)}/amend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerMemberId }),
+        body: JSON.stringify({ owner, confirm: true, ...(extra?.confirmNotJoint ? { confirm_not_joint: true } : {}) }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not record that amendment.');
-      setAmendingId(null);
-      setAmendSuccess((prev) => ({ ...prev, [caseId]: 'Amended — the account owner has been updated.' }));
+      if (!res.ok) return { ok: false, error: apiErrorMessage(json, 'Could not record that amendment.') };
+      setAmendSuccess((prev) => ({ ...prev, [caseId]: 'Amended — the owner has been updated and the earlier decision is kept in history.' }));
       await load();
+      return { ok: true };
     } catch (e) {
-      setAmendError((prev) => ({ ...prev, [caseId]: e instanceof Error ? e.message : 'Could not record that amendment.' }));
-    } finally {
-      setSubmittingId(null);
+      return { ok: false, error: e instanceof Error ? e.message : 'Could not record that amendment.' };
     }
   }
 
@@ -148,7 +138,11 @@ export function ResolutionHistoryClient() {
                 <h3 className="mt-1 font-medium text-ink">{item.accountLabel ?? 'Statement exception'}</h3>
                 {item.maskedHolderName && <p className="mt-1 text-sm text-muted">Statement printed in the name of {item.maskedHolderName}.</p>}
                 <p className="mt-1 text-sm text-muted">
-                  {item.resolutionMethod === 'user_amended_owner' ? 'Amended to' : 'Assigned to'} <strong>{item.resolvedOwnerName ?? '(unknown member)'}</strong>
+                  {item.resolutionMethod === 'user_amended_owner' ? 'Amended to' : item.resolutionMethod === 'user_confirmed_not_joint' ? 'Confirmed not joint; assigned to' : item.resolvedOwner?.kind === 'joint' ? 'Split as' : 'Assigned to'}{' '}
+                  <strong>{item.resolvedOwnerName ?? '(unknown owner)'}</strong>
+                  {item.resolvedOwner && item.resolvedOwner.kind !== 'joint' && item.resolvedOwner.kind !== 'unassigned' && item.resolvedOwner.owners[0] ? (
+                    <span className="text-xs"> ({item.resolvedOwner.owners[0].detail})</span>
+                  ) : null}
                   {item.previousOwnerName ? <> — previously {item.previousOwnerName}</> : null}
                 </p>
                 <p className="mt-2 text-xs text-muted">
@@ -162,40 +156,19 @@ export function ResolutionHistoryClient() {
                     Amend this decision
                   </button>
                 )}
-                {item.amendable && !item.isSuperseded && amendingId === item.id && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <label className="text-xs text-muted" htmlFor={`amend-select-${item.id}`}>
-                      Correct owner to:
-                    </label>
-                    <select
-                      id={`amend-select-${item.id}`}
-                      className="rounded-md border px-2 py-1 text-xs"
-                      value={selectedMemberByCase[item.id] ?? ''}
-                      onChange={(e) => setSelectedMemberByCase((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                      disabled={householdMembers === null}
-                    >
-                      <option value="">{householdMembers === null ? 'Loading…' : 'Choose a household member'}</option>
-                      {(householdMembers ?? [])
-                        .filter((m) => m.is_active)
-                        .map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.full_name} ({m.relationship})
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      onClick={() => void submitAmend(item.id)}
-                      disabled={!selectedMemberByCase[item.id] || submittingId === item.id}
-                      className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
-                    >
-                      {submittingId === item.id ? 'Saving…' : 'Save amendment'}
-                    </button>
-                    <button onClick={() => setAmendingId(null)} className="rounded-md border px-2 py-1 text-xs text-muted">
-                      Cancel
-                    </button>
-                  </div>
+                {item.amendable && !item.isSuperseded && amendingId === item.id && item.subjectType === 'account' && (
+                  <OwnerChangeDialog
+                    accountId={item.subjectId}
+                    accountLabel={item.accountLabel}
+                    mode="amend"
+                    jointOnly={item.discrepancyType === 'joint_holding_allocation_required'}
+                    suggestedJointMemberIds={item.matchedMemberIds ?? []}
+                    holderHint={item.maskedHolderName}
+                    submit={(owner, extra) => submitAmend(item.id, owner, extra)}
+                    onClose={() => setAmendingId(null)}
+                    onDone={() => setAmendingId(null)}
+                  />
                 )}
-                {amendError[item.id] && <p className="mt-1 text-xs text-red-600">{amendError[item.id]}</p>}
                 {amendSuccess[item.id] && <p className="mt-1 text-xs text-green-700">{amendSuccess[item.id]}</p>}
               </div>
             </div>
