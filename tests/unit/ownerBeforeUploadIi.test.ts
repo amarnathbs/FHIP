@@ -24,6 +24,7 @@ import {
   readDocumentOwner,
 } from '@/lib/services/investment-intelligence/documentOwner';
 import { ownerColumnsFor } from '@/lib/services/investment-intelligence/uploadOwner';
+import { OWNER_CASE_TYPES } from '@/lib/services/investment-intelligence/ownerModel';
 import type { ParsedAccountRecord } from '@/lib/services/investment-intelligence/parsers/types';
 
 const h = vi.hoisted(() => ({ db: null as unknown as FakeDb, user: null as { id: string } | null, storageCalls: 0, missingOwnerColumns: false }));
@@ -404,7 +405,10 @@ describe('holder-name mismatch is a NON-BLOCKING warning for new uploads; legacy
   });
   it('the Review / Resolutions surfaces and the owner-assignment route still handle the legacy case types', () => {
     const route = fs.readFileSync(path.resolve(__dirname, '../../app/api/investment-intelligence/accounts/[id]/owner/route.ts'), 'utf8');
-    expect(route).toMatch(/RESOLVABLE_BY_OWNER_ASSIGNMENT = \['owner_unmatched', 'owner_mismatch'\]/);
+    // ONE ownership model: the route resolves the legacy case types through the canonical writer / case-type list.
+    expect(route).toMatch(/applyAccountOwnerChange/);
+    expect(route).toMatch(/isOwnerCaseType/);
+    expect(OWNER_CASE_TYPES).toEqual(expect.arrayContaining(['owner_unmatched', 'owner_mismatch', 'joint_holding_allocation_required']));
     const client = fs.readFileSync(path.resolve(__dirname, '../../components/investment-intelligence/InvestmentIntelligenceClient.tsx'), 'utf8');
     expect(client).toMatch(/c\.discrepancy_type === 'owner_unmatched'/);
     expect(client).toMatch(/handleAssignOwner/);

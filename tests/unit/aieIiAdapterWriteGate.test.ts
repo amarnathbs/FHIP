@@ -8,6 +8,7 @@ function baseInput(overrides: Partial<AcceptAndWriteInput> = {}): AcceptAndWrite
     aieRunId: 'run-1',
     userId: 'user-1',
     ownerMemberId: 'member-1',
+    owner: { kind: 'member', ownerRole: 'self', ownerMemberId: 'member-1', ownerBusinessEntityId: null, entityType: null, allocations: null, label: 'Self' },
     countryCode: 'IN',
     originalFilename: 'statement.pdf',
     declaredMimeType: 'application/pdf',

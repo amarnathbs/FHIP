@@ -12,6 +12,7 @@ import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { dispatchInvestmentDocument } from '@/lib/aie/adapters/investment-intelligence/dispatch';
 import { resolveHouseholdCountryForUser, UnresolvedHouseholdCountryError } from '@/lib/aie/adapters/investment-intelligence/householdContext';
+import { resolveIntakeOwnerForAccept } from '@/lib/aie/intakeOwner';
 
 /**
  * M3 (Phase 4) — `POST /api/aie/investment-intelligence/intake/{intakeId}/process`
@@ -156,12 +157,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ intakeI
     return bad('this document is already being processed', 409, admitted.code);
   }
 
+  // Owner-before-upload: the owner chosen when the file was first sent is stored on the intake and is the one
+  // this (extraction-only) step uses; a legacy intake without one falls back to the caller-supplied member id,
+  // and is refused at accept time anyway.
+  const storedOwner = await resolveIntakeOwnerForAccept(user.id, intakeId, 'ii_cas');
+  const effectiveOwnerMemberId = storedOwner.ok ? (storedOwner.owner.kind === 'member' ? storedOwner.owner.ownerMemberId : null) : ownerMemberId;
+
   const outcome = await dispatchInvestmentDocument({
     intakeId,
     userId: user.id,
     storageKey: intake.storageKey,
     countryCode,
-    ownerMemberId,
+    ownerMemberId: effectiveOwnerMemberId,
+    ownerDeclared: storedOwner.ok,
     password,
     deps: createDefaultDeps(gateway),
   });

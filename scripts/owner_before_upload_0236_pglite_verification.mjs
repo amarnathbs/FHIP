@@ -64,7 +64,7 @@ const ENT_B = 'e2222222-2222-4222-8222-222222222222';
 console.log('Owner-before-upload Phase 1 -- 0236 verification');
 
 const inventory = async () => {
-  const c = await db.query(`select conrelid::regclass::text t, conname from pg_constraint where conrelid in ('public.fdh_statement_uploads'::regclass, 'public.ii_source_documents'::regclass) order by 1, 2`);
+  const c = await db.query(`select conrelid::regclass::text t, conname from pg_constraint where conrelid in ('public.fdh_statement_uploads'::regclass, 'public.ii_source_documents'::regclass, 'public.aie_document_intake'::regclass) order by 1, 2`);
   const t = await db.query(`select event_object_table t, trigger_name from information_schema.triggers where event_object_table in ('fdh_statement_uploads','ii_source_documents') group by 1,2 order by 1,2`);
   const p = await db.query(`select tablename, policyname, cmd, qual, with_check from pg_policies where tablename in ('fdh_statement_uploads','ii_source_documents') order by 1, 2`);
   return { c: JSON.stringify(c.rows), t: JSON.stringify(t.rows), p: JSON.stringify(p.rows) };
@@ -90,7 +90,7 @@ const before = await inventory();
   check('second run changes nothing: constraints, triggers and policies identical', afterFirst.c === afterSecond.c && afterFirst.t === afterSecond.t && afterFirst.p === afterSecond.p);
   check('RLS untouched: the policy inventory is identical BEFORE and AFTER 0236', before.p === afterSecond.p);
   const added = JSON.parse(afterSecond.c).filter((r) => /_0236$/.test(r.conname)).length;
-  check('12 new named constraints (6 on uploads, 6 on ii_source_documents)', added === 12, `found ${added}`);
+  check('13 new named constraints (6 on uploads, 6 on ii_source_documents, 1 on aie_document_intake)', added === 13, `found ${added}`);
 }
 
 // ---- seed ---------------------------------------------------------------------
@@ -164,6 +164,19 @@ const iiDoc = (cols, vals) => `insert into ii_source_documents (user_id, country
   await db.exec('reset role');
   await db.query(`select set_config('request.jwt.claims', '{}', false)`);
   check("RLS: user B cannot see user A's uploads or ii documents", r.rows[0].n === 0 && r2.rows[0].n === 0, JSON.stringify([r.rows[0], r2.rows[0]]));
+}
+
+// ---- 6. AIE intake owner_selection ----------------------------------------------------
+{
+  const ins = (v) => `insert into aie_document_intake (user_id, declared_mime_type, byte_size, owner_selection) values ('${A}', 'application/pdf', 10, ${v})`;
+  check('aie_document_intake.owner_selection exists after 0236 and accepts a JSON object', (await errOf(db, ins(`'{"kind":"member","member_id":"${MEM_A}"}'::jsonb`))) === null);
+  check('an intake with no owner_selection (legacy / insurance) is still valid', (await errOf(db, ins('null'))) === null);
+  check('NEGATIVE: a non-object owner_selection is refused (chk_aie_intake_owner_selection_object_0236)', codeOf(await errOf(db, ins(`'"self"'::jsonb`))) === '23514');
+  await db.exec(`alter table public.aie_document_intake drop constraint chk_aie_intake_owner_selection_object_0236`);
+  check('CONTROL: with the constraint dropped, the same non-object IS accepted (so the constraint is what refused it)', (await errOf(db, ins(`'"self"'::jsonb`))) === null);
+  await db.exec(`delete from aie_document_intake where jsonb_typeof(owner_selection) <> 'object'`);
+  const re = await errOf(db, target);
+  check('re-applying 0236 restores the AIE constraint, and it bites again', re === null && codeOf(await errOf(db, ins(`'"self"'::jsonb`))) === '23514', re?.message);
 }
 
 // ---- 7. negative controls on the guards themselves ---------------------------------

@@ -169,6 +169,32 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ from: () => ({}) }),
 }));
 
+// Owner-before-upload: the intake now requires an owner and accept re-validates it. These tests are about the
+// AIE lifecycle, not the owner rules (tests/unit/aieOwnerBeforeUpload.test.ts covers those), so the validator
+// and the intake-owner store are stubbed to a valid Self owner. A request WITHOUT an owner is still refused.
+vi.mock('@/lib/ownership/validateOwnerSelection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ownership/validateOwnerSelection')>();
+  return {
+    ...actual,
+    validateOwnerSelection: async (_userId: string, input: unknown) =>
+      input
+        ? { ok: true, owner: { kind: 'member', ownerRole: 'self', ownerMemberId: 'member-self-1', ownerBusinessEntityId: null, entityType: null, allocations: null, label: 'Self' } }
+        : { ok: false, code: 'owner_required', message: 'Choose who this document belongs to.', status: 422 },
+  };
+});
+vi.mock('@/lib/aie/intakeOwner', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/aie/intakeOwner')>();
+  return {
+    ...actual,
+    recordIntakeOwnerSelection: async () => true,
+    resolveIntakeOwnerForAccept: async () => ({
+      ok: true,
+      owner: { kind: 'member', ownerRole: 'self', ownerMemberId: 'member-self-1', ownerBusinessEntityId: null, entityType: null, allocations: null, label: 'Self' },
+    }),
+  };
+});
+
+
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
     from: (table: string) => ({
@@ -362,7 +388,7 @@ function cleanCbaStatementBytes(): Uint8Array {
 }
 
 function intakeRequest(bytes: Uint8Array): Request {
-  return new Request('https://app.test/api/aie/fdh-bank/intake?country_code=AU&currency_code=AUD&filename=statement.pdf', {
+  return new Request(`https://app.test/api/aie/fdh-bank/intake?country_code=AU&currency_code=AUD&filename=statement.pdf&owner=${encodeURIComponent(JSON.stringify({ kind: 'member', member_id: 'member-self-1' }))}`, {
     method: 'POST',
     headers: { 'content-length': String(bytes.byteLength), 'content-type': 'application/pdf' },
     body: bytes,

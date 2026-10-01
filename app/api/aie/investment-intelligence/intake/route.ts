@@ -15,6 +15,7 @@ import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
+import { recordIntakeOwnerSelection, resolveAieIntakeOwner } from '@/lib/aie/intakeOwner';
 
 // One shared gateway per process, matching the other AIE intake routes. The
 // provider is constructed HERE, in the route, not inside the adapter —
@@ -81,6 +82,15 @@ export async function POST(req: Request) {
   const filename = url.searchParams.get('filename');
   const ownerMemberIdParam = url.searchParams.get('owner_member_id');
 
+  // Owner-before-upload: the owner (Self / Spouse / Joint with shares / Trust / HUF (India) / Company) is
+  // chosen BEFORE a byte is accepted, validated with the same canonical validator as the interactive CAS
+  // upload, stored on the intake and re-validated at accept. A legacy `owner_member_id` alone is NOT enough.
+  const ownerRequest = await resolveAieIntakeOwner(user.id, url, 'ii_cas');
+  if (!ownerRequest.ok) return bad(ownerRequest.message, ownerRequest.status, ownerRequest.code);
+  if (ownerMemberIdParam && ownerRequest.owner.kind === 'member' && ownerMemberIdParam !== ownerRequest.owner.ownerMemberId) {
+    return bad('owner_member_id does not match the chosen owner.', 422, 'owner_member_mismatch');
+  }
+
   const contentLength = Number(req.headers.get('content-length') ?? '0');
   const maxBytes = DEFAULT_AIE_UPLOAD_LIMITS.maxBytesByMimeType['application/pdf'];
   if (!contentLength || contentLength <= 0) return bad('File upload incomplete.', 422);
@@ -108,6 +118,10 @@ export async function POST(req: Request) {
   if ('error' in created) return bad('could not create intake', 500);
   const intakeId = created.id;
   await recordAieAuditEvent({ intakeId, runId: null, userId: user.id, eventType: 'intake_created', actorType: 'user', actorId: user.id });
+  if (!(await recordIntakeOwnerSelection(intakeId, user.id, ownerRequest.selection))) {
+    await updateIntakeStatus({ intakeId, toStatus: 'rejected', rejectionReason: 'owner_not_recorded' });
+    return bad('could not record the document owner', 500);
+  }
 
   // --- Admission / quarantine gate ---------------------------------------
   // The real scan this application has today: declared-vs-detected MIME,
@@ -190,7 +204,8 @@ export async function POST(req: Request) {
     userId: user.id,
     storageKey,
     countryCode: country,
-    ownerMemberId: ownerMemberIdParam,
+    ownerMemberId: ownerRequest.owner.kind === 'member' ? ownerRequest.owner.ownerMemberId : null,
+    ownerDeclared: true,
     deps: createDefaultDeps(gateway),
   });
 

@@ -30,6 +30,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { uploadBankPdf } from '@/lib/financial-data-hub/services/bankPdfUploadService';
 import { processBankPdfDocument, BankPdfProcessingError } from '@/lib/financial-data-hub/services/bankPdfProcessingService';
 import type { BankCsvUploadMetadataInput } from '@/lib/financial-data-hub/validation/bankCsv';
+import { BankIdenticalUploadOwnerConflictError, BankOwnerConflictError, type BankUploadOwner } from '@/lib/financial-data-hub/services/bankOwnerAttribution';
 import { isAieFdhBankAtomicImportEnabled } from './featureFlags';
 
 export interface FdhBankCommitRequest {
@@ -38,11 +39,16 @@ export interface FdhBankCommitRequest {
   intakeId: string;
   bytes: Uint8Array;
   metadata: BankCsvUploadMetadataInput;
+  /**
+   * Owner-before-upload: REQUIRED. The owner the user chose before sending the file, validated at intake and
+   * re-validated at accept time (lib/aie/intakeOwner.ts). There is no owner-less AIE bank commit.
+   */
+  owner: BankUploadOwner;
 }
 
 export type FdhBankCommitOutcome =
   | { committed: false; reason: 'atomic_import_disabled' }
-  | { committed: false; reason: 'account_ambiguous' | 'account_unresolved' | 'processing_failed'; detail?: string }
+  | { committed: false; reason: 'account_ambiguous' | 'account_unresolved' | 'processing_failed' | 'owner_conflict'; detail?: string }
   | { committed: true; statementUploadId: string; transactionsCreated: number; certificationStatus: string | null };
 
 async function recordWriteBatch(params: {
@@ -90,7 +96,18 @@ export async function commitFdhBankStatementImport(req: FdhBankCommitRequest): P
 
   await recordWriteBatch({ runId: req.runId, intakeId: req.intakeId, userId: req.userId, idempotencyKey, status: 'pending' });
 
-  const uploadOutcome = await uploadBankPdf(req.userId, req.metadata, req.bytes);
+  let uploadOutcome: Awaited<ReturnType<typeof uploadBankPdf>>;
+  try {
+    // No `confirmOwnerChange`: an AIE accept can never silently re-own an existing account, nor store the
+    // same bytes under a different owner. The user resolves that on the interactive upload.
+    uploadOutcome = await uploadBankPdf(req.userId, req.metadata, req.bytes, req.owner, {});
+  } catch (e) {
+    if (e instanceof BankOwnerConflictError || e instanceof BankIdenticalUploadOwnerConflictError) {
+      await recordWriteBatch({ runId: req.runId, intakeId: req.intakeId, userId: req.userId, idempotencyKey, status: 'failed' });
+      return { committed: false, reason: 'owner_conflict', detail: e.code };
+    }
+    throw e;
+  }
   if (uploadOutcome.accountResolution === 'ambiguous') {
     await recordWriteBatch({ runId: req.runId, intakeId: req.intakeId, userId: req.userId, idempotencyKey, status: 'failed' });
     return { committed: false, reason: 'account_ambiguous' };

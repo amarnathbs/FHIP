@@ -47,6 +47,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { downloadFromQuarantine } from '../../storage';
 import { generateObjectKey, uploadSourceDocumentObject } from '@/lib/services/investment-intelligence/storage';
 import { processSourceDocument, type ProcessSourceDocumentResult } from '@/lib/services/investment-intelligence/documentProcessing';
+import { isMissingOwnerColumnError, legacyOwnerColumnsFor, ownerColumnsFor } from '@/lib/services/investment-intelligence/uploadOwner';
+import type { ResolvedOwner } from '@/lib/ownership/validateOwnerSelection';
 import { isIiAdapterCanonicalWriteEnabled } from './featureFlags';
 import type { AieReconciliationOutcome } from '../../types';
 
@@ -55,6 +57,12 @@ export interface AcceptAndWriteInput {
   aieRunId: string;
   userId: string;
   ownerMemberId: string | null;
+  /**
+   * Owner-before-upload: REQUIRED. The owner the user chose BEFORE sending the file, re-validated at accept
+   * time (lib/aie/intakeOwner.ts). It is written to the source document as `user_selected`, so the canonical
+   * processing step applies it to the accounts exactly as for an interactive CAS upload.
+   */
+  owner: ResolvedOwner;
   countryCode: string;
   originalFilename: string;
   declaredMimeType: string;
@@ -77,6 +85,7 @@ export interface AcceptAndWriteDeps {
   insertSourceDocument: (params: {
     userId: string;
     ownerMemberId: string | null;
+    owner: ResolvedOwner;
     countryCode: string;
     checksum: string;
     storagePath: string;
@@ -104,21 +113,23 @@ export function createDefaultAcceptAndWriteDeps(): AcceptAndWriteDeps {
       // this adapter's own certified parsers self-detect document type from
       // evidence at parse time; 'other' would be a guess this file has no
       // basis for and the spec forbids guessing).
-      const { data, error } = await admin
-        .from('ii_source_documents')
-        .insert({
-          user_id: params.userId,
-          owner_member_id: params.ownerMemberId,
-          country_code: params.countryCode,
-          status: 'uploaded',
-          checksum: params.checksum,
-          storage_path: params.storagePath,
-          original_filename: params.originalFilename,
-          mime_type: params.mimeType,
-          file_size: params.fileSize,
-        })
-        .select('id')
-        .single();
+      const baseRow = {
+        user_id: params.userId,
+        country_code: params.countryCode,
+        status: 'uploaded',
+        checksum: params.checksum,
+        storage_path: params.storagePath,
+        original_filename: params.originalFilename,
+        mime_type: params.mimeType,
+        file_size: params.fileSize,
+      };
+      let inserted = await admin.from('ii_source_documents').insert({ ...baseRow, ...ownerColumnsFor(params.owner) }).select('id').single();
+      // A member-owned write survives a database that predates the 0236 owner columns; an entity / joint
+      // owner is never silently downgraded -- it fails closed instead.
+      if (inserted.error && params.owner.kind === 'member' && isMissingOwnerColumnError(inserted.error.message)) {
+        inserted = await admin.from('ii_source_documents').insert({ ...baseRow, ...legacyOwnerColumnsFor(params.owner) }).select('id').single();
+      }
+      const { data, error } = inserted;
       if (error || !data) return { error: error?.message ?? 'ii_source_documents insert failed' };
       return { id: data.id as string };
     },
@@ -162,6 +173,7 @@ export async function acceptAndWriteInvestmentCandidates(input: AcceptAndWriteIn
   const inserted = await deps.insertSourceDocument({
     userId: input.userId,
     ownerMemberId: input.ownerMemberId,
+    owner: input.owner,
     countryCode: input.countryCode,
     checksum,
     storagePath: objectKey,

@@ -338,6 +338,12 @@ describe('M3 I.9 / M2-OPEN-6 — no canonical write happens at dispatch time', (
     ]);
   });
 
+  it('owner-before-upload CONTROL: an owner the user DECLARED that is not a single member (Trust / Joint) raises NO owner_unresolved item', async () => {
+    await dispatchInvestmentDocument({ intakeId: 'intake-6b', userId: 'user-1', storageKey: 'k', countryCode: 'IN', ownerMemberId: null, ownerDeclared: true, deps: deps() });
+    const items = recorded.unresolvedItems.flatMap((u) => u.items);
+    expect(items.some((i) => i.reasonCode === 'ii_adapter:owner_unresolved')).toBe(false);
+  });
+
   it('an identity-derived blocking item is ALSO recorded as a failing reconciliation run, so both acceptance signals agree', async () => {
     await dispatchInvestmentDocument({ intakeId: 'intake-7', userId: 'user-1', storageKey: 'k', countryCode: 'IN', ownerMemberId: null, deps: deps() });
     const recon = recorded.reconciliationRuns.flatMap((r) => r.results);

@@ -89,6 +89,9 @@ import { commitFdhBankStatementImport, FDH_BANK_STATEMENT_ADAPTER_ID, type FdhBa
 import { downloadFromQuarantine } from '../storage';
 import { finalizeDocumentBinaryAfterRun } from '../services/purge';
 import { isAieCanonicalAcceptanceEnabled } from './featureFlags';
+import { resolveIntakeOwnerForAccept, type AieIntakeOwnerFlow, type IntakeOwnerOutcome } from '../intakeOwner';
+import { toBankUploadOwner } from '@/lib/financial-data-hub/services/bankOwnerAttribution';
+import type { ResolvedOwner } from '@/lib/ownership/validateOwnerSelection';
 import type { Owner as OwnerValue } from '@/lib/constants';
 
 const INSURANCE_ADAPTER_ID = 'insurance_generic_schedule_v1';
@@ -185,6 +188,13 @@ export interface AcceptRunDeps {
   investmentWriteDeps: AcceptAndWriteInvestmentDeps;
   commitFdhBankImport: (req: FdhBankCommitRequest) => Promise<FdhBankCommitOutcome>;
   /**
+   * Owner-before-upload. Loads the owner the user chose when the file was sent (stored on the intake) and
+   * re-validates it against the user's CURRENT household / entities / country. Used for the two adapters that
+   * write a canonical financial record (fdh_bank, Investment Intelligence); Insurance keeps its own
+   * ownerHouseholdRole gate.
+   */
+  resolveIntakeOwner: (userId: string, intakeId: string, flow: AieIntakeOwnerFlow) => Promise<IntakeOwnerOutcome>;
+  /**
    * AIE-1 closure mission (section 4.1) addition. Investment Intelligence's
    * and FDH-bank's writes both need the ORIGINAL quarantine bytes AT ACCEPT
    * TIME (unlike Insurance, whose candidate-based write never touches
@@ -224,6 +234,7 @@ export function createDefaultAcceptRunDeps(): AcceptRunDeps {
     acceptAndWriteInvestment: acceptAndWriteInvestmentCandidates,
     investmentWriteDeps: createDefaultAcceptAndWriteDeps(),
     commitFdhBankImport: commitFdhBankStatementImport,
+    resolveIntakeOwner: (userId, intakeId, flow) => resolveIntakeOwnerForAccept(userId, intakeId, flow),
     finalizeDocumentBinary: finalizeDocumentBinaryAfterRun,
   };
 }
@@ -276,8 +287,17 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
   // ownerHouseholdRole for Insurance). Resolved/validated up front, for the
   // same reason as the adapter check above.
   let investmentUploadMetadata: { storageKey: string; declaredMimeType: string; displayFilename: string | null } | null = null;
+  let investmentOwner: ResolvedOwner | null = null;
   if (isInvestmentIntelligence) {
-    if (!params.ownerMemberId || !params.countryCode) return { ok: false, reason: 'missing_required_input', message: 'ownerMemberId and countryCode are required to accept an Investment Intelligence run' };
+    if (!params.countryCode) return { ok: false, reason: 'missing_required_input', message: 'countryCode is required to accept an Investment Intelligence run' };
+    // Owner-before-upload: the owner chosen at intake is the ONLY owner a canonical write may use.
+    const stored = await deps.resolveIntakeOwner(run.userId, run.intakeId, 'ii_cas');
+    if (!stored.ok) return { ok: false, reason: 'missing_required_input', message: stored.message };
+    // A member id supplied at accept time must AGREE with it; it can never choose a different owner.
+    if (params.ownerMemberId && (stored.owner.kind !== 'member' || stored.owner.ownerMemberId !== params.ownerMemberId)) {
+      return { ok: false, reason: 'missing_required_input', message: 'The owner supplied at acceptance does not match the owner chosen when the file was uploaded.' };
+    }
+    investmentOwner = stored.owner;
     investmentUploadMetadata = await deps.getIntakeUploadMetadata(run.intakeId);
     if (!investmentUploadMetadata) return { ok: false, reason: 'missing_required_input', message: 'original upload metadata not found for this intake' };
   }
@@ -289,7 +309,11 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
   // mid-flight for an input that will never resolve.
   let fdhBankUploadMetadata: FdhBankCommitRequest['metadata'] | null = null;
   let fdhBankStorageKey: string | null = null;
+  let fdhBankOwner: ReturnType<typeof toBankUploadOwner> | null = null;
   if (isFdhBank) {
+    const stored = await deps.resolveIntakeOwner(run.userId, run.intakeId, 'bank');
+    if (!stored.ok) return { ok: false, reason: 'missing_required_input', message: stored.message };
+    fdhBankOwner = toBankUploadOwner(stored.owner);
     const [rawMetadata, intakeMetadata] = await Promise.all([deps.getFdhBankUploadMetadata(run.intakeId), deps.getIntakeUploadMetadata(run.intakeId)]);
     if (!looksLikeBankCsvUploadMetadata(rawMetadata)) return { ok: false, reason: 'missing_required_input', message: 'original FDH bank-statement upload metadata not found for this intake' };
     if (!intakeMetadata) return { ok: false, reason: 'missing_required_input', message: 'original upload storage location not found for this intake' };
@@ -453,7 +477,8 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
         aieIntakeId: run.intakeId,
         aieRunId: run.id,
         userId: run.userId,
-        ownerMemberId: params.ownerMemberId ?? null,
+        ownerMemberId: investmentOwner!.kind === 'member' ? investmentOwner!.ownerMemberId : null,
+        owner: investmentOwner!,
         countryCode: params.countryCode!,
         originalFilename: investmentUploadMetadata!.displayFilename ?? 'unknown',
         declaredMimeType: investmentUploadMetadata!.declaredMimeType,
@@ -525,6 +550,7 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
     intakeId: run.intakeId,
     bytes: download.bytes,
     metadata: fdhBankUploadMetadata!,
+    owner: fdhBankOwner!,
   });
 
   if (!commit.committed) {

@@ -237,3 +237,26 @@ drop trigger if exists trg_ii_source_documents_owner_0236 on public.ii_source_do
 create trigger trg_ii_source_documents_owner_0236
   before insert or update of user_id, owner_member_id, owner_business_entity_id on public.ii_source_documents
   for each row execute function public.owner_before_upload_assert_owner();
+
+-- ---------------------------------------------------------------------------
+-- F. aie_document_intake.owner_selection (AIE-fronted intakes)
+--    An AIE intake that can end in a canonical bank statement or a canonical
+--    Investment Intelligence source document must carry the owner the user chose
+--    BEFORE the file was sent (no route may bypass ownership because AI is
+--    involved). The wire selection is stored verbatim as JSON and RE-VALIDATED
+--    against the user's CURRENT household / entities at accept time. Nullable:
+--    intakes created before this migration (and insurance intakes, which have
+--    their own ownerHouseholdRole) carry none. Applied only if the AIE table exists.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if to_regclass('public.aie_document_intake') is not null then
+    alter table public.aie_document_intake add column if not exists owner_selection jsonb;
+    comment on column public.aie_document_intake.owner_selection is
+      'Owner-before-upload (0236): the validated owner wire selection ({kind: member|entity|joint|smsf, ...}) the user chose before sending this file. Re-validated at accept time. Contains only ids and basis points, never document content.';
+    if not exists (select 1 from pg_constraint where conname = 'chk_aie_intake_owner_selection_object_0236' and conrelid = 'public.aie_document_intake'::regclass) then
+      alter table public.aie_document_intake add constraint chk_aie_intake_owner_selection_object_0236
+        check (owner_selection is null or jsonb_typeof(owner_selection) = 'object');
+    end if;
+  end if;
+end $$;
