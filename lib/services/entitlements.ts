@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
+import { effectivePlanTier, utcToday } from '@/lib/services/entitlementWindow';
 
 export type PlanTier = 'free' | 'premium';
 
@@ -19,10 +20,22 @@ export type PlanTier = 'free' | 'premium';
 // route itself returned 200 while every result underneath was 'error').
 // Found via the FHIP 50-User E2E test cycle's Phase 5 report generation,
 // reproduced directly against generateReport({..., client: <service-role>}).
+//
+// Admin Premium grant (migration 0231): this now honours the entitlement
+// validity window (effective_from / effective_to) exactly like the AI SQL
+// functions do (migration 0115). Before, it returned the bare stored flag, so
+// a time-limited entitlement (an admin grant) that had lapsed would still have
+// unlocked report export, Premium report content and the Premium recommendation
+// list indefinitely. The rule lives in entitlementWindow.ts so there is one
+// definition of "Premium today" for the TypeScript consumers.
 export async function getPlanTier(userId: string, client?: SupabaseServerClient): Promise<PlanTier> {
   const supabase = client ?? (await createClient());
-  const { data } = await supabase.from('user_entitlements').select('plan_tier').eq('user_id', userId).maybeSingle();
-  return (data?.plan_tier as PlanTier) ?? 'free';
+  const { data } = await supabase
+    .from('user_entitlements')
+    .select('plan_tier, effective_from, effective_to')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return effectivePlanTier(data as { plan_tier?: string | null; effective_from?: string | null; effective_to?: string | null } | null, utcToday());
 }
 
 export async function canExportReports(userId: string, client?: SupabaseServerClient): Promise<boolean> {

@@ -16,6 +16,11 @@ interface PaymentStatus {
   billingCountry: CountryCode | null;
   billingConfirmed: boolean;
   planTier: 'free' | 'premium';
+  /** Server-composed, honest plan wording (e.g. "Premium (granted by FHIP admin, ends 12 Oct 2026)"). */
+  planLabel?: string;
+  entitlementSource?: 'payment' | 'admin_grant' | null;
+  adminGrantEndsOn?: string | null;
+  adminGrantLapsed?: boolean;
   provider: 'stripe' | 'razorpay' | null;
   subscriptionStatus: string | null;
   priceId: string | null;
@@ -134,8 +139,8 @@ export function BillingPanel() {
     <div className="space-y-6">
       <div>
         <p className="text-sm text-ink">
-          Plan: <span className="font-medium">{status.planTier === 'premium' ? 'Premium' : 'Free'}</span>
-          {status.subscriptionStatus && (
+          Plan: <span className="font-medium">{status.planLabel ?? (status.planTier === 'premium' ? 'Premium' : 'Free')}</span>
+          {status.subscriptionStatus && status.entitlementSource !== 'admin_grant' && (
             <span className="ml-2 text-muted">({SUBSCRIPTION_STATUS_LABEL[status.subscriptionStatus] ?? status.subscriptionStatus})</span>
           )}
         </p>
