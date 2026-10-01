@@ -182,6 +182,30 @@ frontend:
         # (slower, not incorrect) and then repopulates it for the one after
         # that, same as this repo's very first build ever did.
         - rm -rf .next/cache
+        # 2026-10-01 (build #270, merge cce323f): failed AGAIN at the
+        # packaging step -- "size of the build output (232331902) exceeds the
+        # max allowed size of 230686720 bytes", 1,645,182 bytes over, only
+        # three merges after #269 (35956a7) had passed. Measured locally
+        # (docs/ops/AMPLIFY_BUILD_SIZE_FIX_2026-10-01.md): of the ~128MB
+        # `.next` that `next build` leaves behind (cache excluded), ~95MB
+        # (74%) is Turbopack's SERVER sourcemaps -- `.next/server/chunks/
+        # *.js.map`, 1,518 files, each carrying a full `sourcesContent` copy
+        # of every module in its chunk (Next's own app-route.js template
+        # alone is re-embedded 364 times, once per route). They have no
+        # runtime purpose: Node only reads them under --enable-source-maps
+        # to prettify stack traces, and Node silently ignores a
+        # `//# sourceMappingURL` whose file is absent (verified with a local
+        # `next start` under --enable-source-maps, see the doc above).
+        # They are also exactly what grows with every new route/shared
+        # module (the 3 merges behind #270 added 2.18MB of .map vs 0.51MB
+        # of real chunk JS), which is why the limit keeps being hit. Browser
+        # sourcemaps are not emitted (productionBrowserSourceMaps is false)
+        # and .next/static is excluded below regardless, so a future opt-in
+        # to browser maps is not silently dropped. Deleted here, after the
+        # build and before Amplify packages `artifacts.files`, for the same
+        # reason as the cache above: a file that does not exist cannot be
+        # packaged, whatever the packager's glob semantics.
+        - find .next -type f -name '*.map' -not -path '.next/static/*' -delete
   artifacts:
     baseDirectory: .next
     files:
