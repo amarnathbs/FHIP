@@ -27,6 +27,7 @@ import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/ris
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
 import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
+import { selectLatestEligibleNav, type NavObservationRow } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import type { IiTransactionType } from './types';
 
 /**
@@ -198,11 +199,12 @@ export async function loadAnalyticsDataset(
     price: number;
     data_version: string | null;
     quality_status: string | null;
+    currency_code: string | null;
   }
   const navRows = await fetchAllRows<NavRow>(() =>
     supabase
       .from('ii_prices_nav')
-      .select('instrument_id, price_date, price, data_version, quality_status')
+      .select('instrument_id, price_date, price, data_version, quality_status, currency_code')
       .in('instrument_id', instrumentIds)
       // Secondary order on id: price_date alone is not unique once several
       // instruments are queried together, so a tie needs a deterministic
@@ -212,9 +214,18 @@ export async function loadAnalyticsDataset(
   );
 
   const navByInstrument = new Map<string, SeriesPoint[]>();
+  // Document2 Finding #5: every NAV row (any quality, any currency) as a
+  // candidate for the mark-to-market choice below. The eligibility rule
+  // (quality, future date, price validity, currency) is applied by ONE shared
+  // function, selectLatestEligibleNav(), so this consumer and the Holdings
+  // table / X-Ray / Overview can never disagree about which NAV is current.
+  const navCandidatesByInstrument = new Map<string, NavObservationRow[]>();
   let navDataVersion: string | null = null;
   let sawSuspectNav = false;
   for (const r of navRows) {
+    const candidates = navCandidatesByInstrument.get(r.instrument_id as string) ?? [];
+    candidates.push({ date: String(r.price_date).slice(0, 10), price: Number(r.price), currencyCode: r.currency_code, qualityStatus: r.quality_status });
+    navCandidatesByInstrument.set(r.instrument_id as string, candidates);
     if (r.quality_status && r.quality_status !== 'ok') {
       sawSuspectNav = true;
       continue; // never feed a flagged NAV point into a certified calculation
@@ -338,8 +349,28 @@ export async function loadAnalyticsDataset(
     // `snaps` is a filtered subset of snapRows, which was queried ordered
     // ascending by as_of_date (then id) — filtering preserves that order, so
     // the last element is this instrument's latest certified snapshot.
-    const latestSnap = snaps.length ? snaps[snaps.length - 1] : undefined;
-    const latest = valuationSeries.length ? valuationSeries[valuationSeries.length - 1] : undefined;
+    //
+    // Document2 Finding #5 (point-in-time): the snapshot that anchors "current
+    // value" is the latest one dated on or before the requested asOfDate, never
+    // a statement dated AFTER it. With the default asOfDate (now) this is
+    // identical to "the latest snapshot"; with an explicit historical `to`
+    // date it stops a later statement's value leaking into an earlier view.
+    // valuationSeries itself is deliberately left complete.
+    //
+    // Only bounded when the caller EXPLICITLY asked for an as-of date: for the
+    // default "now" view a statement dated "today" in India/Australia can be
+    // a calendar day ahead of UTC for part of the day and must not vanish.
+    const asOfIso = asOfDate.toISOString().slice(0, 10);
+    const boundSnapshotsToAsOf = opts.asOfDate !== undefined;
+    let latestSnapIndex = -1;
+    for (let i = snaps.length - 1; i >= 0; i--) {
+      if (!boundSnapshotsToAsOf || (snaps[i].as_of_date as string).slice(0, 10) <= asOfIso) {
+        latestSnapIndex = i;
+        break;
+      }
+    }
+    const latestSnap = latestSnapIndex >= 0 ? snaps[latestSnapIndex] : undefined;
+    const latest = latestSnapIndex >= 0 ? valuationSeries[latestSnapIndex] : undefined;
 
     let currentValue = latest?.value ?? 0;
     let currentValueDate = latest?.date ?? asOfDate;
@@ -374,12 +405,27 @@ export async function loadAnalyticsDataset(
     // not give the application layer -- see GOLD-008 in
     // tests/unit/iiNavMarkToMarketGoldenFixtures.test.ts.
     const navSeriesForInstrument = navByInstrument.get(instrumentId) ?? [];
-    let latestNav: SeriesPoint | undefined;
-    for (let i = navSeriesForInstrument.length - 1; i >= 0; i--) {
-      if (navSeriesForInstrument[i].date.getTime() <= asOfDate.getTime()) {
-        latestNav = navSeriesForInstrument[i];
-        break;
-      }
+    // Document2 Finding #5: latest ELIGIBLE NAV at or before asOfDate (not
+    // future-dated, quality 'ok', a valid positive price, in the holding's own
+    // currency). Same rule as every other consumer; see
+    // lib/engines/investment-intelligence/valuation/currentHoldingValuation.ts.
+    // Only NAVs newer than the anchoring snapshot can ever supersede it, so
+    // only those are offered (also keeps the exclusion warning below about
+    // rows that actually matter, not decade-old history).
+    const snapDateIso = latest ? latest.date.toISOString().slice(0, 10) : null;
+    const navCandidatesNewerThanSnapshot = (navCandidatesByInstrument.get(instrumentId) ?? []).filter((n) => snapDateIso === null || n.date > snapDateIso);
+    const navSelection = selectLatestEligibleNav(navCandidatesNewerThanSnapshot, {
+      asOfDate: asOfIso,
+      currencyCode: (latestSnap?.currency_code as string | undefined) ?? null,
+    });
+    const latestNav: SeriesPoint | undefined = navSelection.nav
+      ? { date: toDate(navSelection.nav.date), value: navSelection.nav.price }
+      : undefined;
+    if (navSelection.excluded.currency_mismatch > 0 || navSelection.excluded.invalid_price > 0) {
+      warnings.push({
+        scope: 'nav',
+        detail: `${inst.instrument_name as string}: ${navSelection.excluded.currency_mismatch + navSelection.excluded.invalid_price} NAV observation(s) in a different currency or with an invalid price were excluded from its current valuation.`,
+      });
     }
     if (latestSnap && latest && latestNav && latestNav.date.getTime() > latest.date.getTime()) {
       currentValue = Number(latestSnap.units) * latestNav.value;

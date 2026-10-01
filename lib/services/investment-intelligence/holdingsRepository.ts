@@ -24,6 +24,12 @@ import { schemeReconciliationFailed, getAiFallbackReconciliation, describeUnmask
 import { insufficientHistory, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
 import { unitDeltaForTransaction, type ReconciliationTransactionInput } from './reconciliation';
 import { computeCostValue, type CostBasisTransaction } from './costBasis';
+import { loadNavCandidatesSince, todayIsoDate } from './currentValuationLoader';
+import {
+  valueHoldingAsOf,
+  type StatementPositionInput,
+  type ValuationBasis,
+} from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import {
   loadInstrumentBenchmarkContext,
   loadBenchmarkSeriesById,
@@ -45,6 +51,13 @@ export interface HoldingRow {
   registrar: string | null; // e.g. 'CAMS' — from the certified source document's detected source
   costValue: number | null; // sum of ii_tax_lots.units_remaining * cost_per_unit for this position
   unitBalance: number | null;
+  // Document2 Finding #5 (2026-10-01): `nav`/`navDate` are the NAV that
+  // actually produced `marketValue`, and `navDate` is that NAV's OWN date.
+  // When a newer eligible market NAV exists (ii_prices_nav) it is used and
+  // the statement NAV is retained only as evidence (statement* fields below);
+  // when none exists the statement's own NAV is shown and labelled as such
+  // (valuationBasis 'statement'). Single rule:
+  // lib/engines/investment-intelligence/valuation/currentHoldingValuation.ts.
   navDate: string | null;
   nav: number | null;
   marketValue: number | null;
@@ -52,6 +65,18 @@ export interface HoldingRow {
   returnPct: number | null;
   xirr: XirrOutcome;
   currencyCode: string;
+  /** Where marketValue came from: latest market NAV, the statement, a redeemed (0-unit) holding, or unavailable. */
+  valuationBasis: ValuationBasis;
+  /** 'market' (ii_prices_nav) or 'statement' (implied by the statement's own value); null when no NAV applies. */
+  navSource: 'market' | 'statement' | null;
+  /** The certified statement's own date, kept as source evidence even when a newer NAV supersedes it. */
+  statementAsOfDate: string | null;
+  statementNav: number | null;
+  /** True when a newer eligible market NAV replaced the statement NAV as the current NAV. */
+  statementSuperseded: boolean;
+  /** True when the NAV/valuation used is more than NAV_STALE_AFTER_DAYS old. Disclosure only. */
+  valuationStale: boolean;
+  valuationNote: string;
   dataQuality: {
     status: DataQualityStatus;
     detail: string | null;
@@ -117,6 +142,7 @@ interface SnapshotRow {
   as_of_date: string;
   units: number;
   value: number;
+  currency_code: string | null;
   source_document_id: string | null;
   quality_status: string;
 }
@@ -130,7 +156,14 @@ interface CostTxRow {
   transaction_date: string;
 }
 
-export async function loadHoldingsTable(supabase: SupabaseClient, userId: string): Promise<HoldingsTableResult> {
+export async function loadHoldingsTable(
+  supabase: SupabaseClient,
+  userId: string,
+  opts: { asOfDate?: string } = {}
+): Promise<HoldingsTableResult> {
+  // The valuation date is injectable so the NAV-selection rule is testable
+  // deterministically; production callers always get "today" (UTC).
+  const valuationDate = (opts.asOfDate ?? todayIsoDate()).slice(0, 10);
   const warnings: Array<{ scope: string; detail: string }> = [];
 
   const { dataset, warnings: analyticsWarnings, empty } = await loadAnalyticsDataset(supabase, userId);
@@ -169,14 +202,27 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
 
   const { data: snapshotRows } = await supabase
     .from('ii_holding_snapshots')
-    .select('account_id, instrument_id, as_of_date, units, value, source_document_id, quality_status')
+    .select('account_id, instrument_id, as_of_date, units, value, currency_code, source_document_id, quality_status')
     .eq('user_id', userId)
     .order('as_of_date', { ascending: false });
   const latestSnapshotByPosition = new Map<string, SnapshotRow>();
+  // Every snapshot per position, oldest-first, so the valuation rule can pick
+  // "the statement valid on the valuation date" itself (a statement dated
+  // after the valuation date is invisible to it).
+  const statementsByPosition = new Map<string, StatementPositionInput[]>();
   for (const s of (snapshotRows ?? []) as SnapshotRow[]) {
     const key = `${s.account_id}:${s.instrument_id}`;
     if (!latestSnapshotByPosition.has(key)) latestSnapshotByPosition.set(key, s); // first hit is the latest, thanks to the descending order
+    const list = statementsByPosition.get(key) ?? [];
+    list.unshift({ asOfDate: s.as_of_date, units: Number(s.units), value: Number(s.value), currencyCode: s.currency_code });
+    statementsByPosition.set(key, list);
   }
+
+  // Document2 Finding #5: latest eligible market NAVs newer than the oldest
+  // latest-statement among the held positions (a NAV older than every
+  // statement can never supersede one). One batched read, never per row.
+  const oldestLatestStatement = [...latestSnapshotByPosition.values()].map((s) => s.as_of_date).sort()[0] ?? null;
+  const navCandidatesByInstrument = await loadNavCandidatesSince(supabase, instrumentIds, oldestLatestStatement);
 
   // Cost Value — computed directly from each position's own transaction
   // history (average-cost, see costBasis.ts), NOT from ii_tax_lots.
@@ -247,8 +293,14 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
 
     const snapshot = latestSnapshotByPosition.get(key);
     const costValue = costValueByPosition.get(key) ?? null;
-    const unitBalance = snapshot ? Number(snapshot.units) : null;
-    const marketValue = snapshot ? Number(snapshot.value) : null;
+    const valuation = valueHoldingAsOf({
+      statements: statementsByPosition.get(key) ?? [],
+      navs: navCandidatesByInstrument.get(truth.instrument_id) ?? [],
+      asOfDate: valuationDate,
+      currencyCode: account.currency_code,
+    });
+    const unitBalance = valuation.units;
+    const marketValue = valuation.marketValue;
     const gainLoss = costValue !== null && marketValue !== null ? marketValue - costValue : null;
     const returnPct = costValue !== null && costValue !== 0 && gainLoss !== null ? gainLoss / costValue : null;
     const registrarKey = snapshot?.source_document_id ? registrarBySourceDoc.get(snapshot.source_document_id) : null;
@@ -332,13 +384,20 @@ export async function loadHoldingsTable(supabase: SupabaseClient, userId: string
       registrar: registrarKey ? registrarKey.toUpperCase() : null,
       costValue: displayCostValue,
       unitBalance: displayUnitBalance,
-      navDate: snapshot?.as_of_date ?? null,
-      nav: snapshot && Number(snapshot.units) > 0 ? Number(snapshot.value) / Number(snapshot.units) : null,
+      navDate: valuation.navDate,
+      nav: valuation.nav,
       marketValue: displayMarketValue,
       gainLoss: displayGainLoss,
       returnPct: displayReturnPct,
       xirr: displayXirr,
       currencyCode: account.currency_code,
+      valuationBasis: valuation.basis,
+      navSource: valuation.navSource,
+      statementAsOfDate: valuation.statementAsOfDate,
+      statementNav: valuation.statementNav,
+      statementSuperseded: valuation.statementSuperseded,
+      valuationStale: valuation.stale,
+      valuationNote: valuation.note,
       dataQuality,
       sourceDocumentId: truth.latest_source_document_id,
       benchmark,
