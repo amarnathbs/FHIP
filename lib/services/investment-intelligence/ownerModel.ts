@@ -182,6 +182,9 @@ export function deriveAccountOwnership(pointerMemberId: string | null | undefine
       r.owner_member_id ? { memberId: r.owner_member_id, basisPoints: r.allocation_basis_points } : { businessEntityId: r.owner_business_entity_id as string, basisPoints: r.allocation_basis_points }
     );
     const hasEntity = shares.some((s) => !!s.businessEntityId);
+    // An incomplete / over-allocated group is never trusted (same rule as the India MF
+    // report's resolveOwners): the account reads as unassigned until the owner is re-set.
+    if (shares.reduce((s, x) => s + x.basisPoints, 0) !== PC5_TOTAL_BASIS_POINTS) return { kind: 'unassigned' };
     if (shares.length === 1) {
       return { kind: shares[0].businessEntityId ? 'entity' : 'member', shares, hasEntity };
     }

@@ -35,6 +35,8 @@ export function createInMemoryDb(): InMemoryDb {
     const filters: Array<(r: Row) => boolean> = [];
     let orderBy: { col: string; asc: boolean } | null = null;
     let limitN: number | null = null;
+    let rangeFrom: number | null = null;
+    let rangeTo: number | null = null;
     let patch: Row | null = null;
     let inserted: Row[] | null = null;
     let deleting = false;
@@ -50,6 +52,7 @@ export function createInMemoryDb(): InMemoryDb {
         rows = [...rows].sort((a, b) => (String(a[col]) < String(b[col]) ? -1 : String(a[col]) > String(b[col]) ? 1 : 0) * (asc ? 1 : -1));
       }
       if (limitN !== null) rows = rows.slice(0, limitN);
+      if (rangeFrom !== null && rangeTo !== null) rows = rows.slice(rangeFrom, rangeTo + 1);
       if (patch) {
         db.writes.push({ table, kind: 'update', payload: patch });
         for (const r of rows) Object.assign(r, patch);
@@ -85,6 +88,8 @@ export function createInMemoryDb(): InMemoryDb {
       },
       order: (col: string, o?: { ascending?: boolean }) => { orderBy = { col, asc: o?.ascending !== false }; return chain; },
       limit: (n: number) => { limitN = n; return chain; },
+      // .range(from, to) -- inclusive slice, as PostgREST (2026-10-01: lets fetchAllRows-based loaders run on this fake).
+      range: (a: number, b: number) => { rangeFrom = a; rangeTo = b; return chain; },
       returns: () => chain,
       maybeSingle: async () => ({ data: run()[0] ?? null, error: null }),
       single: async () => ({ data: run()[0] ?? null, error: null }),
