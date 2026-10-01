@@ -6,6 +6,7 @@ import { AiExtractionReviewPanel } from './AiExtractionReviewPanel';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping';
 import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import { OwnerConflictPanel } from './OwnerConflictPanel';
 import { ownerSelectionToMeta, type OwnerSelection } from '@/lib/ownership/ownerSelection';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
@@ -97,6 +98,7 @@ interface DocumentSummary {
     label: string | null;
     review: {
       conflicts: { accountId: string; folioNumber: string | null; institutionName: string | null; existingOwner: string; selectedOwner: string }[];
+      targetSignature?: string | null;
       warnings: { accountId: string; kind: string; maskedHolderName: string | null; message: string }[];
     } | null;
   };
@@ -458,14 +460,14 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   // Owner-before-upload (decision 2): the user EXPLICITLY confirms moving
   // folios that were already filed under a different owner. Nothing changes
   // without this call.
-  async function handleConfirmOwnerChange(documentId: string, accountIds: string[]) {
+  async function handleConfirmOwnerChange(documentId: string, accountIds: string[], targetSignature: string) {
     setConfirmingOwner(true);
     setError(null);
     try {
       const res = await fetch(`/api/investment-intelligence/source-documents/${documentId}/confirm-owner`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountIds }),
+        body: JSON.stringify({ accountIds, targetSignature }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not change the owner.');
@@ -944,27 +946,12 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                     </div>
                   ))}
                   {summary.owner.review.conflicts.length > 0 && (
-                    <div role="alert" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      <p className="font-medium">
-                        {summary.owner.review.conflicts.length === 1 ? 'A folio on this statement is already filed under a different owner.' : `${summary.owner.review.conflicts.length} folios on this statement are already filed under a different owner.`}{' '}
-                        They were left exactly as they were.
-                      </p>
-                      <ul className="mt-1 list-disc pl-5">
-                        {summary.owner.review.conflicts.map((c) => (
-                          <li key={c.accountId}>
-                            {c.folioNumber ?? c.institutionName ?? 'Folio'}: now {c.existingOwner}; you chose {c.selectedOwner}
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        type="button"
-                        disabled={confirmingOwner}
-                        onClick={() => handleConfirmOwnerChange(summary.document.id, summary.owner!.review!.conflicts.map((c) => c.accountId))}
-                        className="mt-2 rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
-                      >
-                        {confirmingOwner ? 'Changing…' : `Change these folios to ${summary.owner.label ?? 'the owner I chose'}`}
-                      </button>
-                    </div>
+                    <OwnerConflictPanel
+                      conflicts={summary.owner.review.conflicts}
+                      targetLabel={summary.owner.label ?? 'the owner I chose'}
+                      busy={confirmingOwner}
+                      onConfirm={(ids) => handleConfirmOwnerChange(summary.document.id, ids, summary.owner?.review?.targetSignature ?? '')}
+                    />
                   )}
                 </div>
               )}

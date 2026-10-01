@@ -79,6 +79,9 @@ export interface OwnerReview {
   acknowledgedSoleOwner?: string[];
   /** Folios whose owner was filled in or set from this statement. */
   appliedAccountIds: string[];
+  /** The signature of the owner chosen at upload. A confirmation must echo it, so a stale
+   * screen (or a caller that never saw the target) cannot change an owner. */
+  targetSignature?: string | null;
 }
 
 /** The owner the user chose at upload, or null for a legacy / unset document
@@ -207,7 +210,7 @@ export async function applyDocumentOwnerToAccounts(
 ): Promise<OwnerReview> {
   const admin = createAdminClient();
   const selected = signatureOfDocumentOwner(owner);
-  const review: OwnerReview = { conflicts: [], warnings: [], appliedAccountIds: [] };
+  const review: OwnerReview = { conflicts: [], warnings: [], appliedAccountIds: [], targetSignature: selected };
   let names: Map<string, string> | null = null;
 
   for (const acc of accounts) {
@@ -278,6 +281,8 @@ export async function confirmOwnerChange(
   userId: string,
   documentId: string,
   accountIds: readonly string[],
+  /** The target owner the user was shown (PO-OBU-05: explicit, never assumed). */
+  targetSignature: string | null,
 ): Promise<{ ok: true; changed: string[]; remainingConflicts: number } | { ok: false; status: 404 | 409 | 422 | 500; message: string }> {
   const admin = createAdminClient();
   const { data: doc } = await admin.from('ii_source_documents').select('*').eq('id', documentId).eq('user_id', userId).maybeSingle();
@@ -289,6 +294,11 @@ export async function confirmOwnerChange(
   const wanted = new Set(accountIds);
   const targets = conflicts.filter((c) => wanted.has(c.accountId));
   if (targets.length === 0) return { ok: false, status: 422, message: 'None of those folios are waiting for an owner confirmation on this document.' };
+  // The confirmation must name the owner it was shown. Each folio is decided on its own:
+  // only the listed folios change, every other conflicted folio stays exactly as it was.
+  if (!targetSignature || targetSignature !== signatureOfDocumentOwner(owner)) {
+    return { ok: false, status: 409, message: 'The owner shown to you no longer matches this statement. Reload and choose again.' };
+  }
 
   const changed: string[] = [];
   for (const t of targets) {

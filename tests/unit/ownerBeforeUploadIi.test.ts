@@ -308,7 +308,7 @@ describe('the document owner flows to the accounts', () => {
   it('member: an existing account that already has the same owner is untouched', async () => {
     seedAccounts();
     const review = await applyDocumentOwnerToAccounts(A, DOC, selfOwner, [A_(ACC_SAME, false)]);
-    expect(review).toEqual({ conflicts: [], warnings: [], appliedAccountIds: [] });
+    expect(review).toEqual({ conflicts: [], warnings: [], appliedAccountIds: [], targetSignature: `member:${SELF}` });
   });
 });
 
@@ -328,15 +328,15 @@ describe('DECISION 2: an existing account owner is never silently overwritten', 
     h.db.rows('ii_source_documents')[0].owner_review = review;
 
     // another user's account id, and an account that is not a conflict, are refused
-    const foreign = await confirmOwnerChange(A, DOC, [ACC_B]);
+    const foreign = await confirmOwnerChange(A, DOC, [ACC_B], `member:${SELF}`);
     expect(foreign).toMatchObject({ ok: false, status: 422 });
-    expect((await confirmOwnerChange(A, DOC, [ACC_SAME])).ok).toBe(false);
+    expect((await confirmOwnerChange(A, DOC, [ACC_SAME], `member:${SELF}`)).ok).toBe(false);
     expect(acc(ACC_B).owner_member_id).toBe(MEM_B);
     expect(acc(ACC_OTHER).owner_member_id).toBe(SPOUSE);
     // another user cannot confirm on this document
-    expect(await confirmOwnerChange(B, DOC, [ACC_OTHER])).toMatchObject({ ok: false, status: 404 });
+    expect(await confirmOwnerChange(B, DOC, [ACC_OTHER], `member:${SELF}`)).toMatchObject({ ok: false, status: 404 });
 
-    const confirmed = await confirmOwnerChange(A, DOC, [ACC_OTHER]);
+    const confirmed = await confirmOwnerChange(A, DOC, [ACC_OTHER], `member:${SELF}`);
     expect(confirmed).toMatchObject({ ok: true, changed: [ACC_OTHER], remainingConflicts: 0 });
     expect(acc(ACC_OTHER).owner_member_id).toBe(SELF);
     expect((h.db.rows('ii_source_documents')[0].owner_review as any).conflicts).toEqual([]);
@@ -408,6 +408,66 @@ describe('holder-name mismatch is a NON-BLOCKING warning for new uploads; legacy
     const client = fs.readFileSync(path.resolve(__dirname, '../../components/investment-intelligence/InvestmentIntelligenceClient.tsx'), 'utf8');
     expect(client).toMatch(/c\.discrepancy_type === 'owner_unmatched'/);
     expect(client).toMatch(/handleAssignOwner/);
+  });
+});
+
+describe('PO-OBU-05: conflicted folios are decided ONE BY ONE, never as one indivisible action', () => {
+  const ACC_X = 'c0000000-0000-4000-8000-000000000005';
+  const ACC_Y = 'c0000000-0000-4000-8000-000000000006';
+  async function seedThreeConflicts() {
+    seedAccounts();
+    const base = { account_type: 'mf_folio', country_code: 'IN', currency_code: 'INR', institution_name: 'AMC', status: 'active' };
+    h.db.insert('ii_accounts', { id: ACC_X, user_id: A, owner_member_id: SPOUSE, folio_number: 'FX', ...base });
+    h.db.insert('ii_accounts', { id: ACC_Y, user_id: A, owner_member_id: SPOUSE, folio_number: 'FY', ...base });
+    h.db.insert('ii_source_documents', { id: DOC, user_id: A, status: 'parsed', owner_member_id: SELF, owner_role: 'self', owner_selection_source: 'user_selected', owner_review: null });
+    const review = await applyDocumentOwnerToAccounts(A, DOC, selfOwner, [A_(ACC_OTHER, false), A_(ACC_X, false), A_(ACC_Y, false)]);
+    h.db.rows('ii_source_documents')[0].owner_review = review;
+    return review;
+  }
+  it('three folios conflict; the user ticks TWO: exactly those two change, the third is untouched, each is audited', async () => {
+    const review = await seedThreeConflicts();
+    expect(review.conflicts.map((c) => c.accountId).sort()).toEqual([ACC_OTHER, ACC_X, ACC_Y].sort());
+    expect(review.targetSignature).toBe(`member:${SELF}`);
+    const r = await confirmOwnerChange(A, DOC, [ACC_OTHER, ACC_Y], `member:${SELF}`);
+    expect(r).toMatchObject({ ok: true, remainingConflicts: 1 });
+    expect(acc(ACC_OTHER).owner_member_id).toBe(SELF);
+    expect(acc(ACC_Y).owner_member_id).toBe(SELF);
+    expect(acc(ACC_X).owner_member_id).toBe(SPOUSE); // NOT ticked: unchanged
+    const stored = h.db.rows('ii_source_documents')[0].owner_review as any;
+    expect(stored.conflicts.map((c: any) => c.accountId)).toEqual([ACC_X]); // still waiting
+    const audits = h.db.rows('ii_audit_events').filter((e) => (e.metadata as any)?.outcome === 'owner_change_confirmed_at_upload');
+    expect(audits.map((e) => e.subject_id).sort()).toEqual([ACC_OTHER, ACC_Y].sort()); // one audit per changed folio, none for the third
+    expect(audits.every((e) => (e.metadata as any).previousOwner === 'Priya' && (e.metadata as any).newOwner === 'Anil')).toBe(true);
+  });
+  it('NEGATIVE: an empty selection changes nothing; a stale or missing target owner changes nothing', async () => {
+    await seedThreeConflicts();
+    expect(await confirmOwnerChange(A, DOC, [], `member:${SELF}`)).toMatchObject({ ok: false, status: 422 });
+    expect(await confirmOwnerChange(A, DOC, [ACC_X], `member:${SPOUSE}`)).toMatchObject({ ok: false, status: 409 }); // not the owner shown
+    expect(await confirmOwnerChange(A, DOC, [ACC_X], null)).toMatchObject({ ok: false, status: 409 });
+    for (const id of [ACC_OTHER, ACC_X, ACC_Y]) expect(acc(id).owner_member_id).toBe(SPOUSE);
+    expect(h.db.rows('ii_audit_events').filter((e) => (e.metadata as any)?.outcome === 'owner_change_confirmed_at_upload')).toHaveLength(0);
+  });
+  it('the route body must name the folios AND the target owner (strict); extra keys are refused', async () => {
+    const route = await import('@/app/api/investment-intelligence/source-documents/[id]/confirm-owner/route');
+    const call = (body: unknown) => route.POST(new Request('http://x', { method: 'POST', body: JSON.stringify(body) }), { params: Promise.resolve({ id: DOC }) });
+    expect((await call({ accountIds: [ACC_X] })).status).toBe(422); // no target owner
+    expect((await call({ accountIds: [ACC_X], targetSignature: `member:${SELF}`, all: true })).status).toBe(422);
+    expect((await call({ accountIds: [], targetSignature: `member:${SELF}` })).status).toBe(422);
+  });
+  it('the UI lists EACH folio with its own unchecked checkbox, offers Select all, names the target owner and needs a confirmation', () => {
+    const panel = fs.readFileSync(path.resolve(__dirname, '../../components/investment-intelligence/OwnerConflictPanel.tsx'), 'utf8');
+    expect(panel).toMatch(/useState<Set<string>>\(new Set\(\)\)/); // nothing ticked by default
+    expect(panel).toMatch(/type="checkbox" checked=\{selected\.has\(c\.accountId\)\}/);
+    expect(panel).toMatch(/Select all/);
+    expect(panel).toMatch(/change to <strong>\{targetLabel\}<\/strong>/);
+    expect(panel).toMatch(/Confirm change/);
+    expect(panel).toMatch(/onConfirm\(ticked\.map/); // only the ticked folios are sent
+    const client = fs.readFileSync(path.resolve(__dirname, '../../components/investment-intelligence/InvestmentIntelligenceClient.tsx'), 'utf8');
+    expect(client).toMatch(/<OwnerConflictPanel/);
+    expect(client).toMatch(/targetSignature/);
+    // The old indivisible "change all conflicted folios" action is gone.
+    expect(client).not.toMatch(/conflicts\.map\(\(c\) => c\.accountId\)\)/);
+    expect(client).not.toMatch(/Change these folios to/);
   });
 });
 
