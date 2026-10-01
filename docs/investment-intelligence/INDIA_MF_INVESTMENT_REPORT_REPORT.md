@@ -219,7 +219,28 @@ Gates: eslint clean on all touched files (one pre-existing `<img>` warning in `R
 
 **Observed while building (unit tests):** the outlier test failed when my fixture value fell outside the per-index plausibility band (it was rejected as `out_of_range` before reaching the outlier rule), which is how the two rules were confirmed to be distinct; the rate-limit test failed against the first runner version (it slept before knowing an adapter was unconfigured) and the runner was corrected.
 
-**Designed, harness written, NOT YET EXECUTED:** `scripts/india_mf_negative_controls.py` breaks one rule at a time in the source, runs the named test file and records which test names fail, restoring the file afterwards. It covers 18 rules: F = A+B-C-D-E, H = G-F, joint-folio bp scaling, entity separation, unallocated surfaced, partial history labelled (not n/a), index never invented, India-MF gate, cross-user isolation (loader drops `user_id`), no home-country gate, NAV-pin wider window, conflicting duplicate dates, attestation required, never overwrite a published value, capability guard fails closed, nav not implied by PC6, updater disabled by default, no retry around a 403. It could not be executed because `node_modules` was unavailable (see section 14). **Until it is run, treat the unit-test negative controls as designed, not demonstrated.** Run: `python scripts/india_mf_negative_controls.py` (writes `docs/investment-intelligence/india-mf-report-example/negative_control_runs.json`).
+**Executed (unit-test negative controls):** `scripts/india_mf_negative_controls.py` broke each of 18 rules one at a time in the source, ran the named test file(s), and restored the file (`git status` was clean afterwards). **All 18 turned at least one named test red.** Raw results: `docs/investment-intelligence/india-mf-report-example/negative_control_runs.json`.
+
+| # | Rule broken in the source | Tests that went red (first named) |
+|---|---|---|
+| NC-01 | F = A+B-C-D-E | 2 failing: "A,B,C,D,E and F=A+B-C-D-E, G, H=G-F match the hand calculation" |
+| NC-02 | H = G-F | 2 failing: "A,B,C,D,E and F=A+B-C-D-E, G, H=G-F match the hand calculation" |
+| NC-03 | joint-folio basis-point scaling | 1 failing: "a joint folio shows each owner's share; the owners' shares sum to the whole position" |
+| NC-04 | entity sections stay separate from personal (entity treated as a member) | 5 failing: "a folio with no allocation and no owner is surfaced in the Unallocated section, not dropped" |
+| NC-05 | unallocated folios are surfaced, not dropped | 4 failing: "a folio with no allocation and no owner is surfaced in the Unallocated section, not dropped" |
+| NC-06 | partial history shows a labelled value, never a blanket n/a | 2 failing: "a redemption of units bought before the uploaded history is flagged and contributes no realised gain from unknown cost" |
+| NC-07 | index values never invented | 1 failing: "reports not_available when no close is loaded" |
+| NC-08 | gate: no India MF holding -> no section | 2 failing: "a user whose INR account holds no mutual fund (equity only) gets no section" |
+| NC-09 | cross-user isolation (loader drops user_id on transactions) | 1 failing: "another user's rows are never read into this user's report, and every user-scoped read carries user_id = caller" |
+| NC-10 | AU-style home-country gate must NOT exist (loader gates on country) | 3 failing: "a read failure AFTER the user is known to hold India funds is an explicit error state, never a partial table" |
+| NC-11 | NAV pin keeps the wider window | 1 failing: "when R4 already pins the same (instrument, basis) the WIDER window wins, in either order" |
+| NC-12 | upload: conflicting duplicate dates are rejected | 3 failing: "conflicting duplicate dates: EVERY row of that date is rejected (conflicting_duplicate)" |
+| NC-13 | upload: attestation required | 2 failing: "REFUSED (422) with a ticked box but altered attestation wording" |
+| NC-14 | upload: an existing published value is never overwritten (conflict blocker removed) | 1 failing: "a different value for a published date blocks the commit unless the operator chose to skip conflicts, and is never overwritten either way" |
+| NC-15 | capability guard fails closed | 2 failing: "a truthy-but-not-true flag value is not a grant" |
+| NC-16 | nav: capability not implied by PC6/PC7 | 2 failing: "is not implied by the PC6 or PC7 capabilities, nor by isAdmin" |
+| NC-17 | updater disabled by default | 6 failing: "right secret with the feed off: 200, status disabled_env, no request" |
+| NC-18 | updater never retries around a block (403 treated as retryable) | 7 failing: "HTTP 401 is SOURCE_BLOCKED: exactly ONE request, no retry, the run stops" |
 
 ## 15. What was and was not verified
 

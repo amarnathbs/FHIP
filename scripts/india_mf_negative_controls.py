@@ -79,8 +79,8 @@ for (mid, rule, f, old, new, tests) in M:
         out.append({'id': mid, 'rule': rule, 'result': 'MUTATION NOT APPLIED', 'detail': f'{s.count(o)} matches'}); print(mid, 'NOT APPLIED', s.count(o)); continue
     open(f, 'w', newline='', encoding='utf-8').write(s.replace(o, n))
     try:
-        r = subprocess.run(['npx', 'vitest', 'run', *tests], capture_output=True, text=True, timeout=280, shell=True)
-        text = r.stdout + r.stderr
+        r = subprocess.run(['npx', 'vitest', 'run', *tests], capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=280, shell=True)
+        text = re.sub(r'\[[0-9;]*m', '', (r.stdout or '') + (r.stderr or ''))
         failed = sorted(set(re.findall(r'(?:×|✗)\s+(.+?)\s+\d+ms', text)))
         if not failed:
             failed = sorted(set(re.findall(r'FAIL\s+\S+\s+>\s+(.+)', text)))
