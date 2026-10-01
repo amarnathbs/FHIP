@@ -151,7 +151,7 @@ export function recentWeekdays(todayIso: string, count: number): string[] {
   return out;
 }
 
-export type FeedRunStatus = 'disabled_env' | 'skipped_kill_switch' | 'skipped_backoff' | 'completed' | 'blocked' | 'failed';
+export type FeedRunStatus = 'disabled_env' | 'skipped_kill_switch' | 'skipped_backoff' | 'skipped_already_running' | 'completed' | 'blocked' | 'failed';
 
 export interface FeedRunResult {
   runnerVersion: typeof FEED_RUNNER_VERSION;
@@ -204,7 +204,7 @@ async function publishedDates(supabase: SupabaseClient, indexKey: MarketIndexKey
 }
 
 export async function runMarketIndexDailyUpdate(deps: FeedDeps): Promise<FeedRunResult> {
-  const base = { runnerVersion: FEED_RUNNER_VERSION, perIndex: [] as FeedRunResult['perIndex'], alerts: [] as Alert[], requestsMade: 0 };
+  const base = { runnerVersion: FEED_RUNNER_VERSION as typeof FEED_RUNNER_VERSION, perIndex: [] as FeedRunResult['perIndex'], alerts: [] as Alert[], requestsMade: 0 };
 
   // Switch 1: the environment. Off (or anything but the literal 'true') means
   // NOTHING happens — not even a database read.
