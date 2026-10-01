@@ -63,7 +63,7 @@ Publication wrote `current_value = snapshot.value` and nothing ever moved it, so
 
 **Costs, stated plainly.**
 - A **write on a read path** (a Dashboard load can update the register). Precedent: `writeFinancialSnapshots` already upserts on every Dashboard load. The write is idempotent and a no-op when nothing changed.
-- **Extra queries on a read path** for households that have published funds: ~7 batched queries in 4 round trips, constant in the number of holdings (a test proves it); a household with no published rows pays exactly one indexed query.
+- **Extra queries on a read path** for households that have published funds: 7 batched queries in 5 sequential round trips (investments; publications; snapshots + instrument classes + entity allocations in parallel; unit movements; NAV candidates), constant in the number of holdings (a test proves it); a household with no published rows pays exactly one indexed query.
 - **Freshness is "at the next read", not "at ingestion"**: a direct reader that bypasses every chokepoint (a background SQL report) could see the previous mark until the next Net Worth/Investments read. Its value is always labelled with its own as-of date. A scheduled sweep after NAV ingestion remains possible later as a pure optimisation (open decision 3).
 - **A stored monthly report becomes "stale"** (its staleness test is "a register row changed after generation") on the first read after a NAV moves the value. That is correct (the numbers did change) but may be noisy daily; see open decision 4.
 
@@ -162,12 +162,21 @@ No overlap in any file this change touches (it edits upload routes, `documentPro
 
 All on this branch; line endings preserved (the touched files are LF).
 
-- **New suites (4 files)**: `iiNetWorthNavRemark.test.ts`, `iiNetWorthNavRemarkReconciliation.test.ts`, `iiNetWorthNavRemarkPublishFlow.test.ts`, `iiNetWorthNavRemarkContracts.test.ts` plus `support/remarkFakeDb.ts`, `support/remarkScenario.ts`. RESULTS_NEW
-- **Regression, targeted**: RESULTS_REG
-- `tsc --noEmit -p .`: RESULTS_TSC
-- ESLint on every touched and new file: RESULTS_LINT
+- **New suites (4 files)**: `iiNetWorthNavRemark.test.ts`, `iiNetWorthNavRemarkReconciliation.test.ts`, `iiNetWorthNavRemarkPublishFlow.test.ts`, `iiNetWorthNavRemarkContracts.test.ts` plus `support/remarkFakeDb.ts`, `support/remarkScenario.ts`. **4 files, 83 tests, all pass** (`iiNetWorthNavRemark` 47, including the rule groups and their negative controls; `iiNetWorthNavRemarkReconciliation` 5; `iiNetWorthNavRemarkPublishFlow` 8; `iiNetWorthNavRemarkContracts` 23).
+- **Regression, targeted**: 47 files (the 4 new ones plus `tests/unit/readModels/**`, the report / dashboard / downstream-snapshot suites, `iiR3NetWorthCertification`, `iiR3DedupScenarioMatrix`, `iiR3ManualReconciliation`, `iiR3PublicationLogic`, `iiR3ProvenanceClosure`, `iiR3RepublishFieldRestoration`, `iiPublishing`, `lrFi3NetWorthContributionExactlyOnce`, `fdh11AuPublishJourney`, `fdh11AddToNetWorthCorrelationId`, the Finding #5 suites `iiFinding5CurrentHoldingValuationRule` and `iiFinding5CrossConsumerNavConsistency`, the 10-point golden suite `iiNavMarkToMarketGoldenFixtures` / `iiNavMarkToMarket` / `iiPortfolioTwrrValuationReconstruction`, `iiMultiFolioAggregation`, `iiHoldingsTableAssembly`, `iiPc1F1FifoAccountScope`, `iiZeroUnitClosureReconciliation`): **641 tests, 640 pass, 1 failure**. The one failure is `dashboardCanonicalReadModel` DC-19 "lib/services and lib/engines contain no fdh_transactions query", a repo-walking test that timed out at 5000 ms under machine load (in both full runs); **re-run in isolation: 15 of 15 pass.** The Finding #5 golden suite, the 10-point suite, the multi-folio suite and every existing publish -> Net Worth exactly-once suite are green.
+- `tsc --noEmit -p .`: the only error, before and after this change, is the pre-existing `tests/unit/canonicalCertResidueAllSql.test.ts(127,75): TS18046`. **No error in any touched or new file.** (An intermediate run flagged my own test's dynamic import of the owner-edit module, which does not exist on this branch; fixed with a non-static specifier.)
+- ESLint on every touched and new file: `eslint` on every touched and new file (20 files): **exit 0, zero warnings** (final run).
 - `scripts/` artifacts rewritten by test runs were reverted with `git checkout -- scripts/`.
-- MUTATION_RESULTS
+- - **Mutation run against the REAL source** (not variants): five edits to `publishedRowRemark.ts` / `publishedValueRemark.ts`, each run against the three behavioural suites (60 tests), then restored (`git diff` clean afterwards):
+
+| Mutation of the shipped code | Result |
+|---|---|
+| the planner ignores every NAV | **23 of 60 fail** (RULE-1/2/3/4/9/10/13, the read-model label tests, the joint and revision tests, every publish-flow value assertion, the two-folio and units-after reconciliations) |
+| the entity-owned skip removed | 2 fail: `RULE-8` and `entity-owned: the account is skipped` |
+| the `source_type` guard removed (manual rows exposed) | 2 fail: `RULE-7` and the one-query-for-a-household-with-no-published-rows test |
+| the compare-and-set guard removed | 1 fails: `RULE-14` |
+| later unit movements ignored | 2 fail: `RULE-13` and the units-after-statement Net Worth = Holdings reconciliation |
+
 
 **Not verified (not hidden).**
 - No browser, DEV or production session: **DEV-verified: no. production-verified: no.** The migration has not been applied anywhere, so no real database has executed it, and the `ii_investment_value_revisions` insert path (service-role client) has run only against test doubles.
@@ -178,7 +187,7 @@ All on this branch; line endings preserved (the touched files are LF).
 
 ## 7. Migration number and collision evidence
 
-**Chosen: `0240`.** Scan, re-done immediately before finishing: SCAN_RESULT
+**Chosen: `0240`.** Scan, re-done immediately before finishing (2026-10-02): (1) **every ref in the repository** (local and remote): `git log --all --name-only -- 'supabase/migrations/02[4-9]*' 'supabase/migrations/0[3-9]*'` lists only this branch's own commit adding `0240`; (2) **every directory under `.claude/worktrees`** (161): the migration files numbered `0230` or higher are `0230` (agent-af49d3506f497098a, m117-latency-validator), `0231` (admin-premium-grant, amplify-size, doc2-cert-kit, owner-before-upload), `0232` (bench1-phase2, india-mf-report), `0236` (owner-before-upload), `0237` and `0238` (admin-premium-grant), `0239` (bench1-phase2), and `0240` (this worktree only).
 
 State at authoring time (and re-checked at the end): `origin/main` highest `0231`; in flight on other branches/worktrees: `0230` (m11-7 branches), `0231` (admin-premium-grant, amplify-size), `0232` (bench1-phase2, india-mf-report), `0236` (owner-before-upload), `0237` and `0238` (admin-premium-grant), `0239` (bench1-phase2). Nothing at `0233`-`0235` or at `0240` or above anywhere. `0240` is the first free number above everything found. It is the only file with its prefix in this branch (a test asserts it) and no existing CHECK is recreated, so there is no predecessor to derive from the ledger.
 
