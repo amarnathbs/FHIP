@@ -26,7 +26,8 @@ import '@/lib/serverOnly';
 import { loadFxContext, toReporting, type FxContext, type ReportingCurrency } from './core/currency';
 import { fetchAllRows, type ReadModelClient } from './core/paginate';
 import { attributeByBasisPoints } from '@/lib/services/investment-intelligence/ownerAttribution';
-import { addUnconverted, emptyUnconverted, isHouseholdOwner, provenance, roundMoney, toUnavailable, type MoneyValue, type Provenance, type ReadModelResult, type UnconvertedTally } from './core/types';
+import { addUnconverted, emptyUnconverted, isHouseholdOwner, provenance, ReadModelUnavailableError, roundMoney, toUnavailable, type MoneyValue, type Provenance, type ReadModelResult, type UnconvertedTally } from './core/types';
+import { describeStoredValuation, summarisePublishedValuations, type PublishedValuationSummary, type StoredValuationTag } from '@/lib/engines/investment-intelligence/valuation/publishedRowRemark';
 
 export interface InvestmentRow {
   id: string;
@@ -43,6 +44,15 @@ export interface InvestmentRow {
   country_code?: string | null;
   /** WP-04: goal funding-source allocation; WP-05: the forecast contribution leg (paged). */
   annual_contribution?: number | null;
+  /**
+   * 2026-10-01 current-NAV re-mark (migration 0240): what the last re-mark of this
+   * published row used. All null for a manual row and for a published row not yet
+   * evaluated. Staleness is derived from `ii_value_as_of` and today, never stored.
+   */
+  ii_value_as_of?: string | null;
+  ii_valuation_basis?: string | null;
+  ii_valuation_units?: number | string | null;
+  ii_valuation_nav?: number | string | null;
 }
 
 export interface HoldingSnapshotRow {
@@ -59,6 +69,21 @@ export interface HoldingSnapshotRow {
 export interface PublicationRow {
   canonical_position_id: string;
   status: string;
+}
+
+/** How a published mutual-fund line was valued (the shared latest-eligible-NAV rule, applied by the re-mark). */
+export interface InvestmentLineValuation {
+  basis: 'market_nav' | 'statement' | 'redeemed';
+  /** The date the value is "as at": the NAV's own date, or the statement date. */
+  asOf: string | null;
+  units: number | null;
+  /** NAV per unit that produced the value (the statement-implied NAV for basis 'statement'). */
+  nav: number | null;
+  tag: StoredValuationTag;
+  /** Plain label for the tag: 'Latest NAV' | 'Statement value' | 'Stale NAV' | 'Redeemed'. */
+  label: string;
+  stale: boolean;
+  ageDays: number | null;
 }
 
 /** One owner's share of a position published ONCE for a joint split (2026-10-01). Amounts add back to the line's value exactly. */
@@ -83,6 +108,8 @@ export interface InvestmentLine {
   /** WP-05: native currency, per year; null when not captured. */
   annualContribution: number | null;
   provenance: Provenance;
+  /** Present only for a published mutual-fund line that the NAV re-mark has evaluated. */
+  valuation?: InvestmentLineValuation;
   /**
    * Present only for a position published from an account jointly owned by
    * household members: the SAME single value divided by the ownership split
@@ -104,6 +131,8 @@ export interface UnpublishedHolding {
 export const UNPUBLISHED_BUCKET_LABEL = 'Imported, not yet in Net Worth';
 
 export interface InvestmentsReadModelData {
+  /** Published mutual funds: how many are at the latest NAV, at a statement value, redeemed or stale, and the as-of range. */
+  valuationSummary: PublishedValuationSummary;
   /** Positions left out of the personal "not yet in Net Worth" bucket because an entity owns (a share of) their account. Never added to a total. */
   entityHeldExcludedCount: number;
   reportingCurrency: ReportingCurrency;
@@ -118,6 +147,14 @@ export interface InvestmentsReadModelData {
 export type InvestmentsReadModel = ReadModelResult<InvestmentsReadModelData>;
 
 const r = roundMoney;
+function storedValuationOf(row: InvestmentRow) {
+  return {
+    basis: row.ii_valuation_basis ?? null,
+    asOf: row.ii_value_as_of ? String(row.ii_value_as_of).slice(0, 10) : null,
+    units: row.ii_valuation_units == null ? null : Number(row.ii_valuation_units),
+    nav: row.ii_valuation_nav == null ? null : Number(row.ii_valuation_nav),
+  };
+}
 const pairKey = (accountId: string, instrumentId: string) => `${accountId}|${instrumentId}`;
 
 export function computeInvestments(input: {
@@ -129,12 +166,20 @@ export function computeInvestments(input: {
   /** Accounts jointly owned by household members only: active split per account (shares total 10000). Optional. */
   jointSharesByAccount?: ReadonlyMap<string, readonly { ownerMemberId: string; basisPoints: number }[]>;
   fx: FxContext;
+  /** ISO date used to decide staleness; defaults to today (UTC). Injectable for tests. */
+  today?: string;
 }): InvestmentsReadModelData {
   const { fx } = input;
+  const today = (input.today ?? new Date().toISOString()).slice(0, 10);
   const unconverted = emptyUnconverted();
   const lines: InvestmentLine[] = input.investments.map((row) => {
     const amountReporting = toReporting(Number(row.current_value), row.currency_code, fx);
     if (amountReporting === null) addUnconverted(unconverted, row.currency_code, Number(row.current_value));
+    const stored = row.source_type === 'investment_intelligence_published' ? storedValuationOf(row) : null;
+    const described = stored ? describeStoredValuation(stored, today) : null;
+    const valuation: InvestmentLineValuation | null = stored && described
+      ? { basis: stored.basis as InvestmentLineValuation['basis'], asOf: stored.asOf, units: stored.units, nav: stored.nav, tag: described.tag, label: described.label, stale: described.stale, ageDays: described.ageDays }
+      : null;
     const jointShares = row.ii_canonical_account_id ? input.jointSharesByAccount?.get(row.ii_canonical_account_id) : undefined;
     const nativeSplit = jointShares ? attributeByBasisPoints(Number(row.current_value), jointShares.map((s) => ({ key: s.ownerMemberId, basisPoints: s.basisPoints }))) : null;
     const reportingSplit = jointShares && amountReporting !== null ? attributeByBasisPoints(amountReporting, jointShares.map((s) => ({ key: s.ownerMemberId, basisPoints: s.basisPoints }))) : null;
@@ -148,9 +193,16 @@ export function computeInvestments(input: {
       countryCode: row.country_code ?? null,
       annualContribution: row.annual_contribution == null ? null : Number(row.annual_contribution),
       provenance: row.source_type === 'investment_intelligence_published' ? provenance('investment_intelligence') : provenance('manual'),
+      ...(valuation ? { valuation } : {}),
       ...(ownerShares ? { ownerShares } : {}),
     };
   });
+  const valuationSummary = summarisePublishedValuations(
+    input.investments
+      .filter((row) => row.source_type === 'investment_intelligence_published')
+      .map((row) => storedValuationOf(row)),
+    today,
+  );
 
   const published = new Set<string>();
   for (const row of input.investments) {
@@ -183,6 +235,7 @@ export function computeInvestments(input: {
   holdings.sort((a, b) => (a.accountId + a.instrumentId < b.accountId + b.instrumentId ? -1 : 1));
   const sum = (vals: (number | null)[]) => r(vals.reduce<number>((s, v) => s + (v ?? 0), 0));
   return {
+    valuationSummary,
     entityHeldExcludedCount,
     reportingCurrency: fx.reportingCurrency,
     lines,
@@ -193,16 +246,30 @@ export function computeInvestments(input: {
   };
 }
 
+const INVESTMENT_BASE_COLUMNS = 'id, investment_name, investment_type, current_value, currency_code, owner, master_item_key, source_type, ii_canonical_account_id, ii_canonical_instrument_id, country_code, annual_contribution';
+const INVESTMENT_VALUATION_COLUMNS = 'ii_value_as_of, ii_valuation_basis, ii_valuation_units, ii_valuation_nav';
+
 /** The active `investments` register, paged (WP-05: also used alone by register-only consumers). */
 export async function loadInvestmentRows(userId: string, client: ReadModelClient): Promise<InvestmentRow[]> {
-  return fetchAllRows<InvestmentRow>('investments', (from, to) =>
-    client
-      .from('investments')
-      .select('id, investment_name, investment_type, current_value, currency_code, owner, master_item_key, source_type, ii_canonical_account_id, ii_canonical_instrument_id, country_code, annual_contribution')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('id', { ascending: true })
-      .range(from, to));
+  const page = (columns: string) =>
+    fetchAllRows<InvestmentRow>('investments', (from, to) =>
+      client
+        .from('investments')
+        .select(columns)
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .range(from, to));
+  try {
+    return await page(`${INVESTMENT_BASE_COLUMNS}, ${INVESTMENT_VALUATION_COLUMNS}`);
+  } catch (error) {
+    // Deployment-order safety: this code can reach an environment before
+    // migration 0240 (the four valuation columns) is applied there. Net Worth
+    // must never go offline for that: retry with the columns every environment
+    // has. A genuine failure fails again here and propagates unchanged.
+    if (!(error instanceof ReadModelUnavailableError)) throw error;
+    return page(INVESTMENT_BASE_COLUMNS);
+  }
 }
 
 export async function loadInvestmentInputs(userId: string, client: ReadModelClient) {

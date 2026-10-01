@@ -27,6 +27,20 @@ import type { ValuationPoint, ExternalFlow } from './twrr';
 import type { BenchmarkMapping } from './benchmarkEngine';
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 
+/**
+ * Multi-folio fix (2026-10-01). One folio's own slice of a scheme that is held
+ * in SEVERAL folios: that folio's real cash flows plus its OWN terminal value
+ * (valued from its own statement). Present only when the scheme spans more
+ * than one folio; the scheme-level fields of SchemeDataset are always the
+ * aggregate (the union of every folio's flows and the sum of their values).
+ */
+export interface SchemeFolioDataset {
+  accountId: string;
+  cashFlows: CashFlow[];
+  currentValue: number;
+  currentValueDate: Date;
+}
+
 export interface SchemeDataset {
   instrumentId: string;
   instrumentName: string;
@@ -79,6 +93,8 @@ export interface SchemeDataset {
   // the certified point-in-time snapshot itself must keep using
   // valuationSeries directly.
   reconstructedValuationSeries?: SeriesPoint[];
+  /** Per-folio slices, only when the scheme is held in more than one folio. */
+  folios?: SchemeFolioDataset[];
 }
 
 export interface AnalyticsDataset {
@@ -111,6 +127,12 @@ export interface SchemeAnalytics {
   // the top-level asOfDate/periodStart convention.
   currentValueDate: string;
   investorXirr: CalculationOutcome<{ rate: number }>;
+  /**
+   * Multi-folio fix: the XIRR of each folio on its own (keyed by ii_accounts.id),
+   * only present when the scheme is held in more than one folio. `investorXirr`
+   * above is always the scheme-level figure over the union of every folio.
+   */
+  folioXirr?: Record<string, CalculationOutcome<{ rate: number }>>;
   navReturns: Record<string, CalculationOutcome<{ pointToPoint?: number; cagr?: number }>>;
   activeReturn: CalculationOutcome<{ activeReturn: number; family: string; benchmarkKey: string }>;
   annotations: DataQualityAnnotation[];
@@ -219,12 +241,33 @@ function analyseScheme(s: SchemeDataset, ds: AnalyticsDataset): SchemeAnalytics 
   // the SINCE_INCEPTION CAGR on both sides when available.
   const activeReturn = computeSchemeActive(s, ds, perf.navPointToPoint['SINCE_INCEPTION']);
 
+  // Per-folio XIRR through the SAME engine call (same history-completeness
+  // gate, same solver), fed each folio's own flows and own terminal value.
+  let folioXirr: SchemeAnalytics['folioXirr'];
+  if (s.folios && s.folios.length > 1) {
+    folioXirr = {};
+    for (const f of s.folios) {
+      const fp = computeSchemePerformance({
+        instrumentId: s.instrumentId,
+        historyCompleteness: s.historyCompleteness,
+        optionType: s.optionType,
+        hasDistributionAdjustment: s.hasDistributionAdjustment,
+        cashFlows: f.cashFlows,
+        currentValue: f.currentValue,
+        currentValueDate: f.currentValueDate,
+        navSeries: [],
+      });
+      folioXirr[f.accountId] = fromXirr(fp.investorXirr, () => ({ rate: fp.investorXirr.rate! }));
+    }
+  }
+
   return {
     instrumentId: s.instrumentId,
     instrumentName: s.instrumentName,
     currencyCode: s.currencyCode,
     currentValueDate: iso(s.currentValueDate),
     investorXirr,
+    ...(folioXirr ? { folioXirr } : {}),
     navReturns,
     activeReturn,
     annotations: perf.dataQualityAnnotations,

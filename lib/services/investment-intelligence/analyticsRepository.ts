@@ -20,13 +20,16 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { AnalyticsDataset, SchemeDataset, PersistableAnalyticsRow } from '@/lib/engines/investment-intelligence/analyticsOrchestrator';
+import type { AnalyticsDataset, SchemeDataset, SchemeFolioDataset, PersistableAnalyticsRow } from '@/lib/engines/investment-intelligence/analyticsOrchestrator';
 import type { BenchmarkMapping } from '@/lib/engines/investment-intelligence/benchmarkEngine';
 import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmarkService';
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
 import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
+import { selectLatestEligibleNav, type NavObservationRow, type StatementPositionInput, type UnitMovementInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
+import { valueSchemeAcrossFolios, aggregateFolioValuationPoints, UNKNOWN_FOLIO_KEY, type FolioValuationInput } from '@/lib/engines/investment-intelligence/valuation/schemeValuation';
+import { groupUnitMovements } from './currentValuationLoader';
 import type { IiTransactionType } from './types';
 
 /**
@@ -135,6 +138,10 @@ export async function loadAnalyticsDataset(
 
   interface TxRow {
     instrument_id: string;
+    // Multi-folio fix: the folio the transaction belongs to. A fund held in
+    // several folios is ONE scheme here, but each folio is valued from its
+    // OWN statement, so a transaction has to be attributable to its folio.
+    account_id?: string | null;
     transaction_type: string;
     transaction_date: string;
     gross_amount: number;
@@ -145,7 +152,7 @@ export async function loadAnalyticsDataset(
   const txRows = await fetchAllRows<TxRow>(() =>
     supabase
       .from('ii_transactions')
-      .select('instrument_id, transaction_type, transaction_date, gross_amount, currency_code, status, units')
+      .select('instrument_id, account_id, transaction_type, transaction_date, gross_amount, currency_code, status, units')
       .eq('user_id', userId)
       // Secondary order on id: transaction_date alone is not unique across a
       // user's instruments, and an unstable tie-break across page boundaries
@@ -156,6 +163,7 @@ export async function loadAnalyticsDataset(
 
   interface SnapRow {
     instrument_id: string;
+    account_id?: string | null;
     as_of_date: string;
     units: number;
     value: number;
@@ -165,7 +173,7 @@ export async function loadAnalyticsDataset(
   const snapRows = await fetchAllRows<SnapRow>(() =>
     supabase
       .from('ii_holding_snapshots')
-      .select('instrument_id, as_of_date, units, value, currency_code, quality_status')
+      .select('instrument_id, account_id, as_of_date, units, value, currency_code, quality_status')
       .eq('user_id', userId)
       .order('as_of_date', { ascending: true })
       .order('id', { ascending: true })
@@ -198,11 +206,12 @@ export async function loadAnalyticsDataset(
     price: number;
     data_version: string | null;
     quality_status: string | null;
+    currency_code: string | null;
   }
   const navRows = await fetchAllRows<NavRow>(() =>
     supabase
       .from('ii_prices_nav')
-      .select('instrument_id, price_date, price, data_version, quality_status')
+      .select('instrument_id, price_date, price, data_version, quality_status, currency_code')
       .in('instrument_id', instrumentIds)
       // Secondary order on id: price_date alone is not unique once several
       // instruments are queried together, so a tie needs a deterministic
@@ -212,9 +221,18 @@ export async function loadAnalyticsDataset(
   );
 
   const navByInstrument = new Map<string, SeriesPoint[]>();
+  // Document2 Finding #5: every NAV row (any quality, any currency) as a
+  // candidate for the mark-to-market choice below. The eligibility rule
+  // (quality, future date, price validity, currency) is applied by ONE shared
+  // function, selectLatestEligibleNav(), so this consumer and the Holdings
+  // table / X-Ray / Overview can never disagree about which NAV is current.
+  const navCandidatesByInstrument = new Map<string, NavObservationRow[]>();
   let navDataVersion: string | null = null;
   let sawSuspectNav = false;
   for (const r of navRows) {
+    const candidates = navCandidatesByInstrument.get(r.instrument_id as string) ?? [];
+    candidates.push({ date: String(r.price_date).slice(0, 10), price: Number(r.price), currencyCode: r.currency_code, qualityStatus: r.quality_status });
+    navCandidatesByInstrument.set(r.instrument_id as string, candidates);
     if (r.quality_status && r.quality_status !== 'ok') {
       sawSuspectNav = true;
       continue; // never feed a flagged NAV point into a certified calculation
@@ -298,92 +316,192 @@ export async function loadAnalyticsDataset(
     if (!inst) continue;
 
     // R11: 'review_required' (an unresolved cross-source conflict/ambiguity
-    // — see crossSourceIdentity.ts) is excluded from analytics the same way
-    // 'reversed' already is — the evidence is preserved on the row, just
+    // - see crossSourceIdentity.ts) is excluded from analytics the same way
+    // 'reversed' already is - the evidence is preserved on the row, just
     // not counted until a human resolves the linked reconciliation case
     // (spec sections 36-37: no economic duplication, no evidence loss).
     const txs = (txRows ?? []).filter((t) => t.instrument_id === instrumentId && t.status !== 'reversed' && t.status !== 'review_required');
     const snaps = (snapRows ?? []).filter((s) => s.instrument_id === instrumentId);
 
-    const cashFlows: CashFlow[] = [];
-    const externalCashFlows: CashFlow[] = [];
-    // App Review 2026-09-15, item 2 — the real flows, kept separate from the
-    // synthetic terminal valuation appended below.
-    const externalCashFlowsExcludingTerminal: CashFlow[] = [];
-    for (const t of txs) {
-      const amount = Number(t.gross_amount);
-      const type = t.transaction_type as string;
-      const date = toDate(t.transaction_date as string);
-      const isInternalTransfer = PORTFOLIO_INTERNAL_TRANSFER_TYPES.has(type);
-      if (OUTFLOW_TYPES.has(type)) {
-        const flow: CashFlow = { date, amount: -Math.abs(amount) };
-        cashFlows.push(flow);
-        if (!isInternalTransfer) {
-          externalCashFlows.push(flow);
-          externalCashFlowsExcludingTerminal.push(flow);
+    // Real investor flows of a set of transactions (one folio's, or all of the
+    // scheme's). Multi-folio fix: extracted unchanged from the single loop that
+    // used to run over every transaction of the instrument, so the same code
+    // builds the scheme-level list (union of every folio's flows, each flow
+    // counted exactly once) and each folio's own list.
+    const assembleFlows = (list: typeof txs) => {
+      const cashFlows: CashFlow[] = [];
+      const externalCashFlows: CashFlow[] = [];
+      // App Review 2026-09-15, item 2 - the real flows, kept separate from the
+      // synthetic terminal valuation appended below.
+      const externalCashFlowsExcludingTerminal: CashFlow[] = [];
+      for (const t of list) {
+        const amount = Number(t.gross_amount);
+        const type = t.transaction_type as string;
+        const date = toDate(t.transaction_date as string);
+        const isInternalTransfer = PORTFOLIO_INTERNAL_TRANSFER_TYPES.has(type);
+        if (OUTFLOW_TYPES.has(type)) {
+          const flow: CashFlow = { date, amount: -Math.abs(amount) };
+          cashFlows.push(flow);
+          if (!isInternalTransfer) {
+            externalCashFlows.push(flow);
+            externalCashFlowsExcludingTerminal.push(flow);
+          }
+        } else if (INFLOW_TYPES.has(type)) {
+          const flow: CashFlow = { date, amount: Math.abs(amount) };
+          cashFlows.push(flow);
+          if (!isInternalTransfer) {
+            externalCashFlows.push(flow);
+            externalCashFlowsExcludingTerminal.push(flow);
+          }
         }
-      } else if (INFLOW_TYPES.has(type)) {
-        const flow: CashFlow = { date, amount: Math.abs(amount) };
-        cashFlows.push(flow);
-        if (!isInternalTransfer) {
-          externalCashFlows.push(flow);
-          externalCashFlowsExcludingTerminal.push(flow);
-        }
+        // 'transfer', 'merger', 'adjustment' are unit-movement events with no
+        // investor cash impact; deliberately excluded rather than guessed at.
       }
-      // 'transfer', 'merger', 'adjustment' are unit-movement events with no
-      // investor cash impact; deliberately excluded rather than guessed at.
+      return { cashFlows, externalCashFlows, externalCashFlowsExcludingTerminal };
+    };
+    const { cashFlows, externalCashFlows, externalCashFlowsExcludingTerminal } = assembleFlows(txs);
+
+    // ---- Folios -------------------------------------------------------
+    // Multi-folio fix (2026-10-01). One instrument can sit in several folios
+    // (ii_accounts). Statements are PER FOLIO (unique on account, instrument,
+    // as_of_date), so "the latest snapshot of this instrument" used to be one
+    // arbitrary folio's row: the other folios' units and value dropped out of
+    // currentValue while their transactions were all still in cashFlows.
+    // Each folio is now valued from its OWN statements and the values are
+    // summed (valuation/schemeValuation.ts); a single-folio scheme is valued
+    // exactly as before.
+    const folioOf = (r: { account_id?: string | null }) => (r.account_id ? String(r.account_id) : UNKNOWN_FOLIO_KEY);
+    const snapsByFolio = new Map<string, typeof snaps>();
+    for (const sn of snaps) {
+      const list = snapsByFolio.get(folioOf(sn)) ?? [];
+      list.push(sn);
+      snapsByFolio.set(folioOf(sn), list);
     }
+    const txsByFolio = new Map<string, typeof txs>();
+    for (const t of txs) {
+      const list = txsByFolio.get(folioOf(t)) ?? [];
+      list.push(t);
+      txsByFolio.set(folioOf(t), list);
+    }
+    const folioKeys = [...new Set([...snapsByFolio.keys(), ...txsByFolio.keys()])].sort();
 
-    const valuationSeries: SeriesPoint[] = snaps.map((s) => ({ date: toDate(s.as_of_date as string), value: Number(s.value) }));
+    // Per-folio unit movements: units transacted AFTER a folio's own statement
+    // date are part of its holding (rule 8 of the shared valuation rule).
+    const movementsByFolio = groupUnitMovements(
+      txs.map((t) => ({
+        account_id: folioOf(t),
+        instrument_id: t.instrument_id,
+        transaction_type: t.transaction_type,
+        transaction_date: t.transaction_date,
+        units: t.units,
+        status: t.status,
+      }))
+    );
+    const movementsFor = (folioKey: string): UnitMovementInput[] => movementsByFolio.get(`${folioKey}:${instrumentId}`) ?? [];
+
     // `snaps` is a filtered subset of snapRows, which was queried ordered
-    // ascending by as_of_date (then id) — filtering preserves that order, so
-    // the last element is this instrument's latest certified snapshot.
-    const latestSnap = snaps.length ? snaps[snaps.length - 1] : undefined;
-    const latest = valuationSeries.length ? valuationSeries[valuationSeries.length - 1] : undefined;
+    // ascending by as_of_date (then id) - filtering preserves that order.
+    //
+    // Document2 Finding #5 (point-in-time): the snapshot that anchors "current
+    // value" is the latest one dated on or before the requested asOfDate, never
+    // a statement dated AFTER it. With the default asOfDate (now) this is
+    // identical to "the latest snapshot"; with an explicit historical `to`
+    // date it stops a later statement's value leaking into an earlier view.
+    // valuationSeries itself is deliberately left complete.
+    //
+    // Only bounded when the caller EXPLICITLY asked for an as-of date: for the
+    // default "now" view a statement dated "today" in India/Australia can be
+    // a calendar day ahead of UTC for part of the day and must not vanish.
+    const asOfIso = asOfDate.toISOString().slice(0, 10);
+    const boundSnapshotsToAsOf = opts.asOfDate !== undefined;
 
-    let currentValue = latest?.value ?? 0;
-    let currentValueDate = latest?.date ?? asOfDate;
+    const folioInputs: FolioValuationInput[] = [];
+    const anchorDates: string[] = [];
+    for (const key of folioKeys) {
+      const list = snapsByFolio.get(key) ?? [];
+      if (list.length === 0) continue;
+      const statements: StatementPositionInput[] = list.map((sn) => ({
+        asOfDate: String(sn.as_of_date).slice(0, 10),
+        units: Number(sn.units),
+        value: Number(sn.value),
+        currencyCode: (sn.currency_code as string | undefined) ?? null,
+      }));
+      folioInputs.push({ folioKey: key, statements, unitMovements: movementsFor(key) });
+      const anchor = [...statements].reverse().find((st) => !boundSnapshotsToAsOf || st.asOfDate <= asOfIso);
+      if (anchor) anchorDates.push(anchor.asOfDate);
+    }
+    const latestSnapCurrency = [...snaps].reverse().find((sn) => sn.currency_code)?.currency_code as string | undefined;
+
+    // Dated market value of the scheme, used for weights and drawdown: the sum
+    // over folios of each folio's latest statement value on or before each
+    // statement date (one folio: exactly its own snapshots, as before).
+    const valuationSeries: SeriesPoint[] = aggregateFolioValuationPoints(
+      folioKeys
+        .filter((k) => (snapsByFolio.get(k) ?? []).length > 0)
+        .map((k) => ({ points: (snapsByFolio.get(k) ?? []).map((sn) => ({ date: sn.as_of_date as string, value: Number(sn.value) })) }))
+    ).map((p) => ({ date: toDate(p.date), value: p.value }));
 
     // Mark-to-market against the daily NAV feed (NAV1 / pc6_selective
     // historical hydration writes ii_prices_nav every day). A certified
     // statement snapshot only captures value as of the investor's last
     // upload, so left alone `currentValue`/`currentValueDate` stay frozen at
     // that stale statement date even while the platform's own daily price
-    // job has since moved on — the production bug reported on the
-    // Performance tab. `navByInstrument`'s per-instrument list is a
-    // subsequence of navRows, which was queried ordered ascending by
-    // price_date (then id), so its last element is this instrument's latest
-    // NAV point. When that NAV point postdates the latest snapshot, mark the
-    // position to market: current value becomes (units held as of that
-    // latest snapshot) x (that later NAV price), dated to the NAV point.
-    // When there is no later NAV price, or no snapshot at all, behaviour is
-    // unchanged from before this fix.
+    // job has since moved on - the production bug reported on the
+    // Performance tab.
     //
-    // Regression-proof finding (2026-09-30, golden-fixture audit, PO item 8):
-    // this NAV read has no date filter at all -- it is every ii_prices_nav
-    // row for the instrument, and picking "the last element" is only safe
-    // because every row in production is guaranteed non-future-dated by
-    // trg_ii_prices_nav_no_future_date (migration 0155). That DB trigger was
-    // the ONLY thing standing between a stray future-dated row (a clock-skew
-    // artefact, a direct service-role insert that bypassed the importer, or
-    // simply a caller that passed a genuinely historical `asOfDate` for a
-    // point-in-time query) and this code silently marking a position to
-    // market using a price dated after "now". Bounding the candidate to
-    // `<= asOfDate` costs nothing in the normal case (real NAV rows are never
-    // future-dated) and adds the defense-in-depth the DB trigger alone does
-    // not give the application layer -- see GOLD-008 in
-    // tests/unit/iiNavMarkToMarketGoldenFixtures.test.ts.
+    // Document2 Finding #5: the NAV is the latest ELIGIBLE one at or before
+    // asOfDate (not future-dated, quality 'ok', a valid positive price, in the
+    // holding's own currency) and is applied only when strictly newer than the
+    // folio's statement. Same rule as every other consumer; see
+    // lib/engines/investment-intelligence/valuation/currentHoldingValuation.ts.
+    // Only NAVs newer than the OLDEST anchoring statement can supersede any
+    // folio's statement, so only those are offered (this also keeps the
+    // exclusion warning below about rows that actually matter).
     const navSeriesForInstrument = navByInstrument.get(instrumentId) ?? [];
-    let latestNav: SeriesPoint | undefined;
-    for (let i = navSeriesForInstrument.length - 1; i >= 0; i--) {
-      if (navSeriesForInstrument[i].date.getTime() <= asOfDate.getTime()) {
-        latestNav = navSeriesForInstrument[i];
-        break;
-      }
+    const oldestAnchor = anchorDates.length ? [...anchorDates].sort()[0] : null;
+    const navCandidatesNewerThanSnapshot = (navCandidatesByInstrument.get(instrumentId) ?? []).filter((n) => oldestAnchor === null || n.date > oldestAnchor);
+    const schemeValuation = valueSchemeAcrossFolios({
+      folios: folioInputs,
+      navs: navCandidatesNewerThanSnapshot,
+      asOfDate: asOfIso,
+      currencyCode: latestSnapCurrency ?? null,
+      pointInTime: boundSnapshotsToAsOf,
+    });
+    if (schemeValuation.excludedNavCounts.currency_mismatch > 0 || schemeValuation.excludedNavCounts.invalid_price > 0) {
+      warnings.push({
+        scope: 'nav',
+        detail: `${inst.instrument_name as string}: ${schemeValuation.excludedNavCounts.currency_mismatch + schemeValuation.excludedNavCounts.invalid_price} NAV observation(s) in a different currency or with an invalid price were excluded from its current valuation.`,
+      });
     }
-    if (latestSnap && latest && latestNav && latestNav.date.getTime() > latest.date.getTime()) {
-      currentValue = Number(latestSnap.units) * latestNav.value;
-      currentValueDate = latestNav.date;
+
+    // Scheme current value = SUM of each folio's own value, dated at the latest
+    // folio valuation date. No folio valued (no statement on or before an
+    // explicit as-of date, or none at all) keeps the previous behaviour:
+    // value 0, dated asOfDate.
+    const currentValue = schemeValuation.marketValue ?? 0;
+    let currentValueDate = schemeValuation.valuationDate ? toDate(schemeValuation.valuationDate) : asOfDate;
+    // Pinned legacy behaviour (GOLD-003): a fully redeemed scheme is valued at
+    // exactly 0, and that zero is dated to the latest eligible NAV point when one
+    // is newer than the statements, "honestly reflecting when that zero was last
+    // confirmed true". The shared rule dates a redeemed holding to its statement;
+    // only this consumer's date differs, and only for a zero value (no terminal
+    // flow is ever created from it).
+    if (schemeValuation.basis === 'redeemed' && schemeValuation.valuationDate) {
+      const redeemedNav = selectLatestEligibleNav(navCandidatesNewerThanSnapshot, { asOfDate: asOfIso, currencyCode: latestSnapCurrency ?? null }).nav;
+      if (redeemedNav && redeemedNav.date > schemeValuation.valuationDate) currentValueDate = toDate(redeemedNav.date);
+    }
+
+    // A folio that has transactions but NO statement valuation cannot be
+    // valued, while its flows are still part of the scheme's flows. Disclosed,
+    // never silently patched over.
+    if (folioInputs.length > 0) {
+      const unvalued = folioKeys.filter((k) => !folioInputs.some((f) => f.folioKey === k));
+      if (unvalued.length > 0) {
+        warnings.push({
+          scope: 'valuation',
+          detail: `${inst.instrument_name as string}: ${unvalued.length} folio(s) have transactions but no statement valuation, so their holding is not included in the current value. Upload a statement for each folio.`,
+        });
+      }
     }
 
     // Terminal synthetic flow: the position's current value, positive.
@@ -399,7 +517,23 @@ export async function loadAnalyticsDataset(
     externalCashFlowsExcludingTerminal.sort((a, b) => a.date.getTime() - b.date.getTime());
     if (cashFlows.length && (!earliest || cashFlows[0].date < earliest)) earliest = cashFlows[0].date;
 
-    // App Review 2026-09-15, item 2 — stale-valuation disclosure. A scheme
+    // Per-folio flows (only when the scheme really spans several folios): each
+    // folio's own real flows plus its OWN terminal value on its own date, so the
+    // Holdings table can show a per-folio XIRR next to a per-folio value.
+    let folioDatasets: SchemeFolioDataset[] | undefined;
+    if (folioKeys.length > 1) {
+      folioDatasets = folioKeys.map((key) => {
+        const own = assembleFlows(txsByFolio.get(key) ?? []);
+        const v = schemeValuation.folios.find((f) => f.folioKey === key)?.valuation;
+        const value = v && v.marketValue !== null ? v.marketValue : 0;
+        const date = v && v.valuationDate ? toDate(v.valuationDate) : asOfDate;
+        if (value > 0) own.cashFlows.push({ date, amount: value });
+        own.cashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
+        return { accountId: key, cashFlows: own.cashFlows, currentValue: value, currentValueDate: date };
+      });
+    }
+
+    // App Review 2026-09-15, item 2 - stale-valuation disclosure. A scheme
     // whose newest holding snapshot pre-dates one of its own transactions is
     // being valued as at a date on which that transaction had not happened
     // yet. Any return computed from it terminates on a valuation that does
@@ -457,6 +591,7 @@ export async function loadAnalyticsDataset(
       navSeries: navSeriesForInstrument,
       valuationSeries,
       reconstructedValuationSeries,
+      ...(folioDatasets ? { folios: folioDatasets } : {}),
     });
   }
 

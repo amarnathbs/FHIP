@@ -151,6 +151,7 @@ export function allUnavailableCashFlow(u: ReadModelUnavailable): CanonicalCashFl
     otherUnavailable: [{ section: 'balance_sheet', reason: u.reason, source: u.source }],
     importedNotInNetWorth: null,
     bankBalanceEvidence: null,
+    publishedValuation: null,
   };
 }
 
@@ -181,5 +182,7 @@ export function toCanonicalCashFlow(snapshot: CanonicalFinancialSnapshotResult):
     // Only balances NOT yet applied as a cash asset: an applied one is in Net
     // Worth once, through that asset (WP-15 / D-04).
     bankBalanceEvidence: s.assets.status === 'ok' ? bankBalancesNotInNetWorth(s.assets.bankBalanceEvidence) : null,
+    // 2026-10-01: how the published mutual funds inside Net Worth were valued (disclosure only).
+    publishedValuation: s.investments.status === 'ok' && s.investments.valuationSummary.count > 0 ? s.investments.valuationSummary : null,
   };
 }
