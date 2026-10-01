@@ -967,7 +967,12 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                           {open && c.discrepancy_type === 'document_password_required' && (
                             <span className="text-xs text-gray-500">Enter the document password above and Reprocess — this clears automatically once it opens.</span>
                           )}
-                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'document_password_required' && (
+                          {open && c.discrepancy_type === 'joint_holding_allocation_required' && (
+                            <a href="/investment-intelligence/review" className="text-xs font-medium text-primary hover:underline">
+                              Split ownership on the Review tab
+                            </a>
+                          )}
+                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'joint_holding_allocation_required' && c.discrepancy_type !== 'document_password_required' && (
                             <button onClick={() => handleResolveCase(c.id)} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
                               Resolve
                             </button>

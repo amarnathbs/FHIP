@@ -32,6 +32,7 @@ vi.mock('@/lib/services/investment-intelligence/documentProcessing', () => ({ pr
 import { GET, PATCH } from '@/app/api/investment-intelligence/accounts/[id]/owner/route';
 import { POST as AMEND } from '@/app/api/investment-intelligence/resolutions/[caseId]/amend/route';
 import { GET as RESOLUTIONS } from '@/app/api/investment-intelligence/resolutions/route';
+import { POST as GENERIC_RESOLVE } from '@/app/api/investment-intelligence/reconciliation-cases/[id]/resolve/route';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const USER_A = 'user-a';
@@ -367,6 +368,26 @@ describe('PATCH accounts/[id]/owner -- idempotency and audit', () => {
     expect(auditJson).not.toMatch(/Asha|Rao|Ravi|F-1|A\*\*\*\*/);
     const resolvedDetails = JSON.stringify((rows('ii_reconciliation_cases')[0].discrepancy_details as Record<string, unknown>).resolvedOwner);
     expect(resolvedDetails).not.toMatch(/Asha|Rao|Trust/);
+  });
+});
+
+describe('POST reconciliation-cases/[id]/resolve (the generic "mark resolved" route)', () => {
+  const generic = (caseId: string) =>
+    GENERIC_RESOLVE(new Request('http://test/x', { method: 'POST', body: JSON.stringify({ resolution: 'manual_correction' }) }), { params: Promise.resolve({ id: caseId }) });
+
+  it('NEGATIVE CONTROL [no bypass]: a joint-holding case cannot be closed without an owner decision; it stays open and nothing is written', async () => {
+    seed({ cases: [jointCase()] });
+    const res = await generic(CASE_JOINT);
+    expect(res.status).toBe(422);
+    expect((await body(res)).error).toBe('JOINT_CASE_REQUIRES_JOINT_OWNER');
+    expect(db.writes).toEqual([]);
+    expect(rows('ii_reconciliation_cases')[0].status).toBe('open');
+  });
+
+  it('other case types still resolve through it (unchanged behaviour)', async () => {
+    seed({ cases: [openCase({ id: id(203), discrepancy_type: 'unsupported_document' })] });
+    expect((await generic(id(203))).status).toBe(200);
+    expect(rows('ii_reconciliation_cases')[0].status).toBe('resolved');
   });
 });
 

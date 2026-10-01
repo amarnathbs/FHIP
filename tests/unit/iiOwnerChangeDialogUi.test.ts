@@ -324,6 +324,12 @@ describe('Review and Resolutions clients (structural contract)', () => {
     expect(data).toContain('json.message ?? json.error');
   });
 
+  it('Statements & data no longer offers the generic Resolve on a joint-holding case; it points to the Review tab instead', () => {
+    const data = read('components/investment-intelligence/InvestmentIntelligenceClient.tsx');
+    expect(data).toContain("c.discrepancy_type !== 'joint_holding_allocation_required' && c.discrepancy_type !== 'document_password_required'");
+    expect(data).toContain('Split ownership on the Review tab');
+  });
+
   it('Resolutions uses the dialog for amendments, sends confirm:true, and shows joint / entity decisions', () => {
     expect(resolutions).toContain('<OwnerChangeDialog');
     expect(resolutions).toContain('mode="amend"');
