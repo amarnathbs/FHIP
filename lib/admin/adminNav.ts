@@ -142,7 +142,7 @@ export interface AdminCapabilities {
    * (Standard section 2).
    */
   marketIndexDataUpload: boolean;
-  /** BENCH-1 Phase 2 (migration 0239) - each independently named; none implies another or the upload capability. */
+  /** BENCH-1 Phase 2 (migration 0241) - each independently named; none implies another or the upload capability. */
   benchmarkDataView: boolean;
   benchmarkDataPublish: boolean;
   benchmarkDataCorrect: boolean;

@@ -1,14 +1,14 @@
 {
-  "migration": "0239_bench1_phase2_benchmark_data_governance.sql",
-  "generatedBy": "scripts/bench1_phase2_0239_pglite_verification.mjs",
-  "note": "PGlite verification only; 0239 is NOT applied to DEV or production. All data is synthetic fixture data inside an in-memory database.",
-  "pass": 193,
+  "migration": "0241_bench1_phase2_benchmark_data_governance.sql",
+  "generatedBy": "scripts/bench1_phase2_0241_pglite_verification.mjs",
+  "note": "PGlite verification only; 0241 is NOT applied to DEV or production. All data is synthetic fixture data inside an in-memory database.",
+  "pass": 196,
   "fail": 0,
   "results": [
     {
       "id": "B1P2-PG-001",
       "verdict": "PASS",
-      "label": "0239 re-applies cleanly (idempotent)",
+      "label": "0241 re-applies cleanly (idempotent)",
       "detail": "second application was a no-op"
     },
     {
@@ -32,7 +32,7 @@
     {
       "id": "B1P2-PG-005",
       "verdict": "PASS",
-      "label": "0239 registers NO pg_cron schedule",
+      "label": "0241 registers NO pg_cron schedule",
       "detail": ""
     },
     {
@@ -447,7 +447,7 @@
       "id": "B1P2-PG-074",
       "verdict": "PASS",
       "label": "stage + finalize: 3 new rows, 0 hard errors, eligible (entitlement grants ingest+storage)",
-      "detail": "{\"eligible\":true,\"rows_new\":3,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-27\",\"from\":\"2024-03-25\",\"eligible\":true,\"entitlement_id\":\"ef8a2cad-13db-42c1-b101-91c4a8730cd6\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"bcf1e3ad43437ec608cbfa5043c6b0a06397a0d51ff1b2593cb508514e8d3df0\",\"rows_correction\":0,\"hard_error_total\":0}"
+      "detail": "{\"eligible\":true,\"rows_new\":3,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-27\",\"from\":\"2024-03-25\",\"eligible\":true,\"entitlement_id\":\"8a7aaa93-3aa6-4c08-9157-944e4d81cd8e\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"bcf1e3ad43437ec608cbfa5043c6b0a06397a0d51ff1b2593cb508514e8d3df0\",\"rows_correction\":0,\"hard_error_total\":0}"
     },
     {
       "id": "B1P2-PG-075",
@@ -542,623 +542,641 @@
     {
       "id": "B1P2-PG-090",
       "verdict": "PASS",
-      "label": "publish succeeds for an independent publisher: 3 inserted, atomic",
-      "detail": "{\"job_id\":\"838445ad-dcc0-4541-8250-bcfaeb6219af\",\"date_to\":\"2024-03-27\",\"revived\":0,\"batch_id\":\"164ac22b-7dcc-4d09-8b6f-bce11cbe20d2\",\"inserted\":3,\"corrected\":0,\"date_from\":\"2024-03-25\",\"already_published\":false,\"identical_skipped\":0}"
+      "label": "(precondition) a second approved entitlement still grants the rights generally",
+      "detail": ""
     },
     {
       "id": "B1P2-PG-091",
       "verdict": "PASS",
-      "label": "ledger: ii_reference_import_batches row written (benchmark_level, succeeded, 3 inserted, sha, date range, actor in notes)",
-      "detail": "{\"batch_kind\":\"benchmark_level\",\"status\":\"succeeded\",\"rows_inserted\":3,\"rows_read\":3,\"source_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"f\":\"2024-03-25\",\"t\":\"2024-03-27\",\"notes\":{\"mode\":\"new_history\",\"staged_by\":\"11111111-0000-0000-0000-000000000001\",\"benchmarks\":[\"TEST_A_TRI\"],\"published_by\":\"11111111-0000-0000-0000-000000000002\",\"source_owner\":\"Fixture Owner\",\"history_class\":\"live\",\"import_job_id\":\"838445ad-dcc0-4541-8250-bcfaeb6219af\",\"source_reference\":\"https://example.test/delivery\"}}"
+      "label": "REFUSED: the entitlement CHOSEN at staging was revoked - another approved entitlement does not rescue the publish (the chosen record is re-validated by id)",
+      "detail": "SQLSTATE 42501"
     },
     {
       "id": "B1P2-PG-092",
+      "verdict": "PASS",
+      "label": "publish succeeds for an independent publisher: 3 inserted, atomic",
+      "detail": "{\"job_id\":\"72ecb07d-534d-47b1-9123-5e228755d9db\",\"date_to\":\"2024-03-27\",\"revived\":0,\"batch_id\":\"63899cb1-80b2-4e1c-a9d1-b7d0cd7b6814\",\"inserted\":3,\"corrected\":0,\"date_from\":\"2024-03-25\",\"already_published\":false,\"identical_skipped\":0}"
+    },
+    {
+      "id": "B1P2-PG-093",
+      "verdict": "PASS",
+      "label": "ledger: ii_reference_import_batches row written (benchmark_level, succeeded, 3 inserted, sha, date range, actor in notes)",
+      "detail": "{\"batch_kind\":\"benchmark_level\",\"status\":\"succeeded\",\"rows_inserted\":3,\"rows_read\":3,\"source_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"f\":\"2024-03-25\",\"t\":\"2024-03-27\",\"notes\":{\"mode\":\"new_history\",\"staged_by\":\"11111111-0000-0000-0000-000000000001\",\"benchmarks\":[\"TEST_A_TRI\"],\"published_by\":\"11111111-0000-0000-0000-000000000002\",\"source_owner\":\"Fixture Owner\",\"history_class\":\"live\",\"import_job_id\":\"72ecb07d-534d-47b1-9123-5e228755d9db\",\"source_reference\":\"https://example.test/delivery\"}}"
+    },
+    {
+      "id": "B1P2-PG-094",
       "verdict": "PASS",
       "label": "series rows carry lineage: revision 1, job id, batch id, history class, currency",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-093",
+      "id": "B1P2-PG-095",
       "verdict": "PASS",
       "label": "job row: published, publisher recorded, not self-published, approved counts bound",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-094",
+      "id": "B1P2-PG-096",
       "verdict": "PASS",
       "label": "complete audit evidence: created + validated + published events for the job",
       "detail": "events=3"
     },
     {
-      "id": "B1P2-PG-095",
+      "id": "B1P2-PG-097",
       "verdict": "PASS",
       "label": "ingestion state: latest_valid_data_date updated by the publish (2024-03-27) and last_manual_import_at set",
       "detail": "{\"d\":\"2024-03-27\",\"m\":true}"
     },
     {
-      "id": "B1P2-PG-096",
+      "id": "B1P2-PG-098",
       "verdict": "PASS",
       "label": "IDEMPOTENT: publishing the same job again returns the stored result, writes nothing, adds no ledger row",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-097",
+      "id": "B1P2-PG-099",
       "verdict": "PASS",
       "label": "re-staging the same data: all 3 rows classify identical (no new rows) and the job records duplicate_of",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-098",
+      "id": "B1P2-PG-100",
       "verdict": "PASS",
       "label": "REFUSED: publishing the exact same file again (23505, no duplicate import, no duplicate ledger/audit)",
       "detail": "SQLSTATE 23505"
     },
     {
-      "id": "B1P2-PG-099",
+      "id": "B1P2-PG-101",
       "verdict": "PASS",
       "label": "new_history with a DIFFERENT value for a published date: classified conflict => hard error, not publishable",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-100",
+      "id": "B1P2-PG-102",
       "verdict": "PASS",
       "label": "REFUSED: publication with a hard validation error (22023); the valid row is NOT silently published",
       "detail": "SQLSTATE 22023"
     },
     {
-      "id": "B1P2-PG-101",
+      "id": "B1P2-PG-103",
       "verdict": "PASS",
       "label": "REFUSED: file-level hard errors reported at validation block publication",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-102",
+      "id": "B1P2-PG-104",
       "verdict": "PASS",
       "label": "REFUSED: a required review acknowledgement (large_moves) not given",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-103",
+      "id": "B1P2-PG-105",
       "verdict": "PASS",
       "label": "REFUSED: same admin staging and publishing without the explicit self-publish acknowledgement (separation of duties)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-104",
+      "id": "B1P2-PG-106",
       "verdict": "PASS",
       "label": "with the explicit acknowledgement self-publish works and is RECORDED as self_published",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-105",
+      "id": "B1P2-PG-107",
       "verdict": "PASS",
       "label": "two concurrent jobs staged for the same new date with different values: both look valid at preview time",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-106",
+      "id": "B1P2-PG-108",
       "verdict": "PASS",
       "label": "first publishes",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-107",
+      "id": "B1P2-PG-109",
       "verdict": "PASS",
       "label": "REFUSED (stale, 40001): the second concurrent import is detected, the first value stands, nothing partial written",
       "detail": "SQLSTATE 40001, value=1010"
     },
     {
-      "id": "B1P2-PG-108",
+      "id": "B1P2-PG-110",
       "verdict": "PASS",
       "label": "failure bookkeeping marks the job stale (recoverable: re-stage)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-109",
+      "id": "B1P2-PG-111",
       "verdict": "PASS",
       "label": "REFUSED at create: a multi job mixing a total_return and a price benchmark under one declared variant",
       "detail": "SQLSTATE 22023"
     },
     {
-      "id": "B1P2-PG-110",
+      "id": "B1P2-PG-112",
       "verdict": "PASS",
       "label": "multi-benchmark job: eligibility is evaluated PER benchmark (B has no ingest right => eligible=false)",
-      "detail": "{\"TEST_A_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":true,\"entitlement_id\":\"ef8a2cad-13db-42c1-b101-91c4a8730cd6\"},\"TEST_B_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":false,\"entitlement_id\":\"a3da5343-4f33-4446-8cc8-304d781c7a10\"}}"
+      "detail": "{\"TEST_A_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":true,\"entitlement_id\":\"8a7aaa93-3aa6-4c08-9157-944e4d81cd8e\"},\"TEST_B_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":false,\"entitlement_id\":\"02a9fac5-0522-4097-8d91-93f421a132a8\"}}"
     },
     {
-      "id": "B1P2-PG-111",
+      "id": "B1P2-PG-113",
       "verdict": "PASS",
       "label": "TRANSACTION ROLLBACK: the multi job is refused as a whole; the entitled benchmark A got NO rows either",
       "detail": "SQLSTATE 42501"
     },
     {
-      "id": "B1P2-PG-112",
+      "id": "B1P2-PG-114",
       "verdict": "PASS",
       "label": "TRUE MID-WRITE ROLLBACK: a failure on the 2nd inserted row leaves NO partial rows, NO ledger row, and the job still validated (safe retry possible)",
       "detail": "zz test: forced failure mid-publish"
     },
     {
-      "id": "B1P2-PG-113",
+      "id": "B1P2-PG-115",
       "verdict": "PASS",
       "label": "SAFE RETRY: after the fault is removed the same job publishes once, with exactly one ledger row and one set of rows",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-114",
+      "id": "B1P2-PG-116",
       "verdict": "PASS",
       "label": "chunked staging (100-row chunks) finalizes with the full row count; nothing is canonical until publish",
       "detail": "rows=318"
     },
     {
-      "id": "B1P2-PG-115",
+      "id": "B1P2-PG-117",
       "verdict": "PASS",
       "label": "CHUNK FAILURE: a job interrupted before finalize cannot be published (55000) and published nothing",
       "detail": "SQLSTATE 55000"
     },
     {
-      "id": "B1P2-PG-116",
+      "id": "B1P2-PG-118",
       "verdict": "PASS",
       "label": "REFUSED: staging more rows after finalize (job is validated, not staging)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-117",
+      "id": "B1P2-PG-119",
       "verdict": "PASS",
       "label": "the 300+-row chunked job publishes atomically",
-      "detail": "{\"job_id\":\"82ab7a82-5956-44c2-afe6-730c3f8505d0\",\"date_to\":\"2024-03-20\",\"revived\":0,\"batch_id\":\"634e6ddb-c971-4d7c-a05a-04d4f1eef936\",\"inserted\":318,\"corrected\":0,\"date_from\":\"2023-01-02\",\"already_published\":false,\"identical_skipped\":0}"
+      "detail": "{\"job_id\":\"c931b7be-8dce-445b-8613-1ac4e339bbca\",\"date_to\":\"2024-03-20\",\"revived\":0,\"batch_id\":\"845314c5-a5ee-49b7-a49d-5d0d7734782a\",\"inserted\":318,\"corrected\":0,\"date_from\":\"2023-01-02\",\"already_published\":false,\"identical_skipped\":0}"
     },
     {
-      "id": "B1P2-PG-118",
+      "id": "B1P2-PG-120",
       "verdict": "PASS",
       "label": "correction job: the differing row classifies as correction (before 1005.5 -> after 1006)",
-      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-26\",\"from\":\"2024-03-26\",\"eligible\":true,\"entitlement_id\":\"ef8a2cad-13db-42c1-b101-91c4a8730cd6\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"a493f007ff63ee6ed66bfb195608d108ccd799638899ea5e8fb70f87f3a8f3ee\",\"rows_correction\":1,\"hard_error_total\":0}"
+      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-26\",\"from\":\"2024-03-26\",\"eligible\":true,\"entitlement_id\":\"8a7aaa93-3aa6-4c08-9157-944e4d81cd8e\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"a493f007ff63ee6ed66bfb195608d108ccd799638899ea5e8fb70f87f3a8f3ee\",\"rows_correction\":1,\"hard_error_total\":0}"
     },
     {
-      "id": "B1P2-PG-119",
+      "id": "B1P2-PG-121",
       "verdict": "PASS",
       "label": "REFUSED: a publisher WITHOUT the correction capability publishing a correction (separate permission)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-120",
+      "id": "B1P2-PG-122",
       "verdict": "PASS",
       "label": "and the published level is unchanged (silent overwrite impossible)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-121",
+      "id": "B1P2-PG-123",
       "verdict": "PASS",
       "label": "the corrector publishes the correction",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-122",
+      "id": "B1P2-PG-124",
       "verdict": "PASS",
       "label": "revision 2 holds the corrected level 1006 and points at the correction job",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-123",
+      "id": "B1P2-PG-125",
       "verdict": "PASS",
       "label": "revision evidence in ii_reference_corrections: before (1005.5, rev 1) / after (1006, rev 2), actor, reason",
-      "detail": "{\"previous_value\":{\"value\":1005.5,\"revision_no\":1,\"data_version\":\"bench1-upload-v1\",\"import_job_id\":\"838445ad-dcc0-4541-8250-bcfaeb6219af\"},\"new_value\":{\"value\":1006,\"revision_no\":2,\"import_job_id\":\"ec2d5685-6315-4c72-933b-955b969e57f7\"},\"actor_kind\":\"admin\",\"reason\":\"Source issued a corrected close for 26 Mar 2024 (fixture)\",\"correction_kind\":\"source_correction\"}"
+      "detail": "{\"previous_value\":{\"value\":1005.5,\"revision_no\":1,\"data_version\":\"bench1-upload-v1\",\"import_job_id\":\"72ecb07d-534d-47b1-9123-5e228755d9db\"},\"new_value\":{\"value\":1006,\"revision_no\":2,\"import_job_id\":\"fd4df948-7462-4dff-9138-d198d6735a1f\"},\"actor_kind\":\"admin\",\"reason\":\"Source issued a corrected close for 26 Mar 2024 (fixture)\",\"correction_kind\":\"source_correction\"}"
     },
     {
-      "id": "B1P2-PG-124",
+      "id": "B1P2-PG-126",
       "verdict": "PASS",
       "label": "a correction for a date with no published row is a hard error (missing_target), not an insert",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-125",
+      "id": "B1P2-PG-127",
       "verdict": "PASS",
       "label": "REFUSED: rollback without the correction capability",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-126",
+      "id": "B1P2-PG-128",
       "verdict": "PASS",
       "label": "REFUSED: rollback with a reason under 20 characters",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-127",
+      "id": "B1P2-PG-129",
       "verdict": "PASS",
       "label": "rollback restores the prior level through governance (new revision 3), audited",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-128",
+      "id": "B1P2-PG-130",
       "verdict": "PASS",
       "label": "after rollback: level 1005.5 again, revision 3 (history is preserved, never rewritten)",
       "detail": "{\"v\":1005.5,\"rev\":3}"
     },
     {
-      "id": "B1P2-PG-129",
+      "id": "B1P2-PG-131",
       "verdict": "PASS",
       "label": "rolled-back job is marked rolled_back and its ledger batch is marked rolled_back",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-130",
+      "id": "B1P2-PG-132",
       "verdict": "PASS",
       "label": "IDEMPOTENT: a second rollback is a no-op",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-131",
+      "id": "B1P2-PG-133",
       "verdict": "PASS",
       "label": "a new-history job for two later dates publishes",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-132",
+      "id": "B1P2-PG-134",
       "verdict": "PASS",
       "label": "rollback of a new-history job RETRACTS (soft, quality_status=superseded; no row is deleted)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-133",
+      "id": "B1P2-PG-135",
       "verdict": "PASS",
       "label": "retracted rows are invisible to ordinary readers (R4/R5 would never see them)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-134",
+      "id": "B1P2-PG-136",
       "verdict": "PASS",
       "label": "re-staging the retracted dates classifies them as revive (counted as new)",
-      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-06-04\",\"from\":\"2024-06-03\",\"eligible\":true,\"entitlement_id\":\"ef8a2cad-13db-42c1-b101-91c4a8730cd6\"}},\"rows_revive\":2,\"rows_identical\":0,\"staging_digest\":\"c973c12810ae4cbf616fbcc15e800a6d1851320e6b533f2f14dc4cdd0cbefbde\",\"rows_correction\":0,\"hard_error_total\":0}"
+      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-06-04\",\"from\":\"2024-06-03\",\"eligible\":true,\"entitlement_id\":\"8a7aaa93-3aa6-4c08-9157-944e4d81cd8e\"}},\"rows_revive\":2,\"rows_identical\":0,\"staging_digest\":\"c973c12810ae4cbf616fbcc15e800a6d1851320e6b533f2f14dc4cdd0cbefbde\",\"rows_correction\":0,\"hard_error_total\":0}"
     },
     {
-      "id": "B1P2-PG-135",
+      "id": "B1P2-PG-137",
       "verdict": "PASS",
       "label": "revive publishes with a new revision",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-136",
+      "id": "B1P2-PG-138",
       "verdict": "PASS",
       "label": "REFUSED: rolling back a job whose rows were later revised (55000); data unchanged",
       "detail": "SQLSTATE 55000"
     },
     {
-      "id": "B1P2-PG-137",
+      "id": "B1P2-PG-139",
       "verdict": "PASS",
       "label": "REFUSED: UPDATE on the governance event log (append-only, even for the owner)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-138",
+      "id": "B1P2-PG-140",
       "verdict": "PASS",
       "label": "REFUSED: DELETE on the governance event log",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-139",
+      "id": "B1P2-PG-141",
       "verdict": "PASS",
       "label": "REFUSED: TRUNCATE on the governance event log",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-140",
+      "id": "B1P2-PG-142",
       "verdict": "PASS",
       "label": "RLS: a plain user sees zero import jobs / rows / errors / events",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-141",
+      "id": "B1P2-PG-143",
       "verdict": "PASS",
       "label": "RLS vacuity guard: the view-only admin sees them",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-142",
+      "id": "B1P2-PG-144",
       "verdict": "PASS",
       "label": "REFUSED: direct INSERT of an import job by an admin (the RPC is the only path)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-143",
+      "id": "B1P2-PG-145",
       "verdict": "PASS",
       "label": "REFUSED: a plain user proposing a mapping",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-144",
+      "id": "B1P2-PG-146",
       "verdict": "PASS",
       "label": "REFUSED: a proposal without an evidence URL (table CHECK)",
       "detail": "SQLSTATE 23502"
     },
     {
-      "id": "B1P2-PG-145",
+      "id": "B1P2-PG-147",
       "verdict": "PASS",
       "label": "REFUSED: an evidence source type outside the allow-list",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-146",
+      "id": "B1P2-PG-148",
       "verdict": "PASS",
       "label": "catalogue admin proposes a mapping with evidence",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-147",
+      "id": "B1P2-PG-149",
       "verdict": "PASS",
       "label": "REFUSED: a plain user approving a mapping",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-148",
+      "id": "B1P2-PG-150",
       "verdict": "PASS",
       "label": "REFUSED: approval without a review note of >= 10 chars",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-149",
+      "id": "B1P2-PG-151",
       "verdict": "PASS",
       "label": "approval creates the canonical effective-dated mapping WITH evidence, basis scheme_disclosed, reviewer recorded",
-      "detail": "{\"mapping_basis\":\"scheme_disclosed\",\"evidence_url\":\"https://example.test/sid.pdf\",\"dd\":\"2020-03-15\",\"resolution_method\":\"deterministic_exact\",\"reviewed_by\":\"11111111-0000-0000-0000-000000000004\",\"benchmark_id\":\"dd150491-51ad-4fb1-96fb-bcc07e4742cf\",\"ef\":\"2020-04-01\"}"
+      "detail": "{\"mapping_basis\":\"scheme_disclosed\",\"evidence_url\":\"https://example.test/sid.pdf\",\"dd\":\"2020-03-15\",\"resolution_method\":\"deterministic_exact\",\"reviewed_by\":\"11111111-0000-0000-0000-000000000004\",\"benchmark_id\":\"efaf3d3a-0107-4ac3-8560-420ae740a35c\",\"ef\":\"2020-04-01\"}"
     },
     {
-      "id": "B1P2-PG-150",
+      "id": "B1P2-PG-152",
       "verdict": "PASS",
       "label": "REFUSED: a benchmark CHANGE overlapping the open primary mapping without an explicit reviewed close (23P01)",
       "detail": "SQLSTATE 23P01"
     },
     {
-      "id": "B1P2-PG-151",
+      "id": "B1P2-PG-153",
       "verdict": "PASS",
       "label": "with p_close_previous the OLD mapping is closed at the day before (history keeps its meaning) and the new one starts",
       "detail": "{\"et\":\"2023-03-31\"}"
     },
     {
-      "id": "B1P2-PG-152",
+      "id": "B1P2-PG-154",
       "verdict": "PASS",
       "label": "DATABASE rule: a direct service-role INSERT of an overlapping PRIMARY mapping is refused (23P01)",
       "detail": "SQLSTATE 23P01"
     },
     {
-      "id": "B1P2-PG-153",
+      "id": "B1P2-PG-155",
       "verdict": "PASS",
       "label": "a SECONDARY mapping may coexist with a primary one",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-154",
+      "id": "B1P2-PG-156",
       "verdict": "PASS",
       "label": "REFUSED: an admin session calling the auto-publish RPC (service role only)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-155",
+      "id": "B1P2-PG-157",
       "verdict": "PASS",
       "label": "AUTO-PUBLISH: deterministic, high-confidence, authoritative evidence, verified benchmark => published",
-      "detail": "{\"mapping_id\":\"dfed35de-a106-407a-83ba-886348d3cde2\",\"auto_published\":true}"
+      "detail": "{\"mapping_id\":\"34b15c78-7cf1-4b78-a826-d37a7505b2e3\",\"auto_published\":true}"
     },
     {
-      "id": "B1P2-PG-156",
+      "id": "B1P2-PG-158",
       "verdict": "PASS",
       "label": "NOT auto-published (ambiguity reason present): routed to admin review",
       "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
     },
     {
-      "id": "B1P2-PG-157",
+      "id": "B1P2-PG-159",
       "verdict": "PASS",
       "label": "NOT auto-published (medium confidence): routed to admin review",
       "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
     },
     {
-      "id": "B1P2-PG-158",
+      "id": "B1P2-PG-160",
       "verdict": "PASS",
       "label": "NOT auto-published (admin_judgement method): routed to admin review",
       "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
     },
     {
-      "id": "B1P2-PG-159",
+      "id": "B1P2-PG-161",
       "verdict": "PASS",
       "label": "NOT auto-published (evidence source \"other\"): routed to admin review",
       "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
     },
     {
-      "id": "B1P2-PG-160",
+      "id": "B1P2-PG-162",
       "verdict": "PASS",
       "label": "NOT auto-published (secondary relationship): routed to admin review",
       "detail": "{\"reason\":\"routed to admin review: not a deterministic, high-confidence, unambiguous primary match with authoritative evidence\",\"auto_published\":false}"
     },
     {
-      "id": "B1P2-PG-161",
+      "id": "B1P2-PG-163",
       "verdict": "PASS",
       "label": "NOT auto-published: the benchmark is only a DRAFT catalogue entry (must be verified)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-162",
+      "id": "B1P2-PG-164",
       "verdict": "PASS",
       "label": "REFUSED: even an admin cannot approve a mapping to an unverified catalogue entry (22023)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-163",
+      "id": "B1P2-PG-165",
       "verdict": "PASS",
       "label": "reject records the decision and creates no mapping",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-164",
+      "id": "B1P2-PG-166",
       "verdict": "PASS",
       "label": "REFUSED: a plain user setting the ingestion mode",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-165",
+      "id": "B1P2-PG-167",
       "verdict": "PASS",
       "label": "REFUSED: automation cannot be enabled without an approved AUTOMATION entitlement (a licence for storage/calculation is not automation permission)",
       "detail": "SQLSTATE 42501"
     },
     {
-      "id": "B1P2-PG-166",
+      "id": "B1P2-PG-168",
       "verdict": "PASS",
       "label": "manual_import mode can be set with a reason",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-167",
+      "id": "B1P2-PG-169",
       "verdict": "PASS",
       "label": "REFUSED: an authenticated admin claiming an ingestion lease (service role only)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-168",
+      "id": "B1P2-PG-170",
       "verdict": "PASS",
       "label": "lease: first claimant wins",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-169",
+      "id": "B1P2-PG-171",
       "verdict": "PASS",
       "label": "SINGLE-FLIGHT: an overlapping second runner is refused while the lease is live",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-170",
+      "id": "B1P2-PG-172",
       "verdict": "PASS",
       "label": "LEASE EXPIRY: an expired lease can be taken over",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-171",
+      "id": "B1P2-PG-173",
       "verdict": "PASS",
       "label": "REFUSED: a lease TTL under 30 seconds",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-172",
+      "id": "B1P2-PG-174",
       "verdict": "PASS",
       "label": "releasing someone else's lease is a no-op",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-173",
+      "id": "B1P2-PG-175",
       "verdict": "PASS",
       "label": "WATERMARKS: an empty HTTP 200 moves last_attempt_at but NOT last_successful_run_at, and counts as a failure",
-      "detail": "{\"last_attempt_at\":\"2026-10-01T13:10:45.486Z\",\"last_successful_run_at\":null,\"consecutive_failures\":1,\"last_run_status\":\"empty_response\",\"d\":\"2024-12-31\"}"
+      "detail": "{\"last_attempt_at\":\"2026-10-01T14:06:02.348Z\",\"last_successful_run_at\":null,\"consecutive_failures\":1,\"last_run_status\":\"empty_response\",\"d\":\"2024-12-31\"}"
     },
     {
-      "id": "B1P2-PG-174",
+      "id": "B1P2-PG-176",
+      "verdict": "PASS",
+      "label": "recording a watermark BEYOND the latest valid data date is accepted and clamped (no error)",
+      "detail": ""
+    },
+    {
+      "id": "B1P2-PG-177",
       "verdict": "PASS",
       "label": "success moves last_successful_run_at and clears the failure streak; the completeness watermark is CLAMPED to the latest valid data date (cannot claim coverage beyond real data)",
-      "detail": "{\"last_successful_run_at\":\"2026-10-01T13:10:45.496Z\",\"consecutive_failures\":0,\"d\":\"2024-12-31\",\"w\":\"2024-12-31\"}"
+      "detail": "{\"last_successful_run_at\":\"2026-10-01T14:06:02.352Z\",\"consecutive_failures\":0,\"d\":\"2024-12-31\",\"w\":\"2024-12-31\"}"
     },
     {
-      "id": "B1P2-PG-175",
+      "id": "B1P2-PG-178",
       "verdict": "PASS",
       "label": "every attempt is in the run history",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-176",
+      "id": "B1P2-PG-179",
       "verdict": "PASS",
       "label": "REFUSED by CHECK: a watermark beyond latest_valid_data_date (even for the owner role)",
       "detail": "SQLSTATE 23514"
     },
     {
-      "id": "B1P2-PG-177",
+      "id": "B1P2-PG-180",
       "verdict": "PASS",
       "label": "REFUSED by CHECK: automation_enabled while the mode is not automated",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-178",
+      "id": "B1P2-PG-181",
       "verdict": "PASS",
       "label": "REFUSED: the feed write path while the global/write kill switches are OFF (55000)",
       "detail": "SQLSTATE 55000"
     },
     {
-      "id": "B1P2-PG-179",
+      "id": "B1P2-PG-182",
       "verdict": "PASS",
       "label": "REFUSED: kill switches on but the benchmark is not in automated mode (55000)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-180",
+      "id": "B1P2-PG-183",
       "verdict": "PASS",
       "label": "with an approved AUTOMATION entitlement the mode can be set automated",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-181",
+      "id": "B1P2-PG-184",
       "verdict": "PASS",
       "label": "feed write succeeds only when ALL gates pass (kill switches on, automated, entitlement)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-182",
+      "id": "B1P2-PG-185",
       "verdict": "PASS",
       "label": "feed never overwrites: the differing value is counted as a conflict, the published value stands, the new day is inserted",
-      "detail": "{\"batch_id\":\"b10da3e8-d39c-4f71-b2c7-7cb8d16675e4\",\"inserted\":1,\"identical\":0,\"conflicts_skipped\":1}"
+      "detail": "{\"batch_id\":\"e7142886-cd80-431d-8493-68ed8f408bf6\",\"inserted\":1,\"identical\":0,\"conflicts_skipped\":1}"
     },
     {
-      "id": "B1P2-PG-183",
+      "id": "B1P2-PG-186",
       "verdict": "PASS",
       "label": "REFUSED: after the automation grant is revoked the feed write is refused (42501)",
       "detail": "SQLSTATE 42501"
     },
     {
-      "id": "B1P2-PG-184",
+      "id": "B1P2-PG-187",
       "verdict": "PASS",
       "label": "REFUSED: the WRITE kill switch alone stops writes (55000)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-185",
+      "id": "B1P2-PG-188",
       "verdict": "PASS",
       "label": "REFUSED: an admin session cannot call the feed write path at all",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-186",
+      "id": "B1P2-PG-189",
       "verdict": "PASS",
       "label": "REFUSED: the 0232 single-step upload RPC is no longer executable by an authenticated admin (permission denied)",
       "detail": "permission denied for function commit_market_index_upload"
     },
     {
-      "id": "B1P2-PG-187",
+      "id": "B1P2-PG-190",
       "verdict": "PASS",
       "label": "REFUSED: the 0232 feed RPC now requires an approved automation+storage entitlement for the index (42501) and wrote nothing",
       "detail": "SQLSTATE 42501"
     },
     {
-      "id": "B1P2-PG-188",
+      "id": "B1P2-PG-191",
       "verdict": "PASS",
       "label": "REFUSED: an admin session writing the demand table (service role only)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-189",
+      "id": "B1P2-PG-192",
       "verdict": "PASS",
       "label": "service role upserts aggregate demand (no user detail by construction)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-190",
+      "id": "B1P2-PG-193",
       "verdict": "PASS",
       "label": "the demand table has NO user/account/holding identifier column",
       "detail": "benchmark_id,required_from,required_from_investor,required_to,scheme_count,family_count,demand_basis,demand_version,computed_at"
     },
     {
-      "id": "B1P2-PG-191",
+      "id": "B1P2-PG-194",
       "verdict": "PASS",
       "label": "REFUSED: an admin session calling the expiry job (service role only)",
       "detail": ""
     },
     {
-      "id": "B1P2-PG-192",
+      "id": "B1P2-PG-195",
       "verdict": "PASS",
       "label": "service role expiry: stale validated jobs become expired and their staged rows are purged",
       "detail": "{\"expired_jobs\":5,\"purged_staged_rows\":7}"
     },
     {
-      "id": "B1P2-PG-193",
+      "id": "B1P2-PG-196",
       "verdict": "PASS",
       "label": "expiry never touches canonical published rows",
       "detail": "rows=329"

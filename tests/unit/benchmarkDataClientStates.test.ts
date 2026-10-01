@@ -15,9 +15,9 @@ const task = (o: Partial<PendingImportTask>): PendingImportTask => ({ benchmarkK
 
 describe('honest states render the required text', () => {
   it('unavailable: explicit panel with the reason, never an empty healthy dashboard', () => {
-    const html = renderToStaticMarkup(h(UnavailablePanel, { reason: 'The benchmark tables are not available (migration 0239 not applied).' }));
+    const html = renderToStaticMarkup(h(UnavailablePanel, { reason: 'The benchmark tables are not available (migration 0241 not applied).' }));
     expect(html).toContain('Benchmark Data is unavailable');
-    expect(html).toContain('migration 0239 not applied');
+    expect(html).toContain('migration 0241 not applied');
     expect(html).toContain('not an empty or healthy state');
     expect(html).toContain('role="alert"');
   });

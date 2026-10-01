@@ -13,17 +13,17 @@ The read-only inventory (`scripts/bench1_held_scheme_inventory.mjs dev|prod`, GE
 
 ## Why nothing was written
 
-1. Migration 0239 (and 0232) are **not applied to DEV or production**, and this environment has no DDL path (no database URL, no management token, no SQL-execution RPC - verified against the DEV PostgREST listing). Every governed write path (staging, publish, entitlements, mapping, ingestion state) is an RPC created by 0239, so none exists to call.
+1. Migration 0241 (and 0232) are **not applied to DEV or production**, and this environment has no DDL path (no database URL, no management token, no SQL-execution RPC - verified against the DEV PostgREST listing). Every governed write path (staging, publish, entitlements, mapping, ingestion state) is an RPC created by 0241, so none exists to call.
 2. Writing synthetic benchmark rows straight into the existing tables would bypass the governance this mission builds and would repeat the DEV pollution the 2026-09-30 cleanup removed (14 benchmarks / 199 series rows / 14 mappings).
 3. There is no permitted real source file (no entitlement exists), so no real data could be published.
 
 ## Fixture cleanup
 
-None required. All fixtures live inside in-memory PGlite databases and vitest doubles (`scripts/bench1_phase2_0239_pglite_verification.mjs`, `tests/unit/benchmarkData*.test.ts`) and are discarded with the process. No fixture, synthetic level or test file was committed as market data. Nothing needs deleting from DEV or production.
+None required. All fixtures live inside in-memory PGlite databases and vitest doubles (`scripts/bench1_phase2_0241_pglite_verification.mjs`, `tests/unit/benchmarkData*.test.ts`) and are discarded with the process. No fixture, synthetic level or test file was committed as market data. Nothing needs deleting from DEV or production.
 
 ## What the PO runs to produce live DEV evidence (a mutation ledger for that run must be recorded then)
 
-1. `scripts/bench1_phase2_po_apply_0239.sql` steps 0-2 on DEV (apply 0232 first if absent).
+1. `scripts/bench1_phase2_po_apply_0241.sql` steps 0-2 on DEV (apply 0232 first if absent).
 2. Grant capabilities to named administrators (step 3).
 3. Optionally the draft seed `docs/admin/po_apply_bench1_phase2/03_seed_catalogue_and_mapping_proposals.sql`.
 4. Create and approve an entitlement ONLY if rights exist in writing; then upload a **permitted real file** for one benchmark and walk the five screens (checklist in the release package). Any synthetic file used for a code-path rehearsal must carry `history_class = unknown`, a source reference of "synthetic rehearsal", be rolled back through the Jobs tab and recorded here; it must never be published to production.

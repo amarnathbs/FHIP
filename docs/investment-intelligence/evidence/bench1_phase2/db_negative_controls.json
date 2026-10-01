@@ -1,6 +1,6 @@
 {
-  "generatedBy": "scripts/bench1_phase2_0239_negative_controls.mjs",
-  "note": "Each rule broken in a TEMP COPY of 0239 and replayed on PGlite; the real migration was never modified.",
+  "generatedBy": "scripts/bench1_phase2_0241_negative_controls.mjs",
+  "note": "Each rule broken in a TEMP COPY of 0241 and replayed on PGlite; the real migration was never modified.",
   "results": [
     {
       "id": "DB-01",
@@ -101,9 +101,12 @@
     },
     {
       "id": "DB-09",
-      "rule": "the completeness watermark cannot exceed the latest valid data date",
-      "status": "NOT_DEMONSTRATED",
-      "failingChecks": [],
+      "rule": "the completeness watermark cannot exceed the latest valid data date (clamp, least() and CHECK all removed)",
+      "status": "DEMONSTRATED",
+      "failingChecks": [
+        "FAIL B1P2-PG-177 success moves last_successful_run_at and clears the failure streak; the completeness watermark is CLAMPED to the latest valid data date (cannot claim coverage beyond real data)",
+        "FAIL B1P2-PG-179 REFUSED by CHECK: a watermark beyond latest_valid_data_date (even for the owner role)"
+      ],
       "crashedHarnessOrMigration": false
     },
     {
@@ -137,9 +140,12 @@
       "id": "DB-13",
       "rule": "the 0232 single-step upload RPC (attestation checkbox only) is no longer executable",
       "status": "DEMONSTRATED",
-      "failingChecks": [],
-      "crashedHarnessOrMigration": true,
-      "note": "UNCAUGHT: query has no destination for result data"
+      "failingChecks": [
+        "FAIL B1P2-PG-007 EXECUTE grants: publish for authenticated not anon; lease + feed service_role only; 0232 single-step upload RPC REVOKED from authenticated",
+        "FAIL B1P2-PG-189 REFUSED: the 0232 single-step upload RPC is no longer executable by an authenticated admin (permission denied)",
+        "FAIL B1P2-PG-190 REFUSED: the 0232 feed RPC now requires an approved automation+storage entitlement for the index (42501) and wrote nothing"
+      ],
+      "crashedHarnessOrMigration": false
     },
     {
       "id": "DB-14",
@@ -151,4 +157,33 @@
       ],
       "crashedHarnessOrMigration": false
     },
-    
+    {
+      "id": "DB-15",
+      "rule": "rollback refuses when later revisions exist on the rows",
+      "status": "DEMONSTRATED",
+      "failingChecks": [
+        "FAIL B1P2-PG-136 REFUSED: rolling back a job whose rows were later revised (55000); data unchanged"
+      ],
+      "crashedHarnessOrMigration": false
+    },
+    {
+      "id": "DB-16",
+      "rule": "the same file cannot be published twice",
+      "status": "DEMONSTRATED",
+      "failingChecks": [
+        "FAIL B1P2-PG-098 REFUSED: publishing the exact same file again (23505, no duplicate import, no duplicate ledger/audit)"
+      ],
+      "crashedHarnessOrMigration": false
+    },
+    {
+      "id": "DB-17",
+      "rule": "the entitlement CHOSEN at staging is re-validated by id at publication (another approved entitlement must not rescue a revoked one)",
+      "status": "DEMONSTRATED",
+      "failingChecks": [
+        "FAIL B1P2-PG-091 REFUSED: the entitlement CHOSEN at staging was revoked - another approved entitlement does not rescue the publish (the chosen record is re-validated by id)",
+        "FAIL B1P2-PG-092 publish succeeds for an independent publisher: 3 inserted, atomic"
+      ],
+      "crashedHarnessOrMigration": false
+    }
+  ]
+}

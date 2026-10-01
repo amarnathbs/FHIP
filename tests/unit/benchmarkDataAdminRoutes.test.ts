@@ -11,7 +11,7 @@
 // cannot publish new history, a catalogue admin cannot approve an entitlement, an approver cannot
 // propose, an uploader cannot publish); s8 'unavailable' is explicit; s11 the validation-error export
 // neutralises formula cells and is no-store; s13 safe failure. The database-bypass test (calling the
-// RPCs directly) is scripts/bench1_phase2_0239_pglite_verification.mjs.
+// RPCs directly) is scripts/bench1_phase2_0241_pglite_verification.mjs.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -181,7 +181,7 @@ describe('s13 fail closed', () => {
     adminRow = { data: null, error: { message: 'column admin_users.can_publish_benchmark_data does not exist' } };
     for (const r of ROUTES) expect((await r.call()).status, r.name).toBe(403);
   });
-  it('a row missing the columns (migration 0239 not applied) grants nothing; a truthy non-true value grants nothing', async () => {
+  it('a row missing the columns (migration 0241 not applied) grants nothing; a truthy non-true value grants nothing', async () => {
     adminRow = { data: {}, error: null };
     expect((await overviewGET()).status).toBe(403);
     adminRow = { data: { can_publish_benchmark_data: 'true', can_upload_market_index_data: 1 }, error: null };

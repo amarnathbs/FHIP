@@ -15,7 +15,7 @@ Date: 2026-10-01. Basis: read-only inventory of DEV and PRODUCTION (`docs/invest
 | Held rows with a benchmark mapping | 0 | 0 |
 | Benchmark comparisons available to any user | **none** | **none** |
 
-Migration 0239 (and 0232) are not applied to either database; no benchmark data has been published anywhere by this work.
+Migration 0241 (and 0232) are not applied to either database; no benchmark data has been published anywhere by this work.
 
 ## 2. Demand: what real holdings require
 

@@ -29,7 +29,7 @@ export const POST = adminRoute(async (req: Request, { params }: { params: Promis
   const need = await requireBenchmarkCapability(cap);
   if (need.forbidden) return need.forbidden;
 
-  const outcome = await publishBenchmarkImport(v.supabase, { jobId: id.id, ...body.data });
+  const outcome = await publishBenchmarkImport(v.supabase, { jobId: id.id, ...body.data, acknowledged: body.data.acknowledged ?? [] });
   if (outcome.status === 'failed') return Response.json({ error: outcome.message, code: outcome.kind }, { status: outcome.httpStatus });
   return ok({ alreadyPublished: outcome.alreadyPublished, result: outcome.result });
 });

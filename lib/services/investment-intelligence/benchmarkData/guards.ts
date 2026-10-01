@@ -7,10 +7,10 @@
 //   view                 any of the five below OR PC6 can_view_reference_data_quality
 //                        (read-only; sees jobs, previews, ingestion state)
 //   upload               can_upload_market_index_data      (0232) stage + validate
-//   publish              can_publish_benchmark_data        (0239) approve + publish NEW history
-//   correct              can_correct_benchmark_data        (0239) publish CORRECTIONS, roll back
-//   catalogue            can_manage_benchmark_catalogue    (0239) catalogue, mappings, DRAFT entitlements
-//   entitlementApprove   can_approve_benchmark_entitlements (0239) approve / revoke entitlements
+//   publish              can_publish_benchmark_data        (0241) approve + publish NEW history
+//   correct              can_correct_benchmark_data        (0241) publish CORRECTIONS, roll back
+//   catalogue            can_manage_benchmark_catalogue    (0241) catalogue, mappings, DRAFT entitlements
+//   entitlementApprove   can_approve_benchmark_entitlements (0241) approve / revoke entitlements
 //
 // None implies another (Standard section 2): a publisher cannot stage, an
 // uploader cannot publish, a corrector cannot publish new history, a

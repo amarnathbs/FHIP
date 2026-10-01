@@ -92,11 +92,11 @@ async function canUploadMarketIndexData(): Promise<boolean> {
 }
 
 /**
- * BENCH-1 Phase 2 (migration 0239) - the benchmark-data capabilities. ONE admin_users read, but each
+ * BENCH-1 Phase 2 (migration 0241) - the benchmark-data capabilities. ONE admin_users read, but each
  * output field is its own === true evaluation of its own column (flagsFromAdminRow): no flag is derived
  * from another except `view`, which is the union of READ access only.
  *
- * FAILS CLOSED: any error, a logged-out caller, a missing row or a missing COLUMN (0239 not applied)
+ * FAILS CLOSED: any error, a logged-out caller, a missing row or a missing COLUMN (0241 not applied)
  * yields all-false.
  */
 async function readBenchmarkCapabilities(): Promise<BenchmarkCapabilityFlags> {

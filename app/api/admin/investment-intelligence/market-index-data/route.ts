@@ -120,12 +120,13 @@ export const GET = adminRoute(async () => {
 });
 
 // SUPERSEDED (BENCH-1 Phase 2). The earlier single-step upload wrote series rows on an attestation
-// checkbox alone and called commit_market_index_upload(), which migration 0239 revokes from
+// checkbox alone and called commit_market_index_upload(), which migration 0241 revokes from
 // authenticated sessions because it bypassed the per-right entitlement gate. All uploads now go
 // through the ONE staged pipeline at /api/admin/investment-intelligence/benchmark-data/upload
 // (stage -> validate -> approve -> publish, bound to checksum + staging digest + entitlement).
 // Authentication is still checked first so an unauthenticated caller receives 401, not 410.
-export const POST = adminRoute(async () => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the signature is kept so callers/tests still pass a Request
+export const POST = adminRoute(async (_req: Request) => {
   const { forbidden } = await requireMarketIndexAdmin();
   if (forbidden) return forbidden;
   return Response.json({ error: 'Superseded by /api/admin/investment-intelligence/benchmark-data/upload', code: 'SUPERSEDED' }, { status: 410 });
