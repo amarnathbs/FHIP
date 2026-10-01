@@ -42,6 +42,24 @@
 //      changed (no interpolation, no extrapolation).
 //   7. No snapshot at all -> basis 'unavailable', marketValue null. Never a
 //      fabricated zero.
+//   8. UNITS TRANSACTED AFTER THE STATEMENT (multi-folio fix, 2026-10-01).
+//      Callers may pass `unitMovements` (signed net unit changes of the
+//      position's own non-reversed transactions). Movements dated STRICTLY
+//      after the statement date and on or before the valuation date are added
+//      to the statement's units: units = statement units + movements. The
+//      enlarged unit count is priced at the latest eligible market NAV when
+//      one is newer than the statement (rule 3), otherwise at the statement's
+//      own NAV (basis stays 'statement', and the note says units were added).
+//      A balance that nets to exactly 0 is 'redeemed' (rule 5). A balance that
+//      would go NEGATIVE, or units that cannot be priced (statement held 0
+//      units and no newer NAV exists), are NOT applied: the statement figures
+//      stand and `unitsAfterStatementApplied` is false with a note. Movements
+//      dated on the statement's own date are already inside the statement
+//      figure and are never counted twice.
+//
+// A fund held in SEVERAL folios is valued folio by folio with this function
+// and summed by valuation/schemeValuation.ts; this module itself always values
+// ONE position (one folio).
 //
 // This module deliberately does NOT touch XIRR/TWRR/R4/R5/R6 arithmetic; it
 // only selects the valuation INPUT those figures are computed from.
@@ -67,6 +85,13 @@ export interface StatementPositionInput {
   units: number;
   value: number;
   currencyCode?: string | null;
+}
+
+export interface UnitMovementInput {
+  /** ISO yyyy-mm-dd transaction date. */
+  date: string;
+  /** Signed net change in units (purchase +, redemption -), already direction-resolved by the caller. */
+  unitDelta: number;
 }
 
 export type NavIneligibleReason = 'future_dated' | 'quality_not_ok' | 'currency_mismatch' | 'invalid_price';
@@ -101,12 +126,42 @@ export interface HoldingValuation {
   ageDays: number | null;
   stale: boolean;
   excludedNavCounts: Record<NavIneligibleReason, number>;
+  /** The statement's own unit count (before any later movements). null when unavailable. */
+  statementUnits: number | null;
+  /** Net units transacted strictly after the statement date and on or before the valuation date (0 when none / not supplied). */
+  unitsAfterStatement: number;
+  /** True when those units are included in `units` / `marketValue`. */
+  unitsAfterStatementApplied: boolean;
   /** Plain-language label suitable for a tooltip / footnote. */
   note: string;
 }
 
 function emptyExcluded(): Record<NavIneligibleReason, number> {
   return { future_dated: 0, quality_not_ok: 0, currency_mismatch: 0, invalid_price: 0 };
+}
+
+function round6(n: number): number {
+  return Math.round(n * 1_000_000) / 1_000_000;
+}
+
+/** Net units moved strictly after `statementDate` and on or before `asOf`. */
+function movementsAfterStatement(
+  movements: readonly UnitMovementInput[] | undefined,
+  statementDate: string,
+  asOf: string
+): { sum: number; count: number; lastDate: string | null } {
+  let sum = 0;
+  let count = 0;
+  let lastDate: string | null = null;
+  for (const m of movements ?? []) {
+    const d = m.date.slice(0, 10);
+    if (d <= statementDate || d > asOf) continue;
+    if (!Number.isFinite(m.unitDelta)) continue;
+    sum += m.unitDelta;
+    count += 1;
+    if (lastDate === null || d > lastDate) lastDate = d;
+  }
+  return { sum: round6(sum), count, lastDate };
 }
 
 function dayNumber(iso: string): number {
@@ -181,6 +236,8 @@ export function valueHoldingAsOf(input: {
   currencyCode?: string | null;
   /** true = a historical view: statements dated after asOfDate are ignored. Default false (current view). */
   pointInTime?: boolean;
+  /** Rule 8: this position's own unit movements (any dates; only those after the statement are used). */
+  unitMovements?: readonly UnitMovementInput[];
 }): HoldingValuation {
   const asOf = input.asOfDate.slice(0, 10);
   const statement = selectStatementAsOf(input.statements, asOf, input.pointInTime === true);
@@ -202,6 +259,9 @@ export function valueHoldingAsOf(input: {
       ageDays: null,
       stale: false,
       excludedNavCounts: emptyExcluded(),
+      statementUnits: null,
+      unitsAfterStatement: 0,
+      unitsAfterStatementApplied: false,
       note: input.pointInTime
         ? `No certified statement valuation exists on or before ${asOf}, so no value is shown.`
         : 'No certified statement valuation exists for this holding, so no value is shown.',
@@ -209,66 +269,110 @@ export function valueHoldingAsOf(input: {
   }
 
   const currencyCode = statement.currencyCode ?? input.currencyCode ?? null;
-  const units = Number(statement.units);
+  const statementUnits = Number(statement.units);
   const statementValue = Number(statement.value);
-  const statementNav = units > 0 ? statementValue / units : null;
+  const statementNav = statementUnits > 0 ? statementValue / statementUnits : null;
+
+  // Rule 8 - units transacted after the statement. Nothing here changes a
+  // position with no later movements (the overwhelmingly common case): `units`
+  // stays the statement's own count and every figure below is byte-identical
+  // to the pre-rule-8 behaviour.
+  const mv = movementsAfterStatement(input.unitMovements, statement.asOfDate, asOf);
+  let units = statementUnits;
+  let applied = false;
+  let movementNote = '';
+  const fmtUnits = (n: number) => String(Math.round(Math.abs(n) * 10_000) / 10_000);
+  if (mv.count > 0 && mv.sum !== 0) {
+    const total = round6(statementUnits + mv.sum);
+    if (total < 0) {
+      movementNote = ` ${fmtUnits(mv.sum)} units transacted after the statement net to a negative balance, so they were not applied.`;
+    } else {
+      units = total;
+      applied = true;
+    }
+  }
+
   const evidence = {
     statementAsOfDate: statement.asOfDate,
     statementValue,
     statementNav,
     currencyCode,
-    units,
+    statementUnits,
+    unitsAfterStatement: mv.sum,
   };
 
-  // Rule 5 — fully redeemed: exactly 0, no NAV consulted.
+  const { nav: latestNav, excluded } = selectLatestEligibleNav(input.navs, { asOfDate: asOf, currencyCode });
+  const newerNav = latestNav && latestNav.date > statement.asOfDate ? latestNav : null;
+
+  // Units after the statement that cannot be priced: statement held 0 units
+  // (no statement NAV to reuse) and no newer market NAV exists.
+  if (applied && !newerNav && statementNav === null && units > 0) {
+    applied = false;
+    units = statementUnits;
+    movementNote = ` ${fmtUnits(mv.sum)} units transacted after the statement could not be priced (no market NAV newer than the statement), so they are not included.`;
+  }
+  const appliedNote = applied
+    ? ` Includes ${mv.sum >= 0 ? '+' : '-'}${fmtUnits(mv.sum)} units transacted after the statement date (${mv.count} transaction${mv.count === 1 ? '' : 's'}, latest ${mv.lastDate}).`
+    : movementNote;
+
+  // Rule 5 - fully redeemed: exactly 0, no NAV consulted.
   if (units === 0) {
     return {
       basis: 'redeemed',
       ...evidence,
+      units,
+      unitsAfterStatementApplied: applied,
       marketValue: 0,
       nav: null,
       navDate: null,
       navSource: null,
-      valuationDate: statement.asOfDate,
+      valuationDate: applied && mv.lastDate ? mv.lastDate : statement.asOfDate,
       statementSuperseded: false,
       ageDays: null,
       stale: false,
       excludedNavCounts: emptyExcluded(),
-      note: `Fully redeemed as at ${statement.asOfDate} (0 units). No NAV is needed; the value is 0.`,
+      note: applied
+        ? `Fully redeemed: the statement dated ${statement.asOfDate} held ${fmtUnits(statementUnits)} units and later transactions (latest ${mv.lastDate}) redeemed them all. The value is 0.`
+        : `Fully redeemed as at ${statement.asOfDate} (0 units). No NAV is needed; the value is 0.${appliedNote}`,
     };
   }
 
-  const { nav: latestNav, excluded } = selectLatestEligibleNav(input.navs, { asOfDate: asOf, currencyCode });
-
-  // Rule 3 — a strictly newer eligible market NAV supersedes the statement NAV.
-  if (latestNav && latestNav.date > statement.asOfDate) {
-    const ageDays = Math.max(0, dayNumber(asOf) - dayNumber(latestNav.date));
+  // Rule 3 - a strictly newer eligible market NAV supersedes the statement NAV.
+  if (newerNav) {
+    const ageDays = Math.max(0, dayNumber(asOf) - dayNumber(newerNav.date));
     const stale = ageDays > NAV_STALE_AFTER_DAYS;
     return {
       basis: 'market_nav',
       ...evidence,
-      marketValue: units * latestNav.price,
-      nav: latestNav.price,
-      navDate: latestNav.date,
+      units,
+      unitsAfterStatementApplied: applied,
+      marketValue: units * newerNav.price,
+      nav: newerNav.price,
+      navDate: newerNav.date,
       navSource: 'market',
-      valuationDate: latestNav.date,
+      valuationDate: newerNav.date,
       statementSuperseded: true,
       ageDays,
       stale,
       excludedNavCounts: excluded,
-      note: stale
-        ? `Latest NAV on file is dated ${latestNav.date}, ${ageDays} days before ${asOf}; it may be out of date. The statement dated ${statement.asOfDate} is superseded.`
-        : `Valued at the latest NAV, dated ${latestNav.date}. The statement dated ${statement.asOfDate} is superseded as the current NAV.`,
+      note:
+        (stale
+          ? `Latest NAV on file is dated ${newerNav.date}, ${ageDays} days before ${asOf}; it may be out of date. The statement dated ${statement.asOfDate} is superseded.`
+          : `Valued at the latest NAV, dated ${newerNav.date}. The statement dated ${statement.asOfDate} is superseded as the current NAV.`) + appliedNote,
     };
   }
 
-  // Rule 4 — statement value, labelled as such.
+  // Rule 4 - statement value, labelled as such. With rule-8 units the value is
+  // (statement units + later movements) x the statement's own NAV; the basis
+  // stays 'statement' because no market NAV newer than it exists.
   const ageDays = Math.max(0, dayNumber(asOf) - dayNumber(statement.asOfDate));
   const stale = ageDays > NAV_STALE_AFTER_DAYS;
   return {
     basis: 'statement',
     ...evidence,
-    marketValue: statementValue,
+    units,
+    unitsAfterStatementApplied: applied,
+    marketValue: applied ? units * (statementNav as number) : statementValue,
     nav: statementNav,
     navDate: statement.asOfDate,
     navSource: 'statement',
@@ -277,8 +381,9 @@ export function valueHoldingAsOf(input: {
     ageDays,
     stale,
     excludedNavCounts: excluded,
-    note: stale
-      ? `Value and NAV come from your statement dated ${statement.asOfDate} (${ageDays} days before ${asOf}); no newer market NAV is on file, so this may be out of date.`
-      : `Value and NAV come from your statement dated ${statement.asOfDate}; no newer market NAV is on file.`,
+    note:
+      (stale
+        ? `Value and NAV come from your statement dated ${statement.asOfDate} (${ageDays} days before ${asOf}); no newer market NAV is on file, so this may be out of date.`
+        : `Value and NAV come from your statement dated ${statement.asOfDate}; no newer market NAV is on file.`) + appliedNote,
   };
 }

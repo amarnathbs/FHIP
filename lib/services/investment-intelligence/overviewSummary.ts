@@ -23,7 +23,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DISPOSAL_TYPES } from './taxRepository';
 import { fetchAllRows } from './pagination';
-import { loadNavCandidatesSince, todayIsoDate } from './currentValuationLoader';
+import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey, todayIsoDate } from './currentValuationLoader';
 import { valueHoldingAsOf, type ValuationBasis } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import type { OverviewSignals } from '@/lib/investment-intelligence/analysisAvailability';
 
@@ -168,6 +168,14 @@ export async function buildOverviewSummary(
   const valuationDate = (opts.asOfDate ?? todayIsoDate()).slice(0, 10);
   const oldestLatestStatement = positions.map((p) => p.as_of_date).filter(Boolean).sort()[0] ?? null;
   const navCandidatesByInstrument = await loadNavCandidatesSince(supabase, heldInstrumentIds, oldestLatestStatement);
+  // Multi-folio fix (rule 8 of the shared valuation rule): units transacted
+  // AFTER a folio's own statement date belong to that folio's holding. Bounded
+  // read - only transactions newer than the oldest latest statement, and only
+  // the columns needed to resolve a signed unit change (no amounts, no
+  // descriptions); normally zero rows. Positions here are already per folio
+  // (account:instrument), so a fund held in two folios is summed, never
+  // replaced by one folio's row.
+  const unitMovementsByPosition = await loadUnitMovementsSince(supabase, userId, oldestLatestStatement);
   const valuationBasisCounts: Record<ValuationBasis, number> = { market_nav: 0, statement: 0, redeemed: 0, unavailable: 0 };
   let staleCount = 0;
   const valuationDates: string[] = [];
@@ -180,6 +188,7 @@ export async function buildOverviewSummary(
       navs: navCandidatesByInstrument.get(p.instrument_id) ?? [],
       asOfDate: valuationDate,
       currencyCode: cur,
+      unitMovements: unitMovementsByPosition.get(positionKey(p.account_id, p.instrument_id)) ?? [],
     });
     valuationBasisCounts[v.basis] += 1;
     if (v.stale) staleCount += 1;
