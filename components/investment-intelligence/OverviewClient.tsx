@@ -36,6 +36,8 @@ interface OverviewPayload {
     instrumentClasses: string[];
     latestAsOfDate: string | null;
     oldestAsOfDate: string | null;
+    // Document2 Finding #5: how the values were obtained (see overviewSummary.ts).
+    valuation?: { marketNavCount: number; statementBasisCount: number; redeemedCount: number; staleCount: number };
   };
   dataQuality: {
     documentCount: number;
@@ -262,8 +264,11 @@ export function OverviewClient() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-muted">
-                This is the value Investment Intelligence reconstructed from your statements. Only positions you publish are included in your FHIP net
-                worth.
+                Each position is valued at the latest NAV on file when one is newer than your statement, otherwise at the value on your statement.
+                {portfolio.valuation && portfolio.valuation.staleCount > 0
+                  ? ` ${portfolio.valuation.staleCount} position${portfolio.valuation.staleCount === 1 ? ' is' : 's are'} valued from a NAV or statement more than 7 days old, so ${portfolio.valuation.staleCount === 1 ? 'its' : 'their'} value may be out of date.`
+                  : ''}{' '}
+                Only positions you publish are included in your FHIP net worth, and a published position keeps the value certified at its statement date.
               </p>
             </div>
           </>
