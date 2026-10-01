@@ -161,3 +161,14 @@ The expectations are parsed from the migration files themselves: added columns, 
 that are new in that migration. The probe checks them against DEV's OpenAPI. It includes a sentinel column
 that must be reported missing, which proves the probe can fail. For 0200 it also runs a behavioural check,
 and 0201, which adds indexes only, is reported as not determinable.
+
+## Owner-before-upload (2026-10-02)
+
+Every financial-document upload route now REQUIRES the owner chosen before the file is sent (query `owner=<json>`
+for the bank / liability / retirement / AU-investment routes, `owner` in the upload-session body, `meta.owner`
+for Investment Intelligence). `lib/session.mjs` `api()` therefore adds a VALID synthetic owner for the fixture
+user it is signed in as: Self by default, or the role a script asks for (`owner: 'spouse' | 'joint' | 'smsf'`, or
+the retired loose `owner_role=<role>` query value, which is translated). Pass `owner: null` to send NO owner --
+that is how the owner-required negative controls are written (`final/owner_required_negative_controls.mjs`).
+The shared helper is `scripts/lib/syntheticOwner.mjs`; it only uses the app's own authenticated routes. A
+UI-driven journey must choose the owner in the selector shown above the file input, exactly as a user does.

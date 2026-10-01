@@ -190,7 +190,7 @@ async function main() {
     const fileBlob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
     const form = new FormData();
     form.append('file', fileBlob, 'nav1-r2-http-journey.pdf');
-    form.append('meta', JSON.stringify({ sourceKey: 'manual', documentType: 'other', countryCode: 'IN', ownerMemberId: user.memberId }));
+    form.append('meta', JSON.stringify({ sourceKey: 'manual', documentType: 'other', countryCode: 'IN', owner: { kind: 'member', memberId: user.memberId } }));
     const uploadRes = await fetch(`${APP}/api/investment-intelligence/source-documents`, { method: 'POST', headers: { Cookie: user.cookie }, body: form as unknown as BodyInit });
     const uploadBody: { data?: { id?: string; status?: string } } = await uploadRes.json().catch(() => ({}));
     const uploadedDoc = uploadBody.data;

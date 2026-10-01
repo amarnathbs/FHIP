@@ -70,6 +70,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createClient as createSupabaseJsClient } from '@supabase/supabase-js';
 import { bankLetterPdf, BANK_EXPECTED, PLANTED_PII } from './aie1_other_pdf_fixtures';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 // ------------------------------------------------------------ env / safety
 const repoRoot = 'D:/FHIP';
@@ -276,7 +277,9 @@ async function main() {
 
     // --------------------------------------------------------- 2. upload
     const bytes = bankLetterPdf(RUN_TAG);
-    const qs = new URLSearchParams({ country_code: 'AU', currency_code: 'AUD', filename: `${RUN_TAG}.pdf`, masked_identifier: 'CLOS1', ...(institutionId ? { institution_id: institutionId } : {}) }).toString();
+    // Owner-before-upload: a valid synthetic Self owner for this synthetic user.
+    const ownerSel = await resolveSyntheticOwner(fetchOwnerRequest(APP, session.cookie), 'self', 'bank');
+    const qs = new URLSearchParams({ country_code: 'AU', currency_code: 'AUD', filename: `${RUN_TAG}.pdf`, masked_identifier: 'CLOS1', owner: JSON.stringify(ownerSel), ...(institutionId ? { institution_id: institutionId } : {}) }).toString();
     const uploadStartedAt = Date.now();
     const uploadRes = await app(session, `/api/financial-data-hub/bank-pdf/upload?${qs}`, { method: 'POST', body: new Uint8Array(bytes), headers: { 'Content-Type': 'application/pdf', 'Content-Length': String(bytes.length) } });
     const documentId = uploadRes.json?.data?.document_id as string | undefined;

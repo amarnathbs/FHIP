@@ -33,6 +33,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -180,7 +181,7 @@ async function main() {
   // country, exactly like every other AU fixture in this suite.
   const uploadRes = await app(
     user,
-    '/api/financial-data-hub/bank-csv/upload?filename=lr1-scheduler-proof.csv&country_code=AU&currency_code=AUD',
+    `/api/financial-data-hub/bank-csv/upload?filename=lr1-scheduler-proof.csv&country_code=AU&currency_code=AUD&owner=${encodeURIComponent(JSON.stringify(await resolveSyntheticOwner(fetchOwnerRequest(APP, user.cookie), 'self', 'bank')))}`, // owner-before-upload
     { method: 'POST', headers: { 'Content-Type': 'text/csv', 'Content-Length': String(bytes.byteLength) }, body: bytes },
   );
   // Route wraps its payload in `{ data: ... }` (lib/api.ts's `ok()`) and

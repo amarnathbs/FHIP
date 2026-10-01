@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -90,6 +91,10 @@ async function appPostJson(pathname, cookie, body) {
 async function uploadCsv(cookie, meta, bytes, contentType = 'text/csv') {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(meta)) if (v !== undefined && v !== null) qs.set(k, String(v));
+  // Owner-before-upload: every financial upload route requires the owner chosen BEFORE the file is sent.
+  // A valid synthetic owner for this fixture user (Self unless the caller passed the legacy owner_role).
+  qs.delete('owner_role');
+  qs.set('owner', JSON.stringify(await resolveSyntheticOwner(fetchOwnerRequest(APP, cookie), meta.owner_role ?? 'self', 'bank')));
   const res = await fetch(`${APP}/api/financial-data-hub/bank-csv/upload?${qs.toString()}`, {
     method: 'POST', headers: { Cookie: cookie, 'Content-Type': contentType, 'Content-Length': String(bytes.byteLength) }, body: bytes,
   });
