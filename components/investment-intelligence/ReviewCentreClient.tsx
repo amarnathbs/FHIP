@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { OwnerChangeDialog, type OwnerSubmitResult } from './OwnerChangeDialog';
+import { apiErrorMessage, type OwnerSelectionBody } from './ownerChange';
 
 // R9 — Review Centre UX (spec sections 56, 59, 134). Sections mirror the
 // spec's suggested layout: Overview (severity counts) + a filterable list.
@@ -25,11 +27,14 @@ interface ReviewItem {
   created_at: string;
 }
 
-interface HouseholdMemberOption {
-  id: string;
-  full_name: string;
-  relationship: string;
-  is_active: boolean;
+/** The Review item whose owner dialog is open. Everything the dialog needs, resolved from the item's own evidence. */
+interface OwnerDialogTarget {
+  itemId: string;
+  accountId: string;
+  caseId: string | null;
+  jointOnly: boolean;
+  suggestedJointMemberIds: string[];
+  holderHint: string | null;
 }
 
 const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, info: 3 };
@@ -49,12 +54,16 @@ export function ReviewCentreClient() {
   // dead end for any household whose members were never explicitly set up.
   // `PATCH /api/investment-intelligence/accounts/[id]/owner` already existed
   // and already auto-resolves the matching case; this screen simply never
-  // called it. Household members are loaded lazily, only once any open item
-  // actually needs them.
-  const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberOption[] | null>(null);
-  const [selectedMemberByItem, setSelectedMemberByItem] = useState<Record<string, string>>({});
-  const [assigningItemId, setAssigningItemId] = useState<string | null>(null);
-  const [assignError, setAssignError] = useState<Record<string, string>>({});
+  // called it.
+  //
+  // 2026-10-01: the owner can now ALSO be a trust / HUF / company, or a joint
+  // split with percentages (resolving a 'joint_holding_allocation_required'
+  // case, which previously had no resolver at all). Every owner change goes
+  // through OwnerChangeDialog, whose second step is an explicit confirmation
+  // (current -> new owner, with consequences in plain words); the PATCH
+  // carries `confirm: true` and the server refuses it without.
+  const [ownerDialog, setOwnerDialog] = useState<OwnerDialogTarget | null>(null);
+  const [ownerNotice, setOwnerNotice] = useState<string | null>(null);
   // 2026-09-29 "more resolution actions" audit: production data (read-only
   // check, twwpnltizhtjxhamyoxt) showed 'unsupported_document'/
   // 'document_corrupt'/'parse_incomplete' as the next-highest-value real gap
@@ -129,17 +138,6 @@ export function ReviewCentreClient() {
     };
   }, [statusFilter, load]);
 
-  useEffect(() => {
-    const needsMembers = items.some(
-      (i) =>
-        typeof i.evidence?.discrepancyType === 'string' &&
-        (i.evidence.discrepancyType === 'owner_unmatched' || i.evidence.discrepancyType === 'owner_mismatch') &&
-        i.evidence.subjectType === 'account'
-    );
-    if (needsMembers) void ensureHouseholdMembersLoaded();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
-
   async function refresh() {
     setRefreshing(true);
     try {
@@ -155,30 +153,16 @@ export function ReviewCentreClient() {
     await load(statusFilter);
   }
 
-  async function ensureHouseholdMembersLoaded() {
-    if (householdMembers !== null) return;
+  async function submitOwner(target: OwnerDialogTarget, owner: OwnerSelectionBody): Promise<OwnerSubmitResult> {
     try {
-      const res = await fetch('/api/household-members');
-      const json = await res.json();
-      setHouseholdMembers(res.ok ? (json.data ?? []) : []);
-    } catch {
-      setHouseholdMembers([]);
-    }
-  }
-
-  async function assignOwner(itemId: string, accountId: string) {
-    const ownerMemberId = selectedMemberByItem[itemId];
-    if (!ownerMemberId) return;
-    setAssigningItemId(itemId);
-    setAssignError((prev) => ({ ...prev, [itemId]: '' }));
-    try {
-      const res = await fetch(`/api/investment-intelligence/accounts/${encodeURIComponent(accountId)}/owner`, {
+      const res = await fetch(`/api/investment-intelligence/accounts/${encodeURIComponent(target.accountId)}/owner`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerMemberId }),
+        // `confirm: true` is the explicit confirmation from the dialog's second step.
+        body: JSON.stringify({ owner, confirm: true, ...(target.caseId ? { case_id: target.caseId } : {}) }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not assign that owner.');
+      if (!res.ok) return { ok: false, error: apiErrorMessage(json, 'Could not save that owner.') };
       // Review items are a materialised snapshot (the same reason `refresh()`
       // above hits /review/refresh before reloading, not just /review) --
       // resolving the underlying ii_reconciliation_cases row does not by
@@ -189,10 +173,9 @@ export function ReviewCentreClient() {
       // failed.
       await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
       await load(statusFilter);
+      return { ok: true };
     } catch (e) {
-      setAssignError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not assign that owner.' }));
-    } finally {
-      setAssigningItemId(null);
+      return { ok: false, error: e instanceof Error ? e.message : 'Could not save that owner.' };
     }
   }
 
@@ -209,7 +192,7 @@ export function ReviewCentreClient() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not resolve this instrument.');
-      // Same reason assignOwner()/discardDocument() above hit /review/refresh
+      // Same reason submitOwner()/discardDocument() above hit /review/refresh
       // before reloading -- ii_review_items is a materialised snapshot, not
       // the same table as ii_reconciliation_cases, so resolving the case (and
       // the reprocess this route already performs) does not by itself remove
@@ -277,7 +260,7 @@ export function ReviewCentreClient() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not discard that document.');
-      // Same reason assignOwner() above hits /review/refresh before reloading
+      // Same reason submitOwner() above hits /review/refresh before reloading
       // -- ii_review_items is a materialised snapshot of ii_reconciliation_cases,
       // not the same table, so resolving the case does not by itself remove
       // this item from an already-computed "open" list.
@@ -332,6 +315,28 @@ export function ReviewCentreClient() {
       {loading && <p className="text-sm text-muted">Loading…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!loading && !error && bySeverity.length === 0 && <p className="text-sm text-muted">No {statusFilter} review items right now.</p>}
+
+      {ownerNotice && (
+        <p role="status" className="mb-3 rounded-md bg-green-50 p-2 text-sm text-green-800">
+          {ownerNotice}
+        </p>
+      )}
+      {ownerDialog && (
+        <OwnerChangeDialog
+          accountId={ownerDialog.accountId}
+          accountLabel={null}
+          mode="review"
+          jointOnly={ownerDialog.jointOnly}
+          suggestedJointMemberIds={ownerDialog.suggestedJointMemberIds}
+          holderHint={ownerDialog.holderHint}
+          submit={(owner) => submitOwner(ownerDialog, owner)}
+          onClose={() => setOwnerDialog(null)}
+          onDone={() => {
+            setOwnerDialog(null);
+            setOwnerNotice('Owner saved. This issue has been resolved and is recorded in your history.');
+          }}
+        />
+      )}
 
       <ul className="space-y-3">
         {bySeverity.map((item) => {
@@ -403,15 +408,16 @@ export function ReviewCentreClient() {
           const isInformationalMissingRestatement = discrepancyType === 'transaction_missing_from_restatement' || discrepancyType === 'other';
           // A genuine resolver now exists for owner_unmatched/owner_mismatch
           // accounts, ambiguous_instrument, cross_source_conflict/
-          // cross_source_review_required, and transaction_unclassified;
-          // joint holdings are DETECTED (K.6) but deliberately not offered a
-          // one-owner "fix" here, because forcing a joint folio onto a
-          // single owner would misattribute someone else's share of it -- a
-          // real percentage-split allocation UI is not yet built (see this
-          // file's header history).
+          // cross_source_review_required, and transaction_unclassified.
+          // 2026-10-01: joint holdings (K.6) are resolved too -- never by a
+          // one-owner "fix" (that would misattribute someone else's share),
+          // but by a joint split with percentages that must total 100%, chosen
+          // in OwnerChangeDialog.
+          const matchedMemberIds = Array.isArray(details?.matchedMemberIds) ? (details!.matchedMemberIds as unknown[]).filter((v): v is string => typeof v === 'string') : [];
+          const isJointHoldingResolvable = isJointHoldingAccount && !!subjectId;
           const hasNoResolver =
             (discrepancyType === 'owner_unmatched' && !isOwnerAssignableAccount) ||
-            isJointHoldingAccount ||
+            (isJointHoldingAccount && !isJointHoldingResolvable) ||
             (discrepancyType === 'ambiguous_instrument' && !isAmbiguousInstrumentCase) ||
             ((discrepancyType === 'cross_source_conflict' || discrepancyType === 'cross_source_review_required') && !isCrossSourceConflictCase) ||
             (discrepancyType === 'transaction_unclassified' && !isClassifiableTransaction);
@@ -477,11 +483,23 @@ export function ReviewCentreClient() {
                     </div>
                   )}
                   {statusFilter === 'open' && isJointHoldingAccount && (
-                    <p className="mt-2 text-xs text-amber-800">
-                      This statement prints a joint holding{maskedHolderName ? ` (${maskedHolderName})` : ''}. A single owner cannot be assumed without a percentage-split
-                      decision, which this screen does not yet support — acknowledge for now, or discard the statement from Statements &amp; data if it was filed against the
-                      wrong account.
-                    </p>
+                    <div className="mt-2 flex flex-col items-start gap-2">
+                      <p className="text-xs text-amber-800">
+                        This statement prints a joint holding{maskedHolderName ? ` (${maskedHolderName})` : ''}. A single owner cannot be assumed, so say who owns it and what
+                        share each owner has — the shares must add up to exactly 100%. You will see a summary to confirm before anything is saved.
+                      </p>
+                      {isJointHoldingResolvable && (
+                        <button
+                          onClick={() => {
+                            setOwnerNotice(null);
+                            setOwnerDialog({ itemId: item.id, accountId: subjectId as string, caseId, jointOnly: true, suggestedJointMemberIds: matchedMemberIds, holderHint: maskedHolderName });
+                          }}
+                          className="rounded-md border px-2 py-1 text-xs font-medium text-primary"
+                        >
+                          Split ownership…
+                        </button>
+                      )}
+                    </div>
                   )}
                   {statusFilter === 'open' && hasNoResolver && !isJointHoldingAccount && (
                     <p className="mt-2 text-xs text-amber-800">This issue requires owner/reconciliation functionality that is not yet available.</p>
@@ -592,33 +610,16 @@ export function ReviewCentreClient() {
                   )}
                   {statusFilter === 'open' && isOwnerAssignableAccount && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <label className="text-xs text-muted" htmlFor={`owner-select-${item.id}`}>
-                        {discrepancyType === 'owner_mismatch' ? 'Correct owner to:' : 'Assign to:'}
-                      </label>
-                      <select
-                        id={`owner-select-${item.id}`}
-                        className="rounded-md border px-2 py-1 text-xs"
-                        value={selectedMemberByItem[item.id] ?? ''}
-                        onChange={(e) => setSelectedMemberByItem((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                        disabled={householdMembers === null}
-                      >
-                        <option value="">{householdMembers === null ? 'Loading…' : 'Choose a household member'}</option>
-                        {(householdMembers ?? [])
-                          .filter((m) => m.is_active)
-                          .map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.full_name} ({m.relationship})
-                            </option>
-                          ))}
-                      </select>
                       <button
-                        onClick={() => assignOwner(item.id, subjectId as string)}
-                        disabled={!selectedMemberByItem[item.id] || assigningItemId === item.id}
-                        className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
+                        onClick={() => {
+                          setOwnerNotice(null);
+                          setOwnerDialog({ itemId: item.id, accountId: subjectId as string, caseId, jointOnly: false, suggestedJointMemberIds: [], holderHint: maskedHolderName });
+                        }}
+                        className="rounded-md border px-2 py-1 text-xs font-medium text-primary"
                       >
-                        {assigningItemId === item.id ? 'Assigning…' : 'Assign'}
+                        {discrepancyType === 'owner_mismatch' ? 'Correct the owner…' : 'Choose the owner…'}
                       </button>
-                      {assignError[item.id] && <p className="w-full text-xs text-red-600">{assignError[item.id]}</p>}
+                      <span className="text-xs text-muted">A household member, a trust / HUF / company, or a joint split with percentages.</span>
                     </div>
                   )}
                 </div>
