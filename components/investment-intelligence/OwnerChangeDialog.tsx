@@ -198,7 +198,7 @@ export function OwnerChangeDialog(props: OwnerChangeDialogProps) {
     }
   }
 
-  const title = mode === 'amend' ? 'Amend the owner' : jointOnly ? 'Split ownership between owners' : 'Choose the owner';
+  const title = step === 'confirm' ? 'Confirm the owner change' : mode === 'amend' ? 'Amend the owner' : jointOnly ? 'Split ownership between owners' : 'Choose the owner';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
