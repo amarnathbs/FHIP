@@ -13,6 +13,8 @@ Date: 2026-10-01. Author: Claude Code (unattended session for the Product Owner)
 | `ii_ownership_allocation` (migration 0153) on production | **Unknown from the repo; the NAV1 certifications of 2026-09-25/27 record it as "DEV only".** Entity / joint owners cannot be saved in any environment without 0153 (and HUF without 0154). The code fails closed with a plain 503 message and reads degrade safely. See section 8. |
 | Nothing was written to production or DEV. No migration was added or applied. Nothing was pushed or merged. |  |
 
+> **Update 2026-10-01 (second pass): the PO answered the four open decisions and they are implemented as separate commits. They are described in section 12 and supersede the matching statements below** (section 4 "what was NOT done", the joint-case rule in 2.4 and 5, and open decisions 1-4 in section 11).
+
 ## 1. What was built
 
 On the live Investment Intelligence pipeline, after upload, a user can now:
@@ -66,7 +68,7 @@ case_id?: uuid                   // optional: the case being resolved (enforces 
 1. refuses `409 ACCOUNT_PUBLISHED_UNPUBLISH_FIRST` when the new owner includes an entity share and the account already has a published position (it would keep counting in personal Net Worth);
 2. records a **new** allocation group via the existing `recordAllocationGroup` (supersede then insert; nothing is edited in place or deleted) when the result is entity / joint, or when a group already existed;
 3. keeps `owner_member_id` consistent with the result (and heals a stale pointer left by an interrupted attempt);
-4. resolves the open owner cases the choice may resolve, **merging** `resolvedOwner` / `previousOwner` (ids and basis points only) into `discrepancy_details` without overwriting the detection evidence. `owner_unmatched` / `owner_mismatch`: any owner. `joint_holding_allocation_required`: **only a joint split** (a statement that prints a joint holding cannot be satisfied by asserting a sole owner), enforced both with `case_id` (422) and without it (the case is simply not resolved by a sole-owner choice);
+4. resolves the open owner cases the choice may resolve, **merging** `resolvedOwner` / `previousOwner` (ids and basis points only) into `discrepancy_details` without overwriting the detection evidence. `owner_unmatched` / `owner_mismatch`: any owner. `joint_holding_allocation_required`: a joint split, **or (PO decision 2026-10-01, section 12.3) a sole owner only with an explicit second confirmation `confirm_not_joint: true`**; without it a sole-owner choice is refused with `case_id` (422) and, without `case_id`, simply does not resolve the case;
 5. writes **one** `user_correction` audit event: `field: 'ownership'`, `before` / `after` (kind + ids + basis points), `changed`, `origin`, `resolvedCaseCount`, `allocationGroupId`, `caseId`. It also writes `reconciliation_case_resolved` per case, and `recordAllocationGroup` writes its existing `pc5_ownership_allocation_recorded` / `_superseded` events. No names, no PAN, no folio, no masked holder text. **No new audit event type, so no migration.**
 
 It never moves, deletes or recomputes holdings, transactions, snapshots, tax lots or publications.
@@ -106,7 +108,7 @@ What flows into **personal** totals today is `investments` rows (published) via 
 * **"Imported, not yet in Net Worth" bucket.** `computeInvestments` excludes entity-owned accounts' snapshots (they will never be published, so offering them to personal Net Worth would be wrong) and reports only `entityHeldExcludedCount`. `publishedTotal` / `householdPublishedTotal` are unaffected.
 * This read is deliberately **not fail-closed** (try/catch to "no entity-owned accounts"): it feeds only the informational bucket, and an entity owner can only exist if the table does. Failing closed would have taken the whole Investments read model, and every Net Worth figure built on it, offline in any environment where 0153 is not applied. Every other read there remains fail-closed (asserted).
 
-**What was NOT done (pre-existing, disclosed):** the Investment Intelligence workspace analytics (Overview, Performance, Tax, SIP, X-Ray) and the personal report sections built from `ii_holding_snapshots` aggregate **every** uploaded account regardless of owner, exactly as they did for a spouse's or child's account before this work. Excluding entity-owned accounts from those would need a filter in each loader (`r5Repository`, `taxRepository`, `analyticsRepository`, `overviewSummary`, `investmentIntelligenceReportData`) and a PO decision on whether they should instead appear in a separate entity view. Not changed. See open decisions.
+**Superseded 2026-10-01 (PO decision, section 12.1):** the workspace analytics and the personal report chapters are no longer left aggregating entity-owned accounts: every owner class now has its own breakup, and the personal report chapters exclude entity data. The first-pass disclosure that they "aggregate every uploaded account regardless of owner" was accurate for the first pass only.
 
 ## 5. UI
 
@@ -141,7 +143,7 @@ Merge-conflict surface to expect: `InvestmentIntelligenceClient.tsx` (a small ed
 
 ## 7. Tests, with negative controls
 
-New files (all under `tests/unit/`): `iiOwnerModel.test.ts` (37), `iiOwnerChangeRoutes.test.ts` (37), `iiOwnerSeparationReaders.test.ts` (13), `iiOwnerChangeDialogUi.test.ts` (48) = **135 tests**. Updated: `iiResolutionGuidanceLinksUiContract.test.ts` (it asserted the removed one-click `assignOwner` button), `support/inMemorySupabase.ts` (added `.is` and `.contains`, additive).
+New files (all under `tests/unit/`), first pass: `iiOwnerModel.test.ts`, `iiOwnerChangeRoutes.test.ts`, `iiOwnerSeparationReaders.test.ts`, `iiOwnerChangeDialogUi.test.ts`. Second pass (section 12): `iiJointValueAttribution.test.ts`, `iiOwnerClassBreakup.test.ts`, `iiOwnerClassUi.test.ts`, `iiOwnerClassRoutes.test.ts`, `iiOwnerClassReport.test.ts`, and additions to the first-pass files. All nine owner suites are green. Updated: `iiResolutionGuidanceLinksUiContract.test.ts` (it asserted the removed one-click `assignOwner` button), `support/inMemorySupabase.ts` (added `.is` and `.contains`, additive).
 
 Requested negative controls and where they live:
 
@@ -194,7 +196,7 @@ Each row: one deliberate rule-breaking edit to a source file, the four owner sui
 | M26 | upload pipeline re-opens owner cases on decided accounts | `documentProcessing.ts` | 1 | `e owner is already decided as entity / joint, and does not count it as an unresolved owner` |
 | M27 | generic Resolve closes a joint-holding case with no owner decision | `route.ts` | 1 | `NEGATIVE CONTROL [no bypass]` |
 
-All 27 mutations were caught (0 survivors). Unmutated baseline: all four suites green (150 tests at the time of the run). M26 (upload-pipeline guard) is caught only by a **structural** source assertion, not a behavioural one; see 7.3.
+All 27 first-pass mutations were caught (0 survivors). M10 and M11 were re-targeted at the shared `jointCaseOwnerFailure` call after the not-joint change and re-run (2 failing each). Second-pass mutations M28-M41 are in section 12.5. Unmutated baseline: all four suites green (150 tests at the time of the run). M26 (upload-pipeline guard) is caught only by a **structural** source assertion, not a behavioural one; see 7.3.
 
 ### 7.2 Existing suites run
 
@@ -205,6 +207,8 @@ All 27 mutations were caught (0 survivors). Unmutated baseline: all four suites 
 * `tsc --noEmit -p .`: baseline captured before any edit (66 errors, all missing-package typings); after the changes and with a complete `node_modules` the run shows **1** error, `tests/unit/canonicalCertResidueAllSql.test.ts(127,75)`, which was also in the baseline list and is in an untouched file: **zero errors in touched files** (the intermediate run on the incomplete checkout was identical to the baseline).
 * `eslint` on every touched file: clean. (Pre-existing errors remain in untouched `AiExtractionReviewPanel.tsx` and `TransactionDetailModal.tsx`; one pre-existing `set-state-in-effect` error in `ResolutionHistoryClient.tsx` was fixed because the file was being edited.)
 * Full-suite runs rewrite `scripts/` artifacts; `git checkout -- scripts/` was run after targeted runs.
+
+* **Second pass (final tree):** `tsc --noEmit -p .` = the same single baseline error (`canonicalCertResidueAllSql.test.ts`); `eslint` clean on every changed `.ts` / `.tsx` file; `git diff --stat origin/main -- lib/engines/investment-intelligence` is **empty** (the certified R4/R5/R6 engines are byte-for-byte untouched). Targeted run (`ii*`, `pc5*`, `aieIi*`, `aiePc5*`, `fdh11*`, `readModels/*`, `dashboardCanonical*`, `businessEntity*`, `lr11b*`, `report*`, `countryGate*`, `ensureSelf*`, `g1*`, `premium*`) = **184 files, 2,808 tests passed, 5 skipped, 5 failed in 4 files**: `iiAiReviewBeforeWrite`, `iiDocumentProcessingAiFallbackWiring` and `fdh11InvestmentIntegrityPglite` **pass in isolation** (5s timeouts under parallel load, the known hazard); `countryGateAccessMatrix` is the pre-existing failure described above.
 
 ### 7.3 What the tests cannot show
 
@@ -235,10 +239,70 @@ DEV: not reachable unattended without minting credentials; nothing applied. Prod
 
 ## 11. Open PO decisions
 
-1. **Entity-owned accounts in the Investment Intelligence workspace analytics and personal report sections** (section 4): leave aggregated (today's behaviour), exclude from the personal report only, or build the separate entity view the 2026-09-21 ruling describes?
-2. **Joint split between household members only is published to Net Worth once, under owner role `joint`.** Confirm this is wanted (alternative: block it like an entity until the joint register semantics are decided).
-3. **A statement that prints a joint holding can only be resolved or amended with a joint split.** If a user decides the statement is actually sole-owned, today they Dismiss / Acknowledge the issue (which does not resolve it). Allow a sole owner with an explicit "this is not joint" confirmation?
-4. **Mixed joint (member + entity) keeps the whole account out of personal Net Worth** (the entity share cannot be carved out of a whole-position publication). Acceptable, or should the personal share be publishable?
+Decisions 1-4 of the first pass were **answered by the PO on 2026-10-01 and implemented (section 12)**. What is still open is listed in section 12.6, together with items 5-7 of the first pass, which are unchanged:
+
 5. **Apply 0153 (and 0154) to production** before this is merged; confirm status first.
-6. **Concurrency hardening** (section 9) and refreshing the 0227 column comment: both need a migration (≥ 0240).
+6. **Concurrency hardening** (section 9) and refreshing the 0227 column comment: both need a migration (>= 0240).
 7. HUF/Trust/Company **creation** still lives on `/companies`; the dialog only links to it.
+
+## 12. PO decisions of 2026-10-01 (second pass)
+
+Four decisions, four separate commits on this branch (`5d07131`, `5fd3499`, `a6f7253` + `94ff4a4`, `20065fe`, then docs). Still **code-complete only**: not DEV-verified, not production-verified, nothing pushed or merged, no migration added.
+
+### 12.1 Decision 1: show everything, in a separate breakup per owner class; a consolidated view only as a macro summary
+
+**Owner classes** (`lib/services/investment-intelligence/ownerClass.ts`). An account belongs to exactly one class, from its effective ownership: `member:<id>` (personal, one per household member), `joint` (members-only split), `entity:<id>` (a sole trust / HUF / company, one per entity), `entity_shared` (a split that includes an entity: **decision 4**), `unallocated`. The classes **partition** the accounts, so the macro line is exactly their sum with every position counted once (asserted, including a hand-computed oracle: 100,000 + 200,000 + 1,000,000 + 500,000 + 200,000 + 50,000 = 2,050,000, never 3,050,000).
+
+**How workspace analytics aggregate by owner today (checked in code):** none of them looked at the owner. `overviewSummary`, `analyticsRepository` (Performance), `r5Repository` (SIP, X-Ray), `taxRepository` (Tax) and `holdingsRepository` read `ii_transactions` / `ii_holding_snapshots` / `ii_portfolio_truth_status` for **every** account of the user and the engines then group by **instrument**, across accounts. The personal report chapters called the same loaders.
+
+**What was added, without altering any formula:**
+
+* **Scoped read-only client** (`scopeClientToAccounts`): the account-scoped tables (`ii_transactions`, `ii_holding_snapshots`, `ii_portfolio_truth_status`, `ii_fhip_publications`, `ii_tax_lots`, `ii_accounts`) are narrowed to a class's accounts; every other table passes through; **writes throw**. The certified loaders and engines run on it **unchanged** and simply receive that class's rows. `git diff origin/main -- lib/engines/investment-intelligence` is empty. A test proves the per-class inputs sum to the consolidated input (contributions 1,000 + 5,000 = 6,000) and that each class sees only its own.
+* **API:** `GET /api/investment-intelligence/owner-classes` (the caller's own classes + the explicit macro option). `?ownerClass=<key>` on `analytics`, `sip`, `xray` (+ `overlap`, `data-quality`), `tax/summary`, `tax/lots`, `holdings` and `overview`. Absent / `all` = the existing consolidated behaviour. The key is validated against the caller's **own** classes (another user's key or an unknown key is `404 OWNER_CLASS_NOT_FOUND`, no leak). A scoped run **never persists** (SIP, X-Ray, tax summary skip their persistence steps; asserted by a spy on the SIP route), so a per-class result can never overwrite the consolidated derived rows. Responses carry `ownerClass: { key, label, kind }`.
+* **UI:** an owner-class selector (`OwnerClassBar`) on Performance (and its Holdings table), Recurring investments, X-Ray and Tax. **The default is the explicit "Consolidated (macro view only)" chip**, with text saying entity holdings are not part of a personal total. A class re-mounts the tab and fetches that class's analysis. The Overview does not need a selector: it shows **one table per owner kind** (personal / joint with each owner's divided part / trust-HUF-company / shared with an entity / unallocated) and then a separate dashed **"Consolidated (macro view only)"** line (`OwnerBreakupTable`, `ownerBreakup` in the overview response). Evidence: `owner_class_breakup_preview.html` / `.png` / `_mobile.png` (static render of the real component, invented fixture, headless Chromium; not a live-app session; 0px horizontal overflow at 390px).
+* **Personal report** (`ownerClassReportScope.ts`, `reportOwnerBreakup.ts`, `reportSnapshotResolver.ts`, `reportSectionsPremium.ts`): a household with **no** entity accounts gets the unscoped client, so its report is **unchanged** (asserted). With entity accounts, the performance, SIP, X-Ray and tax chapters run on the **non-entity** accounts only (unallocated stays in, never hidden), and the Investment performance chapter lists **every owner class as its own item followed by the explicit macro line** (in its limitation text and as `sectionData.ownerBreakup`); the other three chapters say entity holdings are not included. No new report section code was added (that could need a DB CHECK change), so the breakup travels in the existing chapter.
+
+**Agreement with the India MF report** (`feat/india-mf-investment-report-20261001`, read-only): its owner keys are `member:<id>` / `entity:<id>` / `unallocated`; I use the same keys and the same rules (an allocation group that does not total 10000, and an owner id with no matching member / entity row, are **Unallocated**, never silently personal; `deriveAccountOwnership` now enforces the 10000 rule). It shows a joint folio inside **each** owner's section at that owner's share; my joint class lists each owner's part at the same shares inside one joint table (largest-remainder division, so the parts add back exactly). Both read the same `ii_ownership_allocation` rows. **Merge-conflict surface:** that branch also edits `lib/engines/reportSectionsPremium.ts` and `lib/services/reportSnapshotResolver.ts`; expect a textual conflict in those two files at integration (additive on both sides).
+
+**Not scoped (disclosed):** the two POST simulations (`sip/simulation`, `tax/redemption-simulation`) and the open-case counts inside the scoped Overview summary (`ii_reconciliation_cases` has no account column) stay consolidated; the report's other chapters (Net Worth, Investment analysis) are unchanged by design (Net Worth already excludes entity holdings: section 4).
+
+### 12.2 Decision 2: a joint split between household members is published ONCE and divided by the percentage split
+
+It was already published once (one `investments` row at the full value, owner role `joint`); what was missing was the **division**. `lib/services/investment-intelligence/ownerAttribution.ts` divides a value by basis points with the largest-remainder method (shares always add back **exactly**; a split that is not exactly 10000, or has a zero / fractional share, returns `null` and never fabricates a value). The Investments read model attaches `ownerShares` to a published line whose account has an active members-only split: **1,000,000 at 60/40 -> 600,000 / 400,000; `publishedTotal` and `householdPublishedTotal` stay 1,000,000, never 2,000,000.** The division follows the **live** allocation, so amending 60/40 to 70/30 re-divides the same single value with no republish (asserted: 700,000 / 300,000). Malformed, entity-shared, superseded and instrument-grain groups never divide a value. **Financial oracle:** `tests/unit/iiJointValueAttribution.test.ts` (hand-computed expectations; includes 3333/3333/3334 of 100.00 -> 33.33 / 33.33 / 33.34, and a structural check that publication still writes one register row at the full `snapshot.value`). The publication write path itself needs a database and was not run.
+
+### 12.3 Decision 3: a sole-owner resolution of a joint holding, with an explicit "this is not joint" confirmation
+
+`confirm_not_joint: true` (in addition to `confirm: true`) on `PATCH .../accounts/[id]/owner` and `POST .../amend`. Without it the previous refusal stands (422 `JOINT_CASE_REQUIRES_JOINT_OWNER`, nothing written). With it: the case resolves with `resolution_method = user_confirmed_not_joint`, `notJointConfirmed: true` in the case details and in the audit event (ids only), the detection evidence is preserved, validation is the same function (cross-tenant ids refused), and **no allocation row is written for a sole member, so value is never duplicated** (the account reads as a sole member through the `owner_member_id` pointer only). It is **amendable** (back to a joint split, or to another owner, with the flag again if a sole owner) and the original row stays untouched; replay is idempotent (no second audit row). The existing **Re-evaluate** action on the position is the way to re-certify afterwards, as before. The dialog's joint-only mode gets a "This is not a joint holding" link that lists single owners behind a checkbox confirmation; the confirm text says "not jointly held". The flag does not relabel an ordinary `owner_unmatched` resolution.
+
+### 12.4 Decision 4: a joint split that includes an entity goes in the separate entity tables and consolidates only in the macro view
+
+Class `entity_shared` ("Shared with a trust, HUF or company"), listed under the entity tables on the Overview with each owner's divided part, excluded from the personal report chapters, from the Net Worth publication (`OWNER_IS_BUSINESS_ENTITY`, first pass), and from the personal "not yet in Net Worth" bucket. It reaches a consolidated number **only** in the explicit macro line. `hasEntity` is the discriminator everywhere; a test proves no personal table contains it (personal total 300,000, not 500,000 or 800,000).
+
+### 12.5 Negative controls added in the second pass (each seen red)
+
+| # | Rule deliberately broken | File mutated | Failing assertions | Named failing assertion(s) |
+|---|---|---|---|---|
+| M28 | not-joint override needs no second confirmation | `ownerModel.ts` | 5 | `NEGATIVE CONTROL [joint case needs a joint owner]`; `NEGATIVE CONTROL [needs the second confirmation]`; +3 more |
+| M29 | a sole owner resolves a joint case without the flag (apply) | `ownerModel.ts` | 4 | ` -- joint splits without case_id, a sole-owner choice never resolves an open joint-holding case`; `1) without case_id the flag alone resolves the account joint case; without the flag it does not`; +2 more |
+| M30 | attribution accepts a split that is not 10000 | `ownerAttribution.ts` | 1 | `NEGATIVE CONTROL [never fabricates]` |
+| M31 | attribution drops the rounding remainder (shares do not add back) | `ownerAttribution.ts` | 1 | `ever drifts: 0.0001 across two owners gives 0.0001 + 0 (largest remainder, earlier owner first)` |
+| M32 | read model divides an incomplete (not 10000) joint group | `investments.ts` | 0 | **none: equivalent mutant (see text)** |
+| M33 | owner-class scope forgets ii_transactions | `ownerClass.ts` | 5 | `puts equals the consolidated input (no row lost, none duplicated); each class sees only its own`; `NEGATIVE CONTROL [scope is what narrows]`; +3 more |
+| M34 | scoped client allows writes (a per-class run could persist) | `ownerClass.ts` | 1 | `NEGATIVE CONTROL [read-only]` |
+| M35 | entity-shared account classified as plain joint (personal-looking) | `ownerClass.ts` | 4 | `y:<id>; members-only split -> joint; split with an entity -> entity_shared; none -> unallocated`; `er class, in a stable order: personal members, joint, entities, shared-with-entity, unallocated`; +2 more |
+| M36 | macro line double-counts | `ownerClass.ts` | 5 | `o line is explicit, labelled, and EXACTLY the sum of the classes (each position once, never 2x)`; `EST snapshot per position, never another tenant's, and its macro line equals the sum of classes`; +3 more |
+| M37 | report chapters run on the unscoped client | `reportSnapshotResolver.ts` | 1 | `ural) the report resolver runs the four II chapters on the scoped client and stores the breakup` |
+| M38 | a per-class SIP run persists over the consolidated rows | `route.ts` | 2 | `persists consolidated run persists (control); a scoped run does not, and says which class it is`; `NEGATIVE CONTROL [no persistence from a scoped run]` |
+| M39 | incomplete allocation group trusted as an owner | `ownerModel.ts` | 1 | `omplete split (not 10000) and an unknown owner id are both Unallocated, never silently personal` |
+| M40 | a foreign / unknown owner class is accepted | `ownerClassScope.ts` | 2 | `NEGATIVE CONTROL [tenant isolation]`; `NEGATIVE CONTROL [unknown class]` |
+| M41 | report does not exclude entity data | `ownerClassReportScope.ts` | 1 | `t -> a read-only client narrowed to the non-entity accounts, and the breakup lists both classes` |
+
+**M32 survives, and why:** it removes the read model's own "group must total 10000" skip; the value is still not divided because `attributeByBasisPoints` independently returns `null` for a non-10000 split (M30 shows that guard is itself tested). Two independent guards for one property, so removing either alone is an equivalent mutant; both are asserted by the malformed-split test.
+
+### 12.6 What the PO must still decide
+
+1. **Per-class views exist on Performance / SIP / X-Ray / Tax and as tables on the Overview, but the personal report only lists the classes in the Investment performance chapter's text.** Should the report get a **separate chapter per entity** (full Performance / SIP / Tax for each trust, HUF, company)? That would need new section codes (possibly a DB CHECK change).
+2. **The India MF report branch shows a joint folio inside every owner's section**, while this branch also gives joint its own class. They agree on keys and rules, but the PO may want one presentation.
+3. **Simulations** (SIP what-if, tax redemption simulator) run on the consolidated data; should they take the owner class?
+4. **The Investments register / Net Worth screens** do not display the new `ownerShares` yet (the read model carries them; the Investment Intelligence Overview shows the divided parts). Wanted on the register grid?
+5. **A sole-owner "not joint" decision on a statement that is genuinely joint is audited and amendable but is the user's word**: no further evidence gate. Acceptable?
