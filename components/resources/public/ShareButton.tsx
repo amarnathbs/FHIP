@@ -4,14 +4,17 @@
 // navigator.share/clipboard/window interactions) rendered inside the
 // otherwise-server ResourceDetailHeader.
 //
-// Two paths: the Web Share API (navigator.share) when the browser exposes
-// it — mostly mobile, and it hands off to whatever the OS's own native
-// share sheet offers, so no per-platform code is needed there. Everywhere
-// else (most desktop browsers), a small dropdown with direct share links
-// for the platforms this content actually gets shared to, plus a
-// "Copy link" fallback that always works regardless of platform support.
+// The Share button ALWAYS opens the dropdown: direct share links for the
+// platforms this content actually gets shared to, plus a "Copy link" that works
+// regardless of platform support. 2026-10-01: it used to hand straight off to
+// the Web Share API whenever the browser exposed it -- which includes Edge and
+// Chrome on Windows -- and that opens the OS share sheet, whose targets
+// (LinkedIn, Facebook, X, WhatsApp, Gmail ...) are whatever apps happen to be
+// installed on that machine, and often do nothing. The reliable web links were
+// therefore never shown. The native sheet is now an optional "More options..."
+// entry, offered only where the browser supports it.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Share2, Copy, Check, Mail } from 'lucide-react';
 
 // Exported for tests/unit/shareButton.test.ts — the actual link-building
@@ -29,8 +32,19 @@ export function buildShareLinks(url: string, title: string) {
   ];
 }
 
+// Exported for tests/unit/shareButton.test.ts.
+export function canUseNativeShare(nav: { share?: unknown } | undefined): boolean {
+  return !!nav && typeof nav.share === 'function';
+}
+
 export function ShareButton({ url, title }: { url: string; title: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Server snapshot is false so server and first client render match.
+  const nativeShare = useSyncExternalStore(
+    () => () => {},
+    () => canUseNativeShare(typeof navigator !== 'undefined' ? navigator : undefined),
+    () => false,
+  );
   const [copied, setCopied] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -50,17 +64,18 @@ export function ShareButton({ url, title }: { url: string; title: string }) {
     };
   }, [menuOpen]);
 
-  async function handleShareClick() {
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title, url });
-        return;
-      } catch {
-        // User cancelled the native share sheet, or the call otherwise
-        // failed — fall through to the dropdown rather than doing nothing.
-      }
-    }
+  function handleShareClick() {
     setMenuOpen((open) => !open);
+  }
+
+  async function handleNativeShare() {
+    setMenuOpen(false);
+    try {
+      await navigator.share({ title, url });
+    } catch {
+      // User cancelled the OS share sheet, or it failed; the dropdown's own
+      // links and Copy link remain available from the button.
+    }
   }
 
   async function handleCopyLink() {
@@ -110,6 +125,17 @@ export function ShareButton({ url, title }: { url: string; title: string }) {
             <Mail className="h-3.5 w-3.5" aria-hidden="true" />
             Email
           </a>
+          {nativeShare && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleNativeShare}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-trust/5"
+            >
+              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+              More options…
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"

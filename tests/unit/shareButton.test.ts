@@ -4,7 +4,7 @@
 // testing directly is that each platform gets a correctly-encoded URL.
 
 import { describe, it, expect } from 'vitest';
-import { buildShareLinks } from '@/components/resources/public/ShareButton';
+import { buildShareLinks, canUseNativeShare } from '@/components/resources/public/ShareButton';
 
 describe('buildShareLinks', () => {
   const url = 'https://app.financialhealthplatform.com/resources/understanding-savings-debt-liquidity-ratios';
@@ -46,5 +46,24 @@ describe('buildShareLinks', () => {
     // split into extra "&"-separated params by an unescaped ampersand.
     expect(twitter.href).toContain(`text=${encodeURIComponent(trickyTitle)}`);
     expect(twitter.href.split('&text=')).toHaveLength(2);
+  });
+});
+
+describe('Share button never hands straight off to the OS share sheet', () => {
+  // Regression: on Windows Edge/Chrome navigator.share exists, so the button used
+  // to open the OS sheet (dead targets) and never showed the working web links.
+  it('detects native share only as an optional extra', () => {
+    expect(canUseNativeShare({ share: () => Promise.resolve() })).toBe(true);
+    expect(canUseNativeShare({})).toBe(false);
+    expect(canUseNativeShare(undefined)).toBe(false);
+  });
+
+  it('the click handler only toggles the dropdown; navigator.share is reachable only from the "More options" item', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('components/resources/public/ShareButton.tsx', 'utf8').split('\r\n').join('\n');
+    const clickHandler = src.slice(src.indexOf('function handleShareClick'), src.indexOf('async function handleNativeShare'));
+    expect(clickHandler).toContain('setMenuOpen');
+    expect(clickHandler).not.toContain('navigator.share');
+    expect(src.match(/navigator\.share\(/g)).toHaveLength(1);
   });
 });
