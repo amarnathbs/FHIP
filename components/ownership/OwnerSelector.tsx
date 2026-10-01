@@ -74,7 +74,11 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
   useEffect(() => {
     if (preview) return undefined;
     let cancelled = false;
-    fetch(`/api/ownership/options?flow=${flow}`)
+    // The read is PURE (GET never writes). The caller's own Self member is ensured by
+    // a separate idempotent POST first, so "Mine" is offered on the very first use.
+    fetch('/api/ownership/self', { method: 'POST' })
+      .catch(() => undefined) // a failure here only means Self may be missing from the list; the read below still answers
+      .then(() => fetch(`/api/ownership/options?flow=${flow}`, { cache: 'no-store' }))
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not load the list of owners.');
@@ -276,10 +280,16 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
         <p className="mt-2 text-xs text-muted">Percentage shares are not used for bank statements — a joint account counts in full to your household.</p>
       )}
 
+      {flow === 'bank' && options && !options.members.some((m) => m.ownerRole === 'spouse') && (
+        <p className="mt-2 text-xs text-muted" data-testid="no-spouse-hint">
+          No spouse or partner is on your household yet. To choose them, add them below — they are saved as a real household member and then selected.
+        </p>
+      )}
+
       <div className="mt-2">
         {!addOpen ? (
           <button type="button" className="text-xs text-gray-600 underline" onClick={() => setAddOpen(true)} disabled={disabled}>
-            Add a household member (e.g. your spouse)
+            Add household member{flow === 'bank' ? ' (spouse or partner)' : ''}
           </button>
         ) : (
           <div className="flex flex-wrap items-end gap-2">

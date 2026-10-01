@@ -1,20 +1,22 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
-import { ensureSelfHouseholdMember } from '@/lib/services/household/ensureSelfMember';
+import { requireCountryConfirmedUser as requireUser, bad } from '@/lib/api';
 import { loadOwnerContext } from '@/lib/ownership/validateOwnerSelection';
 import { buildOwnerOptions } from '@/lib/ownership/ownerOptions';
 import { isOwnerFlow } from '@/lib/ownership/ownerSelection';
 
 // GET /api/ownership/options?flow=bank|ii_cas
 //
-// Owner-before-upload (Phase 1): the owners THIS user may choose from for one
-// upload flow. User-scoped end to end -- every read filters on the caller's own
-// id, nothing is cached across users, and the home country that decides
-// whether HUF / SMSF appear is the user's authoritative profile country, never
-// a query parameter.
+// PURELY READ-ONLY (PO decision, 2026-10-01): this handler never writes. The
+// caller's own "Self" household member is created by the separate, explicit,
+// idempotent mutation POST /api/ownership/self, which the selector calls BEFORE
+// it reads this list (and which onboarding may call too). A GET that wrote on
+// first use would be unsafe to prefetch, retry or cache.
 //
-// The caller's own "Self" household member is created here if it does not
-// exist yet (lib/services/household/ensureSelfMember.ts), so the first upload
-// never needs an extra onboarding step before "Mine" can be chosen.
+// User-scoped end to end: every read filters on the caller's own id, and the home
+// country that decides whether HUF / SMSF appear is the authoritative profile
+// country, never a query parameter. Marked dynamic and `no-store`: the answer is
+// per user and must never be shared between users by any cache.
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
@@ -22,7 +24,6 @@ export async function GET(req: Request) {
   const flow = new URL(req.url).searchParams.get('flow');
   if (!isOwnerFlow(flow)) return bad('Unknown upload type.', 422, 'owner_flow_invalid');
 
-  await ensureSelfHouseholdMember(user.id);
   const ctx = await loadOwnerContext(user.id);
-  return ok(buildOwnerOptions(ctx, flow));
+  return Response.json({ data: buildOwnerOptions(ctx, flow) }, { headers: { 'Cache-Control': 'no-store' } });
 }
