@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { applyAccountOwnerChange, loadAccountOwnership, loadOwnerChoiceContext } from '@/lib/services/investment-intelligence/accountOwnership';
-import { buildOwnerOptions, describeOwnership, isOwnerCaseType, ownerChangeRequestSchema, validateOwnerSelection } from '@/lib/services/investment-intelligence/ownerModel';
+import { buildOwnerOptions, describeOwnership, isOwnerCaseType, jointCaseOwnerFailure, ownerChangeRequestSchema, validateOwnerSelection } from '@/lib/services/investment-intelligence/ownerModel';
 
 // Fixes a real, previously unresolvable dead end: an 'owner_unmatched'
 // reconciliation case (opened by documentProcessing.ts whenever a statement
@@ -33,8 +33,10 @@ import { buildOwnerOptions, describeOwnership, isOwnerCaseType, ownerChangeReque
 // step; a request without it is refused, never assumed). Every owner id is
 // re-validated here against rows loaded for THIS user, and the HUF gate reads
 // the caller's AUTHORITATIVE home country (user_profiles) -- never the body.
-// A joint-holding case (`joint_holding_allocation_required`) is resolved ONLY
-// by a joint split. The legacy body `{ ownerMemberId }` is still understood
+// A joint-holding case (`joint_holding_allocation_required`) is resolved by a
+// joint split, or -- PO decision 2026-10-01 -- by a sole owner when the body
+// also carries `confirm_not_joint: true` ("this is not a joint holding"), which
+// is audited. The legacy body `{ ownerMemberId }` is still understood
 // (mapped to kind 'member') but needs `confirm: true` like everything else.
 // Design, consumers and tests: docs/ownership/OWNER_ENTITY_JOINT_EDIT_REPORT.md.
 
@@ -97,13 +99,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!theCase || theCase.subject_type !== 'account' || theCase.subject_id !== accountId || !isOwnerCaseType(theCase.discrepancy_type)) {
       return bad('That issue was not found for this account.', 404, 'CASE_NOT_FOUND');
     }
-    if (theCase.discrepancy_type === 'joint_holding_allocation_required' && validated.owner.kind !== 'joint') {
-      return bad('This statement prints a joint holding, so it can only be resolved with a joint split between two or more owners.', 422, 'JOINT_CASE_REQUIRES_JOINT_OWNER');
-    }
+    const jointFailure = jointCaseOwnerFailure(theCase.discrepancy_type as string, validated.owner.kind, parsed.data.confirm_not_joint);
+    if (jointFailure) return bad(jointFailure.message, jointFailure.status, jointFailure.code);
     caseId = theCase.id as string;
   }
 
-  const result = await applyAccountOwnerChange({ userId: user.id, accountId, owner: validated.owner, amend: false, caseId });
+  const result = await applyAccountOwnerChange({ userId: user.id, accountId, owner: validated.owner, amend: false, caseId, notJointConfirmed: parsed.data.confirm_not_joint === true });
   if (!result.ok) return bad(result.message, result.status, result.code);
 
   return ok({

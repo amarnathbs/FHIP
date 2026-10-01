@@ -261,6 +261,30 @@ describe('OwnerChangeDialog markup (react-dom/server)', () => {
     expect(html).toContain('Total: 100.00%');
   });
 
+  it('joint-only dialog offers "This is not a joint holding"; in that mode single owners are listed, a checkbox confirmation is required, and the confirm text says so', () => {
+    const base = { jointOnly: true as const, holderHint: 'A**** R**', suggestedJointMemberIds: [SELF, SPOUSE] };
+    const jointMode = render(base);
+    expect(jointMode).toContain('This is not a joint holding');
+    expect(jointMode).not.toContain('I confirm this account is');
+    const notJointMode = render({ ...base, initialNotJoint: true, initialChoice: mKey(SELF) });
+    expect(notJointMode).toContain('People in your household');
+    expect(notJointMode).toContain('I confirm this account is');
+    expect(notJointMode).toContain('It is a joint holding: split it instead');
+    // NEGATIVE CONTROL: choosing a single owner without ticking the confirmation cannot continue
+    expect(notJointMode).toMatch(/<button[^>]*\sdisabled=""[^>]*>Review change<\/button>/);
+    const ticked = render({ ...base, initialNotJoint: true, initialNotJointAck: true, initialChoice: mKey(SELF) });
+    expect(ticked).not.toMatch(/<button[^>]*\sdisabled=""[^>]*>Review change<\/button>/);
+    const confirm = render({ ...base, initialNotJoint: true, initialNotJointAck: true, initialChoice: mKey(SELF), initialStep: 'confirm' });
+    expect(confirm).toContain('not jointly held');
+  });
+
+  it('describeOwnerChange: the not-joint wording is added only when notJoint is set', () => {
+    const current: OwnershipView = { kind: 'unassigned', owners: [] };
+    const next = nextOwnershipView({ kind: 'member', member_id: SELF }, payload().options)!;
+    expect(describeOwnerChange({ current, next, published: false, amend: false, notJoint: true }).consequences.join(' ')).toContain('not jointly held');
+    expect(describeOwnerChange({ current, next, published: false, amend: false }).consequences.join(' ')).not.toContain('not jointly held');
+  });
+
   it('confirm step: current -> new owner, the percentages, the plain-words consequences, and an explicit confirm button', () => {
     const html = render({ initialStep: 'confirm', initialChoice: JOINT_CHOICE, initialJointRows: [row('a', mKey(SELF), '60'), row('b', `e:${TRUST}`, '40')] });
     expect(html).toContain('Please confirm this change');
@@ -302,6 +326,7 @@ describe('Review and Resolutions clients (structural contract)', () => {
     expect(review).toContain('Split ownership…');
     expect(review).toContain('Choose the owner…');
     expect(review).toContain('confirm: true');
+    expect(review).toContain('confirm_not_joint: true');
     expect(review).toContain("/api/investment-intelligence/accounts/${encodeURIComponent(target.accountId)}/owner");
     expect(review).toContain('case_id: target.caseId');
   });

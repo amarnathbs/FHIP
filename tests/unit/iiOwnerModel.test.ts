@@ -14,6 +14,7 @@ import {
   caseTypesResolvedBy,
   deriveAccountOwnership,
   describeOwnership,
+  jointCaseOwnerFailure,
   ownerChangeRequestSchema,
   ownershipAuditShape,
   ownershipBlocksPersonalPublication,
@@ -253,6 +254,19 @@ describe('effective ownership + idempotency key', () => {
 });
 
 describe('case rules', () => {
+  it('NOT-JOINT [PO 2026-10-01]: a sole owner resolves a joint-holding case only with the explicit flag', () => {
+    expect(caseTypesResolvedBy('member', false)).not.toContain('joint_holding_allocation_required');
+    expect(caseTypesResolvedBy('member', true)).toContain('joint_holding_allocation_required');
+    expect(caseTypesResolvedBy('entity', true)).toContain('joint_holding_allocation_required');
+    expect(jointCaseOwnerFailure('joint_holding_allocation_required', 'member', undefined)?.code).toBe('JOINT_CASE_REQUIRES_JOINT_OWNER');
+    expect(jointCaseOwnerFailure('joint_holding_allocation_required', 'member', false)?.status).toBe(422);
+    expect(jointCaseOwnerFailure('joint_holding_allocation_required', 'member', true)).toBeNull();
+    expect(jointCaseOwnerFailure('joint_holding_allocation_required', 'joint', undefined)).toBeNull();
+    expect(jointCaseOwnerFailure('owner_unmatched', 'member', undefined)).toBeNull();
+    expect(resolutionMethodFor('member', false, true)).toBe('user_confirmed_not_joint');
+    expect(resolutionMethodFor('joint', false, true)).toBe('user_assigned_joint_allocation');
+  });
+
   it('a joint holding is resolved ONLY by a joint split; owner_unmatched / owner_mismatch by any owner', () => {
     expect(caseTypesResolvedBy('joint')).toContain('joint_holding_allocation_required');
     expect(caseTypesResolvedBy('member')).not.toContain('joint_holding_allocation_required');

@@ -227,7 +227,7 @@ export function sameOwnershipView(a: OwnershipView, b: OwnershipView): boolean {
   return key(a) === key(b);
 }
 
-export function describeOwnerChange(input: { current: OwnershipView; next: OwnershipView; published: boolean; amend: boolean }): OwnerChangeDescription {
+export function describeOwnerChange(input: { current: OwnershipView; next: OwnershipView; published: boolean; amend: boolean; notJoint?: boolean }): OwnerChangeDescription {
   const { current, next, published } = input;
   const hasEntity = next.owners.some((o) => o.kind === 'entity');
   const consequences: string[] = ['The holdings and transactions in this account are not changed or recalculated. Only who they are attributed to changes.'];
@@ -238,6 +238,10 @@ export function describeOwnerChange(input: { current: OwnershipView; next: Owner
     consequences.push(`This account will be owned by ${next.owners[0].label} (${next.owners[0].detail.toLowerCase()}).`);
   } else if (next.kind === 'joint') {
     consequences.push(`This account will be recorded as jointly owned: ${next.owners.map((o) => `${o.label} ${formatPercent(o.basisPoints)}`).join(', ')}. The shares add up to 100%.`);
+  }
+
+  if (input.notJoint) {
+    consequences.push('You are confirming this account is not jointly held. The joint-holding issue is closed with that decision recorded in your audit history, and the value is attributed to this single owner only (it is never counted twice).');
   }
 
   if (hasEntity) {

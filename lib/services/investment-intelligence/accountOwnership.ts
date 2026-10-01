@@ -123,6 +123,8 @@ export interface ApplyOwnerChangeParams {
   amend: boolean;
   /** The reconciliation case being resolved / amended, for the audit trail. */
   caseId?: string | null;
+  /** The caller explicitly confirmed "this is not a joint holding" (sole owner for a joint case). Audited. */
+  notJointConfirmed?: boolean;
   nowIso?: string;
 }
 
@@ -201,7 +203,8 @@ export async function applyAccountOwnerChange(params: ApplyOwnerChangeParams): P
   // ADMIN CLIENT, deliberately: `discrepancy_details` is a system-authoritative
   // column (migration 0087 refuses an `authenticated` write to it). Ownership
   // of the account and of every owner id was verified before this point.
-  const types = caseTypesResolvedBy(owner.kind);
+  const notJointConfirmed = params.notJointConfirmed === true && owner.kind !== 'joint';
+  const types = caseTypesResolvedBy(owner.kind, notJointConfirmed);
   const { data: openCases, error: openCasesErr } = await admin
     .from('ii_reconciliation_cases')
     .select('id, discrepancy_type, discrepancy_details')
@@ -217,15 +220,18 @@ export async function applyAccountOwnerChange(params: ApplyOwnerChangeParams): P
   const method = resolutionMethodFor(owner.kind, params.amend);
   const resolvedCaseIds: string[] = [];
   for (const c of (openCases ?? []) as { id: string; discrepancy_type: string; discrepancy_details: Record<string, unknown> | null }[]) {
+    const isNotJointResolution = notJointConfirmed && c.discrepancy_type === 'joint_holding_allocation_required';
+    const caseMethod = isNotJointResolution ? resolutionMethodFor(owner.kind, false, true) : method;
     const mergedDetails: Record<string, unknown> = {
       ...(c.discrepancy_details ?? {}),
       resolvedOwner: afterShape,
       previousOwner: beforeShape,
       ...(owner.kind === 'member' ? { resolvedOwnerMemberId: owner.pointerMemberId } : {}),
+      ...(isNotJointResolution ? { notJointConfirmed: true } : {}),
     };
     const { error: resolveErr } = await admin
       .from('ii_reconciliation_cases')
-      .update({ status: 'resolved', resolved_at: nowIso, resolution_method: method, resolved_by: userId, resolved_by_actor_type: 'user', discrepancy_details: mergedDetails })
+      .update({ status: 'resolved', resolved_at: nowIso, resolution_method: caseMethod, resolved_by: userId, resolved_by_actor_type: 'user', discrepancy_details: mergedDetails })
       .eq('id', c.id)
       .eq('status', 'open'); // race guard: only this row, only if still open
     if (!resolveErr) {
@@ -237,7 +243,7 @@ export async function applyAccountOwnerChange(params: ApplyOwnerChangeParams): P
         subjectId: c.id,
         actorType: 'user',
         actorId: userId,
-        metadata: { discrepancyType: c.discrepancy_type, resolutionMethod: method, accountId },
+        metadata: { discrepancyType: c.discrepancy_type, resolutionMethod: caseMethod, accountId },
       });
     }
   }
@@ -259,6 +265,7 @@ export async function applyAccountOwnerChange(params: ApplyOwnerChangeParams): P
         changed: !unchanged,
         origin: params.amend ? 'resolutions_amend' : 'review',
         resolvedCaseCount: resolvedCaseIds.length,
+        ...(notJointConfirmed ? { notJointConfirmed: true } : {}),
         allocationGroupId,
         ...(params.caseId ? { caseId: params.caseId } : {}),
       },

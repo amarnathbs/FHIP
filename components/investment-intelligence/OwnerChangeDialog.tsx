@@ -46,6 +46,12 @@ const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), in
 
 export type OwnerSubmitResult = { ok: true; message?: string } | { ok: false; error: string };
 
+/** Extra, explicit confirmations the dialog can attach to a submission. */
+export interface OwnerSubmitExtra {
+  /** "This is not a joint holding": lets a joint-holding case be resolved with a sole owner. */
+  confirmNotJoint?: boolean;
+}
+
 export interface OwnerChangeDialogProps {
   accountId: string;
   /** Readable account name, e.g. "12345678 · Example AMC". Never a raw uuid. */
@@ -57,7 +63,7 @@ export interface OwnerChangeDialogProps {
   suggestedJointMemberIds?: string[];
   /** The masked holder text the statement printed, shown as a hint only. */
   holderHint?: string | null;
-  submit: (owner: OwnerSelectionBody) => Promise<OwnerSubmitResult>;
+  submit: (owner: OwnerSelectionBody, extra?: OwnerSubmitExtra) => Promise<OwnerSubmitResult>;
   onClose: () => void;
   onDone: () => void;
   /** Test / static-render hooks. When `preloaded` is given the dialog does not fetch. */
@@ -65,6 +71,9 @@ export interface OwnerChangeDialogProps {
   initialChoice?: string;
   initialJointRows?: JointRowDraft[];
   initialStep?: 'choose' | 'confirm';
+  /** Start in the "this is not a joint holding" mode (joint-holding cases only). */
+  initialNotJoint?: boolean;
+  initialNotJointAck?: boolean;
 }
 
 let rowCounter = 0;
@@ -75,10 +84,14 @@ export function OwnerChangeDialog(props: OwnerChangeDialogProps) {
   const [payload, setPayload] = useState<OwnerOptionsPayload | null>(props.preloaded ?? null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [step, setStep] = useState<'choose' | 'confirm'>(props.initialStep ?? 'choose');
-  const [choice, setChoice] = useState<string>(props.initialChoice ?? (jointOnly ? JOINT_CHOICE : ''));
+  const [choice, setChoice] = useState<string>(props.initialChoice ?? (jointOnly && !props.initialNotJoint ? JOINT_CHOICE : ''));
   // `null` until the user edits: the rows shown are then DERIVED (the statement's
   // named members split equally, else two empty lines) rather than set from an effect.
   const [editedJointRows, setEditedJointRows] = useState<JointRowDraft[] | null>(props.initialJointRows ?? null);
+  // PO decision 2026-10-01: a joint-holding case may be resolved with a sole owner,
+  // but only after the user says so explicitly ("this is not a joint holding").
+  const [notJoint, setNotJoint] = useState(props.initialNotJoint ?? false);
+  const [notJointAck, setNotJointAck] = useState(props.initialNotJointAck ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -165,12 +178,15 @@ export function OwnerChangeDialog(props: OwnerChangeDialogProps) {
   }, [options, suggestedKey]);
   const jointRows = editedJointRows ?? defaultJointRows;
   const setJointRows = (rows: JointRowDraft[]) => setEditedJointRows(rows);
-  const { selection, problems } = useMemo(() => selectionFromChoice(choice, jointRows), [choice, jointRows]);
+  const showSingleChoices = !jointOnly || notJoint;
+  const { selection: rawSelection, problems } = useMemo(() => selectionFromChoice(choice, jointRows), [choice, jointRows]);
+  // In "not joint" mode only a single owner is valid, and only once the user has ticked the confirmation.
+  const selection = notJoint && jointOnly ? (rawSelection && rawSelection.kind !== 'joint' && notJointAck ? rawSelection : null) : rawSelection;
   const jointEval = useMemo(() => evaluateJointDraft(jointRows), [jointRows]);
   const nextView = useMemo(() => nextOwnershipView(selection, options), [selection, options]);
   const description = useMemo(
-    () => (payload && nextView ? describeOwnerChange({ current: payload.current, next: nextView, published: payload.published, amend: mode === 'amend' }) : null),
-    [payload, nextView, mode]
+    () => (payload && nextView ? describeOwnerChange({ current: payload.current, next: nextView, published: payload.published, amend: mode === 'amend', notJoint: notJoint && jointOnly }) : null),
+    [payload, nextView, mode, notJoint, jointOnly]
   );
 
   const usedKeys = new Set(jointRows.map((r) => r.ownerKey).filter(Boolean));
@@ -185,7 +201,7 @@ export function OwnerChangeDialog(props: OwnerChangeDialogProps) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await submit(selection);
+      const result = await submit(selection, notJoint && jointOnly ? { confirmNotJoint: true } : undefined);
       if (!result.ok) {
         setSubmitError(result.error);
         return;
@@ -198,7 +214,7 @@ export function OwnerChangeDialog(props: OwnerChangeDialogProps) {
     }
   }
 
-  const title = step === 'confirm' ? 'Confirm the owner change' : mode === 'amend' ? 'Amend the owner' : jointOnly ? 'Split ownership between owners' : 'Choose the owner';
+  const title = step === 'confirm' ? 'Confirm the owner change' : mode === 'amend' ? 'Amend the owner' : jointOnly && !notJoint ? 'Split ownership between owners' : 'Choose the owner';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -226,9 +242,9 @@ export function OwnerChangeDialog(props: OwnerChangeDialogProps) {
             )}
 
             <fieldset className="mt-4">
-              <legend className="text-sm font-medium text-ink">{jointOnly ? 'Owners and shares' : 'Who owns this account?'}</legend>
+              <legend className="text-sm font-medium text-ink">{jointOnly && !notJoint ? 'Owners and shares' : 'Who owns this account?'}</legend>
 
-              {!jointOnly && (
+              {showSingleChoices && (
                 <div className="mt-2 space-y-3">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted">People in your household</p>
@@ -270,12 +286,50 @@ export function OwnerChangeDialog(props: OwnerChangeDialogProps) {
                     </ul>
                   </div>
 
-                  {payload.jointAvailable && (
+                  {payload.jointAvailable && !jointOnly && (
                     <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50">
                       <input type="radio" name={`owner-choice-${instanceId}`} value={JOINT_CHOICE} checked={choice === JOINT_CHOICE} onChange={() => setChoice(JOINT_CHOICE)} />
                       <span className="text-ink">Jointly owned</span>
                       <span className="text-xs text-muted">split between two or more owners, with percentages</span>
                     </label>
+                  )}
+                </div>
+              )}
+
+              {jointOnly && (
+                <div className="mt-3">
+                  {!notJoint ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotJoint(true);
+                        setNotJointAck(false);
+                        setChoice('');
+                      }}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      This is not a joint holding
+                    </button>
+                  ) : (
+                    <div className="rounded-compact border border-amber-300 bg-amber-50 p-3">
+                      <label className="flex cursor-pointer items-start gap-2 text-xs text-amber-900">
+                        <input type="checkbox" className="mt-0.5" checked={notJointAck} onChange={(e) => setNotJointAck(e.target.checked)} />
+                        <span>
+                          I confirm this account is <strong>not</strong> jointly held, even though the statement prints a joint holding. I am assigning it to a single owner. This is recorded in my audit history.
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotJoint(false);
+                          setNotJointAck(false);
+                          setChoice(JOINT_CHOICE);
+                        }}
+                        className="mt-2 text-xs font-medium text-primary hover:underline"
+                      >
+                        It is a joint holding: split it instead
+                      </button>
+                    </div>
                   )}
                 </div>
               )}

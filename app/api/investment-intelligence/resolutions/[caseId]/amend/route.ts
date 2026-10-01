@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
 import { applyAccountOwnerChange, loadAccountOwnership, loadOwnerChoiceContext } from '@/lib/services/investment-intelligence/accountOwnership';
-import { describeOwnership, isOwnerCaseType, ownerChangeRequestSchema, ownershipAuditShape, resolutionMethodFor, validateOwnerSelection } from '@/lib/services/investment-intelligence/ownerModel';
+import { describeOwnership, isOwnerCaseType, jointCaseOwnerFailure, ownerChangeRequestSchema, ownershipAuditShape, resolutionMethodFor, validateOwnerSelection } from '@/lib/services/investment-intelligence/ownerModel';
 import { z } from 'zod';
 
 /**
@@ -168,14 +168,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
   const ctx = await loadOwnerChoiceContext(user.id, userClient);
   const validated = validateOwnerSelection(ownerParsed.data.owner, ctx);
   if (!validated.ok) return bad(validated.message, validated.status, validated.code);
-  if (priorCase.discrepancy_type === 'joint_holding_allocation_required' && validated.owner.kind !== 'joint') {
-    return bad('This statement prints a joint holding, so it can only be amended to a joint split between two or more owners.', 422, 'JOINT_CASE_REQUIRES_JOINT_OWNER');
-  }
+  const jointFailure = jointCaseOwnerFailure(priorCase.discrepancy_type as string, validated.owner.kind, ownerParsed.data.confirm_not_joint);
+  if (jointFailure) return bad(jointFailure.message, jointFailure.status, jointFailure.code);
+  const notJointConfirmed = ownerParsed.data.confirm_not_joint === true && validated.owner.kind !== 'joint';
 
   // Apply the ownership change FIRST: if it is refused (e.g. an entity owner
   // for an already-published account) no amendment row is left behind
   // claiming a decision that did not take effect.
-  const applied = await applyAccountOwnerChange({ userId: user.id, accountId, owner: validated.owner, amend: true, caseId });
+  const applied = await applyAccountOwnerChange({ userId: user.id, accountId, owner: validated.owner, amend: true, caseId, notJointConfirmed });
   if (!applied.ok) return bad(applied.message, applied.status, applied.code);
 
   const previousOwnerMemberId = currentOwnership.pointerMemberId;
@@ -197,6 +197,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
         resolvedOwnerMemberId: validated.owner.kind === 'member' ? validated.owner.pointerMemberId : null,
         previousOwner: ownershipAuditShape(applied.before),
         resolvedOwner: ownershipAuditShape(applied.after),
+        ...(notJointConfirmed && priorCase.discrepancy_type === 'joint_holding_allocation_required' ? { notJointConfirmed: true } : {}),
         reason: 'User amendment of a prior decision, from the Resolutions history view.',
       },
       status: 'resolved',
@@ -216,7 +217,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
     subjectId: newCase.id as string,
     actorType: 'user',
     actorId: user.id,
-    metadata: { field: 'ownership_amendment', amendsCaseId: caseId, newCaseId: newCase.id, accountId, before: ownershipAuditShape(applied.before), after: ownershipAuditShape(applied.after) },
+    metadata: { field: 'ownership_amendment', ...(notJointConfirmed ? { notJointConfirmed: true } : {}), amendsCaseId: caseId, newCaseId: newCase.id, accountId, before: ownershipAuditShape(applied.before), after: ownershipAuditShape(applied.after) },
   });
 
   return ok({

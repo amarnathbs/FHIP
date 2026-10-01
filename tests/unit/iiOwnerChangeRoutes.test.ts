@@ -313,6 +313,69 @@ describe('PATCH accounts/[id]/owner -- joint splits', () => {
   });
 });
 
+describe('PATCH accounts/[id]/owner -- "this is not a joint holding" (PO decision 2026-10-01)', () => {
+  const sole = (extra: Row = {}) => ({ owner: { kind: 'member', member_id: SELF }, confirm: true, case_id: CASE_JOINT, ...extra });
+
+  it('NEGATIVE CONTROL [needs the second confirmation]: confirm:true alone, or confirm_not_joint:false, leaves the joint case OPEN and writes nothing', async () => {
+    seed({ cases: [jointCase()] });
+    for (const extra of [{}, { confirm_not_joint: false }]) {
+      const res = await patch(ACCOUNT, sole(extra));
+      expect(res.status).toBe(422);
+      expect((await body(res)).error).toBe('JOINT_CASE_REQUIRES_JOINT_OWNER');
+    }
+    expect(db.writes).toEqual([]);
+    expect(rows('ii_reconciliation_cases')[0].status).toBe('open');
+  });
+
+  it('with confirm_not_joint:true a sole owner resolves the joint case: sole pointer, NO allocation rows (value never duplicated), audited, evidence kept', async () => {
+    seed({ cases: [jointCase()] });
+    const res = await patch(ACCOUNT, sole({ confirm_not_joint: true }));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toMatchObject({ resolvedCaseCount: 1, changed: true });
+    expect(rows('ii_accounts').find((a) => a.id === ACCOUNT)?.owner_member_id).toBe(SELF);
+    expect(rows('ii_ownership_allocation')).toHaveLength(0);
+    const c = rows('ii_reconciliation_cases')[0];
+    expect(c).toMatchObject({ status: 'resolved', resolution_method: 'user_confirmed_not_joint', resolved_by: USER_A });
+    const d = c.discrepancy_details as Record<string, unknown>;
+    expect(d.notJointConfirmed).toBe(true);
+    expect(d.maskedHolderName).toBe('A**** R**'); // detection evidence preserved
+    const [audit] = auditUserCorrections();
+    expect((audit.metadata as Record<string, unknown>).notJointConfirmed).toBe(true);
+    expect(JSON.stringify(rows('ii_audit_events'))).not.toMatch(/Asha/);
+  });
+
+  it('without case_id the flag alone resolves the account joint case; without the flag it does not', async () => {
+    seed({ cases: [jointCase()] });
+    await patch(ACCOUNT, { owner: { kind: 'member', member_id: SELF }, confirm: true });
+    expect(rows('ii_reconciliation_cases')[0].status).toBe('open');
+    seed({ cases: [jointCase()] });
+    await patch(ACCOUNT, { owner: { kind: 'member', member_id: SELF }, confirm: true, confirm_not_joint: true });
+    expect(rows('ii_reconciliation_cases')[0].status).toBe('resolved');
+  });
+
+  it('the flag does not relabel an ordinary owner_unmatched resolution', async () => {
+    seed({ cases: [openCase()] });
+    await patch(ACCOUNT, { owner: { kind: 'member', member_id: SELF }, confirm: true, confirm_not_joint: true });
+    expect(rows('ii_reconciliation_cases')[0].resolution_method).toBe('user_mapped_owner');
+  });
+
+  it('validation still applies in this mode (cross-tenant id refused, nothing written); an entity can be the single owner', async () => {
+    seed({ cases: [jointCase()] });
+    expect((await patch(ACCOUNT, sole({ confirm_not_joint: true, owner: { kind: 'member', member_id: B_MEMBER } }))).status).toBe(404);
+    expect(db.writes).toEqual([]);
+    expect((await patch(ACCOUNT, sole({ confirm_not_joint: true, owner: { kind: 'entity', business_entity_id: TRUST } }))).status).toBe(200);
+    expect(activeAllocations()).toHaveLength(1);
+  });
+
+  it('replay is idempotent: the second identical request changes nothing and adds no audit row', async () => {
+    seed({ cases: [jointCase()] });
+    await patch(ACCOUNT, sole({ confirm_not_joint: true }));
+    const again = await patch(ACCOUNT, sole({ confirm_not_joint: true }));
+    expect(again.status).toBe(200);
+    expect(auditUserCorrections()).toHaveLength(1);
+  });
+});
+
 describe('PATCH accounts/[id]/owner -- idempotency and audit', () => {
   it('NEGATIVE CONTROL [replay idempotency]: the same joint change sent twice yields ONE allocation set and ONE audit row', async () => {
     seed({ cases: [jointCase()] });
@@ -501,6 +564,23 @@ describe('POST resolutions/[caseId]/amend -- immutability and history', () => {
     const ok = await amend(CASE_JOINT, { owner: { kind: 'joint', allocations: [{ member_id: SELF, basis_points: 7000 }, { member_id: SPOUSE, basis_points: 3000 }] }, confirm: true });
     expect(ok.status).toBe(200);
     expect(activeAllocations().map((r) => r.allocation_basis_points).sort()).toEqual([3000, 7000]);
+  });
+
+  it('a resolved joint case can be amended to a SOLE owner only with confirm_not_joint (recorded on the new row); then amended back to a split', async () => {
+    seed({ cases: [resolvedCase({ id: CASE_JOINT, discrepancy_type: 'joint_holding_allocation_required', discrepancy_details: { matchedMemberIds: [SELF, SPOUSE] } })] });
+    expect((await amend(CASE_JOINT, { owner: { kind: 'member', member_id: SELF }, confirm: true })).status).toBe(422);
+    expect(db.writes).toEqual([]);
+    const ok = await amend(CASE_JOINT, { owner: { kind: 'member', member_id: SELF }, confirm: true, confirm_not_joint: true });
+    expect(ok.status).toBe(200);
+    const added = rows('ii_reconciliation_cases').find((r) => r.id !== CASE_JOINT)!;
+    expect((added.discrepancy_details as Record<string, unknown>).notJointConfirmed).toBe(true);
+    expect(added.resolution_method).toBe('user_amended_owner');
+    expect(rows('ii_accounts').find((a) => a.id === ACCOUNT)?.owner_member_id).toBe(SELF);
+    // the original row is untouched; the new row is amendable again, now to a split
+    expect(rows('ii_reconciliation_cases').find((r) => r.id === CASE_JOINT)?.resolution_method).toBe('user_mapped_owner');
+    const again = await amend(added.id as string, { owner: { kind: 'joint', allocations: [{ member_id: SELF, basis_points: 5000 }, { member_id: SPOUSE, basis_points: 5000 }] }, confirm: true });
+    expect(again.status).toBe(200);
+    expect(activeAllocations()).toHaveLength(2);
   });
 
   it('NEGATIVE CONTROL [amend validation is the same function]: cross-tenant owner, HUF for an AU user and a bad total are all refused with no new row', async () => {

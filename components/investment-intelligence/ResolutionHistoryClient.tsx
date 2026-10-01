@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { fmtDate, fmtDateTime } from './dateDisplay';
-import { OwnerChangeDialog, type OwnerSubmitResult } from './OwnerChangeDialog';
+import { OwnerChangeDialog, type OwnerSubmitExtra, type OwnerSubmitResult } from './OwnerChangeDialog';
 import { apiErrorMessage, type OwnerSelectionBody, type OwnershipView } from './ownerChange';
 
 // 2026-09-28 owner-exception unification, item 4 of the Product Owner's
@@ -95,12 +95,12 @@ export function ResolutionHistoryClient() {
   }
 
   // `confirm: true` is the explicit confirmation from the dialog's second step.
-  async function submitAmend(caseId: string, owner: OwnerSelectionBody): Promise<OwnerSubmitResult> {
+  async function submitAmend(caseId: string, owner: OwnerSelectionBody, extra?: OwnerSubmitExtra): Promise<OwnerSubmitResult> {
     try {
       const res = await fetch(`/api/investment-intelligence/resolutions/${encodeURIComponent(caseId)}/amend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner, confirm: true }),
+        body: JSON.stringify({ owner, confirm: true, ...(extra?.confirmNotJoint ? { confirm_not_joint: true } : {}) }),
       });
       const json = await res.json();
       if (!res.ok) return { ok: false, error: apiErrorMessage(json, 'Could not record that amendment.') };
@@ -138,7 +138,7 @@ export function ResolutionHistoryClient() {
                 <h3 className="mt-1 font-medium text-ink">{item.accountLabel ?? 'Statement exception'}</h3>
                 {item.maskedHolderName && <p className="mt-1 text-sm text-muted">Statement printed in the name of {item.maskedHolderName}.</p>}
                 <p className="mt-1 text-sm text-muted">
-                  {item.resolutionMethod === 'user_amended_owner' ? 'Amended to' : item.resolvedOwner?.kind === 'joint' ? 'Split as' : 'Assigned to'}{' '}
+                  {item.resolutionMethod === 'user_amended_owner' ? 'Amended to' : item.resolutionMethod === 'user_confirmed_not_joint' ? 'Confirmed not joint; assigned to' : item.resolvedOwner?.kind === 'joint' ? 'Split as' : 'Assigned to'}{' '}
                   <strong>{item.resolvedOwnerName ?? '(unknown owner)'}</strong>
                   {item.resolvedOwner && item.resolvedOwner.kind !== 'joint' && item.resolvedOwner.kind !== 'unassigned' && item.resolvedOwner.owners[0] ? (
                     <span className="text-xs"> ({item.resolvedOwner.owners[0].detail})</span>
@@ -164,7 +164,7 @@ export function ResolutionHistoryClient() {
                     jointOnly={item.discrepancyType === 'joint_holding_allocation_required'}
                     suggestedJointMemberIds={item.matchedMemberIds ?? []}
                     holderHint={item.maskedHolderName}
-                    submit={(owner) => submitAmend(item.id, owner)}
+                    submit={(owner, extra) => submitAmend(item.id, owner, extra)}
                     onClose={() => setAmendingId(null)}
                     onDone={() => setAmendingId(null)}
                   />

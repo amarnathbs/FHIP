@@ -84,6 +84,12 @@ export const ownerChangeRequestSchema = z.preprocess(
   z.object({
     owner: ownerSelectionSchema,
     confirm: z.boolean().optional(),
+    /**
+     * PO decision 2026-10-01: a joint-holding case MAY be resolved with a sole
+     * owner, but only with this second, explicit "this is not a joint holding"
+     * confirmation (in addition to `confirm`).
+     */
+    confirm_not_joint: z.boolean().optional(),
     case_id: uuid.optional(),
   })
 );
@@ -338,10 +344,25 @@ export const OWNER_CASE_TYPES = ['owner_unmatched', 'owner_mismatch', 'joint_hol
 export type OwnerCaseType = (typeof OWNER_CASE_TYPES)[number];
 
 /** Which open owner-exception types a given owner choice may resolve. A joint
- *  holding is resolved ONLY by a joint split: a statement that prints a joint
- *  holding cannot be satisfied by asserting a sole owner. */
-export function caseTypesResolvedBy(kind: ValidatedOwner['kind']): readonly OwnerCaseType[] {
-  return kind === 'joint' ? OWNER_CASE_TYPES : ['owner_unmatched', 'owner_mismatch'];
+ *  holding is resolved by a joint split, or -- PO decision 2026-10-01 -- by a
+ *  sole owner ONLY when the caller has explicitly confirmed "this is not a
+ *  joint holding" (`notJointConfirmed`). */
+export function caseTypesResolvedBy(kind: ValidatedOwner['kind'], notJointConfirmed = false): readonly OwnerCaseType[] {
+  return kind === 'joint' || notJointConfirmed ? OWNER_CASE_TYPES : ['owner_unmatched', 'owner_mismatch'];
+}
+
+/**
+ * The joint-case rule, in one place for both routes. A joint-holding case with a
+ * non-joint owner needs `confirm_not_joint: true`. Returns a failure or null.
+ */
+export function jointCaseOwnerFailure(discrepancyType: string, ownerKind: ValidatedOwner['kind'], confirmNotJoint: boolean | undefined): OwnerFailure | null {
+  if (discrepancyType !== 'joint_holding_allocation_required' || ownerKind === 'joint' || confirmNotJoint === true) return null;
+  return {
+    ok: false,
+    status: 422,
+    code: 'JOINT_CASE_REQUIRES_JOINT_OWNER',
+    message: 'This statement prints a joint holding. Split it between two or more owners, or confirm that it is not a joint holding to assign a single owner.',
+  };
 }
 
 export function isOwnerCaseType(t: unknown): t is OwnerCaseType {
@@ -349,8 +370,9 @@ export function isOwnerCaseType(t: unknown): t is OwnerCaseType {
 }
 
 /** Resolution method recorded on the case. 'user_mapped_owner' is the pre-existing value for a member. */
-export function resolutionMethodFor(kind: ValidatedOwner['kind'], amend: boolean): string {
+export function resolutionMethodFor(kind: ValidatedOwner['kind'], amend: boolean, notJointConfirmed = false): string {
   if (amend) return 'user_amended_owner';
+  if (notJointConfirmed && kind !== 'joint') return 'user_confirmed_not_joint';
   if (kind === 'entity') return 'user_mapped_entity_owner';
   if (kind === 'joint') return 'user_assigned_joint_allocation';
   return 'user_mapped_owner';

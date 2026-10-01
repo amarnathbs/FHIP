@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { OwnerChangeDialog, type OwnerSubmitResult } from './OwnerChangeDialog';
+import { OwnerChangeDialog, type OwnerSubmitExtra, type OwnerSubmitResult } from './OwnerChangeDialog';
 import { apiErrorMessage, type OwnerSelectionBody } from './ownerChange';
 
 // R9 — Review Centre UX (spec sections 56, 59, 134). Sections mirror the
@@ -153,13 +153,13 @@ export function ReviewCentreClient() {
     await load(statusFilter);
   }
 
-  async function submitOwner(target: OwnerDialogTarget, owner: OwnerSelectionBody): Promise<OwnerSubmitResult> {
+  async function submitOwner(target: OwnerDialogTarget, owner: OwnerSelectionBody, extra?: OwnerSubmitExtra): Promise<OwnerSubmitResult> {
     try {
       const res = await fetch(`/api/investment-intelligence/accounts/${encodeURIComponent(target.accountId)}/owner`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         // `confirm: true` is the explicit confirmation from the dialog's second step.
-        body: JSON.stringify({ owner, confirm: true, ...(target.caseId ? { case_id: target.caseId } : {}) }),
+        body: JSON.stringify({ owner, confirm: true, ...(extra?.confirmNotJoint ? { confirm_not_joint: true } : {}), ...(target.caseId ? { case_id: target.caseId } : {}) }),
       });
       const json = await res.json();
       if (!res.ok) return { ok: false, error: apiErrorMessage(json, 'Could not save that owner.') };
@@ -329,7 +329,7 @@ export function ReviewCentreClient() {
           jointOnly={ownerDialog.jointOnly}
           suggestedJointMemberIds={ownerDialog.suggestedJointMemberIds}
           holderHint={ownerDialog.holderHint}
-          submit={(owner) => submitOwner(ownerDialog, owner)}
+          submit={(owner, extra) => submitOwner(ownerDialog, owner, extra)}
           onClose={() => setOwnerDialog(null)}
           onDone={() => {
             setOwnerDialog(null);
@@ -486,7 +486,8 @@ export function ReviewCentreClient() {
                     <div className="mt-2 flex flex-col items-start gap-2">
                       <p className="text-xs text-amber-800">
                         This statement prints a joint holding{maskedHolderName ? ` (${maskedHolderName})` : ''}. A single owner cannot be assumed, so say who owns it and what
-                        share each owner has — the shares must add up to exactly 100%. You will see a summary to confirm before anything is saved.
+                        share each owner has — the shares must add up to exactly 100%. If it is not actually a joint holding, you can say so in the dialog and assign a single
+                        owner. You will see a summary to confirm before anything is saved.
                       </p>
                       {isJointHoldingResolvable && (
                         <button
