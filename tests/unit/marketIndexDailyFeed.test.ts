@@ -25,8 +25,8 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const NOW = '2024-03-06T12:00:00.000Z';
 
 function httpDouble(responder: (url: string) => { status: number; bodyText: string }) {
-  const get = vi.fn(async (url: string, _headers: Record<string, string>) => responder(url));
-  const sleep = vi.fn(async (_ms: number) => undefined);
+  const get = vi.fn(async (url: string, headers: Record<string, string>) => (void headers, responder(url)));
+  const sleep = vi.fn(async (ms: number) => void ms);
   const http: FeedHttp = { get, sleep };
   return { http, get, sleep };
 }

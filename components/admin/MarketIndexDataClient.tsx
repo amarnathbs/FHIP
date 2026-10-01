@@ -75,7 +75,13 @@ export default function MarketIndexDataClient() {
     }
   }
   useEffect(() => {
-    void loadStatus();
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) await loadStatus();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function post(action: 'preview' | 'commit') {
