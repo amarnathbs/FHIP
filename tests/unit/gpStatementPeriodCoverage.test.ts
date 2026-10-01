@@ -27,12 +27,12 @@ describe('why the period matters (the documented coverage rule)', () => {
 });
 
 describe('the bank upload query', () => {
-  const base = { country: 'AU' as const, currency: 'AUD' as const, maskedIdentifier: '4401', ownerRole: 'self', filename: 'aug.csv' };
+  const base = { country: 'AU' as const, currency: 'AUD' as const, maskedIdentifier: '4401', owner: { kind: 'member' as const, memberId: 'a1111111-1111-4111-8111-111111111111' }, filename: 'aug.csv' };
 
   it('sends the statement period the user entered', () => {
     const q = bankUploadParams({ ...base, periodStart: '2026-08-01', periodEnd: '2026-08-31' });
     expect(Object.fromEntries(q)).toEqual({
-      country_code: 'AU', currency_code: 'AUD', masked_identifier: '4401', owner_role: 'self', filename: 'aug.csv',
+      country_code: 'AU', currency_code: 'AUD', masked_identifier: '4401', owner: JSON.stringify(base.owner), filename: 'aug.csv',
       statement_period_start: '2026-08-01', statement_period_end: '2026-08-31',
     });
   });

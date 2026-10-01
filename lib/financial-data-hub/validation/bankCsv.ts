@@ -36,10 +36,10 @@ export const bankCsvUploadMetadataSchema = z.object({
   declared_masked_identifier: z.string().max(40).nullish(),
   statement_period_start: z.string().date().nullish(),
   statement_period_end: z.string().date().nullish(),
-  /** WP-08 (EXP-G13 capture, D-10): the user's answer to "whose account is
-   * this?". Optional on the API for older clients; the import panel always
-   * asks. */
-  owner_role: z.enum(FDH_ACCOUNT_OWNER_ROLES).nullish(),
+  // Owner-before-upload (Phase 1): the owner is no longer a loose `owner_role`
+  // on this metadata. It travels as a structured selection (`owner` query
+  // parameter, lib/ownership/ownerSelection.ts), is REQUIRED, and is validated
+  // server-side by validateOwnerSelection before this schema's output is used.
 });
 export type BankCsvUploadMetadataInput = z.infer<typeof bankCsvUploadMetadataSchema>;
 

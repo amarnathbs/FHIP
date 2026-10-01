@@ -58,6 +58,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { bankUploadParams, statementPeriodError } from './bankUploadParams';
+import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import type { OwnerSelection } from '@/lib/ownership/ownerSelection';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -138,13 +140,13 @@ const FAILURE_MESSAGES: Record<string, string> = {
   extraction_timeout: 'Reading this file took too long, so we stopped. It may not be a normal statement PDF. Please try again, or download the statement from your bank again and upload that copy.',
 };
 
-/** WP-08 (PO D-10): whose account the statement is for. */
-const OWNER_OPTIONS: Array<{ value: 'self' | 'spouse' | 'joint' | 'smsf'; label: string }> = [
-  { value: 'self', label: 'Mine' },
-  { value: 'spouse', label: 'My partner\u2019s' },
-  { value: 'joint', label: 'Joint (ours)' },
-  { value: 'smsf', label: 'My SMSF\u2019s' },
-];
+/** Owner-before-upload (Phase 1): an existing account is recorded under a
+ * different owner than the one chosen. The server stopped BEFORE storing
+ * anything and the user must confirm, explicitly, before the account's owner
+ * changes. */
+interface OwnerConflict {
+  message: string;
+}
 
 interface UnreadLines {
   count: number;
@@ -182,8 +184,10 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   const [country, setCountry] = useState<'AU' | 'IN'>('AU');
   const [currency, setCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [maskedIdentifier, setMaskedIdentifier] = useState('');
-  // WP-08 (D-10): no default -- the user says whose account this is.
-  const [ownerRole, setOwnerRole] = useState<'' | 'self' | 'spouse' | 'joint' | 'smsf'>('');
+  // Owner-before-upload (Phase 1; WP-08 D-10 before it): no default -- the user
+  // says who the statement belongs to, with the shared OwnerSelector.
+  const [owner, setOwner] = useState<OwnerSelection | null>(null);
+  const [ownerConflict, setOwnerConflict] = useState<OwnerConflict | null>(null);
   // GP-D3: the statement period printed on the statement (a CSV does not carry it).
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -414,8 +418,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     setPhase('done');
   }
 
-  async function handleUpload() {
-    if (!file) return;
+  async function handleUpload(confirmOwnerChange = false) {
+    if (!file || !owner) return;
     const periodProblem = statementPeriodError(periodStart, periodEnd);
     if (periodProblem) {
       setMessage(periodProblem);
@@ -425,9 +429,10 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setPhase('uploading');
     setMessage(null);
+    setOwnerConflict(null);
     try {
       // GP-D3: the statement period is sent when the user gives it, so a full month counts as covered.
-      const params = bankUploadParams({ country, currency, maskedIdentifier, ownerRole, filename: file.name, periodStart, periodEnd });
+      const params = bankUploadParams({ country, currency, maskedIdentifier, owner, confirmOwnerChange, filename: file.name, periodStart, periodEnd });
 
       const uploadRes = await fetch(
         `/api/financial-data-hub/${csv ? 'bank-csv' : 'bank-pdf'}/upload?${params.toString()}`,
@@ -435,8 +440,16 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       );
       const { ok: uploadOk, json: uploadJson } = await readJson(uploadRes);
       if (!uploadOk) {
-        setMessage(uploadJson.error ?? 'Could not upload this statement.');
-        setPhase('error');
+        // Owner-before-upload: the server refuses BEFORE storing anything when the
+        // chosen owner would silently change an existing account's owner. Ask,
+        // do not guess -- the user confirms the change or goes back.
+        if (uploadRes.status === 409 && uploadJson.error === 'account_owner_conflict') {
+          setOwnerConflict({ message: uploadJson.message as string });
+          setPhase('form');
+          return;
+        }
+        setMessage(uploadJson.message ?? uploadJson.error ?? 'Could not upload this statement.');
+        setPhase(uploadRes.status === 409 ? 'form' : 'error');
         return;
       }
       const data = uploadJson.data ?? {};
@@ -568,21 +581,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
                 <option value="IN">India</option>
               </select>
             </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Whose account is this?</span>
-              <select
-                className="w-full rounded border border-gray-300 px-3 py-2"
-                value={ownerRole}
-                onChange={(e) => setOwnerRole(e.target.value as typeof ownerRole)}
-                aria-describedby="owner-role-help"
-              >
-                <option value="">Choose one</option>
-                {OWNER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              <span id="owner-role-help" className="mt-1 block text-xs text-muted">
-                Joint accounts count in full to your household. An SMSF&apos;s transactions are kept with the fund, not your household spending.
-              </span>
-            </label>
+            <OwnerSelector flow="bank" idPrefix="bank-owner" value={owner} onChange={(next) => { setOwner(next); setOwnerConflict(null); }} disabled={busy} />
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Account / card number (last few digits, optional)</span>
               <input
@@ -628,10 +627,23 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
             />
           </label>
           {message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">{message}</p>}
+          {ownerConflict && (
+            <div className="rounded border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900" role="alert" data-testid="owner-conflict">
+              <p>{ownerConflict.message}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className="rounded bg-trust px-3 py-1.5 text-white" onClick={() => handleUpload(true)}>
+                  Yes, change the account&apos;s owner and upload
+                </button>
+                <button type="button" className="rounded border border-amber-400 px-3 py-1.5" onClick={() => setOwnerConflict(null)}>
+                  No, go back
+                </button>
+              </div>
+            </div>
+          )}
           <button
             type="button"
-            onClick={handleUpload}
-            disabled={!file || !ownerRole || busy || uploadEnabled !== true}
+            onClick={() => handleUpload()}
+            disabled={!file || !owner || busy || uploadEnabled !== true}
             className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Upload statement

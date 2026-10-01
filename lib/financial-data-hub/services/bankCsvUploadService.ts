@@ -14,7 +14,15 @@
 
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { recordDocumentAuditEvent } from './auditLog';
-import { recordAccountOwner, type AccountOwnerWrite } from './accountOwner';
+import {
+  assertNoIdenticalUploadWithDifferentOwner,
+  assertNoSilentAccountOwnerChange,
+  recordBankOwner,
+  type BankOwnerWrite,
+  type BankUploadOptions,
+  type BankUploadOwner,
+  NO_OWNER_OUTCOME,
+} from './bankOwnerAttribution';
 import { financialAccountsRepository, institutionsRepository, reviewItemsRepository, statementUploadsRepository } from '../repositories';
 import { loadExistingAccountsForInstitutionCurrency } from '../bank-csv/repository';
 import { normaliseMaskedIdentifier, resolveAccountIdentity } from '../bank-csv/accountIdentity';
@@ -24,8 +32,10 @@ import type { FdhStatementUpload } from '../domain/types';
 export interface BankCsvUploadOutcome {
   document: FdhStatementUpload;
   accountResolution: 'reused' | 'created' | 'ambiguous';
-  /** WP-08 (D-10): whether the owner the user chose was stored. */
-  ownerRole: AccountOwnerWrite;
+  /** Owner-before-upload: how the owner the user chose was stored. `account`
+   * says what happened to the ACCOUNT's owner (never silently overwritten),
+   * `document` whether the owner was recorded on the document itself. */
+  owner: { account: BankOwnerWrite | 'no_account'; document: 'recorded' | 'unavailable' | 'failed' };
 }
 
 /**
@@ -41,7 +51,19 @@ export async function uploadBankCsv(
   userId: string,
   metadata: BankCsvUploadMetadataInput,
   bytes: Uint8Array,
+  /** Owner-before-upload. `null` ONLY for the AIE bank intake path, which is a
+   * later phase and keeps its previous owner-less behaviour. */
+  owner: BankUploadOwner | null = null,
+  options: BankUploadOptions = {},
 ): Promise<BankCsvUploadOutcome> {
+  // Owner-before-upload: refuse BEFORE anything is stored when the choice would
+  // contradict an earlier upload of the identical file (decision 6) or silently
+  // move an existing account to a different owner (decision 2).
+  if (owner) {
+    await assertNoIdenticalUploadWithDifferentOwner(userId, bytes, owner);
+    await assertNoSilentAccountOwnerChange(userId, metadata, owner, options);
+  }
+
   const { session } = await createUploadSession(userId, {
     source_type: 'csv',
     document_type: 'bank_statement',
@@ -114,8 +136,6 @@ export async function uploadBankCsv(
     }
   }
 
-  const ownerRole = financialAccountId ? await recordAccountOwner(userId, financialAccountId, metadata.owner_role) : 'not_provided';
-
   const { data: finalDoc } = await statementUploadsRepository.update(userId, completed.id, {
     financial_account_id: financialAccountId,
     statement_period_start: metadata.statement_period_start ?? null,
@@ -123,14 +143,20 @@ export async function uploadBankCsv(
     original_filename_sanitised: metadata.original_filename_sanitised ?? null,
   } as never);
 
+  // Its own update, tolerant of a database one migration behind: the account
+  // link above must never be lost to an owner column that does not exist yet.
+  const ownerOutcome = owner
+    ? await recordBankOwner({ userId, documentId: completed.id, accountId: financialAccountId, owner, options })
+    : NO_OWNER_OUTCOME;
+
   await recordDocumentAuditEvent({
     userId,
     documentId: completed.id,
     eventType: 'bank_csv_uploaded',
     actorType: 'user',
     actorId: userId,
-    metadata: { account_resolution: accountResolution },
+    metadata: { account_resolution: accountResolution, owner_role: owner?.ownerRole ?? null, account_owner: ownerOutcome.account },
   });
 
-  return { document: (finalDoc ?? completed) as FdhStatementUpload, accountResolution, ownerRole };
+  return { document: (finalDoc ?? completed) as FdhStatementUpload, accountResolution, owner: ownerOutcome };
 }

@@ -1,3 +1,5 @@
+import { CONFIRM_OWNER_CHANGE_QUERY_PARAM, ownerSelectionToQuery, type OwnerSelection } from '@/lib/ownership/ownerSelection';
+
 /**
  * The query the Expenses -> "Import bank statement" panel sends to
  * bank-CSV / bank-PDF upload routes (see the panel).
@@ -17,7 +19,11 @@ export interface BankUploadForm {
   country: 'AU' | 'IN';
   currency: 'AUD' | 'INR';
   maskedIdentifier?: string;
-  ownerRole?: string;
+  /** Owner-before-upload (Phase 1): who the statement belongs to, chosen with
+   * the shared OwnerSelector. Required by the server. */
+  owner?: OwnerSelection | null;
+  /** The user explicitly confirmed changing an existing account's owner. */
+  confirmOwnerChange?: boolean;
   filename?: string;
   periodStart?: string;
   periodEnd?: string;
@@ -39,7 +45,8 @@ export function statementPeriodError(periodStart?: string, periodEnd?: string): 
 export function bankUploadParams(form: BankUploadForm): URLSearchParams {
   const params = new URLSearchParams({ country_code: form.country, currency_code: form.currency });
   if (form.maskedIdentifier) params.set('masked_identifier', form.maskedIdentifier);
-  if (form.ownerRole) params.set('owner_role', form.ownerRole);
+  if (form.owner) ownerSelectionToQuery(params, form.owner);
+  if (form.confirmOwnerChange) params.set(CONFIRM_OWNER_CHANGE_QUERY_PARAM, '1');
   if (form.filename) params.set('filename', form.filename);
   if (form.periodStart && form.periodEnd && statementPeriodError(form.periodStart, form.periodEnd) === null) {
     params.set('statement_period_start', form.periodStart.trim());
