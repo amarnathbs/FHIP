@@ -90,7 +90,6 @@ import { downloadFromQuarantine } from '../storage';
 import { finalizeDocumentBinaryAfterRun } from '../services/purge';
 import { isAieCanonicalAcceptanceEnabled } from './featureFlags';
 import { resolveIntakeOwnerForAccept, type AieIntakeOwnerFlow, type IntakeOwnerOutcome } from '../intakeOwner';
-import { toBankUploadOwner } from '@/lib/financial-data-hub/services/bankOwnerAttribution';
 import type { ResolvedOwner } from '@/lib/ownership/validateOwnerSelection';
 import type { Owner as OwnerValue } from '@/lib/constants';
 
@@ -309,11 +308,11 @@ export async function acceptRun(params: AcceptRunParams, deps: AcceptRunDeps = c
   // mid-flight for an input that will never resolve.
   let fdhBankUploadMetadata: FdhBankCommitRequest['metadata'] | null = null;
   let fdhBankStorageKey: string | null = null;
-  let fdhBankOwner: ReturnType<typeof toBankUploadOwner> | null = null;
+  let fdhBankOwner: ResolvedOwner | null = null;
   if (isFdhBank) {
     const stored = await deps.resolveIntakeOwner(run.userId, run.intakeId, 'bank');
     if (!stored.ok) return { ok: false, reason: 'missing_required_input', message: stored.message };
-    fdhBankOwner = toBankUploadOwner(stored.owner);
+    fdhBankOwner = stored.owner;
     const [rawMetadata, intakeMetadata] = await Promise.all([deps.getFdhBankUploadMetadata(run.intakeId), deps.getIntakeUploadMetadata(run.intakeId)]);
     if (!looksLikeBankCsvUploadMetadata(rawMetadata)) return { ok: false, reason: 'missing_required_input', message: 'original FDH bank-statement upload metadata not found for this intake' };
     if (!intakeMetadata) return { ok: false, reason: 'missing_required_input', message: 'original upload storage location not found for this intake' };

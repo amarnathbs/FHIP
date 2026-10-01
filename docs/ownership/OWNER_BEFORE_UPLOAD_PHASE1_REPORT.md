@@ -1,5 +1,7 @@
 # Owner-before-upload — Phase 1 report
 
+> **UPDATE 2026-10-02.** This is the Phase 1 record and is kept as written, except where marked. The programme has since been completed: payslip, liability, retirement, AU investment, the generic upload sessions and the AIE intakes now take an owner too; the owner-edit branch is merged and there is ONE ownership model; the stale certification scripts were updated; migration `0236` now has **13** constraints (the AIE intake column and the FDH `owner_allocation` were added) and its PGlite verification is **55** checks. The authoritative current state, the matrix and the PO apply list are in `OWNER_BEFORE_UPLOAD_FINAL_REPORT.md` and `OWNER_BEFORE_UPLOAD_FINAL_MATRIX.md`. Sections 7 (scripts "not edited"), 10 (later phases) and 11 (open decisions) below are **superseded** by those documents.
+
 Branch `feat/owner-before-upload-phase1-20261001` (from `origin/main` `cce323f`). Not pushed, not merged.
 Scope this round: the shared foundation, the **India CAS upload**, and the **bank CSV/PDF upload**, plus a **separate item** (section 12): the bank "which account is this statement for?" flow, in its own commit. Payslip, liability, retirement, AU investment, AIE intake routes and PAN capture are untouched.
 
@@ -87,7 +89,7 @@ Scan (2026-10-01, before choosing and again before finishing — see section 3.1
 - Coordinator re-scan (2026-10-01, later): 0236 is mine; 0237/0238 are on the premium branch, 0232 on the India branch, 0239 is the highest in flight. No collision.
 - Chose 0236, leaving 0233-0235 headroom for the in-flight admin-premium-grant and India-MF-report work. (Gaps are normal here: 0215-0217 are absent.)
 
-Properties: additive only; idempotent (`add column if not exists`, constraints/trigger re-created by name only if absent; applying twice is proven); guarded (refuses to run if the four tables it extends are absent); RLS-safe (no policy touched; the policy inventory is proven identical before/after); **no existing CHECK is widened or dropped** (the trap in `migration_drop_recreate_constraint_trap`): all 11 constraints are new and named `…_0236`; a cross-tenant trigger (`owner_before_upload_assert_owner`, mirroring 0153's) refuses another user's member/entity id on both tables.
+Properties: additive only; idempotent (`add column if not exists`, constraints/trigger re-created by name only if absent; applying twice is proven); guarded (refuses to run if the four tables it extends are absent); RLS-safe (no policy touched; the policy inventory is proven identical before/after); **no existing CHECK is widened or dropped** (the trap in `migration_drop_recreate_constraint_trap`): all 13 constraints (11 at Phase 1; +1 on `fdh_statement_uploads.owner_allocation`, +1 on `aie_document_intake.owner_selection`) are new and named `…_0236`; a cross-tenant trigger (`owner_before_upload_assert_owner`, mirroring 0153's) refuses another user's member/entity id on both tables.
 
 ## 4. Backfill (reviewable, NOT applied)
 

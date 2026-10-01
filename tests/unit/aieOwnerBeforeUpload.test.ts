@@ -181,7 +181,7 @@ describe('acceptRun -- FDH bank', () => {
     const { d, writes } = deps(BANK, { resolveIntakeOwner: async () => ({ ok: true, owner: memberOwner(SPOUSE, 'spouse') }) });
     expect(await acceptRun(params, d)).toMatchObject({ ok: true });
     expect(writes).toHaveLength(1);
-    expect((writes[0] as { owner: unknown }).owner).toEqual({ ownerRole: 'spouse', ownerMemberId: SPOUSE, label: 'x' });
+    expect((writes[0] as { owner: unknown }).owner).toEqual(memberOwner(SPOUSE, 'spouse'));
   });
 
   it('NEGATIVE: an intake with no (or an invalid) stored owner is refused BEFORE any state transition or write', async () => {
@@ -285,10 +285,10 @@ describe('FDH bank atomic import carries the owner into the upload service', () 
       return { accountResolution: 'create', document: { id: 'doc-1' } };
     });
     const { commitFdhBankStatementImport } = await load(upload);
-    const owner = { ownerRole: 'spouse', ownerMemberId: SPOUSE, label: 'Priya' };
+    const owner = memberOwner(SPOUSE, 'spouse');
     expect(await commitFdhBankStatementImport(req(owner))).toMatchObject({ committed: true });
     expect(upload).toHaveBeenCalledTimes(1);
-    expect(upload.mock.calls[0][3]).toEqual(owner);
+    expect(upload.mock.calls[0][3]).toEqual({ ownerRole: 'spouse', ownerMemberId: SPOUSE, label: 'x' });
   });
 
   it('an existing account owned by someone else is NOT silently re-owned: the commit stops as owner_conflict and nothing is processed', async () => {
@@ -297,7 +297,7 @@ describe('FDH bank atomic import carries the owner into the upload service', () 
       throw new (ref.m as NonNullable<typeof ref.m>).BankOwnerConflictError('self', 'spouse', 'acc-1');
     };
     const load2 = (ref.m = await load(upload));
-    const out = await load2.commitFdhBankStatementImport(req({ ownerRole: 'spouse', ownerMemberId: SPOUSE, label: 'Priya' }));
+    const out = await load2.commitFdhBankStatementImport(req(memberOwner(SPOUSE, 'spouse')));
     expect(out).toMatchObject({ committed: false, reason: 'owner_conflict', detail: 'account_owner_conflict' });
     expect(load2.processed).toHaveLength(0);
   });
@@ -308,7 +308,7 @@ describe('FDH bank atomic import carries the owner into the upload service', () 
       throw new (ref.m as NonNullable<typeof ref.m>).BankIdenticalUploadOwnerConflictError('doc-0', 'self', 'spouse');
     };
     const load2 = (ref.m = await load(upload));
-    const out = await load2.commitFdhBankStatementImport(req({ ownerRole: 'spouse', ownerMemberId: SPOUSE, label: 'Priya' }));
+    const out = await load2.commitFdhBankStatementImport(req(memberOwner(SPOUSE, 'spouse')));
     expect(out).toMatchObject({ committed: false, reason: 'owner_conflict' });
     expect(load2.processed).toHaveLength(0);
   });
@@ -317,7 +317,7 @@ describe('FDH bank atomic import carries the owner into the upload service', () 
     const { commitFdhBankStatementImport } = await load(async () => {
       throw new Error('storage down');
     });
-    await expect(commitFdhBankStatementImport(req({ ownerRole: 'self', ownerMemberId: SELF, label: 'Anil' }))).rejects.toThrow('storage down');
+    await expect(commitFdhBankStatementImport(req(memberOwner(SELF)))).rejects.toThrow('storage down');
   });
 });
 

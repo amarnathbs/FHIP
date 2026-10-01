@@ -30,7 +30,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { uploadBankPdf } from '@/lib/financial-data-hub/services/bankPdfUploadService';
 import { processBankPdfDocument, BankPdfProcessingError } from '@/lib/financial-data-hub/services/bankPdfProcessingService';
 import type { BankCsvUploadMetadataInput } from '@/lib/financial-data-hub/validation/bankCsv';
-import { BankIdenticalUploadOwnerConflictError, BankOwnerConflictError, type BankUploadOwner } from '@/lib/financial-data-hub/services/bankOwnerAttribution';
+import { BankIdenticalUploadOwnerConflictError, BankOwnerConflictError, toBankUploadOwner } from '@/lib/financial-data-hub/services/bankOwnerAttribution';
+import type { ResolvedOwner } from '@/lib/ownership/validateOwnerSelection';
 import { isAieFdhBankAtomicImportEnabled } from './featureFlags';
 
 export interface FdhBankCommitRequest {
@@ -43,7 +44,7 @@ export interface FdhBankCommitRequest {
    * Owner-before-upload: REQUIRED. The owner the user chose before sending the file, validated at intake and
    * re-validated at accept time (lib/aie/intakeOwner.ts). There is no owner-less AIE bank commit.
    */
-  owner: BankUploadOwner;
+  owner: ResolvedOwner;
 }
 
 export type FdhBankCommitOutcome =
@@ -100,7 +101,7 @@ export async function commitFdhBankStatementImport(req: FdhBankCommitRequest): P
   try {
     // No `confirmOwnerChange`: an AIE accept can never silently re-own an existing account, nor store the
     // same bytes under a different owner. The user resolves that on the interactive upload.
-    uploadOutcome = await uploadBankPdf(req.userId, req.metadata, req.bytes, req.owner, {});
+    uploadOutcome = await uploadBankPdf(req.userId, req.metadata, req.bytes, toBankUploadOwner(req.owner), {});
   } catch (e) {
     if (e instanceof BankOwnerConflictError || e instanceof BankIdenticalUploadOwnerConflictError) {
       await recordWriteBatch({ runId: req.runId, intakeId: req.intakeId, userId: req.userId, idempotencyKey, status: 'failed' });
