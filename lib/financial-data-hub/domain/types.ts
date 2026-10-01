@@ -368,6 +368,15 @@ export interface FdhStatementUpload extends FdhOwnership {
    * DETECTION" note for why this replaced a hard uniqueness constraint. */
   duplicate_of_document_id: string | null;
 
+  // --- Owner-before-upload, Phase 1 (migration 0236) -------------------------
+  // Optional: a database that predates 0236 has none of these. They are the
+  // owner of THIS DOCUMENT as the user chose it before uploading, and are NOT
+  // purgeable (see PURGE_RETAINED_STATEMENT_UPLOAD_COLUMNS in domain/privacy.ts).
+  owner_member_id?: string | null;
+  owner_business_entity_id?: string | null;
+  owner_role?: string | null;
+  owner_selection_source?: string | null;
+
   // --- R7 (migration 0064) ---------------------------------------------
   delimiter_detected: string | null;
   encoding_detected: string | null;
