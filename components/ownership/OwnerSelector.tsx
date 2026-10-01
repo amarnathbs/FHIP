@@ -67,21 +67,28 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/ownership/options?flow=${flow}`);
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not load the list of owners.');
-      setOptions(json.data as OwnerOptionsPayload);
-      setLoadError(null);
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Could not load the list of owners.');
-    }
-  }, [flow]);
+  // Bumped to re-fetch the options (after a household member is added).
+  const [reloadToken, setReloadToken] = useState(0);
 
+  // State is only set from the fetch's callbacks, never synchronously in the effect body.
   useEffect(() => {
-    if (!preview) void load();
-  }, [load, preview]);
+    if (preview) return undefined;
+    let cancelled = false;
+    fetch(`/api/ownership/options?flow=${flow}`)
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not load the list of owners.');
+        if (cancelled) return;
+        setOptions(json.data as OwnerOptionsPayload);
+        setLoadError(null);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not load the list of owners.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [flow, preview, reloadToken]);
 
   // The joint candidates: every member and entity this flow offers.
   const candidates = useMemo(() => {
@@ -92,10 +99,12 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
     ];
   }, [options]);
 
-  // Keep the row set aligned with the candidates (keeping what the user typed).
-  useEffect(() => {
-    setRows((prev) => candidates.map((c) => prev.find((r) => r.key === c.key) ?? { key: c.key, checked: false, percentText: '' }));
-  }, [candidates]);
+  // One row per candidate, keeping whatever the user has typed for it. Derived at
+  // render (not synchronised in an effect) so the rows can never lag the options.
+  const allRows = useMemo<JointDraftRow[]>(
+    () => candidates.map((c) => rows.find((r) => r.key === c.key) ?? { key: c.key, checked: false, percentText: '' }),
+    [candidates, rows],
+  );
 
   const emitJoint = useCallback(
     (next: JointDraftRow[]) => {
@@ -113,21 +122,21 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
     if (next === 'smsf') return onChange({ kind: 'smsf' });
     if (next === 'joint') {
       if (options && !options.joint.requiresPercentages) return onChange({ kind: 'joint' });
-      emitJoint(rows);
+      emitJoint(allRows);
       return;
     }
     onChange(null);
   }
 
   function toggleRow(key: string, checked: boolean) {
-    const toggled = rows.map((r) => (r.key === key ? { ...r, checked } : r));
+    const toggled = allRows.map((r) => (r.key === key ? { ...r, checked } : r));
     const next = withEqualSplit(toggled);
     setRows(next);
     emitJoint(next);
   }
 
   function editPercent(key: string, percentText: string) {
-    const next = rows.map((r) => (r.key === key ? { ...r, percentText } : r));
+    const next = allRows.map((r) => (r.key === key ? { ...r, percentText } : r));
     setRows(next);
     emitJoint(next);
   }
@@ -146,7 +155,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
       if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not add this person.');
       setNewName('');
       setAddOpen(false);
-      await load();
+      setReloadToken((n) => n + 1);
       // Select the person just added, if this flow can carry them.
       const id = json.data?.id as string | undefined;
       if (id) {
@@ -163,7 +172,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
   // A bank statement can only be owned by a spouse/partner besides you, so
   // offering "child" there would add a person who then cannot be chosen.
   const relationships = flow === 'bank' ? RELATIONSHIPS.filter((r) => r.value === 'spouse' || r.value === 'partner') : RELATIONSHIPS;
-  const jointDraft = useMemo(() => evaluateJointDraft(rows), [rows]);
+  const jointDraft = useMemo(() => evaluateJointDraft(allRows), [allRows]);
   const showPercentages = choice === 'joint' && options?.joint.requiresPercentages === true;
   const selectId = `${idPrefix}-select`;
   const helpId = `${idPrefix}-help`;
@@ -187,7 +196,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
           <optgroup label="People">
             {options.members.map((m) => (
               <option key={m.id} value={`member:${m.id}`}>
-                {m.detail === 'You' ? `${m.label} (you)` : `${m.label} (${m.detail.toLowerCase()})`}
+                {m.detail === 'You' ? `${m.label} (you)` : `${m.label} (${m.detail})`}
               </option>
             ))}
           </optgroup>
@@ -196,7 +205,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
           <optgroup label="Trusts, HUFs and companies">
             {options.entities.map((e) => (
               <option key={e.id} value={`entity:${e.id}`}>
-                {e.label} ({e.detail.toLowerCase()})
+                {e.label} ({e.detail})
               </option>
             ))}
           </optgroup>
@@ -223,7 +232,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
           <legend className="px-1 text-xs font-medium text-gray-600">Who owns it, and how much each?</legend>
           <ul className="space-y-2">
             {candidates.map((c) => {
-              const row = rows.find((r) => r.key === c.key);
+              const row = allRows.find((r) => r.key === c.key);
               return (
                 <li key={c.key} className="flex flex-wrap items-center gap-3">
                   <label className="flex min-w-[10rem] items-center gap-2">
@@ -234,7 +243,7 @@ export function OwnerSelector({ flow, value, onChange, disabled = false, idPrefi
                       onChange={(e) => toggleRow(c.key, e.target.checked)}
                     />
                     <span>
-                      {c.label} <span className="text-xs text-muted">({c.detail.toLowerCase()})</span>
+                      {c.label} <span className="text-xs text-muted">({c.detail})</span>
                     </span>
                   </label>
                   {row?.checked && (

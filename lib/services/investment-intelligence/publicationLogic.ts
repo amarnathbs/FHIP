@@ -175,9 +175,6 @@ export function resolveAnnualContribution(confirmedAnnualPlan: number | null | u
 // ---------------------------------------------------------------------------
 export interface EligibilityInput {
   ownerMemberId: string | null; // resolved household_members.id, or null if unresolved
-  /** Owner-before-upload: no single member owner, but the account IS owned (a
-   * trust / HUF / company, or jointly). Changes only the wording of the block. */
-  ownerHeldByEntityOrJoint?: boolean;
   instrumentClass: IiInstrumentClass;
   accountType: IiAccountType;
   portfolioTruthStatus: string; // ii_portfolio_truth_status.status
@@ -193,11 +190,7 @@ export function evaluateEligibility(input: EligibilityInput): IiEligibilityResul
   const blocking: IiEligibilityReason[] = [];
   const warning: IiEligibilityReason[] = [];
 
-  if (!input.ownerMemberId && input.ownerHeldByEntityOrJoint) {
-    // PO ruling 2026-09-21 (entity data separation): entity-owned and jointly
-    // owned holdings are not published into the personal investment totals.
-    blocking.push({ code: 'OWNER_NOT_SINGLE_MEMBER', message: 'This holding is owned jointly or by a trust, HUF or company, so it is kept separate from your personal investment totals and cannot be published there yet.' });
-  } else if (!input.ownerMemberId) {
+  if (!input.ownerMemberId) {
     blocking.push({ code: 'OWNER_UNRESOLVED', message: 'The statement holder could not be safely mapped to an existing household member.' });
   }
   if (!isProductionCertifiedAssetClass(input.instrumentClass)) {

@@ -50,7 +50,7 @@ import type { ParsedAccountRecord, ParsedInstrumentRecord } from './parsers/type
 import { matchStatementOwner, type Pc5HouseholdMemberForMatching } from '@/lib/aie/adapters/investment-intelligence/ownerMatching';
 import { loadHouseholdMembersForMatching } from '@/lib/aie/adapters/investment-intelligence/householdContext';
 import { resolveOrCreateAccount, planFolioAccountResolution } from './accountResolution';
-import { applyDocumentOwnerToAccounts, computeHolderNameWarnings, readDocumentOwner, saveOwnerReview, type ApplyAccount } from './documentOwner';
+import { applyDocumentOwnerToAccounts, computeHolderNameWarnings, readDocumentOwner, saveOwnerReview, withoutAcknowledgedWarnings, type ApplyAccount, type OwnerReview } from './documentOwner';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { computeTransactionFingerprint } from './fingerprint';
 import { reconcilePosition, determineHistoryCompleteness, evaluateDerivedZeroUnitClosure, type ReconciliationTransactionInput } from './reconciliation';
@@ -620,6 +620,10 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
         })
       );
     }
+    // A folio the user already confirmed is sole-owned ("this is not joint") is not warned about again.
+    const acknowledged = ((doc as Record<string, unknown>).owner_review as OwnerReview | null)?.acknowledgedSoleOwner;
+    ownerReview.warnings = withoutAcknowledgedWarnings(ownerReview.warnings, acknowledged);
+    if (acknowledged?.length) ownerReview.acknowledgedSoleOwner = acknowledged;
     await saveOwnerReview(userId, sourceDocumentId, ownerReview);
   } else if (ownerUnresolved) {
     // 2026-09-29 fix: a statement can print a JOINT holding even when the

@@ -26,7 +26,7 @@ export interface OwnerMemberOption {
 export interface OwnerEntityOption {
   id: string;
   label: string;
-  /** "Family trust", "Hindu Undivided Family (HUF)", "Company". */
+  /** "Family trust", "HUF", "Company". */
   detail: string;
   entityType: 'company' | 'family_trust' | 'huf';
 }
@@ -43,7 +43,7 @@ export interface OwnerOptionsPayload {
 const ENTITY_DETAIL: Record<string, string> = {
   company: 'Company',
   family_trust: 'Family trust',
-  huf: 'Hindu Undivided Family (HUF)',
+  huf: 'HUF',
 };
 
 function relationshipDetail(relationship: string): string {

@@ -17,11 +17,12 @@ import {
   applyDocumentOwnerToAccounts,
   computeHolderNameWarnings,
   confirmOwnerChange,
+  confirmSoleOwner,
+  withoutAcknowledgedWarnings,
   ownerSignature,
   planAccountOwner,
   readDocumentOwner,
 } from '@/lib/services/investment-intelligence/documentOwner';
-import { evaluateEligibility } from '@/lib/services/investment-intelligence/publicationLogic';
 import { ownerColumnsFor } from '@/lib/services/investment-intelligence/uploadOwner';
 import type { ParsedAccountRecord } from '@/lib/services/investment-intelligence/parsers/types';
 
@@ -403,27 +404,44 @@ describe('holder-name mismatch is a NON-BLOCKING warning for new uploads; legacy
   });
 });
 
-describe('an entity-owned or joint position is not published into personal totals (decision 7)', () => {
-  const base = {
-    instrumentClass: 'mutual_fund' as const,
-    accountType: 'mf_folio' as const,
-    portfolioTruthStatus: 'certified',
-    hasBlockingReconciliation: false,
-    currentValue: 1000,
-    countryCode: 'IN',
-    currencyCode: 'INR',
-  };
-  it('no single member + held by an entity/joint -> blocked with an honest reason; a member owner -> not blocked on owner', () => {
-    const entity = evaluateEligibility({ ...base, ownerMemberId: null, ownerHeldByEntityOrJoint: true });
-    expect(entity.status).toBe('NOT_ELIGIBLE');
-    expect(entity.blockingReasons.map((r) => r.code)).toContain('OWNER_NOT_SINGLE_MEMBER');
-    expect(entity.blockingReasons.map((r) => r.code)).not.toContain('OWNER_UNRESOLVED');
-    // CONTROL 1: an owner-less position still says unresolved.
-    expect(evaluateEligibility({ ...base, ownerMemberId: null }).blockingReasons.map((r) => r.code)).toContain('OWNER_UNRESOLVED');
-    // CONTROL 2: a member-owned position has no owner block at all.
-    const member = evaluateEligibility({ ...base, ownerMemberId: SELF });
-    expect(member.blockingReasons.map((r) => r.code)).not.toContain('OWNER_UNRESOLVED');
-    expect(member.blockingReasons.map((r) => r.code)).not.toContain('OWNER_NOT_SINGLE_MEMBER');
+describe('"this is not joint": a statement that prints a joint holding but is solely owned', () => {
+  const warn = (accountId: string) => ({ accountId, kind: 'statement_prints_joint_holding' as const, maskedHolderName: null, message: 'prints a joint holding' });
+  function seedDoc(review: unknown, over: Record<string, unknown> = {}) {
+    h.db.insert('ii_source_documents', { id: DOC, user_id: A, status: 'parsed', owner_member_id: SELF, owner_role: 'self', owner_selection_source: 'user_selected', owner_review: review, ...over });
+  }
+  it('dismisses ONLY the listed folios joint warning, remembers it, and does not touch any account owner', async () => {
+    seedAccounts();
+    seedDoc({ conflicts: [], appliedAccountIds: [], warnings: [warn(ACC_NEW), warn(ACC_EMPTY), { accountId: ACC_NEW, kind: 'holder_name_mismatch', maskedHolderName: null, message: 'x' }] });
+    const r = await confirmSoleOwner(A, DOC, [ACC_NEW]);
+    expect(r).toMatchObject({ ok: true, acknowledged: [ACC_NEW], remainingWarnings: 2 });
+    const review = h.db.rows('ii_source_documents')[0].owner_review as any;
+    expect(review.acknowledgedSoleOwner).toEqual([ACC_NEW]);
+    expect(review.warnings.map((w: any) => `${w.accountId}:${w.kind}`)).toEqual([`${ACC_EMPTY}:statement_prints_joint_holding`, `${ACC_NEW}:holder_name_mismatch`]);
+    expect(acc(ACC_NEW).owner_member_id).toBeNull(); // untouched: confirming is not an owner change
+    expect(h.db.rows('ii_audit_events').some((e) => (e.metadata as any)?.outcome === 'confirmed_sole_owner')).toBe(true);
+  });
+  it('NEGATIVE: another user, a folio without that warning, or a joint/entity-owned document is refused', async () => {
+    seedAccounts();
+    seedDoc({ conflicts: [], appliedAccountIds: [], warnings: [warn(ACC_NEW)] });
+    expect(await confirmSoleOwner(B, DOC, [ACC_NEW])).toMatchObject({ ok: false, status: 404 });
+    expect(await confirmSoleOwner(A, DOC, [ACC_EMPTY])).toMatchObject({ ok: false, status: 422 });
+    h.db.tables.ii_source_documents = [];
+    seedDoc({ conflicts: [], appliedAccountIds: [], warnings: [warn(ACC_NEW)] }, { owner_member_id: null, owner_role: 'joint', owner_allocation: [{ ownerMemberId: SELF, basisPoints: 5000 }, { ownerMemberId: SPOUSE, basisPoints: 5000 }] });
+    expect(await confirmSoleOwner(A, DOC, [ACC_NEW])).toMatchObject({ ok: false, status: 409 });
+    expect((h.db.rows('ii_source_documents')[0].owner_review as any).warnings).toHaveLength(1);
+  });
+  it('a reprocess does not warn again about a folio the user already confirmed (and still warns about others)', () => {
+    const warnings = [warn(ACC_NEW), warn(ACC_EMPTY)];
+    expect(withoutAcknowledgedWarnings(warnings, [ACC_NEW]).map((w) => w.accountId)).toEqual([ACC_EMPTY]);
+    expect(withoutAcknowledgedWarnings(warnings, undefined)).toHaveLength(2); // CONTROL
+    const src = fs.readFileSync(path.resolve(__dirname, '../../lib/services/investment-intelligence/documentProcessing.ts'), 'utf8');
+    expect(src).toMatch(/withoutAcknowledgedWarnings\(ownerReview\.warnings, acknowledged\)/);
+  });
+  it('the statement detail offers the confirmation only on a joint-holding warning', () => {
+    const client = fs.readFileSync(path.resolve(__dirname, '../../components/investment-intelligence/InvestmentIntelligenceClient.tsx'), 'utf8');
+    expect(client).toMatch(/w\.kind === 'statement_prints_joint_holding' && \(/);
+    expect(client).toMatch(/confirm-sole-owner/);
+    expect(client).toMatch(/This is not joint/);
   });
 });
 

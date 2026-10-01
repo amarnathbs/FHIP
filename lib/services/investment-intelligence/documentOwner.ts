@@ -74,6 +74,9 @@ export interface OwnerWarning {
 export interface OwnerReview {
   conflicts: OwnerConflict[];
   warnings: OwnerWarning[];
+  /** Folios the user confirmed are SOLELY owned although the statement prints a joint
+   * holding ("this is not joint"). Kept so a reprocess does not warn again. */
+  acknowledgedSoleOwner?: string[];
   /** Folios whose owner was filled in or set from this statement. */
   appliedAccountIds: string[];
 }
@@ -370,4 +373,47 @@ export function computeHolderNameWarnings(input: {
     }
   }
   return warnings;
+}
+
+/** Drops a printed-joint-holding warning for folios the user already confirmed are sole-owned. */
+export function withoutAcknowledgedWarnings(warnings: readonly OwnerWarning[], acknowledged: readonly string[] | undefined): OwnerWarning[] {
+  const ack = new Set(acknowledged ?? []);
+  return warnings.filter((w) => !(w.kind === 'statement_prints_joint_holding' && ack.has(w.accountId)));
+}
+
+/**
+ * The user's EXPLICIT confirmation that a folio the statement prints as joint is
+ * really solely owned by the owner they chose ("this is not joint"). It only
+ * dismisses the advisory warning for folios that carry it on THIS document -- the
+ * account's owner is not touched (it was filed under the chosen owner already).
+ */
+export async function confirmSoleOwner(
+  userId: string,
+  documentId: string,
+  accountIds: readonly string[],
+): Promise<{ ok: true; acknowledged: string[]; remainingWarnings: number } | { ok: false; status: 404 | 409 | 422; message: string }> {
+  const admin = createAdminClient();
+  const { data: doc } = await admin.from('ii_source_documents').select('*').eq('id', documentId).eq('user_id', userId).maybeSingle();
+  if (!doc) return { ok: false, status: 404, message: 'Document not found.' };
+  const owner = readDocumentOwner(doc as Record<string, unknown>);
+  if (!owner || owner.kind !== 'member') return { ok: false, status: 409, message: 'This document was not filed under a single owner, so there is no joint holding to dismiss.' };
+  const review = ((doc as Record<string, unknown>).owner_review as OwnerReview | null) ?? null;
+  const wanted = new Set(accountIds);
+  const targets = (review?.warnings ?? []).filter((w) => w.kind === 'statement_prints_joint_holding' && wanted.has(w.accountId));
+  if (targets.length === 0) return { ok: false, status: 422, message: 'None of those folios are waiting for a joint-holding confirmation on this document.' };
+  const acknowledged = [...new Set([...(review?.acknowledgedSoleOwner ?? []), ...targets.map((t) => t.accountId)])];
+  const warnings = (review?.warnings ?? []).filter((w) => !(w.kind === 'statement_prints_joint_holding' && wanted.has(w.accountId)));
+  await saveOwnerReview(userId, documentId, { ...(review ?? { conflicts: [], appliedAccountIds: [] }), conflicts: review?.conflicts ?? [], warnings, appliedAccountIds: review?.appliedAccountIds ?? [], acknowledgedSoleOwner: acknowledged });
+  for (const t of targets) {
+    await emitAuditEvent({
+      userId,
+      eventType: 'user_correction',
+      subjectType: 'ii_accounts',
+      subjectId: t.accountId,
+      actorType: 'user',
+      actorId: userId,
+      metadata: { field: 'joint_holding_warning', outcome: 'confirmed_sole_owner', sourceDocumentId: documentId },
+    });
+  }
+  return { ok: true, acknowledged: targets.map((t) => t.accountId), remainingWarnings: warnings.length };
 }

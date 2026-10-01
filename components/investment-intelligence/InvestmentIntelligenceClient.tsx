@@ -477,6 +477,27 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
     }
   }
 
+  // "This is not joint": the statement prints a joint holding but the user chose a
+  // single owner; confirming dismisses the advisory warning (no owner changes).
+  async function handleConfirmSoleOwner(documentId: string, accountId: string) {
+    setConfirmingOwner(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/investment-intelligence/source-documents/${documentId}/confirm-sole-owner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountIds: [accountId] }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not save your confirmation.');
+      await loadSummary(documentId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setConfirmingOwner(false);
+    }
+  }
+
   async function handleProcess(id: string, forceReparse = false) {
     setProcessing(id);
     setError(null);
@@ -905,10 +926,22 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               {summary.owner?.review && (summary.owner.review.warnings.length > 0 || summary.owner.review.conflicts.length > 0) && (
                 <div className="space-y-2" data-testid="owner-review">
                   {summary.owner.review.warnings.map((w, i) => (
-                    <p key={`${w.accountId}-${i}`} role="status" className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      {w.message}
-                      {w.maskedHolderName ? ` (printed name: ${w.maskedHolderName})` : ''}
-                    </p>
+                    <div key={`${w.accountId}-${i}`} role="status" className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <p>
+                        {w.message}
+                        {w.maskedHolderName ? ` (printed name: ${w.maskedHolderName})` : ''}
+                      </p>
+                      {w.kind === 'statement_prints_joint_holding' && (
+                        <button
+                          type="button"
+                          disabled={confirmingOwner}
+                          onClick={() => handleConfirmSoleOwner(summary.document.id, w.accountId)}
+                          className="mt-1 rounded border border-amber-400 bg-white px-2 py-1 text-xs font-medium text-amber-900 disabled:opacity-50"
+                        >
+                          This is not joint — it is solely owned by {summary.owner?.label ?? 'the owner I chose'}
+                        </button>
+                      )}
+                    </div>
                   ))}
                   {summary.owner.review.conflicts.length > 0 && (
                     <div role="alert" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -929,7 +962,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                         onClick={() => handleConfirmOwnerChange(summary.document.id, summary.owner!.review!.conflicts.map((c) => c.accountId))}
                         className="mt-2 rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
                       >
-                        {confirmingOwner ? 'Changing�' : `Change these folios to ${summary.owner.label ?? 'the owner I chose'}`}
+                        {confirmingOwner ? 'Changing…' : `Change these folios to ${summary.owner.label ?? 'the owner I chose'}`}
                       </button>
                     </div>
                   )}
