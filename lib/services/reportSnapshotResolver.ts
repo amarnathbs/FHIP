@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { loadDashboard, getFxRateAudInr, fetchAllRows, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { loadHealthScore, type HealthScorePayload } from '@/lib/services/healthScoreData';
 import { loadResilience, type ResiliencePayload } from '@/lib/services/resilienceData';
+import { ensurePublishedValuesCurrent } from '@/lib/services/investment-intelligence/publishedValueRemark';
 import { loadFinancialDna, type FinancialDnaPayload } from '@/lib/services/financialDnaData';
 import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 import type { DashboardSummary } from '@/lib/engines/dashboard';
@@ -270,6 +271,11 @@ export async function resolveReportSourceData(
 ): Promise<ReportSourceData> {
   const supabase = client ?? (await createClient());
   const month = reportMonth ?? monthStart();
+
+  // 2026-10-01 (PO): published mutual funds are valued at the latest eligible
+  // NAV. Done BEFORE the parallel reads below so the premium register query and
+  // the canonical snapshot cannot disagree. Fail-soft and idempotent.
+  await ensurePublishedValuesCurrent(userId, supabase, 'report_read');
 
   const [profileRes, householdRes] = await Promise.all([
     supabase.from('user_profiles').select('full_name, country_of_residence, preferred_currency').eq('user_id', userId).single(),

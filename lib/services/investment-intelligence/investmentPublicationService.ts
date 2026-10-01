@@ -26,6 +26,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
+import { ensurePublishedValuesCurrent } from './publishedValueRemark';
 import { getFxRateAudInr } from '@/lib/services/dashboardData';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { fetchAllRows } from './pagination';
@@ -650,6 +651,13 @@ export async function publishPosition(userId: string, positionId: string, option
   // checks rely on.
   await supabase.from('investments').update({ ii_publication_id: pub.id }).eq('id', publishedRowId).eq('user_id', userId);
 
+  // 2026-10-01 (PO): Net Worth follows the latest eligible NAV. The publication
+  // row above keeps the certified statement value as immutable evidence; this
+  // brings the ONE register row it owns to units x latest eligible NAV (or leaves
+  // the statement value, labelled, when no newer NAV exists). Updates in place,
+  // never inserts, so "exactly once" is untouched. Fail-soft.
+  await ensurePublishedValuesCurrent(userId, supabase, 'publish', [publishedRowId]);
+
   await emitAuditEvent({
     userId,
     eventType: 'publication_confirmed',
@@ -803,6 +811,9 @@ export async function republishPosition(userId: string, publicationId: string): 
   const { error: updErr } = await supabase.from('ii_fhip_publications').update({ status: 'published', last_republished_at: new Date().toISOString() }).eq('id', publicationId).eq('user_id', userId);
   if (updErr) return { error: updErr.message, publicationId: null };
 
+  // 2026-10-01 (PO): re-apply the latest-eligible-NAV valuation to the re-activated row (never an insert).
+  await ensurePublishedValuesCurrent(userId, supabase, 'republish', [pub.published_row_id as string]);
+
   await emitAuditEvent({ userId, eventType: 'publication_republished', subjectType: 'ii_fhip_publications', subjectId: publicationId, actorType: 'user', metadata: { publishedRowId: pub.published_row_id } });
   return { error: null, publicationId };
 }
@@ -931,6 +942,9 @@ export async function refreshPosition(userId: string, newPositionId: string): Pr
     await emitAuditEvent({ userId, eventType: 'publication_failed', subjectType: 'investments', subjectId: active.published_row_id as string, actorType: 'system', metadata: { reason: `investments row update failed after publication row was already created: ${investUpdateErr.message}`, publicationId: newPub.id } });
     return { error: `Refresh partially completed — the publication record was created (id=${newPub.id}) but the investments row could not be updated: ${investUpdateErr.message}. Manual reconciliation required.`, publicationId: newPub.id as string, decision: decision.action };
   }
+
+  // 2026-10-01 (PO): the new certified position (its own units) is re-valued at the latest eligible NAV newer than it.
+  await ensurePublishedValuesCurrent(userId, supabase, 'refresh', [active.published_row_id as string]);
 
   await emitAuditEvent({ userId, eventType: 'publication_refreshed', subjectType: 'ii_fhip_publications', subjectId: newPub.id as string, actorType: 'user', metadata: { previousPublicationId: active.id, decision: decision.action } });
   await emitAuditEvent({ userId, eventType: 'publication_superseded', subjectType: 'ii_fhip_publications', subjectId: active.id as string, actorType: 'system', metadata: { supersededBy: newPub.id } });
