@@ -11,6 +11,12 @@
  *    added to the published total (no double count once it is published, and
  *    no silent inclusion before the user confirms -- D-05).
  *
+ * ENTITY SEPARATION (PO ruling 2026-09-21, wired 2026-10-01): an account whose
+ * active ownership allocation includes a business-entity share (Family Trust /
+ * HUF / Company) is NOT personal Net Worth and is never offered to it, so its
+ * snapshots are excluded from the "Imported, not yet in Net Worth" bucket too
+ * (only counted in `entityHeldExcludedCount`, never added to any total).
+ *
  * A position is "published" when an active investments row carries its
  * (ii_canonical_account_id, ii_canonical_instrument_id), or an
  * ii_fhip_publications row with status 'published' names one of its
@@ -81,6 +87,8 @@ export interface UnpublishedHolding {
 export const UNPUBLISHED_BUCKET_LABEL = 'Imported, not yet in Net Worth';
 
 export interface InvestmentsReadModelData {
+  /** Positions left out of the personal "not yet in Net Worth" bucket because an entity owns (a share of) their account. Never added to a total. */
+  entityHeldExcludedCount: number;
   reportingCurrency: ReportingCurrency;
   lines: InvestmentLine[];
   /** All owners -- the Net Worth figure. */
@@ -99,6 +107,8 @@ export function computeInvestments(input: {
   investments: readonly InvestmentRow[];
   snapshots: readonly HoldingSnapshotRow[];
   publications: readonly PublicationRow[];
+  /** Accounts with an active entity ownership share. Optional: absent = none (the pre-2026-10-01 behaviour). */
+  entityOwnedAccountIds?: ReadonlySet<string>;
   fx: FxContext;
 }): InvestmentsReadModelData {
   const { fx } = input;
@@ -133,8 +143,13 @@ export function computeInvestments(input: {
     if (!cur || s.as_of_date > cur.as_of_date || (s.as_of_date === cur.as_of_date && (s.created_at ?? '') > (cur.created_at ?? ''))) latest.set(k, s);
   }
   const holdings: UnpublishedHolding[] = [];
+  let entityHeldExcludedCount = 0;
   for (const [k, s] of latest) {
     if (published.has(k) || Number(s.units) <= 0) continue;
+    if (input.entityOwnedAccountIds?.has(s.account_id)) {
+      entityHeldExcludedCount += 1;
+      continue;
+    }
     const amountReporting = toReporting(Number(s.value), s.currency_code, fx);
     if (amountReporting === null) addUnconverted(unconverted, s.currency_code, Number(s.value));
     holdings.push({ accountId: s.account_id, instrumentId: s.instrument_id, snapshotId: s.id, asOfDate: s.as_of_date, units: Number(s.units), value: { amountNative: Number(s.value), currency: s.currency_code, amountReporting } });
@@ -142,6 +157,7 @@ export function computeInvestments(input: {
   holdings.sort((a, b) => (a.accountId + a.instrumentId < b.accountId + b.instrumentId ? -1 : 1));
   const sum = (vals: (number | null)[]) => r(vals.reduce<number>((s, v) => s + (v ?? 0), 0));
   return {
+    entityHeldExcludedCount,
     reportingCurrency: fx.reportingCurrency,
     lines,
     publishedTotal: sum(lines.map((l) => l.value.amountReporting)),
@@ -179,7 +195,31 @@ export async function loadInvestmentInputs(userId: string, client: ReadModelClie
       .eq('user_id', userId)
       .order('canonical_position_id', { ascending: true })
       .range(from, to));
-  return { investments, snapshots, publications };
+  // Accounts owned (even partly) by a business entity: kept out of the personal
+  // "imported, not yet in Net Worth" bucket. Account-grain active rows only.
+  //
+  // DELIBERATELY NOT FAIL-CLOSED, unlike every other read here: this feeds only
+  // the INFORMATIONAL unpublished bucket (never publishedTotal / any total), and
+  // an entity owner can only exist if `ii_ownership_allocation` (migration 0153)
+  // does -- so "table unreadable" correctly degrades to "no entity-owned
+  // accounts" (the exact pre-2026-10-01 behaviour) rather than taking the whole
+  // Investments read model, and every Net Worth figure built on it, offline.
+  let entityRows: { ii_account_id: string; owner_business_entity_id: string | null; ii_instrument_id: string | null }[] = [];
+  try {
+    entityRows = await fetchAllRows<{ ii_account_id: string; owner_business_entity_id: string | null; ii_instrument_id: string | null }>('ii_ownership_allocation', (from, to) =>
+      client
+        .from('ii_ownership_allocation')
+        .select('id, ii_account_id, owner_business_entity_id, ii_instrument_id')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .not('owner_business_entity_id', 'is', null)
+        .order('id', { ascending: true })
+        .range(from, to));
+  } catch {
+    entityRows = [];
+  }
+  const entityOwnedAccountIds = new Set(entityRows.filter((r) => (r.ii_instrument_id ?? null) === null).map((r) => r.ii_account_id));
+  return { investments, snapshots, publications, entityOwnedAccountIds };
 }
 
 /** THE Investments selector. Any failed read -> { status: 'unavailable' }. */

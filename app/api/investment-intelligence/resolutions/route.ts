@@ -1,5 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { describeOwnership, type AccountOwnership, type OwnerChoiceContext } from '@/lib/services/investment-intelligence/ownerModel';
 
 /**
  * GET /api/investment-intelligence/resolutions — 2026-09-28 owner-exception
@@ -19,12 +20,32 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * actually about the moment it supersedes. The reconciliation case row
  * itself is the source of truth and is read straight from it here.
  *
+ * 2026-10-01: a decided owner may now be a business entity or a joint split
+ * (stored as `discrepancy_details.resolvedOwner` / `previousOwner`: ids and
+ * basis points only). This route resolves their LABELS here, per request, from
+ * the caller's own members/entities -- names are never stored on the case.
+ * 'joint_holding_allocation_required' cases are amendable too (to a joint split).
+ *
  * 'owner_unmatched' / 'owner_mismatch' / 'ambiguous_instrument' cases are
  * amendable (K.18-style supersession — see the `/amend` route; the
  * `ambiguous_instrument` amend path was added 2026-09-30, Document2 final
  * non-benchmark closure #3). Other discrepancy types are still shown, for a
  * complete history, but with no amend action offered.
  */
+/** Reads the id + basis-point shares out of a stored `resolvedOwner` / `previousOwner` audit shape. */
+function sharesOf(value: unknown): { memberId?: string; businessEntityId?: string; basisPoints: number }[] {
+  const shares = (value as { shares?: unknown } | null)?.shares;
+  if (!Array.isArray(shares)) return [];
+  const out: { memberId?: string; businessEntityId?: string; basisPoints: number }[] = [];
+  for (const s of shares) {
+    const o = s as { memberId?: unknown; businessEntityId?: unknown; basisPoints?: unknown };
+    if (typeof o.basisPoints !== 'number') continue;
+    if (typeof o.memberId === 'string') out.push({ memberId: o.memberId, basisPoints: o.basisPoints });
+    else if (typeof o.businessEntityId === 'string') out.push({ businessEntityId: o.businessEntityId, basisPoints: o.basisPoints });
+  }
+  return out;
+}
+
 export async function GET(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
@@ -50,10 +71,17 @@ export async function GET(req: Request) {
   // ids) and the accounts these cases are about, so the UI never has to
   // show a bare uuid.
   const memberIds = new Set<string>();
+  const entityIds = new Set<string>();
   const accountIds = new Set<string>();
   for (const c of rows) {
     if (c.subject_type === 'account') accountIds.add(c.subject_id as string);
     const details = (c.discrepancy_details as Record<string, unknown> | null) ?? {};
+    for (const key of ['resolvedOwner', 'previousOwner']) {
+      for (const share of sharesOf(details[key])) {
+        if (share.memberId) memberIds.add(share.memberId);
+        if (share.businessEntityId) entityIds.add(share.businessEntityId);
+      }
+    }
     for (const key of ['declaredOwnerMemberId', 'matchedMemberId', 'resolvedOwnerMemberId', 'previousOwnerMemberId']) {
       const v = details[key];
       if (typeof v === 'string') memberIds.add(v);
@@ -62,10 +90,13 @@ export async function GET(req: Request) {
     if (Array.isArray(candidates)) for (const v of candidates) if (typeof v === 'string') memberIds.add(v);
   }
 
-  const [{ data: memberRows }, { data: accountRows }] = await Promise.all([
+  const [{ data: memberRows }, { data: entityRows }, { data: accountRows }] = await Promise.all([
     memberIds.size > 0
-      ? admin.from('household_members').select('id, full_name').eq('user_id', user.id).in('id', [...memberIds])
-      : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
+      ? admin.from('household_members').select('id, full_name, relationship, is_active').eq('user_id', user.id).in('id', [...memberIds])
+      : Promise.resolve({ data: [] as { id: string; full_name: string; relationship: string; is_active: boolean }[] }),
+    entityIds.size > 0
+      ? admin.from('business_entities').select('id, name, entity_type, is_active').eq('user_id', user.id).in('id', [...entityIds])
+      : Promise.resolve({ data: [] as { id: string; name: string; entity_type: string; is_active: boolean }[] }),
     accountIds.size > 0
       ? admin.from('ii_accounts').select('id, folio_number, institution_name, account_number_masked, currency_code').eq('user_id', user.id).in('id', [...accountIds])
       : Promise.resolve({
@@ -73,6 +104,20 @@ export async function GET(req: Request) {
         }),
   ]);
   const memberNameById = new Map((memberRows ?? []).map((m) => [m.id as string, m.full_name as string]));
+  const labelCtx: OwnerChoiceContext = {
+    members: (memberRows ?? []) as OwnerChoiceContext['members'],
+    entities: (entityRows ?? []) as OwnerChoiceContext['entities'],
+    homeCountry: null,
+  };
+  const ownerViewOf = (value: unknown) => {
+    const shares = sharesOf(value);
+    if (shares.length === 0) return null;
+    const kind = shares.length > 1 ? 'joint' : shares[0].businessEntityId ? 'entity' : 'member';
+    const ownership: AccountOwnership = { kind, shares, hasEntity: shares.some((s) => !!s.businessEntityId) };
+    return describeOwnership(ownership, labelCtx);
+  };
+  const summarise = (view: ReturnType<typeof ownerViewOf>) =>
+    !view ? null : view.kind === 'joint' ? view.owners.map((o) => `${o.label} ${(o.basisPoints / 100).toFixed(2)}%`).join(' / ') : (view.owners[0]?.label ?? null);
   const accountById = new Map((accountRows ?? []).map((a) => [a.id as string, a]));
 
   // An amendment chain: a case that amends an earlier one carries
@@ -113,12 +158,21 @@ export async function GET(req: Request) {
       // every other caller with no currency context.
       accountCurrencyCode: account?.currency_code ?? null,
       amendable:
-        (((c.discrepancy_type === 'owner_unmatched' || c.discrepancy_type === 'owner_mismatch') && c.subject_type === 'account') || c.discrepancy_type === 'ambiguous_instrument') &&
+        (((c.discrepancy_type === 'owner_unmatched' || c.discrepancy_type === 'owner_mismatch' || c.discrepancy_type === 'joint_holding_allocation_required') && c.subject_type === 'account') ||
+          c.discrepancy_type === 'ambiguous_instrument') &&
         !supersededCaseIds.has(c.id as string),
       amendsCaseId: amendsCaseIdByCaseId.get(c.id as string) ?? null,
       isSuperseded: supersededCaseIds.has(c.id as string),
-      resolvedOwnerName: resolve(details['resolvedOwnerMemberId']),
-      previousOwnerName: resolve(details['previousOwnerMemberId']),
+      // `resolvedOwner` / `previousOwner` (2026-10-01) carry member, entity and
+      // joint results; the legacy single-member keys remain the fallback for
+      // decisions recorded before then. `*OwnerName` is a ready-to-show summary
+      // ("Smith Family Trust", "A 60.00% / B 40.00%") so older UI keeps working.
+      resolvedOwner: ownerViewOf(details['resolvedOwner']),
+      previousOwner: ownerViewOf(details['previousOwner']),
+      resolvedOwnerName: summarise(ownerViewOf(details['resolvedOwner'])) ?? resolve(details['resolvedOwnerMemberId']),
+      previousOwnerName: summarise(ownerViewOf(details['previousOwner'])) ?? resolve(details['previousOwnerMemberId']),
+      matchedMemberIds: Array.isArray(details['matchedMemberIds']) ? (details['matchedMemberIds'] as unknown[]).filter((v): v is string => typeof v === 'string') : [],
+      maskedJointHolders: Array.isArray(details['maskedJointHolders']) ? (details['maskedJointHolders'] as unknown[]).filter((v): v is string => typeof v === 'string') : [],
       declaredOwnerName: resolve(details['declaredOwnerMemberId']),
       matchedOwnerName: resolve(details['matchedMemberId']),
       maskedHolderName: typeof details['maskedHolderName'] === 'string' ? details['maskedHolderName'] : null,
