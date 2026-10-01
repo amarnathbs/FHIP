@@ -31,6 +31,8 @@ import { unitDeltaForTransaction, type ReconciliationTransactionInput } from './
 import { xirr, type CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fromXirr, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
 import type { IiTransactionType } from './types';
+import { loadNavCandidatesSince, toUnitMovement, todayIsoDate } from './currentValuationLoader';
+import { valueHoldingAsOf, type UnitMovementInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 
 export interface LedgerRow {
   transactionId: string;
@@ -172,15 +174,37 @@ export async function buildTransactionLedger(
     });
   }
 
+  // Multi-folio fix (2026-10-01): this FOLIO's closing value is its own
+  // position valued by the shared rule (valuation/currentHoldingValuation.ts),
+  // the same one the Holdings row, Performance, X-Ray and Overview use: units x
+  // the latest eligible NAV when one is newer than the statement, plus units
+  // transacted after the statement date. Without a newer NAV and without later
+  // units this is exactly the statement value dated at the statement, as before.
   let terminal: TerminalRow | null = null;
-  if (latestSnapshot && Number(latestSnapshot.value) > 0) {
-    const terminalDate = new Date(`${latestSnapshot.as_of_date}T00:00:00.000Z`);
-    cashFlows.push({ date: terminalDate, amount: Number(latestSnapshot.value) });
-    terminal = {
-      date: latestSnapshot.as_of_date as string,
-      description: 'Closing market value',
-      amount: Number(latestSnapshot.value),
-    };
+  if (latestSnapshot) {
+    const statementDate = String(latestSnapshot.as_of_date).slice(0, 10);
+    const navs = (await loadNavCandidatesSince(supabase, [instrumentId], statementDate)).get(instrumentId) ?? [];
+    const movements: UnitMovementInput[] = [];
+    for (const t of (txRows ?? []) as TxRow[]) {
+      const m = toUnitMovement({ instrument_id: instrumentId, transaction_type: t.transaction_type, transaction_date: t.transaction_date, units: t.units, status: t.status });
+      if (m) movements.push(m);
+    }
+    const valuation = valueHoldingAsOf({
+      statements: [{ asOfDate: statementDate, units: Number(latestSnapshot.units), value: Number(latestSnapshot.value), currencyCode: (account.currency_code as string | null) ?? null }],
+      navs,
+      asOfDate: todayIsoDate(),
+      currencyCode: (account.currency_code as string | null) ?? null,
+      unitMovements: movements,
+    });
+    const closing = valuation.marketValue;
+    if (closing !== null && closing > 0 && valuation.valuationDate) {
+      cashFlows.push({ date: new Date(`${valuation.valuationDate}T00:00:00.000Z`), amount: closing });
+      terminal = {
+        date: valuation.valuationDate,
+        description: 'Closing market value',
+        amount: closing,
+      };
+    }
   }
 
   const xirrResult = xirr(cashFlows);

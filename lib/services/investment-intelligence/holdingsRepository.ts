@@ -24,7 +24,7 @@ import { schemeReconciliationFailed, getAiFallbackReconciliation, describeUnmask
 import { insufficientHistory, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
 import { unitDeltaForTransaction, type ReconciliationTransactionInput } from './reconciliation';
 import { computeCostValue, type CostBasisTransaction } from './costBasis';
-import { loadNavCandidatesSince, todayIsoDate } from './currentValuationLoader';
+import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey, todayIsoDate } from './currentValuationLoader';
 import {
   valueHoldingAsOf,
   type StatementPositionInput,
@@ -171,7 +171,11 @@ export async function loadHoldingsTable(
   if (empty || !dataset) return { holdings: [], warnings, empty: true };
 
   const analytics = runAnalytics(dataset);
-  const investorXirrByInstrument = new Map(analytics.schemes.map((s) => [s.instrumentId, s.investorXirr]));
+  // The scheme's own analytics (its investorXirr is the XIRR over the union of
+  // ALL its folios). A fund held in several folios also carries `folioXirr`, so
+  // each folio's row can show that folio's own XIRR instead of repeating the
+  // scheme-level figure.
+  const schemeAnalyticsByInstrument = new Map(analytics.schemes.map((s) => [s.instrumentId, s]));
 
   const { data: truthRows } = await supabase
     .from('ii_portfolio_truth_status')
@@ -223,6 +227,9 @@ export async function loadHoldingsTable(
   // statement can never supersede one). One batched read, never per row.
   const oldestLatestStatement = [...latestSnapshotByPosition.values()].map((s) => s.as_of_date).sort()[0] ?? null;
   const navCandidatesByInstrument = await loadNavCandidatesSince(supabase, instrumentIds, oldestLatestStatement);
+  // Rule 8 of the shared valuation rule: units transacted after a folio's own
+  // statement date are part of that folio's holding.
+  const unitMovementsByPosition = await loadUnitMovementsSince(supabase, userId, oldestLatestStatement);
 
   // Cost Value — computed directly from each position's own transaction
   // history (average-cost, see costBasis.ts), NOT from ii_tax_lots.
@@ -298,6 +305,7 @@ export async function loadHoldingsTable(
       navs: navCandidatesByInstrument.get(truth.instrument_id) ?? [],
       asOfDate: valuationDate,
       currencyCode: account.currency_code,
+      unitMovements: unitMovementsByPosition.get(positionKey(truth.account_id, truth.instrument_id)) ?? [],
     });
     const unitBalance = valuation.units;
     const marketValue = valuation.marketValue;
@@ -316,8 +324,9 @@ export async function loadHoldingsTable(
     let displayCostValue = costValue;
     let displayGainLoss = gainLoss;
     let displayReturnPct = returnPct;
+    const schemeAnalytics = schemeAnalyticsByInstrument.get(truth.instrument_id);
     let displayXirr: XirrOutcome =
-      investorXirrByInstrument.get(truth.instrument_id) ?? insufficientHistory<{ rate: number }>('INSUFFICIENT_HISTORY', 'No XIRR calculation is available for this scheme.');
+      schemeAnalytics?.folioXirr?.[truth.account_id] ?? schemeAnalytics?.investorXirr ?? insufficientHistory<{ rate: number }>('INSUFFICIENT_HISTORY', 'No XIRR calculation is available for this scheme.');
 
     if (reconciliationFailed) {
       const fallback = await getAiFallbackReconciliation({

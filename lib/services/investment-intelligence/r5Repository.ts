@@ -29,8 +29,9 @@ import type { XrayDataset } from '@/lib/engines/investment-intelligence/xray/xra
 import type { FundHoldingsSnapshot, PortfolioFundPosition, SnapshotHolding } from '@/lib/engines/investment-intelligence/xray/lookThrough';
 import type { DebtExposureLine } from '@/lib/engines/investment-intelligence/xray/debtXray';
 import { fetchAllRows } from './pagination';
-import { loadNavCandidatesSince } from './currentValuationLoader';
-import { isNavQualityEligible, valueHoldingAsOf, type StatementPositionInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
+import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey } from './currentValuationLoader';
+import { isNavQualityEligible, type StatementPositionInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
+import { valueSchemeAcrossFolios, UNKNOWN_FOLIO_KEY, type FolioValuationInput } from '@/lib/engines/investment-intelligence/valuation/schemeValuation';
 import type { Observation } from '@/lib/engines/investment-intelligence/sip/dateAlignment';
 
 export interface LoadWarning {
@@ -318,6 +319,9 @@ export async function loadXrayDataset(
   // READS them and never writes them.
   interface HoldingRow {
     instrument_id: string;
+    // Multi-folio fix: statements are per folio (ii_accounts). A fund held in
+    // several folios must be valued from EACH folio's own statement and summed.
+    account_id?: string | null;
     as_of_date: string;
     units: number;
     value: number;
@@ -327,7 +331,7 @@ export async function loadXrayDataset(
   const holdingRows = await fetchAllRows<HoldingRow>(() =>
     supabase
       .from('ii_holding_snapshots')
-      .select('instrument_id, as_of_date, units, value, currency_code, quality_status')
+      .select('instrument_id, account_id, as_of_date, units, value, currency_code, quality_status')
       .eq('user_id', userId)
       .order('as_of_date', { ascending: false })
       .order('instrument_id', { ascending: true })
@@ -346,49 +350,69 @@ export async function loadXrayDataset(
     return { dataset: null, warnings, empty: true };
   }
 
-  // Latest snapshot per instrument.
+  // Latest snapshot per instrument (used for the position's currency and as a
+  // fallback; the VALUE below is built per folio).
   const latestByInstrument = new Map<string, (typeof holdingRows)[number]>();
-  // Every snapshot per instrument in ASCENDING date order (holdingRows is
-  // descending, so unshift reverses it). valueHoldingAsOf() treats the LAST
-  // element of a date tie as the winner, which reproduces the original
-  // "first row of the descending page wins" tie-break exactly.
-  const statementsByInstrument = new Map<string, StatementPositionInput[]>();
+  // Every snapshot per FOLIO of an instrument, in ASCENDING date order
+  // (holdingRows is descending, so unshift reverses it). valueHoldingAsOf()
+  // treats the LAST element of a date tie as the winner, which reproduces the
+  // original "first row of the descending page wins" tie-break exactly.
+  //
+  // Multi-folio fix (2026-10-01): these used to be grouped by INSTRUMENT only,
+  // so for a fund held in two folios the "latest statement" was one folio's row
+  // and the other folio's units and value dropped out of the position (an
+  // understated, sometimes wrongly-dated, exposure). A fund is now valued as the
+  // SUM of its folios, each valued from its own statements.
+  const statementsByInstrument = new Map<string, Map<string, StatementPositionInput[]>>();
+  const latestDateByFolio = new Map<string, string>();
   for (const r of holdingRows) {
     if (!latestByInstrument.has(r.instrument_id)) latestByInstrument.set(r.instrument_id, r);
-    const list = statementsByInstrument.get(r.instrument_id) ?? [];
+    const folioKey = r.account_id ? String(r.account_id) : UNKNOWN_FOLIO_KEY;
+    const folios = statementsByInstrument.get(r.instrument_id) ?? new Map<string, StatementPositionInput[]>();
+    const list = folios.get(folioKey) ?? [];
     list.unshift({ asOfDate: r.as_of_date, units: Number(r.units), value: Number(r.value), currencyCode: r.currency_code });
-    statementsByInstrument.set(r.instrument_id, list);
+    folios.set(folioKey, list);
+    statementsByInstrument.set(r.instrument_id, folios);
+    const fk = positionKey(folioKey, r.instrument_id);
+    if (!latestDateByFolio.has(fk)) latestDateByFolio.set(fk, r.as_of_date); // descending: first row is that folio's latest
   }
 
   const instrumentIds = [...latestByInstrument.keys()];
 
   // Document2 Finding #5 (2026-10-01): a position's value is units x the
   // latest ELIGIBLE market NAV when one is newer than its statement, and the
-  // statement's own value (labelled as such) otherwise — the SAME rule the
+  // statement's own value (labelled as such) otherwise - the SAME rule the
   // Holdings table, Overview and Performance apply
   // (lib/engines/investment-intelligence/valuation/currentHoldingValuation.ts).
   // Previously this used the statement value unconditionally, so a stale
   // statement NAV stayed the "current" value however old it was.
   const valuationDate = options.asOfDate ?? todayIso();
-  // CURRENT view: only NAVs newer than the oldest LATEST statement can matter.
-  // POINT-IN-TIME view: an earlier statement may be the anchor, so the floor
-  // is the oldest statement of any kind.
+  // CURRENT view: only NAVs newer than the oldest LATEST statement OF ANY FOLIO
+  // can matter. POINT-IN-TIME view: an earlier statement may be the anchor, so
+  // the floor is the oldest statement of any kind.
   const oldestLatestStatement =
     options.asOfDate !== undefined
       ? holdingRows.map((r) => r.as_of_date).sort()[0] ?? null
-      : [...latestByInstrument.values()].map((r) => r.as_of_date).sort()[0] ?? null;
+      : [...latestDateByFolio.values()].sort()[0] ?? null;
   const navCandidatesByInstrument = await loadNavCandidatesSince(supabase, instrumentIds, oldestLatestStatement);
+  // Rule 8: units transacted after a folio's statement are part of its holding.
+  const unitMovementsByFolio = await loadUnitMovementsSince(supabase, userId, oldestLatestStatement);
   const valuationByInstrument = new Map(
-    instrumentIds.map((id) => [
-      id,
-      valueHoldingAsOf({
-        statements: statementsByInstrument.get(id) ?? [],
-        navs: navCandidatesByInstrument.get(id) ?? [],
-        asOfDate: valuationDate,
-        currencyCode: latestByInstrument.get(id)?.currency_code ?? null,
-        pointInTime: options.asOfDate !== undefined,
-      }),
-    ])
+    instrumentIds.map((id) => {
+      const folios: FolioValuationInput[] = [...(statementsByInstrument.get(id) ?? new Map<string, StatementPositionInput[]>()).entries()].map(
+        ([folioKey, statements]) => ({ folioKey, statements, unitMovements: unitMovementsByFolio.get(positionKey(folioKey, id)) ?? [] })
+      );
+      return [
+        id,
+        valueSchemeAcrossFolios({
+          folios,
+          navs: navCandidatesByInstrument.get(id) ?? [],
+          asOfDate: valuationDate,
+          currencyCode: latestByInstrument.get(id)?.currency_code ?? null,
+          pointInTime: options.asOfDate !== undefined,
+        }),
+      ] as const;
+    })
   );
   // The dates the position values are actually "as at": a market NAV's own
   // date, or the statement's date where no newer NAV exists.
