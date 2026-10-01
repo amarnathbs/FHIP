@@ -250,6 +250,13 @@ export async function loadOwnerClassContext(supabase: SupabaseClient, userId: st
   return { accounts, labels, accountIdsByClass, classes };
 }
 
+/** Accounts that are NOT owned (even partly) by a trust / HUF / company: the scope of the personal report chapters. Unallocated accounts stay in (never hidden). */
+export function nonEntityScopeAccountIds(ctx: OwnerClassContext): string[] {
+  const out: string[] = [];
+  for (const info of ctx.classes) if (info.kind !== 'entity' && info.kind !== 'entity_shared') out.push(...(ctx.accountIdsByClass.get(info.key) ?? []));
+  return out;
+}
+
 /** The set of account ids behind the personal reporting scope: sole members and members-only joint splits. Entity-involved accounts are excluded. */
 export function personalScopeAccountIds(ctx: OwnerClassContext): string[] {
   const out: string[] = [];
