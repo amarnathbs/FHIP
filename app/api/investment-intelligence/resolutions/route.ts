@@ -19,10 +19,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * actually about the moment it supersedes. The reconciliation case row
  * itself is the source of truth and is read straight from it here.
  *
- * ONLY 'owner_unmatched' / 'owner_mismatch' cases are amendable in this
- * pass (K.18-style supersession — see the `/amend` route). Other
- * discrepancy types are still shown, for a complete history, but with no
- * amend action offered.
+ * 'owner_unmatched' / 'owner_mismatch' / 'ambiguous_instrument' cases are
+ * amendable (K.18-style supersession — see the `/amend` route; the
+ * `ambiguous_instrument` amend path was added 2026-09-30, Document2 final
+ * non-benchmark closure #3). Other discrepancy types are still shown, for a
+ * complete history, but with no amend action offered.
  */
 export async function GET(req: Request) {
   const { user, unauthenticated } = await requireUser();
@@ -111,7 +112,9 @@ export async function GET(req: Request) {
       // fmtDate()/fmtDateTime() fall back to AUD when it's null, same as
       // every other caller with no currency context.
       accountCurrencyCode: account?.currency_code ?? null,
-      amendable: (c.discrepancy_type === 'owner_unmatched' || c.discrepancy_type === 'owner_mismatch') && c.subject_type === 'account' && !supersededCaseIds.has(c.id as string),
+      amendable:
+        (((c.discrepancy_type === 'owner_unmatched' || c.discrepancy_type === 'owner_mismatch') && c.subject_type === 'account') || c.discrepancy_type === 'ambiguous_instrument') &&
+        !supersededCaseIds.has(c.id as string),
       amendsCaseId: amendsCaseIdByCaseId.get(c.id as string) ?? null,
       isSuperseded: supersededCaseIds.has(c.id as string),
       resolvedOwnerName: resolve(details['resolvedOwnerMemberId']),
@@ -121,6 +124,17 @@ export async function GET(req: Request) {
       maskedHolderName: typeof details['maskedHolderName'] === 'string' ? details['maskedHolderName'] : null,
       outcomeKind: typeof details['outcomeKind'] === 'string' ? details['outcomeKind'] : null,
       reason: typeof details['reason'] === 'string' ? details['reason'] : null,
+      // Document2 final closure #3 — 'ambiguous_instrument' friendly display,
+      // never a raw instrument id: `candidates` was recorded with real
+      // display names at case-creation time (see
+      // documentProcessing.ts/aiExtractionReviewApply.ts), so no extra join
+      // is needed to resolve `resolvedInstrumentId` into a name here.
+      schemeName: typeof details['scheme'] === 'string' ? details['scheme'] : null,
+      candidateInstruments: Array.isArray(details['candidates']) ? (details['candidates'] as unknown[]) : [],
+      resolvedInstrumentName:
+        c.discrepancy_type === 'ambiguous_instrument' && typeof details['resolvedInstrumentId'] === 'string'
+          ? (((details['candidates'] as { instrumentId: string; displayName: string }[] | undefined) ?? []).find((cand) => cand.instrumentId === details['resolvedInstrumentId'])?.displayName ?? null)
+          : null,
     };
   });
 

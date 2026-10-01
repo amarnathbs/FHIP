@@ -291,6 +291,15 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
   const transactionIds: string[] = [];
   const reconciliationConfig = await loadActiveReconciliationConfig();
   for (const tx of fixture.transactions) {
+    // Document2 final closure #4 (2026-09-30): unlike documentProcessing.ts,
+    // this row's id is DB-generated (see the select-then-insert block
+    // below), so it cannot be known before the cross-source conflict case is
+    // opened — the case is backfilled with the real transaction id once
+    // known instead (a few lines down), so
+    // reconciliation-cases/[id]/resolve-cross-source's real fix action works
+    // for a manually-imported position too, not only a parsed statement.
+    let pendingCrossSourceConflictCaseId: string | null = null;
+
     // R11 — cross-source identity resolution (spec sections 24-41), same
     // check documentProcessing.ts's CAMS/KFintech pipeline performs before
     // inserting a transaction. Manual import is itself an in-scope R11
@@ -399,7 +408,7 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
         // evidence preserved), but excluded from analytical aggregation
         // until a human resolves the case (same contract as
         // documentProcessing.ts).
-        await openReconciliationCase(userId, {
+        pendingCrossSourceConflictCaseId = await openReconciliationCase(userId, {
           subjectType: 'transaction',
           subjectId: accountResult.accountId as string,
           discrepancyType: match.state === 'conflict' ? 'cross_source_conflict' : 'cross_source_review_required',
@@ -488,6 +497,14 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
       txId = (existingTx?.id as string) ?? null;
     }
     if (txId) transactionIds.push(txId);
+    if (txId && pendingCrossSourceConflictCaseId) {
+      const { data: caseRow } = await admin.from('ii_reconciliation_cases').select('discrepancy_details').eq('id', pendingCrossSourceConflictCaseId).maybeSingle();
+      const existingDetails = (caseRow?.discrepancy_details as Record<string, unknown> | null) ?? {};
+      await admin
+        .from('ii_reconciliation_cases')
+        .update({ discrepancy_details: { ...existingDetails, newTransactionId: txId } })
+        .eq('id', pendingCrossSourceConflictCaseId);
+    }
   }
 
   // 5. ii_holding_snapshots — immutable, one per (account, instrument, date).
