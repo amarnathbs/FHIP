@@ -318,6 +318,78 @@ describe('a statement an earlier process attempt parked because its account was 
   });
 });
 
+describe('security: race, declared transitions, no re-upload', () => {
+  it('RACE: two simultaneous choices for the same statement -> exactly ONE wins; the loser is refused, never a silent second assignment', async () => {
+    seedAccount(ACC1, { masked_identifier: '****1111' });
+    seedAccount(ACC2, { masked_identifier: '****2222' });
+    seedStatement();
+    const results = await Promise.allSettled([
+      resolveStatementAccount(A, DOC, { accountId: ACC1 }),
+      resolveStatementAccount(A, DOC, { accountId: ACC2 }),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const lost = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(lost.reason).toMatchObject({ code: 'already_assigned_to_other' });
+    const winner = (results.find((r) => r.status === 'fulfilled') as PromiseFulfilledResult<any>).value.financialAccountId;
+    expect(doc().financial_account_id).toBe(winner);
+    // the same two concurrent requests for the SAME account both succeed (idempotent), one as already_assigned
+    h.db.tables.fdh_statement_uploads = [];
+    h.db.tables.fdh_review_items = [];
+    seedStatement();
+    const both = await Promise.all([resolveStatementAccount(A, DOC, { accountId: ACC1 }), resolveStatementAccount(A, DOC, { accountId: ACC1 })]);
+    expect(both.every((r) => r.status === 'assigned' && r.financialAccountId === ACC1)).toBe(true);
+  });
+  it('review_required -> queued only through the DECLARED transitions (review_required -> failed -> queued), and only from review_required', async () => {
+    const { DOCUMENT_STATUS_TRANSITIONS } = await import('@/lib/financial-data-hub/domain/documentLifecycle');
+    expect(DOCUMENT_STATUS_TRANSITIONS.review_required).toContain('failed');
+    expect(DOCUMENT_STATUS_TRANSITIONS.failed).toContain('queued');
+    expect(DOCUMENT_STATUS_TRANSITIONS.review_required).not.toContain('queued'); // there is no shortcut, so the code must use two steps
+    seedAccount(ACC1, { masked_identifier: '****1111' });
+    seedStatement({ processing_status: 'review_required', review_status: 'pending', certification_status: 'review_required' });
+    const seen: string[] = [];
+    const real = h.db.adminClient;
+    h.db.adminClient = () => {
+      const c = real.call(h.db) as any;
+      return new Proxy(c, { get: (t, p) => (p === 'from' ? (table: string) => {
+        const q = t.from(table);
+        if (table !== 'fdh_statement_uploads') return q;
+        return new Proxy(q, { get: (qt, qp) => (qp === 'update' ? (patch: any) => { if (patch.processing_status) seen.push(patch.processing_status); return qt.update(patch); } : qt[qp]) });
+      } : t[p]) });
+    };
+    await resolveStatementAccount(A, DOC, { accountId: ACC1 });
+    h.db.adminClient = real;
+    expect(seen).toEqual(['failed', 'queued']); // in that order, nothing else
+    // CONTROL: a statement in any other state is NOT rewritten (e.g. one already in processing).
+    h.db.tables.fdh_statement_uploads = [];
+    h.db.tables.fdh_review_items = [];
+    seedStatement({ processing_status: 'processing' });
+    await resolveStatementAccount(A, DOC, { accountId: ACC1 });
+    expect(doc().processing_status).toBe('processing');
+  });
+  it('NO RE-UPLOAD: assignment never creates a statement row or stores a file; the same statement id continues', async () => {
+    seedAccount(ACC1, { masked_identifier: '****1111' });
+    seedAccount(ACC2, { masked_identifier: '****2222' });
+    seedStatement();
+    const before = h.db.rows('fdh_statement_uploads').length;
+    await resolveStatementAccount(A, DOC, { accountId: ACC2 });
+    expect(h.db.rows('fdh_statement_uploads')).toHaveLength(before);
+    expect(doc().id).toBe(DOC);
+    const src = fs.readFileSync(path.resolve(__dirname, '../../lib/financial-data-hub/services/bankAccountAssignment.ts'), 'utf8');
+    expect(src).not.toMatch(/uploadBank(Csv|Pdf)|createUploadSession|completeUpload|\.storage\./);
+  });
+  it('the review item closes ONLY for this statement and only the ambiguity titles; other items stay open', async () => {
+    seedAccount(ACC1, { masked_identifier: '****1111' });
+    seedStatement();
+    h.db.insert('fdh_review_items', { id: 'f0000000-0000-4000-8000-0000000000aa', user_id: A, statement_upload_id: DOC, review_type: 'other', severity: 'warning', status: 'open', title_code: 'bank_pdf.reconciliation_failed' });
+    h.db.insert('fdh_review_items', { id: 'f0000000-0000-4000-8000-0000000000bb', user_id: B, statement_upload_id: DOC, review_type: 'other', severity: 'blocking', status: 'open', title_code: 'bank_pdf.account_identity_ambiguous' });
+    await resolveStatementAccount(A, DOC, { accountId: ACC1 });
+    const byId = (id: string) => h.db.rows('fdh_review_items').find((r) => r.id === id)!;
+    expect(item().status).toBe('resolved');
+    expect(byId('f0000000-0000-4000-8000-0000000000aa').status).toBe('open'); // other check: untouched
+    expect(byId('f0000000-0000-4000-8000-0000000000bb').status).toBe('open'); // another user's item: untouched
+  });
+});
+
 describe('PRIVACY: the digits read off a statement never reach logs, audit rows, review items or an AI context', () => {
   const spies: Array<ReturnType<typeof vi.spyOn>> = [];
   const logged: string[] = [];
