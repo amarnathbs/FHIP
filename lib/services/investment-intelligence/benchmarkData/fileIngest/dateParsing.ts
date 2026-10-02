@@ -46,7 +46,7 @@ function daysInMonth(y: number, m: number): number {
 function buildIso(y: number, m: number, d: number): DateParseResult {
   if (m < 1 || m > 12) return fail('DATE_NOT_A_CALENDAR_DATE', `Month ${m} does not exist.`);
   if (d < 1 || d > daysInMonth(y, m)) {
-    return fail('DATE_NOT_A_CALENDAR_DATE', `${d}/${m}/${y} is not a real calendar date.`);
+    return fail('DATE_NOT_A_CALENDAR_DATE', `${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y} is not a real calendar date.`);
   }
   if (y < 1000) return fail('DATE_NOT_A_CALENDAR_DATE', 'The year must have four digits.');
   return { ok: true, iso: `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` };

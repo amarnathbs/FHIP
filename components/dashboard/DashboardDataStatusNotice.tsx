@@ -1,4 +1,5 @@
 import { formatMoney } from '@/lib/engines/money';
+import { fmtDate } from '@/components/investment-intelligence/dateDisplay';
 import type { DashboardDataStatus } from '@/lib/engines/dashboard';
 
 const SECTION_LABELS: Record<string, string> = {
@@ -42,7 +43,7 @@ export function DashboardDataStatusNotice({ status, currency }: { status: Dashbo
     const v = status.publishedValuation;
     const priced = v.marketNavCount + v.statementCount;
     if (priced > 0) {
-      const range = v.latestAsOf ? (v.oldestAsOf && v.oldestAsOf !== v.latestAsOf ? ` dated ${v.oldestAsOf} to ${v.latestAsOf}` : ` dated ${v.latestAsOf}`) : '';
+      const range = v.latestAsOf ? (v.oldestAsOf && v.oldestAsOf !== v.latestAsOf ? ` dated ${fmtDate(v.oldestAsOf, currency)} to ${fmtDate(v.latestAsOf, currency)}` : ` dated ${fmtDate(v.latestAsOf, currency)}`) : '';
       const parts = [`${v.marketNavCount} at the latest NAV${range}`];
       if (v.statementCount > 0) parts.push(`${v.statementCount} at a statement value (no newer NAV on file)`);
       if (v.redeemedCount > 0) parts.push(`${v.redeemedCount} redeemed (counted as 0)`);

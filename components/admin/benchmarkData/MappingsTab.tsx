@@ -18,13 +18,14 @@ import {
   canReviewMapping,
   capabilityDecisions,
   emptyMappingForm,
+  formatDate,
   mappingStatusChip,
   reviewProblem,
   safeExternalUrl,
   validateMappingForm,
   type MappingFormState,
 } from './benchmarkDataUiLogic';
-import { Btn, CheckField, Chip, EmptyState, ErrorPanel, LoadingPanel, Notice, Panel, ScrollTable, SelectField, Td, TextAreaField, TextField, Th } from './ui';
+import { Btn, CheckField, Chip, EmptyState, ErrorPanel, LoadingPanel, Notice, Panel, ScrollTable, SelectField, Td, DateField, TextAreaField, TextField, Th } from './ui';
 
 export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: OverviewResponse; refreshKey: number; onChanged: () => void; say: Say }) {
   const caps = ov.capabilities;
@@ -88,11 +89,11 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
                     <Td>{p.instrumentName ?? 'Unnamed scheme'}<br /><span className="font-mono text-xs text-muted">{p.instrumentId.slice(0, 8)}</span></Td>
                     <Td>{p.proposedBenchmarkName}<br /><span className="text-xs text-muted">{p.benchmarkKey ? `Catalogue: ${p.benchmarkKey}` : 'Not matched to a catalogue entry'}</span></Td>
                     <Td>{RELATIONSHIP_OPTIONS.find((o) => o.value === p.relationshipType)?.label ?? p.relationshipType}</Td>
-                    <Td>{p.effectiveFrom} to {p.effectiveTo ?? 'open'}</Td>
+                    <Td>{formatDate(p.effectiveFrom)} to {p.effectiveTo ? formatDate(p.effectiveTo) : 'open'}</Td>
                     <Td>
                       {EVIDENCE_SOURCE_OPTIONS.find((o) => o.value === p.evidenceSource)?.label ?? p.evidenceSource}
                       {p.evidenceTitle ? `: ${p.evidenceTitle}` : ''}<br />
-                      Document {p.evidenceDocumentDate}, retrieved {p.evidenceRetrievedAt}<br />
+                      Document {formatDate(p.evidenceDocumentDate)}, retrieved {formatDate(p.evidenceRetrievedAt)}<br />
                       {link ? <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-trust underline">Open the document (new tab)</a> : <span className="text-muted">No valid link</span>}
                       {p.evidenceExcerpt ? <><br /><span className="text-xs text-muted">&quot;{p.evidenceExcerpt}&quot;</span></> : null}
                     </Td>
@@ -129,13 +130,13 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
             <SelectField label="Catalogue benchmark (if it exists)" value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v })} options={ov.rows.map((r) => ({ value: r.catalogue.benchmarkKey, label: `${r.catalogue.label} (${r.catalogue.catalogueStatus})` }))} placeholder="Not in the catalogue yet" />
             <TextField label="Benchmark name as the document states it" required value={form.proposedBenchmarkName} onChange={(v) => set({ proposedBenchmarkName: v })} error={errors.proposedBenchmarkName} />
             <SelectField label="Relationship" value={form.relationshipType} onChange={(v) => set({ relationshipType: v as MappingFormState['relationshipType'] })} options={RELATIONSHIP_OPTIONS} placeholder="Primary benchmark" />
-            <TextField label="Effective from" type="date" required value={form.effectiveFrom} onChange={(v) => set({ effectiveFrom: v })} error={errors.effectiveFrom} />
-            <TextField label="Effective to (empty if still in force)" type="date" value={form.effectiveTo} onChange={(v) => set({ effectiveTo: v })} error={errors.effectiveTo} />
+            <DateField label="Effective from" required value={form.effectiveFrom} onChange={(v) => set({ effectiveFrom: v })} error={errors.effectiveFrom} />
+            <DateField label="Effective to (empty if still in force)" value={form.effectiveTo} onChange={(v) => set({ effectiveTo: v })} error={errors.effectiveTo} />
             <SelectField label="Document type" required value={form.evidenceSource} onChange={(v) => set({ evidenceSource: v })} options={EVIDENCE_SOURCE_OPTIONS} error={errors.evidenceSource} />
             <TextField label="Document web address" type="url" required value={form.evidenceUrl} onChange={(v) => set({ evidenceUrl: v })} error={errors.evidenceUrl} />
             <TextField label="Document title (optional)" value={form.evidenceTitle} onChange={(v) => set({ evidenceTitle: v })} />
-            <TextField label="Document date" type="date" required value={form.evidenceDocumentDate} onChange={(v) => set({ evidenceDocumentDate: v })} error={errors.evidenceDocumentDate} />
-            <TextField label="Retrieved on" type="date" required value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
+            <DateField label="Document date" required value={form.evidenceDocumentDate} onChange={(v) => set({ evidenceDocumentDate: v })} error={errors.evidenceDocumentDate} />
+            <DateField label="Retrieved on" required value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
             <SelectField label="How the benchmark was identified" required value={form.resolutionMethod} onChange={(v) => set({ resolutionMethod: v })} options={RESOLUTION_METHOD_OPTIONS} error={errors.resolutionMethod} />
             <SelectField label="Confidence" required value={form.confidence} onChange={(v) => set({ confidence: v })} options={CONFIDENCE_OPTIONS} error={errors.confidence} />
           </div>

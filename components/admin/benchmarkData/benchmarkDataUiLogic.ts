@@ -25,6 +25,8 @@ import type {
 } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { PROVIDER_LAYOUTS } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest/layouts';
 import { isSafeServerMessage } from '@/lib/resources/admin/resultState';
+import { formatDateShort } from '@/lib/engines/date';
+import { DATE_INPUT_PLACEHOLDER, formatDateInput, parseDateInput } from '@/lib/engines/dateInput';
 
 // ------------------------------------------------------------------ API paths ---
 
@@ -100,14 +102,14 @@ export const UPLOAD_MODE_OPTIONS: ReadonlyArray<{ value: UploadModeId; label: st
   { value: 'correction', label: 'Correction', description: 'Replaces stored levels with corrected values. The old level is kept as revision history. Needs a written reason and the correction permission.' },
 ];
 
-/** Explicit date formats. There is deliberately NO default: 03/04/2024 means two different days. */
+/** Explicit date formats. There is deliberately NO default: a date such as 03-04-2024 is two different days depending on the order. */
 export const DATE_FORMAT_OPTIONS: ReadonlyArray<{ value: DateFormatId; label: string; example: string }> = [
-  { value: 'YYYY-MM-DD', label: 'Year-month-day', example: '2024-01-31' },
-  { value: 'DD/MM/YYYY', label: 'Day/month/year', example: '31/01/2024' },
-  { value: 'MM/DD/YYYY', label: 'Month/day/year (US)', example: '01/31/2024' },
-  { value: 'DD-MM-YYYY', label: 'Day-month-year', example: '31-01-2024' },
-  { value: 'DD-MMM-YYYY', label: 'Day-Mon-year', example: '31-Jan-2024' },
-  { value: 'DD MMM YYYY', label: 'Day Mon year', example: '31 Jan 2024' },
+  { value: 'YYYY-MM-DD', label: 'Year first (YYYY-MM-DD)', example: '2024-01-31' },
+  { value: 'DD/MM/YYYY', label: 'Day/month/year (DD/MM/YYYY)', example: '31/01/2024' },
+  { value: 'MM/DD/YYYY', label: 'Month/day/year, US (MM/DD/YYYY)', example: '01/31/2024' },
+  { value: 'DD-MM-YYYY', label: 'Day-month-year (DD-MM-YYYY)', example: '31-01-2024' },
+  { value: 'DD-MMM-YYYY', label: 'Day-Mon-year (DD-MMM-YYYY)', example: '31-Jan-2024' },
+  { value: 'DD MMM YYYY', label: 'Day Mon year (DD MMM YYYY)', example: '31 Jan 2024' },
   { value: 'excel_1900', label: 'Excel date number (1900 date system)', example: '45322' },
   { value: 'excel_1904', label: 'Excel date number (1904 date system)', example: '43860' },
 ];
@@ -540,14 +542,48 @@ export function formatLevel(n: number | null | undefined): string {
   return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
-export function formatDateTime(iso: string | null | undefined): string {
+/**
+ * Every date this module shows is day-first (PO rule, Document2 findings #8/#19):
+ * the Market Index Data catalogue is India's (NSE, BSE), so dates use the India
+ * format dd-mm-yyyy through the canonical formatter, never ISO year-first. A
+ * screen that lists benchmarks in another currency passes that currency.
+ */
+export type DateDisplayCurrency = 'AUD' | 'INR';
+export const MODULE_DATE_CURRENCY: DateDisplayCurrency = 'INR';
+
+export function formatDateTime(iso: string | null | undefined, currency: DateDisplayCurrency = MODULE_DATE_CURRENCY): string {
   if (!iso) return 'never';
   const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(iso);
-  return m ? `${m[1]} ${m[2]} UTC` : iso;
+  return m ? `${formatDateShort(m[1], currency)} ${m[2]} UTC` : iso;
 }
 
-export function formatDate(iso: string | null | undefined): string {
-  return iso ? iso.slice(0, 10) : 'none';
+/** An ISO date-only value (or the date part of a timestamp) as a day-first date; 'none' when absent. */
+export function formatDate(iso: string | null | undefined, currency: DateDisplayCurrency = MODULE_DATE_CURRENCY): string {
+  if (!iso) return 'none';
+  const day = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
+  return day ? formatDateShort(day[1], currency) : iso;
+}
+
+// ------------------------------------------------------------ typed date fields ---
+// Date fields are TEXT fields (never the browser's date picker, which follows the
+// browser locale). The operator types DD-MM-YYYY; the form holds that text and the
+// request body gets the ISO value the API expects.
+
+export { DATE_INPUT_PLACEHOLDER };
+
+/** Words for a typed date field in a validation message. */
+export const DATE_TYPING_HELP = 'DD-MM-YYYY, like 01-10-2026';
+
+/** ISO value for a typed date, or null when it is not a valid day-first date. */
+export function typedDateToIso(v: string | null | undefined): string | null {
+  return parseDateInput(v);
+}
+
+/** Typed (or empty) date for the request body: ISO when valid; the raw text otherwise so the server refuses it; null when empty. */
+function bodyDate(v: string): string | null {
+  const t = v.trim();
+  if (t === '') return null;
+  return parseDateInput(t) ?? t;
 }
 
 export function shortDigest(d: string | null | undefined): string {
@@ -705,7 +741,7 @@ export function stepIssues(step: StepNumber, ctx: UploadContext): string[] {
     if (f.sourceOwner.trim().length < 2) out.push('Enter the source owner or provider.');
     if (f.sourceReference.trim().length < 5) out.push('Enter the original source URL or delivery reference.');
     if (!f.historyClass) out.push('Choose whether the history is live, backtested, mixed or not known.');
-    if (f.dataAsOf.trim() && !isIsoDate(f.dataAsOf.trim())) out.push('The data-as-of date must be a valid date (YYYY-MM-DD) or left empty.');
+    if (f.dataAsOf.trim() && typedDateToIso(f.dataAsOf) === null) out.push(`The data-as-of date must be a valid date (${DATE_TYPING_HELP}) or left empty.`);
     if (f.mode === 'correction') {
       if (!ctx.caps.correct) out.push('Corrections need the correction permission, which you do not have.');
       if (f.reason.trim().length < 20) out.push('A correction needs a written reason of at least 20 characters.');
@@ -776,7 +812,7 @@ export function buildStageParams(ctx: UploadContext): { ok: true; params: StageU
     sourceOwner: f.sourceOwner.trim(),
     sourceReference: f.sourceReference.trim(),
     originalFileName: ctx.file?.name,
-    dataAsOf: f.dataAsOf.trim() ? f.dataAsOf.trim() : null,
+    dataAsOf: bodyDate(f.dataAsOf),
     reason: f.mode === 'correction' ? f.reason.trim() : null,
     headerRow: Number(f.headerRow),
   };
@@ -962,7 +998,7 @@ export function describePublishSuccess(r: PublishResponse): { headline: string; 
   const x = r.result;
   const lines = [
     `Levels written: ${formatCount(x.inserted)} new, ${formatCount(x.revived)} revived, ${formatCount(x.corrected)} corrected; ${formatCount(x.identicalSkipped)} identical skipped.`,
-    `Date range: ${x.dateFrom} to ${x.dateTo}.`,
+    `Date range: ${formatDate(x.dateFrom)} to ${formatDate(x.dateTo)}.`,
     `Batch reference: ${x.batchId}.`,
   ];
   if (r.alreadyPublished) return { headline: 'Already published. Nothing was written this time; this is the result of the earlier publication.', lines };
@@ -1057,17 +1093,17 @@ export function catalogueFormFromRow(r: CatalogueRowView): CatalogueFormState {
     currencyCode: r.currencyCode ?? '',
     returnType: r.returnType ?? '',
     returnVariant: r.returnVariant ?? '',
-    baseDate: r.baseDate ?? '',
+    baseDate: formatDateInput(r.baseDate),
     baseValue: '',
-    launchDate: r.launchDate ?? '',
-    historyStartDate: r.historyStartDate ?? '',
+    launchDate: formatDateInput(r.launchDate),
+    historyStartDate: formatDateInput(r.historyStartDate),
     historyClass: r.historyClass,
-    backtestedThrough: r.backtestedThrough ?? '',
+    backtestedThrough: formatDateInput(r.backtestedThrough),
     calendarCode: '',
     methodologyUrl: r.methodologyUrl ?? '',
     sourceUrl: r.sourceUrl ?? '',
     evidenceRef: r.evidenceRef ?? '',
-    evidenceRetrievedAt: r.evidenceRetrievedAt ?? '',
+    evidenceRetrievedAt: formatDateInput(r.evidenceRetrievedAt),
   };
 }
 
@@ -1099,7 +1135,7 @@ export function validateCatalogueForm(f: CatalogueFormState): Record<string, str
   const mm = returnTypeVariantMismatch(f.returnType, f.returnVariant);
   if (mm) e.returnVariant = mm;
   for (const k of ['baseDate', 'launchDate', 'historyStartDate', 'backtestedThrough', 'evidenceRetrievedAt'] as const) {
-    if (f[k].trim() && !isIsoDate(f[k].trim())) e[k] = 'Use a valid date in the form YYYY-MM-DD.';
+    if (f[k].trim() && typedDateToIso(f[k]) === null) e[k] = `Use a valid date, ${DATE_TYPING_HELP}.`;
   }
   if (f.baseValue.trim() && !(Number.isFinite(Number(f.baseValue)) && Number(f.baseValue) > 0)) e.baseValue = 'The base value must be a positive number.';
   if ((f.historyClass === 'backtested' || f.historyClass === 'mixed') && !f.backtestedThrough.trim()) e.backtestedThrough = 'Say up to which date the history is backtested.';
@@ -1124,17 +1160,17 @@ export function buildCatalogueBody(f: CatalogueFormState): Record<string, string
     currency_code: f.currencyCode.trim().toUpperCase(),
     return_type: f.returnType,
     return_variant: f.returnVariant,
-    base_date: t(f.baseDate),
+    base_date: bodyDate(f.baseDate),
     base_value: f.baseValue.trim() === '' ? null : Number(f.baseValue),
-    launch_date: t(f.launchDate),
-    history_start_date: t(f.historyStartDate),
+    launch_date: bodyDate(f.launchDate),
+    history_start_date: bodyDate(f.historyStartDate),
     history_class: f.historyClass,
-    backtested_through: t(f.backtestedThrough),
+    backtested_through: bodyDate(f.backtestedThrough),
     calendar_code: t(f.calendarCode),
     methodology_url: t(f.methodologyUrl),
     source_url: t(f.sourceUrl),
     evidence_ref: f.evidenceRef.trim(),
-    evidence_retrieved_at: t(f.evidenceRetrievedAt),
+    evidence_retrieved_at: bodyDate(f.evidenceRetrievedAt),
   };
 }
 
@@ -1190,21 +1226,23 @@ export function validateEntitlementForm(f: EntitlementFormState): Record<string,
   else if (r.customerDisplay && !r.calculation) e.rights = 'Customer display needs the calculation right as well.';
   else if (r.reportExport && !r.customerDisplay) e.rights = 'Report and export needs the customer display right as well.';
   else if (r.automation && !r.storage) e.rights = 'Automated ingestion needs the storage right as well.';
-  if (!isIsoDate(f.validFrom)) e.validFrom = 'Enter the date the permission starts (YYYY-MM-DD).';
+  const validFromIso = typedDateToIso(f.validFrom);
+  if (validFromIso === null) e.validFrom = `Enter the date the permission starts (${DATE_TYPING_HELP}).`;
   if (f.validTo.trim()) {
-    if (!isIsoDate(f.validTo.trim())) e.validTo = 'Use a valid date, or leave empty if it has no end date.';
-    else if (isIsoDate(f.validFrom) && f.validTo.trim() < f.validFrom) e.validTo = 'The end date cannot be before the start date.';
+    const validToIso = typedDateToIso(f.validTo);
+    if (validToIso === null) e.validTo = `Use a valid date (${DATE_TYPING_HELP}), or leave empty if it has no end date.`;
+    else if (validFromIso !== null && validToIso < validFromIso) e.validTo = 'The end date cannot be before the start date.';
   }
-  for (const k of ['dataFrom', 'dataTo'] as const) if (f[k].trim() && !isIsoDate(f[k].trim())) e[k] = 'Use a valid date, or leave empty for no limit.';
-  if (!e.dataFrom && !e.dataTo && f.dataFrom.trim() && f.dataTo.trim() && f.dataTo.trim() < f.dataFrom.trim()) e.dataTo = 'The last data date cannot be before the first.';
+  for (const k of ['dataFrom', 'dataTo'] as const) if (f[k].trim() && typedDateToIso(f[k]) === null) e[k] = `Use a valid date (${DATE_TYPING_HELP}), or leave empty for no limit.`;
+  if (!e.dataFrom && !e.dataTo && f.dataFrom.trim() && f.dataTo.trim() && (typedDateToIso(f.dataTo) as string) < (typedDateToIso(f.dataFrom) as string)) e.dataTo = 'The last data date cannot be before the first.';
   if (f.evidenceReference.trim().length < 5) e.evidenceReference = 'Give a document title or reference that supports this permission.';
   if (f.evidenceUrl.trim() && !isHttpUrl(f.evidenceUrl)) e.evidenceUrl = 'Enter a full web address starting with https://';
   if (f.kind === 'public_use_permission') {
     if (!f.evidenceUrl.trim()) e.evidenceUrl = 'A public-use permission needs the web address of the document that grants it.';
-    if (!isIsoDate(f.evidenceDocumentDate.trim())) e.evidenceDocumentDate = 'A public-use permission needs the date of that document (YYYY-MM-DD).';
-    if (!isIsoDate(f.evidenceRetrievedAt.trim())) e.evidenceRetrievedAt = 'A public-use permission needs the date you retrieved that document (YYYY-MM-DD).';
+    if (typedDateToIso(f.evidenceDocumentDate) === null) e.evidenceDocumentDate = `A public-use permission needs the date of that document (${DATE_TYPING_HELP}).`;
+    if (typedDateToIso(f.evidenceRetrievedAt) === null) e.evidenceRetrievedAt = `A public-use permission needs the date you retrieved that document (${DATE_TYPING_HELP}).`;
   } else {
-    for (const k of ['evidenceDocumentDate', 'evidenceRetrievedAt'] as const) if (f[k].trim() && !isIsoDate(f[k].trim())) e[k] = 'Use a valid date, or leave empty.';
+    for (const k of ['evidenceDocumentDate', 'evidenceRetrievedAt'] as const) if (f[k].trim() && typedDateToIso(f[k]) === null) e[k] = `Use a valid date (${DATE_TYPING_HELP}), or leave empty.`;
   }
   return e;
 }
@@ -1222,17 +1260,17 @@ export function buildEntitlementBody(f: EntitlementFormState, row: Pick<Catalogu
     allow_calculation: f.rights.calculation,
     allow_customer_display: f.rights.customerDisplay,
     allow_report_export: f.rights.reportExport,
-    data_from: t(f.dataFrom),
-    data_to: t(f.dataTo),
-    valid_from: f.validFrom.trim(),
-    valid_to: t(f.validTo),
+    data_from: bodyDate(f.dataFrom),
+    data_to: bodyDate(f.dataTo),
+    valid_from: typedDateToIso(f.validFrom) ?? f.validFrom.trim(),
+    valid_to: bodyDate(f.validTo),
     post_expiry_storage: f.postExpiryStorage,
     post_expiry_calculation: f.postExpiryCalculation,
     post_expiry_display: f.postExpiryDisplay,
     evidence_reference: f.evidenceReference.trim(),
     evidence_url: t(f.evidenceUrl),
-    evidence_document_date: t(f.evidenceDocumentDate),
-    evidence_retrieved_at: t(f.evidenceRetrievedAt),
+    evidence_document_date: bodyDate(f.evidenceDocumentDate),
+    evidence_retrieved_at: bodyDate(f.evidenceRetrievedAt),
     attribution_text: t(f.attributionText),
     notes: t(f.notes),
   };
@@ -1289,15 +1327,17 @@ export function validateMappingForm(f: MappingFormState): Record<string, string>
   const e: Record<string, string> = {};
   if (!UUID_RE.test(f.instrumentId.trim())) e.instrumentId = 'Enter the instrument id (a UUID, as shown in the instrument record).';
   if (f.proposedBenchmarkName.trim().length < 3) e.proposedBenchmarkName = 'Enter the benchmark name exactly as the scheme document states it.';
-  if (!isIsoDate(f.effectiveFrom)) e.effectiveFrom = 'Enter the date the benchmark became effective (YYYY-MM-DD).';
+  const effectiveFromIso = typedDateToIso(f.effectiveFrom);
+  if (effectiveFromIso === null) e.effectiveFrom = `Enter the date the benchmark became effective (${DATE_TYPING_HELP}).`;
   if (f.effectiveTo.trim()) {
-    if (!isIsoDate(f.effectiveTo.trim())) e.effectiveTo = 'Use a valid date, or leave empty if still in force.';
-    else if (isIsoDate(f.effectiveFrom) && f.effectiveTo.trim() < f.effectiveFrom) e.effectiveTo = 'The end date cannot be before the start date.';
+    const effectiveToIso = typedDateToIso(f.effectiveTo);
+    if (effectiveToIso === null) e.effectiveTo = `Use a valid date (${DATE_TYPING_HELP}), or leave empty if still in force.`;
+    else if (effectiveFromIso !== null && effectiveToIso < effectiveFromIso) e.effectiveTo = 'The end date cannot be before the start date.';
   }
   if (!EVIDENCE_SOURCE_OPTIONS.some((o) => o.value === f.evidenceSource)) e.evidenceSource = 'Choose the type of document.';
   if (!isHttpUrl(f.evidenceUrl)) e.evidenceUrl = 'Enter the full web address of the document, starting with https://';
-  if (!isIsoDate(f.evidenceDocumentDate)) e.evidenceDocumentDate = 'Enter the date of the document (YYYY-MM-DD).';
-  if (!isIsoDate(f.evidenceRetrievedAt)) e.evidenceRetrievedAt = 'Enter the date you retrieved the document (YYYY-MM-DD).';
+  if (typedDateToIso(f.evidenceDocumentDate) === null) e.evidenceDocumentDate = `Enter the date of the document (${DATE_TYPING_HELP}).`;
+  if (typedDateToIso(f.evidenceRetrievedAt) === null) e.evidenceRetrievedAt = `Enter the date you retrieved the document (${DATE_TYPING_HELP}).`;
   if (f.evidenceExcerpt.length > 400) e.evidenceExcerpt = 'The excerpt can be at most 400 characters.';
   if (!RESOLUTION_METHOD_OPTIONS.some((o) => o.value === f.resolutionMethod)) e.resolutionMethod = 'Choose how the benchmark was identified.';
   if (!CONFIDENCE_OPTIONS.some((o) => o.value === f.confidence)) e.confidence = 'Choose the confidence.';
@@ -1311,13 +1351,13 @@ export function buildMappingBody(f: MappingFormState, benchmarkId: string | null
     benchmark_id: benchmarkId,
     proposed_benchmark_name: f.proposedBenchmarkName.trim(),
     relationship_type: f.relationshipType,
-    effective_from: f.effectiveFrom.trim(),
-    effective_to: t(f.effectiveTo),
+    effective_from: typedDateToIso(f.effectiveFrom) ?? f.effectiveFrom.trim(),
+    effective_to: bodyDate(f.effectiveTo),
     evidence_source: f.evidenceSource,
     evidence_url: f.evidenceUrl.trim(),
     evidence_title: t(f.evidenceTitle),
-    evidence_document_date: f.evidenceDocumentDate.trim(),
-    evidence_retrieved_at: f.evidenceRetrievedAt.trim(),
+    evidence_document_date: typedDateToIso(f.evidenceDocumentDate) ?? f.evidenceDocumentDate.trim(),
+    evidence_retrieved_at: typedDateToIso(f.evidenceRetrievedAt) ?? f.evidenceRetrievedAt.trim(),
     evidence_excerpt: t(f.evidenceExcerpt),
     resolution_method: f.resolutionMethod,
     confidence: f.confidence,

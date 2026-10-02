@@ -60,7 +60,7 @@ const SOURCE_PHRASE: Record<TimeLimitedSource, string> = {
 const HOW_TO_CONTINUE =
   'To keep Premium you can subscribe from the Plans section on your Profile page (where a plan is available for your region), or contact FHIP support and ask for your access to be reviewed.';
 
-export function computeEntitlementReminder(row: ReminderRow | null | undefined, today: string): EntitlementReminder {
+export function computeEntitlementReminder(row: ReminderRow | null | undefined, today: string, country?: string | null): EntitlementReminder {
   if (!row || row.plan_tier !== 'premium') return NONE;
   const source = row.entitlement_source;
   if (source !== 'admin_grant' && source !== 'promo_code') return NONE; // paid / unknown / legacy: never
@@ -78,7 +78,7 @@ export function computeEntitlementReminder(row: ReminderRow | null | undefined, 
         days: left,
         key: `expiring_7:${endsOn}`,
         title: left === 0 ? 'Your Premium access ends today' : `Your Premium access ends in ${left} day${left === 1 ? '' : 's'}`,
-        message: `Your Premium access (${phrase}) ends on ${formatIsoDate(endsOn)}. ${HOW_TO_CONTINUE}`,
+        message: `Your Premium access (${phrase}) ends on ${formatIsoDate(endsOn, country)}. ${HOW_TO_CONTINUE}`,
       };
     }
     if (left <= REMINDER_THRESHOLD_DAYS[0]) {
@@ -89,7 +89,7 @@ export function computeEntitlementReminder(row: ReminderRow | null | undefined, 
         days: left,
         key: `expiring_30:${endsOn}`,
         title: `Your Premium access ends in ${left} days`,
-        message: `Your Premium access (${phrase}) ends on ${formatIsoDate(endsOn)}. ${HOW_TO_CONTINUE}`,
+        message: `Your Premium access (${phrase}) ends on ${formatIsoDate(endsOn, country)}. ${HOW_TO_CONTINUE}`,
       };
     }
     return NONE;
@@ -106,7 +106,7 @@ export function computeEntitlementReminder(row: ReminderRow | null | undefined, 
         days: since,
         key: `lapsed:${endsOn}`,
         title: 'Your Premium access has ended',
-        message: `Your Premium access (${SOURCE_PHRASE[source]}) ended on ${formatIsoDate(endsOn)} and your account is now on the Free plan. ${HOW_TO_CONTINUE}`,
+        message: `Your Premium access (${SOURCE_PHRASE[source]}) ended on ${formatIsoDate(endsOn, country)} and your account is now on the Free plan. ${HOW_TO_CONTINUE}`,
       };
     }
   }

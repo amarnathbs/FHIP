@@ -334,3 +334,16 @@ describe('parseLevel -- precision, range and numbers', () => {
     expect(Date.now() - t0).toBeLessThan(2000);
   });
 });
+
+describe('a rejected date is named day-first (dd-mm-yyyy), never ISO or month-first (PO rule, Document2 findings #8/#19)', () => {
+  it('an impossible day reads dd-mm-yyyy whichever file format was chosen', () => {
+    const iso8601 = parseMarketDate('2023-02-29', 'YYYY-MM-DD', {});
+    expect(iso8601.ok).toBe(false);
+    if (!iso8601.ok) expect(iso8601.message).toBe('29-02-2023 is not a real calendar date.');
+    const us = parseMarketDate('02/31/2024', 'MM/DD/YYYY', {});
+    expect(us.ok).toBe(false);
+    if (!us.ok) expect(us.message).toBe('31-02-2024 is not a real calendar date.');
+    const dmy = parseMarketDate('31/04/2024', 'DD/MM/YYYY', {});
+    if (!dmy.ok) expect(dmy.message).toBe('31-04-2024 is not a real calendar date.');
+  });
+});

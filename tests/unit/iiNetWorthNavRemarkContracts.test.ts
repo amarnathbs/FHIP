@@ -230,12 +230,20 @@ const html = (s: DashboardDataStatus) => renderToStaticMarkup(React.createElemen
 describe('Dashboard: how the mutual funds in Net Worth were valued is disclosed with their as-of dates', () => {
   it('names the NAV date range, the statement-value funds and the stale ones', () => {
     const out = html(status({ count: 3, marketNavCount: 2, statementCount: 1, redeemedCount: 0, staleCount: 1, oldestAsOf: '2026-09-25', latestAsOf: '2026-09-30' }));
-    expect(out).toContain('Mutual funds in your Net Worth: 2 at the latest NAV dated 2026-09-25 to 2026-09-30, 1 at a statement value (no newer NAV on file).');
+    expect(out).toContain('Mutual funds in your Net Worth: 2 at the latest NAV dated 25-09-2026 to 30-09-2026, 1 at a statement value (no newer NAV on file).');
     expect(out).toContain('1 is valued on a NAV or statement more than a week old and may be out of date.');
   });
+  it('the NAV dates follow the household currency: dd/mm/yyyy for AUD, dd-mm-yyyy for INR, never ISO', () => {
+    const st = status({ count: 3, marketNavCount: 2, statementCount: 1, redeemedCount: 0, staleCount: 0, oldestAsOf: '2026-09-25', latestAsOf: '2026-09-30' });
+    const aud = renderToStaticMarkup(React.createElement(DashboardDataStatusNotice, { status: st, currency: 'AUD' }));
+    expect(aud).toContain('dated 25/09/2026 to 30/09/2026');
+    expect(aud).not.toMatch(/2026-09-/);
+    expect(html(st)).toContain('dated 25-09-2026 to 30-09-2026');
+  });
+
   it('a single date reads "dated <date>"; redeemed funds are disclosed as counted 0', () => {
     const out = html(status({ count: 2, marketNavCount: 1, statementCount: 0, redeemedCount: 1, staleCount: 0, oldestAsOf: '2026-09-30', latestAsOf: '2026-09-30' }));
-    expect(out).toContain('1 at the latest NAV dated 2026-09-30, 1 redeemed (counted as 0).');
+    expect(out).toContain('1 at the latest NAV dated 30-09-2026, 1 redeemed (counted as 0).');
   });
   it('NEGATIVE CONTROL: with no published funds the notice says nothing about NAV valuation', () => {
     expect(html(status(null))).not.toContain('Mutual funds in your Net Worth');
@@ -258,7 +266,8 @@ describe('Investments tab: each published fund shows value, units, NAV, NAV date
     const out = render([line('a', 11200, { basis: 'market_nav', asOf: '2026-09-30', units: 100, nav: 112, tag: 'latest_nav', label: 'Latest NAV', stale: false, ageDays: 1 })]);
     expect(out).toContain('11,200.00');
     expect(out).toContain('112.00');
-    expect(out).toContain('2026-09-30');
+    expect(out).toContain('30-09-2026');
+    expect(out).not.toContain('2026-09-30');
     expect(out).toContain('>100<');
     expect(out).toContain('Latest NAV');
     expect(out).not.toContain('Statement value');
@@ -266,13 +275,15 @@ describe('Investments tab: each published fund shows value, units, NAV, NAV date
   it('statement row: labelled Statement value, never Latest NAV, with the statement date', () => {
     const out = render([line('b', 10000, { basis: 'statement', asOf: '2026-06-30', units: 100, nav: 100, tag: 'statement_value', label: 'Statement value', stale: true, ageDays: 93 })]);
     expect(out).toContain('Statement value');
-    expect(out).toContain('2026-06-30');
+    expect(out).toContain('30-06-2026');
+    expect(out).not.toContain('2026-06-30');
     expect(out).not.toContain('Latest NAV');
   });
   it('stale and redeemed rows carry their own tags', () => {
     const stale = render([line('c', 11200, { basis: 'market_nav', asOf: '2026-09-10', units: 100, nav: 112, tag: 'stale_nav', label: 'Stale NAV', stale: true, ageDays: 21 })]);
     expect(stale).toContain('Stale NAV');
-    expect(stale).toContain('2026-09-10');
+    expect(stale).toContain('10-09-2026');
+    expect(stale).not.toContain('2026-09-10');
     const redeemed = render([line('d', 0, { basis: 'redeemed', asOf: '2026-06-30', units: 0, nav: null, tag: 'redeemed', label: 'Redeemed', stale: false, ageDays: null })]);
     expect(redeemed).toContain('Redeemed');
     expect(redeemed).toContain('—');

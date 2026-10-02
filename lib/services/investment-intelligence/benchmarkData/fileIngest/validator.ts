@@ -9,6 +9,7 @@
 // INPUT TABLE. Both readers convert to the same `UploadTable` with a small
 // adapter: `csvToTable` (from parseCsvText output) and `xlsxToTable` (from
 // readWorksheet output). Cell positions are the header positions.
+import { formatDateShort } from '@/lib/engines/date';
 import { parseMarketDate } from './dateParsing';
 import { parseLevel } from './numberParsing';
 import { resolveLayout, type ResolvedMapping } from './layouts';
@@ -242,6 +243,15 @@ function sameLevel(a: number, b: number): boolean {
 }
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A date inside a message the operator reads: day-first (dd-mm-yyyy, the India
+ * format for this module), never ISO year-first (PO rule, Document2 findings
+ * #8/#19). Internal values and the API stay ISO; only the sentence changes.
+ */
+function fd(iso: string): string {
+  return ISO_RE.test(iso) ? formatDateShort(iso, 'INR') : iso;
+}
 
 interface Candidate {
   rowNumber: number;
@@ -491,10 +501,10 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
         else {
           iso = res.iso;
           if (iso > ctx.todayIso) {
-            push('error', n, 'DATE_FUTURE', `The date ${iso} is in the future (today is ${ctx.todayIso}).`, { column: table.header[dateIdx], raw: cellText(c) });
+            push('error', n, 'DATE_FUTURE', `The date ${fd(iso)} is in the future (today is ${fd(ctx.todayIso)}).`, { column: table.header[dateIdx], raw: cellText(c) });
             iso = null;
           } else if (iso < MIN_MARKET_DATE) {
-            push('error', n, 'DATE_OUTSIDE_ENTITLEMENT_SCOPE', `The date ${iso} is before ${MIN_MARKET_DATE}, the earliest date accepted.`, { column: table.header[dateIdx], raw: cellText(c) });
+            push('error', n, 'DATE_OUTSIDE_ENTITLEMENT_SCOPE', `The date ${fd(iso)} is before ${fd(MIN_MARKET_DATE)}, the earliest date accepted.`, { column: table.header[dateIdx], raw: cellText(c) });
             iso = null;
           } else {
             const scope = ctx.entitlementDateScope;
@@ -503,7 +513,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
                 'error',
                 n,
                 'DATE_OUTSIDE_ENTITLEMENT_SCOPE',
-                `The date ${iso} is outside the entitlement's data-date scope (${scope.from ?? 'start'} to ${scope.to ?? 'open'}).`,
+                `The date ${fd(iso)} is outside the entitlement's data-date scope (${scope.from ? fd(scope.from) : 'start'} to ${scope.to ? fd(scope.to) : 'open'}).`,
                 { column: table.header[dateIdx], raw: cellText(c) },
               );
               iso = null;
@@ -612,7 +622,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
       survivors.push(g[0]);
       for (const dup of g.slice(1)) {
         duplicatesCollapsed++;
-        push('warning', dup.rowNumber, 'DUPLICATE_IDENTICAL_COLLAPSED', `Row ${dup.rowNumber} repeats ${dup.key} ${dup.date} with the same level as row ${g[0].rowNumber}; kept once.`);
+        push('warning', dup.rowNumber, 'DUPLICATE_IDENTICAL_COLLAPSED', `Row ${dup.rowNumber} repeats ${dup.key} ${fd(dup.date)} with the same level as row ${g[0].rowNumber}; kept once.`);
       }
     } else {
       for (const x of g) {
@@ -621,7 +631,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
           'error',
           x.rowNumber,
           'DUPLICATE_CONFLICT',
-          `${x.key} ${x.date} appears with different levels (rows ${[x.rowNumber, ...others].join(', ')}).`,
+          `${x.key} ${fd(x.date)} appears with different levels (rows ${[x.rowNumber, ...others].join(', ')}).`,
           { column: table.header[valueIdx], raw: x.valueText },
         );
       }
@@ -635,7 +645,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
     let classification: StagedRow['classification'];
     if (existing === null) {
       if (params.mode === 'correction') {
-        push('error', c.rowNumber, 'CORRECTION_TARGET_MISSING', `Correction mode: no published level exists for ${c.key} on ${c.date}, so there is nothing to correct.`, {
+        push('error', c.rowNumber, 'CORRECTION_TARGET_MISSING', `Correction mode: no published level exists for ${c.key} on ${fd(c.date)}, so there is nothing to correct.`, {
           column: table.header[dateIdx],
         });
         continue;
@@ -647,7 +657,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
         'error',
         c.rowNumber,
         'CONFLICT_WITH_PUBLISHED',
-        `${c.key} ${c.date} is already published at ${existing}; the file says ${c.valueText}. Use correction mode to change a published level.`,
+        `${c.key} ${fd(c.date)} is already published at ${existing}; the file says ${c.valueText}. Use correction mode to change a published level.`,
         { column: table.header[valueIdx], raw: c.valueText },
       );
       continue;
@@ -721,7 +731,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
             'warning',
             cur.rowNumber,
             'SUSPECTED_SCALE_CHANGE',
-            `${key} ${cur.date}: the level moves from ${prev.valueText} (${prev.date}) to ${cur.valueText}, a factor of ${ratio.toFixed(3)}. This may be a rebasing or unit change; confirm before publishing.`,
+            `${key} ${fd(cur.date)}: the level moves from ${prev.valueText} (${fd(prev.date)}) to ${cur.valueText}, a factor of ${ratio.toFixed(3)}. This may be a rebasing or unit change; confirm before publishing.`,
             { column: table.header[valueIdx], raw: cur.valueText },
           );
         }
@@ -733,7 +743,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
             'warning',
             cur.rowNumber,
             'LARGE_MOVE',
-            `${key} ${cur.date}: the level moves ${((ratio - 1) * 100).toFixed(2)}% from ${prev.valueText} (${prev.date}) to ${cur.valueText}. Large real moves happen; review it.`,
+            `${key} ${fd(cur.date)}: the level moves ${((ratio - 1) * 100).toFixed(2)}% from ${prev.valueText} (${fd(prev.date)}) to ${cur.valueText}. Large real moves happen; review it.`,
             { column: table.header[valueIdx], raw: cur.valueText },
           );
         } else largeOverflow++;
@@ -762,7 +772,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
               'warning',
               edge.rowNumber,
               'SUSPECTED_SCALE_CHANGE',
-              `${key} ${edge.date}: the incoming level ${edge.valueText} differs by a factor of ${ratio.toFixed(3)} from the published level ${best.level} on ${best.date}. This may be a rebasing or unit change; confirm before publishing.`,
+              `${key} ${fd(edge.date)}: the incoming level ${edge.valueText} differs by a factor of ${ratio.toFixed(3)} from the published level ${best.level} on ${fd(best.date)}. This may be a rebasing or unit change; confirm before publishing.`,
               { column: table.header[valueIdx], raw: edge.valueText },
             );
           }
@@ -797,7 +807,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
         summary.gaps.push({ from: isoFromDay(from), to: isoFromDay(to), weekdaysMissing: missing });
         acks.add('coverage_gaps');
         if (gapReports++ < MAX_INDIVIDUAL_WARNINGS_PER_BENCHMARK) {
-          push('warning', null, 'COVERAGE_GAP', `${key}: no levels for ${missing} consecutive weekdays from ${isoFromDay(from)} to ${isoFromDay(to)}. Missing dates are never filled in.`);
+          push('warning', null, 'COVERAGE_GAP', `${key}: no levels for ${missing} consecutive weekdays from ${fd(isoFromDay(from))} to ${fd(isoFromDay(to))}. Missing dates are never filled in.`);
         }
       }
     }

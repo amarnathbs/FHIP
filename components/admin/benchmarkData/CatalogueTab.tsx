@@ -18,6 +18,7 @@ import {
   capabilityDecisions,
   catalogueFormFromRow,
   catalogueStatusChip,
+  formatDate,
   emptyCatalogueForm,
   lockedWhenVerified,
   noteProblem,
@@ -26,7 +27,7 @@ import {
   variantLabel,
   type CatalogueFormState,
 } from './benchmarkDataUiLogic';
-import { Btn, Chip, EmptyState, Notice, Panel, ScrollTable, SelectField, Td, TextAreaField, TextField, Th } from './ui';
+import { Btn, Chip, EmptyState, Notice, Panel, ScrollTable, SelectField, Td, DateField, TextAreaField, TextField, Th } from './ui';
 
 export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewResponse; onChanged: () => void; say: Say }) {
   const caps = ov.capabilities;
@@ -94,8 +95,8 @@ export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewRespo
                     <Td>{variantLabel(c.returnVariant)}{c.returnType ? ` (${c.returnType})` : ''}</Td>
                     <Td>{c.currencyCode ?? 'not declared'}</Td>
                     <Td><Chip label={chip.label} tone={chip.tone} /></Td>
-                    <Td>{c.historyClass}{c.backtestedThrough ? `, backtested to ${c.backtestedThrough}` : ''}</Td>
-                    <Td>{c.evidenceRef ?? 'none'}{c.evidenceRetrievedAt ? `, retrieved ${c.evidenceRetrievedAt}` : ''}{link ? <> <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-trust underline">Source (opens in a new tab)</a></> : null}</Td>
+                    <Td>{c.historyClass}{c.backtestedThrough ? `, backtested to ${formatDate(c.backtestedThrough)}` : ''}</Td>
+                    <Td>{c.evidenceRef ?? 'none'}{c.evidenceRetrievedAt ? `, retrieved ${formatDate(c.evidenceRetrievedAt)}` : ''}{link ? <> <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-trust underline">Source (opens in a new tab)</a></> : null}</Td>
                     <Td>
                       <div className="flex flex-wrap gap-1">
                         {dec.canManageCatalogue ? <Btn kind="secondary" onClick={() => { setEditing(c); setForm(catalogueFormFromRow(c)); setErrors({}); }}>{`Edit ${c.benchmarkKey}`}</Btn> : null}
@@ -131,17 +132,17 @@ export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewRespo
             <TextField label="Currency (three letters)" required value={form.currencyCode} onChange={(v) => set({ currencyCode: v })} maxLength={3} disabled={isLocked('currencyCode')} error={errors.currencyCode} />
             <SelectField label="Return type" required value={form.returnType} onChange={(v) => set({ returnType: v })} options={RETURN_TYPE_OPTIONS} disabled={isLocked('returnType')} error={errors.returnType} />
             <SelectField label="Exact variant" required value={form.returnVariant} onChange={(v) => set({ returnVariant: v as CatalogueFormState['returnVariant'] })} options={VARIANT_OPTIONS} disabled={isLocked('returnVariant')} error={errors.returnVariant} />
-            <TextField label="Base date" type="date" value={form.baseDate} onChange={(v) => set({ baseDate: v })} error={errors.baseDate} />
+            <DateField label="Base date" value={form.baseDate} onChange={(v) => set({ baseDate: v })} error={errors.baseDate} />
             <TextField label="Base value" value={form.baseValue} onChange={(v) => set({ baseValue: v })} error={errors.baseValue} />
-            <TextField label="Launch date" type="date" value={form.launchDate} onChange={(v) => set({ launchDate: v })} error={errors.launchDate} />
-            <TextField label="History start date" type="date" value={form.historyStartDate} onChange={(v) => set({ historyStartDate: v })} error={errors.historyStartDate} />
+            <DateField label="Launch date" value={form.launchDate} onChange={(v) => set({ launchDate: v })} error={errors.launchDate} />
+            <DateField label="History start date" value={form.historyStartDate} onChange={(v) => set({ historyStartDate: v })} error={errors.historyStartDate} />
             <SelectField label="History type" value={form.historyClass} onChange={(v) => set({ historyClass: v as CatalogueFormState['historyClass'] })} options={HISTORY_CLASS_OPTIONS} />
-            <TextField label="Backtested through" type="date" value={form.backtestedThrough} onChange={(v) => set({ backtestedThrough: v })} error={errors.backtestedThrough} hint="Needed for backtested or mixed history." />
+            <DateField label="Backtested through" value={form.backtestedThrough} onChange={(v) => set({ backtestedThrough: v })} error={errors.backtestedThrough} hint="Needed for backtested or mixed history." />
             <TextField label="Trading calendar" value={form.calendarCode} onChange={(v) => set({ calendarCode: v })} />
             <TextField label="Methodology URL" type="url" value={form.methodologyUrl} onChange={(v) => set({ methodologyUrl: v })} error={errors.methodologyUrl} />
             <TextField label="Source URL" type="url" value={form.sourceUrl} onChange={(v) => set({ sourceUrl: v })} error={errors.sourceUrl} />
             <TextField label="Evidence reference" required value={form.evidenceRef} onChange={(v) => set({ evidenceRef: v })} error={errors.evidenceRef} hint="A document title or reference for the facts above." />
-            <TextField label="Evidence retrieved on" type="date" required value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
+            <DateField label="Evidence retrieved on" required value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
           </div>
           <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void save()}>Save as draft</Btn><Btn kind="secondary" onClick={() => { setForm(null); setEditing(null); }}>Cancel</Btn></div>
         </Panel>

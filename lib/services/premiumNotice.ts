@@ -32,7 +32,7 @@ export const NO_REMINDER: EntitlementReminder = Object.freeze({
   message: null,
 });
 
-export async function getOwnEntitlementReminder(client: OwnRowClient, userId: string, today: string = utcToday()): Promise<EntitlementReminder> {
+export async function getOwnEntitlementReminder(client: OwnRowClient, userId: string, today: string = utcToday(), country?: string | null): Promise<EntitlementReminder> {
   try {
     const { data, error } = await client
       .from('user_entitlements')
@@ -40,7 +40,7 @@ export async function getOwnEntitlementReminder(client: OwnRowClient, userId: st
       .eq('user_id', userId)
       .maybeSingle();
     if (error || !data) return NO_REMINDER;
-    return computeEntitlementReminder(data as Parameters<typeof computeEntitlementReminder>[0], today);
+    return computeEntitlementReminder(data as Parameters<typeof computeEntitlementReminder>[0], today, country);
   } catch {
     return NO_REMINDER;
   }

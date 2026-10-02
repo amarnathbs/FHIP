@@ -14,6 +14,7 @@ import {
   apiPaths,
   buildPublishBody,
   describePublishSuccess,
+  formatDate,
   formatCount,
   formatLevel,
   publishConfirmText,
@@ -74,8 +75,8 @@ export function PreviewPanel({ preview, jobId }: { preview: JobPreview; jobId: s
                 return (
                   <tr key={s.benchmarkKey}>
                     <Td className="font-medium">{s.benchmarkKey}</Td>
-                    <Td>{s.earliestDate ?? 'none'}</Td>
-                    <Td>{s.latestDate ?? 'none'}</Td>
+                    <Td>{formatDate(s.earliestDate)}</Td>
+                    <Td>{formatDate(s.latestDate)}</Td>
                     <Td num>{formatCount(s.newRows)}</Td>
                     <Td num>{formatCount(s.identicalRows)}</Td>
                     <Td num>{formatCount(s.correctionRows)}</Td>
@@ -90,7 +91,7 @@ export function PreviewPanel({ preview, jobId }: { preview: JobPreview; jobId: s
           <div className="mt-3 text-sm text-ink">
             <p className="font-medium">Gaps (days with no level; never filled in):</p>
             <ul className="list-disc pl-5">
-              {preview.scope.flatMap((s) => s.gaps.slice(0, 20).map((g) => <li key={`${s.benchmarkKey}-${g.from}`}>{s.benchmarkKey}: {g.from} to {g.to} ({formatCount(g.weekdaysMissing)} weekday(s) missing)</li>))}
+              {preview.scope.flatMap((s) => s.gaps.slice(0, 20).map((g) => <li key={`${s.benchmarkKey}-${g.from}`}>{s.benchmarkKey}: {formatDate(g.from)} to {formatDate(g.to)} ({formatCount(g.weekdaysMissing)} weekday(s) missing)</li>))}
             </ul>
           </div>
         ) : null}
@@ -132,7 +133,7 @@ export function PreviewPanel({ preview, jobId }: { preview: JobPreview; jobId: s
             <thead><tr><Th>Benchmark</Th><Th>Date</Th><Th num>Before</Th><Th num>After</Th></tr></thead>
             <tbody>
               {preview.corrections.slice(0, 50).map((c, i) => (
-                <tr key={i}><Td>{c.benchmarkKey}</Td><Td>{c.date}</Td><Td num>{formatLevel(c.before)}</Td><Td num>{formatLevel(c.after)}</Td></tr>
+                <tr key={i}><Td>{c.benchmarkKey}</Td><Td>{formatDate(c.date)}</Td><Td num>{formatLevel(c.before)}</Td><Td num>{formatLevel(c.after)}</Td></tr>
               ))}
             </tbody>
           </ScrollTable>

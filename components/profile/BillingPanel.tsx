@@ -9,14 +9,17 @@
 // "Upgrade" button for a region they haven't confirmed yet.
 
 import { useEffect, useState } from 'react';
+import { formatDateShort } from '@/lib/engines/date';
 import { REGISTRATION_COUNTRY_OPTIONS } from '@/lib/services/countryGate';
 import type { CountryCode } from '@/lib/services/jurisdiction';
 
 interface PaymentStatus {
   billingCountry: CountryCode | null;
   billingConfirmed: boolean;
+  /** Day-first date shape for this user's own country: dd/mm/yyyy (AUD) or dd-mm-yyyy (INR). */
+  dateFormat?: 'AUD' | 'INR';
   planTier: 'free' | 'premium';
-  /** Server-composed, honest plan wording (e.g. "Premium (granted by FHIP admin, ends 12 Oct 2026)"). */
+  /** Server-composed, honest plan wording (e.g. "Premium (granted by FHIP admin, ends 12/10/2026)"). */
   planLabel?: string;
   entitlementSource?: 'payment' | 'admin_grant' | 'promo_code' | null;
   adminGrantEndsOn?: string | null;
@@ -129,7 +132,7 @@ export function BillingPanel() {
       const json = await res.json().catch(() => ({}));
       if (res.ok) {
         const endsOn = json?.data?.endsOn as string | undefined;
-        setPromoResult({ ok: true, text: endsOn ? `Promo code applied. Your Premium access runs until ${endsOn}.` : 'Promo code applied.' });
+        setPromoResult({ ok: true, text: endsOn ? `Promo code applied. Your Premium access runs until ${formatDateShort(endsOn, status?.dateFormat ?? 'AUD')}.` : 'Promo code applied.' });
         setPromoCode('');
         await loadStatus();
       } else {
@@ -178,7 +181,7 @@ export function BillingPanel() {
         </p>
         {hasLiveSubscription && status.currentPeriodEnd && (
           <p className="mt-1 text-xs text-muted">
-            {status.cancelAtPeriodEnd ? 'Ends' : 'Renews'} {new Date(status.currentPeriodEnd).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' })}
+            {status.cancelAtPeriodEnd ? 'Ends' : 'Renews'} {formatDateShort(new Date(status.currentPeriodEnd), status.dateFormat ?? 'AUD')}
             {' · '}via {status.provider === 'stripe' ? 'Stripe' : 'Razorpay'}
           </p>
         )}
@@ -323,7 +326,7 @@ export function BillingPanel() {
             {receipts.map((r) => (
               <li key={r.id} className="flex items-center justify-between text-sm">
                 <span className="text-ink">
-                  {r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Pending'}
+                  {r.issuedAt ? formatDateShort(new Date(r.issuedAt), status.dateFormat ?? 'AUD') : 'Pending'}
                   {' — '}
                   {r.amountFormatted}
                   {' ('}

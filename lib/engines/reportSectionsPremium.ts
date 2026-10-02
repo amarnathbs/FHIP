@@ -8,6 +8,7 @@ import type { ReportSourceData, PremiumSourceData } from '@/lib/services/reportS
 import { hasCrossBorderEligibility, type PremiumSectionCode } from './reportEligibility';
 import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
+import { formatDateInText } from './date';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { entityExclusionNote, ownerBreakupNarrative } from './reportOwnerBreakup';
@@ -710,6 +711,16 @@ function buildPersonalActionPlan(source: ReportSourceData): BuiltSection {
 // never a new interpretation of a raw number.
 // ---------------------------------------------------------------------------
 
+/**
+ * A date inside report narrative text: day-first through the canonical
+ * formatter (dd/mm/yyyy AUD, dd-mm-yyyy INR), never ISO year-first (PO rule,
+ * Document2 findings #8/#19). `currency` is the report's reporting currency; the
+ * India mutual-fund section always passes 'INR'. Non-ISO input is returned as is.
+ */
+export function narrativeDate(iso: string, currency: string | null | undefined): string {
+  return formatDateInText(iso, currency);
+}
+
 export function buildInvestmentPerformance(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
   const perf = premium.investmentPerformance;
   if (!perf) return empty('investment_performance', 27, 'Investment performance analytics are not yet available — this requires recorded investment transactions with enough history to calculate a return.');
@@ -728,9 +739,9 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     sectionData: { results, ...(premium.ownerBreakup ? { ownerBreakup: premium.ownerBreakup } : {}) },
     narrativeText:
       portfolioCount > 1
-        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR/TWRR) as of ${results.asOfDate}.`
+        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR/TWRR) as of ${narrativeDate(results.asOfDate, source.currency)}.`
         : portfolioCount === 1
-          ? `Your investment portfolio's XIRR, TWRR and benchmark comparison as of ${results.asOfDate} are shown below, where enough history exists to calculate them.`
+          ? `Your investment portfolio's XIRR, TWRR and benchmark comparison as of ${narrativeDate(results.asOfDate, source.currency)} are shown below, where enough history exists to calculate them.`
           : null,
     // (owner-class breakup text is appended to the limitation text below so the existing narrative contract is unchanged)
     chartData: { portfolios: results.portfolios.map((p) => ({ currencyCode: p.currencyCode, performanceVsBenchmarkSeries: p.performanceVsBenchmarkSeries, drawdownSeries: p.drawdownSeries })) },
@@ -758,7 +769,7 @@ export function buildSipContribution(source: ReportSourceData, premium: PremiumS
     displayOrder: 28,
     sectionStatus: 'included',
     sectionData: { results },
-    narrativeText: `${results.presentableCount} of ${results.seriesCount} recurring contribution series detected as of ${results.asOfDate} have enough history to present analytics. The observations below are generated directly by the platform's SIP engine from your recorded contribution history.`,
+    narrativeText: `${results.presentableCount} of ${results.seriesCount} recurring contribution series detected as of ${narrativeDate(results.asOfDate, source.currency)} have enough history to present analytics. The observations below are generated directly by the platform's SIP engine from your recorded contribution history.`,
     chartData: {
       series: results.analytics.map((a) => ({ seriesKey: a.series.seriesKey, actualXirr: a.actualXirr, benchmarkSip: a.benchmarkSip })),
       observations,
@@ -784,7 +795,7 @@ export function buildPortfolioXray(source: ReportSourceData, premium: PremiumSou
     sectionStatus: 'included',
     sectionData: { results },
     narrativeText:
-      `This look-through analysis is an attribution view of holdings your funds already contain — it does not add to your recorded net worth. As of ${results.asOfDate}` +
+      `This look-through analysis is an attribution view of holdings your funds already contain — it does not add to your recorded net worth. As of ${narrativeDate(results.asOfDate, source.currency)}` +
       (topSector ? `, your largest sector exposure through look-through holdings is ${topSector.label} at approximately ${(topSector.effectiveWeight * 100).toFixed(0)}%.` : '.'),
     chartData: { sectorExposure: results.sectorExposure, securityConcentration: results.securityConcentration, schemeConcentration: results.schemeConcentration },
     sourceReferences: { module: 'ii-r5-xray', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
@@ -807,7 +818,7 @@ export function buildTaxAndCost(source: ReportSourceData, premium: PremiumSource
     displayOrder: 30,
     sectionStatus: 'included',
     sectionData: { results, taxProfileSource: tax.taxProfileSource },
-    narrativeText: `${disposalCount} disposal${disposalCount === 1 ? '' : 's'} produced a capital-gains result as of ${tax.asOfDate}${exitLoadCount > 0 ? `, and ${exitLoadCount} redemption${exitLoadCount === 1 ? '' : 's'} carried an exit-load observation` : ''}. ${results.disclaimer}`,
+    narrativeText: `${disposalCount} disposal${disposalCount === 1 ? '' : 's'} produced a capital-gains result as of ${narrativeDate(tax.asOfDate, source.currency)}${exitLoadCount > 0 ? `, and ${exitLoadCount} redemption${exitLoadCount === 1 ? '' : 's'} carried an exit-load observation` : ''}. ${results.disclaimer}`,
     chartData: { taxYearAggregation: results.taxYearAggregation },
     sourceReferences: { module: 'ii-r6-tax-cost', engineVersion: results.engineVersion, asOfDate: tax.asOfDate, taxProfileSource: tax.taxProfileSource },
     confidenceLevel: null,
@@ -845,7 +856,7 @@ export function buildIndiaMfInvestmentReport(source: ReportSourceData, premium: 
     sectionStatus: 'included',
     sectionData: { report },
     narrativeText:
-      `Your Indian mutual fund holdings are listed below as at ${report.valuationDate}, one table for each owner (${ownerCount} owner section${ownerCount === 1 ? '' : 's'}, ${positionCount} holding${positionCount === 1 ? '' : 's'}). ` +
+      `Your Indian mutual fund holdings are listed below as at ${narrativeDate(report.valuationDate, 'INR')}, one table for each owner (${ownerCount} owner section${ownerCount === 1 ? '' : 's'}, ${positionCount} holding${positionCount === 1 ? '' : 's'}). ` +
       `Each table shows what your uploaded statements record — purchases, switches, redemptions and dividends — against the latest published NAV.` +
       (partial > 0 ? ` ${partial} holding${partial === 1 ? '' : 's'} rest${partial === 1 ? 's' : ''} on partial transaction history and carr${partial === 1 ? 'ies' : 'y'} a visible basis marker.` : ''),
     chartData: null,

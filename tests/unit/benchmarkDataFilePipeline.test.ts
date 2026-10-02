@@ -79,9 +79,14 @@ describe('CSV happy paths for the three shapes', () => {
 
   it('the templates themselves are valid shapes (and the multi template is NOT publishable unedited)', () => {
     const single = BENCHMARK_UPLOAD_TEMPLATES.single_date_value;
-    expect(ingest(single.fileName, utf8(single.csv), params()).result?.hardErrorCount).toBe(0);
+    // The templates are written day first (DD-MM-YYYY), so they are read with that file date format.
+    expect(ingest(single.fileName, utf8(single.csv), params({ dateFormat: 'DD-MM-YYYY' })).result?.hardErrorCount).toBe(0);
+    expect(single.csv).toContain('01-01-2024');
+    expect(single.csv).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(single.description).toContain('DD-MM-YYYY');
+    expect(single.description).not.toContain('YYYY-MM-DD');
     const multi = BENCHMARK_UPLOAD_TEMPLATES.multi_key_date_value;
-    const m = ingest(multi.fileName, utf8(multi.csv), params({ shape: 'multi', benchmarkKey: undefined }));
+    const m = ingest(multi.fileName, utf8(multi.csv), params({ shape: 'multi', benchmarkKey: undefined, dateFormat: 'DD-MM-YYYY' }));
     expect(codes(m.result)).toContain('BENCHMARK_UNKNOWN');
     for (const t of Object.values(BENCHMARK_UPLOAD_TEMPLATES)) {
       // No comment lines: a comment would corrupt a re-upload.

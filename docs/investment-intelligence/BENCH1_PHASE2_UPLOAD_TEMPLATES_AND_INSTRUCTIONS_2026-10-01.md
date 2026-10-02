@@ -4,7 +4,7 @@ The downloadable templates are served by `GET /api/admin/investment-intelligence
 
 | Template | File shape | Notes |
 |---|---|---|
-| `single_date_value` | `date,value` | Benchmark, source, return type, currency and date format are chosen in the form. Example uses ISO dates. |
+| `single_date_value` | `date,value` | Benchmark, source, return type, currency and date format are chosen in the form. Example dates are written day first (like 01-01-2024), so choose the file date format "Day-month-year (DD-MM-YYYY)". Dates typed into the admin screens are DD-MM-YYYY too; the API still carries ISO. |
 | `multi_key_date_value` | `benchmark_key,date,value` | Every key must exist in the catalogue and share the variant and currency chosen on the form. The example keys are deliberately NOT in any catalogue, so an unedited template can never be published. |
 | `provider_nse_tri_export` | `Date,Total Returns Index` (dates like `02 Jan 2024`) | A recognised provider shape. The header sets for provider exports come from public conventions and are **not verified against a live download**; anything not matching a registered layout needs an explicit column mapping (never inferred). |
 

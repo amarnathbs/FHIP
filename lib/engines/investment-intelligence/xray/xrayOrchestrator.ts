@@ -43,6 +43,7 @@ import {
 } from './debtXray';
 import { TOP_HOLDINGS_DEFAULT_N } from '@/lib/config/investment-intelligence/xrayThresholds';
 import { XRAY_ENGINE_VERSION, R5_XRAY_SUB_VERSIONS, fingerprintXrayInputs } from '../r5Versioning';
+import { formatDateInText } from '@/lib/engines/date';
 
 export interface XrayDataset {
   userId: string;
@@ -200,8 +201,8 @@ export function summariseXrayDataQuality(result: XrayResult): XrayDataQualitySum
       `This analysis covers ${pct(lt.effectiveCoverage)} of the portfolio: ${pct(lt.schemeCoverage)} of its value is in schemes with published holdings, and those schemes disclose ${pct(lt.holdingsCoverageWithinSchemes)} of their portfolios.`,
     ];
     parts.push(
-      `Portfolio positions are as at ${result.portfolioAsOfDate}; fund holdings are as at ${result.holdingsAsOfDate}${
-        result.oldestHoldingsDate && result.oldestHoldingsDate !== result.holdingsAsOfDate ? ` (oldest contributing disclosure ${result.oldestHoldingsDate})` : ''
+      `Portfolio positions are as at ${formatDateInText(result.portfolioAsOfDate, 'INR')}; fund holdings are as at ${formatDateInText(result.holdingsAsOfDate, 'INR')}${
+        result.oldestHoldingsDate && result.oldestHoldingsDate !== result.holdingsAsOfDate ? ` (oldest contributing disclosure ${formatDateInText(result.oldestHoldingsDate, 'INR')})` : ''
       }.`
     );
     if (lt.mixedDateWarning) {

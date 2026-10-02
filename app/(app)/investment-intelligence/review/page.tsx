@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
+import { getUserHomeCountry } from '@/lib/services/jurisdiction';
+import { dateFormatKeyForCountry } from '@/lib/engines/date';
 import { ReviewCentreClient } from '@/components/investment-intelligence/ReviewCentreClient';
 
 // R9 — Investment Review Centre (spec sections 39, 53-59).
@@ -16,6 +18,8 @@ export default async function InvestmentReviewCentrePage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  // Dates on this page follow the user's own country (dd/mm/yyyy AU, dd-mm-yyyy India).
+  const dateCurrency = dateFormatKeyForCountry(await getUserHomeCountry(user.id, supabase));
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -27,7 +31,7 @@ export default async function InvestmentReviewCentrePage() {
         </p>
       </header>
       <InvestmentIntelligenceSubNav />
-      <ReviewCentreClient />
+      <ReviewCentreClient dateCurrency={dateCurrency} />
     </div>
   );
 }

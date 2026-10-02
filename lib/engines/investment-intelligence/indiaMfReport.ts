@@ -91,6 +91,7 @@
 // NEVER INVENTED: a missing NAV falls back to the latest holding-snapshot
 // price (labelled 'statement value'); with neither, current value is n/a. A
 // missing index close is reported 'not_available'.
+import { formatDateShort } from '@/lib/engines/date';
 import { xirr, type CashFlow, type XirrUnavailableReason } from './xirr';
 import { unitDeltaForTransaction } from '@/lib/services/investment-intelligence/reconciliation';
 import { computeCostValue, type CostBasisTransaction } from '@/lib/services/investment-intelligence/costBasis';
@@ -354,11 +355,15 @@ function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/**
+ * A date in the India report, as the PO rule requires for India investment
+ * screens (Document2 findings #8/#19): dd-mm-yyyy through the canonical
+ * formatter (lib/engines/date.ts), e.g. "12-12-2022". The earlier dd-Mon-yyyy
+ * ("12-Dec-2022") was neither the rule's format nor one the rest of the
+ * India screens use. Non-ISO input is returned unchanged.
+ */
 export function formatIsoDateDMY(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${String(d).padStart(2, '0')}-${MONTHS[m - 1]}-${y}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? formatDateShort(iso, 'INR') : iso;
 }
 
 const XIRR_REASON_TEXT: Record<string, string> = {

@@ -28,7 +28,7 @@ import {
   type EntitlementFormState,
   type OpenPanelKey,
 } from './benchmarkDataUiLogic';
-import { Btn, CheckField, Chip, EmptyState, Notice, Panel, ScrollTable, SelectField, Td, TextAreaField, TextField, Th } from './ui';
+import { Btn, CheckField, Chip, EmptyState, Notice, Panel, ScrollTable, SelectField, Td, DateField, TextAreaField, TextField, Th } from './ui';
 
 type Action = { kind: 'approve' | 'revoke'; e: EntitlementRightsView; label: string };
 
@@ -111,15 +111,15 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
             {errors.rights ? <p role="alert" className="text-xs font-medium text-risk">{errors.rights}</p> : null}
           </fieldset>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <TextField label="Valid from" type="date" required value={form.validFrom} onChange={(v) => set({ validFrom: v })} error={errors.validFrom} />
-            <TextField label="Valid to (empty if no end)" type="date" value={form.validTo} onChange={(v) => set({ validTo: v })} error={errors.validTo} />
-            <TextField label="First data date covered (optional)" type="date" value={form.dataFrom} onChange={(v) => set({ dataFrom: v })} error={errors.dataFrom} />
-            <TextField label="Last data date covered (optional)" type="date" value={form.dataTo} onChange={(v) => set({ dataTo: v })} error={errors.dataTo} />
+            <DateField label="Valid from" required value={form.validFrom} onChange={(v) => set({ validFrom: v })} error={errors.validFrom} />
+            <DateField label="Valid to (empty if no end)" value={form.validTo} onChange={(v) => set({ validTo: v })} error={errors.validTo} />
+            <DateField label="First data date covered (optional)" value={form.dataFrom} onChange={(v) => set({ dataFrom: v })} error={errors.dataFrom} />
+            <DateField label="Last data date covered (optional)" value={form.dataTo} onChange={(v) => set({ dataTo: v })} error={errors.dataTo} />
             <SelectField label="Stored data after expiry" value={form.postExpiryStorage} onChange={(v) => set({ postExpiryStorage: v as EntitlementFormState['postExpiryStorage'] })} options={[{ value: 'retain', label: 'May be kept' }, { value: 'delete', label: 'Must be deleted' }, { value: 'unknown', label: 'Not stated' }]} placeholder="Not stated" />
             <TextField label="Evidence reference" required value={form.evidenceReference} onChange={(v) => set({ evidenceReference: v })} error={errors.evidenceReference} hint="Document title or contract reference." />
             <TextField label={`Evidence URL${form.kind === 'public_use_permission' ? '' : ' (optional)'}`} type="url" required={form.kind === 'public_use_permission'} value={form.evidenceUrl} onChange={(v) => set({ evidenceUrl: v })} error={errors.evidenceUrl} />
-            <TextField label={`Evidence document date${form.kind === 'public_use_permission' ? '' : ' (optional)'}`} type="date" required={form.kind === 'public_use_permission'} value={form.evidenceDocumentDate} onChange={(v) => set({ evidenceDocumentDate: v })} error={errors.evidenceDocumentDate} />
-            <TextField label={`Evidence retrieved on${form.kind === 'public_use_permission' ? '' : ' (optional)'}`} type="date" required={form.kind === 'public_use_permission'} value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
+            <DateField label={`Evidence document date${form.kind === 'public_use_permission' ? '' : ' (optional)'}`} required={form.kind === 'public_use_permission'} value={form.evidenceDocumentDate} onChange={(v) => set({ evidenceDocumentDate: v })} error={errors.evidenceDocumentDate} />
+            <DateField label={`Evidence retrieved on${form.kind === 'public_use_permission' ? '' : ' (optional)'}`} required={form.kind === 'public_use_permission'} value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
             <TextField label="Attribution wording (optional)" value={form.attributionText} onChange={(v) => set({ attributionText: v })} />
           </div>
           {form.kind === 'public_use_permission' ? <p className="mt-2 text-xs text-muted">A public-use permission must be backed by a document: its web address, its date and the date you retrieved it. A box saying you have permission is not enough.</p> : null}

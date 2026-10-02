@@ -322,6 +322,20 @@ describe('manual-import mode: pending-import task (never described as automatic)
     expect(t.status).toBe('due');
     expect(t.historyMissingFrom).toBe('2026-09-01');
   });
+  it('the action sentence shows dates day-first (dd-mm-yyyy), never ISO year-first', () => {
+    const iso = /(^|[^0-9])[0-9]{4}-[0-9]{2}-[0-9]{2}([^0-9]|$)/;
+    const current = assessPendingImport({ ...base, latestValidDataDate: '2026-09-30' }, NOW);
+    expect(current.action).toBe('Up to date through 30-09-2026 (manual imports).');
+    const overdue = assessPendingImport({ ...base, latestValidDataDate: '2026-09-18' }, NOW);
+    expect(overdue.action).toContain('Latest imported level is 18-09-2026; the expected latest session is ');
+    const have = stored('2026-09-30', '2026-09-22');
+    const missing = assessPendingImport({ ...base, latestValidDataDate: '2026-09-30', storedDates: new Set(have.keys()) }, NOW);
+    const sentences = [current.action, overdue.action, missing.action, assessPendingImport({ ...base, latestValidDataDate: null }, NOW).action];
+    for (const t of sentences) expect(t, t).not.toMatch(iso);
+    // the structured fields stay ISO for the API
+    expect(overdue.latestValidDataDate).toBe('2026-09-18');
+    expect(missing.historyMissingFrom).toBe('2026-09-01');
+  });
   it('automated / disabled benchmarks are not manual tasks', () => {
     expect(assessPendingImport({ ...base, ingestionMode: 'automated', latestValidDataDate: null }, NOW).status).toBe('not_manual');
     expect(assessPendingImport({ ...base, ingestionMode: 'disabled', latestValidDataDate: null }, NOW).action).toMatch(/disabled/);

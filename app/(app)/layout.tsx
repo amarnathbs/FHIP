@@ -65,7 +65,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Expiry notice for time-limited Premium (admin grant / promo code): computed from the signed-in
   // user's OWN entitlement row only, by a pure function; never shown for paid Premium. Fails soft to
   // "no notice" (see lib/services/premiumNotice.ts).
-  const reminder = await getOwnEntitlementReminder(supabase as never, user.id);
+  const reminder = await getOwnEntitlementReminder(supabase as never, user.id, undefined, gate.countryOfResidence);
 
   return (
     <AppShell>

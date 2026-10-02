@@ -11,6 +11,7 @@ import { isKnownCountry } from '@/lib/services/jurisdiction';
 import { utcToday } from '@/lib/services/entitlementWindow';
 import { describePlanStatus } from '@/lib/services/entitlementPlanStatus';
 import { computeEntitlementReminder } from '@/lib/services/entitlementReminder';
+import { dateFormatKeyForCountry } from '@/lib/engines/date';
 
 export async function GET() {
   const { user, unauthenticated } = await requireUser();
@@ -19,7 +20,7 @@ export async function GET() {
   const supabase = await createClient();
 
   const [{ data: profile, error: profileError }, { data: entitlement, error: entitlementError }] = await Promise.all([
-    supabase.from('user_profiles').select('billing_country, billing_country_confirmed_at').eq('user_id', user.id).maybeSingle(),
+    supabase.from('user_profiles').select('billing_country, billing_country_confirmed_at, country_of_residence').eq('user_id', user.id).maybeSingle(),
     supabase
       .from('user_entitlements')
       .select('plan_tier, effective_from, effective_to, provider, subscription_status, price_id, current_period_end, cancel_at_period_end')
@@ -49,14 +50,17 @@ export async function GET() {
     }
   };
   const sourceRow = await readSourceRow();
+  // Dates in the plan label and the reminder follow the user's own country (dd/mm/yyyy AU, dd-mm-yyyy India).
+  const homeCountry = (profile as { country_of_residence?: string | null } | null)?.country_of_residence ?? null;
   const plan = describePlanStatus(
     entitlement ? { ...entitlement, entitlement_source: sourceRow?.entitlement_source ?? null, admin_grant_ends_on: sourceRow?.admin_grant_ends_on ?? null } : null,
-    utcToday()
+    utcToday(),
+    homeCountry
   );
   // Expiry reminder for the signed-in user's own time-limited Premium (admin grant / promo code).
   // Pure function of this user's own row; null source (paid, legacy or pre-migration) never yields one.
   const reminder = entitlement
-    ? computeEntitlementReminder({ ...entitlement, entitlement_source: sourceRow?.entitlement_source ?? null }, utcToday())
+    ? computeEntitlementReminder({ ...entitlement, entitlement_source: sourceRow?.entitlement_source ?? null }, utcToday(), homeCountry)
     : computeEntitlementReminder(null, utcToday());
 
   const billingCountry = profile?.billing_country ?? null;
@@ -66,6 +70,8 @@ export async function GET() {
   return ok({
     billingCountry,
     billingConfirmed,
+    // Which day-first date shape this user's dates use (dd/mm/yyyy AU, dd-mm-yyyy India): their own country.
+    dateFormat: dateFormatKeyForCountry(homeCountry),
     // Window-aware: an expired time-limited entitlement reads as 'free' here,
     // matching what the gates themselves enforce.
     planTier: plan.planTier,

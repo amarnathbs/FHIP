@@ -9,6 +9,8 @@
 
 import { useEffect, useState } from 'react';
 import { addDaysIso, utcToday } from '@/lib/services/entitlementWindow';
+import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
+import { DATE_INPUT_HINT, DATE_INPUT_PLACEHOLDER, formatDateInput, parseDateInput } from '@/lib/engines/dateInput';
 import {
   PROMO_ALPHABET,
   PROMO_DEFAULT_DURATION_DAYS,
@@ -65,7 +67,8 @@ export function PromoCodesClient() {
   const [durationDays, setDurationDays] = useState(PROMO_DEFAULT_DURATION_DAYS);
   const [maxRedemptions, setMaxRedemptions] = useState(PROMO_DEFAULT_MAX_REDEMPTIONS);
   const [unlimited, setUnlimited] = useState(false);
-  const [expiresOn, setExpiresOn] = useState(addDaysIso(today, 90));
+  // Typed day-first (DD-MM-YYYY); converted to ISO for the API.
+  const [expiresOn, setExpiresOn] = useState(formatDateInput(addDaysIso(today, 90)));
   const [noExpiry, setNoExpiry] = useState(false);
   const [note, setNote] = useState('');
 
@@ -89,6 +92,11 @@ export function PromoCodesClient() {
   }, [reload]);
 
   async function create() {
+    const expiresIso = parseDateInput(expiresOn);
+    if (!noExpiry && (expiresIso === null || expiresIso < today)) {
+      setActionError('Enter the last day the code can be redeemed as DD-MM-YYYY, like 01-10-2026, and not before today. Or tick "No expiry".');
+      return;
+    }
     setBusy(true);
     setActionError(null);
     setNotice(null);
@@ -100,14 +108,14 @@ export function PromoCodesClient() {
           code: code.trim() === '' ? undefined : code,
           durationDays,
           ...(unlimited ? { unlimited: true } : { maxRedemptions }),
-          ...(noExpiry ? { noExpiry: true } : { expiresOn }),
+          ...(noExpiry ? { noExpiry: true } : { expiresOn: expiresIso }),
           note: note.trim() === '' ? undefined : note,
         }),
       });
       const days = created.duration_days ?? durationDays;
       const endsIfToday = created.ends_if_redeemed_today ?? addDaysIso(today, days);
       setNotice(
-        `Promo code created: ${formatPromoCode(created.code)}. Each redemption gives ${days} day(s) of Premium; a user redeeming it today would have access until ${endsIfToday}. Copy the code now; it is also shown in the list below to promo-code admins.`
+        `Promo code created: ${formatPromoCode(created.code)}. Each redemption gives ${days} day(s) of Premium; a user redeeming it today would have access until ${formatDateShort(endsIfToday, 'AUD')}. Copy the code now; it is also shown in the list below to promo-code admins.`
       );
       setCode('');
       setNote('');
@@ -211,8 +219,12 @@ export function PromoCodesClient() {
             <div className="mt-1 flex flex-wrap items-center gap-3">
               <input
                 id="promo-expiry"
-                type="date"
-                min={today}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={DATE_INPUT_PLACEHOLDER}
+                maxLength={10}
+                aria-describedby="promo-expiry-hint"
                 value={expiresOn}
                 disabled={noExpiry}
                 onChange={(e) => setExpiresOn(e.target.value)}
@@ -223,6 +235,9 @@ export function PromoCodesClient() {
                 No expiry (explicit choice)
               </label>
             </div>
+            <p id="promo-expiry-hint" className="mt-1 text-xs text-muted">
+              {DATE_INPUT_HINT}
+            </p>
           </div>
           <div>
             <label htmlFor="promo-note" className="block text-xs font-medium text-muted">
@@ -269,7 +284,7 @@ export function PromoCodesClient() {
                     <td className="px-3 py-2">
                       {r.redemption_count} / {r.max_redemptions ?? 'unlimited'}
                     </td>
-                    <td className="px-3 py-2">{r.expires_on ?? 'no expiry'}</td>
+                    <td className="px-3 py-2">{r.expires_on ? formatDateShort(r.expires_on, 'AUD') : 'no expiry'}</td>
                     <td className="px-3 py-2 text-muted">{r.note ?? '—'}</td>
                     <td className="px-3 py-2">
                       {r.status === 'disabled' ? (
@@ -341,7 +356,7 @@ export function PromoCodesClient() {
               <tbody>
                 {events.map((ev) => (
                   <tr key={ev.id} className="border-t">
-                    <td className="px-3 py-2">{new Date(ev.created_at).toLocaleString('en-AU')}</td>
+                    <td className="px-3 py-2">{formatDateTimeShort(ev.created_at, 'AUD')}</td>
                     <td className="px-3 py-2 capitalize">{ev.event_type}</td>
                     <td className="px-3 py-2 font-mono">{ev.code_hint}</td>
                     <td className="px-3 py-2">{ev.actor_email ?? '(account no longer exists)'}</td>

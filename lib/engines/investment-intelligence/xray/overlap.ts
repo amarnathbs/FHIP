@@ -30,6 +30,7 @@ import type { FundHoldingsSnapshot, SnapshotHolding } from './lookThrough';
 import { classifyFreshness, calculateFundCoverage } from './lookThrough';
 import type { HoldingsFreshness } from '@/lib/config/investment-intelligence/xrayThresholds';
 import { XRAY_THRESHOLD_CONFIG_VERSION } from '@/lib/config/investment-intelligence/xrayThresholds';
+import { formatDateInText } from '@/lib/engines/date';
 
 export const OVERLAP_METHOD_VERSION = 'overlap-min-weight-r5-v1';
 
@@ -132,7 +133,7 @@ export function calculateFundOverlap(a: FundHoldingsSnapshot | null, b: FundHold
     warnings.push('At least one of these funds has holdings data older than the freshness threshold, so the overlap describes an older portfolio composition.');
   }
   if (a.holdingsAsOfDate !== b.holdingsAsOfDate) {
-    warnings.push(`These funds disclosed on different dates (${a.holdingsAsOfDate} and ${b.holdingsAsOfDate}), so the comparison mixes two portfolio dates.`);
+    warnings.push(`These funds disclosed on different dates (${formatDateInText(a.holdingsAsOfDate, 'INR')} and ${formatDateInText(b.holdingsAsOfDate, 'INR')}), so the comparison mixes two portfolio dates.`);
   }
   if (A.unresolvedWeight > 0 || B.unresolvedWeight > 0) {
     warnings.push(`${(A.unresolvedWeight * 100).toFixed(1)}% and ${(B.unresolvedWeight * 100).toFixed(1)}% of these funds could not be matched to identified securities and are excluded from the overlap figure.`);

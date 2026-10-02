@@ -388,7 +388,10 @@ describe('honest plan wording (PO requirement 6)', () => {
   it('describePlanStatus: admin grant is labelled as such with its end date; lapsed grant reads as lapsed; paid reads as plain Premium', async () => {
     const { describePlanStatus } = await import('@/lib/services/entitlementPlanStatus');
     const grant = describePlanStatus({ plan_tier: 'premium', entitlement_source: 'admin_grant', effective_from: dayOffset(-10), effective_to: '2026-10-12', admin_grant_ends_on: '2026-10-12' }, TODAY);
-    expect(grant).toMatchObject({ kind: 'premium_admin_grant', planTier: 'premium', label: 'Premium (granted by FHIP admin, ends 12 Oct 2026)' });
+    expect(grant).toMatchObject({ kind: 'premium_admin_grant', planTier: 'premium', label: 'Premium (granted by FHIP admin, ends 12/10/2026)' });
+    // the user's own country decides the day-first shape: India dd-mm-yyyy, never ISO or a month name
+    const india = describePlanStatus({ plan_tier: 'premium', entitlement_source: 'admin_grant', effective_from: dayOffset(-10), effective_to: '2026-10-12', admin_grant_ends_on: '2026-10-12' }, TODAY, 'IN');
+    expect(india.label).toBe('Premium (granted by FHIP admin, ends 12-10-2026)');
     const lapsed = describePlanStatus({ plan_tier: 'premium', entitlement_source: 'admin_grant', effective_from: dayOffset(-40), effective_to: dayOffset(-3), admin_grant_ends_on: dayOffset(-3) }, TODAY);
     expect(lapsed).toMatchObject({ kind: 'admin_grant_lapsed', planTier: 'free' });
     expect(lapsed.label).toMatch(/^Free \(your Premium access granted by FHIP admin ended /);
@@ -440,7 +443,7 @@ describe('honest plan wording (PO requirement 6)', () => {
         { plan_tier: 'premium', effective_from: dayOffset(-3), effective_to: '2026-12-25', ...base },
         { data: { entitlement_source: 'admin_grant', admin_grant_ends_on: '2026-12-25' }, error: null }
       );
-      expect(d).toMatchObject({ planTier: 'premium', planLabel: 'Premium (granted by FHIP admin, ends 25 Dec 2026)', entitlementSource: 'admin_grant', adminGrantEndsOn: '2026-12-25', adminGrantLapsed: false });
+      expect(d).toMatchObject({ planTier: 'premium', planLabel: 'Premium (granted by FHIP admin, ends 25/12/2026)', entitlementSource: 'admin_grant', adminGrantEndsOn: '2026-12-25', adminGrantLapsed: false });
     });
 
     it('a LAPSED admin grant reads as Free (window-aware) and says it lapsed', async () => {
