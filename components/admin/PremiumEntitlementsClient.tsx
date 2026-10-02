@@ -11,6 +11,8 @@
 
 import { useEffect, useState } from 'react';
 import { ENTITLEMENT_GRANT_MAX_DAYS, maxGrantEndDate, utcToday } from '@/lib/services/entitlementWindow';
+import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
+import { DATE_INPUT_HINT, DATE_INPUT_PLACEHOLDER, formatDateInput, parseDateInput } from '@/lib/engines/dateInput';
 import { REASON_MIN_LENGTH } from '@/lib/services/premiumGrantAdmin';
 
 interface UserRow {
@@ -89,10 +91,11 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
+// Day-first through the canonical formatter (PO rule, Document2 findings #8/#19):
+// this admin page has no single country, so it uses the AU shape dd/mm/yyyy.
 function fmt(isoDate: string | null): string {
   if (!isoDate) return '—';
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return formatDateShort(isoDate, 'AUD');
 }
 
 function describeState(u: UserRow): string {
@@ -140,7 +143,8 @@ export function PremiumEntitlementsClient() {
   const [selected, setSelected] = useState<UserRow | null>(null);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
 
-  const [endsOn, setEndsOn] = useState(maxEnd);
+  // The end date is typed day-first (DD-MM-YYYY); the API gets the ISO value.
+  const [endsOn, setEndsOn] = useState(formatDateInput(maxEnd));
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -195,7 +199,7 @@ export function PremiumEntitlementsClient() {
     setNotice(null);
     setConfirmRevoke(false);
     setReason('');
-    setEndsOn(maxEnd);
+    setEndsOn(formatDateInput(maxEnd));
     try {
       const rows = await fetchJson<UserRow[]>(`/api/admin/entitlements/users?q=${encodeURIComponent(userId)}`);
       const row = rows.find((r) => r.user_id === userId) ?? null;
@@ -215,7 +219,7 @@ export function PremiumEntitlementsClient() {
       await fetchJson('/api/admin/entitlements/grants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, userId: selected.user_id, endsOn: action === 'revoke' ? undefined : endsOn, reason }),
+        body: JSON.stringify({ action, userId: selected.user_id, endsOn: action === 'revoke' ? undefined : (endsIso ?? endsOn), reason }),
       });
       setNotice(action === 'grant' ? 'Premium granted.' : action === 'extend' ? 'Grant extended.' : 'Grant revoked.');
       setReason('');
@@ -232,7 +236,8 @@ export function PremiumEntitlementsClient() {
   }
 
   const reasonOk = reason.trim().length >= REASON_MIN_LENGTH;
-  const dateOk = endsOn >= today && endsOn <= maxEnd;
+  const endsIso = parseDateInput(endsOn);
+  const dateOk = endsIso !== null && endsIso >= today && endsIso <= maxEnd;
   // "Managed" = an admin grant OR a promo-code entitlement (both are time-limited and admin-extendable).
   const isAdminGrant = !!selected && selected.entitlement_source !== 'payment';
   const extensionsExhausted = isAdminGrant && !!selected && selected.extensions_remaining <= 0;
@@ -457,16 +462,25 @@ export function PremiumEntitlementsClient() {
                 </label>
                 <input
                   id="ent-ends"
-                  type="date"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder={DATE_INPUT_PLACEHOLDER}
+                  maxLength={10}
                   value={endsOn}
-                  min={today}
-                  max={maxEnd}
+                  aria-describedby="ent-ends-hint"
+                  aria-invalid={endsOn.trim() !== '' && endsIso === null ? true : undefined}
                   onChange={(e) => setEndsOn(e.target.value)}
                   className="mt-1 rounded border px-3 py-2 text-sm"
                 />
-                <p className="mt-1 text-xs text-muted">
-                  Latest allowed: {fmt(maxEnd)} ({ENTITLEMENT_GRANT_MAX_DAYS} days from today). Enforced by the server.
+                <p id="ent-ends-hint" className="mt-1 text-xs text-muted">
+                  {DATE_INPUT_HINT} Latest allowed: {fmt(maxEnd)} ({ENTITLEMENT_GRANT_MAX_DAYS} days from today). Enforced by the server.
                 </p>
+                {endsOn.trim() !== '' && endsIso === null ? (
+                  <p role="alert" className="mt-1 text-xs text-risk">
+                    That is not a valid date. Use DD-MM-YYYY, like 01-10-2026.
+                  </p>
+                ) : null}
               </div>
               <div>
                 <label htmlFor="ent-reason" className="block text-xs font-medium text-muted">
@@ -558,7 +572,7 @@ export function PremiumEntitlementsClient() {
                   <tbody>
                     {history.map((h) => (
                       <tr key={h.id} className="border-t align-top">
-                        <td className="px-3 py-2">{new Date(h.created_at).toLocaleString('en-AU')}</td>
+                        <td className="px-3 py-2">{formatDateTimeShort(h.created_at, 'AUD')}</td>
                         <td className="px-3 py-2 capitalize">{h.action}</td>
                         <td className="px-3 py-2">{h.actor_email ?? h.actor_user_id}</td>
                         <td className="px-3 py-2 text-muted">

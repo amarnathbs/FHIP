@@ -6,6 +6,7 @@
 // lapsed, not as a silent downgrade. No billing flow is implied.
 
 import { effectivePlanTier, type EntitlementWindowRow } from '@/lib/services/entitlementWindow';
+import { dateFormatKeyForCountry, formatDateShort } from '@/lib/engines/date';
 
 export type PlanStatusKind = 'free' | 'premium_paid' | 'premium_admin_grant' | 'admin_grant_lapsed' | 'premium_promo' | 'promo_lapsed';
 
@@ -23,15 +24,18 @@ export interface PlanStatus {
   grantEndsOn: string | null;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** 2026-10-12 -> "12 Oct 2026" (locale-independent so server and tests agree). */
-export function formatIsoDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
+/**
+ * 2026-10-12 -> "12-10-2026" for India, "12/10/2026" otherwise (the user's own
+ * country; an unknown country uses the AU shape). Day-first through the
+ * canonical formatter (lib/engines/date.ts), never ISO year-first or US
+ * month-first (PO rule, Document2 findings #8/#19). Locale-independent so server
+ * and tests agree.
+ */
+export function formatIsoDate(isoDate: string, country?: string | null): string {
+  return formatDateShort(isoDate, dateFormatKeyForCountry(country));
 }
 
-export function describePlanStatus(row: PlanStatusInput | null | undefined, today: string): PlanStatus {
+export function describePlanStatus(row: PlanStatusInput | null | undefined, today: string, country?: string | null): PlanStatus {
   const planTier = effectivePlanTier(row, today);
   const isAdminGrant = row?.entitlement_source === 'admin_grant';
   const isPromo = row?.entitlement_source === 'promo_code';
@@ -42,7 +46,7 @@ export function describePlanStatus(row: PlanStatusInput | null | undefined, toda
       return {
         kind: 'premium_admin_grant',
         planTier,
-        label: `Premium (granted by FHIP admin, ends ${formatIsoDate(endsOn)})`,
+        label: `Premium (granted by FHIP admin, ends ${formatIsoDate(endsOn, country)})`,
         grantEndsOn: endsOn,
       };
     }
@@ -50,7 +54,7 @@ export function describePlanStatus(row: PlanStatusInput | null | undefined, toda
       return {
         kind: 'premium_promo',
         planTier,
-        label: `Premium (promo code, ends ${formatIsoDate(endsOn)})`,
+        label: `Premium (promo code, ends ${formatIsoDate(endsOn, country)})`,
         grantEndsOn: endsOn,
       };
     }
@@ -61,7 +65,7 @@ export function describePlanStatus(row: PlanStatusInput | null | undefined, toda
     return {
       kind: 'promo_lapsed',
       planTier,
-      label: `Free (your Premium access from a promo code ended ${formatIsoDate(endsOn)})`,
+      label: `Free (your Premium access from a promo code ended ${formatIsoDate(endsOn, country)})`,
       grantEndsOn: endsOn,
     };
   }
@@ -70,7 +74,7 @@ export function describePlanStatus(row: PlanStatusInput | null | undefined, toda
     return {
       kind: 'admin_grant_lapsed',
       planTier,
-      label: `Free (your Premium access granted by FHIP admin ended ${formatIsoDate(endsOn)})`,
+      label: `Free (your Premium access granted by FHIP admin ended ${formatIsoDate(endsOn, country)})`,
       grantEndsOn: endsOn,
     };
   }

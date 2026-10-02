@@ -194,7 +194,8 @@ describe('expiry reminders — pure rules', () => {
   it('plan wording: promo is labelled "Premium (promo code, ends <date>)"; a lapsed promo reads as lapsed; never as paid', async () => {
     const { describePlanStatus } = await import('@/lib/services/entitlementPlanStatus');
     const live = describePlanStatus({ plan_tier: 'premium', entitlement_source: 'promo_code', effective_from: day(-5), effective_to: '2026-12-25', admin_grant_ends_on: '2026-12-25' }, TODAY);
-    expect(live).toMatchObject({ kind: 'premium_promo', planTier: 'premium', label: 'Premium (promo code, ends 25 Dec 2026)' });
+    expect(live).toMatchObject({ kind: 'premium_promo', planTier: 'premium', label: 'Premium (promo code, ends 25/12/2026)' });
+    expect(describePlanStatus({ plan_tier: 'premium', entitlement_source: 'promo_code', effective_from: day(-5), effective_to: '2026-12-25', admin_grant_ends_on: '2026-12-25' }, TODAY, 'IN').label).toBe('Premium (promo code, ends 25-12-2026)');
     const lapsed = describePlanStatus({ plan_tier: 'premium', entitlement_source: 'promo_code', effective_from: day(-90), effective_to: day(-2), admin_grant_ends_on: day(-2) }, TODAY);
     expect(lapsed).toMatchObject({ kind: 'promo_lapsed', planTier: 'free' });
     expect(lapsed.label).toMatch(/promo code ended/);
@@ -577,7 +578,7 @@ describe('GET /api/payments/status — promo wording and reminder', () => {
   it('promo Premium reads "Premium (promo code, ends <date>)", reports its source, and carries the expiring-soon reminder', async () => {
     const d = await status({ plan_tier: 'premium', effective_from: day(-60), effective_to: day(5), ...base }, { entitlement_source: 'promo_code', admin_grant_ends_on: day(5) });
     expect(d).toMatchObject({ planTier: 'premium', entitlementSource: 'promo_code', promoLapsed: false });
-    expect(String(d.planLabel)).toMatch(/^Premium \(promo code, ends \d+ \w{3} 2026\)$/);
+    expect(String(d.planLabel)).toMatch(/^Premium \(promo code, ends \d{2}\/\d{2}\/2026\)$/);
     expect(d.reminder).toMatchObject({ kind: 'expiring_7', days: 5 });
   });
 

@@ -55,3 +55,23 @@ export function formatDateTimeShort(date: Date | string, currency: 'AUD' | 'INR'
   const time = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
   return `${formatDateShort(d, currency)}, ${time}`;
 }
+
+// Country -> the date-format key above (formatDateShort is currency-keyed: AU
+// dd/mm/yyyy, India dd-mm-yyyy). Anything that is not India (including an
+// unresolved country) uses the AU shape, the app-wide display fallback.
+export function dateFormatKeyForCountry(country: string | null | undefined): 'AUD' | 'INR' {
+  return country === 'IN' ? 'INR' : 'AUD';
+}
+
+// A date inside a SENTENCE (a note, warning or narrative the user reads).
+// Day-first via formatDateShort -- dd-mm-yyyy for INR, dd/mm/yyyy otherwise
+// (an unknown or missing currency falls back to AUD, the app-wide convention) --
+// so ISO year-first text never reaches a screen (PO rule, Document2 findings
+// #8/#19). A value that is not an ISO date-only string or timestamp (a label
+// such as "not available", or already-formatted text) is returned unchanged,
+// which makes it safe to wrap around any date-ish value.
+export function formatDateInText(value: string | null | undefined, currencyCode?: string | null): string {
+  if (!value) return '';
+  if (!/^\d{4}-\d{2}-\d{2}(T|$)/.test(value)) return value;
+  return formatDateShort(value.slice(0, 10), (currencyCode ?? '').toUpperCase() === 'INR' ? 'INR' : 'AUD');
+}

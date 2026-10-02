@@ -10,7 +10,7 @@
 // or contact support). No name, no financial data, no promo-code value, no
 // tracking, no upsell language.
 
-import { formatDateShort } from '@/lib/engines/date';
+import { dateFormatKeyForCountry, formatDateShort } from '@/lib/engines/date';
 
 /**
  * THE SINGLE NAMED LIST of reminder thresholds, in days before the end date.
@@ -47,10 +47,8 @@ export interface ReminderEmail {
   text: string;
 }
 
-/** Country -> the repo's date-format key (formatDateShort is currency-keyed: AU dd/mm/yyyy, India dd-mm-yyyy). */
-export function dateFormatKeyForCountry(country: string | null | undefined): 'AUD' | 'INR' {
-  return country === 'IN' ? 'INR' : 'AUD';
-}
+/** Country -> the repo's date-format key (formatDateShort is currency-keyed: AU dd/mm/yyyy, India dd-mm-yyyy). Lives in lib/engines/date.ts; re-exported for existing callers. */
+export { dateFormatKeyForCountry };
 
 export function composeExpiryReminderEmail(input: ReminderEmailInput): ReminderEmail {
   const date = formatDateShort(input.endsOn, dateFormatKeyForCountry(input.country));
