@@ -1,4 +1,4 @@
-// Shared presentational building blocks for the Benchmark Data Admin screens.
+// Shared presentational building blocks for the Market Index Data Admin screens.
 // Presentational and stateless wherever possible, so the honest states
 // (unavailable / empty / error / pending / automation OFF) can be rendered to
 // static HTML and tested without a DOM (tests/unit/benchmarkDataClientStates.test.ts).
@@ -141,7 +141,7 @@ export function ErrorPanel({ failure, what, onRetry }: { failure: ApiFailure; wh
 }
 
 /** The service says it cannot answer (for example the database migration is not applied): never a healthy empty dashboard. */
-export function UnavailablePanel({ reason, what = 'Benchmark Data' }: { reason?: string; what?: string }) {
+export function UnavailablePanel({ reason, what = 'Market Index Data' }: { reason?: string; what?: string }) {
   return (
     <div role="alert" className="rounded-card border border-attention/40 bg-attention/10 p-4 text-sm">
       <p className="font-semibold text-attention">{what} is unavailable</p>

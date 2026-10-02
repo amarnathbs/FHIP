@@ -1,4 +1,4 @@
-// Benchmark Data - stage + validate an upload (CSV / XLSX).
+// Market Index Data - stage + validate an upload (CSV / XLSX).
 //
 // ADMIN ARCHITECTURE STANDARD. Capability `upload` (admin_users.can_upload_market_index_data,
 // enforced again in the database by create_benchmark_import_job / stage / finalize). Runs under

@@ -1,4 +1,4 @@
-// Benchmark Data - set a benchmark's ingestion mode (disabled / manual_import / automated).
+// Market Index Data - set a benchmark's ingestion mode (disabled / manual_import / automated).
 // Capability `catalogue`. Enabling automation additionally needs an approved 'automation' entitlement
 // (the RPC refuses otherwise), and a run still needs the environment flag, the global and write
 // kill switches. Setting a mode grants nothing by itself.

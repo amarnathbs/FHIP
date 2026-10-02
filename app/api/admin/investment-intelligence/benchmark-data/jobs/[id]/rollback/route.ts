@@ -1,4 +1,4 @@
-// Benchmark Data - roll a published import back (restore previous levels / retract inserted rows;
+// Market Index Data - roll a published import back (restore previous levels / retract inserted rows;
 // history is preserved as revisions). Capability `correct`; reason >= 20 characters; audited in
 // ii_benchmark_governance_events and ii_reference_corrections by the RPC.
 import { z } from 'zod';

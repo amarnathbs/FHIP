@@ -1,4 +1,4 @@
-// BENCH-1 Phase 2 - Benchmark Data Admin UI: ALL non-trivial decisions, as PURE functions.
+// BENCH-1 Phase 2 - Market Index Data Admin UI: ALL non-trivial decisions, as PURE functions.
 //
 // This repository has no DOM test environment, so everything the screens decide
 // (which controls are shown, which steps may advance, when Publish enables, how

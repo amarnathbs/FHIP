@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// BENCH-1 Phase 2 -- negative controls for the Benchmark Data Admin UI decision logic.
+// BENCH-1 Phase 2 -- negative controls for the Market Index Data Admin UI decision logic.
 //
 // For each control: (1) confirm the test files are green on the UNMUTATED source,
 // (2) apply ONE tiny mutation that removes/weakens exactly one rule in

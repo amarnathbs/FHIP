@@ -1,4 +1,4 @@
-// Benchmark Data - approve a DRAFT entitlement. Capability `entitlementApprove`
+// Market Index Data - approve a DRAFT entitlement. Capability `entitlementApprove`
 // (can_approve_benchmark_entitlements). The database refuses a proposer approving their own record
 // unless selfApprovalAck is explicit (recorded as self_approved).
 import { z } from 'zod';

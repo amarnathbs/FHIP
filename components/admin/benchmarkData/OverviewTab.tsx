@@ -73,7 +73,7 @@ export default function OverviewTab({ ov, onUpload }: { ov: OverviewResponse; on
     <div className="space-y-4">
       <AutomationBlock switches={ov.switches} notice={ov.automationNotice} />
       <PendingImportsPanel tasks={ov.pendingImports} canStage={ov.capabilities.upload} onUpload={onUpload} />
-      <Panel title="Benchmarks" description={`As at ${ov.asOfDate}. A benchmark with no stored levels is shown as no data, never as up to date.`}>
+      <Panel title="Indices" description={`As at ${ov.asOfDate}. A benchmark with no stored levels is shown as no data, never as up to date.`}>
         <OverviewTable rows={ov.rows} asOfDate={ov.asOfDate} effectivelyEnabled={ov.switches.effectivelyEnabled} />
       </Panel>
     </div>

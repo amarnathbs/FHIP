@@ -44,7 +44,7 @@ export const RESOURCES_ITEMS: { label: string; href: string }[] = [
 // there's one admin entry point in the sidebar, not three independent
 // flat sections at the top level.
 export const ADMIN_GENERAL_ITEMS: { label: string; href: string }[] = [
-  { label: 'Benchmarks', href: '/admin/benchmarks' },
+  { label: 'Planning Benchmarks', href: '/admin/benchmarks' },
   { label: 'Recommendations', href: '/admin/recommendations' },
 ];
 
@@ -101,7 +101,7 @@ export const LOOKTHROUGH_DATA_ITEMS: { label: string; href: string }[] = [
 // WRITES data: an operator trusted to read ingest health is not thereby trusted
 // to upload index values.
 export const MARKET_INDEX_DATA_ITEMS: { label: string; href: string }[] = [
-  { label: 'Benchmark Data', href: '/admin/investment-intelligence/market-index-data' },
+  { label: 'Market Index Data', href: '/admin/investment-intelligence/market-index-data' },
 ];
 
 // Admin Premium grant (migration 0231): the entitlement-management destination.
@@ -287,10 +287,10 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.resourceDiscoveryAdmin ? [{ label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.lookthroughDataQuality ? [{ label: 'Fund Look-Through', items: LOOKTHROUGH_DATA_ITEMS, matchMode: 'exact' as const }] : []),
-    // Benchmark Data (BENCH-1 Phase 2): shown when ANY of its separately named capabilities is held. Each is
+    // Market Index Data (BENCH-1 Phase 2): shown when ANY of its separately named capabilities is held. Each is
     // evaluated independently; this is UX only - every route, page and RPC enforces its own capability.
     ...(capabilities.marketIndexDataUpload || capabilities.benchmarkDataView || capabilities.benchmarkDataPublish || capabilities.benchmarkDataCorrect || capabilities.benchmarkCatalogueManage || capabilities.benchmarkEntitlementApprove
-      ? [{ label: 'Benchmark Data', items: MARKET_INDEX_DATA_ITEMS, matchMode: 'exact' as const }]
+      ? [{ label: 'Market Index Data', items: MARKET_INDEX_DATA_ITEMS, matchMode: 'exact' as const }]
       : []),
     ...(capabilities.entitlementManagement ? [{ label: 'Entitlements', items: ENTITLEMENT_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.promoCodeManagement ? [{ label: 'Promo Codes', items: PROMO_CODE_ITEMS, matchMode: 'exact' as const }] : []),

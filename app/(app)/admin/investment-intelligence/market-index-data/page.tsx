@@ -1,7 +1,7 @@
 import { requireBenchmarkPage } from '@/lib/services/investment-intelligence/benchmarkData/guards';
 import BenchmarkDataClient from '@/components/admin/BenchmarkDataClient';
 
-// Benchmark Data (BENCH-1 Phase 2) - the ONE benchmark upload / catalogue / entitlement / mapping /
+// Market Index Data (BENCH-1 Phase 2) - the ONE benchmark upload / catalogue / entitlement / mapping /
 // ingestion surface. The URL is unchanged from the earlier Market Index Data page so existing links
 // and navigation keep working.
 //

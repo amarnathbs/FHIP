@@ -1,6 +1,6 @@
-# BENCH-1 Phase 2 - Operator runbook (Benchmark Data)
+# BENCH-1 Phase 2 - Operator runbook (Market Index Data)
 
-Audience: the Product Owner and any administrator granted a benchmark capability. Surface: **Admin > Benchmark Data** (`/admin/investment-intelligence/market-index-data`, alias `/admin/investment-intelligence/benchmark-data`). Everything below is code-complete and PGlite-verified; none of it has been run against DEV or production (see the main report for evidence labels).
+Audience: the Product Owner and any administrator granted a benchmark capability. Surface: **Admin > Market Index Data** (`/admin/investment-intelligence/market-index-data`, alias `/admin/investment-intelligence/benchmark-data`). Everything below is code-complete and PGlite-verified; none of it has been run against DEV or production (see the main report for evidence labels).
 
 ## 1. Who can do what (six separately named capabilities)
 

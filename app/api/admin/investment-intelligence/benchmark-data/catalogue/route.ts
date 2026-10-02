@@ -1,4 +1,4 @@
-// Benchmark Data - the benchmark catalogue. GET: capability `view`. POST: capability `catalogue`
+// Market Index Data - the benchmark catalogue. GET: capability `view`. POST: capability `catalogue`
 // (can_manage_benchmark_catalogue) -> upsert_benchmark_catalogue_entry, which re-checks the capability,
 // keeps a VERIFIED entry's variant immutable and drops an edited verified entry back to draft.
 import { ok } from '@/lib/api';

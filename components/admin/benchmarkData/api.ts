@@ -1,6 +1,6 @@
 'use client';
 
-// Browser-side fetch helpers for the Benchmark Data Admin screens. Same-origin
+// Browser-side fetch helpers for the Market Index Data Admin screens. Same-origin
 // credentials, a signal for every request (aborted on unmount), JSON read
 // safely (an HTML error page from an edge proxy never becomes the message an
 // administrator sees). No authorisation decision is made here: the server and

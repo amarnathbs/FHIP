@@ -1,4 +1,4 @@
-// Benchmark Data - cancel an unpublished job (deletes its staged copy). Any of upload/publish/correct;
+// Market Index Data - cancel an unpublished job (deletes its staged copy). Any of upload/publish/correct;
 // the database additionally restricts it to the staging admin or a publisher/corrector.
 import { ok } from '@/lib/api';
 import { adminRoute } from '@/lib/services/adminAuth';

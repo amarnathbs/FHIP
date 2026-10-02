@@ -51,4 +51,4 @@ Therefore the largest history request is ~20 years for NIFTY 100 / NIFTY 500 / N
 
 ## 5. How gaps are shown to users and operators
 
-Users: Holdings/Performance/SIP/X-Ray/Overview show blocked (no entitlement), history-incomplete or mapping-missing states with the specific reason, never 0%. Operators: Admin > Benchmark Data shows per benchmark `no_data / history_missing / stale / current / blocked_no_entitlement`, the demand floor, the four watermarks and the pending-import task list.
+Users: Holdings/Performance/SIP/X-Ray/Overview show blocked (no entitlement), history-incomplete or mapping-missing states with the specific reason, never 0%. Operators: Admin > Market Index Data shows per benchmark `no_data / history_missing / stale / current / blocked_no_entitlement`, the demand floor, the four watermarks and the pending-import task list.

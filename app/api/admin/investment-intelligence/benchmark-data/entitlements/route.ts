@@ -1,4 +1,4 @@
-// Benchmark Data - entitlement records (what FHIP may DO with a benchmark series, right by right).
+// Market Index Data - entitlement records (what FHIP may DO with a benchmark series, right by right).
 // GET: capability `view`. POST (propose a DRAFT): capability `catalogue`. Approval/revocation are a
 // separate capability (`entitlementApprove`) on separate routes: a proposer cannot approve without an
 // explicit, recorded self-approval acknowledgement.

@@ -336,7 +336,7 @@ test.describe('Admin navigation', () => {
     const adminToggle = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Admin', exact: true });
     await expect(adminToggle).toBeVisible();
     await adminToggle.click();
-    const benchmarksLink = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Benchmarks', exact: true });
+    const benchmarksLink = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Planning Benchmarks', exact: true });
     await expect(benchmarksLink).toBeVisible();
     await benchmarksLink.click();
     await expect(page).toHaveURL(/\/admin\/benchmarks/);

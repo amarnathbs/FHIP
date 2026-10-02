@@ -1,4 +1,4 @@
-// Benchmark Data - review a mapping proposal (approve creates the canonical effective-dated mapping
+// Market Index Data - review a mapping proposal (approve creates the canonical effective-dated mapping
 // transactionally with audit; reject records the decision). Capability `catalogue`.
 import { z } from 'zod';
 import { ok } from '@/lib/api';

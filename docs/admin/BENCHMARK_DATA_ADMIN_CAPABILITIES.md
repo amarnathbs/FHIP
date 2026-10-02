@@ -1,6 +1,6 @@
-# Benchmark Data - Admin capabilities and Standard compliance
+# Market Index Data - Admin capabilities and Standard compliance
 
-Applies: `docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md` v1.0 (read in full before this work). Surface: Admin > Benchmark Data (`/admin/investment-intelligence/market-index-data`, alias `/benchmark-data`). Future-review owner: Product Owner. Exceptions requested under section 16: **none**.
+Applies: `docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md` v1.0 (read in full before this work). Surface: Admin > Market Index Data (`/admin/investment-intelligence/market-index-data`, alias `/benchmark-data`). Future-review owner: Product Owner. Exceptions requested under section 16: **none**.
 
 ## 1. Capabilities affected (six, separately named; none implies another)
 

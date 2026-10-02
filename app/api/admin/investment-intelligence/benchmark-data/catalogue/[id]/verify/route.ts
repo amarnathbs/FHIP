@@ -1,4 +1,4 @@
-// Benchmark Data - verify a catalogue entry (draft -> verified, with a note). Capability `catalogue`.
+// Market Index Data - verify a catalogue entry (draft -> verified, with a note). Capability `catalogue`.
 import { z } from 'zod';
 import { ok } from '@/lib/api';
 import { adminRoute } from '@/lib/services/adminAuth';

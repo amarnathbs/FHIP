@@ -48,7 +48,7 @@ Read-only inventory of DEV and PRODUCTION (`scripts/bench1_held_scheme_inventory
 
 ## 6. Admin upload workflow (deliverables 4-5)
 
-Integrated into the existing Admin surface (same URL as the India page, nav group renamed **Benchmark Data**; alias route added); no second portal. Six separately named capabilities (`docs/admin/BENCHMARK_DATA_ADMIN_CAPABILITIES.md`); none granted by migration. Single pipeline stage -> validate -> approve -> publish:
+Integrated into the existing Admin surface (same URL as the India page, nav group renamed **Market Index Data**; alias route added); no second portal. Six separately named capabilities (`docs/admin/BENCHMARK_DATA_ADMIN_CAPABILITIES.md`); none granted by migration. Single pipeline stage -> validate -> approve -> publish:
 
 * **Formats/shapes:** CSV and XLSX; `date,value`; `benchmark_key,date,value`; registered provider exports; explicit column mapping, never inferred. XLSX: explicit sheet, hidden rows/sheets disclosed, formula cells in required columns rejected, Excel 1900/1904 date systems. Purpose-built strict XLSX reader (the installed `xlsx` 0.18.5 is unmaintained on npm with known CVEs; no dependency was added).
 * **Validation:** type and magic-byte sniffing, MIME mismatch, byte/row limits, zip-bomb limits (entries, uncompressed size, ratio, lying headers caught at inflate), encoding, delimiter, explicit date formats, timestamps refused, strict locale-aware decimals, 6-decimal precision, no future dates, exact benchmark/variant/currency, in-file duplicates, existing/conflicting rows, gaps, weekend rows, large moves (flagged, not rejected), suspected rebasing; **nothing is synthesised or interpolated**.

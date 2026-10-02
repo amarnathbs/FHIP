@@ -727,9 +727,9 @@ describe('Wave 1 §10.6 — pre-existing permission predicates are unchanged', (
 });
 
 describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
-  it('the General (non-Resources Admin) group still holds exactly Benchmarks and Recommendations', () => {
+  it('the General (non-Resources Admin) group still holds exactly Planning Benchmarks and Recommendations', () => {
     expect(ADMIN_GENERAL_ITEMS).toEqual([
-      { label: 'Benchmarks', href: '/admin/benchmarks' },
+      { label: 'Planning Benchmarks', href: '/admin/benchmarks' },
       { label: 'Recommendations', href: '/admin/recommendations' },
     ]);
   });

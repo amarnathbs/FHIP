@@ -1,4 +1,4 @@
-// Benchmark Data - inspect a file BEFORE staging (type, size, sheets). Persists nothing.
+// Market Index Data - inspect a file BEFORE staging (type, size, sheets). Persists nothing.
 // Capability `upload`; caller's own session; no service-role client.
 import { bad, ok } from '@/lib/api';
 import { adminRoute } from '@/lib/services/adminAuth';

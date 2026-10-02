@@ -1,4 +1,4 @@
-// Benchmark Data - upload help text and limits. Capability `view`. Static content.
+// Market Index Data - upload help text and limits. Capability `view`. Static content.
 import { ok } from '@/lib/api';
 import { adminRoute } from '@/lib/services/adminAuth';
 import { DEFAULT_LIMITS, UPLOAD_HELP_SECTIONS } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';

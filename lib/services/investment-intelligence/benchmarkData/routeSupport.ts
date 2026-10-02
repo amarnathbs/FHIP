@@ -1,4 +1,4 @@
-// Shared helpers for the Benchmark Data Admin API routes. Every route is thin:
+// Shared helpers for the Market Index Data Admin API routes. Every route is thin:
 // guard (capability, FIRST) -> validate -> one service/RPC call under the
 // CALLER'S session client -> typed response. The service-role client is never
 // imported by any route file (a static test enforces this).

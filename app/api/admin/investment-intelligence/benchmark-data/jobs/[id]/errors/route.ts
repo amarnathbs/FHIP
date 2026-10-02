@@ -1,4 +1,4 @@
-// Benchmark Data - validation-error download for a job.
+// Market Index Data - validation-error download for a job.
 //
 // ADMIN STANDARD SECTION 11 (export): purpose = let the operator fix the file and re-upload;
 // authorised role = `view`; server-side generation; column allow-list (row, severity, code,

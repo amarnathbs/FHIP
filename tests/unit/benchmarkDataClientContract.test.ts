@@ -1,4 +1,4 @@
-// BENCH-1 Phase 2 - static render-contract test for the Benchmark Data Admin client.
+// BENCH-1 Phase 2 - static render-contract test for the Market Index Data Admin client.
 // There is no DOM environment in this repository, so this reads the component SOURCE and asserts
 // the rules that must hold for every screen: no server-only imports, no secrets, no raw HTML
 // injection, accessible buttons, the ARIA tab pattern, a live region, safe external links, the exact
@@ -22,7 +22,7 @@ const CONTRACT_PATHS = new Set([
   'mappings', 'mappings/:id/review', 'ingestion/:id/mode',
 ]);
 
-describe('Benchmark Data client: static render contract', () => {
+describe('Market Index Data client: static render contract', () => {
   it('the client entry is a use-client default export with no props', () => {
     const s = sources.get('components/admin/BenchmarkDataClient.tsx') as string;
     expect(s.startsWith("'use client';")).toBe(true);

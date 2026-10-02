@@ -1,4 +1,4 @@
-// Benchmark Data - the overview: per-benchmark catalogue status, coverage, ingestion watermarks, demand,
+// Market Index Data - the overview: per-benchmark catalogue status, coverage, ingestion watermarks, demand,
 // entitlements and the PENDING-IMPORT task list. Capability `view` (read-only). Caller's own session.
 //
 // RESULT STATES (Standard section 8): 'ok' or 'unavailable' (migration not applied) - never an empty

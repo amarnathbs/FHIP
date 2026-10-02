@@ -59,7 +59,7 @@ export function assessPendingImport(input: PendingImportInput, nowIso: string, o
       weekdaysBehind: null,
       historyMissingFrom: input.requiredFrom,
       severity: input.requiredFrom ? 'critical' : 'warning',
-      action: `No ${input.benchmarkLabel} levels have been imported. Upload a history file (Admin > Benchmark Data > Upload). This is a manual import, not an automatic update.`,
+      action: `No ${input.benchmarkLabel} levels have been imported. Upload a history file (Admin > Market Index Data > Upload). This is a manual import, not an automatic update.`,
     };
   }
   const behind = Math.max(0, weekdaysAfter(input.latestValidDataDate, expected, opts?.holidays));

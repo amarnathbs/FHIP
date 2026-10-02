@@ -1,4 +1,4 @@
-// Benchmark Data - approve + publish a validated job.
+// Market Index Data - approve + publish a validated job.
 //
 // SEPARATE CAPABILITIES (Standard sections 2 and 5): new history needs `publish`
 // (can_publish_benchmark_data); a CORRECTION needs `correct` (can_correct_benchmark_data).

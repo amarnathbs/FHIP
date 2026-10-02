@@ -1,6 +1,6 @@
 'use client';
 
-// Benchmark Data (BENCH-1 Phase 2): the single Admin workspace for historical
+// Market Index Data (BENCH-1 Phase 2): the single Admin workspace for historical
 // benchmark uploads, the catalogue, entitlements, scheme mappings and
 // ingestion mode. It replaces the earlier Nifty 50 / Sensex-only upload page.
 //
@@ -24,7 +24,7 @@ import UploadTab from './benchmarkData/UploadTab';
 import { ErrorPanel, LoadingPanel, UnavailablePanel } from './benchmarkData/ui';
 
 export default function BenchmarkDataClient() {
-  const { state, reload } = useLoad<OverviewResponse>(apiPaths.overview(), 'load Benchmark Data');
+  const { state, reload } = useLoad<OverviewResponse>(apiPaths.overview(), 'load Market Index Data');
   const { outcome, reportSuccess, reportFailure } = useAdminActionStatus();
   const [tab, setTab] = useState<TabId>('overview');
   const [preselect, setPreselect] = useState('');
@@ -50,14 +50,14 @@ export default function BenchmarkDataClient() {
   }
 
   let body: React.ReactNode;
-  if (state.status === 'loading') body = <LoadingPanel what="Benchmark Data" />;
-  else if (state.status === 'error') body = <ErrorPanel failure={state.failure} what="Benchmark Data" onRetry={reload} />;
+  if (state.status === 'loading') body = <LoadingPanel what="Market Index Data" />;
+  else if (state.status === 'error') body = <ErrorPanel failure={state.failure} what="Market Index Data" onRetry={reload} />;
   else if (overviewIsUnavailable(state.data)) body = <UnavailablePanel reason={state.data.reason} />;
   else {
     const ov = state.data;
     body = (
       <>
-        <div role="tablist" aria-label="Benchmark Data sections" className="flex flex-wrap gap-1 border-b border-line">
+        <div role="tablist" aria-label="Market Index Data sections" className="flex flex-wrap gap-1 border-b border-line">
           {TAB_IDS.map((t) => (
             <button key={t} id={`bm-tab-${t}`} type="button" role="tab" aria-selected={tab === t} aria-controls={`bm-panel-${t}`} tabIndex={tab === t ? 0 : -1} onClick={() => go(t)} onKeyDown={onTabKey} className={`min-h-11 rounded-t-compact border border-b-0 px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-trust ${tab === t ? 'border-line bg-white text-trust' : 'border-transparent text-muted hover:text-ink'}`}>
               {TAB_LABELS[t]}
@@ -80,7 +80,7 @@ export default function BenchmarkDataClient() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
       <header>
-        <h1 className="text-2xl font-semibold text-ink">Benchmark Data</h1>
+        <h1 className="text-2xl font-semibold text-ink">Market Index Data</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">
           Historical index levels for the benchmarks that funds are compared against, with the permission records that allow FHIP to use them. Uploading a file never gives permission by itself, and a benchmark on manual import only updates when someone uploads a file.
         </p>

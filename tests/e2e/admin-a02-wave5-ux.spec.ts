@@ -288,7 +288,7 @@ test.describe('Wave 5 — role-by-role visible destinations (§13)', () => {
     await login(page, 'author');
     const items = await visibleAdminItems(page);
     expect(items.length, 'Author sees destinations').toBeGreaterThan(0);
-    expect(items, 'Author must not see Benchmarks').not.toContain('Benchmarks');
+    expect(items, 'Author must not see Planning Benchmarks').not.toContain('Planning Benchmarks');
     expect(items, 'Author must not see Recommendations').not.toContain('Recommendations');
     expect(items).toContain('Drafts');
     expect(items).toContain('Videos');
@@ -322,7 +322,7 @@ test.describe('Wave 5 — role-by-role visible destinations (§13)', () => {
     expect(items).toContain('Review Queue');
     // Holding two content roles must not confer Super Admin surfaces or
     // role management.
-    expect(items).not.toContain('Benchmarks');
+    expect(items).not.toContain('Planning Benchmarks');
     expect(items).not.toContain('Recommendations');
   });
 

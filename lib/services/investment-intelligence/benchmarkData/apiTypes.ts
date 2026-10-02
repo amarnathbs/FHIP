@@ -1,4 +1,4 @@
-// BENCH-1 Phase 2 - the JSON contract between the Benchmark Data Admin API
+// BENCH-1 Phase 2 - the JSON contract between the Market Index Data Admin API
 // (app/api/admin/investment-intelligence/benchmark-data/**) and its UI
 // (components/admin/BenchmarkDataClient.tsx). Types only: no runtime code, so
 // both sides import it freely. Every successful response is wrapped by the

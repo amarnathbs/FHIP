@@ -124,13 +124,13 @@ describe('page layer (s4): a direct navigation is redirected, not rendered empty
 describe('navigation layer (s2/s4): visible only with its own capability', () => {
   const allOthers: AdminCapabilities = { ...NO_ADMIN_CAPABILITIES, resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true, referenceDataQuality: true, lookthroughDataQuality: true };
   it('the group appears only when marketIndexDataUpload is true — every other capability true, and it is still hidden', () => {
-    expect(buildAdminNavGroups(true, { ...allOthers, referenceDataQuality: false }).map((g) => g.label)).not.toContain('Benchmark Data');
+    expect(buildAdminNavGroups(true, { ...allOthers, referenceDataQuality: false }).map((g) => g.label)).not.toContain('Market Index Data');
     const g = buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, marketIndexDataUpload: true });
-    expect(g.map((x) => x.label)).toEqual(['Benchmark Data']);
-    expect(g[0].items).toEqual([{ label: 'Benchmark Data', href: '/admin/investment-intelligence/market-index-data' }]);
+    expect(g.map((x) => x.label)).toEqual(['Market Index Data']);
+    expect(g[0].items).toEqual([{ label: 'Market Index Data', href: '/admin/investment-intelligence/market-index-data' }]);
   });
   it('is not implied by the PC7 capability, nor by isAdmin (PC6 read-only view reuses it as the VIEW capability only)', () => {
-    expect(buildAdminNavGroups(true, { ...NO_ADMIN_CAPABILITIES, lookthroughDataQuality: true }).map((g) => g.label)).not.toContain('Benchmark Data');
+    expect(buildAdminNavGroups(true, { ...NO_ADMIN_CAPABILITIES, lookthroughDataQuality: true }).map((g) => g.label)).not.toContain('Market Index Data');
   });
   it('the capability parser is strictly === true and defaults closed', () => {
     expect(parseAdminCapabilities({ data: { capabilities: { marketIndexDataUpload: 'yes' } } }).marketIndexDataUpload).toBe(false);

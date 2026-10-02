@@ -1,4 +1,4 @@
-// Benchmark Data - revoke an entitlement (reason >= 10 characters). Capability `entitlementApprove`.
+// Market Index Data - revoke an entitlement (reason >= 10 characters). Capability `entitlementApprove`.
 // Revocation takes effect immediately for readers (the series RLS gate) and blocks any staged job.
 import { z } from 'zod';
 import { ok } from '@/lib/api';

@@ -1,4 +1,4 @@
-// BENCH-1 Phase 2 - Benchmark Data Admin API: Admin Architecture Standard compliance.
+// BENCH-1 Phase 2 - Market Index Data Admin API: Admin Architecture Standard compliance.
 //
 // Capabilities touched (six, separately named): view (PC6 can_view_reference_data_quality or any of the
 // others, READ only), upload (can_upload_market_index_data), publish (can_publish_benchmark_data),
@@ -404,12 +404,12 @@ describe('page + nav + /me (s4 layers 3 and 4)', () => {
     adminRow = hasOnly('upload');
     await expect(requireBenchmarkPage('publish')).rejects.toThrow('REDIRECT:/dashboard');
   });
-  it('the Benchmark Data nav group shows for each of the six capabilities independently and for none other', () => {
+  it('the Market Index Data nav group shows for each of the six capabilities independently and for none other', () => {
     const label = (caps: object) => buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, ...caps }).map((g) => g.label);
     for (const k of ['marketIndexDataUpload', 'benchmarkDataView', 'benchmarkDataPublish', 'benchmarkDataCorrect', 'benchmarkCatalogueManage', 'benchmarkEntitlementApprove', 'referenceDataQuality']) {
-      expect(label({ [k]: true }), k).toContain(k === 'referenceDataQuality' ? 'Reference Data' : 'Benchmark Data');
+      expect(label({ [k]: true }), k).toContain(k === 'referenceDataQuality' ? 'Reference Data' : 'Market Index Data');
     }
-    expect(label({ lookthroughDataQuality: true })).not.toContain('Benchmark Data');
+    expect(label({ lookthroughDataQuality: true })).not.toContain('Market Index Data');
     expect(label({})).toEqual([]);
   });
   it('the parser is strictly === true for the new capabilities and defaults closed', () => {

@@ -50,7 +50,7 @@ Date-range limit per NSE query and history depth per index; TRI start dates for 
 
 ## 6. Questions for the Product Owner to put to each owner (FHIP does not contact them)
 
-Written clarification, in the owner's own channel, of: (1) whether displaying to FHIP's customers a fund-versus-index return comparison derived from index levels, in-app and in downloadable reports, requires a licence, and on what terms; (2) permission to store and cache daily levels (price, TRI, net TRI) in FHIP's database for calculation; (3) permission for automated daily retrieval and the documented method; (4) historical depth and TRI start dates available; (5) attribution wording; (6) post-termination retention of stored history; (7) fees, user-count limits and corrections delivery. Ask NSE Indices, BSE Index Services and CRISIL separately; ask an authorised vendor for the same list if a distributor is preferred. Record each answer as an entitlement record (Admin > Benchmark Data > Entitlements) with the written evidence reference; until then nothing publishes.
+Written clarification, in the owner's own channel, of: (1) whether displaying to FHIP's customers a fund-versus-index return comparison derived from index levels, in-app and in downloadable reports, requires a licence, and on what terms; (2) permission to store and cache daily levels (price, TRI, net TRI) in FHIP's database for calculation; (3) permission for automated daily retrieval and the documented method; (4) historical depth and TRI start dates available; (5) attribution wording; (6) post-termination retention of stored history; (7) fees, user-count limits and corrections delivery. Ask NSE Indices, BSE Index Services and CRISIL separately; ask an authorised vendor for the same list if a distributor is preferred. Record each answer as an entitlement record (Admin > Market Index Data > Entitlements) with the written evidence reference; until then nothing publishes.
 
 ## 7. Category averages
 
@@ -58,4 +58,4 @@ A category-average benchmark needs a separately licensed peer dataset and is out
 
 ## 8. Naming collision (unchanged)
 
-`benchmark_datasets` / `lib/services/benchmarkGovernance.ts` and their Admin surface are the financial-planning benchmark system and are untouched. This work uses the distinct investment-index tables (`ii_benchmarks`, `ii_benchmark_series`, `ii_instrument_benchmarks`) and the "Benchmark Data" Admin surface under Investment Intelligence.
+`benchmark_datasets` / `lib/services/benchmarkGovernance.ts` and their Admin surface are the financial-planning benchmark system and are untouched. This work uses the distinct investment-index tables (`ii_benchmarks`, `ii_benchmark_series`, `ii_instrument_benchmarks`) and the "Market Index Data" Admin surface under Investment Intelligence.

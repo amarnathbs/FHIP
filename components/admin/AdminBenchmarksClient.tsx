@@ -1,6 +1,6 @@
 'use client';
 
-// Benchmarks Admin — the Super Admin surface for benchmark source and
+// Planning Benchmarks Admin — the Super Admin surface for benchmark source and
 // dataset governance.
 //
 // Admin A0.2 Wave 5 rebuilt this screen's feedback layer. Every change below
@@ -304,7 +304,7 @@ export function AdminBenchmarksClient() {
       />
 
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Benchmarks</h1>
+        <h1 className="text-2xl font-semibold text-ink">Planning Benchmarks</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">
           Govern the benchmark figures FHIP compares households against. No benchmark is served until its source has been
           approved, its dataset has passed validation, and an administrator has activated it.

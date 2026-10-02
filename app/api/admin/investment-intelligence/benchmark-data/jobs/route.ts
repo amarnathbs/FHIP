@@ -1,4 +1,4 @@
-// Benchmark Data - list import jobs. Capability `view` (read-only). Caller's own session; RLS also
+// Market Index Data - list import jobs. Capability `view` (read-only). Caller's own session; RLS also
 // restricts these tables to the benchmark-data viewer predicate. Another admin's id is never returned.
 import { ok } from '@/lib/api';
 import { adminRoute, safeDbError } from '@/lib/services/adminAuth';

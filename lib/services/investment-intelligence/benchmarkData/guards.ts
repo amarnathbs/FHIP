@@ -1,4 +1,4 @@
-// Capability guards for the Benchmark Data Admin surface (BENCH-1 Phase 2).
+// Capability guards for the Market Index Data Admin surface (BENCH-1 Phase 2).
 //
 // ADMIN ARCHITECTURE STANDARD SECTIONS 2 and 4. Six SEPARATELY NAMED
 // capabilities, each backed by its own admin_users column (never a shared

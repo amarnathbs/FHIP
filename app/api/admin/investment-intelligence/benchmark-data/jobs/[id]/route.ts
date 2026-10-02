@@ -1,4 +1,4 @@
-// Benchmark Data - one import job (counts, preview, validation issues). Capability `view`.
+// Market Index Data - one import job (counts, preview, validation issues). Capability `view`.
 import { bad, ok } from '@/lib/api';
 import { adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { getImportJob } from '@/lib/services/investment-intelligence/benchmarkData/publishService';

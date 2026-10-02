@@ -1,4 +1,4 @@
-// Benchmark Data - scheme -> benchmark mapping proposals (with evidence). GET: capability `view`.
+// Market Index Data - scheme -> benchmark mapping proposals (with evidence). GET: capability `view`.
 // POST (propose): capability `catalogue`. A proposal never changes a mapping by itself: review
 // (approve/reject) is a separate route; only deterministic, high-confidence, evidenced matches to a
 // VERIFIED catalogue entry may auto-publish, and only from the service-role job - not from here.

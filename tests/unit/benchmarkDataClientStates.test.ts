@@ -1,4 +1,4 @@
-// BENCH-1 Phase 2 - the honest states of the Benchmark Data Admin client, rendered to static HTML
+// BENCH-1 Phase 2 - the honest states of the Market Index Data Admin client, rendered to static HTML
 // with react-dom/server (no DOM needed). Proves the unavailable / empty / error / pending / automation
 // OFF / not-a-publisher states say what they must, and that Publish is genuinely disabled or absent.
 import { createElement as h } from 'react';
@@ -11,12 +11,12 @@ import { AutomationBlock, EmptyState, ErrorPanel, PendingImportsPanel, Unavailab
 import { describeApiFailure } from '@/components/admin/benchmarkData/benchmarkDataUiLogic';
 
 const NONE: BenchmarkCapabilityFlags = { view: true, upload: false, publish: false, correct: false, catalogue: false, entitlementApprove: false };
-const task = (o: Partial<PendingImportTask>): PendingImportTask => ({ benchmarkKey: 'NIFTY50_TRI', benchmarkLabel: 'Nifty 50 TRI', status: 'never_imported', latestValidDataDate: null, expectedLatestSession: '2026-09-30', weekdaysBehind: null, historyMissingFrom: '2020-01-01', severity: 'critical', action: 'No Nifty 50 TRI levels have been imported. Upload a history file (Admin > Benchmark Data > Upload). This is a manual import, not an automatic update.', ...o });
+const task = (o: Partial<PendingImportTask>): PendingImportTask => ({ benchmarkKey: 'NIFTY50_TRI', benchmarkLabel: 'Nifty 50 TRI', status: 'never_imported', latestValidDataDate: null, expectedLatestSession: '2026-09-30', weekdaysBehind: null, historyMissingFrom: '2020-01-01', severity: 'critical', action: 'No Nifty 50 TRI levels have been imported. Upload a history file (Admin > Market Index Data > Upload). This is a manual import, not an automatic update.', ...o });
 
 describe('honest states render the required text', () => {
   it('unavailable: explicit panel with the reason, never an empty healthy dashboard', () => {
     const html = renderToStaticMarkup(h(UnavailablePanel, { reason: 'The benchmark tables are not available (migration 0239 not applied).' }));
-    expect(html).toContain('Benchmark Data is unavailable');
+    expect(html).toContain('Market Index Data is unavailable');
     expect(html).toContain('migration 0239 not applied');
     expect(html).toContain('not an empty or healthy state');
     expect(html).toContain('role="alert"');
@@ -31,12 +31,12 @@ describe('honest states render the required text', () => {
     expect(renderToStaticMarkup(h(EmptyState, { title: 'Nothing here' }))).toContain('Nothing here');
   });
   it('error: a 403 is explained and offers no useless retry; a 503 offers retry', () => {
-    const forbidden = renderToStaticMarkup(h(ErrorPanel, { failure: describeApiFailure(403, null, 'view Benchmark Data'), what: 'Benchmark Data', onRetry: () => undefined }));
-    expect(forbidden).toContain('You cannot view Benchmark Data');
+    const forbidden = renderToStaticMarkup(h(ErrorPanel, { failure: describeApiFailure(403, null, 'view Market Index Data'), what: 'Market Index Data', onRetry: () => undefined }));
+    expect(forbidden).toContain('You cannot view Market Index Data');
     expect(forbidden).not.toContain('Try again');
     expect(forbidden).toContain('an error is not the same as');
-    const down = renderToStaticMarkup(h(ErrorPanel, { failure: describeApiFailure(503, null, 'x'), what: 'Benchmark Data', onRetry: () => undefined }));
-    expect(down).toContain('Could not load Benchmark Data');
+    const down = renderToStaticMarkup(h(ErrorPanel, { failure: describeApiFailure(503, null, 'x'), what: 'Market Index Data', onRetry: () => undefined }));
+    expect(down).toContain('Could not load Market Index Data');
     expect(down).toContain('Try again');
   });
   it('pending imports: verbatim action sentence, status chip, upload button; no button without the upload capability', () => {

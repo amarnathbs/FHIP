@@ -1,4 +1,4 @@
-// Benchmark Data - upload templates (static example CSVs). Capability `view`. No data is read.
+// Market Index Data - upload templates (static example CSVs). Capability `view`. No data is read.
 import { bad } from '@/lib/api';
 import { adminRoute } from '@/lib/services/adminAuth';
 import { BENCHMARK_UPLOAD_TEMPLATES } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';

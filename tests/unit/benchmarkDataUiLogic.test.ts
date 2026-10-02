@@ -1,4 +1,4 @@
-// BENCH-1 Phase 2 - the Benchmark Data Admin UI decision logic, tested as pure functions
+// BENCH-1 Phase 2 - the Market Index Data Admin UI decision logic, tested as pure functions
 // (this repository has no DOM test environment). Tests named "NEGATIVE CONTROL: ..." are the
 // ones scripts/bench1_ui_negative_controls.mjs breaks on purpose, one rule at a time, to prove
 // each can fail.
