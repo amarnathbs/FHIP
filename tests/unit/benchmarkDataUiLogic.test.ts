@@ -11,6 +11,11 @@ import {
   NUMBER_LOCALE_OPTIONS,
   NO_ENTITLEMENT_MESSAGE,
   apiPaths,
+  DATE_TYPING_HELP,
+  formatDate,
+  formatDateTime,
+  catalogueFormFromRow,
+  typedDateToIso,
   asJobPreview,
   automationStatus,
   buildCatalogueBody,
@@ -429,7 +434,7 @@ describe('job row actions', () => {
 });
 
 describe('catalogue, entitlement, mapping and ingestion forms', () => {
-  const goodCat = () => ({ ...emptyCatalogueForm(), benchmarkKey: 'NIFTY50_TRI', officialName: 'Nifty 50 TRI', ownerName: 'NSE', assetClass: 'equity', countryCode: 'in', currencyCode: 'inr', returnType: 'TRI', returnVariant: 'total_return' as const, evidenceRef: 'NSE factsheet', evidenceRetrievedAt: '2026-09-30' });
+  const goodCat = () => ({ ...emptyCatalogueForm(), benchmarkKey: 'NIFTY50_TRI', officialName: 'Nifty 50 TRI', ownerName: 'NSE', assetClass: 'equity', countryCode: 'in', currencyCode: 'inr', returnType: 'TRI', returnVariant: 'total_return' as const, evidenceRef: 'NSE factsheet', evidenceRetrievedAt: '30-09-2026' });
   it('catalogue: key pattern, required fields, type/variant coherence, backtest date and URLs', () => {
     expect(validateCatalogueForm(goodCat())).toEqual({});
     expect(validateCatalogueForm({ ...goodCat(), benchmarkKey: 'nifty-50' }).benchmarkKey).toBeDefined();
@@ -446,21 +451,21 @@ describe('catalogue, entitlement, mapping and ingestion forms', () => {
     const b = buildCatalogueBody(goodCat());
     expect(b).toMatchObject({ benchmark_key: 'NIFTY50_TRI', country_code: 'IN', currency_code: 'INR', return_variant: 'total_return', asset_class: 'equity', base_value: null, evidence_retrieved_at: '2026-09-30' });
   });
-  const goodEnt = () => ({ ...emptyEntitlementForm(), benchmarkKey: 'NIFTY50_TRI', kind: 'commercial_licence' as const, rights: { ...emptyEntitlementForm().rights, ingestManual: true, storage: true }, validFrom: '2026-01-01', evidenceReference: 'Licence 42' });
+  const goodEnt = () => ({ ...emptyEntitlementForm(), benchmarkKey: 'NIFTY50_TRI', kind: 'commercial_licence' as const, rights: { ...emptyEntitlementForm().rights, ingestManual: true, storage: true }, validFrom: '01-01-2026', evidenceReference: 'Licence 42' });
   it('entitlement: needs a right, a coherent rights chain, a valid term and evidence', () => {
     expect(validateEntitlementForm(goodEnt())).toEqual({});
     expect(validateEntitlementForm({ ...goodEnt(), rights: emptyEntitlementForm().rights }).rights).toBeDefined();
     expect(validateEntitlementForm({ ...goodEnt(), rights: { ...goodEnt().rights, storage: false, calculation: true } }).rights).toMatch(/storage/);
     expect(validateEntitlementForm({ ...goodEnt(), rights: { ...goodEnt().rights, customerDisplay: true } }).rights).toMatch(/calculation/);
     expect(validateEntitlementForm({ ...goodEnt(), rights: { ...goodEnt().rights, calculation: true, reportExport: true } }).rights).toMatch(/customer display/);
-    expect(validateEntitlementForm({ ...goodEnt(), validTo: '2025-01-01' }).validTo).toMatch(/before the start/);
-    expect(validateEntitlementForm({ ...goodEnt(), dataFrom: '2020-02-01', dataTo: '2020-01-01' }).dataTo).toBeDefined();
+    expect(validateEntitlementForm({ ...goodEnt(), validTo: '01-01-2025' }).validTo).toMatch(/before the start/);
+    expect(validateEntitlementForm({ ...goodEnt(), dataFrom: '01-02-2020', dataTo: '01-01-2020' }).dataTo).toBeDefined();
   });
   it('NEGATIVE CONTROL: a public-use permission requires the evidence URL, document date and retrieval date', () => {
     const pub = { ...goodEnt(), kind: 'public_use_permission' as const };
     const e = validateEntitlementForm(pub);
     expect(Object.keys(e).sort()).toEqual(['evidenceDocumentDate', 'evidenceRetrievedAt', 'evidenceUrl']);
-    expect(validateEntitlementForm({ ...pub, evidenceUrl: 'https://example.org/terms', evidenceDocumentDate: '2026-01-01', evidenceRetrievedAt: '2026-09-01' })).toEqual({});
+    expect(validateEntitlementForm({ ...pub, evidenceUrl: 'https://example.org/terms', evidenceDocumentDate: '01-01-2026', evidenceRetrievedAt: '01-09-2026' })).toEqual({});
   });
   it('entitlement body: the catalogue row supplies the benchmark id, variant and currency', () => {
     const b = buildEntitlementBody(goodEnt(), { id: 'bid', returnVariant: 'total_return', currencyCode: 'INR' });
@@ -477,7 +482,7 @@ describe('catalogue, entitlement, mapping and ingestion forms', () => {
     expect(entitlementActions({ status: 'draft', proposedByMe: false }, caps({ catalogue: true, publish: true })).canApprove).toBe(false);
   });
   it('mapping: evidence is required and the body follows the route contract', () => {
-    const good = { ...emptyMappingForm(), instrumentId: '33333333-3333-4333-8333-333333333333', proposedBenchmarkName: 'Nifty 50 TRI', effectiveFrom: '2024-01-01', evidenceSource: 'amc_sid', evidenceUrl: 'https://example.org/sid.pdf', evidenceDocumentDate: '2024-01-01', evidenceRetrievedAt: '2026-09-01', resolutionMethod: 'deterministic_exact', confidence: 'high' };
+    const good = { ...emptyMappingForm(), instrumentId: '33333333-3333-4333-8333-333333333333', proposedBenchmarkName: 'Nifty 50 TRI', effectiveFrom: '01-01-2024', evidenceSource: 'amc_sid', evidenceUrl: 'https://example.org/sid.pdf', evidenceDocumentDate: '01-01-2024', evidenceRetrievedAt: '01-09-2026', resolutionMethod: 'deterministic_exact', confidence: 'high' };
     expect(validateMappingForm(good)).toEqual({});
     expect(Object.keys(validateMappingForm(emptyMappingForm())).length).toBeGreaterThanOrEqual(8);
     expect(validateMappingForm({ ...good, instrumentId: 'abc' }).instrumentId).toBeDefined();
@@ -492,6 +497,75 @@ describe('catalogue, entitlement, mapping and ingestion forms', () => {
     expect(validateIngestionForm({ ...base, reason: 'a long enough reason', automationEnabled: true }).automationEnabled).toBeDefined();
     expect(validateIngestionForm({ ...base, reason: 'a long enough reason', mode: 'automated' }).adapterId).toBeDefined();
     expect(validateIngestionForm({ ...base, reason: 'a long enough reason', publicationLagDays: '99' }).publicationLagDays).toBeDefined();
+  });
+});
+
+describe('dates: day-first on screen, ISO only on the wire (PO rule, Document2 findings #8/#19)', () => {
+  it('formatDate renders dd-mm-yyyy for this India module and takes the benchmark currency (AUD is dd/mm/yyyy)', () => {
+    expect(formatDate('2026-10-01')).toBe('01-10-2026');
+    expect(formatDate('2026-10-01T05:30:00Z')).toBe('01-10-2026');
+    expect(formatDate('2026-10-01', 'AUD')).toBe('01/10/2026');
+    expect(formatDate(null)).toBe('none');
+    expect(formatDate('')).toBe('none');
+  });
+  it('formatDateTime keeps the UTC time and shows a day-first date', () => {
+    expect(formatDateTime('2026-10-01T09:05:33Z')).toBe('01-10-2026 09:05 UTC');
+    expect(formatDateTime('2026-10-01 09:05:33+00')).toBe('01-10-2026 09:05 UTC');
+    expect(formatDateTime('2026-10-01T09:05:33Z', 'AUD')).toBe('01/10/2026 09:05 UTC');
+    expect(formatDateTime(null)).toBe('never');
+  });
+  it('typed dates convert to ISO for the API and the form never shows ISO', () => {
+    expect(typedDateToIso('01-10-2026')).toBe('2026-10-01');
+    expect(typedDateToIso('01/10/2026')).toBe('2026-10-01');
+    expect(typedDateToIso('01.10.2026')).toBe('2026-10-01');
+    expect(typedDateToIso('2026-10-01')).toBeNull();
+    expect(typedDateToIso('31-02-2026')).toBeNull();
+  });
+  it('validation messages name the day-first format in words and never an ISO or US order', () => {
+    expect(DATE_TYPING_HELP).toBe('DD-MM-YYYY, like 01-10-2026');
+    const ent = validateEntitlementForm({ ...emptyEntitlementForm(), validFrom: '31-02-2026', validTo: 'x', dataFrom: 'y', dataTo: 'z' });
+    const msgs = [ent.validFrom, ent.validTo, ent.dataFrom, ent.dataTo, validateMappingForm(emptyMappingForm()).effectiveFrom, validateMappingForm(emptyMappingForm()).evidenceDocumentDate, validateMappingForm(emptyMappingForm()).evidenceRetrievedAt];
+    for (const m of msgs) {
+      expect(m).toBeDefined();
+      expect(m).toContain('DD-MM-YYYY');
+      expect(m).not.toMatch(/YYYY-MM-DD|MM\/DD|MM-DD-YYYY/);
+    }
+    const pub = validateEntitlementForm({ ...emptyEntitlementForm(), kind: 'public_use_permission' as const });
+    expect(pub.evidenceDocumentDate).toContain('DD-MM-YYYY');
+    expect(pub.evidenceRetrievedAt).toContain('DD-MM-YYYY');
+    expect(validateCatalogueForm({ ...emptyCatalogueForm(), baseDate: '2026-10-01' }).baseDate).toContain('DD-MM-YYYY');
+    expect(stepIssues(2, ctxOf({ form: goodForm({ dataAsOf: '2026-10-01' }) })).join(' ')).toContain('DD-MM-YYYY');
+  });
+  it('request bodies carry ISO dates converted from the typed text, and null for blanks', () => {
+    const e = buildEntitlementBody({ ...emptyEntitlementForm(), kind: 'public_use_permission' as const, validFrom: '01-02-2026', validTo: '31/12/2026', dataFrom: '01.01.2010', evidenceDocumentDate: '15-01-2026', evidenceRetrievedAt: '16-01-2026' }, { id: 'bid', returnVariant: 'total_return', currencyCode: 'INR' });
+    expect(e).toMatchObject({ valid_from: '2026-02-01', valid_to: '2026-12-31', data_from: '2010-01-01', data_to: null, evidence_document_date: '2026-01-15', evidence_retrieved_at: '2026-01-16' });
+    const m = buildMappingBody({ ...emptyMappingForm(), effectiveFrom: '01-01-2024', effectiveTo: '', evidenceDocumentDate: '02-01-2024', evidenceRetrievedAt: '03-01-2024' }, 'b');
+    expect(m).toMatchObject({ effective_from: '2024-01-01', effective_to: null, evidence_document_date: '2024-01-02', evidence_retrieved_at: '2024-01-03' });
+    const c = buildCatalogueBody({ ...emptyCatalogueForm(), benchmarkKey: 'NIFTY50_TRI', officialName: 'x', baseDate: '03-01-1996', backtestedThrough: '' });
+    expect(c).toMatchObject({ base_date: '1996-01-03', backtested_through: null });
+    const p = buildStageParams(ctxOf({ form: goodForm({ dataAsOf: '30-09-2026' }) }));
+    expect(p.ok).toBe(true);
+    if (p.ok) expect(p.params.dataAsOf).toBe('2026-09-30');
+  });
+  it('an invalid typed date is passed through as typed so the server refuses it (never silently altered)', () => {
+    const e = buildEntitlementBody({ ...emptyEntitlementForm(), validFrom: '31-02-2026' }, { id: 'bid', returnVariant: 'total_return', currencyCode: 'INR' });
+    expect(e.valid_from).toBe('31-02-2026');
+  });
+  it('the catalogue edit form shows stored ISO dates day-first', () => {
+    const f = catalogueFormFromRow({ ...(row().catalogue as object), baseDate: '1996-01-03', launchDate: null, historyStartDate: '2005-06-30', backtestedThrough: null, evidenceRetrievedAt: '2026-09-30' } as never);
+    expect(f.baseDate).toBe('03-01-1996');
+    expect(f.launchDate).toBe('');
+    expect(f.historyStartDate).toBe('30-06-2005');
+    expect(f.evidenceRetrievedAt).toBe('30-09-2026');
+  });
+  it('the publish summary shows the date range day-first', () => {
+    const r = { jobId: 'j', batchId: 'b1', inserted: 1, revived: 0, corrected: 0, identicalSkipped: 0, dateFrom: '2020-01-31', dateTo: '2020-02-29' };
+    expect(describePublishSuccess({ alreadyPublished: false, result: r }).lines.join(' ')).toContain('Date range: 31-01-2020 to 29-02-2020.');
+  });
+  it('the file date-format dropdown still names the machine formats (the only place YYYY-MM-DD appears)', () => {
+    const labels = DATE_FORMAT_OPTIONS.map((o) => o.label);
+    expect(labels.filter((l) => l.includes('YYYY-MM-DD'))).toHaveLength(1);
+    expect(labels.some((l) => l.includes('DD-MM-YYYY'))).toBe(true);
   });
 });
 

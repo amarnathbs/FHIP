@@ -43,7 +43,7 @@ import {
   type TabId,
 } from './benchmarkDataUiLogic';
 import { PreviewPanel, PublishSection } from './PublishParts';
-import { Btn, CheckField, Chip, IssueList, LinkBtn, Notice, Panel, RadioGroup, SelectField, TextAreaField, TextField } from './ui';
+import { Btn, CheckField, Chip, IssueList, LinkBtn, Notice, Panel, RadioGroup, SelectField, DateField, TextAreaField, TextField } from './ui';
 
 interface HelpPayload {
   sections: Array<{ title: string; body: string }>;
@@ -261,7 +261,7 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
             <div className="grid gap-3 sm:grid-cols-2">
               <TextField label="Source owner or provider" required value={form.sourceOwner} onChange={(v) => set({ sourceOwner: v })} />
               <TextField label="Original source URL or delivery reference" required value={form.sourceReference} onChange={(v) => set({ sourceReference: v })} hint="Where the file came from, so it can be traced." />
-              <TextField label="Data as of (optional)" type="date" value={form.dataAsOf} onChange={(v) => set({ dataAsOf: v })} hint="The date the provider says the data runs to." />
+              <DateField label="Data as of (optional)" value={form.dataAsOf} onChange={(v) => set({ dataAsOf: v })} hint="The date the provider says the data runs to." />
               <SelectField label="History type" required value={form.historyClass} onChange={(v) => set({ historyClass: v as UploadFormState['historyClass'] })} options={HISTORY_CLASS_OPTIONS} />
             </div>
             <RadioGroup legend="Upload mode" name="mode" value={form.mode} onChange={(v) => set({ mode: v as UploadFormState['mode'] })} options={UPLOAD_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label, description: o.description, }))} disabled={false} />
@@ -318,7 +318,7 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
             ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <SelectField label="Date format used in the file" required value={form.dateFormat} onChange={(v) => set({ dateFormat: v as UploadFormState['dateFormat'] })} options={DATE_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} - ${o.example}` }))} placeholder="Choose the date format" hint="Never guessed: 03/04/2024 can mean two different days." />
+              <SelectField label="Date format used in the file" required value={form.dateFormat} onChange={(v) => set({ dateFormat: v as UploadFormState['dateFormat'] })} options={DATE_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} - ${o.example}` }))} placeholder="Choose the date format" hint="Never guessed: a date such as 03-04-2024 could be 3 April or 4 March, depending on the order the file uses." />
               <SelectField label="How numbers are written" required value={form.numberLocale} onChange={(v) => set({ numberLocale: v as UploadFormState['numberLocale'] })} options={NUMBER_LOCALE_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} - ${o.example}` }))} placeholder="Choose the number format" />
               <TextField label="Header row" type="number" value={form.headerRow} onChange={(v) => set({ headerRow: v })} hint="The row holding the column names (usually 1)." />
             </div>

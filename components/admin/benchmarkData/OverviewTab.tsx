@@ -52,7 +52,7 @@ export function OverviewTable({ rows, asOfDate, effectivelyEnabled }: { rows: re
               </Td>
               <Td>
                 {r.demand ? (
-                  <span className="text-xs">Needed from {r.demand.requiredFrom}{r.demand.requiredFromInvestor ? `; investor periods from ${r.demand.requiredFromInvestor}` : ''}; {formatCount(r.demand.schemeCount)} scheme(s) in {formatCount(r.demand.familyCount)} family(ies)</span>
+                  <span className="text-xs">Needed from {formatDate(r.demand.requiredFrom)}{r.demand.requiredFromInvestor ? `; investor periods from ${formatDate(r.demand.requiredFromInvestor)}` : ''}; {formatCount(r.demand.schemeCount)} scheme(s) in {formatCount(r.demand.familyCount)} family(ies)</span>
                 ) : <span className="text-xs text-muted">No held scheme needs this benchmark yet</span>}
               </Td>
               <Td>
@@ -73,7 +73,7 @@ export default function OverviewTab({ ov, onUpload }: { ov: OverviewResponse; on
     <div className="space-y-4">
       <AutomationBlock switches={ov.switches} notice={ov.automationNotice} />
       <PendingImportsPanel tasks={ov.pendingImports} canStage={ov.capabilities.upload} onUpload={onUpload} />
-      <Panel title="Indices" description={`As at ${ov.asOfDate}. A benchmark with no stored levels is shown as no data, never as up to date.`}>
+      <Panel title="Indices" description={`As at ${formatDate(ov.asOfDate)}. A benchmark with no stored levels is shown as no data, never as up to date.`}>
         <OverviewTable rows={ov.rows} asOfDate={ov.asOfDate} effectivelyEnabled={ov.switches.effectivelyEnabled} />
       </Panel>
     </div>

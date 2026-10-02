@@ -9,9 +9,11 @@
 import { useId, type ReactNode, type Ref } from 'react';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import type { PendingImportTask } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
+import { DATE_INPUT_HINT, DATE_INPUT_PLACEHOLDER } from '@/lib/engines/dateInput';
 import {
   automationStatus,
   formatCount,
+  formatDate,
   pendingStatusChip,
   visiblePendingTasks,
   type ApiFailure,
@@ -191,11 +193,33 @@ export function FieldShell({ id, label, hint, error, children, required }: { id:
 
 const INPUT = `block min-h-11 w-full rounded border border-line bg-white px-3 py-2 text-sm text-ink disabled:bg-gray-100 disabled:text-muted ${FOCUS}`;
 
-export function TextField({ label, value, onChange, hint, error, required, disabled, type = 'text', placeholder, maxLength, list }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; required?: boolean; disabled?: boolean; type?: 'text' | 'date' | 'number' | 'url'; placeholder?: string; maxLength?: number; list?: string }) {
+export function TextField({ label, value, onChange, hint, error, required, disabled, type = 'text', placeholder, maxLength, list }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; required?: boolean; disabled?: boolean; type?: 'text' | 'number' | 'url'; placeholder?: string; maxLength?: number; list?: string }) {
   const id = useId();
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} required={required}>
       <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} maxLength={maxLength} list={list} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={INPUT} />
+    </FieldShell>
+  );
+}
+
+/**
+ * A typed date field. NEVER a native date picker: that follows the browser's
+ * locale (often month-first) and cannot honour the day-first rule (PO,
+ * Document2 findings #8/#19). The operator types DD-MM-YYYY (/ or . also
+ * work); the logic layer converts to the ISO value the API expects.
+ */
+export function DateField({ label, value, onChange, hint, error, required, disabled }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; required?: boolean; disabled?: boolean }) {
+  const id = useId();
+  const fullHint: ReactNode = hint ? (
+    <>
+      {hint} {DATE_INPUT_HINT}
+    </>
+  ) : (
+    DATE_INPUT_HINT
+  );
+  return (
+    <FieldShell id={id} label={label} hint={fullHint} error={error} required={required}>
+      <input id={id} type="text" inputMode="numeric" autoComplete="off" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={DATE_INPUT_PLACEHOLDER} maxLength={10} aria-invalid={error ? true : undefined} aria-describedby={describedBy(`${id}-hint`, error ? `${id}-error` : null)} className={INPUT} />
     </FieldShell>
   );
 }
@@ -308,7 +332,7 @@ export function PendingImportsPanel({ tasks, canStage, onUpload }: { tasks: read
                 </div>
                 <p className="mt-1 text-sm text-ink">{t.action}</p>
                 <p className="mt-1 text-xs text-muted">
-                  Latest stored level: {t.latestValidDataDate ?? 'none'}. Expected latest session: {t.expectedLatestSession}.
+                  Latest stored level: {formatDate(t.latestValidDataDate)}. Expected latest session: {formatDate(t.expectedLatestSession)}.
                   {t.weekdaysBehind !== null ? ` ${formatCount(t.weekdaysBehind)} weekday(s) behind.` : ''}
                 </p>
                 <div className="mt-2">
