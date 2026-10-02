@@ -47,11 +47,19 @@ function lintMigration(sql: string): string[] {
 describe('migration 0240 (additive, idempotent, RLS-safe, no CHECK recreate)', () => {
   const sql = read(`supabase/migrations/${MIGRATION}`);
 
-  it('is numbered above every other migration in this branch and is the only file with its prefix', () => {
+  // Robust to LATER migrations: a migration that has been applied anywhere is never renamed, so a newer
+  // migration (0241, ...) is legitimate. What must hold is that 0240 exists and NO OTHER file shares its number.
+  const filesNumbered = (files: string[], prefix: string) => files.filter((f) => f.startsWith(`${prefix}_`));
+
+  it('exists and is the only migration with its number (later-numbered migrations are allowed)', () => {
     const files = readdirSync(path.join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('.sql'));
-    expect(files.filter((f) => f.startsWith('0240'))).toEqual([MIGRATION]);
-    const others = files.filter((f) => f !== MIGRATION).map((f) => Number(f.slice(0, 4)));
-    expect(Math.max(...others)).toBeLessThan(240);
+    expect(filesNumbered(files, '0240')).toEqual([MIGRATION]);
+  });
+
+  it('NEGATIVE CONTROL: a second 0240 migration, or a missing 0240, fails the uniqueness check by name', () => {
+    expect(filesNumbered(['0239_a.sql', '0240_networth_current_nav_remark.sql', '0240_other.sql'], '0240')).not.toEqual([MIGRATION]);
+    expect(filesNumbered(['0239_a.sql', '0241_b.sql'], '0240')).not.toEqual([MIGRATION]);
+    expect(filesNumbered(['0239_a.sql', '0240_networth_current_nav_remark.sql', '0241_b.sql'], '0240')).toEqual([MIGRATION]);
   });
 
   it('passes the migration lint: no drops, no column alterations, no backfill, guarded adds, read-only policy, no audit-vocabulary change', () => {
