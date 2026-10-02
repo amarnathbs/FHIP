@@ -1,5 +1,5 @@
 // BENCH-1 Phase 2 - the LIVE wiring of the ingestion orchestrator: service-role
-// Supabase client + the migration-0239 RPCs. Server-side only. Nothing here
+// Supabase client + the migration-0241 RPCs. Server-side only. Nothing here
 // decides policy (that is orchestrator.ts and the database); it only performs
 // the I/O each injected dependency names.
 import type { SupabaseClient } from '@supabase/supabase-js';

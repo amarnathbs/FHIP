@@ -1,6 +1,6 @@
 {
-  "generatedBy": "scripts/bench1_phase2_0239_negative_controls.mjs",
-  "note": "Each rule broken in a TEMP COPY of 0239 and replayed on PGlite; the real migration was never modified.",
+  "generatedBy": "scripts/bench1_phase2_0241_negative_controls.mjs",
+  "note": "Each rule broken in a TEMP COPY of 0241 and replayed on PGlite; the real migration was never modified.",
   "results": [
     {
       "id": "DB-01",

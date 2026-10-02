@@ -13,7 +13,7 @@ Audience: the Product Owner and any administrator granted a benchmark capability
 | Catalogue (`can_manage_benchmark_catalogue`) | Catalogue entries, mapping proposals/review, DRAFT entitlements, ingestion mode | Approve an entitlement, publish |
 | Entitlement approver (`can_approve_benchmark_entitlements`) | Approve / revoke entitlements | Propose one |
 
-Capabilities are granted ONE ADMIN AT A TIME by the Product Owner (`update admin_users set <column> = true where user_id = '<uuid>'`); migration 0239 grants nobody anything. The same administrator may hold several, but staging and publishing by the same person needs an explicit self-publish acknowledgement and is recorded (`self_published`).
+Capabilities are granted ONE ADMIN AT A TIME by the Product Owner (`update admin_users set <column> = true where user_id = '<uuid>'`); migration 0241 grants nobody anything. The same administrator may hold several, but staging and publishing by the same person needs an explicit self-publish acknowledgement and is recorded (`self_published`).
 
 ## 2. The order of work for a new benchmark (nothing publishes out of order)
 
@@ -54,7 +54,7 @@ Run kinds (`?run_kind=`): `daily` (after expected EOD publication; re-fetches th
 * Stop automation: leave the switches OFF (default) or set them off; set a benchmark to `manual_import`/`disabled`.
 * Withdraw data rights: revoke the entitlement - ordinary readers lose the series immediately (row-level security), staged jobs are refused at publication.
 * Undo a publish: Jobs > Rollback (correction capability).
-* Undo the migration: `scripts/bench1_phase2_po_apply_0239.sql` rollback block (drops only 0239 objects; does not touch 0232).
+* Undo the migration: `scripts/bench1_phase2_po_apply_0241.sql` rollback block (drops only 0241 objects; does not touch 0232).
 
 ## 7. Known limitations (honest)
 

@@ -5,7 +5,7 @@
 // Overview coverage, report sections) asks the SAME question through this
 // module: may this benchmark be used to CALCULATE and to DISPLAY a comparison
 // (and, for reports/exports, to EXPORT)? The answer comes from the database
-// function benchmark_entitled_actions() (migration 0239), which evaluates the
+// function benchmark_entitled_actions() (migration 0241), which evaluates the
 // per-right entitlement records - NOT from ii_benchmarks.licence_status, which
 // is a coarse legacy summary and grants nothing.
 //

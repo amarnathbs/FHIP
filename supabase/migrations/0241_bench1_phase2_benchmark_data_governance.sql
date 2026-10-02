@@ -1,4 +1,4 @@
--- 0239 — BENCH-1 Phase 2: benchmark data governance, the ONE upload pipeline,
+-- 0241 — BENCH-1 Phase 2: benchmark data governance, the ONE upload pipeline,
 -- per-right entitlements, mapping governance and recurring-ingestion state.
 --
 -- THIS MIGRATION EXTENDS, IT DOES NOT REPLACE:
@@ -56,16 +56,16 @@
 --     entitlement, enable any job or create any pg_cron schedule.
 --
 -- ROLLBACK (all statements idempotent / guarded): see
--- scripts/bench1_phase2_po_apply_0239.sql, which also carries the verify block.
+-- scripts/bench1_phase2_po_apply_0241.sql, which also carries the verify block.
 
 -- Preconditions: this migration builds on 0155 (PC6 reference data) and 0232
 -- (market-index upload capability). Fail loudly rather than half-apply.
 do $$ begin
   if to_regprocedure('is_market_index_data_admin()') is null then
-    raise exception '0239 requires migration 0232 (is_market_index_data_admin) to be applied first';
+    raise exception '0241 requires migration 0232 (is_market_index_data_admin) to be applied first';
   end if;
   if to_regclass('public.ii_reference_import_batches') is null or to_regclass('public.ii_reference_job_control') is null or to_regclass('public.ii_reference_corrections') is null then
-    raise exception '0239 requires migration 0155 (PC6 reference-data ledgers) to be applied first';
+    raise exception '0241 requires migration 0155 (PC6 reference-data ledgers) to be applied first';
   end if;
 end $$;
 
@@ -1608,9 +1608,9 @@ end $$;
 -- ===========================================================================
 insert into ii_reference_job_control (job_key, enabled, disabled_reason)
 select 'benchmark_ingestion_global', false,
-  'Shipped disabled by migration 0239 (BENCH-1 Phase 2). Master switch for ALL benchmark-specific recurring ingestion. No source has a verified automation right; enabling is a deliberate, human-present step after an automation entitlement is approved.'
+  'Shipped disabled by migration 0241 (BENCH-1 Phase 2). Master switch for ALL benchmark-specific recurring ingestion. No source has a verified automation right; enabling is a deliberate, human-present step after an automation entitlement is approved.'
 where not exists (select 1 from ii_reference_job_control where job_key = 'benchmark_ingestion_global');
 insert into ii_reference_job_control (job_key, enabled, disabled_reason)
 select 'benchmark_ingestion_write', false,
-  'Shipped disabled by migration 0239. While off, a run may fetch and validate but writes NOTHING (dry run). Both this and benchmark_ingestion_global must be on, per benchmark, with an approved automation entitlement, for any recurring write.'
+  'Shipped disabled by migration 0241. While off, a run may fetch and validate but writes NOTHING (dry run). Both this and benchmark_ingestion_global must be on, per benchmark, with an approved automation entitlement, for any recurring write.'
 where not exists (select 1 from ii_reference_job_control where job_key = 'benchmark_ingestion_write');

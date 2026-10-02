@@ -1,4 +1,4 @@
--- BENCH-1 Phase 2 - PO apply script for migration 0239 (DEV first; production only after sign-off).
+-- BENCH-1 Phase 2 - PO apply script for migration 0241 (DEV first; production only after sign-off).
 -- Run in the Supabase SQL editor of the TARGET project, in this order. Nothing here grants a capability,
 -- approves an entitlement, loads an index level or enables a job.
 --
@@ -10,7 +10,7 @@ select to_regprocedure('is_market_index_data_admin()') is not null as has_0232,
        (select count(*) from ii_benchmarks) as benchmarks_now,
        (select count(*) from ii_benchmark_series) as series_now;
 
--- STEP 1  APPLY: paste and run the WHOLE of supabase/migrations/0239_bench1_phase2_benchmark_data_governance.sql
+-- STEP 1  APPLY: paste and run the WHOLE of supabase/migrations/0241_bench1_phase2_benchmark_data_governance.sql
 --   (idempotent; safe to re-run). Re-scan migration numbers on all branches before applying to production.
 
 -- STEP 2  VERIFY (expected results in the comments)
@@ -39,8 +39,8 @@ select (select count(*) from ii_benchmark_series) as series_rows, (select count(
 -- STEP 4  OPTIONAL SEED (draft catalogue entries + mapping PROPOSALS only):
 --   docs/admin/po_apply_bench1_phase2/03_seed_catalogue_and_mapping_proposals.sql (edit <ADMIN_USER_UUID>; DEV first).
 
--- ROLLBACK (drops only 0239 objects; does not touch 0232 or any other migration). Run only if 0239 must be withdrawn.
--- Order matters (dependencies). Series rows written under 0239 keep their data; the added columns are dropped.
+-- ROLLBACK (drops only 0241 objects; does not touch 0232 or any other migration). Run only if 0241 must be withdrawn.
+-- Order matters (dependencies). Series rows written under 0241 keep their data; the added columns are dropped.
 -- drop function if exists publish_benchmark_feed_rows(uuid, jsonb, text, text);
 -- drop function if exists record_benchmark_ingestion_attempt(uuid, jsonb);
 -- drop function if exists release_benchmark_ingestion_lease(uuid, text);

@@ -208,7 +208,7 @@ export async function loadIndiaMfReportForReport(
     if (!report) return null;
     return { status: 'ok', report };
   } catch (e) {
-    // A database that has not got the market-index / benchmark-governance migrations (0232, 0239) or another
+    // A database that has not got the market-index / benchmark-governance migrations (0232, 0241) or another
     // newer table or column yet must NOT break report generation: a missing relation/column means the section
     // cannot be stood behind, so it is HIDDEN (null), exactly like "no India MF holding" - never an error section.
     if (isMissingSchemaError(e)) return null;

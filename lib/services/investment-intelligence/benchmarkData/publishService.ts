@@ -2,7 +2,7 @@
 // the read side (job list, job detail, validation-error download).
 //
 // PUBLICATION AUTHORITY IS THE DATABASE. publish_benchmark_import() (migration
-// 0239) re-authorises the caller, re-checks the checksum, the staging digest
+// 0241) re-authorises the caller, re-checks the checksum, the staging digest
 // and the previewed counts, re-validates the entitlement (revocation / expiry
 // / scope), re-classifies every staged row against the CURRENT series (stale
 // preview and concurrent-import guard), serialises per benchmark and writes

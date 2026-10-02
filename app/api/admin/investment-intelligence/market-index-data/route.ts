@@ -120,7 +120,7 @@ export const GET = adminRoute(async () => {
 });
 
 // SUPERSEDED (BENCH-1 Phase 2). The earlier single-step upload wrote series rows on an attestation
-// checkbox alone and called commit_market_index_upload(), which migration 0239 revokes from
+// checkbox alone and called commit_market_index_upload(), which migration 0241 revokes from
 // authenticated sessions because it bypassed the per-right entitlement gate. All uploads now go
 // through the ONE staged pipeline at /api/admin/investment-intelligence/benchmark-data/upload
 // (stage -> validate -> approve -> publish, bound to checksum + staging digest + entitlement).

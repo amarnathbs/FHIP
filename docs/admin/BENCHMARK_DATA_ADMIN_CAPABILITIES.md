@@ -8,12 +8,12 @@ Applies: `docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md` v1.0 (read in full bef
 |---|---|---|---|---|
 | View (read-only) | `can_view_reference_data_quality` (PC6) **or** any column below | `is_benchmark_data_viewer()` | `view` | nav group + tabs |
 | Upload (stage + validate) | `can_upload_market_index_data` (0232) | `is_market_index_data_admin()` | `upload` | Upload tab, cancel own job |
-| Publish new history | `can_publish_benchmark_data` (0239) | `is_benchmark_publisher()` | `publish` | Publish action on new-history jobs |
-| Correct / roll back | `can_correct_benchmark_data` (0239) | `is_benchmark_corrector()` | `correct` | Correction mode, publish correction, rollback |
-| Catalogue, mappings, draft entitlements, ingestion mode | `can_manage_benchmark_catalogue` (0239) | `is_benchmark_catalogue_admin()` | `catalogue` | Catalogue/Mappings/Entitlements(propose)/Ingestion tabs |
-| Approve / revoke entitlements | `can_approve_benchmark_entitlements` (0239) | `is_benchmark_entitlement_approver()` | `entitlementApprove` | Approve/Revoke actions |
+| Publish new history | `can_publish_benchmark_data` (0241) | `is_benchmark_publisher()` | `publish` | Publish action on new-history jobs |
+| Correct / roll back | `can_correct_benchmark_data` (0241) | `is_benchmark_corrector()` | `correct` | Correction mode, publish correction, rollback |
+| Catalogue, mappings, draft entitlements, ingestion mode | `can_manage_benchmark_catalogue` (0241) | `is_benchmark_catalogue_admin()` | `catalogue` | Catalogue/Mappings/Entitlements(propose)/Ingestion tabs |
+| Approve / revoke entitlements | `can_approve_benchmark_entitlements` (0241) | `is_benchmark_entitlement_approver()` | `entitlementApprove` | Approve/Revoke actions |
 
-`view` is the only union and it is read access only. The 0239 migration grants no capability to anyone; each grant is a deliberate PO action. Roles are multi-role by union (section 3); Analyst remains read-only and has no benchmark capability (section 5).
+`view` is the only union and it is read access only. The 0241 migration grants no capability to anyone; each grant is a deliberate PO action. Roles are multi-role by union (section 3); Analyst remains read-only and has no benchmark capability (section 5).
 
 ## 2. Route / RPC gating
 
@@ -52,4 +52,4 @@ Denial behaviour: unauthenticated 401, authenticated without the capability 403,
 
 ## 4. Rollback or disablement
 
-Set the capability column false (per admin); keep the kill switches OFF (default); revoke entitlements; Jobs > Rollback for a publish; `scripts/bench1_phase2_po_apply_0239.sql` rollback block for the migration.
+Set the capability column false (per admin); keep the kill switches OFF (default); revoke entitlements; Jobs > Rollback for a publish; `scripts/bench1_phase2_po_apply_0241.sql` rollback block for the migration.

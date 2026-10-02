@@ -10,7 +10,7 @@ import { refreshBenchmarkHistoryDemand } from '@/lib/services/investment-intelli
 /**
  * Benchmark-specific recurring ingestion (BENCH-1 Phase 2).
  *
- * SHIPS DISABLED, and nothing schedules it: migration 0239 creates NO pg_cron
+ * SHIPS DISABLED, and nothing schedules it: migration 0241 creates NO pg_cron
  * job, the adapter registry ships EMPTY (no index owner's terms were verified to
  * permit automation), and every gate below fails closed:
  *   1. x-cron-secret === CRON_SECRET (same job authentication as the other cron routes);

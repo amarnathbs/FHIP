@@ -7,11 +7,11 @@ Branch `feat/bench1-phase2-benchmark-upload-ingestion-20261001` (built on `feat/
 | Label | Meaning |
 |---|---|
 | **code-complete** | Written, linted, type-checked, unit-tested here |
-| **PGlite-verified** | Migration replayed (all 0001..0240 on main plus 0232 and 0239) on a real Postgres engine and exercised with negative controls. NOT the hosted database |
+| **PGlite-verified** | Migration replayed (all 0001..0240 on main plus 0232 and 0241) on a real Postgres engine and exercised with negative controls. NOT the hosted database |
 | **DEV-verified** | Exercised against the real DEV project. **Nothing in this work is DEV-verified.** |
 | **production-verified** | **Nothing in this work is production-verified.** |
 
-Plainly: migrations **0232 and 0239 are not applied to DEV or production** (no DDL path exists in this environment; the DEV PostgREST listing has no SQL-execution RPC). **No benchmark data was published anywhere.** No DEV or production write was made (ledger: `BENCH1_PHASE2_DEV_MUTATION_LEDGER_2026-10-01.md`). No provider was contacted, nothing was purchased, no licence approval was invented.
+Plainly: migrations **0232 and 0241 are not applied to DEV or production** (no DDL path exists in this environment; the DEV PostgREST listing has no SQL-execution RPC). **No benchmark data was published anywhere.** No DEV or production write was made (ledger: `BENCH1_PHASE2_DEV_MUTATION_LEDGER_2026-10-01.md`). No provider was contacted, nothing was purchased, no licence approval was invented.
 
 ## 1. Verdicts (separate, as the spec requires)
 
@@ -19,7 +19,7 @@ Plainly: migrations **0232 and 0239 are not applied to DEV or production** (no D
 |---|---|---|
 | **Technical implementation** | **PASS (code-complete + PGlite-verified), with two stated limits** | One staged upload pipeline (CSV/XLSX, three shapes), per-right entitlement gate (DB + TS), atomic idempotent publish with corrections/rollback, mapping governance, selective-history demand, ingestion orchestrator with kill switches/leases/watermarks, consumer gating, Admin UI/API. 196 PGlite checks, 3,668 passing unit tests across the touched families (17 pre-existing unrelated failures), 110 named negative controls. Limits: the Admin UI was never opened in a browser (no running app/DEV session; 360px layout unverified); the provider-export header sets are from public conventions, not a live download |
 | **Source / data readiness** | **BLOCKED** | No public source grants FHIP's intended use; NSE Indices, BSE Index Services and CRISIL terms restrict personal/non-commercial use and prohibit automated collection/storage/redistribution; no price or licence terms are public. 0 of 11 required benchmark series exist. AMFI's own pages were unreachable. Detail: `SOURCE_DECISION.md` |
-| **Live DEV end-to-end** | **NOT PERFORMED (blocked)** | Needs 0232+0239 applied to DEV (PO action) and a permitted real file (needs rights). A PO run script and checklist are provided (release package, section 3) |
+| **Live DEV end-to-end** | **NOT PERFORMED (blocked)** | Needs 0232+0241 applied to DEV (PO action) and a permitted real file (needs rights). A PO run script and checklist are provided (release package, section 3) |
 | **Production activation and verification** | **NOT PERFORMED, not requested** | Out of authority; release package prepared |
 | **Overall BENCH-1** | **NOT FULL PASS** | Required comparisons remain unavailable (no data, no rights) and the recurring/manual operating controls are code-proved but not operated live. Technical work is ready to be used the day rights exist |
 
@@ -77,7 +77,7 @@ Reuses the certified R4/R5 engines; only the data loaders gained the entitlement
 
 | Check | Result |
 |---|---|
-| `node scripts/bench1_phase2_0239_pglite_verification.mjs` (real Postgres, chain 0001..0239 from empty, re-apply idempotent) | **196 passed, 0 failed** |
+| `node scripts/bench1_phase2_0241_pglite_verification.mjs` (real Postgres, chain 0001..0241 from empty, re-apply idempotent) | **196 passed, 0 failed** |
 | `npx vitest run tests/unit/benchmarkDataFile*` (file ingest) | 8 files, **482 passed** |
 | `.../benchmarkDataAdminRoutes.test.ts` (route x capability matrix, s5, s8, s11, s13, static) | **217 passed** |
 | `.../benchmarkDataEntitlements.test.ts` / `benchmarkDataIngestion.test.ts` / `benchmarkDataConsumers.test.ts` | **21 / 42 / 11 passed** |
@@ -92,8 +92,8 @@ Repository-walking tests time out at 5 s under parallel load (a known hazard); t
 
 ## 12. Migrations and configuration (deliverable 10)
 
-* New: `0239_bench1_phase2_benchmark_data_governance.sql` (additive; no shared CHECK dropped/recreated: variants live in a new `return_variant` column, the `licence_status`, `return_type`, batch-kind/status and audit-event lists are untouched). Depends on 0155 and 0232 (guards fail loudly). Own append-only audit log `ii_benchmark_governance_events`.
-* **Collision scan (run three times, last this session):** all local and remote refs and every worktree under `D:\FHIP\.claude\worktrees`. Found above main's `0229`: `0230` (module 11.7), `0231` (admin premium grant, on main), `0232` (India index; this branch's base), `0236` (owner-before-upload, on main), `0237`/`0238` (premium promo/reminders, premium branch), `0240_networth_current_nav_remark` (on main). `0239` is unused by any other branch and is kept (it sits between 0238 and 0240; ordering across independent branches does not matter, uniqueness does). A renumber to 0241 was tried and **reverted**: main's `iiNetWorthNavRemarkContracts` test asserts 0240 is the highest migration. Re-scan before merging; `0232` must apply before `0239`.
+* New: `0241_bench1_phase2_benchmark_data_governance.sql` (additive; no shared CHECK dropped/recreated: variants live in a new `return_variant` column, the `licence_status`, `return_type`, batch-kind/status and audit-event lists are untouched). Depends on 0155 and 0232 (guards fail loudly). Own append-only audit log `ii_benchmark_governance_events`.
+* **Collision scan (run three times, last this session):** all local and remote refs and every worktree under `D:\FHIP\.claude\worktrees`. Found above main's `0229`: `0230` (module 11.7), `0231` (admin premium grant, on main), `0232` (India index; this branch's base), `0236` (owner-before-upload, on main), `0237`/`0238` (premium promo/reminders, premium branch), `0240_networth_current_nav_remark` (on main). The work was first numbered 0239, **renumbered to `0241`** (above everything found) and the PO has **applied 0241 (and 0232) on DEV**, so the name is now permanent: a migration that has been applied anywhere is never renamed. Main's `iiNetWorthNavRemarkContracts` test (which asserted 0240 was the highest migration) was made robust instead (0240 exists, unique, no other file shares its number). Re-scan before merging; `0232` must apply before `0241`.
 * Config: see the release package section 2 (all off by default).
 * Merge notes: expect mechanical conflicts in `lib/admin/adminNav.ts` and `app/api/admin/me/route.ts` with the admin-premium-grant branch (both add capability fields: keep both).
 
@@ -108,7 +108,7 @@ DEV/production behaviour of any new code; the Admin UI in a browser (desktop and
 ## 15. What the PO must do or decide
 
 1. **Rights (blocks all real data):** decide the source route and obtain written permission/licence for index levels (NSE Indices for 8 of the 11, BSE Index Services for 3); questions to ask are in `SOURCE_DECISION.md` section 6. Decide whether AMC-published scheme-vs-benchmark returns alone would be an acceptable interim product.
-2. **Apply** 0232 then 0239 to DEV with `scripts/bench1_phase2_po_apply_0239.sql` (verify block included); re-scan migration numbers before any merge; production only after sign-off.
+2. **Apply** 0232 then 0241 to DEV with `scripts/bench1_phase2_po_apply_0241.sql` (verify block included); re-scan migration numbers before any merge; production only after sign-off.
 3. **Grant capabilities** deliberately, one admin at a time (suggest: yourself catalogue + entitlement approver; a second admin publisher).
 4. **Verify the catalogue** against the owners' pages (owners are inferred; identifiers/dates unverified); optionally run the draft seed.
 5. **Decide** the two unsupported schemes (a permitted gold/silver price series and a blended-benchmark definition) and whether to demand the narrower investor window first.

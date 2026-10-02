@@ -4,7 +4,7 @@
 // the browser's preview payload is never the publish authority - the server
 // persists the validated rows in ii_benchmark_import_rows and publication works
 // from THOSE rows, bound to the file checksum, the staging digest and the
-// previewed counts (migration 0239).
+// previewed counts (migration 0241).
 //
 // Everything here runs under the CALLER'S OWN session client (never the
 // service-role client): every RPC authorises with auth.uid() inside the
