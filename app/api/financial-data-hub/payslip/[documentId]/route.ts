@@ -4,6 +4,7 @@ import {
   getPayrollEventForReview,
   getPayrollEventIdForDocument,
 } from '@/lib/financial-data-hub/services/payslipProcessingService';
+import { getDocumentOwner } from '@/lib/financial-data-hub/services/documentOwnerRequest';
 
 // GET /api/financial-data-hub/payslip/{documentId} — the review read-model
 // (spec section 32). Read-only: never mutates the payroll event, and never
@@ -22,5 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ documen
   if (!review) return bad('Payroll event not found.', 404);
 
   const revisionOf = await findRevisionPredecessor(user.id, payrollEventId).catch(() => null);
-  return ok({ payroll_event: review.event, components: review.components, revision_of: revisionOf });
+  // Owner-before-upload (Phase 2): who the payslip was uploaded for (null for a legacy upload).
+  const uploadOwner = await getDocumentOwner(user.id, documentId);
+  return ok({ payroll_event: review.event, components: review.components, revision_of: revisionOf, upload_owner_role: uploadOwner?.ownerRole ?? null });
 }

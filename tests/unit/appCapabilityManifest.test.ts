@@ -157,6 +157,16 @@ const API_FOLDER_INFRA_ALLOWLIST = new Set([
   'landing',
   'master-items',
   'onboarding',
+  // Owner-before-upload (Phase 1): `app/api/ownership/options` is the shared,
+  // user-scoped owner list every upload form asks for BEFORE the file is sent
+  // (bank statement, India CAS, and the later payslip / liability / retirement /
+  // AU-investment phases). Cross-cutting like 'household-members', which it
+  // reads, so it is infrastructure rather than owned by one financial module.
+  'ownership',
+  // Premium expiry e-mail reminders: `app/api/premium/cron/expiry-reminders` is a secret-authenticated
+  // scheduled job (x-cron-secret, no user session), cross-cutting infrastructure like the other cron routes,
+  // not a financial module a user can reach.
+  'premium',
   'professional-access',
   'property-liability-links',
   'reference',

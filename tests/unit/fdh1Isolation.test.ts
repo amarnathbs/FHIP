@@ -791,6 +791,26 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // service role. READ ONLY, and every query is scoped by
       // `.eq('user_id', userId)`; it never matches across users.
       path.join(FDH_LIB, 'services', 'identicalUpload.ts'),
+      // Owner-before-upload (2026-10-01) adds a THIRTEENTH and FOURTEENTH:
+      // bankOwnerAttribution.ts and bankAccountAssignment.ts. Both act on rows
+      // the bank upload path has just created or must settle: the first checks
+      // an identical earlier upload / account owner BEFORE a session-scoped
+      // write and writes the document's owner columns; the second attaches an
+      // already-uploaded statement to an account and may move a statement that
+      // an earlier process attempt parked in review_required (an authoritative
+      // certification column the authenticated role may not write, R7). Every
+      // query in both is scoped by `.eq('user_id', userId)` (and `.eq('id', ...)`
+      // for writes), a statement or account of another user is
+      // indistinguishable from a missing one, and writes only claim a row that
+      // still has no account (`.is('financial_account_id', null)`).
+      path.join(FDH_LIB, 'services', 'bankOwnerAttribution.ts'),
+      path.join(FDH_LIB, 'services', 'bankAccountAssignment.ts'),
+      // Owner-before-upload Phase 2 adds a FIFTEENTH: documentOwnerRequest.ts, the shared owner handling for
+      // payslip / liability / retirement / AU-investment uploads. It writes only the owner columns of a document
+      // row the caller's own upload just created (tolerant of a database without 0236), reads the caller's own
+      // earlier documents to refuse the identical file under a different owner, and reads the caller's own
+      // document owner at the canonical-write gates. Every query is `.eq('user_id', userId)`.
+      path.join(FDH_LIB, 'services', 'documentOwnerRequest.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

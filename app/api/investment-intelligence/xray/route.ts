@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { ownerClassField, resolveOwnerClassScope } from '@/lib/services/investment-intelligence/ownerClassScope';
 import { loadXrayDataset, persistR5Results } from '@/lib/services/investment-intelligence/r5Repository';
 import { runXrayAnalytics, summariseXrayDataQuality } from '@/lib/engines/investment-intelligence/xray/xrayOrchestrator';
 import { XRAY_ENGINE_VERSION } from '@/lib/engines/investment-intelligence/r5Versioning';
@@ -44,12 +45,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const rootClient = await createClient();
+    const scope = await resolveOwnerClassScope(request, rootClient, user.id);
+    if (!scope.ok) return scope.response;
+    const supabase = scope.client;
     const { dataset, warnings, empty } = await loadXrayDataset(supabase, user.id, { asOfDate: asOfRaw ?? undefined });
 
     if (empty || !dataset) {
       return ok({
         empty: true,
+        ownerClass: ownerClassField(scope),
         warnings,
         message: 'No mutual-fund or ETF positions are available yet, so a portfolio X-Ray cannot be produced.',
       });
@@ -68,7 +73,7 @@ export async function GET(request: Request) {
     const benchmarkCtx = await loadInstrumentBenchmarkContext(supabase, xraySchemeInstrumentIds);
     const schemeBenchmarkCoverage = summarizeBenchmarkCoverage(benchmarkCtx, xraySchemeInstrumentIds, new Date(result.asOfDate));
 
-    if (available) {
+    if (available && !scope.active) {
       await persistR5Results(user.id, [
         {
           scopeType: 'portfolio',
@@ -94,6 +99,7 @@ export async function GET(request: Request) {
 
     return ok({
       empty: false,
+      ownerClass: ownerClassField(scope),
       // The single most important field in this response: a consumer must
       // render the unavailable state, not zeros, when this is false.
       available,

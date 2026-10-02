@@ -23,6 +23,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DISPOSAL_TYPES } from './taxRepository';
 import { fetchAllRows } from './pagination';
+import { accessAllows, loadBenchmarkAccess } from './benchmarkAccess';
+import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey, todayIsoDate } from './currentValuationLoader';
+import { valueHoldingAsOf, type ValuationBasis } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import type { OverviewSignals } from '@/lib/investment-intelligence/analysisAvailability';
 
 /**
@@ -62,6 +65,20 @@ export interface OverviewSummary {
     latestAsOfDate: string | null;
     /** Oldest "latest snapshot" date — how stale the stalest position is. */
     oldestAsOfDate: string | null;
+    /**
+     * Document2 Finding #5 (2026-10-01): how the position values above were
+     * obtained, so the UI can say so honestly. `latestAsOfDate` /
+     * `oldestAsOfDate` are the dates of the NAV/statement actually USED.
+     * This is a plain tally of the shared valuation rule's output
+     * (valuation/currentHoldingValuation.ts) — no return, tax, risk or
+     * exposure figure is computed here.
+     */
+    valuation: {
+      marketNavCount: number;
+      statementBasisCount: number;
+      redeemedCount: number;
+      staleCount: number;
+    };
   };
   /** Is my data ready? (spec section 10) */
   dataQuality: {
@@ -81,6 +98,7 @@ interface SnapshotRow {
   account_id: string;
   instrument_id: string;
   as_of_date: string;
+  units: number | string | null;
   value: number | string | null;
   currency_code: string;
 }
@@ -118,7 +136,11 @@ async function countRows(supabase: SupabaseClient, table: string, userId: string
  * filters `user_id` explicitly, so tenancy is enforced twice (RLS policy plus
  * predicate), matching the convention every other II user-facing route uses.
  */
-export async function buildOverviewSummary(supabase: SupabaseClient, userId: string): Promise<OverviewSummary> {
+export async function buildOverviewSummary(
+  supabase: SupabaseClient,
+  userId: string,
+  opts: { asOfDate?: string } = {}
+): Promise<OverviewSummary> {
   // --- 1. Positions: latest snapshot per (account, instrument) --------------
   // Paged, not capped: a position whose newest snapshot falls past the
   // PostgREST cap would otherwise vanish from the user's portfolio entirely
@@ -126,7 +148,7 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
   const snapshots = await fetchAllRows<SnapshotRow>(() =>
     supabase
       .from('ii_holding_snapshots')
-      .select('account_id, instrument_id, as_of_date, value, currency_code')
+      .select('account_id, instrument_id, as_of_date, units, value, currency_code')
       .eq('user_id', userId)
       .order('as_of_date', { ascending: false })
       .order('id', { ascending: true })
@@ -140,15 +162,44 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
   const heldInstrumentIds = [...new Set(positions.map((p) => p.instrument_id))];
   const accountIds = new Set(positions.map((p) => p.account_id));
 
+  // Document2 Finding #5: each position is valued by the ONE shared rule —
+  // units x the latest eligible market NAV when one is newer than the
+  // statement, otherwise the statement's own value (labelled). One batched
+  // NAV read covering only NAVs newer than the oldest latest statement.
+  const valuationDate = (opts.asOfDate ?? todayIsoDate()).slice(0, 10);
+  const oldestLatestStatement = positions.map((p) => p.as_of_date).filter(Boolean).sort()[0] ?? null;
+  const navCandidatesByInstrument = await loadNavCandidatesSince(supabase, heldInstrumentIds, oldestLatestStatement);
+  // Multi-folio fix (rule 8 of the shared valuation rule): units transacted
+  // AFTER a folio's own statement date belong to that folio's holding. Bounded
+  // read - only transactions newer than the oldest latest statement, and only
+  // the columns needed to resolve a signed unit change (no amounts, no
+  // descriptions); normally zero rows. Positions here are already per folio
+  // (account:instrument), so a fund held in two folios is summed, never
+  // replaced by one folio's row.
+  const unitMovementsByPosition = await loadUnitMovementsSince(supabase, userId, oldestLatestStatement);
+  const valuationBasisCounts: Record<ValuationBasis, number> = { market_nav: 0, statement: 0, redeemed: 0, unavailable: 0 };
+  let staleCount = 0;
+  const valuationDates: string[] = [];
+
   const byCurrency = new Map<string, PortfolioValueByCurrency>();
   for (const p of positions) {
     const cur = p.currency_code;
+    const v = valueHoldingAsOf({
+      statements: [{ asOfDate: p.as_of_date, units: Number(p.units ?? 0), value: Number(p.value ?? 0), currencyCode: cur }],
+      navs: navCandidatesByInstrument.get(p.instrument_id) ?? [],
+      asOfDate: valuationDate,
+      currencyCode: cur,
+      unitMovements: unitMovementsByPosition.get(positionKey(p.account_id, p.instrument_id)) ?? [],
+    });
+    valuationBasisCounts[v.basis] += 1;
+    if (v.stale) staleCount += 1;
+    if (v.valuationDate) valuationDates.push(v.valuationDate);
     const entry = byCurrency.get(cur) ?? { currencyCode: cur, totalValue: 0, positionCount: 0 };
-    entry.totalValue += Number(p.value ?? 0);
+    entry.totalValue += v.marketValue ?? 0;
     entry.positionCount += 1;
     byCurrency.set(cur, entry);
   }
-  const asOfDates = positions.map((p) => p.as_of_date).filter(Boolean).sort();
+  const asOfDates = valuationDates.sort();
 
   // --- 2. Cheap status counts ----------------------------------------------
   const [truthRows, docRows, openCaseCount, publishedCount, openReviewItemCount, reviewItemCount] = await Promise.all([
@@ -202,7 +253,7 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
       (async () => {
         const { data, error } = await supabase
           .from('ii_instrument_benchmarks')
-          .select('instrument_id')
+          .select('instrument_id, benchmark_id')
           .in('instrument_id', heldInstrumentIds)
           .limit(COVERAGE_PROBE_LIMIT);
         if (error) throw new Error(`ii_instrument_benchmarks: ${error.message}`);
@@ -228,7 +279,19 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
       (LOOK_THROUGH_INSTRUMENT_CLASSES as readonly string[]).includes(r.instrument_class as string)
     ).length;
     instrumentsWithNavCount = new Set(navRows.map((r) => r.instrument_id as string)).size;
-    instrumentsWithBenchmarkCount = new Set(benchmarkRows.map((r) => r.instrument_id as string)).size;
+    // BENCH-1 Phase 2: a held scheme counts as having a benchmark ONLY when its mapped benchmark is
+    // actually usable - an approved entitlement permits calculation + display AND published levels
+    // exist. A mapping to a blocked or empty benchmark is a mapping, not coverage, so the Overview
+    // never claims comparison availability that the Performance/SIP/Holdings screens cannot deliver.
+    const mappedBenchmarkIds = [...new Set(benchmarkRows.map((r) => r.benchmark_id as string))];
+    const { access } = await loadBenchmarkAccess(supabase, mappedBenchmarkIds);
+    const usableBenchmarkIds = new Set<string>();
+    for (const id of mappedBenchmarkIds) {
+      if (!accessAllows(access.get(id), 'display_comparison')) continue;
+      const { count } = await supabase.from('ii_benchmark_series').select('id', { count: 'exact', head: true }).eq('benchmark_id', id);
+      if ((count ?? 0) > 0) usableBenchmarkIds.add(id);
+    }
+    instrumentsWithBenchmarkCount = new Set(benchmarkRows.filter((r) => usableBenchmarkIds.has(r.benchmark_id as string)).map((r) => r.instrument_id as string)).size;
     instrumentsWithFundHoldingsCount = new Set(fundHoldingRows.map((r) => r.fund_instrument_id as string)).size;
   }
 
@@ -257,6 +320,12 @@ export async function buildOverviewSummary(supabase: SupabaseClient, userId: str
       instrumentClasses,
       latestAsOfDate: asOfDates.length ? asOfDates[asOfDates.length - 1] : null,
       oldestAsOfDate: asOfDates.length ? asOfDates[0] : null,
+      valuation: {
+        marketNavCount: valuationBasisCounts.market_nav,
+        statementBasisCount: valuationBasisCounts.statement,
+        redeemedCount: valuationBasisCounts.redeemed,
+        staleCount,
+      },
     },
     dataQuality: {
       documentCount: docRows.length,

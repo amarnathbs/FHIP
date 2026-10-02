@@ -5,6 +5,9 @@ import { fmtDate } from './dateDisplay';
 import { AiExtractionReviewPanel } from './AiExtractionReviewPanel';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping';
+import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import { OwnerConflictPanel } from './OwnerConflictPanel';
+import { ownerSelectionToMeta, type OwnerSelection } from '@/lib/ownership/ownerSelection';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -58,6 +61,8 @@ interface PublicationPreview {
   sourceCurrency: string | null;
   valuationAsOfDate: string | null;
   certifiedValue: number | null;
+  /** What Net Worth will count: units x latest eligible NAV (or the statement value, labelled), with its date. */
+  currentValuation: { value: number; basis: 'market_nav' | 'statement' | 'redeemed'; units: number | null; nav: number | null; navDate: string | null; stale: boolean; statementValue: number | null; note: string } | null;
   costBaseStatus: string;
   costBaseValue: number | null;
   annualContributionStatus: string;
@@ -87,6 +92,17 @@ interface DocumentSummary {
     statement_period_end: string | null;
     statement_as_of_date: string | null;
     original_filename: string;
+  };
+  /** Owner-before-upload (Phase 1): who the statement was filed under. */
+  owner?: {
+    chosenAtUpload: boolean;
+    ownerRole: string | null;
+    label: string | null;
+    review: {
+      conflicts: { accountId: string; folioNumber: string | null; institutionName: string | null; existingOwner: string; selectedOwner: string }[];
+      targetSignature?: string | null;
+      warnings: { accountId: string; kind: string; maskedHolderName: string | null; message: string }[];
+    } | null;
   };
   accountsFound: number;
   accounts: { id: string; folio_number: string | null; institution_name: string }[];
@@ -217,6 +233,10 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   const [sourceKey, setSourceKey] = useState<'cams' | 'kfintech'>('cams');
   const [countryCode] = useState<'IN'>('IN');
   const [uploading, setUploading] = useState(false);
+  // Owner-before-upload (Phase 1): who the statement belongs to, chosen BEFORE
+  // the file is sent (no default). The Upload button stays disabled until set.
+  const [owner, setOwner] = useState<OwnerSelection | null>(null);
+  const [confirmingOwner, setConfirmingOwner] = useState(false);
 
   // R3 — Publish to FHIP flow state.
   const [publishPreview, setPublishPreview] = useState<PublicationPreview | null>(null);
@@ -360,16 +380,22 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   async function handleAssignOwner(caseObj: ReconciliationCase) {
     const ownerMemberId = ownerSelections[caseObj.id];
     if (!ownerMemberId) return;
+    // 2026-10-01: the owner route now refuses any owner change that is not
+    // explicitly confirmed (`confirm: true`). This inline control only ever
+    // assigns a household member; trusts / HUFs / companies and joint splits are
+    // chosen on the Review and Resolutions tabs (OwnerChangeDialog).
+    const memberName = householdMembers.find((m) => m.id === ownerMemberId)?.full_name ?? 'this household member';
+    if (!window.confirm(`Assign this account to ${memberName}? Its holdings and transactions are not changed or recalculated - only who they are attributed to. You can amend this later from the Resolutions tab.`)) return;
     setError(null);
     setAssigningOwner(caseObj.id);
     try {
       const res = await fetch(`/api/investment-intelligence/accounts/${caseObj.subject_id}/owner`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerMemberId }),
+        body: JSON.stringify({ ownerMemberId, confirm: true }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not assign owner');
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not assign owner');
       if (selectedId) await loadSummary(selectedId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -397,7 +423,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    if (!file || !owner) return;
     setUploading(true);
     setError(null);
     setNotice(null);
@@ -410,6 +436,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
           sourceKey,
           documentType: 'cas_statement',
           countryCode,
+          ...ownerSelectionToMeta(owner),
         })
       );
       const res = await fetch('/api/investment-intelligence/source-documents', { method: 'POST', body: form });
@@ -435,6 +462,49 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setUploading(false);
+    }
+  }
+
+  // Owner-before-upload (decision 2): the user EXPLICITLY confirms moving
+  // folios that were already filed under a different owner. Nothing changes
+  // without this call.
+  async function handleConfirmOwnerChange(documentId: string, accountIds: string[], targetSignature: string) {
+    setConfirmingOwner(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/investment-intelligence/source-documents/${documentId}/confirm-owner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountIds, targetSignature }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not change the owner.');
+      await loadSummary(documentId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setConfirmingOwner(false);
+    }
+  }
+
+  // "This is not joint": the statement prints a joint holding but the user chose a
+  // single owner; confirming dismisses the advisory warning (no owner changes).
+  async function handleConfirmSoleOwner(documentId: string, accountId: string) {
+    setConfirmingOwner(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/investment-intelligence/source-documents/${documentId}/confirm-sole-owner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountIds: [accountId] }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not save your confirmation.');
+      await loadSummary(documentId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setConfirmingOwner(false);
     }
   }
 
@@ -746,6 +816,9 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-gray-900">Step 1 — Upload a statement</h2>
         <form onSubmit={handleUpload} className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="w-full max-w-xl">
+            <OwnerSelector flow="ii_cas" idPrefix="ii-owner" value={owner} onChange={setOwner} disabled={uploading} />
+          </div>
           <div>
             {/* AIE-1 final completion (2026-09-25): axe `select-name` (critical)
                 -- the label was not associated with the control. */}
@@ -780,7 +853,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               className="mt-1 block text-sm"
             />
           </div>
-          <button type="submit" disabled={!file || uploading} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+          <button type="submit" disabled={!file || !owner || uploading} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
             {uploading ? 'Uploading…' : 'Upload'}
           </button>
         </form>
@@ -852,7 +925,44 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                     Statement period: {summary.document.statement_period_start ?? '?'} to {summary.document.statement_period_end ?? '?'}
                   </p>
                 )}
+                {summary.owner?.chosenAtUpload && summary.owner.label && (
+                  <p className="text-xs text-gray-500" data-testid="document-owner">
+                    Filed under: <span className="font-medium text-gray-800">{summary.owner.label}</span>
+                  </p>
+                )}
               </div>
+
+              {/* Owner-before-upload (Phase 1): non-blocking owner notes. */}
+              {summary.owner?.review && (summary.owner.review.warnings.length > 0 || summary.owner.review.conflicts.length > 0) && (
+                <div className="space-y-2" data-testid="owner-review">
+                  {summary.owner.review.warnings.map((w, i) => (
+                    <div key={`${w.accountId}-${i}`} role="status" className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <p>
+                        {w.message}
+                        {w.maskedHolderName ? ` (printed name: ${w.maskedHolderName})` : ''}
+                      </p>
+                      {w.kind === 'statement_prints_joint_holding' && (
+                        <button
+                          type="button"
+                          disabled={confirmingOwner}
+                          onClick={() => handleConfirmSoleOwner(summary.document.id, w.accountId)}
+                          className="mt-1 rounded border border-amber-400 bg-white px-2 py-1 text-xs font-medium text-amber-900 disabled:opacity-50"
+                        >
+                          This is not joint — it is solely owned by {summary.owner?.label ?? 'the owner I chose'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {summary.owner.review.conflicts.length > 0 && (
+                    <OwnerConflictPanel
+                      conflicts={summary.owner.review.conflicts}
+                      targetLabel={summary.owner.label ?? 'the owner I chose'}
+                      busy={confirmingOwner}
+                      onConfirm={(ids) => handleConfirmOwnerChange(summary.document.id, ids, summary.owner?.review?.targetSignature ?? '')}
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Step 5: Portfolio extracted */}
               <div>
@@ -961,7 +1071,12 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                           {open && c.discrepancy_type === 'document_password_required' && (
                             <span className="text-xs text-gray-500">Enter the document password above and Reprocess — this clears automatically once it opens.</span>
                           )}
-                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'document_password_required' && (
+                          {open && c.discrepancy_type === 'joint_holding_allocation_required' && (
+                            <a href="/investment-intelligence/review" className="text-xs font-medium text-primary hover:underline">
+                              Split ownership on the Review tab
+                            </a>
+                          )}
+                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'joint_holding_allocation_required' && c.discrepancy_type !== 'document_password_required' && (
                             <button onClick={() => handleResolveCase(c.id)} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
                               Resolve
                             </button>
@@ -1092,6 +1207,19 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                       <dt className="text-xs text-gray-500">Certified value ({publishPreview.sourceCurrency})</dt>
                       <dd className="font-medium text-gray-900">{formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)}</dd>
                     </div>
+                    {publishPreview.currentValuation && (
+                      <div>
+                        <dt className="text-xs text-gray-500">Counted in net worth ({publishPreview.sourceCurrency})</dt>
+                        <dd className="font-medium text-gray-900">{formatMoney(publishPreview.currentValuation.value, publishPreview.sourceCurrency)}</dd>
+                        <dd className="text-xs text-gray-500">
+                          {publishPreview.currentValuation.basis === 'market_nav'
+                            ? `Latest NAV ${publishPreview.currentValuation.nav === null ? '' : formatMoney(publishPreview.currentValuation.nav, publishPreview.sourceCurrency)} dated ${publishPreview.currentValuation.navDate ? fmtDate(publishPreview.currentValuation.navDate, publishPreview.sourceCurrency) : '—'}${publishPreview.currentValuation.stale ? ' (stale)' : ''}`
+                            : publishPreview.currentValuation.basis === 'redeemed'
+                              ? 'Redeemed (0 units)'
+                              : `Statement value (no newer NAV on file)${publishPreview.currentValuation.stale ? ', stale' : ''}`}
+                        </dd>
+                      </div>
+                    )}
                     <div>
                       <dt className="text-xs text-gray-500">As of</dt>
                       <dd className="font-medium text-gray-900">{publishPreview.valuationAsOfDate ? fmtDate(publishPreview.valuationAsOfDate, publishPreview.sourceCurrency) : '—'}</dd>
@@ -1155,8 +1283,8 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Net-worth impact</p>
                       <p className="mt-1 text-gray-800">
                         {publishChoice !== 'new'
-                          ? `Existing manual value ${formatMoney(publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0, publishPreview.sourceCurrency)} superseded by certified value ${formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)} — net change ${formatMoney((publishPreview.certifiedValue ?? 0) - (publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0), publishPreview.sourceCurrency)}.`
-                          : `New position adds ${formatMoney(publishPreview.certifiedValue, publishPreview.sourceCurrency)} to net worth.`}
+                          ? `Existing manual value ${formatMoney(publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0, publishPreview.sourceCurrency)} superseded by ${publishPreview.currentValuation ? 'the value counted in net worth' : 'certified value'} ${formatMoney(publishPreview.currentValuation?.value ?? publishPreview.certifiedValue, publishPreview.sourceCurrency)} — net change ${formatMoney((publishPreview.currentValuation?.value ?? publishPreview.certifiedValue ?? 0) - (publishPreview.duplicateCandidates.find((c) => c.investmentId === publishChoice)?.existingValue ?? 0), publishPreview.sourceCurrency)}.`
+                          : `New position adds ${formatMoney(publishPreview.currentValuation?.value ?? publishPreview.certifiedValue, publishPreview.sourceCurrency)} to net worth.`}
                       </p>
                     </div>
                   )}

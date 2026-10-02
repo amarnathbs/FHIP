@@ -1,0 +1,980 @@
+[
+ {
+  "amfi_scheme_code": "103174",
+  "isins": [
+   "INF209K01BR9"
+  ],
+  "scheme_name": "Aditya Birla Sun Life Large Cap Fund",
+  "amc_name": "Aditya Birla Sun Life Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "aditya birla sun life|aditya birla sun life large cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Large Cap Fund",
+  "first_transaction_date": "2015-08-21",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "NIFTY 100 TRI",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated in the KIM",
+  "evidence_document": [
+   {
+    "id": "ABSL_KIM",
+    "title": "KIM - Aditya Birla Sun Life Frontline Equity Fund (scheme later renamed Large Cap Fund)",
+    "url": "https://mutualfund.adityabirlacapital.com/-/media/bsl/files/resources/forms/sid----scheme-information-documents/30052025/kim-3/kim--absl-frontline-equity-fund-300325.pdf",
+    "doc_date": "2025-05-30",
+    "excerpt": "Benchmark Risk-o-meter (NIFTY 100 TRI); 'chosen benchmark index, NIFTY 100 TRI'",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "ABSL_PAGE",
+    "title": "ABSL Large Cap Fund scheme page (AMC website)",
+    "url": "https://mutualfund.adityabirlacapital.com/empower/equity-funds/Large-Cap.html",
+    "doc_date": "live page",
+    "excerpt": "Benchmark: Nifty 100 TRI",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "No benchmark-change addendum retrieved. Scheme renamed Frontline Equity Fund -> Large Cap Fund (addendum '25.06.2025 Change in Name of the Schemes' seen in search results only, not fetched).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "KIM is dated 2025-05-30 under the pre-rename name 'Frontline Equity Fund'; AMC scheme page (live) agrees (Nifty 100 TRI). A post-rename SID/KIM was not retrieved. KIM does not use the words Tier 1. Pre-2018 benchmark history and TRI adoption date NOT documented in fetched material.",
+  "fetch_log": [
+   "OK KIM Frontline Equity 2025-05-30 (pdf text extracted) [retrieved 2026-10-01]",
+   "OK scheme page Large-Cap.html [retrieved 2026-10-01]",
+   "search-result only: addendum 250625-change-in-name-of-the-schemes.pdf (not fetched) [retrieved 2026-10-01]"
+  ],
+  "_family": "ABSL"
+ },
+ {
+  "amfi_scheme_code": "112277",
+  "isins": [
+   "INF846K01164"
+  ],
+  "scheme_name": "Axis Large Cap Fund",
+  "amc_name": "Axis Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "axis|axis large cap fund",
+  "category_group": "Equity Schemes",
+  "sub_category": "Large Cap Fund",
+  "first_transaction_date": "2013-09-17",
+  "required_from_date": "2009-12-28",
+  "declared_primary_benchmark_exact_name": "BSE 100 TRI",
+  "benchmark_owner": "Asia Index Pvt Ltd (BSE) (inferred from 'BSE' index name; documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "Nifty 50 TRI (additional benchmark; per AMC leaflet May 2026 and scheme page, not seen in the SID text)",
+  "evidence_document": [
+   {
+    "id": "AXIS_SID",
+    "title": "Axis Large Cap Fund - SID",
+    "url": "https://www.axismf.com/1/5/464/2243/4294/axis_large_cap_fund_sid.pdf",
+    "doc_date": "2025-11-28",
+    "excerpt": "'VII. Benchmark (Total Return Index) AMFI Tier 1 Benchmark: BSE 100 TRI'",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "AXIS_LEAF",
+    "title": "Axis Large Cap Fund (formerly known as Axis Bluechip Fund) leaflet May 2026",
+    "url": "https://www.axismf.com/1/5/1423/1484/1778/1779/Axis_Large_Cap_May_2026.pdf",
+    "doc_date": "2026-05-29 data",
+    "excerpt": "'Benchmark: BSE 100 TRI'; 'Nifty 50 TRI (Additional Benchmark)'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None retrieved. Scheme renamed from Axis Bluechip Fund (leaflet title says 'formerly known as Axis Bluechip Fund'; rename date 2025-06-02 appears only in a search snippet).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "SID labels it 'AMFI Tier 1 Benchmark: BSE 100 TRI'. Earlier benchmark history (pre-TRI, pre-rename) not documented in fetched material.",
+  "fetch_log": [
+   "OK SID 2025-11-28 (URL from AMC scheme page axismf.com/.../axis-large-cap-fund/ef-dg/direct) [retrieved 2026-10-01]",
+   "OK leaflet May 2026 [retrieved 2026-10-01]",
+   "301 www.axismf.com/cms/.../Axis Bluechip Fund - SID.pdf -> transact.axismf.com (not followed; SID from scheme page used instead) [retrieved 2026-10-01]"
+  ],
+  "_family": "AXIS"
+ },
+ {
+  "amfi_scheme_code": "100520",
+  "isins": [
+   "INF090I01239"
+  ],
+  "scheme_name": "Franklin India Flexi Cap Fund",
+  "amc_name": "Franklin Templeton Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "franklin templeton|franklin india flexi cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Flexi Cap Fund",
+  "first_transaction_date": "2022-12-12",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "Nifty 500 (shown under 'Benchmark (Total Return Index)'; Tier I)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (no Tier II)",
+  "evidence_document": [
+   {
+    "id": "FT_FLEXI_SID",
+    "title": "Franklin India Flexi Cap Fund - SID",
+    "url": "https://www.franklintempletonindia.com/download/en-in/open-end-dvsfd-equity-schemes/85f1a581-ecc1-47c7-b741-1edbbbc728a7/4616-A-prospectus-it1ykmug-en-in.pdf",
+    "doc_date": "2025-11-28",
+    "excerpt": "'Benchmark (Total Return Index): Tier I benchmark - Nifty 500'; composite PRI to 26.11.1998 then TRI",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "SID footnote: since TRI data not available from inception, benchmark history uses Nifty 500 PRI 29.09.1994-26.11.1998 and TRI from 26.11.1998. Scheme renamed from Franklin India Equity Fund (AMC page title).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Document says 'Nifty 500' under a 'Total Return Index' heading rather than 'Nifty 500 TRI'; variant therefore taken as TRI by the heading. Shared by Regular and Direct plans.",
+  "fetch_log": [
+   "OK SID 2025-11-28 (pdf text extracted) [retrieved 2026-10-01]"
+  ],
+  "_family": "FTFLEXI"
+ },
+ {
+  "amfi_scheme_code": "100473",
+  "isins": [
+   "INF090I01809"
+  ],
+  "scheme_name": "Franklin India Mid Cap Fund",
+  "amc_name": "Franklin Templeton Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "franklin templeton|franklin india mid cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Mid Cap Fund",
+  "first_transaction_date": "2015-08-21",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "Nifty Midcap 150 (shown under 'Benchmark (Total Return Index)')",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated",
+  "evidence_document": [
+   {
+    "id": "FT_MC_SID",
+    "title": "Franklin India Mid Cap Fund - SID (name changed from Franklin India Prima Fund effective 2025-07-11)",
+    "url": "https://www.franklintempletonindia.com/download/en-in/open-end-dvsfd-equity-schemes/d89e0b2d-0be1-4833-80f8-15d195b70f7f/4615-A-prospectus-it1ykmuf-en-in.pdf",
+    "doc_date": "2025-11-28",
+    "excerpt": "'Benchmark (Total Return Index): Nifty Midcap 150'",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "FT_PRIMA_2018",
+    "title": "Current and proposed scheme features - Franklin India Prima Fund (Annexure 1, Apr 2018)",
+    "url": "https://www.franklintempletonindia.com/download/en-in/latest-updates/d86fa22b-3f15-44c0-8875-2efb11c187e2/franklin-india-prima-fund-jg9o5ah7-en-in.pdf",
+    "doc_date": "2018-04 (PDF created 2018-04-06)",
+    "excerpt": "Current benchmark 'Nifty 500 and Nifty Free Float Midcap 100'; proposed 'Nifty Midcap 150'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "Nifty Midcap 150 adopted 2018 (April 2018 annexure proposes the change; effective date June 4, 2018 appears only in a search snippet - NOT verified)",
+  "benchmark_change_history": "BENCHMARK CHANGE (2018, as Franklin India Prima Fund): 'Nifty 500 and Nifty Free Float Midcap 100' -> 'Nifty Midcap 150'. Scheme renamed Franklin India Prima Fund -> Mid Cap Fund effective 2025-07-11 (SID header).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Pre-2018 benchmark was a two-index pair; a series needed from 2006 would require history of those. Name given without 'TRI' in the SID but under a Total Return Index heading.",
+  "fetch_log": [
+   "OK SID 2025-11-28 [retrieved 2026-10-01]",
+   "OK Annexure 1 Apr 2018 (garbled layout but both benchmark names extracted) [retrieved 2026-10-01]"
+  ],
+  "_family": "FTMID"
+ },
+ {
+  "amfi_scheme_code": "100119",
+  "isins": [
+   "INF179K01830"
+  ],
+  "scheme_name": "HDFC Balanced Advantage Fund",
+  "amc_name": "HDFC Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "hdfc|hdfc balanced advantage fund",
+  "category_group": "Hybrid Scheme",
+  "sub_category": "Dynamic Asset Allocation or Balanced Advantage",
+  "first_transaction_date": "2018-06-01",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "NIFTY 50 Hybrid Composite Debt 50:50 Index (TRI)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none (AMFI Tier I). Composition per SID: 50% NIFTY 50 TRI + 50% NIFTY Composite Debt Index",
+  "evidence_document": [
+   {
+    "id": "HDFC_BAF_KIM",
+    "title": "HDFC Balanced Advantage Fund - KIM",
+    "url": "https://files.hdfcfund.com/s3fs-public/KIM/2025-11/KIM%20-%20HDFC%20Balanced%20Advantage%20Fund%20dated%20November%2021,%202025.pdf",
+    "doc_date": "2025-11-21",
+    "excerpt": "13. Benchmark Index: NIFTY 50 Hybrid Composite Debt 50:50 Index (TRI)",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "HDFC_BAF_SID",
+    "title": "HDFC Balanced Advantage Fund - SID",
+    "url": "https://files.hdfcfund.com/s3fs-public/SID/2024-06/SID%20-%20HDFC%20Balanced%20Advantage%20Fund%20dated%20June%2028,%202024.pdf",
+    "doc_date": "2024-06-28",
+    "excerpt": "Index tracks portfolio with 50% NIFTY 50 TRI and 50% NIFTY Composite Debt Index",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "HDFC_BAF_LEAF",
+    "title": "SMART SWAP - HDFC Balanced Advantage Fund Leaflet (as on April 30, 2026)",
+    "url": "https://files.hdfcfund.com/s3fs-public/Others/2026-05/SMART%20SWAP%20-%20HDFC%20Balanced%20Advantage%20Fund%20Leaflet%20(as%20on%20April%2030,%202026).pdf",
+    "doc_date": "2026-04-30 (published ~2026-05-19)",
+    "excerpt": "Benchmark footnote: Nifty 50 Hybrid Composite Debt 50:50 Index (Total Returns Index)",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found for BAF. NOTE: a search snippet claimed the BAF benchmark changed on 2025-12-10; verification showed that change (65% Nifty 50 TRI + 22.5% Nifty Composite Debt + 10% gold + 2.5% silver, w.e.f. 2025-12-10, addendum 3 Nov 25) belongs to HDFC Multi-Asset Allocation Fund, not BAF.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "KIM (Nov 2025), SID (Jun 2024) and Apr-2026 leaflet all agree. The leaflet's performance table also lists other schemes' benchmarks (65:35, 15:85) - those are other schemes. Pre-2021 benchmark history not retrieved.",
+  "fetch_log": [
+   "OK KIM 2025-11-21 [retrieved 2026-10-01]",
+   "OK SID 2024-06-28 [retrieved 2026-10-01]",
+   "OK leaflet 2026-04-30 [retrieved 2026-10-01]",
+   "OK addenda page https://www.hdfcfund.com/investor-services/form-disclosures/addenda-notices (only a covered-call fundamental-attribute addendum w.e.f. 2026-11-09 listed; fetched PDF confirmed not benchmark-related) [retrieved 2026-10-01]"
+  ],
+  "_family": "HDFCBAF"
+ },
+ {
+  "amfi_scheme_code": "118955",
+  "isins": [
+   "INF179K01UT0"
+  ],
+  "scheme_name": "HDFC Flexi Cap Fund",
+  "amc_name": "HDFC Mutual Fund",
+  "plan_type": "direct",
+  "option_type": "growth",
+  "scheme_family_key": "hdfc|hdfc flexi cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Flexi Cap Fund",
+  "first_transaction_date": "2026-08-01",
+  "required_from_date": "2026-07-22",
+  "declared_primary_benchmark_exact_name": "NIFTY 500 Index (TRI)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier I)",
+  "evidence_document": [
+   {
+    "id": "HDFC_FLEXI_SID",
+    "title": "HDFC Flexi Cap Fund - SID",
+    "url": "https://files.hdfcfund.com/s3fs-public/SID/2025-11/SID%20-%20HDFC%20Flexi%20Cap%20Fund%20dated%20November%2021,%202025_0.pdf",
+    "doc_date": "2025-11-21",
+    "excerpt": "Performance benchmarked against NIFTY 500 Index (TRI); cover: AMFI Tier I Benchmark",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "HDFC_FLEXI_FS",
+    "title": "Fund Facts - HDFC Flexi Cap Fund December 25",
+    "url": "https://files.hdfcfund.com/s3fs-public/Others/2025-12/Fund%20Facts%20-%20HDFC%20Flexi%20Cap%20Fund_December%2025.pdf",
+    "doc_date": "2025-12",
+    "excerpt": "Benchmark: NIFTY 500 Index (Total Returns Index)",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found in retrieved documents.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Shared by Regular and Direct plans. SID Nov 2025 and Dec-2025 Fund Facts agree. Earlier benchmark history (pre-2018) not documented here.",
+  "fetch_log": [
+   "OK SID 2025-11-21 [retrieved 2026-10-01]",
+   "OK Fund Facts Dec 2025 [retrieved 2026-10-01]"
+  ],
+  "_family": "HDFCFLEXI"
+ },
+ {
+  "amfi_scheme_code": "101762",
+  "isins": [
+   "INF179K01608"
+  ],
+  "scheme_name": "HDFC Flexi Cap Fund",
+  "amc_name": "HDFC Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "hdfc|hdfc flexi cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Flexi Cap Fund",
+  "first_transaction_date": "2022-12-12",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "NIFTY 500 Index (TRI)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier I)",
+  "evidence_document": [
+   {
+    "id": "HDFC_FLEXI_SID",
+    "title": "HDFC Flexi Cap Fund - SID",
+    "url": "https://files.hdfcfund.com/s3fs-public/SID/2025-11/SID%20-%20HDFC%20Flexi%20Cap%20Fund%20dated%20November%2021,%202025_0.pdf",
+    "doc_date": "2025-11-21",
+    "excerpt": "Performance benchmarked against NIFTY 500 Index (TRI); cover: AMFI Tier I Benchmark",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "HDFC_FLEXI_FS",
+    "title": "Fund Facts - HDFC Flexi Cap Fund December 25",
+    "url": "https://files.hdfcfund.com/s3fs-public/Others/2025-12/Fund%20Facts%20-%20HDFC%20Flexi%20Cap%20Fund_December%2025.pdf",
+    "doc_date": "2025-12",
+    "excerpt": "Benchmark: NIFTY 500 Index (Total Returns Index)",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found in retrieved documents.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Shared by Regular and Direct plans. SID Nov 2025 and Dec-2025 Fund Facts agree. Earlier benchmark history (pre-2018) not documented here.",
+  "fetch_log": [
+   "OK SID 2025-11-21 [retrieved 2026-10-01]",
+   "OK Fund Facts Dec 2025 [retrieved 2026-10-01]"
+  ],
+  "_family": "HDFCFLEXI"
+ },
+ {
+  "amfi_scheme_code": "115934",
+  "isins": [
+   "INF179K01LC5"
+  ],
+  "scheme_name": "HDFC Gold ETF Fund of Fund",
+  "amc_name": "HDFC Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "hdfc|hdfc gold etf fund of fund",
+  "category_group": "Other Scheme",
+  "sub_category": "FoF Domestic",
+  "first_transaction_date": "2026-01-16",
+  "required_from_date": "2011-10-23",
+  "declared_primary_benchmark_exact_name": "Domestic price of physical gold",
+  "benchmark_owner": "Not an index: a domestic physical-gold price series; the KIM does not state the price source/owner",
+  "return_variant": "price",
+  "additional_benchmarks": "none",
+  "evidence_document": [
+   {
+    "id": "HDFC_GOLD_KIM",
+    "title": "HDFC Gold ETF Fund of Fund - KIM",
+    "url": "https://files.hdfcfund.com/s3fs-public/KIM/2025-11/KIM%20-%20HDFC%20Gold%20ETF%20Fund%20of%20Fund%20dated%20November%2021,%202025.pdf",
+    "doc_date": "2025-11-21",
+    "excerpt": "13. Benchmark Index: Domestic price of physical gold",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "KIM boilerplate says 'Benchmarked to the TRI variant of the Index' but the benchmark is a gold price, so no TRI exists; treat as price series. Source series (e.g. IBJA/other) not named in the KIM - the catalogue entry must be defined by the PO/provider.",
+  "fetch_log": [
+   "OK KIM 2025-11-21 [retrieved 2026-10-01]"
+  ],
+  "_family": "HDFCGOLD"
+ },
+ {
+  "amfi_scheme_code": "119018",
+  "isins": [
+   "INF179K01YV8"
+  ],
+  "scheme_name": "HDFC Large Cap Fund",
+  "amc_name": "HDFC Mutual Fund",
+  "plan_type": "direct",
+  "option_type": "growth",
+  "scheme_family_key": "hdfc|hdfc large cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Large Cap Fund",
+  "first_transaction_date": "2019-10-22",
+  "required_from_date": "2012-12-22",
+  "declared_primary_benchmark_exact_name": "NIFTY 100 Total Returns Index (TRI)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier I)",
+  "evidence_document": [
+   {
+    "id": "HDFC_LC_KIM",
+    "title": "HDFC Large Cap Fund - KIM",
+    "url": "https://files.hdfcfund.com/s3fs-public/KIM/2025-11/KIM%20-%20HDFC%20Large%20Cap%20Fund%20dated%20November%2021,%202025.pdf",
+    "doc_date": "2025-11-21",
+    "excerpt": "13. Benchmark Index: NIFTY 100 Total Returns Index (TRI); cover: 'as per AMFI Tier I Benchmark'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found. Earlier KIM dated 2025-05-30 also shows NIFTY 100 TRI. Scheme was formerly HDFC Top 100 Fund (news snippet, not authoritative).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Shared by Regular and Direct plans. Benchmark history before the Tier I mandate not documented in fetched material.",
+  "fetch_log": [
+   "OK KIM 2025-11-21 [retrieved 2026-10-01]",
+   "OK KIM 2025-05-30 (https://files.hdfcfund.com/s3fs-public/KIM/2025-05/KIM%20-%20HDFC%20Large%20Cap%20Fund%20dated%20May%2030,%202025.pdf) [retrieved 2026-10-01]",
+   "403 plain-HTTP (curl) fetch of that KIM = bot block; not circumvented; the WebFetch tool was used for the same public documents [retrieved 2026-10-01]"
+  ],
+  "_family": "HDFCLC"
+ },
+ {
+  "amfi_scheme_code": "102000",
+  "isins": [
+   "INF179K01BE2"
+  ],
+  "scheme_name": "HDFC Large Cap Fund",
+  "amc_name": "HDFC Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "hdfc|hdfc large cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Large Cap Fund",
+  "first_transaction_date": "2022-08-16",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "NIFTY 100 Total Returns Index (TRI)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier I)",
+  "evidence_document": [
+   {
+    "id": "HDFC_LC_KIM",
+    "title": "HDFC Large Cap Fund - KIM",
+    "url": "https://files.hdfcfund.com/s3fs-public/KIM/2025-11/KIM%20-%20HDFC%20Large%20Cap%20Fund%20dated%20November%2021,%202025.pdf",
+    "doc_date": "2025-11-21",
+    "excerpt": "13. Benchmark Index: NIFTY 100 Total Returns Index (TRI); cover: 'as per AMFI Tier I Benchmark'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found. Earlier KIM dated 2025-05-30 also shows NIFTY 100 TRI. Scheme was formerly HDFC Top 100 Fund (news snippet, not authoritative).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Shared by Regular and Direct plans. Benchmark history before the Tier I mandate not documented in fetched material.",
+  "fetch_log": [
+   "OK KIM 2025-11-21 [retrieved 2026-10-01]",
+   "OK KIM 2025-05-30 (https://files.hdfcfund.com/s3fs-public/KIM/2025-05/KIM%20-%20HDFC%20Large%20Cap%20Fund%20dated%20May%2030,%202025.pdf) [retrieved 2026-10-01]",
+   "403 plain-HTTP (curl) fetch of that KIM = bot block; not circumvented; the WebFetch tool was used for the same public documents [retrieved 2026-10-01]"
+  ],
+  "_family": "HDFCLC"
+ },
+ {
+  "amfi_scheme_code": "105758",
+  "isins": [
+   "INF179K01CR2"
+  ],
+  "scheme_name": "HDFC Mid Cap Fund",
+  "amc_name": "HDFC Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "hdfc|hdfc mid cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Mid Cap Fund",
+  "first_transaction_date": "2026-01-21",
+  "required_from_date": "2007-06-25",
+  "declared_primary_benchmark_exact_name": "NIFTY MIDCAP 150 (TRI)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier I)",
+  "evidence_document": [
+   {
+    "id": "HDFC_MC_KIM",
+    "title": "HDFC Mid Cap Fund - KIM (formerly HDFC Mid-Cap Opportunities Fund)",
+    "url": "https://files.hdfcfund.com/s3fs-public/KIM/2025-11/KIM%20-%20HDFC%20Mid%20Cap%20Fund%20dated%20November%2021,%202025_1.pdf?VersionId=lvZLv6TD_uI7sOzea0XCJmAfPcbIHPlw",
+    "doc_date": "2025-11-21",
+    "excerpt": "13. Benchmark Index: NIFTY MIDCAP 150 (TRI); cover: AMFI Tier I Benchmark",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found. Scheme formerly HDFC Mid-Cap Opportunities Fund.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Pre-2018/pre-Tier-I benchmark history not documented here.",
+  "fetch_log": [
+   "OK KIM 2025-11-21 [retrieved 2026-10-01]"
+  ],
+  "_family": "HDFCMC"
+ },
+ {
+  "amfi_scheme_code": "130502",
+  "isins": [
+   "INF179KA1RZ8"
+  ],
+  "scheme_name": "HDFC Small Cap Fund",
+  "amc_name": "HDFC Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "hdfc|hdfc small cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Small Cap Fund",
+  "first_transaction_date": "2026-01-12",
+  "required_from_date": "2014-06-20",
+  "declared_primary_benchmark_exact_name": "BSE 250 SmallCap Index (TRI)",
+  "benchmark_owner": "Asia Index Pvt Ltd (BSE) (inferred from 'BSE' index name; documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier I)",
+  "evidence_document": [
+   {
+    "id": "HDFC_SC_KIM",
+    "title": "HDFC Small Cap Fund - KIM",
+    "url": "https://files.hdfcfund.com/s3fs-public/KIM/2025-11/KIM%20-%20HDFC%20Small%20Cap%20Fund%20dated%20November%2021%2C%202025.pdf",
+    "doc_date": "2025-11-21",
+    "excerpt": "13. Benchmark Index: BSE 250 SmallCap Index (TRI); cover: 'as per AMFI Tier I Benchmark'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Index name appears without the 'S&P' prefix. Inception 2008-04-03 (KIM).",
+  "fetch_log": [
+   "OK KIM 2025-11-21 (URL from hdfcfund.com KIM listing page) [retrieved 2026-10-01]"
+  ],
+  "_family": "HDFCSC"
+ },
+ {
+  "amfi_scheme_code": "129310",
+  "isins": [
+   "INF109KA1TX4"
+  ],
+  "scheme_name": "ICICI Prudential Dividend Yield Fund",
+  "amc_name": "ICICI Prudential Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "icici prudential|icici prudential yield fund",
+  "category_group": "Equity Schemes",
+  "sub_category": "Dividend Yield Fund",
+  "first_transaction_date": "2022-12-07",
+  "required_from_date": "2014-05-09",
+  "declared_primary_benchmark_exact_name": "Nifty 500 TRI",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "Nifty 50 TRI (additional benchmark)",
+  "evidence_document": [
+   {
+    "id": "ICICI_DY_FS",
+    "title": "ICICI Prudential Complete Factsheet May 2026 (Dividend Yield Equity Fund page)",
+    "url": "https://www.icicipruamc.com/blob/downloads/Files/Historic%20Factsheets/2026-2027/Complete%20Factsheet%20May%202026.pdf",
+    "doc_date": "2026-05-31",
+    "excerpt": "'Nifty 500 TRI (Benchmark)'; revised from Nifty Dividend Opportunities 50 TRI w.e.f. January 01, 2022",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "2022-01-01 (Nifty 500 TRI)",
+  "benchmark_change_history": "BENCHMARK CHANGE: Nifty Dividend Opportunities 50 TRI -> Nifty 500 TRI w.e.f. 2022-01-01 (earlier index used through 2021-12-31). Fundamental attributes changed 2019-12-26.",
+  "evidence_status": "factsheet_only",
+  "ambiguity_notes": "Evidence is the AMC's own complete factsheet (May 2026), not the SID/KIM. A current SID was not retrieved (AMFI-portal SID spages/8338.pdf in search results appears to be the launch-era SID and was not fetched). Inventory name 'ICICI Prudential Dividend Yield Fund' vs official 'Dividend Yield Equity Fund' (same scheme by launch date 2014).",
+  "fetch_log": [
+   "OK Complete Factsheet May 2026 (9.8MB pdf, text extracted) [retrieved 2026-10-01]",
+   "404 icicipruamc.com/.../factsheet-schemes/Schemes/1. Equity Schemes/ICICI Prudential Dividend Yield Equity Fund.pdf [retrieved 2026-10-01]",
+   "404 icicipruamc.com/.../SID/ICICI Prudential Dividend Yield Equity Fund.pdf and ...Fund New.pdf [retrieved 2026-10-01]",
+   "empty/JS page icicipruamc.com/mutual-fund/equity-funds/icici-prudential-dividend-yield-equity-fund/670 [retrieved 2026-10-01]",
+   "TLS error 'unable to verify the first certificate' digitalfactsheet.icicipruamc.com/fact/pdf/fund-factsheet-for-july-2026.pdf [retrieved 2026-10-01]"
+  ],
+  "_family": "ICICIDY"
+ },
+ {
+  "amfi_scheme_code": "104908",
+  "isins": [
+   "INF174K01DS9"
+  ],
+  "scheme_name": "Kotak Mid Cap Fund",
+  "amc_name": "Kotak Mahindra Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "kotak mahindra|kotak mid cap fund",
+  "category_group": "Equity Schemes",
+  "sub_category": "Mid Cap Fund",
+  "first_transaction_date": "2022-08-23",
+  "required_from_date": "2007-03-23",
+  "declared_primary_benchmark_exact_name": "NIFTY Midcap 150 TRI (Tier 1)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "Tier 2: Nifty Midcap 100 TRI; Additional: Nifty 50 TRI (page text)",
+  "evidence_document": [
+   {
+    "id": "KOTAK_FS",
+    "title": "Kotak Midcap Fund (erstwhile Kotak Emerging Equity Fund) factsheet January 2026 (data 2025-12-31)",
+    "url": "https://www.kotakmf.com/factsheet/January_2026/kotak/Download_pdf/KOTAK%20MIDCAP%20FUND.pdf",
+    "doc_date": "2026-01 (data as of 2025-12-31)",
+    "excerpt": "'Benchmark: NIFTY Midcap 150 TRI (Tier 1), Nifty Midcap 100 TRI (Tier 2)'",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "KOTAK_PAGE",
+    "title": "Kotak Mid Cap Fund scheme page (AMC website, reg-g)",
+    "url": "https://www.kotakmf.com/mutual-funds/equity-funds/kotak-mid-cap-fund/reg-g",
+    "doc_date": "live page",
+    "excerpt": "Tier 1 Nifty Midcap 150 TRI; Tier 2 Nifty Midcap 100 TRI; Additional Nifty 50 TRI (as summarised by the fetch tool)",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None retrieved. Scheme renamed Kotak Emerging Equity Fund -> Kotak Midcap Fund (factsheet title). Earlier benchmark not documented in retrieved material.",
+  "evidence_status": "factsheet_only",
+  "ambiguity_notes": "Evidence is the AMC factsheet (Jan 2026) + scheme page; SID/KIM not retrieved (the scheme page lists 'SID kotak midcap fund.pdf' but gave no URL). The kotakmf.com factsheet HTML page for Feb 2026 redirected to a bot-manager challenge (perfdrive) and was NOT followed.",
+  "fetch_log": [
+   "OK factsheet pdf Jan 2026 [retrieved 2026-10-01]",
+   "OK scheme page kotakmf.com/.../kotak-mid-cap-fund/reg-g (summarised) [retrieved 2026-10-01]",
+   "302 -> validate.perfdrive.com (bot challenge) for kotakmf.com/factsheet/feb_2026/...html - not followed [retrieved 2026-10-01]"
+  ],
+  "_family": "KOTAK"
+ },
+ {
+  "amfi_scheme_code": "118834",
+  "isins": [
+   "INF179K01YW8",
+   "INF769K01BI1"
+  ],
+  "scheme_name": "Mirae Asset Large & Midcap Fund",
+  "amc_name": "Mirae Asset Mutual Fund",
+  "plan_type": "direct",
+  "option_type": "growth",
+  "scheme_family_key": "mirae asset|mirae asset large and midcap fund",
+  "category_group": "Equity Schemes",
+  "sub_category": "Large & Mid Cap Fund",
+  "first_transaction_date": "2025-02-01",
+  "required_from_date": "2012-12-23",
+  "declared_primary_benchmark_exact_name": "Nifty Large Midcap 250 Index (TRI)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier 1)",
+  "evidence_document": [
+   {
+    "id": "MIRAE_SID",
+    "title": "Mirae Asset Large & Midcap Fund - SID (formerly Mirae Asset Emerging Bluechip Fund)",
+    "url": "https://www.miraeassetmf.co.in/docs/default-source/sid/27-sid-mirae-asset-large-midcap-fund_final-may2025.pdf",
+    "doc_date": "2025-11-20 (file name says may2025; document states 'dated November 20, 2025')",
+    "excerpt": "'AMFI Tier 1 Benchmark (Total Returns Index): ... Nifty Large Midcap 250 Index (TRI)'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found. Scheme formerly Mirae Asset Emerging Bluechip Fund (SID title).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "IDENTITY FLAG from inventory: the row lists two ISINs (INF179K01YW8; INF769K01BI1). INF769K01BI1 is the Mirae Large & Midcap Direct Growth ISIN per third-party pointers (paytmmoney/advisorkhoj; pointer only); INF179K01YW8 has an HDFC (INF179...) prefix and is not a Mirae ISIN - likely a data-quality defect in the instrument row. Direct plan shares the scheme benchmark.",
+  "fetch_log": [
+   "OK SID (dated 2025-11-20) [retrieved 2026-10-01]",
+   "OK scheme page miraeassetmf.co.in/.../mirae-asset-large-and-midcap-fund (summarised: Nifty Large Midcap 250 (TRI)) [retrieved 2026-10-01]"
+  ],
+  "_family": "MIRAE"
+ },
+ {
+  "amfi_scheme_code": "101262",
+  "isins": [
+   "INF204K01AE0"
+  ],
+  "scheme_name": "Nippon India Power & Infra Fund",
+  "amc_name": "Nippon India Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "nippon india|nippon india power and infra fund",
+  "category_group": "Equity Schemes",
+  "sub_category": "Sectoral Fund",
+  "first_transaction_date": "2007-12-17",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "Nifty Infrastructure TRI",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier I)",
+  "evidence_document": [
+   {
+    "id": "NIPPON_SID",
+    "title": "Nippon India Power & Infra Fund - SID",
+    "url": "https://mf.nipponindiaim.com/InvestorServices/SIDEquity/NipponIndia-Power-and-Infra-Fund.pdf",
+    "doc_date": "2025-11-28",
+    "excerpt": "'VII. Benchmark (Total Return Index): AMFI Tier I Benchmark - Nifty Infrastructure TRI'",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "NIPPON_NOTE",
+    "title": "Nippon India Power & Infra Fund product note Oct 2025",
+    "url": "https://mf.nipponindiaim.com/FundsAndPerformance/ProductNotes/NipponIndia-Power-and-Infra-Fund-Oct-2025.pdf",
+    "doc_date": "2025-10",
+    "excerpt": "'AMFI Tier I Benchmark - Nifty Infrastructure TRI'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found. Within the SID a legacy paragraph names 'Nifty Infrastructure Index' (price name) as the benchmark index while cover/section VII say TRI.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Scheme formerly Reliance Power & Infra. Regular Plan Growth Option shares the scheme benchmark. Pre-2018 history not documented.",
+  "fetch_log": [
+   "OK SID 2025-11-28 (URL from mf.nipponindiaim.com SID downloads page) [retrieved 2026-10-01]",
+   "OK product note Oct 2025 (single-page promo, benchmark line) [retrieved 2026-10-01]",
+   "OK scheme page NipponIndia-Power-Infra-Fund.aspx: 'Benchmark: Nifty Infrastructure TRI' [retrieved 2026-10-01]",
+   "size error (>10MB) NipponIndia-Factsheet-May-2025.pdf [retrieved 2026-10-01]"
+  ],
+  "_family": "NIPPON"
+ },
+ {
+  "amfi_scheme_code": "122639",
+  "isins": [
+   "INF879O01027"
+  ],
+  "scheme_name": "Parag Parikh Flexi Cap Fund",
+  "amc_name": "PPFAS Mutual Fund",
+  "plan_type": "direct",
+  "option_type": "growth",
+  "scheme_family_key": "ppfas|parag parikh flexi cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Flexi Cap Fund",
+  "first_transaction_date": "2023-04-03",
+  "required_from_date": "2013-05-18",
+  "declared_primary_benchmark_exact_name": "Nifty 500 TRI (AMFI Tier I)",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "Nifty 50 TRI (Additional Benchmark)",
+  "evidence_document": [
+   {
+    "id": "PPFAS_SID",
+    "title": "Parag Parikh Flexi Cap Fund - SID",
+    "url": "https://amc.ppfas.com/downloads/parag-parikh-flexi-cap-fund/SID_PPFCF.pdf",
+    "doc_date": "2025-11-28",
+    "excerpt": "Scheme benchmarked with Nifty 500 TRI; Additional Benchmark: Nifty 50 TRI",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None found. Inception 2013-05-24.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Direct plan shares the benchmark with Regular. Earlier benchmark history not documented here.",
+  "fetch_log": [
+   "OK SID 2025-11-28 (URL without query string) [retrieved 2026-10-01]"
+  ],
+  "_family": "PPFAS"
+ },
+ {
+  "amfi_scheme_code": "102414",
+  "isins": [
+   "INF200K01362"
+  ],
+  "scheme_name": "SBI CONTRA FUND",
+  "amc_name": "SBI Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "sbi|sbi contra fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Contra Fund",
+  "first_transaction_date": "2022-12-01",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "BSE 500 TRI Index (AMFI Tier I; 'S&P BSE 500 TRI Index' in the Apr-2023 SID)",
+  "benchmark_owner": "Asia Index Pvt Ltd (BSE) (inferred from 'BSE' index name; documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated",
+  "evidence_document": [
+   {
+    "id": "SBI_CONTRA_SID",
+    "title": "SBI Contra Fund - SID",
+    "url": "https://www.sbimf.com/docs/default-source/sif-forms/sid---sbi-contra-fund.pdf?sfvrsn=4a20c1ae_0",
+    "doc_date": "2025-10-31",
+    "excerpt": "'As per AMFI Tier I benchmark - BSE 500 TRI Index'; PRI composite until 2006-07-31, TRI from 01-Aug-06",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "Name-only change: older SID (2023-04-28) says 'S&P BSE 500 TRI Index'; same index re-branded. History composite: BSE 500 PRI 05-Jul-99 to 31-Jul-06, TRI from 01-Aug-06.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "Benchmark shared by Regular and Direct plans.",
+  "fetch_log": [
+   "OK SID 2025-10-31 [retrieved 2026-10-01]",
+   "OK SID 2023-04-28 (lists/sid_kim URL, older) [retrieved 2026-10-01]"
+  ],
+  "_family": "SBICONTRA"
+ },
+ {
+  "amfi_scheme_code": "103504",
+  "isins": [
+   "INF200K01180",
+   "INF200K01UP0"
+  ],
+  "scheme_name": "SBI Large Cap Fund",
+  "amc_name": "SBI Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "sbi|sbi large cap fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Large Cap Fund",
+  "first_transaction_date": "2022-02-01",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "BSE 100 TRI (AMFI Tier I; 'S&P BSE 100 TRI' in older docs)",
+  "benchmark_owner": "Asia Index Pvt Ltd (BSE) (inferred from 'BSE' index name; documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "BSE Sensex TRI per a search snippet only - not verified in a fetched SBI document",
+  "evidence_document": [
+   {
+    "id": "SBI_LC_SID",
+    "title": "SBI Blue Chip Fund (now SBI Large Cap Fund) - SID",
+    "url": "https://www.sbimf.com/docs/default-source/lists/sid---sbi-bluechip-fundc4383cb3adb94b959c6e6397a3bdc431.pdf?sfvrsn=a817717_2",
+    "doc_date": "2025-04-30",
+    "excerpt": "'The First Tier benchmark of the Scheme is BSE 100 Index TRI'; PRI composite 14-Feb-06 to 31-Jul-06",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "SBI_LC_FS",
+    "title": "SBI Large Cap Fund factsheet January 2026",
+    "url": "https://www.sbimf.com/docs/default-source/scheme-factsheets/sbi-largecap-fund-factsheet-january-2026.pdf?sfvrsn=32d50e47_2",
+    "doc_date": "2026-01",
+    "excerpt": "'First Tier Benchmark: BSE 100 (TRI)'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "Name-only: S&P BSE 100 -> BSE 100. Composite history: BSE 100 PRI 14-Feb-06 to 31-Jul-06 then TRI. Scheme renamed SBI Blue Chip Fund -> SBI Large Cap Fund.",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "SID retrieved (2025-04-30) is titled for the pre-rename SBI Blue Chip Fund; factsheet Jan 2026 (post-rename) agrees. Inventory ISIN pair INF200K01180;INF200K01UP0 mixes Regular and Direct plan ISINs on one row (plan_type regular).",
+  "fetch_log": [
+   "OK SID 2025-04-30 [retrieved 2026-10-01]",
+   "OK factsheet Jan 2026 [retrieved 2026-10-01]",
+   "404 sbimf.com/.../sif-forms/sid---sbi-large-cap-fund.pdf and lists/sid_kim/sid---sbi-large-cap-fund.pdf [retrieved 2026-10-01]",
+   "size error (>10MB) all-sbimf-schemes-factsheet-june-2026.pdf [retrieved 2026-10-01]"
+  ],
+  "_family": "SBILC"
+ },
+ {
+  "amfi_scheme_code": "103408",
+  "isins": [
+   "INF200K01800"
+  ],
+  "scheme_name": "SBI MULTI ASSET ALLOCATION FUND",
+  "amc_name": "SBI Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "sbi|sbi multi asset allocation fund",
+  "category_group": "Hybrid Scheme",
+  "sub_category": "Multi Asset Allocation",
+  "first_transaction_date": "2026-02-05",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "45% BSE 500 TRI + 40% CRISIL Composite Bond Fund Index + 10% Domestic prices of Gold + 5% Domestic prices of silver",
+  "benchmark_owner": "Composite: BSE 500 TRI (Asia Index/BSE, inferred), CRISIL Composite Bond Fund Index (CRISIL), domestic gold and silver prices (price series; source not named)",
+  "return_variant": "mixed: total_return (equity leg); price (gold, silver); debt leg variant not stated",
+  "additional_benchmarks": "none",
+  "evidence_document": [
+   {
+    "id": "SBI_MAAF_SID",
+    "title": "SBI Multi Asset Allocation Fund - SID",
+    "url": "https://www.sbimf.com/docs/default-source/sif-forms/sid---sbi-multi-asset-allocation-fund.pdf?sfvrsn=b3b3896d_0",
+    "doc_date": "2025-10-31",
+    "excerpt": "'45% BSE 500 TRI + 40% Crisil Composite Bond Fund Index + 10% Domestic prices of Gold + 5% Domestic prices of silver'",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "SBI_MAAF_FS",
+    "title": "SBI Multi Asset Allocation Fund factsheet April 2026",
+    "url": "https://www.sbimf.com/docs/default-source/scheme-factsheets/sbi-multi-asset-allocation-fund-factsheet-april-2026.pdf?sfvrsn=829ed1fb_2",
+    "doc_date": "2026-04-30",
+    "excerpt": "First Tier Benchmark: same composite, with note 'W.e.f. 31 October 2023'",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "SBI_MAAF_SID_OLD",
+    "title": "SID - SBI Multi Asset Allocation Fund (older SID)",
+    "url": "https://www.sbimf.com/docs/default-source/lists/sid_kim/sid---sbi-multi-asset-allocation-fund.pdf?sfvrsn=6d062113_0",
+    "doc_date": "2023-04-28",
+    "excerpt": "benchmarked to '45% CRISIL 10 year Gilt Index +40%NIFTY 50 TRI+15% Price of Gold'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "2023-10-31 (per Apr-2026 factsheet 'W.e.f. 31 October 2023')",
+  "benchmark_change_history": "BENCHMARK CHANGE w.e.f. 2023-10-31: previous (per SID dated 2023-04-28) 45% CRISIL 10 year Gilt Index + 40% NIFTY 50 TRI + 15% Price of Gold -> new 45% BSE 500 TRI + 40% CRISIL Composite Bond Fund Index + 10% Domestic prices of Gold + 5% Domestic prices of silver. Scheme recategorised 2018-05-16 (inception 16-May-2018) with changed benchmark; renamed from SBI Magnum Monthly Income Plan - Floater (2021).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "The effective date comes from the factsheet, not the SID text. A required series from 2006 spans the pre-2018 MIP-Floater era whose benchmark was not retrieved. Composite requires 4 component series with fixed weights.",
+  "fetch_log": [
+   "OK SID 2025-10-31 (sif-forms URL) [retrieved 2026-10-01]",
+   "OK factsheet 2026-04-30 [retrieved 2026-10-01]",
+   "OK older SID 2023-04-28 [retrieved 2026-10-01]"
+  ],
+  "_family": "SBIMAAF"
+ },
+ {
+  "amfi_scheme_code": null,
+  "isins": [
+   "INF109KA1Z62"
+  ],
+  "scheme_name": "ICICI Prudential Corporate Bond Fund - Growth (Direct Plan)",
+  "amc_name": null,
+  "plan_type": null,
+  "option_type": null,
+  "scheme_family_key": "unknown_amc|icici prudential corporate bond fund",
+  "category_group": null,
+  "sub_category": null,
+  "first_transaction_date": "2019-01-01",
+  "required_from_date": "2018-12-22",
+  "declared_primary_benchmark_exact_name": "NIFTY Corporate Bond Index A-II",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated (AMFI Tier I)",
+  "evidence_document": [
+   {
+    "id": "ICICI_CB_SID",
+    "title": "ICICI Prudential Corporate Bond Fund - SID",
+    "url": "https://www.icicipruamc.com/blob/downloads/Scheme%20Information%20Document(SID)/ICICI%20Prudential%20Corporate%20Bond%20Fund%20New.pdf",
+    "doc_date": "2025-10-24",
+    "excerpt": "'AMFI Tier I Benchmark - NIFTY Corporate Bond Index A-II'; changed from CRISIL Corporate Bond B-II Index w.e.f. March 12, 2024",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "2024-03-12",
+  "benchmark_change_history": "BENCHMARK CHANGE w.e.f. 2024-03-12: CRISIL Corporate Bond B-II Index -> NIFTY Corporate Bond Index A-II (SID text; also ICICI complete factsheet May 2026).",
+  "evidence_status": "verified_scheme_document",
+  "ambiguity_notes": "IDENTITY: inventory row has only ISIN INF109KA1Z62, no AMFI code, unresolved identity; the scheme-level evidence is for ICICI Prudential Corporate Bond Fund (plans share the benchmark). Mapping of the ISIN to the Direct Growth plan is NOT verified here. SID heading calls it 'Total Return Index'.",
+  "fetch_log": [
+   "OK SID 2025-10-24 ('...Fund New.pdf' name worked) [retrieved 2026-10-01]",
+   "404 .../ICICI Prudential Corporate Bond Fund.pdf [retrieved 2026-10-01]",
+   "OK factsheet May 2026 benchmark footnote [retrieved 2026-10-01]"
+  ],
+  "_family": "ICICICB"
+ },
+ {
+  "amfi_scheme_code": "100740",
+  "isins": [
+   "INF789F01844"
+  ],
+  "scheme_name": "UTI - MNC Fund",
+  "amc_name": "UTI Mutual Fund",
+  "plan_type": "regular",
+  "option_type": "growth",
+  "scheme_family_key": "uti|uti mnc fund",
+  "category_group": "Equity Scheme",
+  "sub_category": "Sectoral/ Thematic",
+  "first_transaction_date": "2015-10-06",
+  "required_from_date": "2006-03-24",
+  "declared_primary_benchmark_exact_name": "Nifty MNC TRI",
+  "benchmark_owner": "NSE Indices Ltd (inferred from index name; scheme documents do not name the owner)",
+  "return_variant": "total_return",
+  "additional_benchmarks": "none stated",
+  "evidence_document": [
+   {
+    "id": "UTI_PRES_2201",
+    "title": "UTI MNC Fund presentation Jan 2022",
+    "url": "https://doc.utimf.com/uticontainer/Presentation_UTI%20MNC%20Fund_Jan%202022-10120220212-220019.pdf",
+    "doc_date": "2022-01 (data 2021-12-31)",
+    "excerpt": "Scheme key facts: 'Benchmark Nifty MNC TRI'",
+    "retrieval_date": "2026-10-01"
+   },
+   {
+    "id": "UTI_PRES_2204",
+    "title": "UTI MNC Fund presentation Apr 2022",
+    "url": "https://doc.utimf.com/uticontainer/Presentation_UTI%20MNC%20Fund_Apr%202022-10120220808-220005.pdf",
+    "doc_date": "2022-04",
+    "excerpt": "Scheme key facts: 'Benchmark Nifty MNC TRI'",
+    "retrieval_date": "2026-10-01"
+   }
+  ],
+  "evidence_document_scope": "shared scheme-level document (applies to all plans/options of the scheme)",
+  "effective_date_of_benchmark": "not stated",
+  "benchmark_change_history": "None retrieved. A 2014 article mentions CNX MNC (third party only).",
+  "evidence_status": "factsheet_only",
+  "ambiguity_notes": "STALE: evidence is UTI-authored scheme presentations from Jan and Apr 2022, not a current SID/KIM/factsheet. The utimf.com scheme page and online.utimf.com did not return usable text (JS-rendered / reset). Third-party pointers (advisorkhoj, icicidirect, scripbox) say 'Nifty MNC TRI' - pointer only, NOT evidence. The presentation header row also shows 'S&P BSE 100 TRI / Nifty MNC TRI / S&P BSE 200 TRI' (style-box peer labels); the scheme key-facts block says Nifty MNC TRI.",
+  "fetch_log": [
+   "OK presentation Jan 2022 [retrieved 2026-10-01]",
+   "OK presentation Apr 2022 [retrieved 2026-10-01]",
+   "empty (JS) utimf.com/mutual-funds/uti-mnc-fund [retrieved 2026-10-01]",
+   "ECONNRESET online.utimf.com/product/equity-funds/uti-mnc-fund/ [retrieved 2026-10-01]",
+   "SID for UTI MNC Fund not found via search (AMFI-portal spages ids unknown; not enumerated) [retrieved 2026-10-01]"
+  ],
+  "_family": "UTI"
+ }
+]

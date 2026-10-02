@@ -58,6 +58,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { bankUploadParams, statementPeriodError } from './bankUploadParams';
+import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import type { OwnerSelection } from '@/lib/ownership/ownerSelection';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -78,6 +80,9 @@ type Phase =
   | 'scanning'
   | 'processing'
   | 'awaiting_password'
+  // The upload could not tell which of the user's accounts the statement is for
+  // and no single account was deterministic: the user picks one (or adds one).
+  | 'choose_account'
   // AIE bank-statement AI-fallback (2026-09-23). The native parse failed on a
   // readable-but-unrecognised layout and an AI read a DRAFT off it; nothing
   // is saved until the user confirms from this phase.
@@ -138,13 +143,35 @@ const FAILURE_MESSAGES: Record<string, string> = {
   extraction_timeout: 'Reading this file took too long, so we stopped. It may not be a normal statement PDF. Please try again, or download the statement from your bank again and upload that copy.',
 };
 
-/** WP-08 (PO D-10): whose account the statement is for. */
-const OWNER_OPTIONS: Array<{ value: 'self' | 'spouse' | 'joint' | 'smsf'; label: string }> = [
-  { value: 'self', label: 'Mine' },
-  { value: 'spouse', label: 'My partner\u2019s' },
-  { value: 'joint', label: 'Joint (ours)' },
-  { value: 'smsf', label: 'My SMSF\u2019s' },
-];
+/** Owner-before-upload (Phase 1): an existing account is recorded under a
+ * different owner than the one chosen. The server stopped BEFORE storing
+ * anything and the user must confirm, explicitly, before the account's owner
+ * changes. */
+interface OwnerConflict {
+  message: string;
+}
+
+/** An account the user may assign a statement to: a friendly name and the last
+ * digits only (never a full number). */
+interface AccountChoiceCandidate {
+  id: string;
+  display_name: string;
+  last_digits: string | null;
+}
+
+/** The "which account is this statement for?" step. Held only for that phase. */
+interface AccountChoice {
+  documentId: string;
+  csv: boolean;
+  /** The upload's own answer, kept so processing continues exactly as it would have. */
+  uploadData: Record<string, unknown>;
+  /** new_account_suggested: the statement's account number matched none of the user's accounts;
+   * several_accounts / nothing_read: the user picks. */
+  reason: 'new_account_suggested' | 'several_accounts' | 'nothing_read';
+  candidates: AccountChoiceCandidate[];
+  /** What was read off the statement (last digits only), for a prefilled "add it". */
+  suggestion: { institution_name: string | null; last_digits: string } | null;
+}
 
 interface UnreadLines {
   count: number;
@@ -182,8 +209,19 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   const [country, setCountry] = useState<'AU' | 'IN'>('AU');
   const [currency, setCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [maskedIdentifier, setMaskedIdentifier] = useState('');
-  // WP-08 (D-10): no default -- the user says whose account this is.
-  const [ownerRole, setOwnerRole] = useState<'' | 'self' | 'spouse' | 'joint' | 'smsf'>('');
+  // Owner-before-upload (Phase 1; WP-08 D-10 before it): no default -- the user
+  // says who the statement belongs to, with the shared OwnerSelector.
+  const [owner, setOwner] = useState<OwnerSelection | null>(null);
+  const [ownerConflict, setOwnerConflict] = useState<OwnerConflict | null>(null);
+  const [accountChoice, setAccountChoice] = useState<AccountChoice | null>(null);
+  // '' = nothing chosen yet; an account id; or 'new' = a different / new account.
+  const [accountPick, setAccountPick] = useState('');
+  const [newAccountDigits, setNewAccountDigits] = useState('');
+  const [accountOwnerConflict, setAccountOwnerConflict] = useState<string | null>(null);
+  // Neutral, informational line (e.g. "Matched to your ... account ending 1234"). NOT an error.
+  const [info, setInfo] = useState<string | null>(null);
+  // In the prefilled-suggestion step: the user said "this is one of my existing accounts".
+  const [showExistingAccounts, setShowExistingAccounts] = useState(false);
   // GP-D3: the statement period printed on the statement (a CSV does not carry it).
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -231,6 +269,10 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   }, []);
 
   function reset() {
+    setAccountChoice(null);
+    setAccountOwnerConflict(null);
+    setInfo(null);
+    setShowExistingAccounts(false);
     setPhase('form');
     setFile(null);
     setPassword('');
@@ -414,8 +456,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     setPhase('done');
   }
 
-  async function handleUpload() {
-    if (!file) return;
+  async function handleUpload(confirmOwnerChange = false) {
+    if (!file || !owner) return;
     const periodProblem = statementPeriodError(periodStart, periodEnd);
     if (periodProblem) {
       setMessage(periodProblem);
@@ -425,9 +467,11 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setPhase('uploading');
     setMessage(null);
+    setOwnerConflict(null);
+    setInfo(null);
     try {
       // GP-D3: the statement period is sent when the user gives it, so a full month counts as covered.
-      const params = bankUploadParams({ country, currency, maskedIdentifier, ownerRole, filename: file.name, periodStart, periodEnd });
+      const params = bankUploadParams({ country, currency, maskedIdentifier, owner, confirmOwnerChange, filename: file.name, periodStart, periodEnd });
 
       const uploadRes = await fetch(
         `/api/financial-data-hub/${csv ? 'bank-csv' : 'bank-pdf'}/upload?${params.toString()}`,
@@ -435,8 +479,16 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       );
       const { ok: uploadOk, json: uploadJson } = await readJson(uploadRes);
       if (!uploadOk) {
-        setMessage(uploadJson.error ?? 'Could not upload this statement.');
-        setPhase('error');
+        // Owner-before-upload: the server refuses BEFORE storing anything when the
+        // chosen owner would silently change an existing account's owner. Ask,
+        // do not guess -- the user confirms the change or goes back.
+        if (uploadRes.status === 409 && uploadJson.error === 'account_owner_conflict') {
+          setOwnerConflict({ message: uploadJson.message as string });
+          setPhase('form');
+          return;
+        }
+        setMessage(uploadJson.message ?? uploadJson.error ?? 'Could not upload this statement.');
+        setPhase(uploadRes.status === 409 ? 'form' : 'error');
         return;
       }
       const data = uploadJson.data ?? {};
@@ -455,51 +507,129 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       // rejected below (canonical-cert, DEV 2026-09-27: a corrupt file also comes back 'ambiguous' and was
       // told to add account digits). A password-protected PDF keeps the previous order.
       if (data.account_resolution === 'ambiguous' && (!data.error_code || data.error_code === 'password_required')) {
-        setMessage(
-          'We couldn’t automatically match this statement to one of your accounts. Try adding the last few digits of the account or card number above and uploading again.',
-        );
-        setPhase('error');
-        return;
+        // Account resolution: the upload could not tell which account this is. Do NOT
+        // send the user back to retype digits and re-upload -- the file is already
+        // stored. Resolve automatically where that is deterministic, otherwise ask
+        // "which account is this statement for?" (see bankAccountAssignment.ts).
+        const settled = await settleAmbiguousAccount(docId, csv, data);
+        if (!settled) return;
       }
 
-      // Bank PDFs may come back declaring `password_required` at the UPLOAD
-      // step (structure-only detection, before any parsing is attempted) —
-      // that is not a failure, just a signal to collect a password before
-      // calling `process`.
-      if (!csv && data.password_required) {
-        setPhase('awaiting_password');
-        return;
-      }
-      if (data.error_code) {
-        failWith(data.error_code, 'This file could not be uploaded.');
-        return;
-      }
-
-      // Real-malware-gate async fix (2026-09-21): the upload step may have
-      // left this document genuinely, legally waiting in `validating` — the
-      // real S3+GuardDuty scan has not resolved yet. Calling detect/process
-      // immediately in that case used to surface a raw `invalid_state`
-      // error even though nothing had gone wrong. Wait for the document to
-      // leave `validating` first, showing an honest "scanning" state.
-      if (data.processing_status === 'validating') {
-        setPhase('scanning');
-        setMessage(SCANNING_MESSAGE);
-        const waited = await waitForDocumentToLeaveValidating(docId, { signal: scanPollCancelRef.current });
-        if (waited.outcome === 'timeout') {
-          setMessage(SCAN_TIMEOUT_MESSAGE);
-          setPhase('scan_timeout');
-          return;
-        }
-        if (waited.processingStatus === 'failed' || waited.processingStatus === 'rejected') {
-          failWith(waited.errorCode, 'This file could not be accepted.');
-          return;
-        }
-        setMessage(null);
-      }
-
-      await runProcessing(docId, csv);
+      await continueAfterAccount(docId, csv, data);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Upload failed');
+      setPhase('error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Everything that follows once the statement is attached to an account: the
+   * password prompt, the scan wait, then processing. Unchanged behaviour. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `data` is the upload route's JSON payload
+  async function continueAfterAccount(docId: string, csv: boolean, data: Record<string, any>) {
+    // Bank PDFs may come back declaring `password_required` at the UPLOAD
+    // step (structure-only detection, before any parsing is attempted) —
+    // that is not a failure, just a signal to collect a password before
+    // calling `process`.
+    if (!csv && data.password_required) {
+      setPhase('awaiting_password');
+      return;
+    }
+    if (data.error_code) {
+      failWith(data.error_code, 'This file could not be uploaded.');
+      return;
+    }
+
+    // Real-malware-gate async fix (2026-09-21): the upload step may have
+    // left this document genuinely, legally waiting in `validating` — the
+    // real S3+GuardDuty scan has not resolved yet. Calling detect/process
+    // immediately in that case used to surface a raw `invalid_state`
+    // error even though nothing had gone wrong. Wait for the document to
+    // leave `validating` first, showing an honest "scanning" state.
+    if (data.processing_status === 'validating') {
+      setPhase('scanning');
+      setMessage(SCANNING_MESSAGE);
+      const waited = await waitForDocumentToLeaveValidating(docId, { signal: scanPollCancelRef.current });
+      if (waited.outcome === 'timeout') {
+        setMessage(SCAN_TIMEOUT_MESSAGE);
+        setPhase('scan_timeout');
+        return;
+      }
+      if (waited.processingStatus === 'failed' || waited.processingStatus === 'rejected') {
+        failWith(waited.errorCode, 'This file could not be accepted.');
+        return;
+      }
+      setMessage(null);
+    }
+
+    await runProcessing(docId, csv);
+  }
+
+  /** Asks the server to settle the account. true = assigned (carry on);
+   * false = the picker is showing, or an error is. */
+  async function settleAmbiguousAccount(docId: string, csv: boolean, data: Record<string, unknown>, body: Record<string, unknown> = {}): Promise<boolean> {
+    const res = await fetch(`/api/financial-data-hub/bank-statements/${docId}/resolve-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const { ok: resolveOk, status, json } = await readJson(res);
+    if (!resolveOk) {
+      // The chosen account would change the owner it is recorded under: ask first.
+      if (status === 409 && json.error === 'account_owner_conflict') {
+        setAccountOwnerConflict(json.message as string);
+        return false;
+      }
+      setMessage(json.message ?? json.error ?? 'We could not match this statement to an account.');
+      if (!accountChoice) setPhase('error');
+      return false;
+    }
+    if (json.data?.status === 'assigned') {
+      setAccountChoice(null);
+      setAccountOwnerConflict(null);
+      // Matched without asking: say so, plainly, so the user can see where it went.
+      if (json.data.how === 'auto_printed_identifier' || json.data.how === 'auto_single_account') {
+        const a = json.data.account as { display_name: string; last_digits: string | null } | undefined;
+        if (a) setInfo(`Matched to your ${a.display_name} account${a.last_digits ? ` ending ${a.last_digits}` : ''}.`);
+      }
+      return true;
+    }
+    setAccountChoice({
+      documentId: docId,
+      csv,
+      uploadData: data,
+      reason: json.data.reason,
+      candidates: json.data.candidates ?? [],
+      suggestion: json.data.suggestion ?? null,
+    });
+    setAccountPick('');
+    setNewAccountDigits('');
+    setShowExistingAccounts(false);
+    setMessage(null);
+    setPhase('choose_account');
+    return false;
+  }
+
+  async function handleChooseAccount(confirmOwnerChange = false, acceptSuggestion = false) {
+    if (!accountChoice) return;
+    if (!acceptSuggestion && !accountPick) return;
+    const suggestion = accountChoice.suggestion;
+    const body: Record<string, unknown> = acceptSuggestion && suggestion
+      ? { new_account_digits: suggestion.last_digits, ...(suggestion.institution_name ? { new_account_name: suggestion.institution_name } : {}) }
+      : accountPick === 'new'
+        ? { new_account_digits: newAccountDigits.trim() }
+        : { account_id: accountPick };
+    if (confirmOwnerChange) body.confirm_owner_change = true;
+    setBusy(true);
+    setAccountOwnerConflict(null);
+    try {
+      const settled = await settleAmbiguousAccount(accountChoice.documentId, accountChoice.csv, accountChoice.uploadData, body);
+      if (!settled) return;
+      setPhase('uploading');
+      await continueAfterAccount(accountChoice.documentId, accountChoice.csv, accountChoice.uploadData);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Something went wrong');
       setPhase('error');
     } finally {
       setBusy(false);
@@ -568,21 +698,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
                 <option value="IN">India</option>
               </select>
             </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Whose account is this?</span>
-              <select
-                className="w-full rounded border border-gray-300 px-3 py-2"
-                value={ownerRole}
-                onChange={(e) => setOwnerRole(e.target.value as typeof ownerRole)}
-                aria-describedby="owner-role-help"
-              >
-                <option value="">Choose one</option>
-                {OWNER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              <span id="owner-role-help" className="mt-1 block text-xs text-muted">
-                Joint accounts count in full to your household. An SMSF&apos;s transactions are kept with the fund, not your household spending.
-              </span>
-            </label>
+            <OwnerSelector flow="bank" idPrefix="bank-owner" value={owner} onChange={(next) => { setOwner(next); setOwnerConflict(null); }} disabled={busy} />
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Account / card number (last few digits, optional)</span>
               <input
@@ -628,10 +744,23 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
             />
           </label>
           {message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">{message}</p>}
+          {ownerConflict && (
+            <div className="rounded border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900" role="alert" data-testid="owner-conflict">
+              <p>{ownerConflict.message}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className="rounded bg-trust px-3 py-1.5 text-white" onClick={() => handleUpload(true)}>
+                  Yes, change the account&apos;s owner and upload
+                </button>
+                <button type="button" className="rounded border border-amber-400 px-3 py-1.5" onClick={() => setOwnerConflict(null)}>
+                  No, go back
+                </button>
+              </div>
+            </div>
+          )}
           <button
             type="button"
-            onClick={handleUpload}
-            disabled={!file || !ownerRole || busy || uploadEnabled !== true}
+            onClick={() => handleUpload()}
+            disabled={!file || !owner || busy || uploadEnabled !== true}
             className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Upload statement
@@ -765,6 +894,114 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
             Try again
           </button>
+        </div>
+      )}
+
+      {info && phase !== 'form' && (
+        <p className="mt-3 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900" role="status" data-testid="account-info">
+          {info}
+        </p>
+      )}
+
+      {phase === 'choose_account' && accountChoice && (
+        <div className="mt-4 space-y-3 rounded border border-blue-200 bg-blue-50 px-4 py-4 text-blue-900" data-testid="choose-account" role="group" aria-labelledby="choose-account-title">
+          <h3 id="choose-account-title" className="text-sm font-semibold">One quick check so your statement goes to the right account</h3>
+
+          {accountChoice.reason === 'new_account_suggested' && accountChoice.suggestion && !showExistingAccounts && (
+            <>
+              <p className="text-sm">
+                We read this statement as{' '}
+                <strong>{accountChoice.suggestion.institution_name ?? 'a new account'}</strong>, account ending{' '}
+                <strong>{accountChoice.suggestion.last_digits}</strong>. It is not one of the accounts you have imported before.
+                Your file is already uploaded — you do not need to upload it again.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleChooseAccount(false, true)}
+                  disabled={busy}
+                  className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+                >
+                  Add as a new account
+                </button>
+                {accountChoice.candidates.length > 0 && (
+                  <button type="button" onClick={() => setShowExistingAccounts(true)} disabled={busy} className="rounded border border-blue-300 bg-white px-4 py-2 text-sm text-blue-900">
+                    This is one of my existing accounts
+                  </button>
+                )}
+                <button type="button" onClick={reset} className="text-sm underline">
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+
+          {(accountChoice.reason !== 'new_account_suggested' || !accountChoice.suggestion || showExistingAccounts) && (
+            <>
+              <p className="text-sm">
+                {accountChoice.reason === 'several_accounts'
+                  ? 'You have more than one account, so we need to know which one this statement is for.'
+                  : 'We could not read an account number from this statement, so please tell us which account it is for.'}{' '}
+                Your file is already uploaded — you do not need to upload it again.
+              </p>
+              <fieldset className="space-y-2">
+                <legend className="sr-only">Choose the account</legend>
+                {accountChoice.candidates.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 rounded border border-blue-200 bg-white px-3 py-2 text-sm text-gray-900">
+                    <input type="radio" name="statement-account" value={c.id} checked={accountPick === c.id} onChange={() => setAccountPick(c.id)} />
+                    <span>
+                      {c.display_name}
+                      {c.last_digits ? <span className="text-muted"> — ending {c.last_digits}</span> : null}
+                    </span>
+                  </label>
+                ))}
+                <label className="flex items-center gap-2 rounded border border-blue-200 bg-white px-3 py-2 text-sm text-gray-900">
+                  <input type="radio" name="statement-account" value="new" checked={accountPick === 'new'} onChange={() => setAccountPick('new')} />
+                  <span>A different / new account</span>
+                </label>
+              </fieldset>
+              {accountPick === 'new' && (
+                <label className="block text-sm">
+                  <span className="mb-1 block">Last 4 to 6 digits of the account or card number</span>
+                  <input
+                    className="w-48 rounded border border-gray-300 bg-white px-3 py-2 text-gray-900"
+                    inputMode="numeric"
+                    placeholder="e.g. 1234"
+                    value={newAccountDigits}
+                    onChange={(e) => setNewAccountDigits(e.target.value)}
+                  />
+                </label>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleChooseAccount()}
+                  disabled={busy || !accountPick || (accountPick === 'new' && !/^\d{4,6}$/.test(newAccountDigits.trim()))}
+                  className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
+                >
+                  Use this account
+                </button>
+                <button type="button" onClick={reset} className="text-sm underline">
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+
+          {message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">{message}</p>}
+          {accountOwnerConflict && (
+            <div className="rounded border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900" role="alert" data-testid="account-owner-conflict">
+              <p>{accountOwnerConflict}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className="rounded bg-trust px-3 py-1.5 text-white" onClick={() => handleChooseAccount(true, accountChoice.reason === 'new_account_suggested' && !showExistingAccounts)} disabled={busy}>
+                  Yes, change the account&apos;s owner and continue
+                </button>
+                <button type="button" className="rounded border border-amber-400 px-3 py-1.5" onClick={() => setAccountOwnerConflict(null)}>
+                  No, choose another account
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

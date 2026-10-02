@@ -7,6 +7,7 @@ import { investmentGridConfig } from '@/lib/grid/configs';
 import { InvestmentsSubNav } from '@/components/investments/InvestmentsSubNav';
 import { AuInvestmentStatementImportPanel } from '@/components/investments/AuInvestmentStatementImportPanel';
 import { ImportedInvestmentStatements } from '@/components/investments/ImportedInvestmentStatements';
+import { PublishedFundValuations } from '@/components/investments/PublishedFundValuations';
 
 // FDH-11 spec sections 2, 76-83: the Investments hub offers three entry
 // points — Add Investment Manually (the existing grid below, unchanged and
@@ -77,6 +78,8 @@ export default function InvestmentsPage() {
           setShowAuImport(true);
         }}
       />
+
+      <PublishedFundValuations refreshKey={gridKey} />
 
       <hr className="border-gray-200" />
 

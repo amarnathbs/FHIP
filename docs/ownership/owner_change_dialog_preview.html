@@ -1,0 +1,957 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Owner change dialog — preview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>*, ::before, ::after {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}
+
+::backdrop {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}
+
+/*
+! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com
+*/
+
+/*
+1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)
+2. Allow adding a border to an element by just adding a border-width. (https://github.com/tailwindcss/tailwindcss/pull/116)
+*/
+
+*,
+::before,
+::after {
+  box-sizing: border-box;
+  /* 1 */
+  border-width: 0;
+  /* 2 */
+  border-style: solid;
+  /* 2 */
+  border-color: #e5e7eb;
+  /* 2 */
+}
+
+::before,
+::after {
+  --tw-content: '';
+}
+
+/*
+1. Use a consistent sensible line-height in all browsers.
+2. Prevent adjustments of font size after orientation changes in iOS.
+3. Use a more readable tab size.
+4. Use the user's configured `sans` font-family by default.
+5. Use the user's configured `sans` font-feature-settings by default.
+6. Use the user's configured `sans` font-variation-settings by default.
+7. Disable tap highlights on iOS
+*/
+
+html,
+:host {
+  line-height: 1.5;
+  /* 1 */
+  -webkit-text-size-adjust: 100%;
+  /* 2 */
+  -moz-tab-size: 4;
+  /* 3 */
+  -o-tab-size: 4;
+     tab-size: 4;
+  /* 3 */
+  font-family: Inter, system-ui, sans-serif;
+  /* 4 */
+  font-feature-settings: normal;
+  /* 5 */
+  font-variation-settings: normal;
+  /* 6 */
+  -webkit-tap-highlight-color: transparent;
+  /* 7 */
+}
+
+/*
+1. Remove the margin in all browsers.
+2. Inherit line-height from `html` so users can set them as a class directly on the `html` element.
+*/
+
+body {
+  margin: 0;
+  /* 1 */
+  line-height: inherit;
+  /* 2 */
+}
+
+/*
+1. Add the correct height in Firefox.
+2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)
+3. Ensure horizontal rules are visible by default.
+*/
+
+hr {
+  height: 0;
+  /* 1 */
+  color: inherit;
+  /* 2 */
+  border-top-width: 1px;
+  /* 3 */
+}
+
+/*
+Add the correct text decoration in Chrome, Edge, and Safari.
+*/
+
+abbr:where([title]) {
+  -webkit-text-decoration: underline dotted;
+          text-decoration: underline dotted;
+}
+
+/*
+Remove the default font size and weight for headings.
+*/
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/*
+Reset links to optimize for opt-in styling instead of opt-out.
+*/
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+/*
+Add the correct font weight in Edge and Safari.
+*/
+
+b,
+strong {
+  font-weight: bolder;
+}
+
+/*
+1. Use the user's configured `mono` font-family by default.
+2. Use the user's configured `mono` font-feature-settings by default.
+3. Use the user's configured `mono` font-variation-settings by default.
+4. Correct the odd `em` font sizing in all browsers.
+*/
+
+code,
+kbd,
+samp,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  /* 1 */
+  font-feature-settings: normal;
+  /* 2 */
+  font-variation-settings: normal;
+  /* 3 */
+  font-size: 1em;
+  /* 4 */
+}
+
+/*
+Add the correct font size in all browsers.
+*/
+
+small {
+  font-size: 80%;
+}
+
+/*
+Prevent `sub` and `sup` elements from affecting the line height in all browsers.
+*/
+
+sub,
+sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+sub {
+  bottom: -0.25em;
+}
+
+sup {
+  top: -0.5em;
+}
+
+/*
+1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)
+2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)
+3. Remove gaps between table borders by default.
+*/
+
+table {
+  text-indent: 0;
+  /* 1 */
+  border-color: inherit;
+  /* 2 */
+  border-collapse: collapse;
+  /* 3 */
+}
+
+/*
+1. Change the font styles in all browsers.
+2. Remove the margin in Firefox and Safari.
+3. Remove default padding in all browsers.
+*/
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit;
+  /* 1 */
+  font-feature-settings: inherit;
+  /* 1 */
+  font-variation-settings: inherit;
+  /* 1 */
+  font-size: 100%;
+  /* 1 */
+  font-weight: inherit;
+  /* 1 */
+  line-height: inherit;
+  /* 1 */
+  letter-spacing: inherit;
+  /* 1 */
+  color: inherit;
+  /* 1 */
+  margin: 0;
+  /* 2 */
+  padding: 0;
+  /* 3 */
+}
+
+/*
+Remove the inheritance of text transform in Edge and Firefox.
+*/
+
+button,
+select {
+  text-transform: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Remove default button styles.
+*/
+
+button,
+input:where([type='button']),
+input:where([type='reset']),
+input:where([type='submit']) {
+  -webkit-appearance: button;
+  /* 1 */
+  background-color: transparent;
+  /* 2 */
+  background-image: none;
+  /* 2 */
+}
+
+/*
+Use the modern Firefox focus style for all focusable elements.
+*/
+
+:-moz-focusring {
+  outline: auto;
+}
+
+/*
+Remove the additional `:invalid` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)
+*/
+
+:-moz-ui-invalid {
+  box-shadow: none;
+}
+
+/*
+Add the correct vertical alignment in Chrome and Firefox.
+*/
+
+progress {
+  vertical-align: baseline;
+}
+
+/*
+Correct the cursor style of increment and decrement buttons in Safari.
+*/
+
+::-webkit-inner-spin-button,
+::-webkit-outer-spin-button {
+  height: auto;
+}
+
+/*
+1. Correct the odd appearance in Chrome and Safari.
+2. Correct the outline style in Safari.
+*/
+
+[type='search'] {
+  -webkit-appearance: textfield;
+  /* 1 */
+  outline-offset: -2px;
+  /* 2 */
+}
+
+/*
+Remove the inner padding in Chrome and Safari on macOS.
+*/
+
+::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Change font properties to `inherit` in Safari.
+*/
+
+::-webkit-file-upload-button {
+  -webkit-appearance: button;
+  /* 1 */
+  font: inherit;
+  /* 2 */
+}
+
+/*
+Add the correct display in Chrome and Safari.
+*/
+
+summary {
+  display: list-item;
+}
+
+/*
+Removes the default spacing and border for appropriate elements.
+*/
+
+blockquote,
+dl,
+dd,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+hr,
+figure,
+p,
+pre {
+  margin: 0;
+}
+
+fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+legend {
+  padding: 0;
+}
+
+ol,
+ul,
+menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+Reset default styling for dialogs.
+*/
+
+dialog {
+  padding: 0;
+}
+
+/*
+Prevent resizing textareas horizontally by default.
+*/
+
+textarea {
+  resize: vertical;
+}
+
+/*
+1. Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)
+2. Set the default placeholder color to the user's configured gray 400 color.
+*/
+
+input::-moz-placeholder, textarea::-moz-placeholder {
+  opacity: 1;
+  /* 1 */
+  color: #9ca3af;
+  /* 2 */
+}
+
+input::placeholder,
+textarea::placeholder {
+  opacity: 1;
+  /* 1 */
+  color: #9ca3af;
+  /* 2 */
+}
+
+/*
+Set the default cursor for buttons.
+*/
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+/*
+Make sure disabled buttons don't get the pointer cursor.
+*/
+
+:disabled {
+  cursor: default;
+}
+
+/*
+1. Make replaced elements `display: block` by default. (https://github.com/mozdevs/cssremedy/issues/14)
+2. Add `vertical-align: middle` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)
+   This can trigger a poorly considered lint error in some tools but is included by design.
+*/
+
+img,
+svg,
+video,
+canvas,
+audio,
+iframe,
+embed,
+object {
+  display: block;
+  /* 1 */
+  vertical-align: middle;
+  /* 2 */
+}
+
+/*
+Constrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)
+*/
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Make elements with the HTML hidden attribute stay hidden by default */
+
+[hidden]:where(:not([hidden="until-found"])) {
+  display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.static {
+  position: static;
+}
+
+.relative {
+  position: relative;
+}
+
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+
+.mb-10 {
+  margin-bottom: 2.5rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-6 {
+  margin-bottom: 1.5rem;
+}
+
+.ml-auto {
+  margin-left: auto;
+}
+
+.mt-1 {
+  margin-top: 0.25rem;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
+.mt-3 {
+  margin-top: 0.75rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.mt-5 {
+  margin-top: 1.25rem;
+}
+
+.flex {
+  display: flex;
+}
+
+.grid {
+  display: grid;
+}
+
+.hidden {
+  display: none;
+}
+
+.max-h-\[90vh\] {
+  max-height: 90vh;
+}
+
+.min-h-11 {
+  min-height: 2.75rem;
+}
+
+.w-24 {
+  width: 6rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.min-w-0 {
+  min-width: 0px;
+}
+
+.max-w-xl {
+  max-width: 36rem;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.list-disc {
+  list-style-type: disc;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.items-start {
+  align-items: flex-start;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.gap-1 {
+  gap: 0.25rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.space-y-0\.5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.125rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.125rem * var(--tw-space-y-reverse));
+}
+
+.space-y-1 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
+}
+
+.space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
+}
+
+.space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.75rem * var(--tw-space-y-reverse));
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+.rounded {
+  border-radius: 0.25rem;
+}
+
+.rounded-card {
+  border-radius: 0.75rem;
+}
+
+.rounded-compact {
+  border-radius: 0.5rem;
+}
+
+.rounded-xl {
+  border-radius: 0.75rem;
+}
+
+.border {
+  border-width: 1px;
+}
+
+.border-2 {
+  border-width: 2px;
+}
+
+.border-line {
+  --tw-border-opacity: 1;
+  border-color: rgb(221 227 234 / var(--tw-border-opacity, 1));
+}
+
+.border-primary {
+  --tw-border-opacity: 1;
+  border-color: rgb(37 99 235 / var(--tw-border-opacity, 1));
+}
+
+.bg-amber-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 251 235 / var(--tw-bg-opacity, 1));
+}
+
+.bg-slate-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(241 245 249 / var(--tw-bg-opacity, 1));
+}
+
+.bg-slate-200 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(226 232 240 / var(--tw-bg-opacity, 1));
+}
+
+.bg-trust {
+  --tw-bg-opacity: 1;
+  background-color: rgb(37 99 235 / var(--tw-bg-opacity, 1));
+}
+
+.bg-white {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
+}
+
+.p-2 {
+  padding: 0.5rem;
+}
+
+.p-3 {
+  padding: 0.75rem;
+}
+
+.p-4 {
+  padding: 1rem;
+}
+
+.p-5 {
+  padding: 1.25rem;
+}
+
+.p-6 {
+  padding: 1.5rem;
+}
+
+.px-2 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.pl-5 {
+  padding-left: 1.25rem;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.font-sans {
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.uppercase {
+  text-transform: uppercase;
+}
+
+.tracking-wide {
+  letter-spacing: 0.025em;
+}
+
+.text-amber-900 {
+  --tw-text-opacity: 1;
+  color: rgb(120 53 15 / var(--tw-text-opacity, 1));
+}
+
+.text-attention {
+  --tw-text-opacity: 1;
+  color: rgb(183 121 31 / var(--tw-text-opacity, 1));
+}
+
+.text-ink {
+  --tw-text-opacity: 1;
+  color: rgb(23 32 51 / var(--tw-text-opacity, 1));
+}
+
+.text-muted {
+  --tw-text-opacity: 1;
+  color: rgb(91 103 122 / var(--tw-text-opacity, 1));
+}
+
+.text-positive {
+  --tw-text-opacity: 1;
+  color: rgb(25 135 84 / var(--tw-text-opacity, 1));
+}
+
+.text-primary {
+  --tw-text-opacity: 1;
+  color: rgb(37 99 235 / var(--tw-text-opacity, 1));
+}
+
+.text-red-700 {
+  --tw-text-opacity: 1;
+  color: rgb(185 28 28 / var(--tw-text-opacity, 1));
+}
+
+.text-slate-600 {
+  --tw-text-opacity: 1;
+  color: rgb(71 85 105 / var(--tw-text-opacity, 1));
+}
+
+.text-white {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
+.shadow-xl {
+  --tw-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --tw-shadow-colored: 0 20px 25px -5px var(--tw-shadow-color), 0 8px 10px -6px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+.hover\:bg-gray-50:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
+}
+
+.hover\:opacity-90:hover {
+  opacity: 0.9;
+}
+
+.disabled\:opacity-40:disabled {
+  opacity: 0.4;
+}
+
+.disabled\:opacity-50:disabled {
+  opacity: 0.5;
+}
+
+@media (min-width: 640px) {
+  .sm\:flex {
+    display: flex;
+  }
+
+  .sm\:grid-cols-\[1fr_auto_1fr\] {
+    grid-template-columns: 1fr auto 1fr;
+  }
+
+  .sm\:items-stretch {
+    align-items: stretch;
+  }
+}
+</style>
+</head><body class="bg-slate-100 p-6 font-sans"><h1 class="mb-1 text-xl font-semibold">Owner-change dialog — static render of each state</h1><p class="mb-6 text-sm text-slate-600">Server-rendered markup of OwnerChangeDialog (react-dom/server) with the real component code and sample data; no interaction. Fixture names are invented.</p><section class="mb-10"><h3 class="mb-2 text-sm font-semibold text-slate-600">1. Review tab — choose the owner (member, trust/HUF/company, or joint)</h3><div class="rounded-xl bg-slate-200 p-4"><div class="relative flex items-start justify-center p-4"><div class="hidden" aria-hidden="true"></div><div role="dialog" aria-modal="true" aria-labelledby="owner-dialog-title-:R0:" class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-card bg-white p-5 shadow-xl"><h2 id="owner-dialog-title-:R0:" class="text-lg font-semibold text-ink">Choose the owner</h2><p class="mt-1 text-sm text-muted">12345678 · Example AMC</p><div class="mt-4"><p class="text-sm text-ink"><span class="text-muted">Current owner: </span><strong>Asha Rao</strong></p><fieldset class="mt-4"><legend class="text-sm font-medium text-ink">Who owns this account?</legend><div class="mt-2 space-y-3"><div><p class="text-xs uppercase tracking-wide text-muted">People in your household</p><ul class="mt-1 space-y-1"><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="m:00000000-0000-4000-8000-000000000001"/><span class="text-ink">Asha Rao</span><span class="text-xs text-muted">You</span></label></li><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="m:00000000-0000-4000-8000-000000000002"/><span class="text-ink">Ravi Rao</span><span class="text-xs text-muted">Spouse</span></label></li></ul></div><div><p class="text-xs uppercase tracking-wide text-muted">Trusts, HUFs and companies</p><ul class="mt-1 space-y-1"><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" checked="" value="e:00000000-0000-4000-8000-000000000011"/><span class="text-ink">Rao Family Trust</span><span class="text-xs text-muted">Family trust</span></label></li><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="e:00000000-0000-4000-8000-000000000012"/><span class="text-ink">Rao HUF</span><span class="text-xs text-muted">Hindu Undivided Family (HUF)</span></label></li></ul></div><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="joint"/><span class="text-ink">Jointly owned</span><span class="text-xs text-muted">split between two or more owners, with percentages</span></label></div></fieldset><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" class="min-h-11 rounded border border-line px-3 py-2 text-sm text-ink hover:bg-gray-50">Cancel</button><button type="button" class="min-h-11 rounded bg-trust px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Review change</button></div></div></div></div></div></section>
+<section class="mb-10"><h3 class="mb-2 text-sm font-semibold text-slate-600">2. Joint split editor — 60 / 30 (total 90%, cannot continue)</h3><div class="rounded-xl bg-slate-200 p-4"><div class="relative flex items-start justify-center p-4"><div class="hidden" aria-hidden="true"></div><div role="dialog" aria-modal="true" aria-labelledby="owner-dialog-title-:R0:" class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-card bg-white p-5 shadow-xl"><h2 id="owner-dialog-title-:R0:" class="text-lg font-semibold text-ink">Choose the owner</h2><p class="mt-1 text-sm text-muted">12345678 · Example AMC</p><div class="mt-4"><p class="text-sm text-ink"><span class="text-muted">Current owner: </span><strong>Asha Rao</strong></p><fieldset class="mt-4"><legend class="text-sm font-medium text-ink">Who owns this account?</legend><div class="mt-2 space-y-3"><div><p class="text-xs uppercase tracking-wide text-muted">People in your household</p><ul class="mt-1 space-y-1"><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="m:00000000-0000-4000-8000-000000000001"/><span class="text-ink">Asha Rao</span><span class="text-xs text-muted">You</span></label></li><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="m:00000000-0000-4000-8000-000000000002"/><span class="text-ink">Ravi Rao</span><span class="text-xs text-muted">Spouse</span></label></li></ul></div><div><p class="text-xs uppercase tracking-wide text-muted">Trusts, HUFs and companies</p><ul class="mt-1 space-y-1"><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="e:00000000-0000-4000-8000-000000000011"/><span class="text-ink">Rao Family Trust</span><span class="text-xs text-muted">Family trust</span></label></li><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="e:00000000-0000-4000-8000-000000000012"/><span class="text-ink">Rao HUF</span><span class="text-xs text-muted">Hindu Undivided Family (HUF)</span></label></li></ul></div><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" checked="" value="joint"/><span class="text-ink">Jointly owned</span><span class="text-xs text-muted">split between two or more owners, with percentages</span></label></div><div class="mt-3 rounded-compact border border-line p-3" aria-live="polite"><ul class="space-y-2"><li class="flex flex-wrap items-center gap-2"><label class="sr-only" for="joint-owner-a">Owner 1</label><select id="joint-owner-a" class="min-h-11 min-w-0 flex-1 rounded-compact border border-line px-2 py-1 text-sm"><option value="">Choose an owner</option><option value="m:00000000-0000-4000-8000-000000000001" selected="">Asha Rao (You)</option><option value="m:00000000-0000-4000-8000-000000000002" disabled="">Ravi Rao (Spouse)</option><option value="e:00000000-0000-4000-8000-000000000011">Rao Family Trust (Family trust)</option><option value="e:00000000-0000-4000-8000-000000000012">Rao HUF (Hindu Undivided Family (HUF))</option></select><label class="sr-only" for="joint-pct-a">Share of owner 1, percent</label><div class="flex items-center gap-1"><input id="joint-pct-a" inputMode="decimal" class="min-h-11 w-24 rounded-compact border border-line px-2 py-1 text-right text-sm" placeholder="0" value="60"/><span class="text-sm text-muted">%</span></div><button type="button" disabled="" class="min-h-11 rounded-compact border border-line px-2 py-1 text-xs text-muted disabled:opacity-40" aria-label="Remove owner 1">Remove</button></li><li class="flex flex-wrap items-center gap-2"><label class="sr-only" for="joint-owner-b">Owner 2</label><select id="joint-owner-b" class="min-h-11 min-w-0 flex-1 rounded-compact border border-line px-2 py-1 text-sm"><option value="">Choose an owner</option><option value="m:00000000-0000-4000-8000-000000000001" disabled="">Asha Rao (You)</option><option value="m:00000000-0000-4000-8000-000000000002" selected="">Ravi Rao (Spouse)</option><option value="e:00000000-0000-4000-8000-000000000011">Rao Family Trust (Family trust)</option><option value="e:00000000-0000-4000-8000-000000000012">Rao HUF (Hindu Undivided Family (HUF))</option></select><label class="sr-only" for="joint-pct-b">Share of owner 2, percent</label><div class="flex items-center gap-1"><input id="joint-pct-b" inputMode="decimal" class="min-h-11 w-24 rounded-compact border border-line px-2 py-1 text-right text-sm" placeholder="0" value="30"/><span class="text-sm text-muted">%</span></div><button type="button" disabled="" class="min-h-11 rounded-compact border border-line px-2 py-1 text-xs text-muted disabled:opacity-40" aria-label="Remove owner 2">Remove</button></li></ul><div class="mt-3 flex flex-wrap items-center gap-2"><button type="button" class="min-h-11 rounded-compact border border-line px-3 py-1 text-xs font-medium text-primary disabled:opacity-40">Add an owner</button><button type="button" class="min-h-11 rounded-compact border border-line px-3 py-1 text-xs text-muted disabled:opacity-40">Split equally</button><p class="ml-auto text-sm font-medium text-attention" data-testid="joint-total">Total: 90.00% — 10.00% still to assign</p></div><ul class="mt-2 list-disc pl-5 text-xs text-red-700"><li>The shares add up to 90.00%. They must add up to exactly 100%.</li></ul></div></fieldset><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" class="min-h-11 rounded border border-line px-3 py-2 text-sm text-ink hover:bg-gray-50">Cancel</button><button type="button" disabled="" title="The shares add up to 90.00%. They must add up to exactly 100%." class="min-h-11 rounded bg-trust px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Review change</button></div></div></div></div></div></section>
+<section class="mb-10"><h3 class="mb-2 text-sm font-semibold text-slate-600">3. Joint-holding case — statement holders pre-filled equally (joint only)</h3><div class="rounded-xl bg-slate-200 p-4"><div class="relative flex items-start justify-center p-4"><div class="hidden" aria-hidden="true"></div><div role="dialog" aria-modal="true" aria-labelledby="owner-dialog-title-:R0:" class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-card bg-white p-5 shadow-xl"><h2 id="owner-dialog-title-:R0:" class="text-lg font-semibold text-ink">Split ownership between owners</h2><p class="mt-1 text-sm text-muted">12345678 · Example AMC</p><div class="mt-4"><p class="text-sm text-ink"><span class="text-muted">Current owner: </span><strong>Asha Rao</strong></p><p class="mt-1 text-xs text-muted">The statement is printed in the name of A**** R** / R**** R**.</p><p class="mt-2 rounded-compact bg-amber-50 p-2 text-xs text-amber-900">This statement prints a joint holding, so it can only be resolved by saying who owns it and what share each owner has. The shares must add up to exactly 100%.</p><fieldset class="mt-4"><legend class="text-sm font-medium text-ink">Owners and shares</legend><div class="mt-3 rounded-compact border border-line p-3" aria-live="polite"><ul class="space-y-2"><li class="flex flex-wrap items-center gap-2"><label class="sr-only" for="joint-owner-suggested-0">Owner 1</label><select id="joint-owner-suggested-0" class="min-h-11 min-w-0 flex-1 rounded-compact border border-line px-2 py-1 text-sm"><option value="">Choose an owner</option><option value="m:00000000-0000-4000-8000-000000000001" selected="">Asha Rao (You)</option><option value="m:00000000-0000-4000-8000-000000000002" disabled="">Ravi Rao (Spouse)</option><option value="e:00000000-0000-4000-8000-000000000011">Rao Family Trust (Family trust)</option><option value="e:00000000-0000-4000-8000-000000000012">Rao HUF (Hindu Undivided Family (HUF))</option></select><label class="sr-only" for="joint-pct-suggested-0">Share of owner 1, percent</label><div class="flex items-center gap-1"><input id="joint-pct-suggested-0" inputMode="decimal" class="min-h-11 w-24 rounded-compact border border-line px-2 py-1 text-right text-sm" placeholder="0" value="50"/><span class="text-sm text-muted">%</span></div><button type="button" disabled="" class="min-h-11 rounded-compact border border-line px-2 py-1 text-xs text-muted disabled:opacity-40" aria-label="Remove owner 1">Remove</button></li><li class="flex flex-wrap items-center gap-2"><label class="sr-only" for="joint-owner-suggested-1">Owner 2</label><select id="joint-owner-suggested-1" class="min-h-11 min-w-0 flex-1 rounded-compact border border-line px-2 py-1 text-sm"><option value="">Choose an owner</option><option value="m:00000000-0000-4000-8000-000000000001" disabled="">Asha Rao (You)</option><option value="m:00000000-0000-4000-8000-000000000002" selected="">Ravi Rao (Spouse)</option><option value="e:00000000-0000-4000-8000-000000000011">Rao Family Trust (Family trust)</option><option value="e:00000000-0000-4000-8000-000000000012">Rao HUF (Hindu Undivided Family (HUF))</option></select><label class="sr-only" for="joint-pct-suggested-1">Share of owner 2, percent</label><div class="flex items-center gap-1"><input id="joint-pct-suggested-1" inputMode="decimal" class="min-h-11 w-24 rounded-compact border border-line px-2 py-1 text-right text-sm" placeholder="0" value="50"/><span class="text-sm text-muted">%</span></div><button type="button" disabled="" class="min-h-11 rounded-compact border border-line px-2 py-1 text-xs text-muted disabled:opacity-40" aria-label="Remove owner 2">Remove</button></li></ul><div class="mt-3 flex flex-wrap items-center gap-2"><button type="button" class="min-h-11 rounded-compact border border-line px-3 py-1 text-xs font-medium text-primary disabled:opacity-40">Add an owner</button><button type="button" class="min-h-11 rounded-compact border border-line px-3 py-1 text-xs text-muted disabled:opacity-40">Split equally</button><p class="ml-auto text-sm font-medium text-positive" data-testid="joint-total">Total: 100.00% — adds up to 100%</p></div></div></fieldset><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" class="min-h-11 rounded border border-line px-3 py-2 text-sm text-ink hover:bg-gray-50">Cancel</button><button type="button" class="min-h-11 rounded bg-trust px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Review change</button></div></div></div></div></div></section>
+<section class="mb-10"><h3 class="mb-2 text-sm font-semibold text-slate-600">4. Confirmation — joint 60/40 with a trust (current → new, consequences)</h3><div class="rounded-xl bg-slate-200 p-4"><div class="relative flex items-start justify-center p-4"><div class="hidden" aria-hidden="true"></div><div role="dialog" aria-modal="true" aria-labelledby="owner-dialog-title-:R0:" class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-card bg-white p-5 shadow-xl"><h2 id="owner-dialog-title-:R0:" class="text-lg font-semibold text-ink">Confirm the owner change</h2><p class="mt-1 text-sm text-muted">12345678 · Example AMC</p><div class="mt-4"><p class="text-sm font-medium text-ink">Please confirm this change</p><div class="mt-2 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch"><div class="rounded-compact border border-line p-3"><p class="text-xs uppercase tracking-wide text-muted">Current owner</p><ul class="mt-1 space-y-0.5 text-sm text-ink"><li>Asha Rao</li></ul></div><div class="hidden items-center justify-center text-muted sm:flex" aria-hidden="true">→</div><div class="rounded-compact border-2 border-primary p-3"><p class="text-xs uppercase tracking-wide text-muted">New owner</p><ul class="mt-1 space-y-0.5 text-sm text-ink"><li><strong>Asha Rao</strong> <span class="text-xs text-muted">You</span><span class="text-muted"> — 60.00%</span></li><li><strong>Rao Family Trust</strong> <span class="text-xs text-muted">Family trust</span><span class="text-muted"> — 40.00%</span></li></ul><p class="mt-1 text-xs font-medium text-positive">Total 100.00%</p></div></div><p class="mt-3 text-xs font-medium uppercase tracking-wide text-muted">What this means</p><ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-ink"><li>The holdings and transactions in this account are not changed or recalculated. Only who they are attributed to changes.</li><li>This account will be recorded as jointly owned: Asha Rao 60.00%, Rao Family Trust 40.00%. The shares add up to 100%.</li><li>Holdings owned by a trust, HUF or company are kept separate from your personal Net Worth. This account will not be published to your personal Net Worth, and it will no longer appear under &quot;Imported, not yet in Net Worth&quot;.</li><li>This is saved to your audit history. You can amend it later from the Resolutions tab; earlier decisions are never deleted.</li></ul><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" class="min-h-11 rounded border border-line px-3 py-2 text-sm text-ink hover:bg-gray-50 disabled:opacity-50">Back</button><button type="button" class="min-h-11 rounded bg-trust px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Confirm owner change</button></div></div></div></div></div></section>
+<section class="mb-10"><h3 class="mb-2 text-sm font-semibold text-slate-600">5. Confirmation — already published, moving under a trust (confirm disabled)</h3><div class="rounded-xl bg-slate-200 p-4"><div class="relative flex items-start justify-center p-4"><div class="hidden" aria-hidden="true"></div><div role="dialog" aria-modal="true" aria-labelledby="owner-dialog-title-:R0:" class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-card bg-white p-5 shadow-xl"><h2 id="owner-dialog-title-:R0:" class="text-lg font-semibold text-ink">Confirm the owner change</h2><p class="mt-1 text-sm text-muted">12345678 · Example AMC</p><div class="mt-4"><p class="text-sm font-medium text-ink">Please confirm this change</p><div class="mt-2 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch"><div class="rounded-compact border border-line p-3"><p class="text-xs uppercase tracking-wide text-muted">Current owner</p><ul class="mt-1 space-y-0.5 text-sm text-ink"><li>Asha Rao</li></ul></div><div class="hidden items-center justify-center text-muted sm:flex" aria-hidden="true">→</div><div class="rounded-compact border-2 border-primary p-3"><p class="text-xs uppercase tracking-wide text-muted">New owner</p><ul class="mt-1 space-y-0.5 text-sm text-ink"><li><strong>Rao Family Trust</strong> <span class="text-xs text-muted">Family trust</span></li></ul></div></div><p class="mt-3 text-xs font-medium uppercase tracking-wide text-muted">What this means</p><ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-ink"><li>The holdings and transactions in this account are not changed or recalculated. Only who they are attributed to changes.</li><li>This account will be owned by Rao Family Trust (family trust).</li><li>Holdings owned by a trust, HUF or company are kept separate from your personal Net Worth. This account will not be published to your personal Net Worth, and it will no longer appear under &quot;Imported, not yet in Net Worth&quot;.</li><li>This account is already counted in your personal Net Worth, so this change will be refused until you unpublish its positions from Statements &amp; data.</li><li>This is saved to your audit history. You can amend it later from the Resolutions tab; earlier decisions are never deleted.</li></ul><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" class="min-h-11 rounded border border-line px-3 py-2 text-sm text-ink hover:bg-gray-50 disabled:opacity-50">Back</button><button type="button" disabled="" class="min-h-11 rounded bg-trust px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Confirm owner change</button></div></div></div></div></div></section>
+<section class="mb-10"><h3 class="mb-2 text-sm font-semibold text-slate-600">6. Resolutions tab — amend a decision</h3><div class="rounded-xl bg-slate-200 p-4"><div class="relative flex items-start justify-center p-4"><div class="hidden" aria-hidden="true"></div><div role="dialog" aria-modal="true" aria-labelledby="owner-dialog-title-:R0:" class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-card bg-white p-5 shadow-xl"><h2 id="owner-dialog-title-:R0:" class="text-lg font-semibold text-ink">Amend the owner</h2><p class="mt-1 text-sm text-muted">12345678 · Example AMC</p><div class="mt-4"><p class="text-sm text-ink"><span class="text-muted">Current owner: </span><strong>Asha Rao</strong></p><fieldset class="mt-4"><legend class="text-sm font-medium text-ink">Who owns this account?</legend><div class="mt-2 space-y-3"><div><p class="text-xs uppercase tracking-wide text-muted">People in your household</p><ul class="mt-1 space-y-1"><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="m:00000000-0000-4000-8000-000000000001"/><span class="text-ink">Asha Rao</span><span class="text-xs text-muted">You</span></label></li><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" checked="" value="m:00000000-0000-4000-8000-000000000002"/><span class="text-ink">Ravi Rao</span><span class="text-xs text-muted">Spouse</span></label></li></ul></div><div><p class="text-xs uppercase tracking-wide text-muted">Trusts, HUFs and companies</p><ul class="mt-1 space-y-1"><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="e:00000000-0000-4000-8000-000000000011"/><span class="text-ink">Rao Family Trust</span><span class="text-xs text-muted">Family trust</span></label></li><li><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="e:00000000-0000-4000-8000-000000000012"/><span class="text-ink">Rao HUF</span><span class="text-xs text-muted">Hindu Undivided Family (HUF)</span></label></li></ul></div><label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-compact border border-line px-3 py-2 text-sm hover:bg-gray-50"><input type="radio" name="owner-choice-:R0:" value="joint"/><span class="text-ink">Jointly owned</span><span class="text-xs text-muted">split between two or more owners, with percentages</span></label></div></fieldset><div class="mt-5 flex flex-wrap justify-end gap-2"><button type="button" class="min-h-11 rounded border border-line px-3 py-2 text-sm text-ink hover:bg-gray-50">Cancel</button><button type="button" class="min-h-11 rounded bg-trust px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Review change</button></div></div></div></div></div></section></body></html>

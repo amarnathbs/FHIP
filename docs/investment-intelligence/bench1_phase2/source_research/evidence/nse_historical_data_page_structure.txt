@@ -1,0 +1,8 @@
+RETRIEVED 2026-10-01 ~08:19Z via curl, HTTP 200. URL: https://www.niftyindices.com/reports/historical-data
+Page structure (static HTML; data tables load dynamically on Submit - NOT exercised by research):
+- Tabs: Historical Index Data | Archives of Daily/Monthly Reports | P/E, P/B & Div.Yield values | Total returns Index Values
+- Selectors: Index Type, Sub-IndexType, Index, Time Period (from/to), Submit; output labelled 'csv format'.
+- Price tab columns: Date, Open, High, Low, Close (index name column in download). Fixed-income variant also Prev Close/Change/% Change.
+- TRI tab columns: Date, Total Returns Index, Net Total Return Index.
+- Footnote on page: all fixed income indices except Nifty 10 yr Benchmark G-Sec (Clean Price) are Total Return.
+- Max date-range per query: UNKNOWN - not stated on static page.

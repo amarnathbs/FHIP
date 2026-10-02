@@ -24,6 +24,8 @@ import type { ReportContent } from '@/lib/services/reportContentData';
 import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { isCanonicalAppendix } from '@/lib/engines/reportCanonicalAppendix';
+import { IndiaMfInvestmentReportSection } from '@/components/reports/IndiaMfInvestmentReportSection';
+import type { IndiaMfReport } from '@/lib/engines/investment-intelligence/indiaMfReport';
 
 interface BuiltSectionLike {
   sectionCode: string;
@@ -197,6 +199,10 @@ export function ReportPreview({
   const sipContribution = byCode('sip_contribution');
   const portfolioXray = byCode('portfolio_xray');
   const taxAndCost = byCode('tax_and_cost');
+  // India Mutual Fund Investment Report — present only when the user holds
+  // INR mutual funds (see buildIndiaMfInvestmentReport); absent otherwise.
+  const indiaMf = byCode('india_mf_investment_report');
+  const indiaMfReport = (indiaMf?.sectionData as { report?: IndiaMfReport } | undefined)?.report;
   const priorityReviewItems = byCode('priority_review_items');
   const appendices = byCode('appendices');
   const isPremiumReport = Boolean(
@@ -1508,6 +1514,18 @@ export function ReportPreview({
           {taxAndCost && taxAndCost.sectionStatus !== 'included' && (
             <SectionCard title={taxAndCost.sectionTitle} className="report-section">
               <Unavailable text={taxAndCost.limitationText} />
+            </SectionCard>
+          )}
+
+          {/* India Mutual Fund Investment Report — table-style, per owner. Prints on a landscape page (app/globals.css). */}
+          {indiaMf?.sectionStatus === 'included' && indiaMfReport && Array.isArray(indiaMfReport.sections) && (
+            <div>
+              <IndiaMfInvestmentReportSection report={indiaMfReport} title={indiaMf.sectionTitle} narrative={indiaMf.narrativeText} limitation={indiaMf.limitationText} />
+            </div>
+          )}
+          {indiaMf && indiaMf.sectionStatus !== 'included' && (
+            <SectionCard title={indiaMf.sectionTitle} className="report-section">
+              <Unavailable text={indiaMf.limitationText} />
             </SectionCard>
           )}
 

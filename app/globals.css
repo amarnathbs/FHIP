@@ -77,6 +77,35 @@
     break-inside: avoid;
   }
 
+  /* India Mutual Fund Investment Report: a 16-column table is wider than the
+     portrait text area, so this section prints on its own A4 LANDSCAPE page
+     (CSS named page — the rest of the report stays portrait). Verified in the
+     PDF renderer's Chromium: the page after the section returns to portrait.
+     Tables here may span several landscape pages; keep rows whole and repeat
+     the header row. */
+  @page india-mf-landscape {
+    size: A4 landscape;
+    margin: 18mm 14mm;
+  }
+  .india-mf-landscape {
+    page: india-mf-landscape;
+    break-before: page;
+    break-after: page;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .india-mf-landscape .india-mf-table {
+    break-inside: auto;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .india-mf-landscape .india-mf-table tr {
+    break-inside: avoid;
+  }
+  .india-mf-landscape [data-testid='india-mf-table-wrap'] {
+    overflow: visible !important;
+  }
+
   a[href]::after {
     content: '';
   }

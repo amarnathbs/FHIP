@@ -4,6 +4,8 @@ import { getRetirementStatementIdForDocument } from '@/lib/financial-data-hub/se
 // Canonical Retirement is read by the BRIDGE, never by the Hub — see that
 // module's header and `tests/unit/fdh1Isolation.test.ts`.
 import { resolveRetirementStatementAccount } from '@/lib/retirement-import-bridge/retirementAccountResolution';
+import { getDocumentOwner } from '@/lib/financial-data-hub/services/documentOwnerRequest';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 // POST /api/financial-data-hub/retirement-statement/{documentId}/account-match
 //
@@ -44,9 +46,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   if (!parsed.success) return bad('Unrecognised request.', 400);
   const body = parsed.data;
 
+  // Owner-before-upload (Phase 2): the person the statement was uploaded for fixes the retirement member
+  // (the Retirement model's own self / spouse members). A different member is refused; none takes theirs.
+  const uploadOwner = await getDocumentOwner(user.id, documentId);
+  let memberId: string | null = 'member_id' in body ? (body.member_id ?? null) : null;
+  if (uploadOwner) {
+    const { data: ownerMember } = await createAdminClient()
+      .from('retirement_members')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('member_type', uploadOwner.ownerRole)
+      .eq('is_active', true)
+      .maybeSingle();
+    const expected = (ownerMember as { id?: string } | null)?.id ?? null;
+    if (memberId && expected && memberId !== expected) {
+      return bad('This statement was uploaded for a different owner. To change who it belongs to, delete it and upload it again with the right owner.', 409, 'owner_differs_from_upload');
+    }
+    if (!memberId) memberId = expected;
+  }
+
   const result = await resolveRetirementStatementAccount(user.id, statementId, {
     userConfirmedAccountId: body.action === 'resolve' ? body.account_id : null,
-    userConfirmedMemberId: 'member_id' in body ? (body.member_id ?? null) : null,
+    userConfirmedMemberId: memberId,
     confirmNewAccount: body.action === 'confirm_new',
   });
 

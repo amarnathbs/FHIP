@@ -144,8 +144,27 @@ const RPC_ERRORS: Record<string, { status: number; message: string }> = {
  * route error, or null when it is not one of ours (the caller then falls back
  * to safeDbError(), which never leaks internals).
  */
+/**
+ * True when the error means "this database does not have the object": a missing function (PostgREST
+ * PGRST202 / Postgres 42883), table or view (PGRST205 / 42P01) or column (42703). That is a deployment-order
+ * condition (the code is live before its migration), not a user mistake and not a defect to leak.
+ */
+export function isMissingDbObjectError(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const code = error.code ?? '';
+  if (['PGRST202', '42883', 'PGRST205', '42P01', '42703'].includes(code)) return true;
+  return /could not find the function|does not exist|schema cache/i.test(error.message ?? '');
+}
+
+export const FEATURE_UNAVAILABLE: RouteError = {
+  status: 503,
+  code: 'FEATURE_UNAVAILABLE',
+  message: 'This feature is not available on this database yet. Nothing was changed.',
+};
+
 export function mapEntitlementRpcError(error: { message?: string; code?: string } | null | undefined): RouteError | null {
   if (!error?.message) return null;
+  if (isMissingDbObjectError(error)) return FEATURE_UNAVAILABLE;
   const code = Object.keys(RPC_ERRORS).find((c) => error.message === c || error.message!.startsWith(`${c}:`) || error.message!.includes(c));
   if (!code) return null;
   return { code, ...RPC_ERRORS[code] };

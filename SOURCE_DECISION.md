@@ -1,120 +1,61 @@
-# BENCH-1 — Source Decision (India Mutual Fund Benchmark Data)
+# BENCH-1 - Source Decision (India benchmark index data) - Phase 2 update
 
-Status: **DRAFT / DECISION PACK ONLY — no commercial commitment made or authorized.**
-Prepared: 2026-09-30, as part of BENCH-1 discovery (stage B1). Updated same day (continuation
-dispatch) after a second attempt to reach the official reference pages and after finding that a
-prior mission (PC6, 2026-09-15) already reached the identical blocked conclusion independently.
+Status: **EVIDENCE PACK + DECISION REQUEST. No commercial commitment, outreach, purchase or licence approval has been made, authorised or invented.**
+Updated 2026-10-01 (this replaces the 2026-09-30 draft, which could not reach any owner page). Full research: `docs/investment-intelligence/bench1_phase2/source_research/SOURCE_RESEARCH.md` (with short evidence excerpts and the exact fetch log in `.../evidence/fetch_attempt_log.txt`).
 
-**PC6 cross-reference (found after this document's first draft).** A separate prior mission
-(`docs/investment-intelligence/PC6_MARKET_DATA_CERTIFICATION_2026-09-15.md`) already investigated
-this exact question on 2026-09-15 and recorded, as `BLOCKER PO-PC6-1`: NIFTY belongs to NSE Indices
-Ltd, SENSEX to BSE/Asia Index, neither is open data, and the legacy unauthenticated
-`niftyindices.com/Backpage.aspx/getTotalReturnIndexString` endpoint "now returns the HTML site shell
-rather than data, so there is not even a technical path, let alone a licensed one." That mission also
-registered both indices as `licence_required` sources in
-`lib/config/investment-intelligence/pc6ReferenceSources.ts`, which refuses to build a fetch URL for
-either (`buildUrl()` throws). This document's own independent fetch attempts below reached the same
-practical outcome from a different angle (network-level failure rather than a data response), which
-is corroborating rather than contradictory: whether the block is "returns no data" or "cannot even
-connect," the practical conclusion — no real Indian index level can be ingested without a licence —
-is the same, reached twice, independently, five months apart.
+## 1. The decision in one paragraph
 
-**Second retry, this same continuation dispatch.** Per PO authorization, the three official
-reference pages were fetched again:
-- `https://www.amfiindia.com/otherdata/listofbenchmarkindices` — `ECONNREFUSED` (connection refused
-  at the IP layer), same failure mode as the first attempt and as PC6's own 2026-09-15 finding that
-  `www.amfiindia.com` was unreachable from a build environment while `portal.amfiindia.com` was not
-  (this document did not additionally try the portal host for this specific benchmark-list page,
-  since AMFI's portal mirrors its NAV files, not its benchmark-index list page).
-- `https://www.niftyindices.com/terms-of-use` — timed out (60s) on both attempts.
-- `https://www.niftyindices.com/offerings/data-subscription` — `ECONNRESET` on the first attempt.
-No terms, pricing, or entitlement text was retrieved on either attempt. Nothing below is invented to
-fill that gap.
+**No public source was found that grants FHIP's intended use** (a commercial web application that shows customers a fund-versus-index comparison, computes returns, stores index history in its own database and puts comparisons into reports/exports). Every index owner whose terms were read (NSE Indices, BSE Index Services, CRISIL) restricts its site and data to personal / internal / non-commercial use and prohibits automated collection; written permission or a paid subscription/licence is the documented route. No open-data licence, attribution-only licence or redistribution rule for Indian index VALUES exists in anything read. Therefore **every index-value source stays `permissions not granted`**, recurring automation stays OFF, and ingestion is limited to **governed manual import against an approved entitlement record** that the Product Owner creates once rights exist in writing. The technical machinery for all of that is built and verified (see the Phase 2 report); the data and rights are the blocker.
 
-This document exists to give the Product Owner what is needed to choose a benchmark-data
-source. No purchase, vendor outreach, paid signup, or production activation has occurred or is
-recommended by this document alone (per the mission's own instruction and this session's
-environment constraints, which prohibit any external commercial commitment).
+What IS public and usable as evidence: each scheme's **declared benchmark** (name, tier, effective date) is a regulatory disclosure in the scheme's own SID/KIM/factsheet and in benchmark-change addenda. That is a different question from the index LEVELS, which are the owner's licensed data. The catalogue and mapping evidence in this repository uses only the former.
 
-## 1. What was actually verified this session
+## 2. Source / permission decision matrix
 
-- The three official reference pages listed in the mission (niftyindices.com terms-of-use,
-  niftyindices.com data-subscription, amfiindia.com listofbenchmarkindices) were each attempted
-  via a read-only fetch. All three failed at the network level in this environment (timeout,
-  connection reset, connection refused) rather than returning content. **No terms, pricing, or
-  entitlement text from those pages was retrieved or can be quoted here.** This is recorded
-  honestly rather than papered over with remembered/assumed text — re-verification with a
-  working fetch path (or manual PO visit) is required before any of the general knowledge below
-  is relied on for a commercial decision.
-- What follows below the line is background knowledge from general training, not a live-verified
-  quote. It must be re-confirmed against the current live pages before use in any procurement
-  decision. Nothing here should be treated as a verified entitlement.
+Legend: V = verified first-hand on 2026-10-01; B = blocked; U = unavailable to this environment; C = awaiting owner clarification. "NS" = UNKNOWN - not stated in what was read. "Not granted" = the terms read restrict this and no permission was found. A successful fetch is not a licence; a failed fetch is not proof of unavailability.
 
-## 2. Candidate sources (unverified this session — re-check before acting)
+| # | Owner / exact source | Data | Variant / currency | Coverage | Automation | Storage | Customer-visible derived comparison | Export / report | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| S1 | AMC scheme documents (SID, KIM, factsheets, notice-cum-addenda), each AMC site | A scheme's DECLARED benchmark name/tier, effective date, scheme-vs-benchmark return table | Declared TRI (SEBI mandate); INR domestic | Scheme's own life | AMC terms NS (not read) | NS | NS | NS | V for documents; reuse terms **C** |
+| S2 | AMFI-hosted SIDs `https://portal.amfiindia.com/spages/<n>.pdf` | Same content, stable numeric URLs | as S1 | as S1 | AMFI terms NS | NS | NS | NS | V (2 PDFs fetched); permissions **C** |
+| S3/S4 | AMFI Tier-1 and PRC benchmark lists (`https://www.amfiindia.com/otherdata`, `/otherdata/listofbenchmarkindices`, `/research-information/other-data/zcollatedprcbenchmarks`) | Category -> permitted Tier-1 index names | Intended TRI | n/a | n/a | n/a | n/a | n/a | **B**: www.amfiindia.com refused every connection (ECONNREFUSED) on every attempt this session, through three tools. Contents, format and cadence are NOT first-hand |
+| S5 | NSE Indices historical data page `https://www.niftyindices.com/reports/historical-data` | Price OHLC per index; a TRI tab with Total Returns Index AND Net Total Return Index; CSV output | Price / TRI / NTR; INR | Per-index; date-range limit per query NS; Nifty 50 history from 3 Jul 1990 (launch 22 Apr 1996, base 3 Nov 1995 = 1000); other TRI start dates NS | Prohibited without written consent | Not granted | Not granted (personal, non-commercial only) | Not granted | V metadata; permission **C**. No query was run and no file downloaded |
+| S6 | NSE public PDFs (factsheets, benchmark codes list, monthly Benchmark Riskometer) | Factsheet returns, benchmark codes/names | Price / TRI / NTR | Monthly | Site terms apply | Not granted | Not granted | Not granted | V metadata; **C** |
+| S7 | NSE data subscription `/offerings/data-subscription`; authorised vendors; licensing `/offerings/index-licensing` | EOD constituent data by subscription (written enquiry); index data via six named vendors; licence/prior approval when an institution benchmarks ITS product to an NSE index | NS | NS | Contractual - NS | NS | NS (the licensing page addresses AMCs; whether FHIP's display needs a licence is unknown) | NS | V (pages read); price/terms **C** |
+| S8 | BSE Index Services Pvt Ltd (formerly Asia Index; renamed 2025-08-01) `https://www.bseindices.com/` | Public chart per index; subscriber area behind Client Access | Price Return and Gross TR in methodology; Net TR not stated for equity | Methodology lists launch/base dates (e.g. BSE 100 launched 3 Jan 1989) | Prohibited (robots, scrapers) | Prohibited (no "historical databases"; internal business purposes only) | Prohibited without written agreement | Prohibited | V; **C** |
+| S9 | CRISIL Indices `https://intelligence.crisil.com/...indices.html` | Methodologies, factsheets, a public xlsx of daily values for index-linked products (headers only fetched; contents and licence unknown); client delivery by email/SFTP/API | Debt indices are TRI; INR | Base dates in methodology (e.g. Composite Bond Fund Index 31 Mar 2002) | Website bots prohibited; client API under contract | NS | NS | NS | V; **C** |
+| S10 | S&P Dow Jones Indices | - | - | - | - | - | - | - | **U** (HTTP 403 on both pages) |
+| S11 | MSCI end-of-day data | iframe app not opened; terms are a client contract | NS | NS | NS | NS | NS | NS | Not assessed |
+| S12 | Licensed vendors (Bloomberg, FactSet, LSEG, MSCI, Rimes, S&P Global) | Index history via vendor feed | NS | NS | Contractual | Contractual | Contractual | Contractual | Categories named publicly by NSE; pricing and terms UNKNOWN. **Not contacted** |
+| S13 | Open-data / attribution-based sources for Indian index values | - | - | - | - | - | - | - | **None found** |
 
-| Source | What it would plausibly offer | Known friction |
-|---|---|---|
-| NSE Indices Ltd (niftyindices.com) direct subscription | Official owner of Nifty family indices (Price and TRI variants); has historically published a "data subscription" offering distinct from its public historical-reports download. | Public historical-reports section is documented (elsewhere, pre-session) as restricted to personal/non-commercial use in its terms — a commercial subscription tier, if any, would need to be requested and quoted directly; not verified this session. |
-| BSE Ltd (index services) | Owner of Sensex and other BSE indices, needed only if a held scheme's disclosed benchmark is BSE-owned. | Not investigated this session — no held scheme in DEV data pointed at a BSE-owned index (see §6). |
-| CRISIL (index services) | Owner of CRISIL debt/hybrid indices, needed for debt/hybrid/liquid scheme benchmarks. | Not investigated this session; required only once a real debt/hybrid scheme's factsheet-declared benchmark is confirmed CRISIL-owned. |
-| Authorised multi-index vendor (e.g. a market-data distributor carrying NSE/BSE/CRISIL feeds under redistribution agreements) | Single integration point, one contract, one bill. | Mission explicitly warns: a vendor's general "NSE data" credential does NOT itself prove TRI/BSE/CRISIL/redistribution rights — each entitlement must be verified per index, per variant. Not identified or contacted this session (outreach is out of scope). |
-| Manual CSV import (licensed) | Continuity channel, not a primary source — already has a design touchpoint in the existing Admin CSV-import pattern this repo uses elsewhere (see `app/api/admin/benchmarks/*` — note, that path is a **different, pre-existing "benchmark_datasets" governance system** for financial-planning targets, not this mission's index-level `ii_benchmarks`; see §7). | Requires the same licensing proof as any other channel — CSV delivery does not itself confer usage rights. |
+Regulatory context (first-hand, SEBI): TRI benchmarking is mandatory for mutual-fund schemes (circular dated 2018-01-04, w.e.f. 2018-02-01; PRI-to-TRI composite where a TRI is missing for a period); two-tier benchmarks per the 2021-10-27 circular; benchmark changes are published as notice-cum-addenda and are effective-dated (example: DSP Large Cap moved BSE 100 TRI -> NIFTY 100 TRI w.e.f. 2026-05-16). Hence scheme-to-benchmark mapping is effective-dated in the data model.
 
-## 3. Comparison matrix (per mission §3) — status: NOT POPULATED
+## 3. Facts verified and recorded (not left blank for want of a price)
 
-Every column the mission asks for (exact index identifiers, price/TRI/net-TRI distinction, earliest
-date, publication time, transport, automation rights, storage/caching rights, derived-returns
-rights, display/export rights, attribution, user-count limits, retention-on-cancellation,
-correction delivery, SLA, rate limits, support, annual/setup quote, historical charges,
-redistribution fees, currency/tax, contract expiry) requires either a live-fetched terms page or a
-vendor response. Neither was obtained this session (network access to the reference pages failed;
-outreach is explicitly out of scope for this dispatch). **The matrix is intentionally left blank
-rather than filled with invented numbers.** Populating it is the concrete next step and does not
-require code — it requires either (a) a working fetch/browse path to the three reference URLs and
-NSE Indices' actual subscription page, or (b) the PO or an authorised person visiting those pages
-directly and pasting the current terms back for the next dispatch to encode.
+* Nifty 50: launch 22 Apr 1996; base 3 Nov 1995 = 1000; history available from 3 Jul 1990; Price, TRI and Net TRI exist (NSE factsheet dated 2026-09-30 and FAQ).
+* BSE Index Services: renamed from Asia Index on 2025-08-01 (BSE press release); methodology defines Price Return and Gross Total Return; Net TR not mentioned for equity indices.
+* CRISIL debt indices are total-return indices; client delivery is T+0 for values.
+* NSE sells EOD constituent data by subscription and names six authorised vendors; price is not published anywhere read.
 
-## 4. What this means for build sequencing (mission §14)
+## 4. Unknowns (explicit; nothing is guessed)
 
-Because no source is contractually or technically confirmed, this mission is currently
-**source-blocked for B4 (ingestion)**, exactly as the mission's own decision-rule anticipates: the
-provider-neutral adapter interface (mission §8) and the CSV staging/validation/publish path
-(mission §10, §13) can and should be built and tested against fixtures without waiting on a
-vendor, but no adapter can be pointed at a real endpoint, and no `source-blocked` status can be
-cleared, until real credentials/rights exist.
+Date-range limit per NSE query and history depth per index; TRI start dates for every index other than Nifty 50; whether BSE publishes TRI levels or Net TR publicly; the contents/licence of the CRISIL xlsx; **any price or fee for any product**; whether AMC-published scheme-vs-benchmark returns may be reused; the source of the "domestic price of physical gold/silver" benchmarks; international index owners' terms; the current SEBI master-circular clause numbers; the contents, format and cadence of the AMFI benchmark lists (unreachable).
 
-## 5. Category averages
+## 5. What this means for the build (Phase 2)
 
-Per mission §2/§5, category averages require a separately licensed peer dataset and are explicitly
-out of scope for initial index certification. No category-average work should be attempted before
-a dedicated PO decision on that separate dataset.
+* Catalogue and mapping: built from the scheme documents (evidence in `docs/investment-intelligence/bench1_phase2/mapping_evidence/`). Draft catalogue entries and mapping PROPOSALS only; verification is a human step.
+* Entitlements: the gate is per-right (ingest, automation, storage, calculation, display, export) with date scope and expiry; **no entitlement record exists**, so every right is false today. A manual file upload is refused at publication until an approved record covers it.
+* Recurring ingestion: shipped DISABLED; the adapter registry is EMPTY; every benchmark is in governed manual-import mode.
+* The legacy India-branch Nifty 50 / Sensex price updater (`marketIndex/dailyFeed.ts`, NSE archive adapter) now additionally requires an approved `automation` + `storage` entitlement (database-enforced) and stays off.
 
-## 6. Held-instrument demand (what benchmarks would actually need to be sourced)
+## 6. Questions for the Product Owner to put to each owner (FHIP does not contact them)
 
-DEV's `ii_scheme_master` table (14,374 rows) was inspected directly this session. It has **no
-declared-benchmark column at all** — its columns are identity/classification only
-(`amfi_scheme_code`, `scheme_name`, `amc_name`, `isin_*`, `category_group`, `sub_category`,
-`scheme_structure`, lifecycle/effective-dating). This empirically confirms the mission's own
-warning (§6): AMFI scheme-master data does not carry each scheme's declared benchmark, and none
-should be assumed from it. Actual per-scheme declared benchmarks still need to come from AMC
-scheme documents/factsheets/addenda, which this session did not attempt to source (that is B3
-mapping work, not B1 source procurement, and depends on the outcome of this document).
+Written clarification, in the owner's own channel, of: (1) whether displaying to FHIP's customers a fund-versus-index return comparison derived from index levels, in-app and in downloadable reports, requires a licence, and on what terms; (2) permission to store and cache daily levels (price, TRI, net TRI) in FHIP's database for calculation; (3) permission for automated daily retrieval and the documented method; (4) historical depth and TRI start dates available; (5) attribution wording; (6) post-termination retention of stored history; (7) fees, user-count limits and corrections delivery. Ask NSE Indices, BSE Index Services and CRISIL separately; ask an authorised vendor for the same list if a distributor is preferred. Record each answer as an entitlement record (Admin > Benchmark Data > Entitlements) with the written evidence reference; until then nothing publishes.
 
-No genuine held-instrument-to-index demand list exists yet (see the B1 discovery note for why the
-current `ii_instrument_benchmarks` rows in DEV cannot be used for this — they are test-fixture
-artifacts, not real mappings).
+## 7. Category averages
 
-## 7. A naming collision to flag for the Product Owner
+A category-average benchmark needs a separately licensed peer dataset and is out of scope until a dedicated PO decision (unchanged).
 
-This repository already has an **unrelated, pre-existing** "Benchmarks" Admin surface at
-`app/api/admin/benchmarks/*` and `components/admin/AdminBenchmarksClient.tsx`, backed by
-`benchmark_datasets` / `benchmark_sources` / `benchmark_cohorts` / `benchmark_target_ranges`
-tables (see `lib/services/benchmarkGovernance.ts`). That system is about **financial-planning
-targets** (e.g. DTI/DSR benchmark ranges, per the "Dashboard formula decisions" and "UX redesign
-decision" memory entries), not investment index levels. This mission's `ii_benchmarks` /
-`ii_benchmark_series` / `ii_instrument_benchmarks` tables are a **separate system** for
-Investment-Intelligence index comparisons. The mission's own §13 instruction ("no duplicate
-administration portal") should be read as: reuse the existing Admin shell/navigation/role model,
-but this is legitimately new admin *content* inside it — not a merge with the unrelated
-`benchmark_datasets` governance system. Flagging this now so a future dispatch does not
-accidentally conflate the two or try to "reuse" the wrong governance module.
+## 8. Naming collision (unchanged)
+
+`benchmark_datasets` / `lib/services/benchmarkGovernance.ts` and their Admin surface are the financial-planning benchmark system and are untouched. This work uses the distinct investment-index tables (`ii_benchmarks`, `ii_benchmark_series`, `ii_instrument_benchmarks`) and the "Benchmark Data" Admin surface under Investment Intelligence.

@@ -1,0 +1,6 @@
+DOCUMENT: ABSL Large Cap Fund scheme page (AMC website)
+URL: https://mutualfund.adityabirlacapital.com/empower/equity-funds/Large-Cap.html
+DOCUMENT DATE: live page
+RETRIEVED: 2026-10-01
+EXCERPT (short quote/paraphrase, <=30 words):
+Benchmark: Nifty 100 TRI

@@ -13,6 +13,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const repoRoot = path.resolve(__dirname, '..');
 const APP = process.argv[2] ?? 'http://localhost:31997';
@@ -71,6 +72,7 @@ async function main() {
 
   const t0 = Date.now();
   const qs = new URLSearchParams({ country_code: 'AU', currency_code: 'AUD', institution_id: cbaInst, masked_identifier: 'SCALE1', filename: 'cba-10000.csv' });
+  qs.set('owner', JSON.stringify(await resolveSyntheticOwner(fetchOwnerRequest(APP, user.cookie), 'self', 'bank'))); // owner-before-upload
   const upRes = await fetch(`${APP}/api/financial-data-hub/bank-csv/upload?${qs}`, { method: 'POST', headers: { Cookie: user.cookie, 'Content-Type': 'text/csv', 'Content-Length': String(bytes.byteLength) }, body: bytes });
   const up = await upRes.json();
   const docId = up.data?.document_id;

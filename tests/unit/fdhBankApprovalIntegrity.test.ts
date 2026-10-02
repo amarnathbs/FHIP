@@ -507,19 +507,21 @@ describe('Approved Financial Summary labels, the D-01 refund rule and month copy
 // EXP-G13 capture (D-10): owner attribution at upload.
 // ---------------------------------------------------------------------------
 describe('EXP-G13 owner attribution captured at upload (D-10)', () => {
-  it('the upload metadata accepts self/spouse/joint/smsf and nothing else', async () => {
-    const { bankCsvUploadMetadataSchema } = await import('@/lib/financial-data-hub/validation/bankCsv');
-    const base = { country_code: 'AU', currency_code: 'AUD' };
-    for (const owner of ['self', 'spouse', 'joint', 'smsf']) expect(bankCsvUploadMetadataSchema.safeParse({ ...base, owner_role: owner }).success).toBe(true);
-    expect(bankCsvUploadMetadataSchema.safeParse({ ...base, owner_role: 'company' }).success).toBe(false);
+  it('an account can be stored as self/spouse/joint/smsf and nothing else; the owner no longer rides on the loose metadata', async () => {
+    // Owner-before-upload (Phase 1): the owner is a REQUIRED structured selection validated by
+    // lib/ownership (tests/unit/ownerBeforeUploadBank.test.ts); the metadata schema no longer carries it.
+    const { bankCsvUploadMetadataSchema, FDH_ACCOUNT_OWNER_ROLES } = await import('@/lib/financial-data-hub/validation/bankCsv');
+    expect([...FDH_ACCOUNT_OWNER_ROLES]).toEqual(['self', 'spouse', 'joint', 'smsf']);
+    const parsed = bankCsvUploadMetadataSchema.safeParse({ country_code: 'AU', currency_code: 'AUD', owner_role: 'smsf' });
+    expect(parsed.success && 'owner_role' in parsed.data).toBe(false);
   });
 
   it('an upload that creates the account records the chosen owner on it', async () => {
     h.db.tables.fdh_financial_accounts = [];
     const { uploadBankCsv } = await import('@/lib/financial-data-hub/services/bankCsvUploadService');
-    const out = await uploadBankCsv(A, { country_code: 'AU', currency_code: 'AUD', owner_role: 'smsf', declared_masked_identifier: '1234' } as never, new Uint8Array([1]));
+    const out = await uploadBankCsv(A, { country_code: 'AU', currency_code: 'AUD', declared_masked_identifier: '1234' } as never, new Uint8Array([1]), { ownerRole: 'smsf', ownerMemberId: null, label: 'SMSF' });
     expect(out.accountResolution).toBe('created');
-    expect(out.ownerRole).toBe('recorded');
+    expect(out.owner.account).toBe('recorded');
     expect(h.db.rows('fdh_financial_accounts').find((a) => a.id === out.document.financial_account_id)!.owner_role).toBe('smsf');
   });
 
@@ -534,15 +536,17 @@ describe('EXP-G13 owner attribution captured at upload (D-10)', () => {
     expect(await recordAccountOwner(A, ACC, null)).toBe('not_provided');
   });
 
-  it('the Expenses import panel asks whose account it is, with no default, and sends it', () => {
+  it('the Expenses import panel asks who the statement belongs to (shared OwnerSelector), with no default, and sends it', () => {
     const panel = fs.readFileSync(path.join(REPO, 'components/expenses/BankStatementImportPanel.tsx'), 'utf8');
-    expect(panel).toMatch(/Whose account is this\?/);
-    expect(panel).toMatch(/useState<'' \| 'self' \| 'spouse' \| 'joint' \| 'smsf'>\(''\)/);
-    // GP-D3 moved the query into components/expenses/bankUploadParams.ts (the panel passes ownerRole to it).
-    expect(panel).toMatch(/bankUploadParams\(\{[^}]*ownerRole[^}]*\}\)/);
+    expect(panel).toMatch(/<OwnerSelector flow="bank"/);
+    expect(panel).toMatch(/useState<OwnerSelection \| null>\(null\)/);
+    // GP-D3 moved the query into components/expenses/bankUploadParams.ts (the panel passes the owner to it).
+    expect(panel).toMatch(/bankUploadParams\(\{[^}]*owner[^}]*\}\)/);
     const builder = fs.readFileSync(path.join(REPO, 'components/expenses/bankUploadParams.ts'), 'utf8');
-    expect(builder).toMatch(/params\.set\('owner_role', form\.ownerRole\)/);
-    expect(panel).toMatch(/disabled=\{!file \|\| !ownerRole/);
+    expect(builder).toMatch(/ownerSelectionToQuery\(params, form\.owner\)/);
+    expect(panel).toMatch(/disabled=\{!file \|\| !owner/);
+    const selector = fs.readFileSync(path.join(REPO, 'components/ownership/OwnerSelector.tsx'), 'utf8');
+    expect(selector).toMatch(/Who does this document belong to\?/);
   });
 });
 

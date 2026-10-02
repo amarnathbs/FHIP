@@ -1,0 +1,8 @@
+RETRIEVED 2026-10-01 ~08:18Z via curl (UA FHIP-source-research/1.0), HTTP 200
+URL: https://www.niftyindices.com/terms-of-use  (Terms of Use, NSE Indices Limited; copyright footer 2018)
+--- paraphrased/short excerpts ---
+P1: Site "may be used only for lawful purposes by individuals for personal, non-commercial use only." (Specific Prohibited Uses clause)
+P2: "You may not conduct any systematic or automated data collection activities (including scraping, data mining, data extraction and data harvesting) ... without our express written consent."
+P3: Prohibited: "Aggregate, copy or duplicate in any manner any of the content or information available from the Site"
+P4: No material may be copied, modified, reproduced, republished, uploaded, transmitted, posted or distributed without prior written permission of the Company; all rights not expressly granted are reserved. Right granted is non-exclusive, non-transferable, limited right to access the Site.
+P5: Governing law India, Mumbai courts.

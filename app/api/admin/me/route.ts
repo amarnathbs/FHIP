@@ -10,6 +10,8 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
 import { PC7_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc7/lookthroughDataAdmin';
+import { MARKET_INDEX_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/marketIndex/marketIndexAdmin';
+import { BENCHMARK_CAPABILITY_COLUMNS, BENCHMARK_VIEW_COLUMN, flagsFromAdminRow, NO_BENCHMARK_CAPABILITIES, type BenchmarkCapabilityFlags } from '@/lib/services/investment-intelligence/benchmarkData/guards';
 import { PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY } from '@/lib/services/premiumEntitlementAdmin';
 import { PROMO_CODE_ADMIN_CAPABILITY } from '@/lib/services/promoCodeAdmin';
 
@@ -68,6 +70,31 @@ async function canViewLookthroughDataQuality(): Promise<boolean> {
 }
 
 /**
+ * Market Index Data upload capability (migration 0232). Its own independent
+ * read — never derived from the PC6/PC7 reads above or from isAdmin: this
+ * capability WRITES data, those only read (Standard section 2).
+ *
+ * FAILS CLOSED: any error, a logged-out caller, a missing row or a missing
+ * COLUMN (0232 not applied) yields false.
+ */
+async function canUploadMarketIndexData(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(MARKET_INDEX_ADMIN_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return (data as unknown as Record<string, unknown> | null)?.[MARKET_INDEX_ADMIN_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
+
+
+/**
  * Admin Premium grant (migration 0231) — the entitlement-management capability.
  *
  * Its own independent read, deliberately not derived from any other capability
@@ -111,6 +138,31 @@ async function canManagePromoCodes(): Promise<boolean> {
   }
 }
 
+/**
+ * BENCH-1 Phase 2 (migration 0241) - the benchmark-data capabilities. ONE admin_users read, but each
+ * output field is its own === true evaluation of its own column (flagsFromAdminRow): no flag is derived
+ * from another except `view`, which is the union of READ access only.
+ *
+ * FAILS CLOSED: any error, a logged-out caller, a missing row or a missing COLUMN (0241 not applied)
+ * yields all-false.
+ */
+async function readBenchmarkCapabilities(): Promise<BenchmarkCapabilityFlags> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ...NO_BENCHMARK_CAPABILITIES };
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select([BENCHMARK_VIEW_COLUMN, ...Object.values(BENCHMARK_CAPABILITY_COLUMNS)].join(', '))
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error || !data) return { ...NO_BENCHMARK_CAPABILITIES };
+    return flagsFromAdminRow(data as unknown as Record<string, unknown>);
+  } catch {
+    return { ...NO_BENCHMARK_CAPABILITIES };
+  }
+}
+
 // Lets the nav know which Admin groups to show, without exposing any admin
 // data itself — a logged-out, non-admin, non-Resources-role caller just gets
 // all-false flags, never a 403 (the actual admin/Resources routes still
@@ -148,6 +200,7 @@ async function canManagePromoCodes(): Promise<boolean> {
 // exist for their own id, which they could already read directly under RLS.
 export async function GET() {
   const current = await getCurrentResourceRoles();
+  const benchmark = await readBenchmarkCapabilities();
   return ok({
     // Unchanged legacy fields, kept for existing consumers. Neither is used
     // to derive any capability below.
@@ -161,6 +214,12 @@ export async function GET() {
       resourceAnalytics: canViewResourceAnalytics(current),
       referenceDataQuality: await canViewReferenceDataQuality(),
       lookthroughDataQuality: await canViewLookthroughDataQuality(),
+      marketIndexDataUpload: await canUploadMarketIndexData(),
+      benchmarkDataView: benchmark.view,
+      benchmarkDataPublish: benchmark.publish,
+      benchmarkDataCorrect: benchmark.correct,
+      benchmarkCatalogueManage: benchmark.catalogue,
+      benchmarkEntitlementApprove: benchmark.entitlementApprove,
       entitlementManagement: await canManagePremiumEntitlements(),
       promoCodeManagement: await canManagePromoCodes(),
     },

@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { loadOwnerBreakup } from '@/lib/services/investment-intelligence/ownerClass';
+import { ownerClassField, resolveOwnerClassScope } from '@/lib/services/investment-intelligence/ownerClassScope';
 import { buildOverviewSummary } from '@/lib/services/investment-intelligence/overviewSummary';
 import { buildAnalysisCards, nextStep } from '@/lib/investment-intelligence/analysisAvailability';
 
@@ -25,13 +27,24 @@ import { buildAnalysisCards, nextStep } from '@/lib/investment-intelligence/anal
 // ERROR ISOLATION (spec section 42): a failure here degrades the Overview's
 // summary only. Each analysis route remains independently reachable from the
 // sub-navigation, so a broken Overview never makes the workspace unusable.
-export async function GET() {
+// 2026-10-01 owner classes: the response now carries `ownerBreakup` -- every owner class (personal per member,
+// joint, each trust / HUF / company, shared-with-an-entity, unallocated) as its OWN row, plus one explicit
+// "Consolidated (macro view only)" line. The classes partition the accounts, so the macro line is exactly their
+// sum and nothing is counted twice. `?ownerClass=<key>` narrows the summary itself to one class (read-only).
+export async function GET(request?: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
-  const supabase = await createClient();
+  const rootClient = await createClient();
+  const scope = request ? await resolveOwnerClassScope(request, rootClient, user.id) : ({ ok: true, active: false, client: rootClient, ownerClass: null } as const);
+  if (!scope.ok) return scope.response;
+  const supabase = scope.client;
   try {
     const summary = await buildOverviewSummary(supabase, user.id);
+    // The breakup is always the FULL picture (never narrowed); a failure here degrades only this block.
+    const ownerBreakup = await loadOwnerBreakup(rootClient, user.id).catch(() => null);
     return ok({
+      ownerClass: ownerClassField(scope),
+      ownerBreakup,
       portfolio: summary.portfolio,
       dataQuality: summary.dataQuality,
       signals: summary.signals,

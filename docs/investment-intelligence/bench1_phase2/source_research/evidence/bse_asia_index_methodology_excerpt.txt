@@ -1,0 +1,11 @@
+Retrieved 2026-10-01 ~08:30Z, HTTP 200 application/pdf (~800KB). URL: https://www.bseindices.com/Downloads/Methodology_Doc/BSE_Indices_Methodology.pdf
+Title: "BSE Indices Methodology, April 2024", Asia Index Private Limited. (publisher named AIPL, a wholly owned subsidiary of BSE Limited per the disclaimer in this document)
+- Section "Base Dates and History Availability" (p.41-42) lists Launch Date / First Value Date / Base Date / Base Value per index. Table layout in PDF text extraction is garbled for some rows; reliable rows: BSE 500 launch 09-Aug-99, first value 01-Feb-99, base 01-Feb-99, base value 100; BSE 100 launch 03-Jan-89; BSE 150 MidCap and BSE 250 SmallCap launch 30-Nov-17, first value 16-Sep-05, base 16-Sep-05, base value 1000; BSE 250 LargeMidCap same dates; BSE SENSEX launch 01-Jan-86, first value 03-Apr-79. Confirm exact cells against the original PDF before relying on them.
+- "Calculation Return Types - Equity Indices" (p.43): Price Return (PR) versions exclude regular cash dividends; Gross Total Return (TR) versions reinvest regular cash dividends at close on ex-date without regard to withholding taxes. Net TR NOT mentioned in this section. Full list of indices stated to be in daily index levels file (".SDL") - not accessed.
+- Disclaimer (p.56) is the licensee-oriented template: licence relationship, trademarks licensed, no endorsement; says nothing about public site data re-use.
+- The methodology document does NOT state TRI history start dates.
+
+UPDATE (same session): current methodology "BSE Indices Methodology September-2026", BSE Index Services Pvt. Ltd. (HTTP 200 PDF ~1.5MB) URL https://www.bseindices.com/Downloads/BSE_Indices_Methodology.pdf
+- Return types section: PR and Gross TR as above (re-checked; Net TR not stated for equity indices there).
+- Base-date table text extraction is misaligned (columns shift); do not rely on extracted cells - verify visually in PDF.
+- Press release https://www.bseindices.com/Downloads/MediaRelease/PRESS_RELEASE_BSE_Index_20250108.pdf (filename says 20250108, body dated 1 Aug 2025): Asia Index Pvt. Ltd. renamed BSE Index Services Pvt. Ltd.; wholly owned subsidiary of BSE Ltd; no change in operations. (A search-engine summary claiming rename in May 2026 is wrong per this owner document.)

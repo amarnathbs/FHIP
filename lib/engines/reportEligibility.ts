@@ -60,6 +60,7 @@ export type PremiumSectionCode =
   | 'sip_contribution' // II-R5 SIP
   | 'portfolio_xray' // II-R5 X-Ray
   | 'tax_and_cost' // II-R6
+  | 'india_mf_investment_report' // India Mutual Fund Investment Report (table-style, per owner) — only built for a user who holds INR mutual funds
   | 'priority_review_items' // II-R9 Review Centre
   | 'appendices';
 

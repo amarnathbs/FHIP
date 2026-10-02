@@ -1,0 +1,6 @@
+DOCUMENT: SBI Multi Asset Allocation Fund - SID
+URL: https://www.sbimf.com/docs/default-source/sif-forms/sid---sbi-multi-asset-allocation-fund.pdf?sfvrsn=b3b3896d_0
+DOCUMENT DATE: 2025-10-31
+RETRIEVED: 2026-10-01
+EXCERPT (short quote/paraphrase, <=30 words):
+'45% BSE 500 TRI + 40% Crisil Composite Bond Fund Index + 10% Domestic prices of Gold + 5% Domestic prices of silver'

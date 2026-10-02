@@ -14,6 +14,8 @@ import {
 } from 'recharts';
 import { fmtDate } from './dateDisplay';
 import { HoldingsTable } from './HoldingsTable';
+import { OwnerClassBar } from './OwnerClassBar';
+import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { formatMoneyCode } from '@/lib/engines/money';
 
 // R4 — Performance UX (spec sections 60-65).
@@ -208,6 +210,18 @@ function AnnotationList({ items }: { items: Annotation[] }) {
 // ---------------------------------------------------------------------------
 
 export function PerformanceClient() {
+  // 2026-10-01 owner classes: the default is the explicit consolidated (macro) view; picking a class re-mounts the
+  // content (key) so it fetches that class's own analysis. Nothing is added across classes.
+  const [ownerClass, setOwnerClass] = useState(ALL_OWNER_CLASSES);
+  return (
+    <div>
+      <OwnerClassBar value={ownerClass} onChange={setOwnerClass} />
+      <PerformanceClientInner key={ownerClass} ownerClass={ownerClass} />
+    </div>
+  );
+}
+
+function PerformanceClientInner({ ownerClass }: { ownerClass: string }) {
   const [payload, setPayload] = useState<ApiPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -216,7 +230,7 @@ export function PerformanceClient() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/investment-intelligence/analytics');
+        const res = await fetch(withOwnerClass('/api/investment-intelligence/analytics', ownerClass));
         const json = await res.json();
         if (cancelled) return;
         if (!res.ok) setError(json.error ?? 'Analytics could not be loaded.');
@@ -230,7 +244,7 @@ export function PerformanceClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerClass]);
 
   if (loading) return <p className="text-sm text-muted">Calculating performance…</p>;
   if (error) return <p className="rounded-card border border-risk bg-white p-4 text-sm text-risk">{error}</p>;
@@ -251,7 +265,7 @@ export function PerformanceClient() {
     <div className="space-y-10">
       <WarningList warnings={payload.warnings} />
 
-      <HoldingsTable />
+      <HoldingsTable ownerClass={ownerClass} />
 
       {r.portfolios.length > 1 && (
         <div className="rounded-card border border-attention bg-white p-4 text-sm leading-relaxed text-ink">

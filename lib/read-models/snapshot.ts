@@ -19,6 +19,7 @@ import { selectIncome, type IncomeReadModel } from './income';
 import { selectInvestments, type InvestmentsReadModel } from './investments';
 import { loadLiabilityRows, selectLiabilities, type CardRepaymentRule, type LiabilitiesReadModel, type LoadedLiabilities } from './liabilities';
 import { selectRetirement, type RetirementReadModel } from './retirement';
+import { ensurePublishedValuesCurrent } from '@/lib/services/investment-intelligence/publishedValueRemark';
 
 export interface CanonicalFinancialSnapshot {
   status: 'ok';
@@ -48,6 +49,13 @@ export async function buildCanonicalFinancialSnapshot(
     // No FX context: nothing can be converted, so nothing is reported.
     return toUnavailable(error, 'buildCanonicalFinancialSnapshot');
   }
+  // 2026-10-01 (PO): Net Worth follows the latest eligible NAV for published
+  // mutual funds. This runs BEFORE any selector reads the `investments`
+  // register (they run in parallel below), so every reader of this snapshot --
+  // Dashboard, Goals, Twin, Reports -- sees one consistent, labelled value.
+  // Fail-soft and idempotent: a problem here never takes a read offline, and a
+  // call with nothing to change performs no write.
+  await ensurePublishedValuesCurrent(userId, ctx.client, 'dashboard_read');
   let ledgerSection: CanonicalFinancialSnapshot['ledger'];
   try {
     ledgerSection = { status: 'ok', value: await ctx.ledger() };

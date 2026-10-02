@@ -35,6 +35,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { data: existing } = await supabase.from('ii_reconciliation_cases').select('id, status, subject_type, subject_id, discrepancy_type').eq('id', id).eq('user_id', user.id).maybeSingle();
   if (!existing) return bad('Reconciliation case not found', 404);
   if (existing.status === 'resolved') return bad('This case is already resolved', 409);
+  // 2026-10-01: a joint holding is resolved ONLY by saying who owns it and what
+  // share each owner has (OwnerChangeDialog on the Review / Resolutions tabs ->
+  // PATCH .../accounts/[id]/owner). This generic "just mark it resolved" route
+  // would otherwise close the case with no ownership decision at all.
+  if (existing.discrepancy_type === 'joint_holding_allocation_required') {
+    return bad('A joint holding is resolved by choosing its owners and their shares on the Review tab, not by marking it resolved.', 422, 'JOINT_CASE_REQUIRES_JOINT_OWNER');
+  }
 
   const { data, error } = await supabase
     .from('ii_reconciliation_cases')

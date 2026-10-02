@@ -50,9 +50,11 @@ import type { ParsedAccountRecord, ParsedInstrumentRecord } from './parsers/type
 import { matchStatementOwner, type Pc5HouseholdMemberForMatching } from '@/lib/aie/adapters/investment-intelligence/ownerMatching';
 import { loadHouseholdMembersForMatching } from '@/lib/aie/adapters/investment-intelligence/householdContext';
 import { resolveOrCreateAccount, planFolioAccountResolution } from './accountResolution';
+import { applyDocumentOwnerToAccounts, computeHolderNameWarnings, readDocumentOwner, saveOwnerReview, withoutAcknowledgedWarnings, type ApplyAccount, type OwnerReview } from './documentOwner';
+import { loadAccountOwnership, loadDecidedOwnershipAccountIds } from './accountOwnership';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { computeTransactionFingerprint } from './fingerprint';
-import { reconcilePosition, determineHistoryCompleteness, type ReconciliationTransactionInput } from './reconciliation';
+import { reconcilePosition, determineHistoryCompleteness, evaluateDerivedZeroUnitClosure, type ReconciliationTransactionInput } from './reconciliation';
 import { evaluateCertification } from './certification';
 import { loadActiveReconciliationConfig } from './reconciliationConfig';
 import { scaledToDecimalString, ZERO } from './decimal';
@@ -63,6 +65,12 @@ import type { IiPlanType, IiOptionType } from './types';
 import { fetchAllRows } from './pagination';
 import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
 import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
+import {
+  findResolvedAmbiguousInstrumentOverride,
+  auditUserResolvedAmbiguousInstrument,
+  type InstrumentResolutionSignature,
+  type AmbiguousInstrumentCandidate,
+} from './ambiguousInstrumentResolution';
 // M12C §10 (`M2-OPEN-8`) — the SHARED, already-certified password-attempt
 // limiter and its already-certified threshold. Imported, never re-implemented:
 // a second counter with its own threshold is exactly the failure this closure
@@ -568,6 +576,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // parsed evidence, keyed by DISTINCT (folio, amcName) pairs.
   const resolutionPlan = planFolioAccountResolution({ accounts: parsed.accounts, transactions: parsed.transactions, holdings: parsed.holdings });
   const accountIdByFolioAmc = new Map<string, string>(); // key = assignment.key (accountResolutionKey(folioNumber, amcName))
+  const resolvedAccountsForOwner: ApplyAccount[] = [];
   let reconciliationCasesOpened = 0;
 
   for (const assignment of resolutionPlan.assignments) {
@@ -583,12 +592,50 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     });
     if (resolved.accountId) {
       accountIdByFolioAmc.set(assignment.key, resolved.accountId);
+      resolvedAccountsForOwner.push({ accountId: resolved.accountId, created: resolved.created, folioNumber: assignment.folioNumber, institutionName: assignment.amcName });
       await emitAuditEvent({ userId, eventType: 'account_resolved', subjectType: 'ii_accounts', subjectId: resolved.accountId, actorType: 'system', metadata: { folioNumber: assignment.folioNumber, amcName: assignment.amcName, created: resolved.created, parseRunId } });
     }
   }
 
-  const ownerUnresolved = !doc.owner_member_id;
-  if (ownerUnresolved) {
+  // Owner-before-upload (Phase 1): a document uploaded with an owner chosen up
+  // front (owner_selection_source = 'user_selected') never raises owner_unmatched
+  // -- the owner is known. The chosen owner is applied to every folio (never
+  // overwriting a DIFFERENT existing owner; that is recorded for the user to
+  // confirm), and a printed holder name that disagrees is a NON-BLOCKING warning
+  // instead of a blocking case. Documents uploaded before this change carry no
+  // such owner and fall through to the unchanged legacy branches below.
+  // 2026-10-01 entity + joint owners: an account whose owner was DECIDED as a
+  // business entity or a joint split has `owner_member_id = null` BY DESIGN
+  // (the decision lives in the active `ii_ownership_allocation` group). A
+  // fresh statement for that same folio must not re-open owner_unmatched /
+  // joint_holding_allocation_required / owner_mismatch against it, nor count
+  // as "unresolved owner" for certification: the user has already decided.
+  const decidedOwnershipAccountIds = await loadDecidedOwnershipAccountIds(admin, userId, [...accountIdByFolioAmc.values()]);
+  // Both rules compose: a statement uploaded with an owner never raises owner_unmatched (the owner is known);
+  // an account whose owner was DECIDED as an entity / joint split is likewise never "unresolved".
+  const documentOwner = readDocumentOwner(doc as Record<string, unknown>);
+  const ownerUnresolved = !documentOwner && !doc.owner_member_id;
+  if (documentOwner) {
+    const ownerReview = await applyDocumentOwnerToAccounts(userId, sourceDocumentId, documentOwner, resolvedAccountsForOwner);
+    if (documentOwner.kind === 'member' && parsed.accounts.length > 0) {
+      // Advisory only: a printed holder name that disagrees with the chosen
+      // member is a NON-BLOCKING warning, never a case.
+      const membersForWarnings = await loadHouseholdMembersForMatching(userId);
+      ownerReview.warnings.push(
+        ...computeHolderNameWarnings({
+          declaredOwnerMemberId: documentOwner.ownerMemberId as string,
+          assignments: resolutionPlan.assignments.map((a) => ({ folioNumber: a.folioNumber, accountId: accountIdByFolioAmc.get(a.key) ?? null })),
+          parsedAccounts: parsed.accounts,
+          members: membersForWarnings,
+        })
+      );
+    }
+    // A folio the user already confirmed is sole-owned ("this is not joint") is not warned about again.
+    const acknowledged = ((doc as Record<string, unknown>).owner_review as OwnerReview | null)?.acknowledgedSoleOwner;
+    ownerReview.warnings = withoutAcknowledgedWarnings(ownerReview.warnings, acknowledged);
+    if (acknowledged?.length) ownerReview.acknowledgedSoleOwner = acknowledged;
+    await saveOwnerReview(userId, sourceDocumentId, ownerReview);
+  } else if (ownerUnresolved) {
     // 2026-09-29 fix: a statement can print a JOINT holding even when the
     // user declared NO owner at all at upload time. Before this fix, this
     // branch opened 'owner_unmatched' unconditionally for every account on
@@ -609,6 +656,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     for (const assignment of resolutionPlan.assignments) {
       const accountId = accountIdByFolioAmc.get(assignment.key);
       if (!accountId) continue;
+      if (decidedOwnershipAccountIds.has(accountId)) continue; // owner already decided as entity / joint split
       const acctRecord = accountRecordByFolioForJointCheck.get(assignment.folioNumber ?? '__no_folio__');
       if (acctRecord) {
         if (householdMembersForJointCheck === null) householdMembersForJointCheck = await loadHouseholdMembersForMatching(userId);
@@ -671,6 +719,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     for (const assignment of resolutionPlan.assignments) {
       const accountId = accountIdByFolioAmc.get(assignment.key);
       if (!accountId) continue;
+      if (decidedOwnershipAccountIds.has(accountId)) continue; // owner already decided as entity / joint split
       const acctRecord = accountRecordByFolio.get(assignment.folioNumber ?? '__no_folio__');
       if (!acctRecord) continue; // no per-account holder evidence printed at all for this folio — nothing to compare
       if (householdMembersForMatching === null) householdMembersForMatching = await loadHouseholdMembersForMatching(userId);
@@ -832,8 +881,33 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     countryCode: (a.country_code as string) ?? null,
     resolvedInstrumentId: a.resolved_instrument_id as string,
   }));
+  // Document2 final closure #3: friendly display names for `ambiguous_instrument`
+  // candidates — never show a raw instrument id in user-facing UI (Finding #6).
+  const instrumentNameById = new Map<string, string>((existingInstrumentRows ?? []).map((r) => [r.id as string, r.instrument_name as string]));
 
   for (const [key, scheme] of uniqueSchemes) {
+    const signature: InstrumentResolutionSignature = {
+      isin: scheme.isin,
+      amfiSchemeCode: scheme.amfiSchemeCode,
+      normalisedSchemeName: scheme.normalisedSchemeName,
+      amcName: scheme.amcName,
+      planType: scheme.planType,
+      optionType: scheme.optionType,
+      countryCode,
+    };
+    // Document2 final closure #3: an earlier EXPLICIT user resolution for
+    // this exact scheme identity always wins over the automatic resolver —
+    // resolveScheme() is deterministic and would report the identical
+    // ambiguity again on every re-run (see ambiguousInstrumentResolution.ts
+    // header for why the pre-existing alias-map step can never be reached
+    // for an ambiguity, only for a genuinely unresolved scheme).
+    const userOverrideInstrumentId = await findResolvedAmbiguousInstrumentOverride(admin, userId, signature);
+    if (userOverrideInstrumentId) {
+      instrumentIdByKey.set(key, userOverrideInstrumentId);
+      await auditUserResolvedAmbiguousInstrument(userId, userOverrideInstrumentId, parseRunId, scheme.rawSchemeName);
+      continue;
+    }
+
     const outcome = resolveScheme(
       { isin: scheme.isin, amfiSchemeCode: scheme.amfiSchemeCode, internalProvisionalCode: null, normalisedSchemeName: scheme.normalisedSchemeName, amcName: scheme.amcName, planType: scheme.planType, optionType: scheme.optionType, countryCode },
       existingForResolution,
@@ -846,13 +920,30 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     }
     if (outcome.kind === 'ambiguous') {
       instrumentUnresolvedKeys.add(key);
+      const candidates: AmbiguousInstrumentCandidate[] = outcome.candidateInstrumentIds.map((id) => {
+        const found = existingForResolution.find((e) => e.instrumentId === id);
+        return {
+          instrumentId: id,
+          displayName: instrumentNameById.get(id) ?? scheme.rawSchemeName,
+          amcName: found?.amcName ?? null,
+          isin: found?.isin ?? null,
+          planType: found?.planType ?? null,
+          optionType: found?.optionType ?? null,
+        };
+      });
       const caseId = await openReconciliationCase(userId, {
         subjectType: 'account',
         subjectId: sourceDocumentId,
         discrepancyType: 'ambiguous_instrument',
         severity: 'high',
         sourceDocumentId,
-        details: { scheme: scheme.rawSchemeName, matchedVia: outcome.matchedVia, candidateInstrumentIds: outcome.candidateInstrumentIds, reason: outcome.reason },
+        // `signature` is consulted by findResolvedAmbiguousInstrumentOverride
+        // once this case is resolved (see that module) — recording it here,
+        // at detection time, means the resolution path never has to
+        // re-derive it from a raw scheme string later. `candidates` carries
+        // real display names precisely so the Review Centre UI never has to
+        // show — or separately fetch — a bare instrument id.
+        details: { scheme: scheme.rawSchemeName, matchedVia: outcome.matchedVia, candidateInstrumentIds: outcome.candidateInstrumentIds, candidates, reason: outcome.reason, signature },
       });
       if (caseId) reconciliationCasesOpened++;
       continue;
@@ -985,6 +1076,17 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     const instrumentId = instrumentIdByKey.get(schemeKey(t.scheme));
     if (!accountId || !instrumentId) continue; // account/instrument unresolved — already logged as a reconciliation case above; skip writing an orphaned transaction
 
+    // Document2 final non-benchmark closure #4 (2026-09-30): generated HERE,
+    // before the cross-source conflict case below is opened, rather than
+    // just before the batched insert further down — so a genuine
+    // cross_source_conflict/cross_source_review_required case can record
+    // the id of the NEW transaction row it is actually about at the moment
+    // it is created, instead of a resolution route having to guess it back
+    // later from (account, source document, status, date) alone. Nothing
+    // else about the insert timing changes — this id is still only WRITTEN
+    // to the database in the same batched insert as before.
+    const newTransactionId = randomUUID();
+
     const fingerprint = computeTransactionFingerprint({
       sourceKey: parsed.metadata.sourceKey,
       accountId,
@@ -1081,8 +1183,13 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
           discrepancyType: match.state === 'conflict' ? 'cross_source_conflict' : 'cross_source_review_required',
           severity: 'high',
           sourceDocumentId,
-          details: { matchedFields: match.matchedFields, differingFields: match.differingFields, rationale: match.rationale, transactionDate: t.transactionDateIso },
-          evidence: { comparedTransactionIds: match.ambiguousCandidateIds.length > 0 ? match.ambiguousCandidateIds : match.matchedExistingId ? [match.matchedExistingId] : [], engineVersion: match.engineVersion, newSourceDocumentId: sourceDocumentId },
+          // Document2 final closure #4: `newTransactionId` is the id the row
+          // this case is actually about WILL have once inserted a few lines
+          // below (generated above, before this case is opened) — the
+          // resolve-cross-source route uses it directly rather than
+          // re-deriving "which transaction" from account/date/status alone.
+          details: { matchedFields: match.matchedFields, differingFields: match.differingFields, rationale: match.rationale, transactionDate: t.transactionDateIso, newTransactionId },
+          evidence: { comparedTransactionIds: match.ambiguousCandidateIds.length > 0 ? match.ambiguousCandidateIds : match.matchedExistingId ? [match.matchedExistingId] : [], engineVersion: match.engineVersion, newSourceDocumentId: sourceDocumentId, newTransactionId },
         });
         if (caseId) reconciliationCasesOpened++;
         crossSourceReviewRequired = true;
@@ -1091,25 +1198,34 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
     if (t.canonicalType === 'unclassified') {
       const material = t.amountScaled !== ZERO;
+      // Document2 final closure #10 (2026-09-30): `newTransactionId` (hoisted
+      // above, before this row is inserted a few lines below) lets a real
+      // resolution action reclassify THIS exact row later — see
+      // reconciliation-cases/[id]/resolve-classification. A material
+      // ('high' severity) unclassified transaction is a genuine
+      // certification BLOCKER (evaluateCertification's
+      // hasMaterialUnclassifiedTransaction) that previously had no way to
+      // ever be cleared other than Acknowledge/Dismiss, which never touches
+      // the underlying transaction_type.
       const caseId = await openReconciliationCase(userId, {
         subjectType: 'account',
         subjectId: accountId,
         discrepancyType: 'transaction_unclassified',
         severity: material ? 'high' : 'low',
         sourceDocumentId,
-        details: { description: t.rawTransactionTypeText, date: t.transactionDateIso, amount: scaledToDecimalString(t.amountScaled), material },
+        details: { description: t.rawTransactionTypeText, date: t.transactionDateIso, amount: scaledToDecimalString(t.amountScaled), material, newTransactionId },
       });
       if (caseId) reconciliationCasesOpened++;
     }
 
     // Staged in memory, not written yet -- flushed as bulk inserts below,
     // once per this whole document instead of once per transaction. The id
-    // is generated client-side (a plain uuid-default column accepts an
-    // explicit value on insert) so the transaction row and its source-link
-    // row can both be staged now without waiting on a round trip for the
-    // DB-generated id, and so this same transaction can immediately become
-    // a same-import cross-source candidate for a later row below.
-    const newTransactionId = randomUUID();
+    // is generated client-side, HOISTED to the top of this loop iteration
+    // (see comment above) — a plain uuid-default column accepts an explicit
+    // value on insert — so the transaction row and its source-link row can
+    // both be staged now without waiting on a round trip for the DB-generated
+    // id, and so this same transaction can immediately become a same-import
+    // cross-source candidate for a later row below.
     pendingTransactionInserts.push({
       id: newTransactionId,
       user_id: userId,
@@ -1338,7 +1454,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   for (const [key, instrumentId] of instrumentIdByKey) {
     void key;
     for (const [, accountId] of accountIdByFolioAmc) {
-      await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved, instrumentUnresolvedKeys.size > 0, parserHasFatalError);
+      await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved && !decidedOwnershipAccountIds.has(accountId), instrumentUnresolvedKeys.size > 0, parserHasFatalError);
     }
   }
 
@@ -1572,7 +1688,10 @@ export async function recertifyPosition(userId: string, accountId: string, instr
   const sourceDocumentId = (latestSnapshot?.source_document_id as string | null) ?? (account.source_document_id as string | null) ?? accountId;
 
   const config = await loadActiveReconciliationConfig();
-  const ownerUnresolved = !account.owner_member_id;
+  // An entity / joint owner is a DECIDED owner (owner_member_id is null by
+  // design) -- only a genuinely unassigned account is "unresolved".
+  const effectiveOwnership = await loadAccountOwnership(admin, userId, accountId);
+  const ownerUnresolved = effectiveOwnership ? effectiveOwnership.ownership.kind === 'unassigned' : !account.owner_member_id;
 
   const { data: instrumentCases } = await admin
     .from('ii_reconciliation_cases')
@@ -1593,6 +1712,129 @@ export async function recertifyPosition(userId: string, accountId: string, instr
   return { ok: true, error: null };
 }
 
+// FULLY-REDEEMED / ZERO-UNIT POSITION FIX (Document2 final non-benchmark
+// closure, mission item #6, 2026-09-30). Known defect: a fully redeemed
+// position (every unit switched/redeemed/transferred out) can never be
+// re-evaluated/certified — it stays stuck at whatever status it had before
+// the redemption, forever, purely because `evaluatePositionAndCertify`
+// below has nothing to certify against.
+//
+// ROOT CAUSE (traced transactions -> reconciliation -> holding/position
+// state -> certification rules, per this mission's own instruction, not
+// assumed): section 6 above ("Holding snapshots") only ever writes a row
+// for a scheme that appears in `parsed.holdings` — the statement's OWN
+// "current holdings" table. A fully redeemed position holds nothing, so it
+// is never printed in ANY subsequent statement's holdings section — there
+// is nothing left to print. No terminal units=0 snapshot is therefore ever
+// written for it. `evaluatePositionAndCertify` then either finds NO
+// snapshot at all (returns early, nothing certified) or a STALE
+// pre-redemption snapshot with a real positive unit balance (certifies
+// against out-of-date data, oblivious to the redemption). Either way the
+// position is permanently invisible to certification.
+//
+// FIX: derive a canonical closing snapshot directly from the
+// already-persisted, already-reconciled transaction ledger whenever doing
+// so PROVES (never assumes) the position is fully redeemed to zero units as
+// of its own last transaction. This is exactly the case
+// `ii_holding_snapshots.source_document_id`'s own migration-0033 comment
+// already anticipated ("nullable: can also be derived by replaying
+// ii_transactions") — no new table, no new column, no new status value.
+// Once a derived row exists, the UNCHANGED `evaluateCertification` below
+// naturally reaches 'certified'/'certified_with_warnings' with
+// reconciledClosingUnits=0 and value=0 — it never fabricates a non-zero
+// holding and never needs a current NAV (units=0 implies value=0
+// unconditionally, see reconcilePosition/unitDeltaForTransaction).
+//
+// Safety: only ever moves a position TOWARDS a zero-unit terminal state
+// when the transaction stream since the last known baseline proves it
+// nets to zero within the configured unit tolerance; a genuine reduction to
+// a NON-zero balance, a negative-unit reconciliation error, or a stream
+// that opens with an outflow (missing earlier history, not a complete
+// one) are all left completely untouched — those remain real, separate
+// reconciliation problems this fix does not paper over. Idempotent: the
+// unique index on (account_id, instrument_id, as_of_date) makes a repeated
+// call either a no-op upsert of the same row or a genuine progression to a
+// later as-of date; it never creates a duplicate canonical position.
+// The DECISION (does this transaction stream prove full redemption to zero
+// units?) is pure logic, unit-tested independently in
+// tests/unit/iiZeroUnitClosureReconciliation.test.ts — see
+// `evaluateDerivedZeroUnitClosure` in reconciliation.ts for the full
+// negative-control contract (A-I in the mission's own list: genuine full
+// redemption, erroneous negative units, rounding-only apparent zero,
+// partial redemption, redeem-then-repurchase, no-current-NAV, unresolved
+// owner/instrument left blocked, idempotent repeat, no duplicate publish).
+// This function is only the DB I/O: fetch the transaction stream since the
+// last known baseline, ask the pure function, and only ever WRITE when it
+// says 'fully_redeemed'.
+async function ensureDerivedZeroUnitClosingSnapshot(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  accountId: string,
+  instrumentId: string,
+  config: Awaited<ReturnType<typeof loadActiveReconciliationConfig>>,
+  existingLatestSnapshot: Record<string, unknown> | null
+): Promise<Record<string, unknown> | null> {
+  const { parseExactDecimal } = await import('./decimal');
+  const baselineDate = existingLatestSnapshot ? (existingLatestSnapshot.as_of_date as string) : null;
+
+  const txnsSinceBaseline = await fetchAllRows<{ transaction_type: string; units: string | number | null; transaction_date: string; currency_code: string }>(() => {
+    const query = admin
+      .from('ii_transactions')
+      .select('transaction_type, units, transaction_date, currency_code')
+      .eq('account_id', accountId)
+      .eq('instrument_id', instrumentId)
+      .order('transaction_date', { ascending: true })
+      .order('id', { ascending: true });
+    return baselineDate ? query.gt('transaction_date', baselineDate) : query;
+  });
+
+  const existingSnapshotUnitsScaled = existingLatestSnapshot
+    ? (() => {
+        const parsedUnits = parseExactDecimal(String(existingLatestSnapshot.units));
+        return parsedUnits.ok ? parsedUnits.scaled : null;
+      })()
+    : null;
+
+  const outcome = evaluateDerivedZeroUnitClosure({
+    hasExistingSnapshot: !!existingLatestSnapshot,
+    existingSnapshotUnitsScaled,
+    transactionsSinceBaseline: txnsSinceBaseline.map((t) => {
+      const unitsParsed = t.units === null ? null : parseExactDecimal(String(t.units));
+      return { canonicalType: t.transaction_type as ReconciliationTransactionInput['canonicalType'], unitsScaled: unitsParsed && unitsParsed.ok ? unitsParsed.scaled : null };
+    }),
+    config,
+  });
+  if (outcome.kind !== 'fully_redeemed') return existingLatestSnapshot; // no_new_activity / malformed_existing_units / insufficient_history / not_fully_redeemed — all leave existing behaviour untouched
+
+  const asOfDate = txnsSinceBaseline[outcome.asOfTransactionIndex].transaction_date;
+  const currencyCode = (existingLatestSnapshot?.currency_code as string | undefined) ?? txnsSinceBaseline[outcome.asOfTransactionIndex].currency_code;
+
+  const { data: derived, error } = await admin
+    .from('ii_holding_snapshots')
+    .upsert(
+      {
+        user_id: userId,
+        account_id: accountId,
+        instrument_id: instrumentId,
+        source_document_id: null, // derived by replaying ii_transactions, not printed on any one statement — see migration 0033's own column comment
+        currency_code: currencyCode,
+        quality_status: 'warning', // same convention as a statement-derived row — upgraded to 'certified' below once evaluateCertification passes
+        as_of_date: asOfDate,
+        units: '0',
+        value: '0',
+        parser_code: 'system_derived_zero_unit_closure',
+      },
+      { onConflict: 'account_id,instrument_id,as_of_date' }
+    )
+    .select('*')
+    .single();
+  if (error || !derived) {
+    console.error('[investment-intelligence] derived zero-unit closing snapshot upsert failed', { userId, accountId, instrumentId, error: error?.message });
+    return existingLatestSnapshot;
+  }
+  return derived as Record<string, unknown>;
+}
+
 async function evaluatePositionAndCertify(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
@@ -1604,7 +1846,7 @@ async function evaluatePositionAndCertify(
   anyInstrumentUnresolved: boolean,
   parserHasFatalError: boolean
 ) {
-  const { data: latestSnapshot } = await admin
+  const { data: fetchedLatestSnapshot } = await admin
     .from('ii_holding_snapshots')
     .select('*')
     .eq('account_id', accountId)
@@ -1612,6 +1854,7 @@ async function evaluatePositionAndCertify(
     .order('as_of_date', { ascending: false })
     .limit(1)
     .maybeSingle();
+  const latestSnapshot = await ensureDerivedZeroUnitClosingSnapshot(admin, userId, accountId, instrumentId, config, fetchedLatestSnapshot);
   if (!latestSnapshot) return; // no certified closing balance for this position yet — nothing to certify
 
   // R6-P0: unbounded before. This is the unit-reconciliation input that

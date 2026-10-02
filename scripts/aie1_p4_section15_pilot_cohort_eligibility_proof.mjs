@@ -32,6 +32,7 @@
 // Run: npx tsx scripts/aie1_p4_section15_pilot_cohort_eligibility_proof.mjs http://localhost:3993
 import fs from 'node:fs';
 import path from 'node:path';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const APP = process.argv[2] ?? 'http://localhost:3993';
 const repoRoot = path.resolve(import.meta.dirname, '..');
@@ -135,7 +136,9 @@ async function main() {
 
   // (1) Supported class: bank CSV upload should SUCCEED for this never-piloted user.
   const csv = 'Date,Description,Amount\n2026-08-01,Coffee Shop,-4.50\n2026-08-02,Salary,3000.00\n';
-  const uploadRes = await fetch(`${APP}/api/financial-data-hub/bank-csv/upload?country_code=AU&currency_code=AUD&filename=section15_eligibility.csv`, {
+  // Owner-before-upload: the supported-class upload now needs a valid owner; a synthetic Self for this user.
+  const ownerSel = await resolveSyntheticOwner(fetchOwnerRequest(APP, cookieHeader), 'self', 'bank');
+  const uploadRes = await fetch(`${APP}/api/financial-data-hub/bank-csv/upload?country_code=AU&currency_code=AUD&filename=section15_eligibility.csv&owner=${encodeURIComponent(JSON.stringify(ownerSel))}`, {
     method: 'POST',
     headers: { Cookie: cookieHeader, 'Content-Type': 'text/csv', 'Content-Length': String(Buffer.byteLength(csv)) },
     body: csv,

@@ -33,11 +33,22 @@ export async function GET() {
   // tolerantly so this endpoint keeps working if it is deployed before the
   // migration is applied (the columns do not exist yet -> grant fields absent,
   // everything else unchanged). Never an error for the user.
-  const { data: sourceRow } = await supabase
-    .from('user_entitlements')
-    .select('entitlement_source, admin_grant_ends_on')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  // Fail soft: an error OR a thrown exception here (columns missing, transport fault) just means "no
+  // grant/promo information"; the user still gets their plan and no error.
+  type SourceRow = { entitlement_source?: string | null; admin_grant_ends_on?: string | null };
+  const readSourceRow = async (): Promise<SourceRow | null> => {
+    try {
+      const res = await supabase
+        .from('user_entitlements')
+        .select('entitlement_source, admin_grant_ends_on')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      return res.error ? null : (res.data as SourceRow | null);
+    } catch {
+      return null;
+    }
+  };
+  const sourceRow = await readSourceRow();
   const plan = describePlanStatus(
     entitlement ? { ...entitlement, entitlement_source: sourceRow?.entitlement_source ?? null, admin_grant_ends_on: sourceRow?.admin_grant_ends_on ?? null } : null,
     utcToday()

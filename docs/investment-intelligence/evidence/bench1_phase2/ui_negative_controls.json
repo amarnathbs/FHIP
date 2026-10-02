@@ -1,0 +1,346 @@
+{
+  "generatedAt": "2026-10-01T13:25:12.267Z",
+  "method": "one tiny mutation per rule in benchmarkDataUiLogic.ts; the matching vitest file(s) must FAIL at least one NAMED test; source restored byte-exactly and verified by SHA-256",
+  "baseline": {
+    "tests/unit/benchmarkDataUiLogic.test.ts": {
+      "ran": true,
+      "total": 57,
+      "passed": 57,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataClientStates.test.ts": {
+      "ran": true,
+      "total": 12,
+      "passed": 12,
+      "failed": []
+    }
+  },
+  "summary": {
+    "controls": 11,
+    "demonstrated": 11,
+    "notDemonstrated": [],
+    "allRestoredByteExact": true,
+    "greenAfterRestore": true
+  },
+  "controls": [
+    {
+      "id": "U01",
+      "rule": "Publish is disabled while hard validation errors remain (no partial publication)",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "  if (i.hardErrorCount > 0) reasons.push(",
+          "replace": "  if (false) reasons.push("
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts",
+        "tests/unit/benchmarkDataClientStates.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "publish stays disabled while hard errors remain",
+        "Publish is rendered disabled while hard errors remain"
+      ],
+      "failingTests": [
+        "publish enable rule NEGATIVE CONTROL: publish stays disabled while hard errors remain (no partial publication)",
+        "publish section render NEGATIVE CONTROL: Publish is rendered disabled while hard errors remain, and the reason is listed"
+      ],
+      "namedFailingTests": [
+        "publish enable rule NEGATIVE CONTROL: publish stays disabled while hard errors remain (no partial publication)",
+        "publish section render NEGATIVE CONTROL: Publish is rendered disabled while hard errors remain, and the reason is listed"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U02",
+      "rule": "A correction needs a written reason of at least 20 characters",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "      if (f.reason.trim().length < 20) out.push(",
+          "replace": "      if (false) out.push("
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "a correction needs a written reason"
+      ],
+      "failingTests": [
+        "upload steps NEGATIVE CONTROL: a correction needs a written reason of at least 20 characters"
+      ],
+      "namedFailingTests": [
+        "upload steps NEGATIVE CONTROL: a correction needs a written reason of at least 20 characters"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U03",
+      "rule": "The date format has no default: the operator must choose",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "    dateFormat: '',",
+          "replace": "    dateFormat: 'YYYY-MM-DD',"
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "ambiguous date format has no default"
+      ],
+      "failingTests": [
+        "upload steps NEGATIVE CONTROL: an ambiguous date format has no default and cannot proceed without an explicit choice"
+      ],
+      "namedFailingTests": [
+        "upload steps NEGATIVE CONTROL: an ambiguous date format has no default and cannot proceed without an explicit choice"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U04",
+      "rule": "A missing required acknowledgement keeps Publish disabled",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "  for (const m of missing) reasons.push(",
+          "replace": "  for (const m of []) reasons.push("
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts",
+        "tests/unit/benchmarkDataClientStates.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "required acknowledgement is missing",
+        "required acknowledgements render as explicit checkboxes"
+      ],
+      "failingTests": [
+        "publish enable rule NEGATIVE CONTROL: publish stays disabled while a required acknowledgement is missing"
+      ],
+      "namedFailingTests": [
+        "publish enable rule NEGATIVE CONTROL: publish stays disabled while a required acknowledgement is missing"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U05",
+      "rule": "The publish control is not shown to a user without the publish capability",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "  return mode === 'correction' ? caps.correct === true : caps.publish === true;",
+          "replace": "  return true;"
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts",
+        "tests/unit/benchmarkDataClientStates.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "never sees the publish control",
+        "sees no Publish button"
+      ],
+      "failingTests": [
+        "publish enable rule NEGATIVE CONTROL: a user without the publish capability never sees the publish control",
+        "publish enable rule corrections need the correction capability, not the publish capability (and vice versa)",
+        "job row actions publish is shown only for validated jobs and only to the matching publisher capability",
+        "publish section render NEGATIVE CONTROL: a user without the publish capability sees no Publish button, only the explanation"
+      ],
+      "namedFailingTests": [
+        "publish enable rule NEGATIVE CONTROL: a user without the publish capability never sees the publish control",
+        "publish section render NEGATIVE CONTROL: a user without the publish capability sees no Publish button, only the explanation"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U06",
+      "rule": "Self-publication needs its own explicit confirmation when staged by me",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "  if (i.stagedByMe && !i.selfPublishAck) reasons.push(",
+          "replace": "  if (false) reasons.push("
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts",
+        "tests/unit/benchmarkDataClientStates.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "self-publication confirmation is required",
+        "self-publication needs its own box"
+      ],
+      "failingTests": [
+        "publish enable rule NEGATIVE CONTROL: self-publication confirmation is required when staged by me"
+      ],
+      "namedFailingTests": [
+        "publish enable rule NEGATIVE CONTROL: self-publication confirmation is required when staged by me"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U07",
+      "rule": "An XLSX file requires an explicit sheet choice",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "  if (!sheetName) return { required: true, ok: false,",
+          "replace": "  if (false) return { required: true, ok: false,"
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "cannot proceed without an explicit sheet choice"
+      ],
+      "failingTests": [
+        "upload steps NEGATIVE CONTROL: an XLSX file cannot proceed without an explicit sheet choice"
+      ],
+      "namedFailingTests": [
+        "upload steps NEGATIVE CONTROL: an XLSX file cannot proceed without an explicit sheet choice"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U08",
+      "rule": "No approved entitlement blocks the upload (a file upload does not establish permission)",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "  if (approved.length === 0) return { ok: false, message: NO_ENTITLEMENT_MESSAGE };",
+          "replace": "  if (false) return { ok: false, message: NO_ENTITLEMENT_MESSAGE };"
+        },
+        {
+          "find": "  if (eligibleEntitlements(row, asOfDate).length === 0) {",
+          "replace": "  if (false) {"
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "no approved entitlement for the benchmark"
+      ],
+      "failingTests": [
+        "publish enable rule NEGATIVE CONTROL: publish stays disabled with no approved entitlement for the benchmark",
+        "upload steps step 2 needs source, reference, history class and an approved entitlement"
+      ],
+      "namedFailingTests": [
+        "publish enable rule NEGATIVE CONTROL: publish stays disabled with no approved entitlement for the benchmark"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U09",
+      "rule": "Capabilities are independent: upload does not grant publish",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "    canPublishNew: c('publish'),",
+          "replace": "    canPublishNew: c('publish') || c('upload'),"
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "granting one capability never switches on another control group"
+      ],
+      "failingTests": [
+        "capability-based visibility (each capability independent) NEGATIVE CONTROL: granting one capability never switches on another control group"
+      ],
+      "namedFailingTests": [
+        "capability-based visibility (each capability independent) NEGATIVE CONTROL: granting one capability never switches on another control group"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U10",
+      "rule": "A public-use permission requires the evidence URL",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "    if (!f.evidenceUrl.trim()) e.evidenceUrl = 'A public-use permission",
+          "replace": "    if (false) e.evidenceUrl = 'A public-use permission"
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "public-use permission requires the evidence"
+      ],
+      "failingTests": [
+        "catalogue, entitlement, mapping and ingestion forms NEGATIVE CONTROL: a public-use permission requires the evidence URL, document date and retrieval date"
+      ],
+      "namedFailingTests": [
+        "catalogue, entitlement, mapping and ingestion forms NEGATIVE CONTROL: a public-use permission requires the evidence URL, document date and retrieval date"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    },
+    {
+      "id": "U11",
+      "rule": "Automated mode is not shown as automated while recurring ingestion is OFF",
+      "mutatedFile": "components/admin/benchmarkData/benchmarkDataUiLogic.ts",
+      "edits": [
+        {
+          "find": "      return ing.automationEnabled && effectivelyEnabled ? { label: 'Automated', tone: 'ok' } :",
+          "replace": "      return true ? { label: 'Automated', tone: 'ok' } :"
+        }
+      ],
+      "testFiles": [
+        "tests/unit/benchmarkDataUiLogic.test.ts"
+      ],
+      "expectedNamedFailures": [
+        "NEVER describes manual import as automatic"
+      ],
+      "failingTests": [
+        "overview presentation rules NEVER describes manual import as automatic"
+      ],
+      "namedFailingTests": [
+        "overview presentation rules NEVER describes manual import as automatic"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": ""
+    }
+  ],
+  "afterRestore": {
+    "tests/unit/benchmarkDataUiLogic.test.ts": {
+      "ran": true,
+      "total": 57,
+      "passed": 57,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataClientStates.test.ts": {
+      "ran": true,
+      "total": 12,
+      "passed": 12,
+      "failed": []
+    }
+  }
+}

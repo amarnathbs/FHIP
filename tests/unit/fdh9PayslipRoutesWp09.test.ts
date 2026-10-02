@@ -40,6 +40,11 @@ vi.mock('@/lib/api', async () => {
   return { ...actual, requireCountryConfirmedUser: async () => ({ user: { id: 'u1' }, unauthenticated: null }) };
 });
 vi.mock('@/lib/services/appCapability', () => ({ requireModuleCapability: async () => ({ user: { id: 'u1' }, blocked: null }) }));
+// Owner-before-upload: the approve route reads the document's stored owner (a legacy document has none).
+vi.mock('@/lib/financial-data-hub/services/documentOwnerRequest', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/financial-data-hub/services/documentOwnerRequest')>('@/lib/financial-data-hub/services/documentOwnerRequest');
+  return { ...actual, getDocumentOwner: async () => null };
+});
 vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({ recordDocumentAuditEvent: h.audit }));
 vi.mock('@/lib/financial-data-hub/services/payslipProcessingService', () => ({
   getPayrollEventIdForDocument: async () => 'pe1',

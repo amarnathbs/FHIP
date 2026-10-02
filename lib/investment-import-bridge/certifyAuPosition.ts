@@ -28,6 +28,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
+import { loadAccountOwnership } from '@/lib/services/investment-intelligence/accountOwnership';
 import { evaluateCertification } from '@/lib/services/investment-intelligence/certification';
 import { isoDateDaysBetween } from '@/lib/services/investment-intelligence/dateNormalisation';
 import { parseExactDecimal, scaledToDecimalString, ZERO } from '@/lib/services/investment-intelligence/decimal';
@@ -120,13 +121,18 @@ export async function certifyAuPosition(userId: string, accountId: string, instr
     .in('severity', ['blocking', 'high']);
   const cases = (blockingCases ?? []) as { discrepancy_type: string; severity: string }[];
 
+  const effectiveOwnership = await loadAccountOwnership(admin, userId, accountId);
+  const ownerUnresolved = effectiveOwnership ? effectiveOwnership.ownership.kind === 'unassigned' : !account.owner_member_id;
+
   const today = new Date().toISOString().slice(0, 10);
   const staleDays = isoDateDaysBetween(latest.as_of_date as string, today);
   const certification = evaluateCertification({
     sourceDetected: true,
     parserFatalError: false,
     documentCorrupt: false,
-    ownerUnresolved: !account.owner_member_id,
+    // 2026-10-01: an entity / joint owner is a DECIDED owner (owner_member_id is
+    // null by design); only a genuinely unassigned account is unresolved.
+    ownerUnresolved: ownerUnresolved,
     // The instrument is the one the user confirmed at review (Apply refuses an
     // unmatched line), so it is resolved by construction.
     instrumentUnresolved: false,

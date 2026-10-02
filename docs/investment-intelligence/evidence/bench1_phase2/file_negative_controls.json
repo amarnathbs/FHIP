@@ -1,0 +1,1408 @@
+{
+  "generatedAt": "2026-10-01T09:25:31.433Z",
+  "validatorVersion": "bench1-file-validator-v1",
+  "method": "one tiny mutation per rule; the matching vitest file must FAIL at least one NAMED test; source restored byte-exactly and verified by SHA-256",
+  "baseline": {
+    "tests/unit/benchmarkDataFileValidator.test.ts": {
+      "ran": true,
+      "total": 72,
+      "passed": 72,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataFilePipeline.test.ts": {
+      "ran": true,
+      "total": 31,
+      "passed": 31,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataFileDatesNumbers.test.ts": {
+      "ran": true,
+      "total": 235,
+      "passed": 235,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataFileInspection.test.ts": {
+      "ran": true,
+      "total": 44,
+      "passed": 44,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataFileCsv.test.ts": {
+      "ran": true,
+      "total": 22,
+      "passed": 22,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataFileXlsx.test.ts": {
+      "ran": true,
+      "total": 28,
+      "passed": 28,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataFileLayouts.test.ts": {
+      "ran": true,
+      "total": 17,
+      "passed": 17,
+      "failed": []
+    },
+    "tests/unit/benchmarkDataFileErrorCsvTemplates.test.ts": {
+      "ran": true,
+      "total": 33,
+      "passed": 33,
+      "failed": []
+    }
+  },
+  "summary": {
+    "controls": 49,
+    "demonstrated": 49,
+    "notDemonstrated": [],
+    "allRestoredByteExact": true
+  },
+  "controls": [
+    {
+      "rule": "future market dates are rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls future date"
+      ],
+      "id": "C01",
+      "edits": [
+        {
+          "find": "if (iso > ctx.todayIso) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "future date"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls future date"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "dates outside the entitlement data-date scope are rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls date before entitlement scope start",
+        "rule table with negative controls date after entitlement scope end"
+      ],
+      "id": "C02",
+      "edits": [
+        {
+          "find": "if (scope && ((scope.from && iso < scope.from) || (scope.to && iso > scope.to))) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "date before entitlement scope start",
+        "date after entitlement scope end"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls date before entitlement scope start",
+        "rule table with negative controls date after entitlement scope end"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "zero levels are rejected as non-positive",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls zero level"
+      ],
+      "id": "C03",
+      "edits": [
+        {
+          "find": "else if (res.value <= 0) {",
+          "replace": "else if (res.value < 0) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "zero level"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls zero level"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "return variant must equal the catalogue variant for every row",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls return variant differs from the catalogue",
+        "rule table with negative controls net total return declared for a TRI benchmark",
+        "multi-benchmark files: identity is validated on every row variant, currency and inactive checks apply to EVERY row of a multi file",
+        "multi-benchmark files: identity is validated on every row a key-level problem is reported once with the number of rows it affects",
+        "provider exports with an index-name column a mapped key is still checked against the catalogue (variant) row by row"
+      ],
+      "id": "C04",
+      "edits": [
+        {
+          "find": "if (entry.returnVariant !== params.returnVariant) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "return variant differs",
+        "variant, currency and inactive checks apply to EVERY row"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls return variant differs from the catalogue",
+        "multi-benchmark files: identity is validated on every row variant, currency and inactive checks apply to EVERY row of a multi file"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "currency must equal the catalogue currency for every row",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls currency differs from the catalogue",
+        "multi-benchmark files: identity is validated on every row variant, currency and inactive checks apply to EVERY row of a multi file"
+      ],
+      "id": "C05",
+      "edits": [
+        {
+          "find": "if (entry.currencyCode !== params.currencyCode) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "currency differs"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls currency differs from the catalogue"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "conflicting duplicate (key,date) rows are errors, not collapsed",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls conflicting duplicate rows",
+        "duplicates within the file conflicting duplicates error on BOTH rows and neither is staged",
+        "duplicates within the file three rows where only one differs are all conflicts"
+      ],
+      "id": "C06",
+      "edits": [
+        {
+          "find": "if (g.every((x) => sameLevel(x.value, g[0].value))) {",
+          "replace": "if (true) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "conflicting duplicate rows"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls conflicting duplicate rows"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "new-history upload may not silently change a published level",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls new-history upload conflicting with a published level",
+        "classification against published levels and the two modes new_history: identical within 1e-6 is skipped-as-identical, new is new, different is a conflict"
+      ],
+      "id": "C07",
+      "edits": [
+        {
+          "find": "else if (params.mode === 'new_history') {",
+          "replace": "else if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "new-history upload conflicting with a published level"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls new-history upload conflicting with a published level"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "correction mode requires an existing published level",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls correction with nothing to correct",
+        "classification against published levels and the two modes correction: a different level becomes a correction with the before value; missing targets are errors"
+      ],
+      "id": "C08",
+      "edits": [
+        {
+          "find": "if (params.mode === 'correction') {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "correction with nothing to correct"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls correction with nothing to correct"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "weekend-dated rows are flagged for acknowledgement (never silently dropped)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls weekend-dated row",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped weekend rows stay in staging with a flag and require an acknowledgement",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped acknowledgements come back in a stable order"
+      ],
+      "id": "C09",
+      "edits": [
+        {
+          "find": "const weekend = rows.filter((r) => isWeekendDay(dayNumber(r.date)));",
+          "replace": "const weekend: StagedRow[] = [];"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "weekend-dated row",
+        "weekend rows stay in staging"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls weekend-dated row",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped weekend rows stay in staging with a flag and require an acknowledgement"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "large moves are review warnings, never errors",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls large day-over-day move",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped large moves up and down are warnings only (the rows stay staged)"
+      ],
+      "id": "C10",
+      "edits": [
+        {
+          "find": "            'warning',\n            cur.rowNumber,\n            'LARGE_MOVE',",
+          "replace": "            'error',\n            cur.rowNumber,\n            'LARGE_MOVE',"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "large day-over-day move",
+        "large moves up and down are warnings only"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls large day-over-day move",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped large moves up and down are warnings only (the rows stay staged)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "suspected scale/rebasing change is flagged",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls suspected rebasing",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped a 10% move exactly is not flagged; a 5x jump is a scale change (not a large move)",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped compares the first and last incoming level with the nearest published neighbour",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped acknowledgements come back in a stable order"
+      ],
+      "id": "C11",
+      "edits": [
+        {
+          "find": "export const SCALE_RATIO_HIGH = 5;",
+          "replace": "export const SCALE_RATIO_HIGH = 5000;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "suspected rebasing",
+        "a 10% move exactly is not flagged"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls suspected rebasing",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped a 10% move exactly is not flagged; a 5x jump is a scale change (not a large move)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "coverage gaps longer than 3 weekdays are flagged",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "rule table with negative controls coverage gap of 4 weekdays",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped coverage gaps need MORE than 3 consecutive missing weekdays and are never filled in",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped weekdays already published inside the range are not gaps",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped acknowledgements come back in a stable order"
+      ],
+      "id": "C12",
+      "edits": [
+        {
+          "find": "export const GAP_WEEKDAY_THRESHOLD = 3;",
+          "replace": "export const GAP_WEEKDAY_THRESHOLD = 300;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "coverage gap of 4 weekdays",
+        "coverage gaps need MORE than 3"
+      ],
+      "namedFailingTests": [
+        "rule table with negative controls coverage gap of 4 weekdays",
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped coverage gaps need MORE than 3 consecutive missing weekdays and are never filled in"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "incoming levels are compared with the nearest published neighbour",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped compares the first and last incoming level with the nearest published neighbour"
+      ],
+      "id": "C13",
+      "edits": [
+        {
+          "find": "if (existingForKey && existingForKey.size > 0) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "compares the first and last incoming level"
+      ],
+      "namedFailingTests": [
+        "review flags: kept, flagged, acknowledged -- never rejected or dropped compares the first and last incoming level with the nearest published neighbour"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "hidden rows included on request need an acknowledgement",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "XLSX: hidden rows and sheets are disclosed when included on request they are processed, listed, and need an acknowledgement"
+      ],
+      "id": "C14",
+      "edits": [
+        {
+          "find": "if (params.includeHiddenRows && included.length > 0) acks.add('hidden_rows_included');",
+          "replace": "if (false) acks.add('hidden_rows_included');"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFilePipeline.test.ts",
+      "expectedNamedFailures": [
+        "when included on request they are processed"
+      ],
+      "namedFailingTests": [
+        "XLSX: hidden rows and sheets are disclosed when included on request they are processed, listed, and need an acknowledgement"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "Excel date system must match the workbook",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "XLSX: Excel date systems are explicit and cross-checked declaring the wrong system for the workbook is a hard DATE_SYSTEM_MISMATCH (dates would be 4 years off)"
+      ],
+      "id": "C15",
+      "edits": [
+        {
+          "find": "if (params.dateFormat === 'excel_1900' && table.date1904) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFilePipeline.test.ts",
+      "expectedNamedFailures": [
+        "declaring the wrong system for the workbook"
+      ],
+      "namedFailingTests": [
+        "XLSX: Excel date systems are explicit and cross-checked declaring the wrong system for the workbook is a hard DATE_SYSTEM_MISMATCH (dates would be 4 years off)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "formula cells in required columns are rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "XLSX: formula cells are rejected in required columns formula in the VALUE column (even with a cached number): error with the cell reference",
+        "XLSX: formula cells are rejected in required columns formula in the DATE column",
+        "XLSX: formula cells are rejected in required columns formula in the benchmark_key column of a multi file"
+      ],
+      "id": "C16",
+      "edits": [
+        {
+          "find": "if (requiredIdx.has(idx)) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFilePipeline.test.ts",
+      "expectedNamedFailures": [
+        "formula in the VALUE column",
+        "formula in the DATE column",
+        "formula in the benchmark_key column"
+      ],
+      "namedFailingTests": [
+        "XLSX: formula cells are rejected in required columns formula in the VALUE column (even with a cached number): error with the cell reference",
+        "XLSX: formula cells are rejected in required columns formula in the DATE column",
+        "XLSX: formula cells are rejected in required columns formula in the benchmark_key column of a multi file"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "rows beyond the configured row limit are a hard error",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "limits, empty files and reader problems rows beyond the limit are a hard TOO_MANY_ROWS and nothing is staged"
+      ],
+      "id": "C17",
+      "edits": [
+        {
+          "find": "if (dataRows.length > limits.maxRows) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "rows beyond the limit"
+      ],
+      "namedFailingTests": [
+        "limits, empty files and reader problems rows beyond the limit are a hard TOO_MANY_ROWS and nothing is staged"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "an empty benchmark_key in a multi file is an error",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "multi-benchmark files: identity is validated on every row empty and unknown keys are errors on their own row; other rows are unaffected"
+      ],
+      "id": "C18",
+      "edits": [
+        {
+          "find": "if (raw === '') push('error', n, 'BENCHMARK_KEY_EMPTY'",
+          "replace": "if (false) push('error', n, 'BENCHMARK_KEY_EMPTY'"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "empty and unknown keys are errors"
+      ],
+      "namedFailingTests": [
+        "multi-benchmark files: identity is validated on every row empty and unknown keys are errors on their own row; other rows are unaffected"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "rows left out by an index-name map are disclosed",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "provider exports with an index-name column indexNameToKey maps names exactly; unmapped names are excluded and DISCLOSED, not silently dropped"
+      ],
+      "id": "C19",
+      "edits": [
+        {
+          "find": "if (excludedNames.size > 0) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileValidator.test.ts",
+      "expectedNamedFailures": [
+        "indexNameToKey maps names exactly"
+      ],
+      "namedFailingTests": [
+        "provider exports with an index-name column indexNameToKey maps names exactly; unmapped names are excluded and DISCLOSED, not silently dropped"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "skipped hidden rows are disclosed as a warning",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/validator.ts",
+      "failingTests": [
+        "XLSX: hidden rows and sheets are disclosed by default hidden rows are NOT processed, and the preview says exactly which"
+      ],
+      "id": "C20",
+      "edits": [
+        {
+          "find": "if (skipped.length > 0) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFilePipeline.test.ts",
+      "expectedNamedFailures": [
+        "by default hidden rows are NOT processed"
+      ],
+      "namedFailingTests": [
+        "XLSX: hidden rows and sheets are disclosed by default hidden rows are NOT processed, and the preview says exactly which"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "DD/MM/YYYY is not treated as MM/DD/YYYY",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/dateParsing.ts",
+      "failingTests": [
+        "ambiguous dates are never guessed 03/04/2024 is 3 April under DD/MM/YYYY and 4 March under MM/DD/YYYY",
+        "ambiguous dates are never guessed 13/04/2024 is valid day-first and FAILS month-first (no silent fallback to the other order)",
+        "supported text formats 28/03/2024 as DD/MM/YYYY -> 2024-03-28",
+        "supported text formats 3/4/2024 as DD/MM/YYYY -> 2024-04-03",
+        "real calendar validation 30/04/2024 (DD/MM/YYYY) valid=true"
+      ],
+      "id": "C21",
+      "edits": [
+        {
+          "find": "return numericDmy(s, '/', format, 'dmy');",
+          "replace": "return numericDmy(s, '/', format, 'mdy');"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileDatesNumbers.test.ts",
+      "expectedNamedFailures": [
+        "03/04/2024 is 3 April"
+      ],
+      "namedFailingTests": [
+        "ambiguous dates are never guessed 03/04/2024 is 3 April under DD/MM/YYYY and 4 March under MM/DD/YYYY"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "timestamps are rejected as DATE_IS_TIMESTAMP, never truncated",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/dateParsing.ts",
+      "failingTests": [
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28T00:00:00Z with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28T00:00:00.000Z with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28T00:00:00+05:30 with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28 15:30 with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28 15:30:00 with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28T00Z with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28Z with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28+05:30 with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects a time component under the other text formats too"
+      ],
+      "id": "C22",
+      "edits": [
+        {
+          "find": "if (looksLikeTimestamp(s)) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileDatesNumbers.test.ts",
+      "expectedNamedFailures": [
+        "DATE_IS_TIMESTAMP"
+      ],
+      "namedFailingTests": [
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28T00:00:00Z with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28T00:00:00.000Z with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28T00:00:00+05:30 with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28 15:30 with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28 15:30:00 with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28T00Z with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28Z with DATE_IS_TIMESTAMP (never truncates it)",
+        "market dates are calendar dates, not UTC timestamps rejects 2024-03-28+05:30 with DATE_IS_TIMESTAMP (never truncates it)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "Excel serial 60 (1900 leap-year bug) is rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/xlsxReader.ts",
+      "failingTests": [
+        "Excel date systems serial 60 is the non-existent 1900-02-29 (Lotus leap-year bug)"
+      ],
+      "id": "C23",
+      "edits": [
+        {
+          "find": "if (serial === 60) return null;",
+          "replace": "void 0;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileDatesNumbers.test.ts",
+      "expectedNamedFailures": [
+        "serial 60"
+      ],
+      "namedFailingTests": [
+        "Excel date systems serial 60 is the non-existent 1900-02-29 (Lotus leap-year bug)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "the 1904 date system is honoured (not treated as 1900)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/xlsxReader.ts",
+      "failingTests": [
+        "Excel date systems the same serial is four years and a day apart in the 1904 system",
+        "Excel date systems rejects out-of-range, fractional and non-finite serials"
+      ],
+      "id": "C24",
+      "edits": [
+        {
+          "find": "epochMs = Date.UTC(1904, 0, 1) + serial * DAY_MS;",
+          "replace": "epochMs = (serial < 60 ? Date.UTC(1899, 11, 31) : Date.UTC(1899, 11, 30)) + serial * DAY_MS;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileDatesNumbers.test.ts",
+      "expectedNamedFailures": [
+        "four years and a day apart"
+      ],
+      "namedFailingTests": [
+        "Excel date systems the same serial is four years and a day apart in the 1904 system"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "percentage returns are rejected as levels",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/numberParsing.ts",
+      "failingTests": [
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"-0.5 %\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"12.5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"-0.5 %\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"12.5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"-0.5 %\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"12.5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"-0.5 %\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"12.5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) the percent message says an index LEVEL is required"
+      ],
+      "id": "C25",
+      "edits": [
+        {
+          "find": "if (s.includes('%')) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileDatesNumbers.test.ts",
+      "expectedNamedFailures": [
+        "VALUE_IS_PERCENT"
+      ],
+      "namedFailingTests": [
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"-0.5 %\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"12.5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"-0.5 %\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"12.5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"-0.5 %\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"12.5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"5%\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"-0.5 %\" with VALUE_IS_PERCENT",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"12.5%\" with VALUE_IS_PERCENT"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "a leading + is rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/numberParsing.ts",
+      "failingTests": [
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"+100\" with VALUE_LEADING_PLUS",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"+100\" with VALUE_LEADING_PLUS",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"+100\" with VALUE_LEADING_PLUS",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"+100\" with VALUE_LEADING_PLUS"
+      ],
+      "id": "C26",
+      "edits": [
+        {
+          "find": "if (s[0] === '+')",
+          "replace": "if (false)"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileDatesNumbers.test.ts",
+      "expectedNamedFailures": [
+        "VALUE_LEADING_PLUS"
+      ],
+      "namedFailingTests": [
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"+100\" with VALUE_LEADING_PLUS",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"+100\" with VALUE_LEADING_PLUS",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"+100\" with VALUE_LEADING_PLUS",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"+100\" with VALUE_LEADING_PLUS"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "more than 6 decimals is rejected, not truncated",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/numberParsing.ts",
+      "failingTests": [
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"1.1234567\" with VALUE_TOO_PRECISE",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"1.1234567\" with VALUE_TOO_PRECISE",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"1.1234567\" with VALUE_TOO_PRECISE",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"1.1234567\" with VALUE_TOO_PRECISE",
+        "parseLevel -- precision, range and numbers allows at most 6 decimals and values below 1e12"
+      ],
+      "id": "C27",
+      "edits": [
+        {
+          "find": "if (!/^0+$/.test(fracPart.slice(MAX_DECIMALS))) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileDatesNumbers.test.ts",
+      "expectedNamedFailures": [
+        "VALUE_TOO_PRECISE",
+        "allows at most 6 decimals"
+      ],
+      "namedFailingTests": [
+        "parseLevel -- shared rejections (every locale) [plain] rejects \"1.1234567\" with VALUE_TOO_PRECISE",
+        "parseLevel -- shared rejections (every locale) [en] rejects \"1.1234567\" with VALUE_TOO_PRECISE",
+        "parseLevel -- shared rejections (every locale) [in] rejects \"1.1234567\" with VALUE_TOO_PRECISE",
+        "parseLevel -- shared rejections (every locale) [eu] rejects \"1.1234567\" with VALUE_TOO_PRECISE",
+        "parseLevel -- precision, range and numbers allows at most 6 decimals and values below 1e12"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "Indian grouping is strict (Western grouping rejected under the in locale)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/numberParsing.ts",
+      "failingTests": [
+        "parseLevel -- locale grammars in: Indian grouping (3 then 2s); Western grouping is NOT accepted under it"
+      ],
+      "id": "C28",
+      "edits": [
+        {
+          "find": "if (first.length < 1 || first.length > 2) return false;",
+          "replace": "if (first.length < 1) return false;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileDatesNumbers.test.ts",
+      "expectedNamedFailures": [
+        "in: Indian grouping"
+      ],
+      "namedFailingTests": [
+        "parseLevel -- locale grammars in: Indian grouping (3 then 2s); Western grouping is NOT accepted under it"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "NUL bytes make a CSV invalid",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/fileInspection.ts",
+      "failingTests": [
+        "CSV content, encoding and MIME transcodes UTF-16 LE and BE only when a BOM is present",
+        "CSV content, encoding and MIME rejects a NUL byte inside otherwise valid text"
+      ],
+      "id": "C29",
+      "edits": [
+        {
+          "find": "if (body.includes(0))",
+          "replace": "if (false)"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "rejects a NUL byte"
+      ],
+      "namedFailingTests": [
+        "CSV content, encoding and MIME rejects a NUL byte inside otherwise valid text"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "macro workbooks (vbaProject.bin) are rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/fileInspection.ts",
+      "failingTests": [
+        "XLSX container checks rejects a workbook that contains a macro project"
+      ],
+      "id": "C30",
+      "edits": [
+        {
+          "find": "if (zip.has('xl/vbaProject.bin')) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "rejects a workbook that contains a macro project"
+      ],
+      "namedFailingTests": [
+        "XLSX container checks rejects a workbook that contains a macro project"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "a declared MIME type that contradicts the file is rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/fileInspection.ts",
+      "failingTests": [
+        "CSV content, encoding and MIME rejects a declared MIME type that contradicts the file (csv)"
+      ],
+      "id": "C31",
+      "edits": [
+        {
+          "find": "if (!GENERIC_MIME.has(mime) && !CSV_MIME.has(mime)) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "rejects a declared MIME type that contradicts the file (csv)"
+      ],
+      "namedFailingTests": [
+        "CSV content, encoding and MIME rejects a declared MIME type that contradicts the file (csv)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "the byte limit is enforced",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/fileInspection.ts",
+      "failingTests": [
+        "CSV content, encoding and MIME enforces the byte limit exactly (and rejects empty files)"
+      ],
+      "id": "C32",
+      "edits": [
+        {
+          "find": "if (bytes.length > limits.maxBytes) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "enforces the byte limit exactly"
+      ],
+      "namedFailingTests": [
+        "CSV content, encoding and MIME enforces the byte limit exactly (and rejects empty files)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "invalid UTF-8 is rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/fileInspection.ts",
+      "failingTests": [
+        "CSV content, encoding and MIME rejects invalid UTF-8 (a lone continuation / Latin-1 byte) as FILE_ENCODING_INVALID"
+      ],
+      "id": "C33",
+      "edits": [
+        {
+          "find": "new TextDecoder('utf-8', { fatal: true }).decode(body)",
+          "replace": "new TextDecoder('utf-8', { fatal: false }).decode(body)"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "rejects invalid UTF-8"
+      ],
+      "namedFailingTests": [
+        "CSV content, encoding and MIME rejects invalid UTF-8 (a lone continuation / Latin-1 byte) as FILE_ENCODING_INVALID"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "the zip compression-ratio limit is enforced (limit made infinite)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/types.ts",
+      "failingTests": [
+        "zip-bomb defences rejects an entry with an extreme compression ratio (declared honestly)",
+        "readZipEntries throws a ZipReadError (never a raw error) for unsafe archives and offers a non-throwing form"
+      ],
+      "id": "C34",
+      "edits": [
+        {
+          "find": "maxZipRatio: 100,",
+          "replace": "maxZipRatio: Number.POSITIVE_INFINITY,"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "extreme compression ratio"
+      ],
+      "namedFailingTests": [
+        "zip-bomb defences rejects an entry with an extreme compression ratio (declared honestly)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "a lying zip header cannot expand past its declared size at inflate time (maxOutputLength AND the size check removed)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/zipReader.ts",
+      "failingTests": [
+        "zip-bomb defences catches a LYING header at inflate time (declares 100 bytes, really inflates to 6 MiB)",
+        "zip-bomb defences rejects an entry that inflates to LESS than declared (inconsistent header)"
+      ],
+      "id": "C35",
+      "edits": [
+        {
+          "find": "maxOutputLength: Math.max(e.uncompressedSize, 1)",
+          "replace": "maxOutputLength: 1 << 30"
+        },
+        {
+          "find": "if (out.length !== e.uncompressedSize) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "catches a LYING header at inflate time"
+      ],
+      "namedFailingTests": [
+        "zip-bomb defences catches a LYING header at inflate time (declares 100 bytes, really inflates to 6 MiB)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "inflated size must equal the declared size (size check removed only)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/zipReader.ts",
+      "failingTests": [
+        "zip-bomb defences rejects an entry that inflates to LESS than declared (inconsistent header)"
+      ],
+      "id": "C36",
+      "edits": [
+        {
+          "find": "if (out.length !== e.uncompressedSize) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "inflates to LESS than declared"
+      ],
+      "namedFailingTests": [
+        "zip-bomb defences rejects an entry that inflates to LESS than declared (inconsistent header)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "zip path traversal names are rejected",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/zipReader.ts",
+      "failingTests": [
+        "zip-bomb defences rejects path-traversal names and duplicate entry names"
+      ],
+      "id": "C37",
+      "edits": [
+        {
+          "find": "if (seg === '..') return true;",
+          "replace": "if (seg === '..') return false;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileInspection.test.ts",
+      "expectedNamedFailures": [
+        "rejects path-traversal names"
+      ],
+      "namedFailingTests": [
+        "zip-bomb defences rejects path-traversal names and duplicate entry names"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "an ambiguous delimiter is reported, not guessed",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/csvReader.ts",
+      "failingTests": [
+        "delimiter detection (documented rule) reports AMBIGUOUS_DELIMITER when two candidates tie, and does not guess silently"
+      ],
+      "id": "C38",
+      "edits": [
+        {
+          "find": "if (winners.length === 1) return { delimiter: winners[0].d, problems };",
+          "replace": "if (true) return { delimiter: winners[0].d, problems };"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileCsv.test.ts",
+      "expectedNamedFailures": [
+        "reports AMBIGUOUS_DELIMITER"
+      ],
+      "namedFailingTests": [
+        "delimiter detection (documented rule) reports AMBIGUOUS_DELIMITER when two candidates tie, and does not guess silently"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "ragged rows are reported with their row number",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/csvReader.ts",
+      "failingTests": [
+        "malformed input is reported, never thrown reports ragged rows with the row number the operator sees",
+        "malformed input is reported, never thrown exempts preamble rows before an explicit header row from the ragged check"
+      ],
+      "id": "C39",
+      "edits": [
+        {
+          "find": "if (rows[r].length !== width) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileCsv.test.ts",
+      "expectedNamedFailures": [
+        "reports ragged rows"
+      ],
+      "namedFailingTests": [
+        "malformed input is reported, never thrown reports ragged rows with the row number the operator sees"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "hidden rows are disclosed, not silently ignored",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/xlsxReader.ts",
+      "failingTests": [
+        "readWorksheet -- hidden rows are disclosed, never silently ignored excludes hidden rows by default and lists them"
+      ],
+      "id": "C40",
+      "edits": [
+        {
+          "find": "(includeHidden ? hiddenIncluded : hiddenSkipped).push(r.rowNumber);",
+          "replace": "if (includeHidden) hiddenIncluded.push(r.rowNumber);"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileXlsx.test.ts",
+      "expectedNamedFailures": [
+        "excludes hidden rows by default and lists them"
+      ],
+      "namedFailingTests": [
+        "readWorksheet -- hidden rows are disclosed, never silently ignored excludes hidden rows by default and lists them"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "DTD / entity definitions in XML are forbidden",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/xmlScanner.ts",
+      "failingTests": [
+        "readWorksheet -- hostile XML and limits rejects a DOCTYPE / entity definition in any part (XML_DTD_FORBIDDEN)"
+      ],
+      "id": "C41",
+      "edits": [
+        {
+          "find": "if (xml.startsWith('<!', i)) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileXlsx.test.ts",
+      "expectedNamedFailures": [
+        "rejects a DOCTYPE / entity definition"
+      ],
+      "namedFailingTests": [
+        "readWorksheet -- hostile XML and limits rejects a DOCTYPE / entity definition in any part (XML_DTD_FORBIDDEN)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "the XLSX sheet must be chosen explicitly (silent default to the first sheet)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/xlsxReader.ts",
+      "failingTests": [
+        "readWorksheet -- sheet selection is explicit requires a sheet name and lists the available sheets"
+      ],
+      "id": "C42",
+      "edits": [
+        {
+          "find": "if (!sheetName) {",
+          "replace": "if (false) {"
+        },
+        {
+          "find": "const sheet = wb.sheets.find((s) => s.name === sheetName);",
+          "replace": "const sheet = sheetName ? wb.sheets.find((s) => s.name === sheetName) : wb.sheets[0];"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileXlsx.test.ts",
+      "expectedNamedFailures": [
+        "requires a sheet name and lists the available sheets"
+      ],
+      "namedFailingTests": [
+        "readWorksheet -- sheet selection is explicit requires a sheet name and lists the available sheets"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "very-hidden sheets are refused",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/xlsxReader.ts",
+      "failingTests": [
+        "readWorksheet -- sheet selection is explicit refuses a very-hidden sheet but can process a hidden one, disclosing both"
+      ],
+      "id": "C43",
+      "edits": [
+        {
+          "find": "if (sheet.state === 'veryHidden') {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileXlsx.test.ts",
+      "expectedNamedFailures": [
+        "refuses a very-hidden sheet"
+      ],
+      "namedFailingTests": [
+        "readWorksheet -- sheet selection is explicit refuses a very-hidden sheet but can process a hidden one, disclosing both"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "merged cells in the data area are flagged",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/xlsxReader.ts",
+      "failingTests": [
+        "readWorksheet -- merged cells flags merged cells that touch the data area and the header, but allows a banner above the header"
+      ],
+      "id": "C44",
+      "edits": [
+        {
+          "find": "if (m.r2 > headerRow) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileXlsx.test.ts",
+      "expectedNamedFailures": [
+        "flags merged cells"
+      ],
+      "namedFailingTests": [
+        "readWorksheet -- merged cells flags merged cells that touch the data area and the header, but allows a banner above the header"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "date cells are detected from the number format",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/xlsxReader.ts",
+      "failingTests": [
+        "readWorksheet -- date cells and date systems detects date cells from built-in and custom number formats (and not look-alikes)"
+      ],
+      "id": "C45",
+      "edits": [
+        {
+          "find": "const isDate = cStyle >= 0 && dateStyles[cStyle] === true;",
+          "replace": "const isDate = false;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileXlsx.test.ts",
+      "expectedNamedFailures": [
+        "detects date cells from built-in and custom number formats"
+      ],
+      "namedFailingTests": [
+        "readWorksheet -- date cells and date systems detects date cells from built-in and custom number formats (and not look-alikes)"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "a layout whose variant conflicts with the declared variant is a hard error",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/layouts.ts",
+      "failingTests": [
+        "registered provider layouts a layout whose variant conflicts with the declared variant is a hard VARIANT_LAYOUT_CONFLICT"
+      ],
+      "id": "C46",
+      "edits": [
+        {
+          "find": "if (variantHint !== null && variantHint !== params.returnVariant) {",
+          "replace": "if (false) {"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileLayouts.test.ts",
+      "expectedNamedFailures": [
+        "a layout whose variant conflicts"
+      ],
+      "namedFailingTests": [
+        "registered provider layouts a layout whose variant conflicts with the declared variant is a hard VARIANT_LAYOUT_CONFLICT"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "error-CSV cells starting with '=' are neutralised",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/errorCsv.ts",
+      "failingTests": [
+        "neutraliseCsvCell prefixes a quote to \"=HYPERLINK(\\\"http://evil\\\",\\\"click\\\")\"",
+        "neutraliseCsvCell prefixes a quote to \"  =1+1\"",
+        "neutraliseCsvCell prefixes a quote to \"\\n=cmd|calc\"",
+        "neutraliseCsvCell prefixes a quote to \" =1\"",
+        "neutraliseCsvCell caps a cell at 500 characters, prefix included",
+        "buildValidationErrorCsv NEUTRALISES formula-injection payloads in EVERY text column, including quote-wrapped ones"
+      ],
+      "id": "C47",
+      "edits": [
+        {
+          "find": "const TRIGGERS = new Set(['=', '+', '-', '@']);",
+          "replace": "const TRIGGERS = new Set(['+', '-', '@']);"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileErrorCsvTemplates.test.ts",
+      "expectedNamedFailures": [
+        "prefixes a quote to",
+        "NEUTRALISES formula-injection payloads"
+      ],
+      "namedFailingTests": [
+        "neutraliseCsvCell prefixes a quote to \"=HYPERLINK(\\\"http://evil\\\",\\\"click\\\")\"",
+        "neutraliseCsvCell prefixes a quote to \"  =1+1\"",
+        "neutraliseCsvCell prefixes a quote to \"\\n=cmd|calc\"",
+        "neutraliseCsvCell prefixes a quote to \" =1\"",
+        "buildValidationErrorCsv NEUTRALISES formula-injection payloads in EVERY text column, including quote-wrapped ones"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "error-CSV cells starting with TAB or CR are neutralised",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/errorCsv.ts",
+      "failingTests": [
+        "neutraliseCsvCell prefixes a quote to \"\\tabc\""
+      ],
+      "id": "C48",
+      "edits": [
+        {
+          "find": "let dangerous = first === '\\t' || first === '\\r';",
+          "replace": "let dangerous = false;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileErrorCsvTemplates.test.ts",
+      "expectedNamedFailures": [
+        "prefixes a quote to"
+      ],
+      "namedFailingTests": [
+        "neutraliseCsvCell prefixes a quote to \"\\tabc\""
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    },
+    {
+      "rule": "error-CSV cells are length-capped",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/fileIngest/errorCsv.ts",
+      "failingTests": [
+        "neutraliseCsvCell caps a cell at 500 characters, prefix included",
+        "buildValidationErrorCsv never emits a cell longer than 500 characters"
+      ],
+      "id": "C49",
+      "edits": [
+        {
+          "find": "export const MAX_CELL_CHARS = 500;",
+          "replace": "export const MAX_CELL_CHARS = 500000;"
+        }
+      ],
+      "testFile": "tests/unit/benchmarkDataFileErrorCsvTemplates.test.ts",
+      "expectedNamedFailures": [
+        "caps a cell at 500 characters",
+        "never emits a cell longer than 500"
+      ],
+      "namedFailingTests": [
+        "neutraliseCsvCell caps a cell at 500 characters, prefix included",
+        "buildValidationErrorCsv never emits a cell longer than 500 characters"
+      ],
+      "demonstrated": true,
+      "restoredByteExact": true,
+      "note": "",
+      "ranVitest": true
+    }
+  ]
+}

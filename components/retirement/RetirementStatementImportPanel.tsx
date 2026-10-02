@@ -23,6 +23,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
+import { OwnerSelector } from '@/components/ownership/OwnerSelector';
+import { ownerSelectionToQuery, type OwnerSelection } from '@/lib/ownership/ownerSelection';
 import {
   RetirementStatementDetails,
   normaliseRetirementActivity,
@@ -230,6 +232,9 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  // Owner-before-upload (Phase 2): the person the statement belongs to, chosen BEFORE uploading (a real household
+  // member; SMSF is never an owner here -- it has its own workspace). Fixes the retirement member at account match.
+  const [owner, setOwner] = useState<OwnerSelection | null>(null);
 
   const [documentId, setDocumentId] = useState<string | null>(null);
   // AIE retirement-statement AI-fallback (2026-09-23). Held only for the
@@ -376,16 +381,18 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
 
   const handleUpload = useCallback(async () => {
     if (!file) { setMessage('Choose a statement file first.'); return; }
+    if (!owner) { setMessage('Choose who this statement belongs to first.'); return; }
     setBusy(true); setMessage(null); setPhase('uploading');
     try {
       const qs = buildStatementMetadataQuery();
+      ownerSelectionToQuery(qs, owner);
       const res = await fetch(`/api/financial-data-hub/retirement-statement/upload?${qs.toString()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/csv' },
         body: await file.arrayBuffer(),
       });
       const body = await readJson(res);
-      if (!res.ok) { setPhase('error'); setMessage(String(body.error ?? 'Could not read this statement.')); return; }
+      if (!res.ok) { setPhase('error'); setMessage(String(body.message ?? body.error ?? 'Could not read this statement.')); return; }
 
       // `readJson` already unwrapped the `{ data }` envelope (clientApiEnvelope.ts).
       const data = body;
@@ -436,7 +443,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
 
       await handleStatementOutcome(body);
     } finally { setBusy(false); }
-  }, [file, buildStatementMetadataQuery, handleStatementOutcome]);
+  }, [file, owner, buildStatementMetadataQuery, handleStatementOutcome]);
 
   const handleMatch = useCallback(async (action: 'auto' | 'resolve' | 'confirm_new') => {
     if (!documentId) return;
@@ -732,6 +739,9 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
               <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="rounded border border-gray-300 px-2 py-1" />
             </label>
           </div>
+          <div className="max-w-md">
+            <OwnerSelector flow="retirement" idPrefix="retirement-owner" value={owner} onChange={setOwner} disabled={busy} />
+          </div>
           <label className="flex flex-col text-sm">
             <span className="mb-1 font-medium">Statement file (CSV)</span>
             <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
@@ -744,7 +754,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
             </span>
           </label>
           <button
-            type="button" onClick={handleUpload} disabled={busy || !file || uploadEnabled !== true}
+            type="button" onClick={handleUpload} disabled={busy || !file || !owner || uploadEnabled !== true}
             className="rounded bg-trust px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             Upload and read statement

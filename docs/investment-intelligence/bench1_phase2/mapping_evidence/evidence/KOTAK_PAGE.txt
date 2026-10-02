@@ -1,0 +1,6 @@
+DOCUMENT: Kotak Mid Cap Fund scheme page (AMC website, reg-g)
+URL: https://www.kotakmf.com/mutual-funds/equity-funds/kotak-mid-cap-fund/reg-g
+DOCUMENT DATE: live page
+RETRIEVED: 2026-10-01
+EXCERPT (short quote/paraphrase, <=30 words):
+Tier 1 Nifty Midcap 150 TRI; Tier 2 Nifty Midcap 100 TRI; Additional Nifty 50 TRI (as summarised by the fetch tool)

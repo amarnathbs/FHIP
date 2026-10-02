@@ -1,0 +1,210 @@
+[
+ {
+  "id": "NC-01",
+  "rule": "F = A+B-C-D-E",
+  "broken": "lib/engines/investment-intelligence/indiaMfReport.ts",
+  "failing": [
+   "A,B,C,D,E and F=A+B-C-D-E, G, H=G-F match the hand calculation",
+   "unrealised + realised + dividend payouts equals the overall gain when history is complete and nothing is reinvested"
+  ],
+  "failingCount": 2,
+  "exit": 1
+ },
+ {
+  "id": "NC-02",
+  "rule": "H = G-F",
+  "broken": "lib/engines/investment-intelligence/indiaMfReport.ts",
+  "failing": [
+   "A,B,C,D,E and F=A+B-C-D-E, G, H=G-F match the hand calculation",
+   "unrealised + realised + dividend payouts equals the overall gain when history is complete and nothing is reinvested"
+  ],
+  "failingCount": 2,
+  "exit": 1
+ },
+ {
+  "id": "NC-03",
+  "rule": "joint-folio basis-point scaling",
+  "broken": "lib/engines/investment-intelligence/indiaMfReport.ts",
+  "failing": [
+   "a joint folio shows each owner's share; the owners' shares sum to the whole position"
+  ],
+  "failingCount": 1,
+  "exit": 1
+ },
+ {
+  "id": "NC-04",
+  "rule": "entity sections stay separate from personal (entity treated as a member)",
+  "broken": "lib/engines/investment-intelligence/indiaMfReport.ts",
+  "failing": [
+   "a folio with no allocation and no owner is surfaced in the Unallocated section, not dropped",
+   "a joint folio shows each owner's share; the owners' shares sum to the whole position",
+   "creates one self-contained section per owner, in Self, Spouse, entity, Unallocated order",
+   "cross-user isolation: the report is built only from the rows handed in (another user's ids resolve to nothing)",
+   "entity holdings never leak into personal totals and each section has its own totals"
+  ],
+  "failingCount": 5,
+  "exit": 1
+ },
+ {
+  "id": "NC-05",
+  "rule": "unallocated folios are surfaced, not dropped",
+  "broken": "lib/engines/investment-intelligence/indiaMfReport.ts",
+  "failing": [
+   "a folio with no allocation and no owner is surfaced in the Unallocated section, not dropped",
+   "creates one self-contained section per owner, in Self, Spouse, entity, Unallocated order",
+   "cross-user isolation: the report is built only from the rows handed in (another user's ids resolve to nothing)",
+   "entity holdings never leak into personal totals and each section has its own totals"
+  ],
+  "failingCount": 4,
+  "exit": 1
+ },
+ {
+  "id": "NC-06",
+  "rule": "partial history shows a labelled value, never a blanket n/a",
+  "broken": "lib/engines/investment-intelligence/indiaMfReport.ts",
+  "failing": [
+   "a redemption of units bought before the uploaded history is flagged and contributes no realised gain from unknown cost",
+   "values every held unit but measures cost-based figures on units with a recorded cost"
+  ],
+  "failingCount": 2,
+  "exit": 1
+ },
+ {
+  "id": "NC-07",
+  "rule": "index values never invented",
+  "broken": "lib/engines/investment-intelligence/indiaMfReport.ts",
+  "failing": [
+   "reports not_available when no close is loaded"
+  ],
+  "failingCount": 1,
+  "exit": 1
+ },
+ {
+  "id": "NC-08",
+  "rule": "gate: no India MF holding -> no section",
+  "broken": "lib/engines/investment-intelligence/indiaMfReport.ts",
+  "failing": [
+   "a user whose INR account holds no mutual fund (equity only) gets no section",
+   "returns null (no section) when the user has no INR mutual-fund holding, whatever their home country"
+  ],
+  "failingCount": 2,
+  "exit": 1
+ },
+ {
+  "id": "NC-09",
+  "rule": "cross-user isolation (loader drops user_id on transactions)",
+  "broken": "lib/services/investment-intelligence/indiaMfReportData.ts",
+  "failing": [
+   "another user's rows are never read into this user's report, and every user-scoped read carries user_id = caller"
+  ],
+  "failingCount": 1,
+  "exit": 1
+ },
+ {
+  "id": "NC-10",
+  "rule": "AU-style home-country gate must NOT exist (loader gates on country)",
+  "broken": "lib/services/investment-intelligence/indiaMfReportData.ts",
+  "failing": [
+   "a read failure AFTER the user is known to hold India funds is an explicit error state, never a partial table",
+   "an Australian-resident user with an INR mutual-fund folio gets the section",
+   "another user's rows are never read into this user's report, and every user-scoped read carries user_id = caller"
+  ],
+  "failingCount": 3,
+  "exit": 1
+ },
+ {
+  "id": "NC-11",
+  "rule": "NAV pin keeps the wider window",
+  "broken": "lib/services/investment-intelligence/pc6/reportNavDependencyWriter.ts",
+  "failing": [
+   "when R4 already pins the same (instrument, basis) the WIDER window wins, in either order"
+  ],
+  "failingCount": 1,
+  "exit": 1
+ },
+ {
+  "id": "NC-12",
+  "rule": "upload: conflicting duplicate dates are rejected",
+  "broken": "lib/services/investment-intelligence/marketIndex/indexCsvParser.ts",
+  "failing": [
+   "conflicting duplicate dates: EVERY row of that date is rejected (conflicting_duplicate)",
+   "identical duplicate rows are collapsed, not rejected",
+   "the usable weekday rows are exactly the clean ones, ascending"
+  ],
+  "failingCount": 3,
+  "exit": 1
+ },
+ {
+  "id": "NC-13",
+  "rule": "upload: attestation required",
+  "broken": "lib/services/investment-intelligence/marketIndex/indexUploadService.ts",
+  "failing": [
+   "REFUSED (422) with a ticked box but altered attestation wording",
+   "REFUSED (422) without the attestation: no RPC is called"
+  ],
+  "failingCount": 2,
+  "exit": 1
+ },
+ {
+  "id": "NC-14",
+  "rule": "upload: an existing published value is never overwritten (conflict blocker removed)",
+  "broken": "lib/services/investment-intelligence/marketIndex/indexUploadService.ts",
+  "failing": [
+   "a different value for a published date blocks the commit unless the operator chose to skip conflicts, and is never overwritten either way"
+  ],
+  "failingCount": 1,
+  "exit": 1
+ },
+ {
+  "id": "NC-15",
+  "rule": "capability guard fails closed",
+  "broken": "lib/services/investment-intelligence/marketIndex/marketIndexAdmin.ts",
+  "failing": [
+   "a truthy-but-not-true flag value is not a grant",
+   "s13 fail closed: a role-resolution error or a missing column (migration 0232 not applied) is a denial, not a grant"
+  ],
+  "failingCount": 2,
+  "exit": 1
+ },
+ {
+  "id": "NC-16",
+  "rule": "nav: capability not implied by PC6/PC7",
+  "broken": "lib/admin/adminNav.ts",
+  "failing": [
+   "is not implied by the PC6 or PC7 capabilities, nor by isAdmin",
+   "the group appears only when marketIndexDataUpload is true \u2014 every other capability true, and it is still hidden"
+  ],
+  "failingCount": 2,
+  "exit": 1
+ },
+ {
+  "id": "NC-17",
+  "rule": "updater disabled by default",
+  "broken": "lib/services/investment-intelligence/marketIndex/dailyFeed.ts",
+  "failing": [
+   "right secret with the feed off: 200, status disabled_env, no request",
+   "the environment switch must be exactly \"true\" (\"\" is off)",
+   "the environment switch must be exactly \"true\" (\"1\" is off)",
+   "the environment switch must be exactly \"true\" (\"TRUE\" is off)",
+   "the environment switch must be exactly \"true\" (\"yes\" is off)",
+   "with the environment switch absent, NO request is made and the database is not touched"
+  ],
+  "failingCount": 6,
+  "exit": 1
+ },
+ {
+  "id": "NC-18",
+  "rule": "updater never retries around a block (403 treated as retryable)",
+  "broken": "lib/services/investment-intelligence/marketIndex/dailyFeed.ts",
+  "failing": [
+   "HTTP 401 is SOURCE_BLOCKED: exactly ONE request, no retry, the run stops",
+   "HTTP 403 is SOURCE_BLOCKED: exactly ONE request, no retry, the run stops",
+   "HTTP 429 is SOURCE_BLOCKED: exactly ONE request, no retry, the run stops",
+   "a database-reported conflict (feed differs from a published value) raises FEED_VALUE_CONFLICT, nothing is overwritten",
+   "a value that spikes against the previous published close is rejected, alerted, and not written",
+   "fetches the missing recent weekdays, writes through the feed RPC, and a holiday (404) is not an error"
+  ],
+  "failingCount": 7,
+  "exit": 1
+ }
+]

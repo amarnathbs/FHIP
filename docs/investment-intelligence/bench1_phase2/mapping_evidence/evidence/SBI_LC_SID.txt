@@ -1,0 +1,6 @@
+DOCUMENT: SBI Blue Chip Fund (now SBI Large Cap Fund) - SID
+URL: https://www.sbimf.com/docs/default-source/lists/sid---sbi-bluechip-fundc4383cb3adb94b959c6e6397a3bdc431.pdf?sfvrsn=a817717_2
+DOCUMENT DATE: 2025-04-30
+RETRIEVED: 2026-10-01
+EXCERPT (short quote/paraphrase, <=30 words):
+'The First Tier benchmark of the Scheme is BSE 100 Index TRI'; PRI composite 14-Feb-06 to 31-Jul-06

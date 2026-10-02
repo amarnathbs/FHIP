@@ -12,6 +12,7 @@ import {
 import { II_RELATED_DESTINATIONS } from '@/lib/investment-intelligence/workspaceNav';
 import { fmtDate } from './dateDisplay';
 import { formatMoneyCode } from '@/lib/engines/money';
+import { OwnerBreakupTable, type OwnerBreakupPayload } from './OwnerBreakupTable';
 
 // II-PC2 — the Investment Intelligence workspace Overview (spec sections 10,
 // 12, 29, 64).
@@ -25,6 +26,8 @@ import { formatMoneyCode } from '@/lib/engines/money';
 // analytics page for every actual analytical number.
 
 interface OverviewPayload {
+  /** Every owner class as its own table + the explicit consolidated macro line (null if it could not be built). */
+  ownerBreakup?: OwnerBreakupPayload | null;
   portfolio: {
     positionCount: number;
     accountCount: number;
@@ -33,6 +36,8 @@ interface OverviewPayload {
     instrumentClasses: string[];
     latestAsOfDate: string | null;
     oldestAsOfDate: string | null;
+    // Document2 Finding #5: how the values were obtained (see overviewSummary.ts).
+    valuation?: { marketNavCount: number; statementBasisCount: number; redeemedCount: number; staleCount: number };
   };
   dataQuality: {
     documentCount: number;
@@ -137,6 +142,9 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
+// 2026-10-01 owner classes: the Overview shows EVERY owner class as its own table (OwnerBreakupTable) plus the
+// explicit consolidated macro line, so it needs no class selector of its own; the per-class views are on the
+// analysis tabs (Performance, Recurring investments, X-Ray, Tax).
 export function OverviewClient() {
   const [data, setData] = useState<OverviewPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +220,9 @@ export function OverviewClient() {
 
   return (
     <div className="space-y-6">
+      {/* ---------- Owner classes (2026-10-01): separate tables + explicit macro line ---------- */}
+      {data.ownerBreakup && <OwnerBreakupTable breakup={data.ownerBreakup} />}
+
       {/* ---------- What do I have? (spec section 10) ---------- */}
       <Card title="What you have">
         {portfolio.positionCount === 0 ? (
@@ -253,8 +264,11 @@ export function OverviewClient() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-muted">
-                This is the value Investment Intelligence reconstructed from your statements. Only positions you publish are included in your FHIP net
-                worth.
+                Each position is valued at the latest NAV on file when one is newer than your statement, otherwise at the value on your statement.
+                {portfolio.valuation && portfolio.valuation.staleCount > 0
+                  ? ` ${portfolio.valuation.staleCount} position${portfolio.valuation.staleCount === 1 ? ' is' : 's are'} valued from a NAV or statement more than 7 days old, so ${portfolio.valuation.staleCount === 1 ? 'its' : 'their'} value may be out of date.`
+                  : ''}{' '}
+                Only positions you publish are included in your FHIP net worth, and a published position keeps the value certified at its statement date.
               </p>
             </div>
           </>

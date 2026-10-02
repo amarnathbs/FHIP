@@ -10,6 +10,12 @@ import {
 } from '@/lib/financial-data-hub/services/investmentStatementProcessingService';
 import { FdhUploadLifecycleError } from '@/lib/financial-data-hub/services/uploadLifecycle';
 import { auInvestmentStatementUploadMetadataSchema } from '@/lib/financial-data-hub/validation/auInvestmentStatement';
+import {
+  assertNoIdenticalDocumentWithDifferentOwner,
+  documentOwnerConflictResponse,
+  recordDocumentOwner,
+  resolveUploadOwnerFromUrl,
+} from '@/lib/financial-data-hub/services/documentOwnerRequest';
 
 const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['text/csv'];
 
@@ -64,6 +70,12 @@ export async function POST(req: Request) {
   const parsed = auInvestmentStatementUploadMetadataSchema.safeParse(metadataInput);
   if (!parsed.success) return bad(parsed.error.issues[0]?.message ?? 'Invalid request', 422);
 
+  // Owner-before-upload (Phase 2): Self / Spouse / Joint (percentages required, the same allocation model
+  // as the India CAS) -- REQUIRED and validated before the file is read. Company, trust and SMSF holdings
+  // are refused until they have their own separate records, so nothing entity-held lands in personal holdings.
+  const ownerRequest = await resolveUploadOwnerFromUrl(user.id, url, 'au_investment');
+  if (!ownerRequest.ok) return ownerRequest.response;
+
   const contentLength = Number(req.headers.get('content-length') ?? '0');
   if (!contentLength || contentLength <= 0) return bad('File upload incomplete.', 422);
   if (contentLength > HARD_MAX_BYTES) return bad('File too large.', 413);
@@ -73,6 +85,7 @@ export async function POST(req: Request) {
   if (bytes.byteLength === 0) return bad('File upload incomplete.', 422);
 
   try {
+    await assertNoIdenticalDocumentWithDifferentOwner(user.id, bytes, ['investment_statement'], ownerRequest.owner);
     const result = await uploadAndProcessAuInvestmentStatement(
       user.id,
       {
@@ -86,6 +99,7 @@ export async function POST(req: Request) {
       },
       bytes,
     );
+    await recordDocumentOwner(user.id, result.document.id, ownerRequest.owner);
     const reviewDocumentId =
       // 2026-09-25: the original upload the service carried on with (evidence
       // OR an AI draft awaiting review), found by the shared identical-upload
@@ -111,6 +125,8 @@ export async function POST(req: Request) {
       ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
+    const ownerConflict = documentOwnerConflictResponse(e);
+    if (ownerConflict) return ownerConflict;
     if (e instanceof AuInvestmentStatementProcessingError) {
       const status = e.code === 'not_found' ? 404 : e.code === 'invalid_state' ? 409 : 500;
       return bad(e.message, status);

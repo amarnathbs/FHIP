@@ -24,6 +24,7 @@ process.on('unhandledRejection', (e) => { console.error('REJECTED: ' + (e?.stack
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -130,6 +131,8 @@ function csvBytes(text) { return Buffer.from(text, 'utf8'); }
 
 async function uploadCsv(user, extra = {}) {
   const params = new URLSearchParams({ csv_kind: 'transaction', currency_code: extra.currency_code ?? 'AUD', institution_name: 'G5LiveCertBroker', ...extra });
+  // Owner-before-upload: a valid synthetic owner for this fixture user.
+  params.set('owner', JSON.stringify(await resolveSyntheticOwner(fetchOwnerRequest(APP, user.cookie), 'self', 'au_investment')));
   // Header must include Brokerage (9 columns), and the date's DAY component
   // must be > 12 (e.g. 20, not 10) so inferDateFormat can disambiguate
   // DD/MM from MM/DD from a single sample row -- both confirmed against the

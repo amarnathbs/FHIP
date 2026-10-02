@@ -29,6 +29,10 @@ import type { XrayDataset } from '@/lib/engines/investment-intelligence/xray/xra
 import type { FundHoldingsSnapshot, PortfolioFundPosition, SnapshotHolding } from '@/lib/engines/investment-intelligence/xray/lookThrough';
 import type { DebtExposureLine } from '@/lib/engines/investment-intelligence/xray/debtXray';
 import { fetchAllRows } from './pagination';
+import { accessAllows, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
+import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey } from './currentValuationLoader';
+import { isNavQualityEligible, type StatementPositionInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
+import { valueSchemeAcrossFolios, UNKNOWN_FOLIO_KEY, type FolioValuationInput } from '@/lib/engines/investment-intelligence/valuation/schemeValuation';
 import type { Observation } from '@/lib/engines/investment-intelligence/sip/dateAlignment';
 
 export interface LoadWarning {
@@ -75,7 +79,7 @@ function todayIso(): string {
 export async function loadSipDataset(
   supabase: SupabaseClient,
   userId: string,
-  options: { asOfDate?: string } = {}
+  options: { asOfDate?: string; benchmarkAccessNeed?: AccessNeed } = {}
 ): Promise<R5LoadResult<SipDataset>> {
   const warnings: LoadWarning[] = [];
 
@@ -134,11 +138,12 @@ export async function loadSipDataset(
     price_date: string;
     price: number;
     quality_status: string;
+    currency_code: string | null;
   }
   const navRows = await fetchAllRows<NavRow>(() =>
     supabase
       .from('ii_prices_nav')
-      .select('instrument_id, price_date, price, quality_status')
+      .select('instrument_id, price_date, price, quality_status, currency_code')
       .in('instrument_id', instrumentIds)
       .order('instrument_id', { ascending: true })
       .order('price_date', { ascending: true })
@@ -146,8 +151,18 @@ export async function loadSipDataset(
 
   const navByInstrument = new Map<string, Observation[]>();
   let latestNavDate: string | null = null;
+  // The currency each instrument is actually transacted in; a NAV quoted in
+  // another currency is never applied to it (same rule as the valuation module).
+  const txnCurrencyByInstrument = new Map<string, string>();
+  for (const t of transactions) if (t.currencyCode && !txnCurrencyByInstrument.has(t.instrumentId)) txnCurrencyByInstrument.set(t.instrumentId, t.currencyCode.toUpperCase());
   for (const r of navRows) {
-    if (r.quality_status === 'superseded') continue;
+    const holdingCurrency = txnCurrencyByInstrument.get(r.instrument_id);
+    if (r.currency_code && holdingCurrency && r.currency_code.toUpperCase() !== holdingCurrency) continue;
+    // Document2 Finding #5: the SAME NAV eligibility as every other consumer
+    // (quality 'ok' only, a positive price). This previously excluded only
+    // 'superseded', so a 'stale' or 'suspicious_jump' NAV that Performance and
+    // the Holdings table reject could still drive a SIP closing value.
+    if (!isNavQualityEligible(r.quality_status) || !(Number(r.price) > 0)) continue;
     const list = navByInstrument.get(r.instrument_id) ?? [];
     list.push({ date: r.price_date, value: Number(r.price) });
     navByInstrument.set(r.instrument_id, list);
@@ -168,7 +183,7 @@ export async function loadSipDataset(
 
   // Benchmark resolution is entirely server-side. The client cannot name a
   // benchmark id (spec section 97).
-  const benchmarkByInstrument = await loadBenchmarkSeries(supabase, instrumentIds, warnings);
+  const benchmarkByInstrument = await loadBenchmarkSeries(supabase, instrumentIds, warnings, options.benchmarkAccessNeed ?? 'display_comparison');
 
   // Attributable inflows, grouped by (account, instrument) then matched to
   // series keys by the caller's series detection. Here we key by the
@@ -233,7 +248,8 @@ export function attachAttributableInflows(dataset: SipDataset, seriesKeys: strin
 async function loadBenchmarkSeries(
   supabase: SupabaseClient,
   instrumentIds: string[],
-  warnings: LoadWarning[]
+  warnings: LoadWarning[],
+  accessNeed: AccessNeed = 'display_comparison'
 ): Promise<SipDataset['benchmarkByInstrument']> {
   const out: SipDataset['benchmarkByInstrument'] = new Map();
   if (instrumentIds.length === 0) return out;
@@ -269,9 +285,22 @@ async function loadBenchmarkSeries(
       .order('series_date', { ascending: true })
   );
 
+  // BENCH-1 Phase 2: central entitlement gate (calculation AND display) + entitled data-date scope.
+  const { access: benchmarkAccess, error: accessError } = await loadBenchmarkAccess(supabase, benchmarkIds);
+  const blockedBenchmarkIds = benchmarkIds.filter((id) => !accessAllows(benchmarkAccess.get(id), accessNeed));
+  if (blockedBenchmarkIds.length > 0) {
+    warnings.push({
+      scope: 'benchmark',
+      detail: accessError
+        ? 'Benchmark entitlements could not be checked, so no benchmark comparison is shown.'
+        : `${blockedBenchmarkIds.length} benchmark(s) have no approved entitlement for calculation and display, so no comparison against them is shown.`,
+    });
+  }
   const seriesByBenchmark = new Map<string, Observation[]>();
   for (const r of seriesRows) {
     if (r.quality_status === 'superseded' || r.quality_status === 'duplicate_flagged') continue;
+    const grant = benchmarkAccess.get(r.benchmark_id);
+    if (!grant || !accessAllows(grant, accessNeed) || !inDataScope(grant, r.series_date)) continue;
     const list = seriesByBenchmark.get(r.benchmark_id) ?? [];
     list.push({ date: r.series_date, value: Number(r.value) });
     seriesByBenchmark.set(r.benchmark_id, list);
@@ -305,6 +334,9 @@ export async function loadXrayDataset(
   // READS them and never writes them.
   interface HoldingRow {
     instrument_id: string;
+    // Multi-folio fix: statements are per folio (ii_accounts). A fund held in
+    // several folios must be valued from EACH folio's own statement and summed.
+    account_id?: string | null;
     as_of_date: string;
     units: number;
     value: number;
@@ -314,7 +346,7 @@ export async function loadXrayDataset(
   const holdingRows = await fetchAllRows<HoldingRow>(() =>
     supabase
       .from('ii_holding_snapshots')
-      .select('instrument_id, as_of_date, units, value, currency_code, quality_status')
+      .select('instrument_id, account_id, as_of_date, units, value, currency_code, quality_status')
       .eq('user_id', userId)
       .order('as_of_date', { ascending: false })
       .order('instrument_id', { ascending: true })
@@ -333,14 +365,75 @@ export async function loadXrayDataset(
     return { dataset: null, warnings, empty: true };
   }
 
-  // Latest snapshot per instrument.
+  // Latest snapshot per instrument (used for the position's currency and as a
+  // fallback; the VALUE below is built per folio).
   const latestByInstrument = new Map<string, (typeof holdingRows)[number]>();
+  // Every snapshot per FOLIO of an instrument, in ASCENDING date order
+  // (holdingRows is descending, so unshift reverses it). valueHoldingAsOf()
+  // treats the LAST element of a date tie as the winner, which reproduces the
+  // original "first row of the descending page wins" tie-break exactly.
+  //
+  // Multi-folio fix (2026-10-01): these used to be grouped by INSTRUMENT only,
+  // so for a fund held in two folios the "latest statement" was one folio's row
+  // and the other folio's units and value dropped out of the position (an
+  // understated, sometimes wrongly-dated, exposure). A fund is now valued as the
+  // SUM of its folios, each valued from its own statements.
+  const statementsByInstrument = new Map<string, Map<string, StatementPositionInput[]>>();
+  const latestDateByFolio = new Map<string, string>();
   for (const r of holdingRows) {
     if (!latestByInstrument.has(r.instrument_id)) latestByInstrument.set(r.instrument_id, r);
+    const folioKey = r.account_id ? String(r.account_id) : UNKNOWN_FOLIO_KEY;
+    const folios = statementsByInstrument.get(r.instrument_id) ?? new Map<string, StatementPositionInput[]>();
+    const list = folios.get(folioKey) ?? [];
+    list.unshift({ asOfDate: r.as_of_date, units: Number(r.units), value: Number(r.value), currencyCode: r.currency_code });
+    folios.set(folioKey, list);
+    statementsByInstrument.set(r.instrument_id, folios);
+    const fk = positionKey(folioKey, r.instrument_id);
+    if (!latestDateByFolio.has(fk)) latestDateByFolio.set(fk, r.as_of_date); // descending: first row is that folio's latest
   }
-  const portfolioAsOfDate = [...latestByInstrument.values()].map((r) => r.as_of_date).sort().slice(-1)[0];
 
   const instrumentIds = [...latestByInstrument.keys()];
+
+  // Document2 Finding #5 (2026-10-01): a position's value is units x the
+  // latest ELIGIBLE market NAV when one is newer than its statement, and the
+  // statement's own value (labelled as such) otherwise - the SAME rule the
+  // Holdings table, Overview and Performance apply
+  // (lib/engines/investment-intelligence/valuation/currentHoldingValuation.ts).
+  // Previously this used the statement value unconditionally, so a stale
+  // statement NAV stayed the "current" value however old it was.
+  const valuationDate = options.asOfDate ?? todayIso();
+  // CURRENT view: only NAVs newer than the oldest LATEST statement OF ANY FOLIO
+  // can matter. POINT-IN-TIME view: an earlier statement may be the anchor, so
+  // the floor is the oldest statement of any kind.
+  const oldestLatestStatement =
+    options.asOfDate !== undefined
+      ? holdingRows.map((r) => r.as_of_date).sort()[0] ?? null
+      : [...latestDateByFolio.values()].sort()[0] ?? null;
+  const navCandidatesByInstrument = await loadNavCandidatesSince(supabase, instrumentIds, oldestLatestStatement);
+  // Rule 8: units transacted after a folio's statement are part of its holding.
+  const unitMovementsByFolio = await loadUnitMovementsSince(supabase, userId, oldestLatestStatement);
+  const valuationByInstrument = new Map(
+    instrumentIds.map((id) => {
+      const folios: FolioValuationInput[] = [...(statementsByInstrument.get(id) ?? new Map<string, StatementPositionInput[]>()).entries()].map(
+        ([folioKey, statements]) => ({ folioKey, statements, unitMovements: unitMovementsByFolio.get(positionKey(folioKey, id)) ?? [] })
+      );
+      return [
+        id,
+        valueSchemeAcrossFolios({
+          folios,
+          navs: navCandidatesByInstrument.get(id) ?? [],
+          asOfDate: valuationDate,
+          currencyCode: latestByInstrument.get(id)?.currency_code ?? null,
+          pointInTime: options.asOfDate !== undefined,
+        }),
+      ] as const;
+    })
+  );
+  // The dates the position values are actually "as at": a market NAV's own
+  // date, or the statement's date where no newer NAV exists.
+  const portfolioAsOfDate =
+    [...valuationByInstrument.values()].map((v) => v.valuationDate).filter((d): d is string => !!d).sort().slice(-1)[0] ??
+    [...latestByInstrument.values()].map((r) => r.as_of_date).sort().slice(-1)[0];
   const { data: instrumentRows } = await supabase
     .from('ii_instruments')
     .select('id, instrument_name, instrument_class')
@@ -382,6 +475,10 @@ export async function loadXrayDataset(
   const positions: PortfolioFundPosition[] = [...latestByInstrument.values()]
     .filter((r) => {
       const cls = instrumentMeta.get(r.instrument_id)?.instrument_class;
+      // A position with no statement valuation on or before an explicit
+      // historical asOfDate did not exist in that view — never backfilled
+      // with a later statement's value.
+      if (valuationByInstrument.get(r.instrument_id)?.basis === 'unavailable') return false;
       return cls === 'mutual_fund' || cls === 'etf' || cls === 'equity';
     })
     .map((r) => {
@@ -392,7 +489,7 @@ export async function loadXrayDataset(
         fundName: instrumentMeta.get(r.instrument_id)?.instrument_name ?? r.instrument_id,
         // Value stays in the investment's OWN local currency and is never
         // FX-converted here (spec section 101, R0_CROSS_BORDER_CONTRACT).
-        value: Number(r.value),
+        value: valuationByInstrument.get(r.instrument_id)!.marketValue ?? Number(r.value),
         currencyCode: r.currency_code,
         amcId: amcNameByInstrument.get(r.instrument_id) ?? null,
         amcName: amcNameByInstrument.get(r.instrument_id) ?? null,
@@ -401,6 +498,19 @@ export async function loadXrayDataset(
 
   if (positions.length === 0) {
     return { dataset: null, warnings, empty: true };
+  }
+
+  // Disclose, never hide, positions whose value rests on an old NAV/statement.
+  const staleHeld = positions
+    .map((p) => ({ name: p.fundName, v: valuationByInstrument.get(p.fundInstrumentId) }))
+    .filter((x) => x.v?.stale);
+  if (staleHeld.length > 0) {
+    warnings.push({
+      scope: 'valuation',
+      detail: `${staleHeld.length} position(s) are valued from a NAV or statement more than 7 days old (oldest: ${staleHeld
+        .map((x) => x.v!.valuationDate)
+        .sort()[0]}), so their weights may be out of date: ${staleHeld.map((x) => x.name).join(', ')}.`,
+    });
   }
 
   const requestedAsOf = options.asOfDate ?? todayIso();

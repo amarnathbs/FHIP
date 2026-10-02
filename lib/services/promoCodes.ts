@@ -10,7 +10,7 @@
 // admin/audit surfaces identify a code by its id and a masked hint.
 
 import { addDaysIso, isValidIsoDate } from '@/lib/services/entitlementWindow';
-import type { RouteError } from '@/lib/services/premiumGrantAdmin';
+import { FEATURE_UNAVAILABLE, isMissingDbObjectError, type RouteError } from '@/lib/services/premiumGrantAdmin';
 
 /** Unambiguous alphabet: no 0/O, 1/I/L. 31 characters. */
 export const PROMO_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -130,6 +130,7 @@ const ADMIN_RPC_ERRORS: Record<string, { status: number; message: string }> = {
 
 export function mapPromoRpcError(error: { message?: string; code?: string } | null | undefined): RouteError | null {
   if (!error?.message) return null;
+  if (isMissingDbObjectError(error)) return FEATURE_UNAVAILABLE; // promo migration not applied here: explicit 503, never an internals leak
   const code = Object.keys(ADMIN_RPC_ERRORS).find((c) => error.message === c || error.message!.includes(c));
   return code ? { code, ...ADMIN_RPC_ERRORS[code] } : null;
 }

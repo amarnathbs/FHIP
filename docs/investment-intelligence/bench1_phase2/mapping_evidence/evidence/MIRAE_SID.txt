@@ -1,0 +1,6 @@
+DOCUMENT: Mirae Asset Large & Midcap Fund - SID (formerly Mirae Asset Emerging Bluechip Fund)
+URL: https://www.miraeassetmf.co.in/docs/default-source/sid/27-sid-mirae-asset-large-midcap-fund_final-may2025.pdf
+DOCUMENT DATE: 2025-11-20 (file name says may2025; document states 'dated November 20, 2025')
+RETRIEVED: 2026-10-01
+EXCERPT (short quote/paraphrase, <=30 words):
+'AMFI Tier 1 Benchmark (Total Returns Index): ... Nifty Large Midcap 250 Index (TRI)'

@@ -133,6 +133,66 @@ export function reconcilePosition(input: ReconcilePositionInput): ReconcilePosit
   };
 }
 
+// Document2 final non-benchmark closure — fully-redeemed / zero-unit
+// position certification fix (mission item #6, 2026-09-30). Pure decision
+// logic only, deliberately separated from documentProcessing.ts's DB I/O
+// (`ensureDerivedZeroUnitClosingSnapshot`) so it can be unit-tested without
+// pulling in that module's pdf-parse/pdfjs-dist dependency chain — the same
+// reason `openReconciliationCase` was previously extracted into its own
+// file (see reconciliationCases.ts's header).
+//
+// See documentProcessing.ts's `ensureDerivedZeroUnitClosingSnapshot` for the
+// full root-cause narrative: a fully redeemed position never again appears
+// in any subsequent statement's holdings section, so no terminal units=0
+// snapshot is ever written for it, and certification is permanently starved
+// of a closing balance to evaluate. This function decides WHETHER a derived
+// zero-unit closing snapshot is warranted — the caller performs the actual
+// read/write.
+export const ACQUISITION_TRANSACTION_TYPES: ReadonlySet<IiTransactionType> = new Set<IiTransactionType>(['purchase', 'sip', 'switch_in', 'stp_in', 'transfer_in', 'reinvestment', 'bonus']);
+
+export interface DerivedZeroUnitClosureInput {
+  hasExistingSnapshot: boolean;
+  existingSnapshotUnitsScaled: bigint | null; // meaningful only when hasExistingSnapshot is true; null there means "existing units could not be parsed"
+  transactionsSinceBaseline: ReconciliationTransactionInput[]; // already filtered by the caller to strictly after the existing snapshot's as-of date (or the full history, if there is no existing snapshot)
+  config: ReconciliationConfig;
+}
+
+export type DerivedZeroUnitClosureOutcome =
+  | { kind: 'no_new_activity' } // nothing since the last known snapshot (or no history at all) — leave existing behaviour untouched
+  | { kind: 'malformed_existing_units' } // existing snapshot's own units could not be parsed — not this fix's problem
+  | { kind: 'insufficient_history' } // no existing snapshot AND the stream does not open with an acquisition — cannot safely assume a complete history
+  | { kind: 'not_fully_redeemed'; finalUnitsScaled: bigint } // a real, non-zero position (or a genuine unresolved variance) — out of this fix's scope
+  | { kind: 'fully_redeemed'; finalUnitsScaled: bigint; asOfTransactionIndex: number }; // proves the position nets to zero within tolerance — synthesize a derived closing snapshot as of the LAST transaction in transactionsSinceBaseline
+
+/**
+ * Decide whether the transaction stream since the last known baseline PROVES
+ * (never assumes) a position has been fully redeemed to zero units. Never
+ * manufactures a non-zero holding, never requires a current NAV (a zero
+ * balance implies zero value unconditionally) — see reconcilePosition's own
+ * opening/delta math, reused identically here via unitDeltaForTransaction.
+ */
+export function evaluateDerivedZeroUnitClosure(input: DerivedZeroUnitClosureInput): DerivedZeroUnitClosureOutcome {
+  if (input.transactionsSinceBaseline.length === 0) return { kind: 'no_new_activity' };
+
+  if (!input.hasExistingSnapshot) {
+    // With no existing snapshot to anchor a baseline, only trust summing
+    // from zero when the stream genuinely OPENS with an acquisition — a
+    // stream opening with a redemption/outflow signals missing earlier
+    // history, not a complete one.
+    if (!ACQUISITION_TRANSACTION_TYPES.has(input.transactionsSinceBaseline[0].canonicalType)) {
+      return { kind: 'insufficient_history' };
+    }
+  } else if (input.existingSnapshotUnitsScaled === null) {
+    return { kind: 'malformed_existing_units' };
+  }
+
+  const baseline = input.hasExistingSnapshot ? (input.existingSnapshotUnitsScaled as bigint) : ZERO;
+  const finalUnitsScaled = input.transactionsSinceBaseline.reduce((balance, t) => balance + unitDeltaForTransaction(t), baseline);
+  const isFullyRedeemed = compareScaled(absScaled(finalUnitsScaled), input.config.unitToleranceScaled) <= 0;
+  if (!isFullyRedeemed) return { kind: 'not_fully_redeemed', finalUnitsScaled };
+  return { kind: 'fully_redeemed', finalUnitsScaled, asOfTransactionIndex: input.transactionsSinceBaseline.length - 1 };
+}
+
 /**
  * Determine history completeness (spec section 46) from what evidence is
  * actually available for this position — never guessed, never defaulted

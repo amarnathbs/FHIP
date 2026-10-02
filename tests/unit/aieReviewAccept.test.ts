@@ -63,6 +63,10 @@ function fakeDeps(overrides: Partial<AcceptRunDeps> = {}): { deps: AcceptRunDeps
       calls.writes.push(req);
       return { committed: true, statementUploadId: 'statement-1', transactionsCreated: 12, certificationStatus: 'certified' };
     },
+    resolveIntakeOwner: async (_userId, _intakeId, flow) => ({
+      ok: true,
+      owner: { kind: 'member', ownerRole: flow === 'bank' ? 'self' : 'self', ownerMemberId: 'member-1', ownerBusinessEntityId: null, entityType: null, allocations: null, label: 'Self' },
+    }),
     finalizeDocumentBinary: async (p) => {
       calls.audits.push({ finalizeDocumentBinary: p });
       return { status: 'deleted' };

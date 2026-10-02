@@ -3,6 +3,7 @@ import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } fr
 import { makeRegistry } from '@/lib/services/registry';
 import { investmentSchema } from '@/lib/validation/investment';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
+import { ensurePublishedValuesCurrent } from '@/lib/services/investment-intelligence/publishedValueRemark';
 
 const registry = makeRegistry('investments');
 
@@ -19,6 +20,8 @@ const RETIRED_PURPOSE_ONLY_ITEM_KEYS = new Set(['education_fund', 'children_inve
 export async function GET() {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // 2026-10-01: published mutual funds are shown at the latest eligible NAV (fail-soft, idempotent).
+  await ensurePublishedValuesCurrent(user.id, await createClient(), 'investments_read');
   const { data, error } = await registry.list(user.id);
   return error ? bad(error.message) : ok(data);
 }

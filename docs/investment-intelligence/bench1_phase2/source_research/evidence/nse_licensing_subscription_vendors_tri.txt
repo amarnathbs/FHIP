@@ -1,0 +1,19 @@
+RETRIEVED 2026-10-01 ~08:19Z HTTP 200 URL: https://www.niftyindices.com/offerings/index-licensing
+L1: A licence from NSE Indices is required to create a product based on or linked to its indices; annual global and single-transaction licences offered.
+L2: Benchmarking: if an institution benchmarks its PRODUCT performance to NSE indices, prior approval from NSE Indices (and fees where applicable) is required. If AMC uses NSE trademarks/indices as underlying, prior approval + licence agreement mandatory.
+L3: Licensed uses listed: exchange traded derivatives, ETFs, index funds, structured products/OTC derivatives, annuities/insurance products.
+
+RETRIEVED 2026-10-01 ~08:18Z HTTP 200 URL: https://www.niftyindices.com/offerings/data-subscription
+S1: Offers end-of-day index constituent data subscription; contact via an NSE Indices email address published on page (not contacted).
+S2: Also available via vendors Bloomberg, FactSet, IHS Markit, MSCI, Rimes, Thomson Reuters. Pricing: UNKNOWN - not stated.
+
+RETRIEVED 2026-10-01 ~08:19Z HTTP 200 URL: https://www.niftyindices.com/resources/authorized-data-vendors
+V1: Lists authorised data vendors: Bloomberg Finance LP, FactSet Research Systems, IHS Markit, MSCI, Rimes Technologies, Thomson Reuters Markets (Thomson Financial).
+
+RETRIEVED 2026-10-01 ~08:19Z HTTP 200 URL: https://www.niftyindices.com/resources/index-concepts/total-return-index
+T1: Nifty indices are price indices; Total Returns Index adds reinvested dividends; TR and price index share the same base.
+
+RETRIEVED 2026-10-01 ~08:20Z HTTP 200 URL: https://www.niftyindices.com/reports/benchmark-riskometer
+R1: Monthly Benchmark Riskometer PDFs listed (Aug 2026 and Jul 2026 visible, plus archive).
+RETRIEVED 2026-10-01 ~08:20Z URL: https://www.niftyindices.com/reports/benchmark-codes -> HTTP 200 but page body is a 404 error page (menu link exists, page does not).
+robots.txt (https://www.niftyindices.com/robots.txt, 2026-10-01): User-agent * Allow /, with a few specific Disallow paths (Nifty passive insights, a few strategy-index paths). Note robots.txt is not the site's contract; Terms of Use clause on automated collection still applies.

@@ -10,6 +10,7 @@ import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
+import { entityExclusionNote, ownerBreakupNarrative } from './reportOwnerBreakup';
 import { isDomesticRecord, isKnownCountry, type CountryCode } from '@/lib/services/jurisdiction';
 import { isCanonicalAppendix } from './reportCanonicalAppendix';
 
@@ -41,6 +42,7 @@ const PREMIUM_SECTION_TITLES: Record<PremiumSectionCode, string> = {
   sip_contribution: 'Contribution (SIP) Behaviour',
   portfolio_xray: 'Portfolio X-Ray & Diversification',
   tax_and_cost: 'Tax & Cost Intelligence',
+  india_mf_investment_report: 'Mutual Fund Investment Report',
   priority_review_items: 'Priority Review Items',
   appendices: 'Appendices — Recorded Data',
 };
@@ -722,13 +724,15 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     sectionTitle: PREMIUM_SECTION_TITLES.investment_performance,
     displayOrder: 27,
     sectionStatus: 'included',
-    sectionData: { results },
+    // 2026-10-01 owner classes: every class as its own item + the explicit macro line (null for a single-class household).
+    sectionData: { results, ...(premium.ownerBreakup ? { ownerBreakup: premium.ownerBreakup } : {}) },
     narrativeText:
       portfolioCount > 1
         ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR/TWRR) as of ${results.asOfDate}.`
         : portfolioCount === 1
           ? `Your investment portfolio's XIRR, TWRR and benchmark comparison as of ${results.asOfDate} are shown below, where enough history exists to calculate them.`
           : null,
+    // (owner-class breakup text is appended to the limitation text below so the existing narrative contract is unchanged)
     chartData: { portfolios: results.portfolios.map((p) => ({ currencyCode: p.currencyCode, performanceVsBenchmarkSeries: p.performanceVsBenchmarkSeries, drawdownSeries: p.drawdownSeries })) },
     sourceReferences: { module: 'ii-r4-performance', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
     confidenceLevel: null,
@@ -737,7 +741,7 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     // single portfolio total (Investment Analysis / Net Worth) does not
     // include those until the user adds them -- disclosed so the two figures
     // reconcile.
-    limitationText: `Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period.${unpublishedDisclosure(source, premium) ? ` ${unpublishedDisclosure(source, premium)}` : ''}`,
+    limitationText: `Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period.${unpublishedDisclosure(source, premium) ? ` ${unpublishedDisclosure(source, premium)}` : ''}${ownerBreakupNarrative(premium.ownerBreakup) ? ` ${ownerBreakupNarrative(premium.ownerBreakup)}` : ''}`,
   };
 }
 
@@ -761,7 +765,7 @@ export function buildSipContribution(source: ReportSourceData, premium: PremiumS
     },
     sourceReferences: { module: 'ii-r5-sip', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
     confidenceLevel: null,
-    limitationText: 'Contribution-consistency analysis is observational — it describes recorded activity and does not recommend changing your contribution amount, frequency or destination fund.',
+    limitationText: `Contribution-consistency analysis is observational — it describes recorded activity and does not recommend changing your contribution amount, frequency or destination fund.${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
   };
 }
 
@@ -785,7 +789,7 @@ export function buildPortfolioXray(source: ReportSourceData, premium: PremiumSou
     chartData: { sectorExposure: results.sectorExposure, securityConcentration: results.securityConcentration, schemeConcentration: results.schemeConcentration },
     sourceReferences: { module: 'ii-r5-xray', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
     confidenceLevel: results.classificationVersion,
-    limitationText: 'Look-through figures depend on the completeness of published fund factsheet/portfolio-disclosure data and may not reflect the most recent fund rebalancing.',
+    limitationText: `Look-through figures depend on the completeness of published fund factsheet/portfolio-disclosure data and may not reflect the most recent fund rebalancing.${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
   };
 }
 
@@ -807,7 +811,55 @@ export function buildTaxAndCost(source: ReportSourceData, premium: PremiumSource
     chartData: { taxYearAggregation: results.taxYearAggregation },
     sourceReferences: { module: 'ii-r6-tax-cost', engineVersion: results.engineVersion, asOfDate: tax.asOfDate, taxProfileSource: tax.taxProfileSource },
     confidenceLevel: null,
-    limitationText: results.residencyNote ?? results.ruleVersionNote ?? 'This is a simulation based on recorded transaction data and the applicable rule version shown — it is not personal tax advice.',
+    limitationText: `${results.residencyNote ?? results.ruleVersionNote ?? 'This is a simulation based on recorded transaction data and the applicable rule version shown — it is not personal tax advice.'}${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
+  };
+}
+
+// India Mutual Fund Investment Report — ONE table-style section inside the
+// monthly report, broken up per owner (Self, Spouse, HUF, Trust, Company,
+// Unallocated). Classification: OBSERVATION (R10_COMPLIANCE_AND_LANGUAGE.md) —
+// records what the uploaded statements and published NAVs show; no advice, no
+// projection, no tax computation. The section's data IS the pure module's
+// result (lib/engines/investment-intelligence/indiaMfReport.ts); nothing is
+// recalculated here (Rule 15).
+//
+// Returns NULL — the section is not built, not listed, not shown as
+// "unavailable" — unless the user actually holds India (INR) mutual funds.
+// That is the whole eligibility rule: premium plan tier (already implied,
+// premium sections only run for a premium report) AND India MF holdings.
+// Home country is deliberately NOT consulted.
+export function buildIndiaMfInvestmentReport(source: ReportSourceData, premium: PremiumSourceData): BuiltSection | null {
+  const loaded = premium.indiaMf;
+  if (!loaded) return null;
+  if (loaded.status === 'error') {
+    return empty('india_mf_investment_report', 33, 'The Mutual Fund Investment Report could not be produced because your investment records could not be read just now. No partial table is shown — regenerate the report to try again.');
+  }
+  const { report } = loaded;
+  const ownerCount = report.sections.length;
+  const positionCount = report.sections.reduce((n, s) => n + s.rows.length, 0);
+  const partial = report.sections.reduce((n, s) => n + s.tiles.partialPositions, 0);
+  return {
+    sectionCode: 'india_mf_investment_report',
+    sectionTitle: PREMIUM_SECTION_TITLES.india_mf_investment_report,
+    displayOrder: 33,
+    sectionStatus: 'included',
+    sectionData: { report },
+    narrativeText:
+      `Your Indian mutual fund holdings are listed below as at ${report.valuationDate}, one table for each owner (${ownerCount} owner section${ownerCount === 1 ? '' : 's'}, ${positionCount} holding${positionCount === 1 ? '' : 's'}). ` +
+      `Each table shows what your uploaded statements record — purchases, switches, redemptions and dividends — against the latest published NAV.` +
+      (partial > 0 ? ` ${partial} holding${partial === 1 ? '' : 's'} rest${partial === 1 ? 's' : ''} on partial transaction history and carr${partial === 1 ? 'ies' : 'y'} a visible basis marker.` : ''),
+    chartData: null,
+    sourceReferences: {
+      module: 'india-mf-investment-report',
+      version: report.version,
+      valuationDate: report.valuationDate,
+      sensexDate: report.indices.sensex.date,
+      niftyDate: report.indices.nifty.date,
+    },
+    confidenceLevel: null,
+    limitationText:
+      'Observation only: this is a record of your uploaded statements and published NAVs, not personal financial or tax advice. Amounts are in Indian rupees. ' +
+      report.notSummedNote,
   };
 }
 
@@ -908,5 +960,7 @@ export function buildPremiumSections(source: ReportSourceData, isFirstReport: bo
     buildTaxAndCost(source, premium),
     buildPriorityReviewItems(source, premium),
     buildAppendices(source, premium),
-  ];
+    // Conditional section: absent entirely unless the user holds INR mutual funds.
+    buildIndiaMfInvestmentReport(source, premium),
+  ].filter((s): s is BuiltSection => s !== null);
 }

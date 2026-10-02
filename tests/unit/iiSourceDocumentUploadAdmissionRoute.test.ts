@@ -33,6 +33,22 @@ vi.mock('@/lib/services/investment-intelligence/storage', async () => {
   return { ...actual, uploadSourceDocumentObject: uploadSpy };
 });
 
+// Owner-before-upload (Phase 1): an owner is now required, so every upload below
+// carries one. The real validator runs against a fixed context (the user's own
+// "self" member), so the structural-admission denials are still the thing under
+// test rather than an owner_required refusal that would also be a 422.
+const OWNER_MEMBER_ID = 'a1111111-1111-4111-8111-111111111111';
+vi.mock('@/lib/ownership/validateOwnerSelection', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/ownership/validateOwnerSelection')>('@/lib/ownership/validateOwnerSelection');
+  return {
+    ...actual,
+    validateOwnerSelection: (userId: string, input: unknown, flow: 'bank' | 'ii_cas') =>
+      actual.validateOwnerSelection(userId, input, flow, {
+        loadContext: async () => ({ homeCountry: 'IN', members: [{ id: OWNER_MEMBER_ID, fullName: 'Me', relationship: 'self', isActive: true }], entities: [] }),
+      }),
+  };
+});
+
 function buildPdfBytes(body: string): Uint8Array {
   return new TextEncoder().encode(`%PDF-1.4\n${body}\n%%EOF\n`);
 }
@@ -44,7 +60,7 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 function uploadForm(bytes: Uint8Array, filename = 'statement.pdf', mimeType = 'application/pdf'): FormData {
   const form = new FormData();
   form.append('file', new File([toArrayBuffer(bytes)], filename, { type: mimeType }));
-  form.append('meta', JSON.stringify({ sourceKey: 'manual', countryCode: 'AU' }));
+  form.append('meta', JSON.stringify({ sourceKey: 'manual', countryCode: 'AU', owner: { kind: 'member', memberId: OWNER_MEMBER_ID } }));
   return form;
 }
 

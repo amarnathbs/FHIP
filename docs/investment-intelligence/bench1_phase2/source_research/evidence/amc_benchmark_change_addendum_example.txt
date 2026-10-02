@@ -1,0 +1,4 @@
+Retrieved 2026-10-01 08:26Z (curl HTTP 200 application/pdf, ~128KB)
+URL: https://www.dspim.com/downloads/20.-notice-cum-addendum-to-sid-kim-change-in-benchmark-and-fund-manager.pdf
+Notice-cum-addendum to SID & KIM, dated 6 May 2026 (DSP Mutual Fund). Table "Change in Benchmark": DSP Large Cap Fund existing benchmark BSE 100 TRI -> revised NIFTY 100 Index TRI, effective 16 May 2026. States change will be made in SID and KIM and overrides conflicting provisions.
+Takeaway: a benchmark change is disclosed by AMC notice-cum-addendum with effective date; benchmark can switch index OWNER (BSE -> NSE) so history must be effective-dated per scheme.

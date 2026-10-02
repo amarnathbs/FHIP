@@ -216,7 +216,7 @@ describe('loadHoldingsTable', () => {
   // Indian index — see SOURCE_DECISION.md / PO-PC6-1). Must still be an
   // honest unavailable, not a fabricated number from whatever placeholder
   // series might exist.
-  it('reports BENCHMARK_HISTORY_INCOMPLETE when the mapped benchmark is licence_required', async () => {
+  it('reports BENCHMARK_HISTORY_INCOMPLETE when NO approved entitlement covers the mapped benchmark (a licence_status label alone grants nothing)', async () => {
     const tables = {
       ii_portfolio_truth_status: [
         { user_id: USER_ID, account_id: 'account-5', instrument_id: 'instrument-5', status: 'certified', unit_variance_within_tolerance: true, latest_source_document_id: 'doc-5', history_completeness: 'complete_from_inception' },
@@ -248,12 +248,12 @@ describe('loadHoldingsTable', () => {
     expect(result.holdings).toHaveLength(1);
     expect(result.holdings[0].benchmark.status).toBe('MISSING_REFERENCE_DATA');
     expect(result.holdings[0].benchmark.qualityFlag).toBe('BENCHMARK_HISTORY_INCOMPLETE');
-    expect(result.holdings[0].benchmark.detail).toContain('licence');
+    expect(result.holdings[0].benchmark.detail).toContain('entitlement');
   });
 
   // The one path that SHOULD produce a real number: a licensed, mapped
   // benchmark with a published series actually covering the window.
-  it('computes a real comparable return when a mapped benchmark has a licence-clear series covering the window', async () => {
+  it('computes a real comparable return when a mapped benchmark has an APPROVED entitlement (calculation + display) and a series covering the window', async () => {
     const tables = {
       ii_portfolio_truth_status: [
         { user_id: USER_ID, account_id: 'account-6', instrument_id: 'instrument-6', status: 'certified', unit_variance_within_tolerance: true, latest_source_document_id: 'doc-6', history_completeness: 'complete_from_inception' },
@@ -273,6 +273,7 @@ describe('loadHoldingsTable', () => {
           ii_benchmarks: { benchmark_key: 'TEST_LICENSED_INDEX_TRI', benchmark_label: 'Test Licensed Index TRI', return_type: 'TRI', licence_status: 'public_open', lifecycle_status: 'active' },
         },
       ],
+      __benchmark_access: [{ benchmark_id: 'bm-hypothetical-licensed', can_calculate: true, can_display: true, can_export: false, data_from: null, data_to: null }],
       ii_benchmark_series: [
         { benchmark_id: 'bm-hypothetical-licensed', series_date: '2020-01-01', value: 100 },
         { benchmark_id: 'bm-hypothetical-licensed', series_date: '2021-01-01', value: 110 },

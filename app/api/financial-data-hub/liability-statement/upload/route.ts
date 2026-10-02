@@ -8,6 +8,12 @@ import {
 } from '@/lib/financial-data-hub/services/liabilityStatementProcessingService';
 import { FdhUploadLifecycleError } from '@/lib/financial-data-hub/services/uploadLifecycle';
 import { liabilityStatementUploadMetadataSchema } from '@/lib/financial-data-hub/validation/liabilityStatement';
+import {
+  assertNoIdenticalDocumentWithDifferentOwner,
+  documentOwnerConflictResponse,
+  recordDocumentOwner,
+  resolveUploadOwnerFromUrl,
+} from '@/lib/financial-data-hub/services/documentOwnerRequest';
 
 const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['text/csv'];
 
@@ -50,6 +56,12 @@ export async function POST(req: Request) {
   const parsed = liabilityStatementUploadMetadataSchema.safeParse(metadataInput);
   if (!parsed.success) return bad(parsed.error.issues[0]?.message ?? 'Invalid request', 422);
 
+  // Owner-before-upload (Phase 2): REQUIRED and validated before the file is read. Only owners the
+  // canonical Liabilities model separates correctly today (self / spouse / joint household / SMSF in
+  // Australia); company, trust and HUF debt is refused so no entity debt can enter personal DTI / DSR.
+  const ownerRequest = await resolveUploadOwnerFromUrl(user.id, url, 'liability');
+  if (!ownerRequest.ok) return ownerRequest.response;
+
   const contentLength = Number(req.headers.get('content-length') ?? '0');
   if (!contentLength || contentLength <= 0) return bad('File upload incomplete.', 422);
   if (contentLength > HARD_MAX_BYTES) return bad('File too large.', 413);
@@ -59,6 +71,7 @@ export async function POST(req: Request) {
   if (bytes.byteLength === 0) return bad('File upload incomplete.', 422);
 
   try {
+    await assertNoIdenticalDocumentWithDifferentOwner(user.id, bytes, ['credit_card_statement', 'loan_statement'], ownerRequest.owner);
     const result = await uploadAndProcessLiabilityStatement(
       user.id,
       {
@@ -79,6 +92,7 @@ export async function POST(req: Request) {
       },
       bytes,
     );
+    await recordDocumentOwner(user.id, result.document.id, ownerRequest.owner);
     // On a duplicate-whole-document upload, `result.document` is a NEW
     // document row that intentionally has no `fdh_liability_statements` row
     // of its own (uploadAndProcessLiabilityStatement never re-persists
@@ -97,6 +111,7 @@ export async function POST(req: Request) {
       // rule -- never the copy, which has nothing of its own to review.
       result.duplicateOfDocumentId ?? result.document.id;
     return ok({
+      owner_role: ownerRequest.owner.ownerRole,
       document_id: reviewDocumentId,
       duplicate_of_document_id: result.duplicateOfDocumentId ?? null,
       processing_status: result.document.processing_status,
@@ -113,6 +128,8 @@ export async function POST(req: Request) {
       ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
+    const ownerConflict = documentOwnerConflictResponse(e);
+    if (ownerConflict) return ownerConflict;
     if (e instanceof LiabilityStatementProcessingError) {
       const status = e.code === 'not_found' ? 404 : e.code === 'wrong_document_type' ? 422 : e.code === 'invalid_state' ? 409 : 500;
       return bad(e.message, status);

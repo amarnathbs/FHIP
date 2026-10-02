@@ -26,6 +26,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
+import { ensurePublishedValuesCurrent, valueSnapshotAtCurrentNav, type PublicationCurrentValuation } from './publishedValueRemark';
+import { loadAccountOwnership } from './accountOwnership';
+import type { AccountOwnership } from './ownerModel';
 import { getFxRateAudInr } from '@/lib/services/dashboardData';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { fetchAllRows } from './pagination';
@@ -72,6 +75,7 @@ interface HoldingSnapshotRow {
   account_id: string;
   instrument_id: string;
   as_of_date: string;
+  units: number | string;
   value: number;
   currency_code: string;
   quality_status: string;
@@ -173,6 +177,12 @@ export interface PublicationPreview {
   sourceCurrency: string | null;
   valuationAsOfDate: string | null;
   certifiedValue: number | null;
+  /**
+   * 2026-10-02: what Net Worth will actually count for this position (units x latest eligible NAV, or the
+   * certified statement value, labelled), with its NAV date. null for a non-mutual-fund or when NAVs cannot
+   * be read. `certifiedValue` stays the immutable certified statement value.
+   */
+  currentValuation: PublicationCurrentValuation | null;
   costBaseStatus: string;
   costBaseValue: number | null;
   annualContributionStatus: 'confirmed_user_plan' | 'none';
@@ -193,6 +203,8 @@ interface PositionContext {
   instrument: IiInstrumentRow;
   truth: PortfolioTruthRow | null;
   member: HouseholdMemberRow | null;
+  /** 2026-10-01: the account's EFFECTIVE owner (sole member / entity / joint split / unassigned). */
+  ownership: AccountOwnership;
   openLots: TaxLotRow[];
   hasBlockingReconciliation: boolean;
 }
@@ -200,7 +212,7 @@ interface PositionContext {
 async function loadPositionContext(supabase: SupabaseServerClient, userId: string, positionId: string): Promise<PositionContext | { error: string }> {
   const { data: snapshotRaw, error: snapErr } = await supabase
     .from('ii_holding_snapshots')
-    .select('id, account_id, instrument_id, as_of_date, value, currency_code, quality_status, created_at')
+    .select('id, account_id, instrument_id, as_of_date, units, value, currency_code, quality_status, created_at')
     .eq('id', positionId)
     .eq('user_id', userId)
     .maybeSingle();
@@ -225,9 +237,17 @@ async function loadPositionContext(supabase: SupabaseServerClient, userId: strin
   const instrument = instrumentRaw as unknown as IiInstrumentRow;
   const truth = (truthRaw as unknown as PortfolioTruthRow | null) ?? null;
 
+  // Effective ownership: an active entity / joint allocation group decides
+  // when present (owner_member_id is null for those, by design); otherwise the
+  // sole-member pointer. Anything unreadable falls back to the pointer alone,
+  // i.e. exactly the pre-2026-10-01 behaviour.
+  const loadedOwnership = await loadAccountOwnership(supabase, userId, account.id);
+  const ownership: AccountOwnership = loadedOwnership?.ownership ?? (account.owner_member_id ? { kind: 'member', shares: [{ memberId: account.owner_member_id, basisPoints: 10000 }], hasEntity: false } : { kind: 'unassigned' });
+  const soleMemberId = ownership.kind === 'member' ? (ownership.shares[0].memberId ?? null) : null;
+
   let member: HouseholdMemberRow | null = null;
-  if (account.owner_member_id) {
-    const { data } = await supabase.from('household_members').select('id, relationship, full_name').eq('id', account.owner_member_id).eq('user_id', userId).maybeSingle();
+  if (soleMemberId) {
+    const { data } = await supabase.from('household_members').select('id, relationship, full_name').eq('id', soleMemberId).eq('user_id', userId).maybeSingle();
     member = (data as unknown as HouseholdMemberRow | null) ?? null;
   }
 
@@ -257,8 +277,17 @@ async function loadPositionContext(supabase: SupabaseServerClient, userId: strin
     .eq('severity', 'blocking')
     .maybeSingle();
 
-  return { snapshot, account, instrument, truth, member, openLots: (openLotsRaw as unknown as TaxLotRow[]) ?? [], hasBlockingReconciliation: !!blockingCase };
+  return { snapshot, account, instrument, truth, member, ownership, openLots: (openLotsRaw as unknown as TaxLotRow[]) ?? [], hasBlockingReconciliation: !!blockingCase };
 }
+
+/** The owner ROLE a position is published under, from its effective ownership. A joint split between members only is published once as 'joint'; an entity-owned one is never published (eligibility blocks it first). */
+function resolvePublicationOwner(ctx: Pick<PositionContext, 'member' | 'ownership'>): FhipOwner | null {
+  if (ctx.member) return mapRelationshipToOwner(ctx.member.relationship);
+  if (ctx.ownership.kind === 'joint' && !ctx.ownership.hasEntity) return 'joint';
+  return null;
+}
+
+const eligibilityOwnership = (o: AccountOwnership) => ({ kind: o.kind, hasEntity: o.kind === 'unassigned' ? false : o.hasEntity });
 
 // ---------------------------------------------------------------------------
 // Eligibility (spec section 10) — read-only.
@@ -270,6 +299,7 @@ export async function checkEligibility(userId: string, positionId: string): Prom
 
   const eligibility = evaluateEligibility({
     ownerMemberId: ctx.member?.id ?? null,
+    ownership: eligibilityOwnership(ctx.ownership),
     instrumentClass: ctx.instrument.instrument_class as IiInstrumentClass,
     accountType: ctx.account.account_type,
     portfolioTruthStatus: ctx.truth?.status ?? 'pending',
@@ -296,6 +326,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
   const instrumentClass = instrument.instrument_class as IiInstrumentClass;
   const eligibility = evaluateEligibility({
     ownerMemberId: member?.id ?? null,
+    ownership: eligibilityOwnership(ctx.ownership),
     instrumentClass,
     accountType: account.account_type,
     portfolioTruthStatus: truth?.status ?? 'pending',
@@ -305,7 +336,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
     currencyCode: snapshot.currency_code,
   });
 
-  const resolvedOwner = member ? mapRelationshipToOwner(member.relationship) : null;
+  const resolvedOwner = resolvePublicationOwner(ctx);
   const masterItemKey = mapInstrumentClassToMasterItemKey(instrumentClass, account.country_code);
   const targetRegister = computePublicationTarget(instrumentClass, account.account_type);
 
@@ -355,14 +386,23 @@ export async function buildPreview(userId: string, positionId: string): Promise<
   const fxRate = await getFxRateAudInr(supabase);
   const { data: profile } = await supabase.from('user_profiles').select('preferred_currency').eq('user_id', userId).maybeSingle();
   const householdCurrency = (profile?.preferred_currency as string) ?? 'AUD';
-  const baseCurrency = computeBaseCurrencyPreview(snapshot.value, snapshot.currency_code, householdCurrency, fxRate);
+  // The figure Net Worth will count (NAV-valued), not just the frozen statement value.
+  const currentValuation = await valueSnapshotAtCurrentNav(supabase, userId, {
+    accountId: account.id,
+    instrumentId: instrument.id,
+    instrumentClass,
+    currencyCode: snapshot.currency_code,
+    snapshot: { asOfDate: snapshot.as_of_date, units: Number(snapshot.units), value: Number(snapshot.value) },
+  });
+  const countedValue = currentValuation?.value ?? snapshot.value;
+  const baseCurrency = computeBaseCurrencyPreview(countedValue, snapshot.currency_code, householdCurrency, fxRate);
 
   let financialImpact: IiFinancialImpact | null = null;
   if (eligibility.status !== 'NOT_ELIGIBLE') {
     const topCandidate = duplicateCandidates[0];
     financialImpact = calculateFinancialImpact({
-      currentIncludedValue: existingPub ? snapshot.value : topCandidate ? 0 : 0,
-      newPublishedValue: snapshot.value,
+      currentIncludedValue: existingPub ? countedValue : topCandidate ? 0 : 0,
+      newPublishedValue: countedValue,
       manualValueBeingSuperseded: 0, // preview shows 0 until the user CONFIRMS a specific link — never assumed
       currency: snapshot.currency_code,
     });
@@ -390,6 +430,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
       sourceCurrency: snapshot.currency_code,
       valuationAsOfDate: snapshot.as_of_date,
       certifiedValue: snapshot.value,
+      currentValuation,
       costBaseStatus,
       costBaseValue,
       annualContributionStatus: annualContribution.source,
@@ -436,6 +477,7 @@ export async function publishPosition(userId: string, positionId: string, option
   const instrumentClass = instrument.instrument_class as IiInstrumentClass;
   const eligibility = evaluateEligibility({
     ownerMemberId: member?.id ?? null,
+    ownership: eligibilityOwnership(ctx.ownership),
     instrumentClass,
     accountType: account.account_type,
     portfolioTruthStatus: truth?.status ?? 'pending',
@@ -473,7 +515,7 @@ export async function publishPosition(userId: string, positionId: string, option
   }
 
   // Duplicate review gate (spec section 11 — controlled flow, never silent).
-  const resolvedOwner = member ? mapRelationshipToOwner(member.relationship) : null;
+  const resolvedOwner = resolvePublicationOwner(ctx);
   const masterItemKey = mapInstrumentClassToMasterItemKey(instrumentClass, account.country_code);
   let duplicateCandidates: IiDuplicateCandidate[] = [];
   if (!options.linkToExistingInvestmentId && resolvedOwner) {
@@ -650,6 +692,13 @@ export async function publishPosition(userId: string, positionId: string, option
   // checks rely on.
   await supabase.from('investments').update({ ii_publication_id: pub.id }).eq('id', publishedRowId).eq('user_id', userId);
 
+  // 2026-10-01 (PO): Net Worth follows the latest eligible NAV. The publication
+  // row above keeps the certified statement value as immutable evidence; this
+  // brings the ONE register row it owns to units x latest eligible NAV (or leaves
+  // the statement value, labelled, when no newer NAV exists). Updates in place,
+  // never inserts, so "exactly once" is untouched. Fail-soft.
+  await ensurePublishedValuesCurrent(userId, supabase, 'publish', [publishedRowId]);
+
   await emitAuditEvent({
     userId,
     eventType: 'publication_confirmed',
@@ -659,7 +708,16 @@ export async function publishPosition(userId: string, positionId: string, option
     metadata: { positionId, publishedRowId, target, action, correlationId: options.correlationId ?? null },
   });
 
-  const financialImpact = calculateFinancialImpact({ currentIncludedValue: action === 'REPLACE_LINK_EXISTING' ? manualValueBeingSuperseded : 0, newPublishedValue: snapshot.value, manualValueBeingSuperseded, currency: snapshot.currency_code });
+  // The value Net Worth now counts for this row (NAV-valued), read back; the certified value if it cannot be read.
+  let countedNow = snapshot.value;
+  try {
+    const { data: marked } = await supabase.from('investments').select('current_value').eq('id', publishedRowId).eq('user_id', userId).maybeSingle();
+    const n = Number((marked as { current_value?: unknown } | null)?.current_value);
+    if (marked && Number.isFinite(n)) countedNow = n;
+  } catch {
+    /* keep the certified value */
+  }
+  const financialImpact = calculateFinancialImpact({ currentIncludedValue: action === 'REPLACE_LINK_EXISTING' ? manualValueBeingSuperseded : 0, newPublishedValue: countedNow, manualValueBeingSuperseded, currency: snapshot.currency_code });
 
   return { publicationId: pub.id as string, publishedRowId, action, financialImpact, error: null };
 }
@@ -803,6 +861,9 @@ export async function republishPosition(userId: string, publicationId: string): 
   const { error: updErr } = await supabase.from('ii_fhip_publications').update({ status: 'published', last_republished_at: new Date().toISOString() }).eq('id', publicationId).eq('user_id', userId);
   if (updErr) return { error: updErr.message, publicationId: null };
 
+  // 2026-10-01 (PO): re-apply the latest-eligible-NAV valuation to the re-activated row (never an insert).
+  await ensurePublishedValuesCurrent(userId, supabase, 'republish', [pub.published_row_id as string]);
+
   await emitAuditEvent({ userId, eventType: 'publication_republished', subjectType: 'ii_fhip_publications', subjectId: publicationId, actorType: 'user', metadata: { publishedRowId: pub.published_row_id } });
   return { error: null, publicationId };
 }
@@ -931,6 +992,9 @@ export async function refreshPosition(userId: string, newPositionId: string): Pr
     await emitAuditEvent({ userId, eventType: 'publication_failed', subjectType: 'investments', subjectId: active.published_row_id as string, actorType: 'system', metadata: { reason: `investments row update failed after publication row was already created: ${investUpdateErr.message}`, publicationId: newPub.id } });
     return { error: `Refresh partially completed — the publication record was created (id=${newPub.id}) but the investments row could not be updated: ${investUpdateErr.message}. Manual reconciliation required.`, publicationId: newPub.id as string, decision: decision.action };
   }
+
+  // 2026-10-01 (PO): the new certified position (its own units) is re-valued at the latest eligible NAV newer than it.
+  await ensurePublishedValuesCurrent(userId, supabase, 'refresh', [active.published_row_id as string]);
 
   await emitAuditEvent({ userId, eventType: 'publication_refreshed', subjectType: 'ii_fhip_publications', subjectId: newPub.id as string, actorType: 'user', metadata: { previousPublicationId: active.id, decision: decision.action } });
   await emitAuditEvent({ userId, eventType: 'publication_superseded', subjectType: 'ii_fhip_publications', subjectId: active.id as string, actorType: 'system', metadata: { supersededBy: newPub.id } });

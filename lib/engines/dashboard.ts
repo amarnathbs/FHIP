@@ -3,6 +3,7 @@ import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems } from './businessEntityValuation';
 import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
 import { debtServiceClassFor, isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
+import type { PublishedValuationSummary } from './investment-intelligence/valuation/publishedRowRemark';
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the subset of each register's columns the dashboard uses)
@@ -145,6 +146,12 @@ export interface CanonicalCashFlowInput {
   /** D-05 / D-04 evidence buckets, shown but never inside Net Worth. */
   importedNotInNetWorth: { label: string; count: number; total: number } | null;
   bankBalanceEvidence: { label: string; count: number; total: number } | null;
+  /**
+   * 2026-10-01: how the published mutual funds inside Net Worth were valued
+   * (latest NAV / statement value / redeemed / stale, and the as-of range).
+   * Null = none published. Disclosure only: never an input to a total.
+   */
+  publishedValuation?: PublishedValuationSummary | null;
 }
 
 /**
@@ -167,6 +174,7 @@ export interface DashboardDataStatus {
   window: CanonicalCashFlowInput['window'];
   importedNotInNetWorth: CanonicalCashFlowInput['importedNotInNetWorth'];
   bankBalanceEvidence: CanonicalCashFlowInput['bankBalanceEvidence'];
+  publishedValuation: PublishedValuationSummary | null;
   /** Retirement contributions with no frequency: shown, never assumed monthly (GAP-RET-02). */
   retirementContributionFrequencyUnknown: number;
   /** D-07 review prompts: imported income credits that look like a planned source. */
@@ -1557,6 +1565,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       window: input.canonical?.window ?? null,
       importedNotInNetWorth: input.canonical?.importedNotInNetWorth ?? null,
       bankBalanceEvidence: input.canonical?.bankBalanceEvidence ?? null,
+      publishedValuation: input.canonical?.publishedValuation ?? null,
       retirementContributionFrequencyUnknown,
       possibleDuplicateIncomeCount: cf.possibleDuplicateIncomeCount,
       unknownPendingCount: cf.unknownPendingCount,

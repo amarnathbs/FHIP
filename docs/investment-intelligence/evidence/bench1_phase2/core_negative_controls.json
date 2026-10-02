@@ -1,0 +1,417 @@
+{
+  "generatedBy": "scripts/bench1_core_negative_controls.mjs",
+  "note": "One rule broken at a time; the named test file was run; the file was restored byte-exactly.",
+  "results": [
+    {
+      "id": "ENT-01",
+      "rule": "a draft or revoked entitlement grants nothing",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/entitlements.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "H: fail closed draft and revoked records grant nothing"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ENT-02",
+      "rule": "the variant must equal the catalogue variant (a price entitlement is not a TRI entitlement)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/entitlements.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "H: fail closed variant mismatch (a PRICE entitlement is not a TRI entitlement) and currency mismatch grant nothing"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ENT-03",
+      "rule": "post-expiry retention never applies before the term starts",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/entitlements.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "H: term, post-expiry retention and data-date scope before valid_from nothing is granted"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ENT-04",
+      "rule": "a customer-visible comparison needs the DISPLAY right as well as calculation",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/entitlements.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "H: rights are separate storage + calculation without ingestion cannot publish; without display cannot show a comparison; without export cannot export",
+        "H: rights are separate the action table is the documented one"
+      ],
+      "failingCount": 2
+    },
+    {
+      "id": "ENT-05",
+      "rule": "a manual-ingest licence is not automation permission",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/entitlements.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "H: rights are separate a manual-ingest licence is NOT automation permission"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ENT-06",
+      "rule": "data-date scope is enforced (a range outside the entitled range is refused)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/entitlements.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "H: term, post-expiry retention and data-date scope data-date scope: a requested range outside the entitled range is refused, inside is allowed",
+        "H: term, post-expiry retention and data-date scope any ONE sufficient record is enough, but a record with the right for the wrong scope is not combined with another"
+      ],
+      "failingCount": 2
+    },
+    {
+      "id": "ACC-01",
+      "rule": "consumer gate fails closed for an unknown benchmark",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkAccess.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "consumer gate (benchmarkAccess): fail closed, scope clamp, honest reasons undefined access (unknown benchmark) is no access for every need"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ACC-02",
+      "rule": "an entitlement lookup failure blocks everything (never a partial grant)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkAccess.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "consumer gate (benchmarkAccess): fail closed, scope clamp, honest reasons loadBenchmarkAccess: an RPC error blocks EVERYTHING (empty map + error), a missing function likewise"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ACC-03",
+      "rule": "series outside the entitled data-date scope are dropped",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkAccess.ts",
+      "testFile": "tests/unit/benchmarkDataEntitlements.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "consumer gate (benchmarkAccess): fail closed, scope clamp, honest reasons series points outside the entitled data-date scope are dropped; with no access nothing is returned"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ING-01",
+      "rule": "the global kill switch stops everything before any other read",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J gates: nothing is fetched or written unless EVERY gate holds global kill switch OFF: no entitlement read, no lease, no fetch, no write, no attempt recorded"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ING-02",
+      "rule": "the central entitlement (automation + storage) gates every run",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J gates: nothing is fetched or written unless EVERY gate holds NO automation entitlement (a manual-ingest licence only): skipped_not_entitled, no lease, no fetch",
+        "J gates: nothing is fetched or written unless EVERY gate holds entitlement revoked / expired / wrong variant: skipped_not_entitled"
+      ],
+      "failingCount": 2
+    },
+    {
+      "id": "ING-03",
+      "rule": "single-flight lease: an overlapping run is refused",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J gates: nothing is fetched or written unless EVERY gate holds overlapping jobs: when the lease is held by another runner nothing is fetched (single-flight)",
+        "J gates: nothing is fetched or written unless EVERY gate holds the lease is ALWAYS released, even when the adapter throws"
+      ],
+      "failingCount": 2
+    },
+    {
+      "id": "ING-04",
+      "rule": "the write kill switch makes a run a dry run (nothing written)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J gates: nothing is fetched or written unless EVERY gate holds WRITE kill switch OFF: the source is fetched and validated but NOTHING is written (dry_run, not success)"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ING-05",
+      "rule": "HTTP 200 with no expected data is NOT success unless coverage is already complete",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J success is honest HTTP 200 with NO expected data is NOT success while coverage is behind (empty_response, failure counted, backoff set)"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ING-06",
+      "rule": "a source refusal (403/captcha) stops the run (no probing of further benchmarks)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J success is honest blocked (403/captcha): STOP - the run records blocked, makes one request and skips later benchmarks"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ING-07",
+      "rule": "an implausible (>25%) value is never written",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J success is honest implausible rows (>25% spike) and invalid rows are never written; the run is partial, not success, and a critical alert is raised"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ING-08",
+      "rule": "manual-import benchmarks are never fetched",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J gates: nothing is fetched or written unless EVERY gate holds manual_import / disabled benchmarks are skipped as source-disabled without any request (and a skip is not an attempt)",
+        "J gates: nothing is fetched or written unless EVERY gate holds the per-benchmark SOURCE switch (automation_enabled=false) stops the run even in automated mode"
+      ],
+      "failingCount": 2
+    },
+    {
+      "id": "ING-09",
+      "rule": "the daily late-retry budget is bounded",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J success is honest late publication: the daily retry budget is bounded (late_retry is skipped once the budget is spent)"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ING-10",
+      "rule": "a backoff window is honoured",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/orchestrator.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "J gates: nothing is fetched or written unless EVERY gate holds backoff window active: skipped_backoff; expired backoff runs"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "CAL-01",
+      "rule": "gap tolerance is bounded (a long gap stops the completeness watermark)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/calendar.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "watermarks and the calendar completeness: full coverage -> watermark = last date; a short gap (<= 3 weekdays) is tolerated and disclosed; a long gap stops the watermark before it",
+        "watermarks and the calendar a leading gap (history missing at the start) or no data at all gives a NULL watermark (never a claim of coverage)",
+        "manual-import mode: pending-import task (never described as automatic) history missing at the start makes an otherwise current benchmark DUE"
+      ],
+      "failingCount": 3
+    },
+    {
+      "id": "PND-01",
+      "rule": "a manual import becomes OVERDUE past the threshold",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/pending.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "manual-import mode: pending-import task (never described as automatic) current / due / overdue by weekdays behind the expected session"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "PND-02",
+      "rule": "a benchmark never imported is reported as never_imported (not current)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/pending.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "manual-import mode: pending-import task (never described as automatic) never imported => never_imported (critical when demand exists), with an upload instruction that says manual"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "DEM-01",
+      "rule": "only HELD schemes create benchmark demand (no full-universe backfill)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/demand.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "I selective-history demand: aggregated by exact benchmark, mapping-bounded, no full-universe backfill NOT held, or with no dated history, creates NO demand (no full-universe backfill)"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "DEM-02",
+      "rule": "mapping-effective periods bound the demand",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/demand.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "I selective-history demand: aggregated by exact benchmark, mapping-bounded, no full-universe backfill mapping-effective periods bound the demand: a mapping that ended before the scheme history began creates none; a later start clamps the window"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "ENV-01",
+      "rule": "a DEV job cannot ingest into another project (environment ref guard)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/ingestion/liveDeps.ts",
+      "testFile": "tests/unit/benchmarkDataIngestion.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "environment guard: a DEV job can never write production and vice versa refuses when the project ref is not configured, absent, or different from the connected project"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "API-01",
+      "rule": "a CORRECTION publish needs the correct capability (not the publish capability)",
+      "mutatedFile": "app/api/admin/investment-intelligence/benchmark-data/jobs/[id]/publish/route.ts",
+      "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/publish (correction job): holder of ONLY publish -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/publish (correction job): holder of ONLY correct -> passes the guard",
+        "s5 separation of duties across capabilities a publisher cannot publish a CORRECTION job and a corrector cannot publish NEW history"
+      ],
+      "failingCount": 3
+    },
+    {
+      "id": "API-02",
+      "rule": "the guard denies a caller lacking the capability",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/guards.ts",
+      "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET overview: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload: holder of ONLY view -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload: holder of ONLY publish -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload: holder of ONLY correct -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload: holder of ONLY catalogue -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload: holder of ONLY entitlementApprove -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload/inspect: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload/inspect: holder of ONLY view -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload/inspect: holder of ONLY publish -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload/inspect: holder of ONLY correct -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload/inspect: holder of ONLY catalogue -> 403"
+      ],
+      "failingCount": 97
+    },
+    {
+      "id": "API-03",
+      "rule": "unauthenticated callers get 401",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/guards.ts",
+      "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET overview: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload/inspect: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET jobs: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET jobs/[id]: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET jobs/[id]/errors: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/publish (new_history job): unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/publish (correction job): unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/cancel: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/rollback: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET templates/[name]: unauthenticated -> 401",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET help: unauthenticated -> 401"
+      ],
+      "failingCount": 23
+    },
+    {
+      "id": "API-04",
+      "rule": "a role-resolution error fails closed",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/guards.ts",
+      "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET overview: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST upload/inspect: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET jobs: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET jobs/[id]: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET jobs/[id]/errors: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/publish (new_history job): authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/publish (correction job): authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/cancel: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/rollback: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET templates/[name]: authenticated with NO admin row -> 403 and no RPC",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) GET help: authenticated with NO admin row -> 403 and no RPC"
+      ],
+      "failingCount": 24
+    },
+    {
+      "id": "API-05",
+      "rule": "only a literal true is a grant",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/guards.ts",
+      "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "s13 fail closed a row missing the columns (migration 0241 not applied) grants nothing; a truthy non-true value grants nothing"
+      ],
+      "failingCount": 1
+    },
+    {
+      "id": "API-06",
+      "rule": "a stale-preview refusal maps to 409 (never success)",
+      "mutatedFile": "lib/services/investment-intelligence/benchmarkData/publishService.ts",
+      "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "publish failure mapping (the database is the authority; the route only translates) SQLSTATE 40001 -> HTTP 409 (stale) and never a success",
+        "publish failure mapping (the database is the authority; the route only translates) mapRpcError is total: every code maps to a typed failure"
+      ],
+      "failingCount": 2
+    },
+    {
+      "id": "API-07",
+      "rule": "the rollback route requires the correct capability",
+      "mutatedFile": "app/api/admin/investment-intelligence/benchmark-data/jobs/[id]/rollback/route.ts",
+      "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/rollback: holder of ONLY upload -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST jobs/[id]/rollback: holder of ONLY correct -> passes the guard",
+        "s5 separation of duties across capabilities an uploader (stage) cannot publish, rollback, approve an entitlement or edit the catalogue",
+        "validation, size and shape (422 / 413) after authorisation rollback needs a reason of >= 20 characters"
+      ],
+      "failingCount": 4
+    },
+    {
+      "id": "API-08",
+      "rule": "entitlement approval is its own capability",
+      "mutatedFile": "app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/approve/route.ts",
+      "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
+      "status": "DEMONSTRATED",
+      "failingTests": [
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST entitlements/[id]/approve: holder of ONLY catalogue -> 403",
+        "s2/s4: capability MATRIX - every route x every capability (each capability gates only its own routes) POST entitlements/[id]/approve: holder of ONLY entitlementApprove -> passes the guard",
+        "s5 separation of duties across capabilities a catalogue admin cannot approve an entitlement; an approver cannot propose one"
+      ],
+      "failingCount": 3
+    }
+  ]
+}

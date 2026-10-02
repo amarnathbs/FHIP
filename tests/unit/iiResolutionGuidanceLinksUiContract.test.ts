@@ -44,7 +44,11 @@ describe('Review Centre "Review statement" link is scoped to the actual statemen
   it('does not touch the per-case action buttons (Acknowledge/Dismiss/owner-assign) — additive only', () => {
     expect(src).toContain("onClick={() => act(item.id, 'acknowledge')}");
     expect(src).toContain("onClick={() => act(item.id, 'dismiss')}");
-    expect(src).toContain('onClick={() => assignOwner(item.id, subjectId as string)}');
+    // 2026-10-01: the one-click household-member "Assign" was replaced by the
+    // owner-change dialog (choose member / trust / HUF / company / joint split,
+    // then an explicit confirmation). Still a per-case action button.
+    expect(src).toContain('Choose the owner…');
+    expect(src).toContain('<OwnerChangeDialog');
   });
 });
 

@@ -1,0 +1,6 @@
+RETRIEVED 2026-10-01 ~08:20Z via curl, HTTP 200. URL: https://www.niftyindices.com/disclaimer
+D1: "No part of this Site or information contained herein may be reproduced, stored in a retrieval system or transmitted in any form..." without prior written permission of the Company or group company.
+D2: Use or distribution of index data and use of index data to create financial products require a licence from NSE Indices and/or third-party licensors.
+D3: Index returns are past performance; no investment advice; no guarantee of accuracy/completeness.
+D4: Products by third parties based on NSE indices are not sponsored/endorsed by NSE Indices (standard licensee disclaimer).
+D5: Marks may not be used without prior written permission or licence terms.

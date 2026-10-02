@@ -1,0 +1,6 @@
+Retrieved 2026-10-01 08:3xZ HTTP 200.
+F1 https://www.niftyindices.com/Factsheet/ind_nifty50.pdf dated September 30, 2026: Nifty 50 launch date April 22, 1996; base date November 03, 1995; base value 1000; calculation frequency real-time; index variants include Nifty 50 Total Returns Index (Gross and Net) and USD/JPY variants; returns table shows Price Return, Total Return, Net Total Return rows (QTD/YTD/1Y/5Y/Since inception). Factsheet carries a standard NSE Indices disclaimer (reference purposes only; no warranty).
+F2 https://www.niftyindices.com/resources/index-concepts/faqs: Nifty 50 history "available from 3 July 1990" (back-calculated, base for Nifty and Nifty TR is 3 Nov 1995 = 1000).
+F3 https://www.niftyindices.com/BenchmarkCodes/nifty_indices_benchmark_codes.pdf "List of Benchmark Codes and Names (As on September 30, 2026)": public list of NSE index benchmark codes, e.g. NSE_E_63 Nifty 500, NSE_E_59 Nifty 100, NSE_E_438 Nifty Midcap 150, NSE_E_416 Nifty Smallcap 250, NSE_E_60 Nifty 50, NSE_E_583 Nifty500 Multicap 50:25:25. Updated at least to 30 Sep 2026.
+F4 TRI start dates per index: NOT stated on pages read. (Only Nifty 50 TR base date/level facts above.)
+F5 Third-party GitHub notes describe an undocumented niftyindices.com data endpoint; NOT used, NOT evaluated, not an NSE statement of permission.

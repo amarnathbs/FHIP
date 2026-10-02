@@ -19,6 +19,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveOrCreateAccount } from './accountResolution';
+import { applyDocumentOwnerToAccounts, readDocumentOwner, saveOwnerReview, type ApplyAccount } from './documentOwner';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { normaliseSchemeName } from './parsers/textUtils';
 import { computeTransactionFingerprint } from './fingerprint';
@@ -28,6 +29,12 @@ import { recertifyPosition } from './documentProcessing';
 import { detectMissingTransactions } from './missingTransactionDetection';
 import { openReconciliationCase } from './reconciliationCases';
 import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
+import {
+  findResolvedAmbiguousInstrumentOverride,
+  auditUserResolvedAmbiguousInstrument,
+  type InstrumentResolutionSignature,
+  type AmbiguousInstrumentCandidate,
+} from './ambiguousInstrumentResolution';
 import { purgeSourceDocumentStorage } from './sourceDocumentPurge';
 import type { AieExtractedHolding } from './aiFallbackDocumentExtraction';
 import type { IiTransactionType, IiPlanType, IiOptionType } from './types';
@@ -82,7 +89,7 @@ export async function applyAiExtractionReview(userId: string, reviewId: string):
   if (reviewErr || !current) return { ok: false, error: 'AI extraction review not found.', code: 'not_found' };
   if (current.status !== 'pending_review') return { ok: false, error: `This review has already been ${current.status}.`, code: 'already_decided' };
 
-  const { data: doc } = await admin.from('ii_source_documents').select('country_code, owner_member_id').eq('id', current.source_document_id).eq('user_id', userId).maybeSingle();
+  const { data: doc } = await admin.from('ii_source_documents').select('*').eq('id', current.source_document_id).eq('user_id', userId).maybeSingle();
   if (!doc) return { ok: false, error: 'Source document not found.', code: 'not_found' };
 
   // 2026-09-25 (other-PDF AI proof): CLAIM FIRST, in one conditional update.
@@ -105,7 +112,7 @@ export async function applyAiExtractionReview(userId: string, reviewId: string):
   if (!review) return { ok: false, error: 'This review has already been decided.', code: 'already_decided' };
 
   try {
-    const result = await writeAcceptedReview(admin, userId, reviewId, review, doc as { country_code: string; owner_member_id: string | null });
+    const result = await writeAcceptedReview(admin, userId, reviewId, review, doc as { country_code: string; owner_member_id: string | null } & Record<string, unknown>);
     await purgeDecidedSourceDocument(admin, userId, review.source_document_id as string);
     return result;
   } catch (e) {
@@ -125,7 +132,7 @@ async function writeAcceptedReview(
   reviewId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   review: Record<string, any>,
-  doc: { country_code: string; owner_member_id: string | null },
+  doc: { country_code: string; owner_member_id: string | null } & Record<string, unknown>,
 ): Promise<ApplyAiExtractionReviewResult> {
   void reviewId;
   const countryCode = doc.country_code as string;
@@ -166,6 +173,7 @@ async function writeAcceptedReview(
   }));
 
   const accountsTouched = new Set<string>();
+  const accountsForOwner = new Map<string, ApplyAccount>();
   const schemesTouched = new Set<string>();
   let newTransactionsCount = 0;
   let duplicateTransactionsLinked = 0;
@@ -197,15 +205,37 @@ async function writeAcceptedReview(
     if (!resolvedAccount.accountId) continue;
     const accountId = resolvedAccount.accountId;
     accountsTouched.add(accountId);
+    if (!accountsForOwner.has(accountId)) {
+      accountsForOwner.set(accountId, { accountId, created: resolvedAccount.created, folioNumber: holding.folioNumber ?? null, institutionName: holding.amcName ?? null });
+    }
 
     const normalisedSchemeName = normaliseSchemeName(holding.schemeName);
+    const signature: InstrumentResolutionSignature = {
+      isin: holding.isin,
+      amfiSchemeCode: null,
+      normalisedSchemeName,
+      amcName: holding.amcName ?? null,
+      planType: 'not_applicable',
+      optionType: 'not_applicable',
+      countryCode,
+    };
+    // Document2 final closure #3 — same override consultation as
+    // documentProcessing.ts's deterministic path (see
+    // ambiguousInstrumentResolution.ts): an earlier explicit user resolution
+    // for this exact scheme always wins over resolveScheme()'s own
+    // deterministic (and therefore otherwise-repeating) ambiguity.
+    const overrideInstrumentId = await findResolvedAmbiguousInstrumentOverride(admin, userId, signature);
+
+    let instrumentId: string | null = overrideInstrumentId;
+    if (overrideInstrumentId) {
+      await auditUserResolvedAmbiguousInstrument(userId, overrideInstrumentId, null, holding.schemeName);
+    } else {
     const outcome = resolveScheme(
       { isin: holding.isin, amfiSchemeCode: null, internalProvisionalCode: null, normalisedSchemeName, amcName: holding.amcName ?? '', planType: 'not_applicable', optionType: 'not_applicable', countryCode },
       existingForResolution,
       aliasRows
     );
 
-    let instrumentId: string | null = null;
     if (outcome.kind === 'resolved') {
       instrumentId = outcome.instrumentId;
     } else if (outcome.kind === 'unresolved') {
@@ -241,15 +271,27 @@ async function writeAcceptedReview(
       }
     } else {
       // ambiguous — never guess; flag for a human, skip this holding.
+      const candidates: AmbiguousInstrumentCandidate[] = outcome.candidateInstrumentIds.map((id) => {
+        const found = existingForResolution.find((e) => e.instrumentId === id);
+        return {
+          instrumentId: id,
+          displayName: existingInstrumentRows.find((r) => r.id === id)?.instrument_name ?? holding.schemeName,
+          amcName: found?.amcName ?? null,
+          isin: found?.isin ?? null,
+          planType: found?.planType ?? null,
+          optionType: found?.optionType ?? null,
+        };
+      });
       await openReconciliationCase(userId, {
         subjectType: 'account',
         subjectId: accountId,
         discrepancyType: 'ambiguous_instrument',
         severity: 'high',
         sourceDocumentId: review.source_document_id as string,
-        details: { scheme: holding.schemeName, matchedVia: outcome.matchedVia, candidateInstrumentIds: outcome.candidateInstrumentIds, reason: outcome.reason, source: 'ai_extraction_review' },
+        details: { scheme: holding.schemeName, matchedVia: outcome.matchedVia, candidateInstrumentIds: outcome.candidateInstrumentIds, candidates, reason: outcome.reason, source: 'ai_extraction_review', signature },
       });
       continue;
+    }
     }
     if (!instrumentId) continue;
     schemesTouched.add(instrumentId);
@@ -416,6 +458,16 @@ async function writeAcceptedReview(
   // "this small top-up statement simply doesn't cover that far back",
   // exactly the same principle documentProcessing.ts's own step 6.5 already
   // applies.
+  // Owner-before-upload (Phase 1): apply the owner chosen at upload to the
+  // folios this accepted extraction created or touched -- BEFORE they are
+  // recertified below, so an entity- or jointly-owned account is not reported
+  // as having an unresolved owner. Never overwrites a different existing owner.
+  const chosenOwner = readDocumentOwner(doc as Record<string, unknown>);
+  if (chosenOwner) {
+    const ownerReview = await applyDocumentOwnerToAccounts(userId, review.source_document_id as string, chosenOwner, [...accountsForOwner.values()]);
+    await saveOwnerReview(userId, review.source_document_id as string, ownerReview);
+  }
+
   const periodStartIso = (review.statement_period_start as string | null) ?? null;
   const periodEndIso = (review.statement_period_end as string | null) ?? null;
   const missingCases = await detectMissingTransactions(

@@ -102,4 +102,40 @@ describe('resolveScheme (spec section 17 — priority-ordered deterministic reso
     const outcome = resolveScheme(baseQuery({ normalisedSchemeName: 'hdfc flexi cap fund - growth' }), existingOne, []);
     expect(outcome.kind).toBe('unresolved');
   });
+
+  // Document2 final non-benchmark closure #3 (2026-09-30) — REAL DEFECT
+  // FOUND AND FIXED: priority 4's own comment always said "+ AMC" but the
+  // filter never actually checked amcName, so two different fund houses
+  // publishing an identically-normalised scheme name/plan/option were
+  // spuriously reported AMBIGUOUS (or worse, silently cross-matched to the
+  // wrong AMC's instrument) even though the caller's own amcName field
+  // already disambiguates them.
+  it('priority 4 now genuinely disambiguates by AMC — two different AMCs with an identical name/plan/option resolve independently, not ambiguously', () => {
+    const twoAmcs: ExistingInstrumentForResolution[] = [
+      { ...existingOne[0], instrumentId: 'inst-hdfc', amcName: 'HDFC Mutual Fund', isin: null, amfiSchemeCode: null },
+      { ...existingOne[0], instrumentId: 'inst-sbi', amcName: 'SBI Mutual Fund', isin: null, amfiSchemeCode: null },
+    ];
+    const outcome = resolveScheme(baseQuery({ amcName: 'HDFC Mutual Fund' }), twoAmcs, []);
+    expect(outcome.kind).toBe('resolved');
+    if (outcome.kind === 'resolved') expect(outcome.instrumentId).toBe('inst-hdfc');
+
+    const other = resolveScheme(baseQuery({ amcName: 'SBI Mutual Fund' }), twoAmcs, []);
+    expect(other.kind).toBe('resolved');
+    if (other.kind === 'resolved') expect(other.instrumentId).toBe('inst-sbi');
+  });
+
+  it('priority 4 still treats a null (not-yet-known) amcName on an existing instrument as matching any AMC — never a new false negative', () => {
+    const unknownAmc: ExistingInstrumentForResolution[] = [{ ...existingOne[0], amcName: null, isin: null, amfiSchemeCode: null }];
+    const outcome = resolveScheme(baseQuery({ amcName: 'HDFC Mutual Fund' }), unknownAmc, []);
+    expect(outcome.kind).toBe('resolved');
+  });
+
+  it('priority 4 correctly reports AMBIGUOUS when two existing rows share the same AMC too (a real duplicate, not an AMC mixup)', () => {
+    const sameAmcTwice: ExistingInstrumentForResolution[] = [
+      { ...existingOne[0], instrumentId: 'inst-1', isin: null, amfiSchemeCode: null },
+      { ...existingOne[0], instrumentId: 'inst-2', isin: null, amfiSchemeCode: null },
+    ];
+    const outcome = resolveScheme(baseQuery(), sameAmcTwice, []);
+    expect(outcome.kind).toBe('ambiguous');
+  });
 });

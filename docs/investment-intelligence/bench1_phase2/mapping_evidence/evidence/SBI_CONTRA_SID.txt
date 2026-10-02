@@ -1,0 +1,6 @@
+DOCUMENT: SBI Contra Fund - SID
+URL: https://www.sbimf.com/docs/default-source/sif-forms/sid---sbi-contra-fund.pdf?sfvrsn=4a20c1ae_0
+DOCUMENT DATE: 2025-10-31
+RETRIEVED: 2026-10-01
+EXCERPT (short quote/paraphrase, <=30 words):
+'As per AMFI Tier I benchmark - BSE 500 TRI Index'; PRI composite until 2006-07-31, TRI from 01-Aug-06
