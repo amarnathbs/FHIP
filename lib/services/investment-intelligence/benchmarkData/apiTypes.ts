@@ -98,7 +98,7 @@ export interface BenchmarkOverviewRow {
 
 export interface OverviewResponse {
   state: 'ok' | 'unavailable';
-  /** Present when state is 'unavailable' (for example migration 0241 not applied). */
+  /** Present when state is 'unavailable' (for example migration 0239 not applied). */
   reason?: string;
   asOfDate: string;
   capabilities: BenchmarkCapabilityFlags;

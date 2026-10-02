@@ -1,8 +1,8 @@
 // BENCH-1 Phase 2 - the central entitlement evaluator (pure).
 //
 // Mirrors, line for line, the SQL functions benchmark_entitlement_grants() and
-// benchmark_right_allowed() of migration 0241 (a PGlite cross-check in
-// scripts/bench1_phase2_0241_pglite_verification.mjs and the unit tests keep
+// benchmark_right_allowed() of migration 0239 (a PGlite cross-check in
+// scripts/bench1_phase2_0239_pglite_verification.mjs and the unit tests keep
 // the two in agreement). The TypeScript copy exists because the CSV pipeline
 // preview, the recurring-ingestion orchestrator and the calculation / display /
 // export consumers must all ask THE SAME question the database answers at

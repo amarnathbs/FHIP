@@ -12,6 +12,7 @@ import { createLazyAieAiProvider } from '@/lib/aie/provider/providerFactory';
 import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
+import { recordIntakeOwnerSelection, resolveAieIntakeOwner } from '@/lib/aie/intakeOwner';
 
 import { classifyPdf } from '@/lib/financial-data-hub/bank-pdf/classification';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges, loadExistingAccountsForInstitutionCurrency } from '@/lib/financial-data-hub/bank-csv/repository';
@@ -94,6 +95,12 @@ export async function POST(req: Request) {
   if (!metadataParsed.success) return bad(metadataParsed.error.issues[0]?.message ?? 'Invalid request', 422);
   const metadata = metadataParsed.data;
 
+  // Owner-before-upload: who this statement belongs to is chosen BEFORE a byte is accepted (a missing or
+  // invalid owner is refused here, before the body is read). Entity-owned bank statements stay refused
+  // (PO-OBU-02); the accepted owner is re-validated at accept time and only then reaches the canonical write.
+  const ownerRequest = await resolveAieIntakeOwner(user.id, url, 'bank');
+  if (!ownerRequest.ok) return bad(ownerRequest.message, ownerRequest.status, ownerRequest.code);
+
   const contentLength = Number(req.headers.get('content-length') ?? '0');
   const maxBytes = DEFAULT_AIE_UPLOAD_LIMITS.maxBytesByMimeType['application/pdf'];
   if (!contentLength || contentLength <= 0) return bad('File upload incomplete.', 422);
@@ -123,6 +130,10 @@ export async function POST(req: Request) {
   // to re-supply it. See accept.ts's own header and repository.ts's
   // `recordFdhBankUploadMetadata` doc comment for the full rationale.
   await recordFdhBankUploadMetadata(intakeId, metadata);
+  if (!(await recordIntakeOwnerSelection(intakeId, user.id, ownerRequest.selection))) {
+    await updateIntakeStatus({ intakeId, toStatus: 'rejected', rejectionReason: 'owner_not_recorded' });
+    return bad('could not record the document owner', 500);
+  }
 
   const admission = validateUploadForAdmission({
     declaredMimeType: 'application/pdf',

@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadDevEnv, serviceClient } from './env.mjs';
 import { fixturePassword } from './users.mjs';
+import { flowForDocumentType, flowForUploadRoute, legacyOwnerRoleOf, resolveSyntheticOwner, routeHasOwner, routeWithOwner } from '../../lib/syntheticOwner.mjs';
 
 const SESSION_DIR = () => process.env.CERT_LEDGER_DIR ?? path.resolve(process.cwd(), '.canonical-cert');
 const sessionFile = (email) => path.join(SESSION_DIR(), `session-${email.replace(/[^a-z0-9._-]/gi, '_')}.json`);
@@ -90,15 +91,57 @@ export function browserCookieScript(session) {
     .join('\n');
 }
 
+const syntheticOwnerCache = new Map();
+
+/**
+ * Owner-before-upload. Every financial-document upload route now requires the owner chosen BEFORE the file is
+ * sent, so a journey that uploads must supply one. `api()` does that for the fixture user it is signed in as:
+ * a POST to an owner-required upload route (or an upload-session for an owner-bearing document type) gets a
+ * VALID synthetic owner -- Self by default, or the role a script asks for with `owner: 'spouse' | 'joint' |
+ * 'smsf' | {wire selection}`, or the retired loose `owner_role=<role>` query value, translated. Pass
+ * `owner: null` to send NO owner (the owner-required negative controls). A route that already carries an
+ * `owner` is never touched.
+ */
+async function withSyntheticOwner(email, method, route, opts) {
+  if (method !== 'POST' || opts.owner === null) return { route, opts };
+  const request = async (m, r, j) => {
+    const res = await rawApi(email, m, r, { port: opts.port, json: j });
+    return { status: res.status, json: res.json };
+  };
+  const resolve = async (role, flow) => {
+    const key = `${email}|${role}|${flow}`;
+    if (!syntheticOwnerCache.has(key)) syntheticOwnerCache.set(key, await resolveSyntheticOwner(request, role, flow));
+    return syntheticOwnerCache.get(key);
+  };
+  const wanted = async (flow, legacyRole) => (opts.owner && typeof opts.owner === 'object' ? opts.owner : resolve(typeof opts.owner === 'string' ? opts.owner : legacyRole ?? 'self', flow));
+
+  const uploadFlow = flowForUploadRoute(route);
+  if (uploadFlow && !routeHasOwner(route)) {
+    return { route: routeWithOwner(route, await wanted(uploadFlow, legacyOwnerRoleOf(route))), opts };
+  }
+  if (route.split('?')[0].endsWith('/documents/upload-sessions') && opts.json && typeof opts.json === 'object' && opts.json.owner === undefined) {
+    const flow = flowForDocumentType(opts.json.document_type);
+    if (flow) return { route, opts: { ...opts, json: { ...opts.json, owner: await wanted(flow, null) } } };
+  }
+  return { route, opts };
+}
+
 /**
  * Call the localhost app as the user. Returns {status, json, text, headers}.
  * @param {string} email
  * @param {string} method
  * @param {string} route
- * @param {{ port?: number, json?: unknown, body?: BodyInit, contentType?: string, headers?: Record<string, string> }} [opts]
+ * @param {{ port?: number, json?: any, body?: BodyInit, contentType?: string, headers?: Record<string, string>, owner?: null | string | object }} [opts]
  * @returns {Promise<{ status: number, json: any, text: string, headers: Headers }>}
  */
-export async function api(email, method, route, { port, json, body, contentType, headers = {} } = {}) {
+export async function api(email, method, route, opts = {}) {
+  const prepared = await withSyntheticOwner(email, method, route, opts);
+  const { owner: _owner, ...rest } = prepared.opts;
+  void _owner;
+  return rawApi(email, method, prepared.route, rest);
+}
+
+async function rawApi(email, method, route, { port, json, body, contentType, headers = {} } = {}) {
   const session = loadSession(email);
   const base = `http://127.0.0.1:${port ?? process.env.CERT_PORT ?? 3000}`;
   const init = { method, headers: { cookie: cookieHeader(session), ...headers }, redirect: 'manual' };

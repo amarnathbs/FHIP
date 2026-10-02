@@ -19,6 +19,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveOrCreateAccount } from './accountResolution';
+import { applyDocumentOwnerToAccounts, readDocumentOwner, saveOwnerReview, type ApplyAccount } from './documentOwner';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { normaliseSchemeName } from './parsers/textUtils';
 import { computeTransactionFingerprint } from './fingerprint';
@@ -88,7 +89,7 @@ export async function applyAiExtractionReview(userId: string, reviewId: string):
   if (reviewErr || !current) return { ok: false, error: 'AI extraction review not found.', code: 'not_found' };
   if (current.status !== 'pending_review') return { ok: false, error: `This review has already been ${current.status}.`, code: 'already_decided' };
 
-  const { data: doc } = await admin.from('ii_source_documents').select('country_code, owner_member_id').eq('id', current.source_document_id).eq('user_id', userId).maybeSingle();
+  const { data: doc } = await admin.from('ii_source_documents').select('*').eq('id', current.source_document_id).eq('user_id', userId).maybeSingle();
   if (!doc) return { ok: false, error: 'Source document not found.', code: 'not_found' };
 
   // 2026-09-25 (other-PDF AI proof): CLAIM FIRST, in one conditional update.
@@ -111,7 +112,7 @@ export async function applyAiExtractionReview(userId: string, reviewId: string):
   if (!review) return { ok: false, error: 'This review has already been decided.', code: 'already_decided' };
 
   try {
-    const result = await writeAcceptedReview(admin, userId, reviewId, review, doc as { country_code: string; owner_member_id: string | null });
+    const result = await writeAcceptedReview(admin, userId, reviewId, review, doc as { country_code: string; owner_member_id: string | null } & Record<string, unknown>);
     await purgeDecidedSourceDocument(admin, userId, review.source_document_id as string);
     return result;
   } catch (e) {
@@ -131,7 +132,7 @@ async function writeAcceptedReview(
   reviewId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   review: Record<string, any>,
-  doc: { country_code: string; owner_member_id: string | null },
+  doc: { country_code: string; owner_member_id: string | null } & Record<string, unknown>,
 ): Promise<ApplyAiExtractionReviewResult> {
   void reviewId;
   const countryCode = doc.country_code as string;
@@ -172,6 +173,7 @@ async function writeAcceptedReview(
   }));
 
   const accountsTouched = new Set<string>();
+  const accountsForOwner = new Map<string, ApplyAccount>();
   const schemesTouched = new Set<string>();
   let newTransactionsCount = 0;
   let duplicateTransactionsLinked = 0;
@@ -203,6 +205,9 @@ async function writeAcceptedReview(
     if (!resolvedAccount.accountId) continue;
     const accountId = resolvedAccount.accountId;
     accountsTouched.add(accountId);
+    if (!accountsForOwner.has(accountId)) {
+      accountsForOwner.set(accountId, { accountId, created: resolvedAccount.created, folioNumber: holding.folioNumber ?? null, institutionName: holding.amcName ?? null });
+    }
 
     const normalisedSchemeName = normaliseSchemeName(holding.schemeName);
     const signature: InstrumentResolutionSignature = {
@@ -453,6 +458,16 @@ async function writeAcceptedReview(
   // "this small top-up statement simply doesn't cover that far back",
   // exactly the same principle documentProcessing.ts's own step 6.5 already
   // applies.
+  // Owner-before-upload (Phase 1): apply the owner chosen at upload to the
+  // folios this accepted extraction created or touched -- BEFORE they are
+  // recertified below, so an entity- or jointly-owned account is not reported
+  // as having an unresolved owner. Never overwrites a different existing owner.
+  const chosenOwner = readDocumentOwner(doc as Record<string, unknown>);
+  if (chosenOwner) {
+    const ownerReview = await applyDocumentOwnerToAccounts(userId, review.source_document_id as string, chosenOwner, [...accountsForOwner.values()]);
+    await saveOwnerReview(userId, review.source_document_id as string, ownerReview);
+  }
+
   const periodStartIso = (review.statement_period_start as string | null) ?? null;
   const periodEndIso = (review.statement_period_end as string | null) ?? null;
   const missingCases = await detectMissingTransactions(

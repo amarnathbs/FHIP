@@ -66,6 +66,15 @@ interface HoldingRowView {
   returnPct: number | null;
   xirr: XirrOutcomeView;
   currencyCode: string;
+  // Document2 Finding #5 (2026-10-01): see holdingsRepository.ts. navDate/nav
+  // are the NAV that produced marketValue, dated by that NAV's own date.
+  valuationBasis?: 'market_nav' | 'statement' | 'redeemed' | 'unavailable';
+  navSource?: 'market' | 'statement' | null;
+  statementAsOfDate?: string | null;
+  statementNav?: number | null;
+  statementSuperseded?: boolean;
+  valuationStale?: boolean;
+  valuationNote?: string;
   dataQuality: DataQuality;
   // 2026-09-29 fix (resolution-guidance links): see holdingsRepository.ts's
   // matching field comment. Used below to link an 'unresolved' row straight
@@ -129,7 +138,7 @@ const QUALITY_BADGE: Record<DataQuality['status'], { label: string; className: s
   unresolved: { label: 'Data quality issue', className: 'bg-amber-50 text-amber-800 border-amber-200' },
 };
 
-export function HoldingsTable() {
+export function HoldingsTable({ ownerClass = 'all' }: { ownerClass?: string } = {}) {
   const [payload, setPayload] = useState<HoldingsApiPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,7 +148,7 @@ export function HoldingsTable() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/investment-intelligence/holdings');
+        const res = await fetch(ownerClass && ownerClass !== 'all' ? `/api/investment-intelligence/holdings?ownerClass=${encodeURIComponent(ownerClass)}` : '/api/investment-intelligence/holdings');
         const json = await res.json();
         if (cancelled) return;
         if (!res.ok) setError(json.error ?? 'Holdings could not be loaded.');
@@ -153,7 +162,7 @@ export function HoldingsTable() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerClass]);
 
   if (loading) return <p className="text-sm text-muted">Loading holdings…</p>;
   if (error) return <p className="rounded-card border border-risk bg-white p-4 text-sm text-risk">{error}</p>;
@@ -227,7 +236,23 @@ export function HoldingsTable() {
                   <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.registrar ?? '—'}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.costValue, h.currencyCode)}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{num(h.unitBalance)}</td>
-                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.navDate ? fmtDate(h.navDate, h.currencyCode) : '—'}</td>
+                  <td className="py-3 pr-4 text-muted whitespace-nowrap" title={h.valuationNote}>
+                    {h.navDate ? fmtDate(h.navDate, h.currencyCode) : '—'}
+                    {/* Document2 Finding #5: say where the NAV came from, so a
+                        statement NAV is never mistaken for the latest market
+                        NAV, and a stale one is never silently presented as
+                        current. The latest market NAV carries no tag — it is
+                        the normal case. */}
+                    {h.valuationBasis === 'statement' && (
+                      <span className="ml-1 inline-block rounded border border-line px-1 text-[10px] font-medium uppercase text-muted">Statement</span>
+                    )}
+                    {h.valuationBasis === 'redeemed' && (
+                      <span className="ml-1 inline-block rounded border border-line px-1 text-[10px] font-medium uppercase text-muted">Redeemed</span>
+                    )}
+                    {h.valuationStale && (
+                      <span className="ml-1 inline-block rounded border border-amber-200 bg-amber-50 px-1 text-[10px] font-medium uppercase text-amber-800">Stale</span>
+                    )}
+                  </td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{num(h.nav, 4)}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.marketValue, h.currencyCode)}</td>
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.gainLoss, h.currencyCode)}</td>

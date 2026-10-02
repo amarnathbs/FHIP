@@ -11,7 +11,15 @@
 
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { recordDocumentAuditEvent } from './auditLog';
-import { recordAccountOwner, type AccountOwnerWrite } from './accountOwner';
+import {
+  assertNoIdenticalUploadWithDifferentOwner,
+  assertNoSilentAccountOwnerChange,
+  recordBankOwner,
+  type BankOwnerWrite,
+  type BankUploadOptions,
+  type BankUploadOwner,
+  NO_OWNER_OUTCOME,
+} from './bankOwnerAttribution';
 import { financialAccountsRepository, institutionsRepository, reviewItemsRepository, statementUploadsRepository } from '../repositories';
 import { loadExistingAccountsForInstitutionCurrency } from '../bank-csv/repository';
 import { normaliseMaskedIdentifier, resolveAccountIdentity } from '../bank-csv/accountIdentity';
@@ -21,8 +29,8 @@ import type { FdhStatementUpload } from '../domain/types';
 export interface BankPdfUploadOutcome {
   document: FdhStatementUpload;
   accountResolution: 'reused' | 'created' | 'ambiguous';
-  /** WP-08 (D-10): whether the owner the user chose was stored. */
-  ownerRole: AccountOwnerWrite;
+  /** Owner-before-upload: how the owner the user chose was stored (see the CSV service). */
+  owner: { account: BankOwnerWrite | 'no_account'; document: 'recorded' | 'unavailable' | 'failed' };
 }
 
 /**
@@ -43,7 +51,17 @@ export async function uploadBankPdf(
   userId: string,
   metadata: BankCsvUploadMetadataInput,
   bytes: Uint8Array,
+  /** Owner-before-upload. `null` ONLY for the AIE bank intake path, which is a
+   * later phase and keeps its previous owner-less behaviour. */
+  owner: BankUploadOwner | null = null,
+  options: BankUploadOptions = {},
 ): Promise<BankPdfUploadOutcome> {
+  // Owner-before-upload: refuse BEFORE anything is stored (decisions 2 and 6).
+  if (owner) {
+    await assertNoIdenticalUploadWithDifferentOwner(userId, bytes, owner);
+    await assertNoSilentAccountOwnerChange(userId, metadata, owner, options);
+  }
+
   const { session } = await createUploadSession(userId, {
     source_type: 'pdf_native',
     document_type: 'bank_statement',
@@ -126,8 +144,6 @@ export async function uploadBankPdf(
     }
   }
 
-  const ownerRole = financialAccountId ? await recordAccountOwner(userId, financialAccountId, metadata.owner_role) : 'not_provided';
-
   const { data: finalDoc } = await statementUploadsRepository.update(userId, completed.id, {
     financial_account_id: financialAccountId,
     statement_period_start: metadata.statement_period_start ?? null,
@@ -135,5 +151,10 @@ export async function uploadBankPdf(
     original_filename_sanitised: metadata.original_filename_sanitised ?? null,
   } as never);
 
-  return { document: (finalDoc ?? completed) as FdhStatementUpload, accountResolution, ownerRole };
+  // Its own update, tolerant of a database one migration behind (see the CSV service).
+  const ownerOutcome = owner
+    ? await recordBankOwner({ userId, documentId: completed.id, accountId: financialAccountId, owner, options })
+    : NO_OWNER_OUTCOME;
+
+  return { document: (finalDoc ?? completed) as FdhStatementUpload, accountResolution, owner: ownerOutcome };
 }

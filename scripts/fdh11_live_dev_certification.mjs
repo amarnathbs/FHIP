@@ -20,6 +20,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -102,6 +103,8 @@ function csvBytes(text) {
 
 async function uploadCsv(cookie, kind, csvText, extra = {}) {
   const params = new URLSearchParams({ csv_kind: kind, currency_code: 'AUD', institution_name: 'LiveCertBroker', ...extra });
+  // Owner-before-upload: a valid synthetic owner for this fixture user.
+  params.set('owner', JSON.stringify(await resolveSyntheticOwner(fetchOwnerRequest(APP, cookie), 'self', 'au_investment')));
   return app(cookie, `/api/financial-data-hub/investment-statement/upload?${params.toString()}`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/csv' },

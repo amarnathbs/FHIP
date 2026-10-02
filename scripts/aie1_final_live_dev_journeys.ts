@@ -16,6 +16,7 @@ import { devFetch, BASE, ANON, env, recordArtefact, makeChecker, assertDev } fro
 import { nativePayslipPdf, aiNeededPayslipPdf, eicarCsv, AI_PAYSLIP_EXPECTED } from './aie1_final_fixtures';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fetchOwnerRequest, flowForDocumentType, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const APP = process.argv[2] ?? 'http://localhost:3961';
 const selected = new Set(process.argv.slice(3));
@@ -113,7 +114,8 @@ async function ledger() {
 async function uploadFdhPdf(u: U, documentType: string, bytes: Buffer, mime = 'application/pdf', sourceType = 'pdf_native') {
   const s = await app(u, '/api/financial-data-hub/documents/upload-sessions', {
     method: 'POST',
-    json: { document_type: documentType, source_type: sourceType, country_code: 'AU', declared_mime_type: mime, declared_file_size_bytes: bytes.length },
+    // Owner-before-upload: an owner-bearing document type needs the owner chosen before the session is opened.
+    json: { document_type: documentType, source_type: sourceType, country_code: 'AU', declared_mime_type: mime, declared_file_size_bytes: bytes.length, ...(flowForDocumentType(documentType) ? { owner: await resolveSyntheticOwner(fetchOwnerRequest(APP, u.cookie), 'self', flowForDocumentType(documentType)) } : {}) },
   });
   if (s.status !== 200) throw new Error(`session ${s.status} ${s.text.slice(0, 200)}`);
   const c = await app(u, `/api/financial-data-hub/documents/upload-sessions/${s.json.data.session_id}/complete`, { method: 'POST', body: new Uint8Array(bytes), headers: { 'Content-Type': mime } });
@@ -326,10 +328,12 @@ async function main() {
     const expected = JSON.parse(fs.readFileSync(`${fx}.expected.json`, 'utf8'));
     const form = new FormData();
     form.append('file', new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }), `${RUN}-cas.pdf`);
-    form.append('meta', JSON.stringify({ sourceKey: 'cams', documentType: 'cas_statement', countryCode: 'IN' }));
+    form.append('meta', JSON.stringify({ sourceKey: 'cams', documentType: 'cas_statement', countryCode: 'IN' })); // owner added below, once the user exists
     // II is IN-scoped; this user is re-homed to IN for this journey only.
     const inUser = await makeUser(`aie1-final-ii-${Date.now()}@fhip-test.invalid`, 'ii');
     await devFetch(`/rest/v1/user_profiles?user_id=eq.${inUser.id}`, { method: 'PATCH', body: { country_of_residence: 'IN' } });
+    const casOwner = await resolveSyntheticOwner(fetchOwnerRequest(APP, inUser.cookie), 'self', 'ii_cas'); // owner-before-upload
+    form.set('meta', JSON.stringify({ sourceKey: 'cams', documentType: 'cas_statement', countryCode: 'IN', owner: casOwner }));
     const upRes = await fetch(`${APP}/api/investment-intelligence/source-documents`, { method: 'POST', headers: { Cookie: inUser.cookie }, body: form });
     const upJson: any = await upRes.json().catch(() => null);
     const sdId = upJson?.data?.id;

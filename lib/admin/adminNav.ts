@@ -104,6 +104,14 @@ export const MARKET_INDEX_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Benchmark Data', href: '/admin/investment-intelligence/market-index-data' },
 ];
 
+// Admin Premium grant (migration 0231): the entitlement-management destination.
+// One real screen behind it. A SEPARATE group from every other capability: the
+// ability to allocate Premium (a money-affecting entitlement) is not implied by,
+// and does not imply, Resources, Reference Data, Look-Through or any other grant.
+export const ENTITLEMENT_ITEMS: { label: string; href: string }[] = [
+  { label: 'Premium Access', href: '/admin/entitlements' },
+];
+
 // -- Capability contract ---------------------------------------------------
 
 /**
@@ -142,12 +150,20 @@ export interface AdminCapabilities {
    * (Standard section 2).
    */
   marketIndexDataUpload: boolean;
-  /** BENCH-1 Phase 2 (migration 0241) - each independently named; none implies another or the upload capability. */
+  /** BENCH-1 Phase 2 (migration 0239) - each independently named; none implies another or the upload capability. */
   benchmarkDataView: boolean;
   benchmarkDataPublish: boolean;
   benchmarkDataCorrect: boolean;
   benchmarkCatalogueManage: boolean;
   benchmarkEntitlementApprove: boolean;
+  /**
+   * Admin Premium grant (migration 0231) — allocate / extend / revoke admin
+   * Premium. Backed by admin_users.can_manage_premium_entitlements and the
+   * is_premium_entitlement_admin() predicate. Deliberately NOT implied by
+   * `isAdmin` (Super Admin) and NOT implied by any other capability (Standard
+   * §2/§3).
+   */
+  entitlementManagement: boolean;
 }
 
 /**
@@ -170,6 +186,7 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   benchmarkDataCorrect: false,
   benchmarkCatalogueManage: false,
   benchmarkEntitlementApprove: false,
+  entitlementManagement: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -207,6 +224,7 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     benchmarkDataCorrect: readBooleanField(source, 'benchmarkDataCorrect'),
     benchmarkCatalogueManage: readBooleanField(source, 'benchmarkCatalogueManage'),
     benchmarkEntitlementApprove: readBooleanField(source, 'benchmarkEntitlementApprove'),
+    entitlementManagement: readBooleanField(source, 'entitlementManagement'),
   };
 }
 
@@ -259,6 +277,7 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.marketIndexDataUpload || capabilities.benchmarkDataView || capabilities.benchmarkDataPublish || capabilities.benchmarkDataCorrect || capabilities.benchmarkCatalogueManage || capabilities.benchmarkEntitlementApprove
       ? [{ label: 'Benchmark Data', items: MARKET_INDEX_DATA_ITEMS, matchMode: 'exact' as const }]
       : []),
+    ...(capabilities.entitlementManagement ? [{ label: 'Entitlements', items: ENTITLEMENT_ITEMS, matchMode: 'exact' as const }] : []),
   ];
 }
 

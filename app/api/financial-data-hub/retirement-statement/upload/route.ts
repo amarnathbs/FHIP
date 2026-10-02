@@ -9,6 +9,12 @@ import {
   retirementStatementUploadMetadataSchema as metadataSchema,
   currencyMatchesJurisdiction,
 } from '@/lib/financial-data-hub/validation/retirementStatement';
+import {
+  assertNoIdenticalDocumentWithDifferentOwner,
+  documentOwnerConflictResponse,
+  recordDocumentOwner,
+  resolveUploadOwnerFromUrl,
+} from '@/lib/financial-data-hub/services/documentOwnerRequest';
 
 // POST /api/financial-data-hub/retirement-statement/upload
 //
@@ -62,10 +68,17 @@ export async function POST(req: Request) {
     );
   }
 
+  // Owner-before-upload (Phase 2): the member the statement belongs to, REQUIRED and validated before
+  // the file is read. SMSF is not an owner label here: an SMSF follows the SMSF workspace model, so a
+  // statement must not be filed under it (that would create a second copy of SMSF value).
+  const ownerRequest = await resolveUploadOwnerFromUrl(user.id, url, 'retirement');
+  if (!ownerRequest.ok) return ownerRequest.response;
+
   const bytes = new Uint8Array(await req.arrayBuffer());
   if (bytes.byteLength === 0) return bad('The uploaded file was empty.', 400);
 
   try {
+    await assertNoIdenticalDocumentWithDifferentOwner(user.id, bytes, ['super_statement', 'epf_statement', 'nps_statement'], ownerRequest.owner);
     const result = await uploadAndProcessRetirementStatement(
       user.id,
       {
@@ -84,6 +97,7 @@ export async function POST(req: Request) {
       bytes,
     );
 
+    await recordDocumentOwner(user.id, result.document.id, ownerRequest.owner);
     return ok({
       // 2026-09-25: a byte-identical re-upload carries on with the ORIGINAL
       // upload (its statement, or its AI draft awaiting review). Returning
@@ -115,6 +129,8 @@ export async function POST(req: Request) {
       ai_fallback_draft: result.aiFallbackDraft ?? null,
     });
   } catch (e) {
+    const ownerConflict = documentOwnerConflictResponse(e);
+    if (ownerConflict) return ownerConflict;
     if (e instanceof RetirementStatementProcessingError) {
       return bad(e.message, e.code === 'not_found' ? 404 : 400);
     }

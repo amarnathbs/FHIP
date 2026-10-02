@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
+import type { OwnerBreakup } from '@/lib/services/investment-intelligence/ownerClass';
+import { loadOwnerClassScopeForReport } from '@/lib/services/investment-intelligence/ownerClassReportScope';
 import { loadDashboard, getFxRateAudInr, fetchAllRows, type SupabaseServerClient } from '@/lib/services/dashboardData';
 import { loadHealthScore, type HealthScorePayload } from '@/lib/services/healthScoreData';
 import { loadResilience, type ResiliencePayload } from '@/lib/services/resilienceData';
+import { ensurePublishedValuesCurrent } from '@/lib/services/investment-intelligence/publishedValueRemark';
 import { loadFinancialDna, type FinancialDnaPayload } from '@/lib/services/financialDnaData';
 import { computeGoalsPagePayload } from '@/lib/services/goalsData';
 import type { DashboardSummary } from '@/lib/engines/dashboard';
@@ -137,6 +140,12 @@ export interface PremiumSourceData {
   // hold India funds but the read failed; the section says so and shows no
   // partial table.
   indiaMf?: ReportIndiaMfData | null;
+  /**
+   * 2026-10-01 owner classes: every owner class as its own item + the explicit macro line (null when the
+   * household has a single owner class or the classes could not be read). When the user has trust / HUF /
+   * company holdings the four chapters above were produced WITHOUT them (see loadOwnerClassScopeForReport).
+   */
+  ownerBreakup?: OwnerBreakup | null;
 }
 
 export interface ReportSourceData {
@@ -280,6 +289,11 @@ export async function resolveReportSourceData(
   const supabase = client ?? (await createClient());
   const month = reportMonth ?? monthStart();
 
+  // 2026-10-01 (PO): published mutual funds are valued at the latest eligible
+  // NAV. Done BEFORE the parallel reads below so the premium register query and
+  // the canonical snapshot cannot disagree. Fail-soft and idempotent.
+  await ensurePublishedValuesCurrent(userId, supabase, 'report_read');
+
   const [profileRes, householdRes] = await Promise.all([
     supabase.from('user_profiles').select('full_name, country_of_residence, preferred_currency').eq('user_id', userId).single(),
     supabase.from('households').select('household_name, household_type, dependants_count').eq('user_id', userId).maybeSingle(),
@@ -335,6 +349,9 @@ export async function resolveReportSourceData(
   // just hidden in the UI, to avoid paying for data a free report never renders.
   let premium: PremiumSourceData | null = null;
   if (planTier === 'premium') {
+    // 2026-10-01 owner classes: entity-owned (trust / HUF / company) holdings are never silently summed into the
+    // personal chapters. A user with none gets the unscoped client: behaviour identical to before.
+    const iiScope = await loadOwnerClassScopeForReport(userId, supabase).catch(() => ({ client: supabase, breakup: null as OwnerBreakup | null }));
     const [
       investmentsRes,
       insuranceRes,
@@ -394,10 +411,10 @@ export async function resolveReportSourceData(
       // null internally (spec section 39) — the .catch() here is defence
       // in depth only, so one chapter's failure can never abort the whole
       // premium report generation.
-      loadInvestmentPerformanceForReport(userId, supabase).catch(() => null),
-      loadSipForReport(userId, supabase).catch(() => null),
-      loadXrayForReport(userId, supabase).catch(() => null),
-      loadTaxForReport(userId, supabase).catch(() => null),
+      loadInvestmentPerformanceForReport(userId, iiScope.client).catch(() => null),
+      loadSipForReport(userId, iiScope.client).catch(() => null),
+      loadXrayForReport(userId, iiScope.client).catch(() => null),
+      loadTaxForReport(userId, iiScope.client).catch(() => null),
       loadReviewItemsForReport(userId).catch(() => null),
       // India MF Investment Report. Returns null when the user holds no INR
       // mutual fund; its own try/catch turns a read failure into
@@ -433,6 +450,7 @@ export async function resolveReportSourceData(
       taxAndCost,
       reviewItems,
       indiaMf,
+      ownerBreakup: iiScope.breakup,
     };
   }
 

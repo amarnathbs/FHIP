@@ -50,6 +50,8 @@ import type { ParsedAccountRecord, ParsedInstrumentRecord } from './parsers/type
 import { matchStatementOwner, type Pc5HouseholdMemberForMatching } from '@/lib/aie/adapters/investment-intelligence/ownerMatching';
 import { loadHouseholdMembersForMatching } from '@/lib/aie/adapters/investment-intelligence/householdContext';
 import { resolveOrCreateAccount, planFolioAccountResolution } from './accountResolution';
+import { applyDocumentOwnerToAccounts, computeHolderNameWarnings, readDocumentOwner, saveOwnerReview, withoutAcknowledgedWarnings, type ApplyAccount, type OwnerReview } from './documentOwner';
+import { loadAccountOwnership, loadDecidedOwnershipAccountIds } from './accountOwnership';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { computeTransactionFingerprint } from './fingerprint';
 import { reconcilePosition, determineHistoryCompleteness, evaluateDerivedZeroUnitClosure, type ReconciliationTransactionInput } from './reconciliation';
@@ -574,6 +576,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // parsed evidence, keyed by DISTINCT (folio, amcName) pairs.
   const resolutionPlan = planFolioAccountResolution({ accounts: parsed.accounts, transactions: parsed.transactions, holdings: parsed.holdings });
   const accountIdByFolioAmc = new Map<string, string>(); // key = assignment.key (accountResolutionKey(folioNumber, amcName))
+  const resolvedAccountsForOwner: ApplyAccount[] = [];
   let reconciliationCasesOpened = 0;
 
   for (const assignment of resolutionPlan.assignments) {
@@ -589,12 +592,50 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     });
     if (resolved.accountId) {
       accountIdByFolioAmc.set(assignment.key, resolved.accountId);
+      resolvedAccountsForOwner.push({ accountId: resolved.accountId, created: resolved.created, folioNumber: assignment.folioNumber, institutionName: assignment.amcName });
       await emitAuditEvent({ userId, eventType: 'account_resolved', subjectType: 'ii_accounts', subjectId: resolved.accountId, actorType: 'system', metadata: { folioNumber: assignment.folioNumber, amcName: assignment.amcName, created: resolved.created, parseRunId } });
     }
   }
 
-  const ownerUnresolved = !doc.owner_member_id;
-  if (ownerUnresolved) {
+  // Owner-before-upload (Phase 1): a document uploaded with an owner chosen up
+  // front (owner_selection_source = 'user_selected') never raises owner_unmatched
+  // -- the owner is known. The chosen owner is applied to every folio (never
+  // overwriting a DIFFERENT existing owner; that is recorded for the user to
+  // confirm), and a printed holder name that disagrees is a NON-BLOCKING warning
+  // instead of a blocking case. Documents uploaded before this change carry no
+  // such owner and fall through to the unchanged legacy branches below.
+  // 2026-10-01 entity + joint owners: an account whose owner was DECIDED as a
+  // business entity or a joint split has `owner_member_id = null` BY DESIGN
+  // (the decision lives in the active `ii_ownership_allocation` group). A
+  // fresh statement for that same folio must not re-open owner_unmatched /
+  // joint_holding_allocation_required / owner_mismatch against it, nor count
+  // as "unresolved owner" for certification: the user has already decided.
+  const decidedOwnershipAccountIds = await loadDecidedOwnershipAccountIds(admin, userId, [...accountIdByFolioAmc.values()]);
+  // Both rules compose: a statement uploaded with an owner never raises owner_unmatched (the owner is known);
+  // an account whose owner was DECIDED as an entity / joint split is likewise never "unresolved".
+  const documentOwner = readDocumentOwner(doc as Record<string, unknown>);
+  const ownerUnresolved = !documentOwner && !doc.owner_member_id;
+  if (documentOwner) {
+    const ownerReview = await applyDocumentOwnerToAccounts(userId, sourceDocumentId, documentOwner, resolvedAccountsForOwner);
+    if (documentOwner.kind === 'member' && parsed.accounts.length > 0) {
+      // Advisory only: a printed holder name that disagrees with the chosen
+      // member is a NON-BLOCKING warning, never a case.
+      const membersForWarnings = await loadHouseholdMembersForMatching(userId);
+      ownerReview.warnings.push(
+        ...computeHolderNameWarnings({
+          declaredOwnerMemberId: documentOwner.ownerMemberId as string,
+          assignments: resolutionPlan.assignments.map((a) => ({ folioNumber: a.folioNumber, accountId: accountIdByFolioAmc.get(a.key) ?? null })),
+          parsedAccounts: parsed.accounts,
+          members: membersForWarnings,
+        })
+      );
+    }
+    // A folio the user already confirmed is sole-owned ("this is not joint") is not warned about again.
+    const acknowledged = ((doc as Record<string, unknown>).owner_review as OwnerReview | null)?.acknowledgedSoleOwner;
+    ownerReview.warnings = withoutAcknowledgedWarnings(ownerReview.warnings, acknowledged);
+    if (acknowledged?.length) ownerReview.acknowledgedSoleOwner = acknowledged;
+    await saveOwnerReview(userId, sourceDocumentId, ownerReview);
+  } else if (ownerUnresolved) {
     // 2026-09-29 fix: a statement can print a JOINT holding even when the
     // user declared NO owner at all at upload time. Before this fix, this
     // branch opened 'owner_unmatched' unconditionally for every account on
@@ -615,6 +656,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     for (const assignment of resolutionPlan.assignments) {
       const accountId = accountIdByFolioAmc.get(assignment.key);
       if (!accountId) continue;
+      if (decidedOwnershipAccountIds.has(accountId)) continue; // owner already decided as entity / joint split
       const acctRecord = accountRecordByFolioForJointCheck.get(assignment.folioNumber ?? '__no_folio__');
       if (acctRecord) {
         if (householdMembersForJointCheck === null) householdMembersForJointCheck = await loadHouseholdMembersForMatching(userId);
@@ -677,6 +719,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     for (const assignment of resolutionPlan.assignments) {
       const accountId = accountIdByFolioAmc.get(assignment.key);
       if (!accountId) continue;
+      if (decidedOwnershipAccountIds.has(accountId)) continue; // owner already decided as entity / joint split
       const acctRecord = accountRecordByFolio.get(assignment.folioNumber ?? '__no_folio__');
       if (!acctRecord) continue; // no per-account holder evidence printed at all for this folio — nothing to compare
       if (householdMembersForMatching === null) householdMembersForMatching = await loadHouseholdMembersForMatching(userId);
@@ -1411,7 +1454,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   for (const [key, instrumentId] of instrumentIdByKey) {
     void key;
     for (const [, accountId] of accountIdByFolioAmc) {
-      await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved, instrumentUnresolvedKeys.size > 0, parserHasFatalError);
+      await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved && !decidedOwnershipAccountIds.has(accountId), instrumentUnresolvedKeys.size > 0, parserHasFatalError);
     }
   }
 
@@ -1645,7 +1688,10 @@ export async function recertifyPosition(userId: string, accountId: string, instr
   const sourceDocumentId = (latestSnapshot?.source_document_id as string | null) ?? (account.source_document_id as string | null) ?? accountId;
 
   const config = await loadActiveReconciliationConfig();
-  const ownerUnresolved = !account.owner_member_id;
+  // An entity / joint owner is a DECIDED owner (owner_member_id is null by
+  // design) -- only a genuinely unassigned account is "unresolved".
+  const effectiveOwnership = await loadAccountOwnership(admin, userId, accountId);
+  const ownerUnresolved = effectiveOwnership ? effectiveOwnership.ownership.kind === 'unassigned' : !account.owner_member_id;
 
   const { data: instrumentCases } = await admin
     .from('ii_reconciliation_cases')

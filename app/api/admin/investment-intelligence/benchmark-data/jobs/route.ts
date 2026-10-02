@@ -14,7 +14,7 @@ export const GET = adminRoute(async () => {
     return ok(await listImportJobs(g.supabase, g.user.id, 50));
   } catch (e) {
     const err = e as { code?: string; message?: string };
-    if (isMissingRelation(err)) return Response.json({ error: 'The benchmark import tables are not available in this database (migration 0241 not applied).', code: 'unavailable' }, { status: 503 });
+    if (isMissingRelation(err)) return Response.json({ error: 'The benchmark import tables are not available in this database (migration 0239 not applied).', code: 'unavailable' }, { status: 503 });
     return safeDbError(err, 'benchmark import jobs');
   }
 });

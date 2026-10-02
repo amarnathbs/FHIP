@@ -33,6 +33,22 @@ export const PURGEABLE_STATEMENT_UPLOAD_COLUMNS = [
 ] as const satisfies readonly (keyof FdhStatementUpload)[];
 
 /**
+ * Columns on `fdh_statement_uploads` that must SURVIVE a purge. Owner-before-
+ * upload (migration 0236): who a document belongs to is a retained, privacy-safe
+ * fact about the derived data (it decides whether the statement counts to the
+ * household or to an SMSF), not part of the raw material the purge deletes.
+ * `buildStatementUploadPurgePatch` must never name any of these, and a test
+ * asserts it.
+ */
+export const PURGE_RETAINED_STATEMENT_UPLOAD_COLUMNS = [
+  'owner_member_id',
+  'owner_business_entity_id',
+  'owner_role',
+  'owner_selection_source',
+  'owner_allocation',
+] as const satisfies readonly (keyof FdhStatementUpload)[];
+
+/**
  * Columns on `fdh_transactions` that the purge lifecycle nulls once
  * normalisation has produced the retained equivalents (`description_clean`,
  * `merchant_id`). Each must remain nullable forever.

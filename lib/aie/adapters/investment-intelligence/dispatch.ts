@@ -142,6 +142,13 @@ export interface DispatchParams {
    * unresolved item rather than a guess.
    */
   ownerMemberId: string | null;
+  /**
+   * Owner-before-upload: true when the user chose an owner that is NOT a single household member (a Trust /
+   * Company / HUF, or a Joint split) before sending the file. The owner is then declared, so the blocking
+   * `owner_unresolved` item is not raised; the member-vs-printed-name comparison below still runs only for a
+   * member owner. Never defaulted: the intake route sets it from the validated owner.
+   */
+  ownerDeclared?: boolean;
   /** Supplied only by the unlock entry point. Never logged, never persisted,
    * never echoed, never sent to a provider. */
   password?: string;
@@ -163,6 +170,7 @@ export interface DispatchParams {
  */
 export async function dispatchInvestmentDocument(params: DispatchParams): Promise<DispatchOutcome> {
   const { intakeId, userId, storageKey, countryCode, ownerMemberId, password, deps } = params;
+  const ownerDeclared = !!ownerMemberId || params.ownerDeclared === true;
 
   // Registration is idempotent and safe to call per-request. Doing it here
   // rather than only at route module load is deliberate: the Insurance route
@@ -291,7 +299,7 @@ export async function dispatchInvestmentDocument(params: DispatchParams): Promis
     ...unresolvedItemsForAccountMatches(context.accountMatches.outcomes),
     ...unresolvedItemsForInstrumentMatches(context.instrumentMatches),
     ...unresolvedItemForStatementPeriod(checkStatementPeriod(parsed.metadata)),
-    ...(ownerMemberId ? [] : unresolvedItemForOwnerUnresolved(context.accountMatches.outcomes.length > 0)),
+    ...(ownerDeclared ? [] : unresolvedItemForOwnerUnresolved(context.accountMatches.outcomes.length > 0)),
     ...(ownerMatchForItems ? unresolvedItemForOwnerMismatch(ownerMatchForItems, ownerMemberId) : []),
   ];
 

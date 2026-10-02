@@ -5,6 +5,7 @@ import { uploadBankPdf } from '@/lib/financial-data-hub/services/bankPdfUploadSe
 import { FdhUploadLifecycleError } from '@/lib/financial-data-hub/services/uploadLifecycle';
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from '@/lib/financial-data-hub/services/identicalUpload';
 import { bankCsvUploadMetadataSchema } from '@/lib/financial-data-hub/validation/bankCsv';
+import { bankOwnerConflictResponse, resolveBankOwnerFromRequest } from '@/lib/financial-data-hub/services/bankOwnerRequest';
 
 const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['application/pdf'];
 
@@ -32,11 +33,15 @@ export async function POST(req: Request) {
     declared_masked_identifier: url.searchParams.get('masked_identifier') || undefined,
     statement_period_start: url.searchParams.get('statement_period_start') || undefined,
     statement_period_end: url.searchParams.get('statement_period_end') || undefined,
-    // WP-08 (D-10): whose account this is (self / spouse / joint / smsf).
-    owner_role: url.searchParams.get('owner_role') || undefined,
   };
   const parsed = bankCsvUploadMetadataSchema.safeParse(metadataInput);
   if (!parsed.success) return bad(parsed.error.issues[0]?.message ?? 'Invalid request', 422);
+
+  // Owner-before-upload (Phase 1): the owner is REQUIRED and validated here,
+  // server-side, before the body is even read (self / spouse / joint / smsf;
+  // entities are refused for bank statements -- see validateOwnerSelection).
+  const ownerRequest = await resolveBankOwnerFromRequest(user.id, url);
+  if (!ownerRequest.ok) return ownerRequest.response;
 
   const contentLength = Number(req.headers.get('content-length') ?? '0');
   if (!contentLength || contentLength <= 0) return bad('File upload incomplete.', 422);
@@ -47,7 +52,7 @@ export async function POST(req: Request) {
   if (bytes.byteLength === 0) return bad('File upload incomplete.', 422);
 
   try {
-    const { document, accountResolution, ownerRole } = await uploadBankPdf(user.id, parsed.data, bytes);
+    const { document, accountResolution, owner } = await uploadBankPdf(user.id, parsed.data, bytes, ownerRequest.owner, ownerRequest.options);
     // 2026-09-25: a byte-identical re-upload of a statement already imported
     // (or whose AI draft awaits review) is flagged here, so the panel goes
     // straight to the original instead of asking for a password or an account
@@ -64,10 +69,13 @@ export async function POST(req: Request) {
       // sensitive internals in a user-facing response).
       password_required: document.error_code === 'password_required',
       account_resolution: accountResolution,
-      owner_role_recorded: ownerRole,
+      owner_role: ownerRequest.owner.ownerRole,
+      owner_recorded: owner,
       financial_account_id: document.financial_account_id,
     });
   } catch (e) {
+    const ownerConflict = bankOwnerConflictResponse(e);
+    if (ownerConflict) return ownerConflict;
     if (e instanceof FdhUploadLifecycleError) {
       const status = e.code === 'not_found' ? 404 : e.code === 'rate_limited' ? 429 : e.code === 'upload_incomplete' ? 422 : 400;
       return bad(e.message, status);

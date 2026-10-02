@@ -5,7 +5,7 @@
 // Overview coverage, report sections) asks the SAME question through this
 // module: may this benchmark be used to CALCULATE and to DISPLAY a comparison
 // (and, for reports/exports, to EXPORT)? The answer comes from the database
-// function benchmark_entitled_actions() (migration 0241), which evaluates the
+// function benchmark_entitled_actions() (migration 0239), which evaluates the
 // per-right entitlement records - NOT from ii_benchmarks.licence_status, which
 // is a coarse legacy summary and grants nothing.
 //
@@ -42,6 +42,8 @@ export async function loadBenchmarkAccess(supabase: SupabaseClient, benchmarkIds
   if (ids.length === 0) return { access, error: null };
   for (let i = 0; i < ids.length; i += CHUNK) {
     const slice = ids.slice(i, i + CHUNK);
+    // A client without rpc (a test double, a restricted wrapper) is a lookup FAILURE: fail closed, never throw.
+    if (typeof (supabase as { rpc?: unknown }).rpc !== 'function') return { access: new Map(), error: 'rpc unavailable on this client' };
     const { data, error } = await supabase.rpc('benchmark_entitled_actions', { p_benchmark_ids: slice, ...(onIso ? { p_on: onIso } : {}) });
     if (error) return { access: new Map(), error: error.message };
     for (const r of (data ?? []) as Array<{ benchmark_id: string; can_calculate: boolean; can_display: boolean; can_export: boolean; data_from: string | null; data_to: string | null }>) {

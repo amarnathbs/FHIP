@@ -208,6 +208,17 @@ export async function loadIndiaMfReportForReport(
     if (!report) return null;
     return { status: 'ok', report };
   } catch (e) {
+    // A database that has not got the market-index / benchmark-governance migrations (0232, 0239) or another
+    // newer table or column yet must NOT break report generation: a missing relation/column means the section
+    // cannot be stood behind, so it is HIDDEN (null), exactly like "no India MF holding" - never an error section.
+    if (isMissingSchemaError(e)) return null;
     return { status: 'error', message: e instanceof Error ? e.message : 'Unknown error' };
   }
+}
+
+/** Postgres/PostgREST "relation/column/function does not exist" or schema-cache miss. */
+export function isMissingSchemaError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : '';
+  const code = (e as { code?: string } | null)?.code;
+  return code === '42P01' || code === '42703' || code === '42883' || code === 'PGRST205' || code === 'PGRST202' || /does not exist|schema cache|could not find the (table|function|column)/i.test(msg);
 }

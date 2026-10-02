@@ -31,6 +31,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildBankPdfFixture } from '../tests/support/buildBankPdfFixture';
+import { fetchOwnerRequest, resolveSyntheticOwner, type SyntheticOwnerRole } from './lib/syntheticOwner.mjs';
 
 const repoRoot = path.resolve(__dirname, '..');
 const APP = process.argv[2] ?? 'http://localhost:31997';
@@ -114,6 +115,10 @@ async function appGet(pathname: string, cookie: string) {
 async function uploadPdf(cookie: string, meta: Record<string, string>, bytes: Buffer) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(meta)) if (v !== undefined && v !== null) qs.set(k, String(v));
+  // Owner-before-upload: every financial upload route requires the owner chosen BEFORE the file is sent.
+  // A valid synthetic owner for this fixture user (Self unless the caller passed the legacy owner_role).
+  qs.delete('owner_role');
+  qs.set('owner', JSON.stringify(await resolveSyntheticOwner(fetchOwnerRequest(APP, cookie), (meta.owner_role as SyntheticOwnerRole | undefined) ?? 'self', 'bank')));
   const res = await fetch(`${APP}/api/financial-data-hub/bank-pdf/upload?${qs.toString()}`, {
     method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/pdf', 'Content-Length': String(bytes.byteLength) }, body: new Uint8Array(bytes),
   });

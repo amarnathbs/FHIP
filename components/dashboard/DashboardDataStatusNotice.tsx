@@ -38,6 +38,17 @@ export function DashboardDataStatusNotice({ status, currency }: { status: Dashbo
   if (status.importedNotInNetWorth) {
     notes.push(`${status.importedNotInNetWorth.label}: ${status.importedNotInNetWorth.count} holding${status.importedNotInNetWorth.count === 1 ? '' : 's'} worth ${formatMoney(status.importedNotInNetWorth.total, currency)}.`);
   }
+  if (status.publishedValuation && status.publishedValuation.count > 0) {
+    const v = status.publishedValuation;
+    const priced = v.marketNavCount + v.statementCount;
+    if (priced > 0) {
+      const range = v.latestAsOf ? (v.oldestAsOf && v.oldestAsOf !== v.latestAsOf ? ` dated ${v.oldestAsOf} to ${v.latestAsOf}` : ` dated ${v.latestAsOf}`) : '';
+      const parts = [`${v.marketNavCount} at the latest NAV${range}`];
+      if (v.statementCount > 0) parts.push(`${v.statementCount} at a statement value (no newer NAV on file)`);
+      if (v.redeemedCount > 0) parts.push(`${v.redeemedCount} redeemed (counted as 0)`);
+      notes.push(`Mutual funds in your Net Worth: ${parts.join(', ')}.${v.staleCount > 0 ? ` ${v.staleCount} ${v.staleCount === 1 ? 'is' : 'are'} valued on a NAV or statement more than a week old and may be out of date.` : ''}`);
+    }
+  }
   if (status.bankBalanceEvidence) {
     notes.push(`${status.bankBalanceEvidence.label}: ${formatMoney(status.bankBalanceEvidence.total, currency)}.`);
   }

@@ -12,6 +12,7 @@ import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6
 import { PC7_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc7/lookthroughDataAdmin';
 import { MARKET_INDEX_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/marketIndex/marketIndexAdmin';
 import { BENCHMARK_CAPABILITY_COLUMNS, BENCHMARK_VIEW_COLUMN, flagsFromAdminRow, NO_BENCHMARK_CAPABILITIES, type BenchmarkCapabilityFlags } from '@/lib/services/investment-intelligence/benchmarkData/guards';
+import { PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY } from '@/lib/services/premiumEntitlementAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -91,12 +92,37 @@ async function canUploadMarketIndexData(): Promise<boolean> {
   }
 }
 
+
 /**
- * BENCH-1 Phase 2 (migration 0241) - the benchmark-data capabilities. ONE admin_users read, but each
+ * Admin Premium grant (migration 0231) — the entitlement-management capability.
+ *
+ * Its own independent read, deliberately not derived from any other capability
+ * or from Super Admin (Standard §2/§3). FAILS CLOSED: any error, a logged-out
+ * caller, a missing row or a missing COLUMN (migration not yet applied) yields
+ * false — an unapplied migration must never become a grant.
+ */
+async function canManagePremiumEntitlements(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return data?.[PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * BENCH-1 Phase 2 (migration 0239) - the benchmark-data capabilities. ONE admin_users read, but each
  * output field is its own === true evaluation of its own column (flagsFromAdminRow): no flag is derived
  * from another except `view`, which is the union of READ access only.
  *
- * FAILS CLOSED: any error, a logged-out caller, a missing row or a missing COLUMN (0241 not applied)
+ * FAILS CLOSED: any error, a logged-out caller, a missing row or a missing COLUMN (0239 not applied)
  * yields all-false.
  */
 async function readBenchmarkCapabilities(): Promise<BenchmarkCapabilityFlags> {
@@ -173,6 +199,7 @@ export async function GET() {
       benchmarkDataCorrect: benchmark.correct,
       benchmarkCatalogueManage: benchmark.catalogue,
       benchmarkEntitlementApprove: benchmark.entitlementApprove,
+      entitlementManagement: await canManagePremiumEntitlements(),
     },
   });
 }

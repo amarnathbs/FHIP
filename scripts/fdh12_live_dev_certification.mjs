@@ -23,6 +23,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -156,6 +157,8 @@ async function uploadStatement(user, csvText, meta = {}) {
     ...(meta.statement_period_start ? { statement_period_start: meta.statement_period_start } : {}),
     ...(meta.statement_period_end ? { statement_period_end: meta.statement_period_end } : {}),
   });
+  // Owner-before-upload: a valid synthetic owner for this fixture user.
+  params.set('owner', JSON.stringify(await resolveSyntheticOwner(fetchOwnerRequest(APP, user.cookie), 'self', 'retirement')));
   return app(user, `/api/financial-data-hub/retirement-statement/upload?${params.toString()}`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/csv' },

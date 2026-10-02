@@ -151,3 +151,33 @@ describe('Overview coverage (screen 3): a mapping is not coverage unless the ben
     expect(await countFor(tables({ ii_benchmark_series: [] }))).toBe(0);
   });
 });
+
+describe('India MF report degrades safely when the 0232/0239 schema is absent (a code deploy must not break report generation)', () => {
+  it('index closes: any read error, missing benchmark row or missing relation yields null ("not available"), never a throw or a number', async () => {
+    const { loadIndexCloses } = await import('@/lib/services/investment-intelligence/marketIndex/indexCloseReader');
+    const erroring = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { code: '42P01', message: 'relation "ii_benchmarks" does not exist' } }) }) }) }) };
+    expect(await loadIndexCloses(erroring as never, '2026-10-01')).toEqual({ sensex: null, nifty: null });
+    const throwing = { from: () => { throw new Error('boom'); } };
+    expect(await loadIndexCloses(throwing as never, '2026-10-01')).toEqual({ sensex: null, nifty: null });
+  });
+  it('the section is HIDDEN (null) when a read fails because a relation/column does not exist, but a genuine failure is still an honest error section', async () => {
+    const { loadIndiaMfReportForReport, isMissingSchemaError } = await import('@/lib/services/investment-intelligence/indiaMfReportData');
+    expect(isMissingSchemaError({ code: '42703', message: 'column x does not exist' })).toBe(true);
+    expect(isMissingSchemaError(new Error('Could not find the table public.ii_foo in the schema cache'))).toBe(true);
+    expect(isMissingSchemaError(new Error('terminating connection'))).toBe(false);
+    const mk = (message: string, code: string) => {
+      const table = (name: string) => {
+        const b: Record<string, unknown> = {};
+        for (const m of ['select', 'eq', 'lte', 'order', 'in', 'is', 'limit']) b[m] = () => b;
+        const rows = name === 'ii_accounts' ? [{ id: 'a1', folio_number: 'F', owner_member_id: null, currency_code: 'INR', country_code: 'IN', institution_name: 'AMC' }] : null;
+        b.range = async () => (name === 'ii_accounts' ? { data: rows, error: null } : { data: null, error: { code, message } });
+        b.then = (res: (v: unknown) => unknown) => Promise.resolve(name === 'ii_accounts' ? { data: rows, error: null } : { data: null, error: { code, message } }).then(res);
+        return b;
+      };
+      return { from: table };
+    };
+    expect(await loadIndiaMfReportForReport('u1', mk('relation "ii_ownership_allocation" does not exist', '42P01') as never, '2026-10-01')).toBeNull();
+    const err = await loadIndiaMfReportForReport('u1', mk('terminating connection', '57P01') as never, '2026-10-01');
+    expect(err?.status).toBe('error');
+  });
+});

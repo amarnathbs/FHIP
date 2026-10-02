@@ -1,10 +1,10 @@
-// BENCH-1 Phase 2 - DATABASE negative controls for migration 0241.
+// BENCH-1 Phase 2 - DATABASE negative controls for migration 0239.
 //
-// For each rule: copy migration 0241 to a temp file with ONE rule broken, replay the whole chain 0001..0241 on PGlite
+// For each rule: copy migration 0239 to a temp file with ONE rule broken, replay the whole chain 0001..0239 on PGlite
 // (B1P2_MIG_OVERRIDE), run the verification harness, and record which NAMED checks FAIL. A control with no failing
 // check is reported NOT_DEMONSTRATED (the harness is too weak for that rule). The real migration file is never edited.
 //
-// Run: node scripts/bench1_phase2_0241_negative_controls.mjs [idPrefix]      (each control replays ~240 migrations: slow)
+// Run: node scripts/bench1_phase2_0239_negative_controls.mjs [idPrefix]      (each control replays ~240 migrations: slow)
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
-const MIG = path.join(ROOT, 'supabase', 'migrations', fs.readdirSync(path.join(ROOT, 'supabase', 'migrations')).find((f) => f.startsWith('0241_')));
+const MIG = path.join(ROOT, 'supabase', 'migrations', fs.readdirSync(path.join(ROOT, 'supabase', 'migrations')).find((f) => f.startsWith('0239_')));
 const OUT = path.join(ROOT, 'docs/investment-intelligence/evidence/bench1_phase2/db_negative_controls.json');
 const original = fs.readFileSync(MIG, 'utf8');
 
@@ -45,10 +45,10 @@ for (const c of C.filter((x) => !only || x.id.startsWith(only))) {
   if (!edits.every((e) => original.includes(e.find))) {
     entry.status = 'MUTATION_TARGET_NOT_FOUND';
   } else {
-    const tmp = path.join(os.tmpdir(), `0241_mut_${c.id}.sql`);
+    const tmp = path.join(os.tmpdir(), `0239_mut_${c.id}.sql`);
     fs.writeFileSync(tmp, edits.reduce((acc, e) => acc.replace(e.find, e.replace), original));
-    const res = path.join(os.tmpdir(), `0241_mut_${c.id}.json`);
-    const r = spawnSync(process.execPath, [path.join(HERE, 'bench1_phase2_0241_pglite_verification.mjs')], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, B1P2_MIG_OVERRIDE: tmp, B1P2_RESULTS_OUT: res }, timeout: 1_200_000, maxBuffer: 64 * 1024 * 1024 });
+    const res = path.join(os.tmpdir(), `0239_mut_${c.id}.json`);
+    const r = spawnSync(process.execPath, [path.join(HERE, 'bench1_phase2_0239_pglite_verification.mjs')], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, B1P2_MIG_OVERRIDE: tmp, B1P2_RESULTS_OUT: res }, timeout: 1_200_000, maxBuffer: 64 * 1024 * 1024 });
     const lines = (r.stdout ?? '').split(/\r?\n/);
     entry.failingChecks = lines.filter((l) => /^\s+FAIL\s/.test(l)).map((l) => l.trim().replace(/\s+/g, ' ').slice(0, 220));
     const crashed = /UNCAUGHT|REJECTED/.test(r.stdout + r.stderr) || (r.status !== 0 && entry.failingChecks.length === 0);
@@ -63,7 +63,7 @@ for (const c of C.filter((x) => !only || x.id.startsWith(only))) {
   else results.push(entry);
   console.log(`${entry.status.padEnd(26)} ${c.id} ${c.rule} (${entry.failingChecks.length} failing check(s): ${entry.failingChecks[0] ?? entry.note ?? '-'})`);
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
-  fs.writeFileSync(OUT, JSON.stringify({ generatedBy: 'scripts/bench1_phase2_0241_negative_controls.mjs', note: 'Each rule broken in a TEMP COPY of 0241 and replayed on PGlite; the real migration was never modified.', results }, null, 2));
+  fs.writeFileSync(OUT, JSON.stringify({ generatedBy: 'scripts/bench1_phase2_0239_negative_controls.mjs', note: 'Each rule broken in a TEMP COPY of 0239 and replayed on PGlite; the real migration was never modified.', results }, null, 2));
 }
 const bad = results.filter((r) => r.status !== 'DEMONSTRATED');
 console.log(`\n${results.length - bad.length}/${results.length} database controls demonstrated`);

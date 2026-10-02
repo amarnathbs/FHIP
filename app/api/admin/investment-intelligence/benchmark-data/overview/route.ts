@@ -15,7 +15,7 @@ import type { BenchmarkOverviewRow, CoverageView, DemandView, EntitlementRightsV
 
 export const dynamic = 'force-dynamic';
 
-const UNAVAILABLE = 'The benchmark governance tables (migration 0241) are not available in this database. This is reported as unavailable, not as an empty healthy state.';
+const UNAVAILABLE = 'The benchmark governance tables (migration 0239) are not available in this database. This is reported as unavailable, not as an empty healthy state.';
 const AUTOMATION_NOTICE =
   'Recurring ingestion is OFF unless every gate holds: the environment flag, the global kill switch, the write kill switch, the benchmark in automated mode, and an approved automation entitlement. Benchmarks in manual-import mode are updated only when an administrator uploads a file.';
 

@@ -370,7 +370,7 @@
       "testFile": "tests/unit/benchmarkDataAdminRoutes.test.ts",
       "status": "DEMONSTRATED",
       "failingTests": [
-        "s13 fail closed a row missing the columns (migration 0241 not applied) grants nothing; a truthy non-true value grants nothing"
+        "s13 fail closed a row missing the columns (migration 0239 not applied) grants nothing; a truthy non-true value grants nothing"
       ],
       "failingCount": 1
     },

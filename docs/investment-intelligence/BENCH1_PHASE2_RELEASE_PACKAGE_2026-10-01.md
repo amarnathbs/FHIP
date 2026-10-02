@@ -6,8 +6,8 @@ Status: **prepared, not requested.** Nothing here authorises production data pub
 
 | Area | Files |
 |---|---|
-| Migration | `supabase/migrations/0241_bench1_phase2_benchmark_data_governance.sql` (additive; no shared CHECK dropped/recreated; revokes the 0232 single-step upload RPC from `authenticated`; tightens the 0232 feed RPC with the entitlement gate; replaces the series read policy with the entitlement gate) |
-| Apply/verify/rollback | `scripts/bench1_phase2_po_apply_0241.sql`; PGlite proof `scripts/bench1_phase2_0241_pglite_verification.mjs` (results `scripts/bench1-phase2-0241-pglite-results.json`) |
+| Migration | `supabase/migrations/0239_bench1_phase2_benchmark_data_governance.sql` (additive; no shared CHECK dropped/recreated; revokes the 0232 single-step upload RPC from `authenticated`; tightens the 0232 feed RPC with the entitlement gate; replaces the series read policy with the entitlement gate) |
+| Apply/verify/rollback | `scripts/bench1_phase2_po_apply_0239.sql`; PGlite proof `scripts/bench1_phase2_0239_pglite_verification.mjs` (results `scripts/bench1-phase2-0239-pglite-results.json`) |
 | Services | `lib/services/investment-intelligence/benchmarkData/**` (guards, entitlements, uploadService, publishService, demand, routeSupport, apiTypes, `fileIngest/**`, `ingestion/**`), `benchmarkAccess.ts` |
 | Consumers (gate only; certified R4/R5 arithmetic untouched) | `analyticsRepository.ts`, `r5Repository.ts`, `benchmarkCoverage.ts`, `holdingsRepository.ts`, `overviewSummary.ts`, `investmentIntelligenceReportData.ts` |
 | API | `app/api/admin/investment-intelligence/benchmark-data/**` (19 handlers), the superseded POST of `.../market-index-data/route.ts` (410), `app/api/investment-intelligence/cron/benchmark-ingestion/route.ts` (OFF) |
@@ -30,7 +30,7 @@ No `pg_cron` schedule, Vault secret or Amplify variable is created by this chang
 
 ## 3. Verification checklist for the first real DEV rollout (PO present)
 
-1. Apply 0241 to DEV with the apply script; run its verify block (expected values are in the comments).
+1. Apply 0239 to DEV with the apply script; run its verify block (expected values are in the comments).
 2. Grant yourself catalogue + approver capabilities; seed the draft catalogue (optional); verify one entry against the owner's page.
 3. Obtain a **permitted real file** for one benchmark that a held scheme declares (e.g. NIFTY 100 TRI) - only after rights are in writing; create and approve the entitlement (ingest, storage, calculation, display; export only if granted).
 4. Stage, review the preview, publish with a second administrator; confirm the ledger row (`ii_reference_import_batches`, `benchmark_level`) and the job record.
@@ -48,9 +48,9 @@ No `pg_cron` schedule, Vault secret or Amplify variable is created by this chang
 | E3 | A decision on gold/silver price sources and a blended-benchmark definition (SBI Multi Asset; HDFC Gold FoF) | Product Owner | Those two schemes |
 | E4 | Human visit to the AMFI benchmark lists and the owners' index pages (unreachable from this environment) to verify official identifiers, base/launch/TRI-start dates and cross-check the 22 declared benchmarks | Product Owner | Catalogue verification |
 | E5 | Current SID/KIM for UTI MNC, ICICI Dividend Yield, Kotak Mid Cap; scheme-master linkage for the ICICI Corporate Bond ISIN | Product Owner / AMCs | 4 mappings |
-| E6 | Decision to apply 0232 + 0241 to DEV, then production; capability grants; the migration number re-scan before merge | Product Owner | Everything live |
+| E6 | Decision to apply 0232 + 0239 to DEV, then production; capability grants; the migration number re-scan before merge | Product Owner | Everything live |
 | E7 | An exchange holiday calendar (operator-supplied or licensed) | Product Owner | Exact gap detection |
 
 ## 5. Rollback
 
-Section "ROLLBACK" of `scripts/bench1_phase2_po_apply_0241.sql`; capability revocation; kill switches (already off). Code rollback = do not merge/revert the branch.
+Section "ROLLBACK" of `scripts/bench1_phase2_po_apply_0239.sql`; capability revocation; kill switches (already off). Code rollback = do not merge/revert the branch.

@@ -12,6 +12,8 @@ import {
   type AuAccountOwnerChoice,
 } from '@/lib/investment-import-bridge/auAccountResolution';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
+import { getDocumentOwner } from '@/lib/financial-data-hub/services/documentOwnerRequest';
+import { applyUploadOwnerToExistingAuAccount, confirmNewAuJointAccount, gateAuOwnerChoice } from '@/lib/investment-import-bridge/auDocumentOwner';
 
 async function accountHasOwner(userId: string, accountId: string): Promise<boolean> {
   const [described] = await describeAuAccounts(userId, [accountId]);
@@ -32,7 +34,7 @@ const bodySchema = z.union([
   z.object({ action: z.literal('resolve'), account_type: z.string().default('broker'), currency_code: z.string().length(3) }),
   z.object({ action: z.literal('confirm_new'), institution_name: z.string().min(1), masked_account_identifier: z.string().nullish(), currency_code: z.string().length(3), ...ownerFields }),
   // WP-12 (INV-G3): the user picks one of the candidates an ambiguous match offered.
-  z.object({ action: z.literal('confirm_existing'), account_id: z.string().uuid(), ...ownerFields }),
+  z.object({ action: z.literal('confirm_existing'), account_id: z.string().uuid(), confirm_owner_change: z.boolean().optional(), ...ownerFields }),
   // WP-12 (INV-G10): record the holder of the matched account when it has none.
   z.object({ action: z.literal('set_owner'), ...ownerFields }),
 ]);
@@ -84,8 +86,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     return bad('This statement is already approved against an investment account.', 409, 'ALREADY_APPROVED');
   }
 
+  // Owner-before-upload (Phase 2): the owner chosen before uploading is the default and the lock; a request
+  // that names a different owner is refused. (A legacy statement with no upload owner behaves as before.)
+  const uploadOwner = await getDocumentOwner(user.id, documentId);
+  const gated = gateAuOwnerChoice(uploadOwner, ownerOf(body.data as { owner_member_id?: string; owner_self?: true }));
+  if (!gated.ok) return bad(gated.message, gated.status, gated.code);
+
   if (body.data.action === 'confirm_new') {
-    const owner = ownerOf(body.data);
+    if (uploadOwner?.ownerRole === 'joint') {
+      const joint = await confirmNewAuJointAccount(user.id, statementId, uploadOwner, {
+        institutionName: body.data.institution_name,
+        maskedAccountIdentifier: body.data.masked_account_identifier ?? null,
+        currencyCode: body.data.currency_code,
+      });
+      if (!joint.accountId) return bad(joint.error ?? 'Could not create investment account.', 400);
+      await recordDocumentAuditEvent({ userId: user.id, documentId, eventType: 'investment_statement_account_matched', actorType: 'user', actorId: user.id, metadata: { statementId, outcome: 'add_new', accountId: joint.accountId, ownerRole: 'joint' } });
+      return ok({ outcome: 'add_new', account_id: joint.accountId, owner_recorded: true });
+    }
+    const owner = gated.choice;
     if (!owner) return bad('Choose who holds this account.', 422, 'OWNER_REQUIRED');
     const created = await confirmNewAuStatementAccount(user.id, statementId, {
       institutionName: body.data.institution_name,
@@ -99,14 +117,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   }
 
   if (body.data.action === 'confirm_existing') {
-    const confirmed = await confirmExistingAuStatementAccount(user.id, statementId, body.data.account_id, ownerOf(body.data) ?? undefined);
+    // Decision 2: an existing account that already has a DIFFERENT owner is never silently overwritten.
+    if (uploadOwner) {
+      const outcome = await applyUploadOwnerToExistingAuAccount(user.id, body.data.account_id, uploadOwner, body.data.confirm_owner_change === true);
+      if (outcome === 'conflict') {
+        return bad('That account is already recorded under a different owner than this statement. Nothing was changed. Choose another account, or confirm the change of owner.', 409, 'account_owner_conflict');
+      }
+    }
+    const confirmed = await confirmExistingAuStatementAccount(user.id, statementId, body.data.account_id, gated.choice ?? undefined);
     if (!confirmed.accountId) return bad(confirmed.error ?? 'Could not use that investment account.', 400);
     await recordDocumentAuditEvent({ userId: user.id, documentId, eventType: 'investment_statement_account_matched', actorType: 'user', actorId: user.id, metadata: { statementId, outcome: 'user_picked_existing', accountId: confirmed.accountId } });
     return ok({ outcome: 'single_match', account_id: confirmed.accountId, owner_recorded: await accountHasOwner(user.id, confirmed.accountId) });
   }
 
   if (body.data.action === 'set_owner') {
-    const owner = ownerOf(body.data);
+    const owner = gated.choice;
     if (!owner) return bad('Choose who holds this account.', 422, 'OWNER_REQUIRED');
     const accountId = (statement?.canonical_account_id as string | null) ?? null;
     if (!accountId) return bad('Match this statement to an investment account first.', 409);

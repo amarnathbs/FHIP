@@ -29,6 +29,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fetchOwnerRequest, resolveSyntheticOwner } from './lib/syntheticOwner.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -172,6 +173,10 @@ async function app(user, pathname, opts = {}) {
 async function uploadCsv(user, meta, bytes) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(meta)) if (v !== undefined && v !== null) qs.set(k, String(v));
+  // Owner-before-upload: every financial upload route requires the owner chosen BEFORE the file is sent.
+  // A valid synthetic owner for this fixture user (Self unless the caller passed the legacy owner_role).
+  qs.delete('owner_role');
+  qs.set('owner', JSON.stringify(await resolveSyntheticOwner(fetchOwnerRequest(APP, user.cookie), meta.owner_role ?? 'self', 'bank')));
   return app(user, `/api/financial-data-hub/bank-csv/upload?${qs.toString()}`, {
     method: 'POST', headers: { 'Content-Type': 'text/csv', 'Content-Length': String(bytes.byteLength) }, body: bytes,
   });
@@ -347,7 +352,7 @@ async function fixtureC() {
   console.log('--- C1: session created, never completed ---');
   const sessRes = await app(userA, '/api/financial-data-hub/documents/upload-sessions', {
     method: 'POST',
-    body: { document_type: 'bank_statement', source_type: 'csv', country_code: 'AU', currency_code: 'AUD', declared_mime_type: 'text/csv', declared_file_size_bytes: 500 },
+    body: { document_type: 'bank_statement', source_type: 'csv', country_code: 'AU', currency_code: 'AUD', declared_mime_type: 'text/csv', declared_file_size_bytes: 500, owner: await resolveSyntheticOwner(fetchOwnerRequest(APP, userA.cookie), 'self', 'bank') }, // owner-before-upload
   });
   const sessionId = sessRes.json?.data?.session_id;
   const c1DocId = sessRes.json?.data?.document_id;

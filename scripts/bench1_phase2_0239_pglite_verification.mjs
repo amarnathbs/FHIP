@@ -1,9 +1,9 @@
-// Migration 0241 (BENCH-1 Phase 2: benchmark governance, staged upload pipeline,
+// Migration 0239 (BENCH-1 Phase 2: benchmark governance, staged upload pipeline,
 // per-right entitlements, mapping governance, ingestion state) — verified
 // against a freshly rebuilt REAL Postgres (PGlite/WASM) with the whole chain
-// 0001..0241 applied from empty.
+// 0001..0239 applied from empty.
 //
-// EVIDENCE LABEL: PGlite verification only. This is NOT a claim that 0241 has
+// EVIDENCE LABEL: PGlite verification only. This is NOT a claim that 0239 has
 // been applied to DEV or production — it has not been.
 //
 // Every "REFUSED" check names the SQLSTATE the database returned and is
@@ -27,9 +27,9 @@ const db = await PGlite.create();
 await db.exec(fs.readFileSync(path.join(HERE, 'db-rebuild-check', 'shim.sql'), 'utf8'));
 const seed = fs.readFileSync(path.join(ROOT, 'seed.sql'), 'utf8');
 const files = fs.readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort();
-const MY = files.find((f) => f.startsWith('0241_'));
-// Negative-control hook: B1P2_MIG_OVERRIDE points at a MUTATED copy of 0241 (see
-// scripts/bench1_phase2_0241_negative_controls.mjs). Normal runs use the real file.
+const MY = files.find((f) => f.startsWith('0239_'));
+// Negative-control hook: B1P2_MIG_OVERRIDE points at a MUTATED copy of 0239 (see
+// scripts/bench1_phase2_0239_negative_controls.mjs). Normal runs use the real file.
 const MIG_TEXT = (f) => (f === MY && process.env.B1P2_MIG_OVERRIDE ? fs.readFileSync(process.env.B1P2_MIG_OVERRIDE, 'utf8') : fs.readFileSync(path.join(MIG, f), 'utf8'));
 for (const f of files) {
   await db.exec(strip(MIG_TEXT(f)));
@@ -81,7 +81,7 @@ for (const k of ['UPLOADER', 'PUBLISHER', 'CORRECTOR', 'CATALOGUE', 'APPROVER', 
 
 console.log('--- 1. idempotency, shape, nothing granted ---');
 const second = await tryExec(strip(MIG_TEXT(MY)));
-check('0241 re-applies cleanly (idempotent)', second === null, second ? second.message.slice(0, 200) : 'second application was a no-op');
+check('0239 re-applies cleanly (idempotent)', second === null, second ? second.message.slice(0, 200) : 'second application was a no-op');
 const cols = await all(`select column_name, column_default, is_nullable from information_schema.columns where table_name = 'admin_users' and column_name in ('can_publish_benchmark_data','can_correct_benchmark_data','can_manage_benchmark_catalogue','can_approve_benchmark_entitlements') order by 1`);
 check('four NEW capability columns exist and default FALSE', cols.length === 4 && cols.every((c) => /false/.test(c.column_default) && c.is_nullable === 'NO'));
 const granted = await one(`select count(*)::int n from admin_users where can_publish_benchmark_data or can_correct_benchmark_data or can_manage_benchmark_catalogue or can_approve_benchmark_entitlements`);
@@ -89,7 +89,7 @@ check('the migration granted NO capability to anyone (no "all admins" auto-grant
 const sw = await all(`select job_key, enabled from ii_reference_job_control where job_key in ('benchmark_ingestion_global','benchmark_ingestion_write') order by 1`);
 check('global and write kill switches ship DISABLED', sw.length === 2 && sw.every((r) => r.enabled === false));
 const cron = await all(`select jobname from cron.job where jobname ilike '%benchmark%'`);
-check('0241 registers NO pg_cron schedule', cron.length === 0);
+check('0239 registers NO pg_cron schedule', cron.length === 0);
 const lic = await one(`select pg_get_constraintdef(oid) d from pg_constraint where conname = 'ii_benchmarks_licence_status_check'`);
 check('no licence_status value was invented (constraint text still the 0155 four)', lic && /public_open/.test(lic.d) && /licence_required/.test(lic.d) && /licensed_held/.test(lic.d) && /unknown/.test(lic.d) && !/entitled|permitted|approved/.test(lic.d), lic?.d);
 const anonExec = await one(`select has_function_privilege('anon','publish_benchmark_import(uuid,jsonb)','execute') a, has_function_privilege('authenticated','publish_benchmark_import(uuid,jsonb)','execute') b, has_function_privilege('authenticated','claim_benchmark_ingestion_lease(uuid,text,integer)','execute') c, has_function_privilege('service_role','claim_benchmark_ingestion_lease(uuid,text,integer)','execute') d, has_function_privilege('authenticated','commit_market_index_upload(text,text,text,jsonb,boolean,text)','execute') e, has_function_privilege('authenticated','publish_benchmark_feed_rows(uuid,jsonb,text,text)','execute') f`);
@@ -649,5 +649,5 @@ const pubStillThere = await seriesCount('TEST_A_TRI');
 check('expiry never touches canonical published rows', pubStillThere >= 6, `rows=${pubStillThere}`);
 
 console.log(`\n${pass} passed, ${fail} failed`);
-fs.writeFileSync(process.env.B1P2_RESULTS_OUT ?? path.join(HERE, 'bench1-phase2-0241-pglite-results.json'), JSON.stringify({ migration: MY, generatedBy: 'scripts/bench1_phase2_0241_pglite_verification.mjs', note: 'PGlite verification only; 0241 is NOT applied to DEV or production. All data is synthetic fixture data inside an in-memory database.', pass, fail, results }, null, 2));
+fs.writeFileSync(process.env.B1P2_RESULTS_OUT ?? path.join(HERE, 'bench1-phase2-0239-pglite-results.json'), JSON.stringify({ migration: MY, generatedBy: 'scripts/bench1_phase2_0239_pglite_verification.mjs', note: 'PGlite verification only; 0239 is NOT applied to DEV or production. All data is synthetic fixture data inside an in-memory database.', pass, fail, results }, null, 2));
 process.exit(fail === 0 ? 0 : 1);

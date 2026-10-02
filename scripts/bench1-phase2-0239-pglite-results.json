@@ -1,14 +1,14 @@
 {
-  "migration": "0241_bench1_phase2_benchmark_data_governance.sql",
-  "generatedBy": "scripts/bench1_phase2_0241_pglite_verification.mjs",
-  "note": "PGlite verification only; 0241 is NOT applied to DEV or production. All data is synthetic fixture data inside an in-memory database.",
+  "migration": "0239_bench1_phase2_benchmark_data_governance.sql",
+  "generatedBy": "scripts/bench1_phase2_0239_pglite_verification.mjs",
+  "note": "PGlite verification only; 0239 is NOT applied to DEV or production. All data is synthetic fixture data inside an in-memory database.",
   "pass": 196,
   "fail": 0,
   "results": [
     {
       "id": "B1P2-PG-001",
       "verdict": "PASS",
-      "label": "0241 re-applies cleanly (idempotent)",
+      "label": "0239 re-applies cleanly (idempotent)",
       "detail": "second application was a no-op"
     },
     {
@@ -32,7 +32,7 @@
     {
       "id": "B1P2-PG-005",
       "verdict": "PASS",
-      "label": "0241 registers NO pg_cron schedule",
+      "label": "0239 registers NO pg_cron schedule",
       "detail": ""
     },
     {
@@ -447,7 +447,7 @@
       "id": "B1P2-PG-074",
       "verdict": "PASS",
       "label": "stage + finalize: 3 new rows, 0 hard errors, eligible (entitlement grants ingest+storage)",
-      "detail": "{\"eligible\":true,\"rows_new\":3,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-27\",\"from\":\"2024-03-25\",\"eligible\":true,\"entitlement_id\":\"8a7aaa93-3aa6-4c08-9157-944e4d81cd8e\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"bcf1e3ad43437ec608cbfa5043c6b0a06397a0d51ff1b2593cb508514e8d3df0\",\"rows_correction\":0,\"hard_error_total\":0}"
+      "detail": "{\"eligible\":true,\"rows_new\":3,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-27\",\"from\":\"2024-03-25\",\"eligible\":true,\"entitlement_id\":\"d5682778-662c-4961-9ca4-95341782cc32\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"bcf1e3ad43437ec608cbfa5043c6b0a06397a0d51ff1b2593cb508514e8d3df0\",\"rows_correction\":0,\"hard_error_total\":0}"
     },
     {
       "id": "B1P2-PG-075",
@@ -555,13 +555,13 @@
       "id": "B1P2-PG-092",
       "verdict": "PASS",
       "label": "publish succeeds for an independent publisher: 3 inserted, atomic",
-      "detail": "{\"job_id\":\"72ecb07d-534d-47b1-9123-5e228755d9db\",\"date_to\":\"2024-03-27\",\"revived\":0,\"batch_id\":\"63899cb1-80b2-4e1c-a9d1-b7d0cd7b6814\",\"inserted\":3,\"corrected\":0,\"date_from\":\"2024-03-25\",\"already_published\":false,\"identical_skipped\":0}"
+      "detail": "{\"job_id\":\"013f8124-2b65-4f5e-9aee-9ae3f7006dca\",\"date_to\":\"2024-03-27\",\"revived\":0,\"batch_id\":\"bb7f76df-402f-429c-92e7-c035b53a1401\",\"inserted\":3,\"corrected\":0,\"date_from\":\"2024-03-25\",\"already_published\":false,\"identical_skipped\":0}"
     },
     {
       "id": "B1P2-PG-093",
       "verdict": "PASS",
       "label": "ledger: ii_reference_import_batches row written (benchmark_level, succeeded, 3 inserted, sha, date range, actor in notes)",
-      "detail": "{\"batch_kind\":\"benchmark_level\",\"status\":\"succeeded\",\"rows_inserted\":3,\"rows_read\":3,\"source_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"f\":\"2024-03-25\",\"t\":\"2024-03-27\",\"notes\":{\"mode\":\"new_history\",\"staged_by\":\"11111111-0000-0000-0000-000000000001\",\"benchmarks\":[\"TEST_A_TRI\"],\"published_by\":\"11111111-0000-0000-0000-000000000002\",\"source_owner\":\"Fixture Owner\",\"history_class\":\"live\",\"import_job_id\":\"72ecb07d-534d-47b1-9123-5e228755d9db\",\"source_reference\":\"https://example.test/delivery\"}}"
+      "detail": "{\"batch_kind\":\"benchmark_level\",\"status\":\"succeeded\",\"rows_inserted\":3,\"rows_read\":3,\"source_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"f\":\"2024-03-25\",\"t\":\"2024-03-27\",\"notes\":{\"mode\":\"new_history\",\"staged_by\":\"11111111-0000-0000-0000-000000000001\",\"benchmarks\":[\"TEST_A_TRI\"],\"published_by\":\"11111111-0000-0000-0000-000000000002\",\"source_owner\":\"Fixture Owner\",\"history_class\":\"live\",\"import_job_id\":\"013f8124-2b65-4f5e-9aee-9ae3f7006dca\",\"source_reference\":\"https://example.test/delivery\"}}"
     },
     {
       "id": "B1P2-PG-094",
@@ -675,7 +675,7 @@
       "id": "B1P2-PG-112",
       "verdict": "PASS",
       "label": "multi-benchmark job: eligibility is evaluated PER benchmark (B has no ingest right => eligible=false)",
-      "detail": "{\"TEST_A_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":true,\"entitlement_id\":\"8a7aaa93-3aa6-4c08-9157-944e4d81cd8e\"},\"TEST_B_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":false,\"entitlement_id\":\"02a9fac5-0522-4097-8d91-93f421a132a8\"}}"
+      "detail": "{\"TEST_A_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":true,\"entitlement_id\":\"d5682778-662c-4961-9ca4-95341782cc32\"},\"TEST_B_TRI\":{\"to\":\"2024-04-01\",\"from\":\"2024-04-01\",\"eligible\":false,\"entitlement_id\":\"23204f8b-4b44-4b98-b2c6-a1f13896cb1a\"}}"
     },
     {
       "id": "B1P2-PG-113",
@@ -717,13 +717,13 @@
       "id": "B1P2-PG-119",
       "verdict": "PASS",
       "label": "the 300+-row chunked job publishes atomically",
-      "detail": "{\"job_id\":\"c931b7be-8dce-445b-8613-1ac4e339bbca\",\"date_to\":\"2024-03-20\",\"revived\":0,\"batch_id\":\"845314c5-a5ee-49b7-a49d-5d0d7734782a\",\"inserted\":318,\"corrected\":0,\"date_from\":\"2023-01-02\",\"already_published\":false,\"identical_skipped\":0}"
+      "detail": "{\"job_id\":\"da1bce5e-d596-414e-bcc6-59efa50200a1\",\"date_to\":\"2024-03-20\",\"revived\":0,\"batch_id\":\"2b09e8d7-3b02-43e6-a4b9-f33e941d4f04\",\"inserted\":318,\"corrected\":0,\"date_from\":\"2023-01-02\",\"already_published\":false,\"identical_skipped\":0}"
     },
     {
       "id": "B1P2-PG-120",
       "verdict": "PASS",
       "label": "correction job: the differing row classifies as correction (before 1005.5 -> after 1006)",
-      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-26\",\"from\":\"2024-03-26\",\"eligible\":true,\"entitlement_id\":\"8a7aaa93-3aa6-4c08-9157-944e4d81cd8e\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"a493f007ff63ee6ed66bfb195608d108ccd799638899ea5e8fb70f87f3a8f3ee\",\"rows_correction\":1,\"hard_error_total\":0}"
+      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-03-26\",\"from\":\"2024-03-26\",\"eligible\":true,\"entitlement_id\":\"d5682778-662c-4961-9ca4-95341782cc32\"}},\"rows_revive\":0,\"rows_identical\":0,\"staging_digest\":\"a493f007ff63ee6ed66bfb195608d108ccd799638899ea5e8fb70f87f3a8f3ee\",\"rows_correction\":1,\"hard_error_total\":0}"
     },
     {
       "id": "B1P2-PG-121",
@@ -753,7 +753,7 @@
       "id": "B1P2-PG-125",
       "verdict": "PASS",
       "label": "revision evidence in ii_reference_corrections: before (1005.5, rev 1) / after (1006, rev 2), actor, reason",
-      "detail": "{\"previous_value\":{\"value\":1005.5,\"revision_no\":1,\"data_version\":\"bench1-upload-v1\",\"import_job_id\":\"72ecb07d-534d-47b1-9123-5e228755d9db\"},\"new_value\":{\"value\":1006,\"revision_no\":2,\"import_job_id\":\"fd4df948-7462-4dff-9138-d198d6735a1f\"},\"actor_kind\":\"admin\",\"reason\":\"Source issued a corrected close for 26 Mar 2024 (fixture)\",\"correction_kind\":\"source_correction\"}"
+      "detail": "{\"previous_value\":{\"value\":1005.5,\"revision_no\":1,\"data_version\":\"bench1-upload-v1\",\"import_job_id\":\"013f8124-2b65-4f5e-9aee-9ae3f7006dca\"},\"new_value\":{\"value\":1006,\"revision_no\":2,\"import_job_id\":\"b5c4ec5a-d050-4b48-886e-bc6bad8826c7\"},\"actor_kind\":\"admin\",\"reason\":\"Source issued a corrected close for 26 Mar 2024 (fixture)\",\"correction_kind\":\"source_correction\"}"
     },
     {
       "id": "B1P2-PG-126",
@@ -819,7 +819,7 @@
       "id": "B1P2-PG-136",
       "verdict": "PASS",
       "label": "re-staging the retracted dates classifies them as revive (counted as new)",
-      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-06-04\",\"from\":\"2024-06-03\",\"eligible\":true,\"entitlement_id\":\"8a7aaa93-3aa6-4c08-9157-944e4d81cd8e\"}},\"rows_revive\":2,\"rows_identical\":0,\"staging_digest\":\"c973c12810ae4cbf616fbcc15e800a6d1851320e6b533f2f14dc4cdd0cbefbde\",\"rows_correction\":0,\"hard_error_total\":0}"
+      "detail": "{\"eligible\":true,\"rows_new\":0,\"eligibility\":{\"TEST_A_TRI\":{\"to\":\"2024-06-04\",\"from\":\"2024-06-03\",\"eligible\":true,\"entitlement_id\":\"d5682778-662c-4961-9ca4-95341782cc32\"}},\"rows_revive\":2,\"rows_identical\":0,\"staging_digest\":\"c973c12810ae4cbf616fbcc15e800a6d1851320e6b533f2f14dc4cdd0cbefbde\",\"rows_correction\":0,\"hard_error_total\":0}"
     },
     {
       "id": "B1P2-PG-137",
@@ -909,7 +909,7 @@
       "id": "B1P2-PG-151",
       "verdict": "PASS",
       "label": "approval creates the canonical effective-dated mapping WITH evidence, basis scheme_disclosed, reviewer recorded",
-      "detail": "{\"mapping_basis\":\"scheme_disclosed\",\"evidence_url\":\"https://example.test/sid.pdf\",\"dd\":\"2020-03-15\",\"resolution_method\":\"deterministic_exact\",\"reviewed_by\":\"11111111-0000-0000-0000-000000000004\",\"benchmark_id\":\"efaf3d3a-0107-4ac3-8560-420ae740a35c\",\"ef\":\"2020-04-01\"}"
+      "detail": "{\"mapping_basis\":\"scheme_disclosed\",\"evidence_url\":\"https://example.test/sid.pdf\",\"dd\":\"2020-03-15\",\"resolution_method\":\"deterministic_exact\",\"reviewed_by\":\"11111111-0000-0000-0000-000000000004\",\"benchmark_id\":\"19d77d91-6a3d-435d-a99f-db78276ac6b5\",\"ef\":\"2020-04-01\"}"
     },
     {
       "id": "B1P2-PG-152",
@@ -945,7 +945,7 @@
       "id": "B1P2-PG-157",
       "verdict": "PASS",
       "label": "AUTO-PUBLISH: deterministic, high-confidence, authoritative evidence, verified benchmark => published",
-      "detail": "{\"mapping_id\":\"34b15c78-7cf1-4b78-a826-d37a7505b2e3\",\"auto_published\":true}"
+      "detail": "{\"mapping_id\":\"7564ed60-b105-443c-8ea8-a572031bfcae\",\"auto_published\":true}"
     },
     {
       "id": "B1P2-PG-158",
@@ -1053,7 +1053,7 @@
       "id": "B1P2-PG-175",
       "verdict": "PASS",
       "label": "WATERMARKS: an empty HTTP 200 moves last_attempt_at but NOT last_successful_run_at, and counts as a failure",
-      "detail": "{\"last_attempt_at\":\"2026-10-01T14:06:02.348Z\",\"last_successful_run_at\":null,\"consecutive_failures\":1,\"last_run_status\":\"empty_response\",\"d\":\"2024-12-31\"}"
+      "detail": "{\"last_attempt_at\":\"2026-10-02T11:07:29.260Z\",\"last_successful_run_at\":null,\"consecutive_failures\":1,\"last_run_status\":\"empty_response\",\"d\":\"2024-12-31\"}"
     },
     {
       "id": "B1P2-PG-176",
@@ -1065,7 +1065,7 @@
       "id": "B1P2-PG-177",
       "verdict": "PASS",
       "label": "success moves last_successful_run_at and clears the failure streak; the completeness watermark is CLAMPED to the latest valid data date (cannot claim coverage beyond real data)",
-      "detail": "{\"last_successful_run_at\":\"2026-10-01T14:06:02.352Z\",\"consecutive_failures\":0,\"d\":\"2024-12-31\",\"w\":\"2024-12-31\"}"
+      "detail": "{\"last_successful_run_at\":\"2026-10-02T11:07:29.264Z\",\"consecutive_failures\":0,\"d\":\"2024-12-31\",\"w\":\"2024-12-31\"}"
     },
     {
       "id": "B1P2-PG-178",
@@ -1113,7 +1113,7 @@
       "id": "B1P2-PG-185",
       "verdict": "PASS",
       "label": "feed never overwrites: the differing value is counted as a conflict, the published value stands, the new day is inserted",
-      "detail": "{\"batch_id\":\"e7142886-cd80-431d-8493-68ed8f408bf6\",\"inserted\":1,\"identical\":0,\"conflicts_skipped\":1}"
+      "detail": "{\"batch_id\":\"a086c06b-eef9-4332-801f-99da7055c343\",\"inserted\":1,\"identical\":0,\"conflicts_skipped\":1}"
     },
     {
       "id": "B1P2-PG-186",

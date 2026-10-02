@@ -46,7 +46,14 @@ export const iiSourceDocumentUploadMetaSchema = z.object({
   sourceKey: z.string().min(1),
   documentType: z.enum(['cas_statement', 'demat_statement', 'contract_note', 'manual_entry_record', 'other']).default('other'),
   countryCode: z.enum(['AU', 'IN']),
-  ownerMemberId: z.string().uuid().optional().nullable(),
+  // Owner-before-upload (Phase 1): the owner is REQUIRED and chosen BEFORE the
+  // file is sent. It is kept as `unknown` here on purpose -- the route validates
+  // it with validateOwnerSelection (lib/ownership), which answers with a
+  // specific code (owner_required / owner_not_found / ...) rather than a generic
+  // schema error, and which resolves ids against THIS user's own members and
+  // entities. The former `ownerMemberId` field is gone: a client that still
+  // sends only that is told an owner is required.
+  owner: z.unknown().optional(),
   statementPeriodStart: z.string().optional().nullable(),
   statementPeriodEnd: z.string().optional().nullable(),
   statementAsOfDate: z.string().optional().nullable(),

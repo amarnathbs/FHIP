@@ -1,0 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- route JSON of an untyped harness response */
+export type SyntheticOwnerRole = 'self' | 'spouse' | 'partner' | 'joint' | 'smsf';
+export type OwnerWire = { kind: 'member'; memberId: string } | { kind: 'entity'; entityId: string } | { kind: 'joint'; allocations?: Array<{ memberId?: string; entityId?: string; basisPoints: number }> } | { kind: 'smsf' };
+export type OwnerRequest = (method: string, route: string, json?: unknown) => Promise<{ status: number; json: Record<string, any> | null }>;
+export const DOCUMENT_TYPE_FLOWS: Record<string, string>;
+export function flowForUploadRoute(route: string): string | null;
+export function flowForDocumentType(documentType: string): string | null;
+export function resolveSyntheticOwner(request: OwnerRequest, role: SyntheticOwnerRole, flow: string | null): Promise<OwnerWire>;
+export function routeWithOwner(route: string, selection: OwnerWire): string;
+export function legacyOwnerRoleOf(route: string): string | null;
+export function routeHasOwner(route: string): boolean;
+export function fetchOwnerRequest(app: string, cookie: string): OwnerRequest;
