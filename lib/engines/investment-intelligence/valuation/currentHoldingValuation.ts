@@ -64,6 +64,8 @@
 // This module deliberately does NOT touch XIRR/TWRR/R4/R5/R6 arithmetic; it
 // only selects the valuation INPUT those figures are computed from.
 
+import { formatDateInText } from '@/lib/engines/date';
+
 /** A valuation whose date is more than this many days before the valuation
  *  date is disclosed as stale. Mutual fund NAVs publish every business day;
  *  7 calendar days spans a long weekend plus a holiday and still catches a
@@ -263,12 +265,14 @@ export function valueHoldingAsOf(input: {
       unitsAfterStatement: 0,
       unitsAfterStatementApplied: false,
       note: input.pointInTime
-        ? `No certified statement valuation exists on or before ${asOf}, so no value is shown.`
+        ? `No certified statement valuation exists on or before ${formatDateInText(asOf, input.currencyCode)}, so no value is shown.`
         : 'No certified statement valuation exists for this holding, so no value is shown.',
     };
   }
 
   const currencyCode = statement.currencyCode ?? input.currencyCode ?? null;
+  // Dates in the notes below are day-first (dd-mm-yyyy INR / dd/mm/yyyy otherwise), never ISO year-first.
+  const dt = (iso: string | null | undefined) => formatDateInText(iso, currencyCode);
   const statementUnits = Number(statement.units);
   const statementValue = Number(statement.value);
   const statementNav = statementUnits > 0 ? statementValue / statementUnits : null;
@@ -312,7 +316,7 @@ export function valueHoldingAsOf(input: {
     movementNote = ` ${fmtUnits(mv.sum)} units transacted after the statement could not be priced (no market NAV newer than the statement), so they are not included.`;
   }
   const appliedNote = applied
-    ? ` Includes ${mv.sum >= 0 ? '+' : '-'}${fmtUnits(mv.sum)} units transacted after the statement date (${mv.count} transaction${mv.count === 1 ? '' : 's'}, latest ${mv.lastDate}).`
+    ? ` Includes ${mv.sum >= 0 ? '+' : '-'}${fmtUnits(mv.sum)} units transacted after the statement date (${mv.count} transaction${mv.count === 1 ? '' : 's'}, latest ${dt(mv.lastDate)}).`
     : movementNote;
 
   // Rule 5 - fully redeemed: exactly 0, no NAV consulted.
@@ -332,8 +336,8 @@ export function valueHoldingAsOf(input: {
       stale: false,
       excludedNavCounts: emptyExcluded(),
       note: applied
-        ? `Fully redeemed: the statement dated ${statement.asOfDate} held ${fmtUnits(statementUnits)} units and later transactions (latest ${mv.lastDate}) redeemed them all. The value is 0.`
-        : `Fully redeemed as at ${statement.asOfDate} (0 units). No NAV is needed; the value is 0.${appliedNote}`,
+        ? `Fully redeemed: the statement dated ${dt(statement.asOfDate)} held ${fmtUnits(statementUnits)} units and later transactions (latest ${dt(mv.lastDate)}) redeemed them all. The value is 0.`
+        : `Fully redeemed as at ${dt(statement.asOfDate)} (0 units). No NAV is needed; the value is 0.${appliedNote}`,
     };
   }
 
@@ -357,8 +361,8 @@ export function valueHoldingAsOf(input: {
       excludedNavCounts: excluded,
       note:
         (stale
-          ? `Latest NAV on file is dated ${newerNav.date}, ${ageDays} days before ${asOf}; it may be out of date. The statement dated ${statement.asOfDate} is superseded.`
-          : `Valued at the latest NAV, dated ${newerNav.date}. The statement dated ${statement.asOfDate} is superseded as the current NAV.`) + appliedNote,
+          ? `Latest NAV on file is dated ${dt(newerNav.date)}, ${ageDays} days before ${dt(asOf)}; it may be out of date. The statement dated ${dt(statement.asOfDate)} is superseded.`
+          : `Valued at the latest NAV, dated ${dt(newerNav.date)}. The statement dated ${dt(statement.asOfDate)} is superseded as the current NAV.`) + appliedNote,
     };
   }
 
@@ -383,7 +387,7 @@ export function valueHoldingAsOf(input: {
     excludedNavCounts: excluded,
     note:
       (stale
-        ? `Value and NAV come from your statement dated ${statement.asOfDate} (${ageDays} days before ${asOf}); no newer market NAV is on file, so this may be out of date.`
-        : `Value and NAV come from your statement dated ${statement.asOfDate}; no newer market NAV is on file.`) + appliedNote,
+        ? `Value and NAV come from your statement dated ${dt(statement.asOfDate)} (${ageDays} days before ${dt(asOf)}); no newer market NAV is on file, so this may be out of date.`
+        : `Value and NAV come from your statement dated ${dt(statement.asOfDate)}; no newer market NAV is on file.`) + appliedNote,
   };
 }

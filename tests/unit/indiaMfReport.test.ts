@@ -224,7 +224,7 @@ describe('partial history shows a labelled value, never a blanket n/a', () => {
     const report = buildIndiaMfReport(partial())!;
     const row = report.sections[0].rows[0];
     expect(row.basis.partial).toBe(true);
-    expect(row.basis.label).toBe('from 12-Dec-2022; earlier history not uploaded');
+    expect(row.basis.label).toBe('from 12-12-2022; earlier history not uploaded');
     expect(row.basis.unitsWithoutRecordedCost).toBeCloseTo(300, 6);
     const note = report.footnotes.find((f) => f.code === 'PARTIAL_HISTORY')!;
     expect(note.text).toContain('MFCentral integration is available');

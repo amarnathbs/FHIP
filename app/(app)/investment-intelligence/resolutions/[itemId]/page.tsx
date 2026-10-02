@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { ResolutionDetailClient } from '@/components/pc5/ResolutionDetailClient';
+import { getUserHomeCountry } from '@/lib/services/jurisdiction';
+import { dateFormatKeyForCountry } from '@/lib/engines/date';
 import { PC5_RESOLUTIONS_BASE } from '@/lib/pc5/deepLinks';
 
 /**
@@ -18,6 +20,8 @@ export default async function ResolutionDetailPage({ params }: { params: Promise
   if (!user) redirect('/login');
 
   const { itemId } = await params;
+  // Dates on this page follow the user's own country (dd/mm/yyyy AU, dd-mm-yyyy India).
+  const dateCurrency = dateFormatKeyForCountry(await getUserHomeCountry(user.id, supabase));
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -32,7 +36,7 @@ export default async function ResolutionDetailPage({ params }: { params: Promise
           the item id in the URL is never treated as proof of access, and a
           cross-user id returns 404 rather than 403 so the route cannot be
           used to discover which items exist. */}
-      <ResolutionDetailClient itemId={itemId} />
+      <ResolutionDetailClient itemId={itemId} dateCurrency={dateCurrency} />
     </div>
   );
 }

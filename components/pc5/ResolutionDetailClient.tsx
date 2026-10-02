@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { fmtDateTime } from '@/components/investment-intelligence/dateDisplay';
 import { PC5_DISCARD_REASONS, type Pc5DiscardReason } from '@/lib/pc5/discard';
 import { PC5_TOTAL_BASIS_POINTS, defaultEqualAllocation, formatBasisPoints } from '@/lib/pc5/jointAllocation';
 import type { Pc5AllocationEntry, Pc5CorrectionOverlayView, Pc5ResolutionItemView } from '@/lib/pc5/types';
@@ -53,7 +54,7 @@ function newIdempotencyKey(itemId: string, action: string, version: number): str
   return `pc5:${itemId}:${action}:${version}`;
 }
 
-export function ResolutionDetailClient({ itemId }: { itemId: string }) {
+export function ResolutionDetailClient({ itemId, dateCurrency = 'AUD' }: { itemId: string; dateCurrency?: 'AUD' | 'INR' }) {
   const [data, setData] = useState<ItemContextResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -456,7 +457,7 @@ export function ResolutionDetailClient({ itemId }: { itemId: string }) {
                   {o.userValue ? <> — {o.userValue}</> : null}
                 </p>
                 <p className="mt-0.5 text-xs text-muted">
-                  {new Date(o.decidedAt).toLocaleString()}
+                  {fmtDateTime(o.decidedAt, dateCurrency)}
                   {o.parserVersionAtDecision ? ` · reader version ${o.parserVersionAtDecision}` : ''}
                   {o.resultingReconciliationAt ? ' · statement re-checked afterwards' : ' · statement not re-checked'}
                 </p>

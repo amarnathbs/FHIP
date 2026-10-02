@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { OwnerChangeDialog, type OwnerSubmitExtra, type OwnerSubmitResult } from './OwnerChangeDialog';
 import { apiErrorMessage, type OwnerSelectionBody } from './ownerChange';
+import { fmtDate } from './dateDisplay';
 
 // R9 — Review Centre UX (spec sections 56, 59, 134). Sections mirror the
 // spec's suggested layout: Overview (severity counts) + a filterable list.
@@ -40,7 +41,7 @@ interface OwnerDialogTarget {
 const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2, info: 3 };
 const SEVERITY_LABEL: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low', info: 'Info' };
 
-export function ReviewCentreClient() {
+export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'AUD' | 'INR' } = {}) {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -435,7 +436,7 @@ export function ReviewCentreClient() {
                   <h3 className="mt-1 font-medium text-ink">{item.title}</h3>
                   <p className="mt-1 text-sm text-muted">{item.description}</p>
                   <p className="mt-2 text-xs text-muted">
-                    Source: {item.source_module.replace(/_/g, ' ')} · as of {item.as_of_date}
+                    Source: {item.source_module.replace(/_/g, ' ')} · as of {fmtDate(item.as_of_date, dateCurrency)}
                   </p>
                   {statusFilter === 'open' && sourceDocumentId && !isOwnerAssignableAccount && !isDiscardableDocument && (
                     // 2026-09-29 fix (resolution-guidance links): this used to

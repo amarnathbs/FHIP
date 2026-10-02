@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { fmtDate } from '@/components/investment-intelligence/dateDisplay';
 
 export interface Valuation {
   basis: 'market_nav' | 'statement' | 'redeemed';
@@ -108,7 +109,7 @@ export function PublishedFundValuationsTable({ lines }: { lines: readonly Line[]
                 <td className="py-1 pr-3">{l.name}</td>
                 <td className="py-1 pr-3 text-right">{l.valuation.units === null ? '—' : l.valuation.units.toLocaleString('en-IN', { maximumFractionDigits: 3 })}</td>
                 <td className="py-1 pr-3 text-right">{l.valuation.nav === null ? '—' : money(l.valuation.nav, l.currency)}</td>
-                <td className="py-1 pr-3">{l.valuation.asOf ?? '—'}</td>
+                <td className="py-1 pr-3">{l.valuation.asOf ? fmtDate(l.valuation.asOf, l.currency) : '—'}</td>
                 <td className="py-1 pr-3 text-right font-medium">{money(l.value, l.currency)}</td>
                 <td className="py-1">
                   <span className={`rounded px-2 py-0.5 text-xs ${TAG_CLASS[l.valuation.tag]}`} title={TAG_HINT[l.valuation.tag]}>

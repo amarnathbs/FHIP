@@ -571,7 +571,7 @@ describe('dates inside messages are day-first (dd-mm-yyyy), never ISO year-first
     expect(find(future, 'DATE_FUTURE')?.message).toBe('The date 02-10-2026 is in the future (today is 01-10-2026).');
     const old = run(file('1899-12-31,1000'));
     expect(find(old, 'DATE_OUTSIDE_ENTITLEMENT_SCOPE')?.message).toBe('The date 31-12-1899 is before 01-01-1900, the earliest date accepted.');
-    const scoped = run(file('2019-12-31,1000'), {}, { entitlementDateScope: { from: '2020-01-01', to: null } });
+    const scoped = run(file('2019-12-31,1000'), {}, { entitlementDateScope: { from: '2020-01-01' } });
     expect(find(scoped, 'DATE_OUTSIDE_ENTITLEMENT_SCOPE')?.message).toBe("The date 31-12-2019 is outside the entitlement's data-date scope (01-01-2020 to open).");
   });
 
