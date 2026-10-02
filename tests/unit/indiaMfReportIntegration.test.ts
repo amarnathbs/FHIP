@@ -48,9 +48,16 @@ const SHARED: TableSet = {
   user_profiles: [{ user_id: 'user-A', country_of_residence: 'AU' }],
 };
 
+// The header index closes are entitlement-gated (customer display + report export); these fixtures model an
+// approved entitlement for both price-index series so the loader tests below exercise the entitled path.
+const ENTITLED_RPC = (name: string, args: Record<string, unknown>) =>
+  name === 'benchmark_entitled_actions'
+    ? { data: (args.p_benchmark_ids as string[]).map((id) => ({ benchmark_id: id, can_calculate: true, can_display: true, can_export: true, data_from: null, data_to: null })), error: null }
+    : { data: null, error: null };
+
 describe('loader gating: India mutual-fund holdings, not home country', () => {
   it('an Australian-resident user with an INR mutual-fund folio gets the section', async () => {
-    const { client, calls } = fakeSupabase({ ...SHARED, ...tablesFor('user-A') });
+    const { client, calls } = fakeSupabase({ ...SHARED, ...tablesFor('user-A') }, { rpc: ENTITLED_RPC });
     const out = await loadIndiaMfReportForReport('user-A', client, V);
     expect(out?.status).toBe('ok');
     if (out?.status === 'ok') {
@@ -87,7 +94,7 @@ describe('cross-user isolation', () => {
     const b = tablesFor('user-B');
     const merged: TableSet = { ...SHARED };
     for (const k of Object.keys(a)) merged[k] = [...a[k], ...b[k]];
-    const { client, calls } = fakeSupabase(merged);
+    const { client, calls } = fakeSupabase(merged, { rpc: ENTITLED_RPC });
     const out = await loadIndiaMfReportForReport('user-A', client, V);
     expect(out?.status).toBe('ok');
     if (out?.status !== 'ok') return;
@@ -103,7 +110,7 @@ describe('cross-user isolation', () => {
 
 describe('fail closed', () => {
   it('a read failure AFTER the user is known to hold India funds is an explicit error state, never a partial table', async () => {
-    const { client } = fakeSupabase({ ...SHARED, ...tablesFor('user-A') }, { failTable: 'ii_transactions' });
+    const { client } = fakeSupabase({ ...SHARED, ...tablesFor('user-A') }, { failTable: 'ii_transactions', rpc: ENTITLED_RPC });
     const out = await loadIndiaMfReportForReport('user-A', client, V);
     expect(out?.status).toBe('error');
   });
