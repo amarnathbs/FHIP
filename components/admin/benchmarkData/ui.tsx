@@ -6,7 +6,7 @@
 // Reuses the repository's Admin conventions: Tailwind tokens (trust, line, ink,
 // muted, risk, positive, attention), 44px touch targets, visible focus rings,
 // tables inside horizontal scroll containers, aria-live announcements.
-import { useId, type ReactNode } from 'react';
+import { useId, type ReactNode, type Ref } from 'react';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import type { PendingImportTask } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import {
@@ -48,13 +48,13 @@ export function Notice({ tone = 'info', title, children, live }: { tone?: Tone; 
   );
 }
 
-export function Panel({ title, id, description, children, actions }: { title: string; id?: string; description?: ReactNode; children?: ReactNode; actions?: ReactNode }) {
+export function Panel({ title, id, description, children, actions, headingRef }: { title: string; id?: string; description?: ReactNode; children?: ReactNode; actions?: ReactNode; /** When set, the heading is programmatically focusable (tabIndex -1) so an opened panel can receive keyboard focus. */ headingRef?: Ref<HTMLHeadingElement> }) {
   const generated = useId();
   const hid = id ?? `panel-${generated}`;
   return (
     <section aria-labelledby={hid} className="rounded-card border border-line bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2 id={hid} className="text-base font-semibold text-ink">
+        <h2 id={hid} ref={headingRef} tabIndex={headingRef ? -1 : undefined} className="text-base font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-trust">
           {title}
         </h2>
         {actions}

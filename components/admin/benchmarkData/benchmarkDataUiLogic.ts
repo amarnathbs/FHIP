@@ -1413,3 +1413,30 @@ export function nextTab(current: TabId, key: string): TabId | null {
   if (key === 'End') return TAB_IDS[TAB_IDS.length - 1];
   return null;
 }
+
+
+// ---------------------------------------------------------------------------
+// Opened-panel reveal (scroll into view + keyboard focus). A panel that opens
+// below the fold or after a long list must not look like "nothing happened".
+// Pure decisions only; the component performs the scroll/focus.
+// ---------------------------------------------------------------------------
+
+/** Which action panel is open: null, 'propose', 'approve:<id>' or 'revoke:<id>' (each id is the entitlement's own). */
+export type OpenPanelKey = string | null;
+
+export function entitlementPanelKeys(form: unknown | null, action: { kind: 'approve' | 'revoke'; e: { entitlementId: string } } | null): { propose: OpenPanelKey; action: OpenPanelKey } {
+  return { propose: form ? 'propose' : null, action: action ? `${action.kind}:${action.e.entitlementId}` : null };
+}
+
+/**
+ * Reveal (scroll + focus) when a panel opens, a DIFFERENT one opens, or the user PRESSES the control again while
+ * its panel is already open (so a press never looks like "nothing happened"). Never on close, re-render or typing.
+ */
+export function shouldRevealPanel(prev: OpenPanelKey, next: OpenPanelKey, pressedAgain = false): boolean {
+  return next !== null && (next !== prev || pressedAgain);
+}
+
+/** Respect prefers-reduced-motion: no animated scrolling for users who asked for less motion. */
+export function revealScrollBehavior(prefersReducedMotion: boolean): 'auto' | 'smooth' {
+  return prefersReducedMotion ? 'auto' : 'smooth';
+}
