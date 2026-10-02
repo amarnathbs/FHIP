@@ -561,3 +561,52 @@ describe('limits, empty files and reader problems', () => {
     expect(errors(r).map((i) => [i.rowNumber, i.code])).toEqual([[2, 'VALUE_NOT_NUMERIC'], [4, 'VALUE_PLACEHOLDER']]);
   });
 });
+
+describe('dates inside messages are day-first (dd-mm-yyyy), never ISO year-first (PO rule, Document2 findings #8/#19)', () => {
+  const ISO = /\b\d{4}-\d{2}-\d{2}\b/;
+  const existing = existingOf({ [TRI]: { '2024-01-01': 1000, '2024-01-02': 1001 } });
+
+  it('future date, pre-1900 date and entitlement-scope messages', () => {
+    const future = run(file('2026-10-02,1000'));
+    expect(find(future, 'DATE_FUTURE')?.message).toBe('The date 02-10-2026 is in the future (today is 01-10-2026).');
+    const old = run(file('1899-12-31,1000'));
+    expect(find(old, 'DATE_OUTSIDE_ENTITLEMENT_SCOPE')?.message).toBe('The date 31-12-1899 is before 01-01-1900, the earliest date accepted.');
+    const scoped = run(file('2019-12-31,1000'), {}, { entitlementDateScope: { from: '2020-01-01', to: null } });
+    expect(find(scoped, 'DATE_OUTSIDE_ENTITLEMENT_SCOPE')?.message).toBe("The date 31-12-2019 is outside the entitlement's data-date scope (01-01-2020 to open).");
+  });
+
+  it('duplicate, correction, conflict, move, scale and gap messages', () => {
+    const dup = run(file('2024-01-01,1000', '2024-01-01,1000', '2024-01-02,1000', '2024-01-02,1005'));
+    expect(find(dup, 'DUPLICATE_IDENTICAL_COLLAPSED')?.message).toContain('IN_NIFTY_50_TRI 01-01-2024 with the same level');
+    const conflictInFile = dup.issues.find((i) => i.message.includes('appears with different levels'));
+    expect(conflictInFile?.message).toContain('IN_NIFTY_50_TRI 02-01-2024 appears with different levels');
+    const missing = run(file('2024-01-03,1003'), { mode: 'correction' }, { existing });
+    expect(find(missing, 'CORRECTION_TARGET_MISSING')?.message).toBe('Correction mode: no published level exists for IN_NIFTY_50_TRI on 03-01-2024, so there is nothing to correct.');
+    const conflict = run(file('2024-01-02,1002'), {}, { existing });
+    expect(find(conflict, 'CONFLICT_WITH_PUBLISHED')?.message).toContain('IN_NIFTY_50_TRI 02-01-2024 is already published at 1001');
+    const move = run(file('2024-01-01,1000', '2024-01-02,1150'));
+    expect(find(move, 'LARGE_MOVE')?.message).toContain('IN_NIFTY_50_TRI 02-01-2024: the level moves 15.00% from 1000 (01-01-2024) to 1150');
+    const scale = run(file('2024-01-01,1000', '2024-01-02,10000'));
+    expect(find(scale, 'SUSPECTED_SCALE_CHANGE')?.message).toContain('IN_NIFTY_50_TRI 02-01-2024: the level moves from 1000 (01-01-2024) to 10000');
+    const edge = run(file('2024-01-01,210', '2024-01-02,211'), {}, { existing: existingOf({ [TRI]: { '2023-12-29': 21000 } }) });
+    expect(find(edge, 'SUSPECTED_SCALE_CHANGE')?.message).toContain('on 29-12-2023');
+    const gap = run(file('2024-01-01,1000', '2024-01-12,1001'));
+    expect(find(gap, 'COVERAGE_GAP')?.message).toContain('from 02-01-2024 to 11-01-2024');
+  });
+
+  it('NEGATIVE CONTROL shape: every message the checks above produce is free of ISO year-first dates', () => {
+    const results = [
+      run(file('2026-10-02,1000')),
+      run(file('1899-12-31,1000')),
+      run(file('2019-12-31,1000'), {}, { entitlementDateScope: { from: '2020-01-01', to: '2020-12-31' } }),
+      run(file('2024-01-01,1000', '2024-01-01,1000', '2024-01-02,1000', '2024-01-02,1005')),
+      run(file('2024-01-03,1003'), { mode: 'correction' }, { existing }),
+      run(file('2024-01-02,1002'), {}, { existing }),
+      run(file('2024-01-01,1000', '2024-01-02,10000', '2024-01-12,1')),
+      run(file('2024-01-01,1000', '2024-01-12,1001')),
+    ];
+    const all = results.flatMap((r) => r.issues.map((i) => i.message));
+    expect(all.length).toBeGreaterThan(8);
+    for (const m of all) expect(m, m).not.toMatch(ISO);
+  });
+});

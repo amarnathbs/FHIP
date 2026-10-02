@@ -15,17 +15,17 @@ const CRLF = '\r\n';
 export const BENCHMARK_UPLOAD_TEMPLATES: Record<'single_date_value' | 'multi_key_date_value' | 'provider_nse_tri_export', UploadTemplate> = {
   single_date_value: {
     fileName: 'benchmark_single_template.csv',
-    description: 'One benchmark: choose the benchmark, source, return type, currency and date format on the upload form. Use the ISO date format YYYY-MM-DD.',
-    csv: ['date,value', '2024-01-01,1000.00', '2024-01-02,1001.50', '2024-01-03,1002.25'].join(CRLF) + CRLF,
+    description: 'One benchmark: choose the benchmark, source, return type, currency and date format on the upload form. Dates in this template are written day first, like 01-01-2024, so choose the file date format "Day-month-year (DD-MM-YYYY)".',
+    csv: ['date,value', '01-01-2024,1000.00', '02-01-2024,1001.50', '03-01-2024,1002.25'].join(CRLF) + CRLF,
   },
   multi_key_date_value: {
     fileName: 'benchmark_multi_template.csv',
-    description: 'Several benchmarks in one file. Every benchmark_key must exactly match a key in the benchmark catalogue and share the return type and currency chosen on the form.',
+    description: 'Several benchmarks in one file. Every benchmark_key must exactly match a key in the benchmark catalogue and share the return type and currency chosen on the form. Dates are written day first, like 01-01-2024, so choose the file date format "Day-month-year (DD-MM-YYYY)".',
     csv: [
       'benchmark_key,date,value',
-      'EXAMPLE_KEY_REPLACE_ME,2024-01-01,1000.00',
-      'EXAMPLE_KEY_REPLACE_ME,2024-01-02,1001.50',
-      'EXAMPLE_OTHER_KEY_REPLACE_ME,2024-01-01,2000.00',
+      'EXAMPLE_KEY_REPLACE_ME,01-01-2024,1000.00',
+      'EXAMPLE_KEY_REPLACE_ME,02-01-2024,1001.50',
+      'EXAMPLE_OTHER_KEY_REPLACE_ME,01-01-2024,2000.00',
     ].join(CRLF) + CRLF,
   },
   provider_nse_tri_export: {
@@ -55,7 +55,7 @@ export const UPLOAD_HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'Currency and dates must be correct',
-    body: 'Choose the currency the levels are quoted in. Choose the date format explicitly (for example DD/MM/YYYY or MM/DD/YYYY): the system never guesses, because 03/04/2024 means two different days. Dates must be plain calendar dates; a date with a time or a timezone is refused. Two-digit years are refused. Dates in the future are refused.',
+    body: 'Choose the currency the levels are quoted in. Choose the date format the file uses, in words and with an example (day-month-year like 01-10-2026, month-day-year, year first, or an Excel date number): the system never guesses, because a date such as 03-04-2024 is two different days depending on the order. Dates must be plain calendar dates; a date with a time or a timezone is refused. Two-digit years are refused. Dates in the future are refused.',
   },
   {
     title: 'Uploading a file does not give you permission to use the data',

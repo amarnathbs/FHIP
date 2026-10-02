@@ -11,7 +11,13 @@
 // and it never describes a manual upload as an automatic update: the wording
 // says "upload", the status vocabulary says manual_import, and a benchmark with
 // no data at all is `never_imported`, not "up to date".
+import { formatDateShort } from '@/lib/engines/date';
 import { addDaysIso, assessCompleteness, expectedLatestSession, weekdaysAfter } from './calendar';
+
+/** A date inside the operator-facing action sentence: day-first dd-mm-yyyy (India format), never ISO year-first (PO rule, Document2 findings #8/#19). */
+function fd(iso: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? formatDateShort(iso, 'INR') : iso;
+}
 
 export type PendingImportStatus = 'current' | 'due' | 'overdue' | 'never_imported' | 'not_manual';
 
@@ -73,9 +79,9 @@ export function assessPendingImport(input: PendingImportInput, nowIso: string, o
   const severity: PendingImportTask['severity'] = status === 'overdue' ? 'critical' : status === 'due' ? 'warning' : 'info';
   const action =
     status === 'current'
-      ? `Up to date through ${input.latestValidDataDate} (manual imports).`
+      ? `Up to date through ${fd(input.latestValidDataDate)} (manual imports).`
       : historyMissingFrom && behind === 0
-        ? `History is missing from ${historyMissingFrom}: upload the historical file for ${input.benchmarkLabel} (manual import).`
-        : `Latest imported level is ${input.latestValidDataDate}; the expected latest session is ${expected} (${behind} weekday${behind === 1 ? '' : 's'} behind). Upload the latest file for ${input.benchmarkLabel} (manual import; nothing updates automatically).`;
+        ? `History is missing from ${fd(historyMissingFrom)}: upload the historical file for ${input.benchmarkLabel} (manual import).`
+        : `Latest imported level is ${fd(input.latestValidDataDate)}; the expected latest session is ${fd(expected)} (${behind} weekday${behind === 1 ? '' : 's'} behind). Upload the latest file for ${input.benchmarkLabel} (manual import; nothing updates automatically).`;
   return { ...base, status, latestValidDataDate: input.latestValidDataDate, weekdaysBehind: behind, historyMissingFrom, severity, action };
 }
