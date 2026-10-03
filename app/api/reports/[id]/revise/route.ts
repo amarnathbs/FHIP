@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { generateReport, type ReportTypeCode } from '@/lib/services/reportsData';
+import { waitingResponseFor } from '@/lib/services/investment-intelligence/pc6/reportNavHistoryGate';
 
 // Corrections create a new report version rather than overwriting the
 // published original (Rule 9/10). The original is marked 'superseded' and
@@ -37,6 +38,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     return ok(result);
   } catch (e) {
+    const waiting = waitingResponseFor(e);
+    if (waiting) return waiting;
     return bad(e instanceof Error ? e.message : 'Could not revise report');
   }
 }

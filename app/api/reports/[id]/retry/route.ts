@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { generateReport, type ReportTypeCode } from '@/lib/services/reportsData';
+import { waitingResponseFor } from '@/lib/services/investment-intelligence/pc6/reportNavHistoryGate';
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,6 +31,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }
     return ok(result);
   } catch (e) {
+    const waiting = waitingResponseFor(e);
+    if (waiting) return waiting;
     return bad(e instanceof Error ? e.message : 'Could not retry report generation');
   }
 }
