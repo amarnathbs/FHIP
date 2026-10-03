@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { PerformanceClient } from '@/components/investment-intelligence/PerformanceClient';
-import { NavHistoryStatusPanel } from '@/components/investment-intelligence/NavHistoryStatusPanel';
+import { PriceHistoryGate } from '@/components/investment-intelligence/PriceHistoryGate';
 
 // R4 — Performance & Benchmark UX (spec sections 60-65).
 //
@@ -27,8 +27,10 @@ export default async function InvestmentPerformancePage() {
         </p>
       </header>
       <InvestmentIntelligenceSubNav />
-      <NavHistoryStatusPanel />
-      <PerformanceClient />
+      {/* PO 2026-10-03: no partial figures while the price history of the user's funds is still loading. */}
+      <PriceHistoryGate>
+        <PerformanceClient />
+      </PriceHistoryGate>
     </div>
   );
 }

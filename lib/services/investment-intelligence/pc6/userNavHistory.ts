@@ -207,7 +207,7 @@ export async function loadUserSchemeNeeds(db: Db, userId: string): Promise<Schem
   return needs.sort((a, b) => a.schemeName.localeCompare(b.schemeName));
 }
 
-async function loadCoverage(db: Db, instrumentIds: string[]): Promise<Map<string, SchemeCoverage>> {
+export async function loadCoverage(db: Db, instrumentIds: string[]): Promise<Map<string, SchemeCoverage>> {
   const out = new Map<string, SchemeCoverage>();
   const { data: floors } = instrumentIds.length ? await db.from('ii_nav_history_floors').select('instrument_id, floor_date').in('instrument_id', instrumentIds) : { data: [] };
   const floorBy = new Map(((floors ?? []) as unknown as Array<{ instrument_id: string; floor_date: string }>).map((f) => [f.instrument_id, f.floor_date]));
@@ -219,7 +219,7 @@ async function loadCoverage(db: Db, instrumentIds: string[]): Promise<Map<string
   return out;
 }
 
-async function loadAttempts(db: Db, instrumentIds: string[]): Promise<Map<string, AttemptInfo & { attemptsTotal: number; lastSuccessAt: string | null }>> {
+export async function loadAttempts(db: Db, instrumentIds: string[]): Promise<Map<string, AttemptInfo & { attemptsTotal: number; lastSuccessAt: string | null }>> {
   const out = new Map<string, AttemptInfo & { attemptsTotal: number; lastSuccessAt: string | null }>();
   if (instrumentIds.length === 0) return out;
   // The ledger (0198) may not exist yet: no table = never attempted, never a failure.

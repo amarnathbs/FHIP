@@ -10,6 +10,13 @@ import {
 import { buildReportSections, type BuiltSection } from '@/lib/engines/reportSections';
 import { localeForReportingCurrency } from '@/lib/engines/money';
 import { writeReportNavDependencyManifest } from '@/lib/services/investment-intelligence/pc6/reportNavDependencyWriter';
+import {
+  ReportWaitingForPriceHistoryError,
+  applyNavDisclosures,
+  checkReportNavHistoryGate,
+  type ReportNavGate,
+} from '@/lib/services/investment-intelligence/pc6/reportNavHistoryGate';
+import { kickUserNavHistory } from '@/lib/services/investment-intelligence/pc6/userNavHistoryKick';
 
 // II-R10 security hardening (migration 0070_ii_r10_reports_authoritative_write_hardening.sql):
 // the `reports` table family now grants the `authenticated` role SELECT-own
@@ -96,6 +103,8 @@ export interface GenerateReportParams {
   // Optional pre-built client (a service-role client for the scheduled job,
   // which has no per-request cookie session to build one from).
   client?: SupabaseServerClient;
+  /** Test seam for the price-history gate; production uses checkReportNavHistoryGate. */
+  navHistoryGate?: (userId: string, db: SupabaseServerClient) => Promise<ReportNavGate | null>;
 }
 
 // Orchestrates report generation end to end (spec section 12): resolves
@@ -170,6 +179,18 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
     }
     const effectiveReviseReportId = params.reviseReportId ?? autoReviseReportId;
 
+    // PO 2026-10-03 -- WAIT FOR THE DATA, but never trap the user. This is the ONE
+    // place a report is built (manual, retry, revise and the monthly cron all
+    // come through here), so no path -- preview, PDF/export, scheduled -- can
+    // build the India MF / Performance sections around a fund whose price
+    // history is still being fetched. While any of the user's funds is still
+    // waiting for history, NOTHING is generated and the caller is told to wait;
+    // once every fund is loaded, or the bounded retry window has passed for a
+    // fund that cannot be loaded, the report is built and the fund that could
+    // not be loaded is named in it. See pc6/reportNavHistoryGate.ts.
+    const navGate = reportType === 'monthly_financial_health' ? await navHistoryGateFor(params, supabase) : null;
+    if (navGate?.hold) throw new ReportWaitingForPriceHistoryError(navGate);
+
     const source = await resolveReportSourceData(params.userId, reportMonth, supabase);
     const eligibilityInput = buildEligibilityInput(source);
 
@@ -216,7 +237,7 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
       .limit(1);
     const isFirstReport = (earlierMonths?.length ?? 0) === 0;
 
-    const sections = buildReportSections(source, eligibilityInput, isFirstReport);
+    const sections = applyNavDisclosures(buildReportSections(source, eligibilityInput, isFirstReport), navGate ?? { unavailable: [], disclosures: [] });
     const dataQuality = sections.find((s) => s.sectionCode === 'data_quality');
     const dataCompletenessPct = (dataQuality?.sectionData.dataCompletenessPct as number) ?? null;
 
@@ -400,8 +421,23 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
     await finishRun(supabase, runRow?.id, report.id, 'succeeded');
     return { report: report as ReportRow, sections, alreadyExisted: false };
   } catch (e) {
-    await finishRun(supabase, runRow?.id, null, 'failed', e instanceof Error ? e.message : 'Unknown error');
+    // A held report is not a failure: nothing was stored, the user is asked to wait.
+    if (e instanceof ReportWaitingForPriceHistoryError) await finishRun(supabase, runRow?.id, null, 'waiting_for_price_history', e.message);
+    else await finishRun(supabase, runRow?.id, null, 'failed', e instanceof Error ? e.message : 'Unknown error');
     throw e;
+  }
+}
+
+// Fails OPEN: if the gate itself cannot be evaluated (a read problem), the report
+// is generated rather than held -- a broken check must never trap the user. The
+// failure is logged, never silent.
+async function navHistoryGateFor(params: GenerateReportParams, supabase: SupabaseServerClient): Promise<ReportNavGate | null> {
+  try {
+    if (params.navHistoryGate) return await params.navHistoryGate(params.userId, supabase);
+    return await checkReportNavHistoryGate({ db: supabase, userId: params.userId, today: new Date().toISOString().slice(0, 10), createAnchor: true, kick: kickUserNavHistory });
+  } catch (err) {
+    console.error('[reports] price-history gate could not be evaluated; generating without it', err instanceof Error ? err.message : err);
+    return null;
   }
 }
 
