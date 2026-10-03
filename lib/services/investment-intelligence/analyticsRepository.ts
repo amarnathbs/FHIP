@@ -613,6 +613,8 @@ export async function loadAnalyticsDataset(
       currencyCode: (txs[0]?.currency_code as string) ?? (snaps[0]?.currency_code as string) ?? (inst.base_currency as string),
       countryOfDomicile: inst.country_of_domicile as string,
       historyCompleteness: completenessByInstrument.get(instrumentId) ?? null,
+      // D-3: no usable transaction at all = a holding with no purchase date.
+      holdingsOnly: txs.length === 0,
       optionType: null, // populated when R2 scheme-option metadata is available
       hasDistributionAdjustment: false,
       cashFlows,

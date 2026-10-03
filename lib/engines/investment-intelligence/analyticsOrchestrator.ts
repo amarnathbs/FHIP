@@ -56,6 +56,12 @@ export interface SchemeDataset {
   currencyCode: string;
   countryOfDomicile: string;
   historyCompleteness: string | null;
+  /**
+   * True when the scheme has NO usable transaction at all (a statement holding
+   * with no purchase date). Optional so a caller or fixture that predates it
+   * behaves exactly as before. See splitHoldingsOnlySchemes().
+   */
+  holdingsOnly?: boolean;
   optionType: string | null;
   hasDistributionAdjustment: boolean;
   cashFlows: CashFlow[];
@@ -383,13 +389,33 @@ function schemeRealFlows(s: SchemeDataset): CashFlow[] {
   });
 }
 
+/**
+ * Document2 D-3 (PO decision 2026-10-03). A holdings-only scheme (a statement
+ * holding with NO usable transaction) has a current value but no cost flow, so
+ * counting its value in the portfolio terminal value inflates the portfolio
+ * return. It is left out of the portfolio return until the user supplies the
+ * investment date (which then writes the purchase the scheme was missing), and
+ * the omission is disclosed, never silent.
+ */
+export function splitHoldingsOnlySchemes(group: SchemeDataset[]): { included: SchemeDataset[]; holdingsOnly: SchemeDataset[] } {
+  const holdingsOnly = group.filter((s) => s.holdingsOnly === true && s.currentValue > 0);
+  return { included: group.filter((s) => !holdingsOnly.includes(s)), holdingsOnly };
+}
+
 function analysePortfolioCurrency(
   currencyCode: string,
-  group: SchemeDataset[],
+  fullGroup: SchemeDataset[],
   ds: AnalyticsDataset,
   frequency: ReturnFrequency
 ): PortfolioCurrencyAnalytics {
   const annotations: DataQualityAnnotation[] = [];
+  const { included: group, holdingsOnly: holdingsOnlySchemes } = splitHoldingsOnlySchemes(fullGroup);
+  if (holdingsOnlySchemes.length > 0) {
+    annotations.push({
+      flag: 'PARTIAL_TRANSACTION_HISTORY',
+      detail: `${holdingsOnlySchemes.length === 1 ? '1 holding has' : `${holdingsOnlySchemes.length} holdings have`} no purchase date (${holdingsOnlySchemes.map((s) => s.instrumentName).join(', ')}) and ${holdingsOnlySchemes.length === 1 ? 'is' : 'are'} left out of the portfolio return until you add the investment date.`,
+    });
+  }
 
   // Aggregate the portfolio valuation series across this currency's schemes.
   // Prefer each scheme's derived, unit-ledger-x-NAV reconstruction over its

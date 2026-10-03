@@ -76,6 +76,9 @@ export function createInMemoryDb(): InMemoryDb {
       not: (c: string, op: string, v: unknown) => { filters.push((r) => (op === 'is' ? (v === null ? r[c] !== null && r[c] !== undefined : r[c] !== v) : r[c] !== v)); return chain; },
       in: (c: string, vs: unknown[]) => { filters.push((r) => vs.includes(r[c])); return chain; },
       gte: (c: string, v: unknown) => { filters.push((r) => String(r[c]) >= String(v)); return chain; },
+      // .lte / .lt -- string comparison, which is chronological for ISO dates (2026-10-03: investment-date NAV lookup).
+      lte: (c: string, v: unknown) => { filters.push((r) => String(r[c]) <= String(v)); return chain; },
+      lt: (c: string, v: unknown) => { filters.push((r) => String(r[c]) < String(v)); return chain; },
       // .is(col, null) -- IS NULL (2026-10-01, owner-change routes).
       is: (c: string, v: unknown) => { filters.push((r) => (v === null ? r[c] === null || r[c] === undefined : r[c] === v)); return chain; },
       // .contains(jsonbCol, { k: v }) -- shallow jsonb containment (2026-10-01: the Resolutions amend route's "already amended" check).

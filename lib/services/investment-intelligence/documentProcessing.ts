@@ -81,6 +81,8 @@ import { checkPasswordAttemptRateLimit } from '@/lib/financial-data-hub/bank-pdf
 import { MAX_PASSWORD_ATTEMPTS_PER_DOCUMENT_PER_HOUR } from '@/lib/financial-data-hub/bank-pdf/constants';
 import { detectMissingTransactions } from './missingTransactionDetection';
 import { openReconciliationCase } from './reconciliationCases';
+import { CROSS_SOURCE_INSERT_STATUS, CROSS_SOURCE_REVIEW_SEVERITY, filterCertificationBlockingCases } from './crossSourceReviewPolicy';
+import { openUserDateSupersessionCases } from './userDateSupersession';
 import { getAiFallbackDocumentExtraction, iiAiCallEvidenceMetadata, type AiFallbackDocumentOutcome, type AieDocumentProvider } from './aiFallbackDocumentExtraction';
 import { maskText } from '@/lib/aie/masking/piiMasking';
 
@@ -1118,7 +1120,6 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     // can never catch this by construction — see
     // R11_SCOPE_AND_ARCHITECTURE_RECONCILIATION.md section 1).
     const crossSourceCandidates = await loadCrossSourceCandidates(accountId, instrumentId);
-    let crossSourceReviewRequired = false;
     if (crossSourceCandidates.length > 0) {
       const match = resolveCrossSourceTransactionMatch(
         {
@@ -1172,16 +1173,21 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
       if (match.state === 'conflict' || match.state === 'ambiguous') {
         // Never silently merge (spec section 29). Both pieces of evidence
-        // are preserved — this row IS inserted below (falls through), but
-        // with status='review_required' so R4/R5/R6 exclude it from
-        // analytical aggregation until a human resolves the case (spec
-        // sections 36, 37 — "no economic duplication" while still "never
-        // discard evidence").
+        // are preserved — this row IS inserted below (falls through).
+        //
+        // Document2 D-5 (PO 2026-10-03): it is inserted COUNTED
+        // (CROSS_SOURCE_INSERT_STATUS = 'parsed'), no longer parked as
+        // 'review_required', and the case is a NON-BLOCKING highlight
+        // (CROSS_SOURCE_REVIEW_SEVERITY = 'medium', below the certification
+        // blocking set). Analysis never waits on a possible duplicate; the
+        // user decides in Review (keep both / accept the statement / reject
+        // the statement entry) and nothing changes until they do. Detection
+        // is unchanged. See crossSourceReviewPolicy.ts.
         const caseId = await openReconciliationCase(userId, {
           subjectType: 'transaction',
           subjectId: accountId, // the new row doesn't exist yet at case-creation time; account_id is a stable, always-available anchor. The evidence payload below carries the precise comparison.
           discrepancyType: match.state === 'conflict' ? 'cross_source_conflict' : 'cross_source_review_required',
-          severity: 'high',
+          severity: CROSS_SOURCE_REVIEW_SEVERITY,
           sourceDocumentId,
           // Document2 final closure #4: `newTransactionId` is the id the row
           // this case is actually about WILL have once inserted a few lines
@@ -1192,7 +1198,6 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
           evidence: { comparedTransactionIds: match.ambiguousCandidateIds.length > 0 ? match.ambiguousCandidateIds : match.matchedExistingId ? [match.matchedExistingId] : [], engineVersion: match.engineVersion, newSourceDocumentId: sourceDocumentId, newTransactionId },
         });
         if (caseId) reconciliationCasesOpened++;
-        crossSourceReviewRequired = true;
       }
     }
 
@@ -1234,13 +1239,9 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       source_document_id: sourceDocumentId,
       currency_code: currencyCode,
       // R11: a cross-source CONFLICT/AMBIGUOUS candidate is still fully
-      // inserted (never discarded — spec section 29) but excluded from
-      // R4/R5/R6 analytical aggregation via 'review_required' until a
-      // human resolves the linked ii_reconciliation_cases row, using the
-      // exact same exclusion mechanism R4/R5/R6 already apply to
-      // 'reversed' (see analyticsRepository.ts/r5Repository.ts/
-      // taxRepository.ts's "usable" filters).
-      status: crossSourceReviewRequired ? 'review_required' : 'parsed',
+      // inserted (never discarded — spec section 29). D-5 (2026-10-03): it is
+      // COUNTED, not parked — see crossSourceReviewPolicy.ts.
+      status: CROSS_SOURCE_INSERT_STATUS,
       transaction_type: t.canonicalType,
       transaction_date: t.transactionDateIso,
       units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
@@ -1272,7 +1273,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       grossAmount: scaledToDecimalString(t.amountScaled, 2),
       units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
       sourceReference: t.sourceReference,
-      status: crossSourceReviewRequired ? 'review_required' : 'parsed',
+      status: CROSS_SOURCE_INSERT_STATUS,
     });
   }
 
@@ -1309,6 +1310,27 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
       return { ok: false, status: 'parse_failed', parseRunId, error: message };
     }
+  }
+
+  // Document2 D-3 follow-up (2026-10-03): a position whose purchase date the
+  // user typed in now has real statement history. Ask, never auto-remove.
+  // Best effort: a failure here must never fail the statement itself.
+  try {
+    const supersession = await openUserDateSupersessionCases({
+      db: admin,
+      userId,
+      sourceDocumentId,
+      statementTransactions: pendingTransactionInserts.map((r) => ({
+        id: r.id as string,
+        accountId: r.account_id as string,
+        instrumentId: r.instrument_id as string,
+        type: r.transaction_type as string,
+        date: r.transaction_date as string,
+      })),
+    });
+    reconciliationCasesOpened += supersession.opened;
+  } catch (err) {
+    console.error('[investment-intelligence] user-supplied investment date supersession check failed', err instanceof Error ? err.message : err);
   }
 
   // --- 6. Holding snapshots -------------------------------------------------
@@ -1927,13 +1949,18 @@ async function evaluatePositionAndCertify(
     config,
   });
 
-  const { data: openBlockingCases } = await admin
+  const { data: openBlockingCasesRaw } = await admin
     .from('ii_reconciliation_cases')
     .select('id, discrepancy_type, severity')
     .eq('user_id', userId)
     .eq('status', 'open')
     .in('severity', ['blocking', 'high'])
     .or(`subject_id.eq.${accountId},subject_id.eq.${sourceDocumentId}`);
+  // Document2 D-5 (PO 2026-10-03): an open cross-source (statement vs manual)
+  // probable duplicate is highlighted for the user but NEVER blocks
+  // certification -- including a legacy case opened at 'high' severity before
+  // this rule. Detection is unchanged; only its power to block is removed.
+  const openBlockingCases = filterCertificationBlockingCases(openBlockingCasesRaw ?? []);
 
   const asOfDate = latestSnapshot.as_of_date as string;
   const today = new Date().toISOString().slice(0, 10);

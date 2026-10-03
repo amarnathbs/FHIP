@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-10-01T13:25:12.267Z",
+  "generatedAt": "2026-10-03T00:38:30.741Z",
   "method": "one tiny mutation per rule in benchmarkDataUiLogic.ts; the matching vitest file(s) must FAIL at least one NAMED test; source restored byte-exactly and verified by SHA-256",
   "baseline": {
     "tests/unit/benchmarkDataUiLogic.test.ts": {
       "ran": true,
-      "total": 57,
-      "passed": 57,
+      "total": 66,
+      "passed": 66,
       "failed": []
     },
     "tests/unit/benchmarkDataClientStates.test.ts": {
@@ -284,6 +284,10 @@
         {
           "find": "    if (!f.evidenceUrl.trim()) e.evidenceUrl = 'A public-use permission",
           "replace": "    if (false) e.evidenceUrl = 'A public-use permission"
+        },
+        {
+          "find": "    else if (!/^https:",
+          "replace": "    else if (false && !/^https:"
         }
       ],
       "testFiles": [
@@ -332,8 +336,8 @@
   "afterRestore": {
     "tests/unit/benchmarkDataUiLogic.test.ts": {
       "ran": true,
-      "total": 57,
-      "passed": 57,
+      "total": 66,
+      "passed": 66,
       "failed": []
     },
     "tests/unit/benchmarkDataClientStates.test.ts": {

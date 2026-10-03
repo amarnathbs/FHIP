@@ -5,6 +5,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { EntitlementRightsView, OverviewResponse } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { usePost, type Say } from './api';
+import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
+import { ENTITLEMENT_DATE_KEYS, ENTITLEMENT_FIELD_LABELS, ENTITLEMENT_FIELD_MAP, ENTITLEMENT_FIELD_ORDER, NOTE_FIELD_LABELS, NOTE_FIELD_MAP, NOTE_FIELD_ORDER } from './benchmarkDataFormErrors';
 import {
   ENTITLEMENT_RIGHT_INFO,
   LICENCE_STATUS_EXPLAINER,
@@ -30,6 +32,9 @@ import {
 } from './benchmarkDataUiLogic';
 import { Btn, CheckField, Chip, EmptyState, Notice, Panel, ScrollTable, SelectField, Td, DateField, TextAreaField, TextField, Th } from './ui';
 
+const PROPOSE_SPEC: FormSpec = { order: ENTITLEMENT_FIELD_ORDER, labels: ENTITLEMENT_FIELD_LABELS, map: ENTITLEMENT_FIELD_MAP, dateKeys: ENTITLEMENT_DATE_KEYS };
+const NOTE_SPEC: FormSpec = { order: NOTE_FIELD_ORDER, labels: NOTE_FIELD_LABELS, map: NOTE_FIELD_MAP };
+
 type Action = { kind: 'approve' | 'revoke'; e: EntitlementRightsView; label: string };
 
 export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewResponse; onChanged: () => void; say: Say }) {
@@ -37,7 +42,9 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
   const dec = capabilityDecisions(caps);
   const { busy, post } = usePost(say);
   const [form, setForm] = useState<EntitlementFormState | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const fb = useFormFeedback(PROPOSE_SPEC);
+  const fbAction = useFormFeedback(NOTE_SPEC);
+  const errors = fb.errors;
   const [action, setAction] = useState<Action | null>(null);
   const [note, setNote] = useState('');
   const [selfAck, setSelfAck] = useState(false);
@@ -68,15 +75,18 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
 
   async function propose() {
     if (!form) return;
-    const e = validateEntitlementForm(form);
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
     const row = ov.rows.find((r) => r.catalogue.benchmarkKey === form.benchmarkKey);
+    const e = validateEntitlementForm(form, row?.catalogue);
+    fb.showClientErrors(e);
+    if (Object.keys(e).length > 0) return;
     if (!row) return;
     const r = await post(apiPaths.entitlements(), buildEntitlementBody(form, row.catalogue), 'Proposed. It grants nothing until a user who can approve entitlements approves it.', 'propose this entitlement');
     if (r.ok) {
+      fb.clear();
       setForm(null);
       onChanged();
+    } else {
+      fb.showServerFailure(r.body, r.message);
     }
   }
 
@@ -87,10 +97,13 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
         ? await post(apiPaths.entitlementApprove(action.e.entitlementId), { note: note.trim(), selfApprovalAck: action.e.proposedByMe ? selfAck : undefined }, 'The entitlement is approved.', 'approve this entitlement')
         : await post(apiPaths.entitlementRevoke(action.e.entitlementId), { reason: note.trim() }, 'The entitlement is revoked. Publications that depend on it will now be refused.', 'revoke this entitlement');
     if (ok.ok) {
+      fbAction.clear();
       setAction(null);
       setNote('');
       setSelfAck(false);
       onChanged();
+    } else {
+      fbAction.showServerFailure(ok.body, ok.message);
     }
   }
 
@@ -101,30 +114,33 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
   const proposeInline = groups.length === 0;
   const proposeForm = form && dec.canProposeEntitlement ? (
         <Panel headingRef={proposeHeading} title="Propose an entitlement" description="A proposal grants nothing until a user with the approval permission approves it.">
+          <div data-form={fb.formId}>
+          <FormFeedback fb={fb} />
           <div className="grid gap-3 sm:grid-cols-2">
-            <SelectField label="Benchmark" required value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v })} options={ov.rows.map((r) => ({ value: r.catalogue.benchmarkKey, label: `${r.catalogue.label} (${r.catalogue.currencyCode ?? 'no currency'})` }))} error={errors.benchmarkKey} />
-            <SelectField label="Kind of permission" required value={form.kind} onChange={(v) => set({ kind: v as EntitlementFormState['kind'] })} options={[{ value: 'public_use_permission', label: 'Public-use permission (published terms)' }, { value: 'commercial_licence', label: 'Commercial licence' }]} error={errors.kind} />
+            <SelectField label="Benchmark" required value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v })} options={ov.rows.map((r) => ({ value: r.catalogue.benchmarkKey, label: `${r.catalogue.label} (${r.catalogue.currencyCode ?? 'no currency'})` }))} error={errors.benchmarkKey} fieldKey="benchmarkKey" />
+            <SelectField label="Kind of permission" required value={form.kind} onChange={(v) => set({ kind: v as EntitlementFormState['kind'] })} options={[{ value: 'public_use_permission', label: 'Public-use permission (published terms)' }, { value: 'commercial_licence', label: 'Commercial licence' }]} error={errors.kind} fieldKey="kind" />
           </div>
-          <fieldset className="mt-3 rounded-compact border border-line p-3">
-            <legend className="px-1 text-sm font-medium text-ink">Rights granted</legend>
+          <fieldset data-field-key="rights" tabIndex={-1} aria-invalid={errors.rights ? true : undefined} className={`mt-3 rounded-compact border p-3 ${errors.rights ? 'border-risk ring-1 ring-risk' : 'border-line'}`}>
+            <legend className="px-1 text-sm font-medium text-ink">Rights granted <span className="text-risk">(required: tick at least one)</span></legend>
             {ENTITLEMENT_RIGHT_INFO.map((r) => <CheckField key={r.key} label={r.label} hint={r.meaning} checked={form.rights[r.key]} onChange={(v) => set({ rights: { ...form.rights, [r.key]: v } })} />)}
-            {errors.rights ? <p role="alert" className="text-xs font-medium text-risk">{errors.rights}</p> : null}
+            {errors.rights ? <p id="entitlement-rights-error" role="alert" className="text-xs font-medium text-risk">{errors.rights}</p> : null}
           </fieldset>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <DateField label="Valid from" required value={form.validFrom} onChange={(v) => set({ validFrom: v })} error={errors.validFrom} />
-            <DateField label="Valid to (empty if no end)" value={form.validTo} onChange={(v) => set({ validTo: v })} error={errors.validTo} />
-            <DateField label="First data date covered (optional)" value={form.dataFrom} onChange={(v) => set({ dataFrom: v })} error={errors.dataFrom} />
-            <DateField label="Last data date covered (optional)" value={form.dataTo} onChange={(v) => set({ dataTo: v })} error={errors.dataTo} />
-            <SelectField label="Stored data after expiry" value={form.postExpiryStorage} onChange={(v) => set({ postExpiryStorage: v as EntitlementFormState['postExpiryStorage'] })} options={[{ value: 'retain', label: 'May be kept' }, { value: 'delete', label: 'Must be deleted' }, { value: 'unknown', label: 'Not stated' }]} placeholder="Not stated" />
-            <TextField label="Evidence reference" required value={form.evidenceReference} onChange={(v) => set({ evidenceReference: v })} error={errors.evidenceReference} hint="Document title or contract reference." />
-            <TextField label={`Evidence URL${form.kind === 'public_use_permission' ? '' : ' (optional)'}`} type="url" required={form.kind === 'public_use_permission'} value={form.evidenceUrl} onChange={(v) => set({ evidenceUrl: v })} error={errors.evidenceUrl} />
-            <DateField label={`Evidence document date${form.kind === 'public_use_permission' ? '' : ' (optional)'}`} required={form.kind === 'public_use_permission'} value={form.evidenceDocumentDate} onChange={(v) => set({ evidenceDocumentDate: v })} error={errors.evidenceDocumentDate} />
-            <DateField label={`Evidence retrieved on${form.kind === 'public_use_permission' ? '' : ' (optional)'}`} required={form.kind === 'public_use_permission'} value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
-            <TextField label="Attribution wording (optional)" value={form.attributionText} onChange={(v) => set({ attributionText: v })} />
+            <DateField label="Valid from" required value={form.validFrom} onChange={(v) => set({ validFrom: v })} error={errors.validFrom} fieldKey="validFrom" />
+            <DateField label="Valid to (empty if no end)" value={form.validTo} onChange={(v) => set({ validTo: v })} error={errors.validTo} fieldKey="validTo" />
+            <DateField label="First data date covered (optional)" value={form.dataFrom} onChange={(v) => set({ dataFrom: v })} error={errors.dataFrom} fieldKey="dataFrom" />
+            <DateField label="Last data date covered (optional)" value={form.dataTo} onChange={(v) => set({ dataTo: v })} error={errors.dataTo} fieldKey="dataTo" />
+            <SelectField label="Stored data after expiry" value={form.postExpiryStorage} onChange={(v) => set({ postExpiryStorage: (v || 'unknown') as EntitlementFormState['postExpiryStorage'] })} options={[{ value: 'retain', label: 'May be kept' }, { value: 'delete', label: 'Must be deleted' }, { value: 'unknown', label: 'Not stated' }]} placeholder="Not stated" error={errors.postExpiryStorage} fieldKey="postExpiryStorage" />
+            <TextField label="Evidence reference" required value={form.evidenceReference} onChange={(v) => set({ evidenceReference: v })} error={errors.evidenceReference} fieldKey="evidenceReference" hint="Document title or contract reference." />
+            <TextField label="Evidence URL" type="url" required={form.kind === 'public_use_permission' ? true : 'optional; required for a public-use permission'} value={form.evidenceUrl} onChange={(v) => set({ evidenceUrl: v })} error={errors.evidenceUrl} fieldKey="evidenceUrl" />
+            <DateField label="Evidence document date" required={form.kind === 'public_use_permission' ? true : 'optional; required for a public-use permission'} value={form.evidenceDocumentDate} onChange={(v) => set({ evidenceDocumentDate: v })} error={errors.evidenceDocumentDate} fieldKey="evidenceDocumentDate" />
+            <DateField label="Evidence retrieved on" required={form.kind === 'public_use_permission' ? true : 'optional; required for a public-use permission'} value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} fieldKey="evidenceRetrievedAt" />
+            <TextField label="Attribution wording (optional)" value={form.attributionText} onChange={(v) => set({ attributionText: v })} error={errors.attributionText} fieldKey="attributionText" />
           </div>
           {form.kind === 'public_use_permission' ? <p className="mt-2 text-xs text-muted">A public-use permission must be backed by a document: its web address, its date and the date you retrieved it. A box saying you have permission is not enough.</p> : null}
-          <div className="mt-3"><TextAreaField label="Notes (optional)" value={form.notes} onChange={(v) => set({ notes: v })} /></div>
-          <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void propose()}>Propose</Btn><Btn kind="secondary" onClick={() => setForm(null)}>Cancel</Btn></div>
+          <div className="mt-3"><TextAreaField label="Notes (optional)" value={form.notes} onChange={(v) => set({ notes: v })} error={errors.notes} fieldKey="notes" /></div>
+          <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void propose()}>Propose</Btn><Btn kind="secondary" onClick={() => { fb.clear(); setForm(null); }}>Cancel</Btn></div>
+          </div>
         </Panel>
   ) : null;
 
@@ -139,7 +155,7 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
         </dl>
       </Panel>
 
-      <Panel title="Entitlement records" description="Grouped by benchmark. Only an approved record inside its term grants a right." actions={dec.canProposeEntitlement ? <Btn onClick={() => { setForm(emptyEntitlementForm()); setErrors({}); setPressTick((t) => t + 1); }}>Propose an entitlement</Btn> : undefined}>
+      <Panel title="Entitlement records" description="Grouped by benchmark. Only an approved record inside its term grants a right." actions={dec.canProposeEntitlement ? <Btn onClick={() => { setForm(emptyEntitlementForm()); fb.clear(); setPressTick((t) => t + 1); }}>Propose an entitlement</Btn> : undefined}>
         {!dec.canProposeEntitlement ? <Notice tone="info">{dec.why.catalogue} You can propose nothing here.</Notice> : null}
         {!dec.canApproveEntitlement ? <p className="mt-2 text-sm text-muted">{dec.why.entitlementApprove}</p> : null}
         {proposeInline && proposeForm ? <div className="mt-3">{proposeForm}</div> : null}
@@ -185,12 +201,15 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
 
       {action && dec.canApproveEntitlement ? (
         <Panel headingRef={actionHeading} title={`${action.kind === 'approve' ? 'Approve' : 'Revoke'} an entitlement for ${action.label}`}>
-          <TextAreaField label={action.kind === 'approve' ? 'Approval note' : 'Reason for revoking'} required value={note} onChange={setNote} hint={`At least ${action.kind === 'approve' ? 5 : MIN_NOTE} characters; recorded permanently.`} />
+          <div data-form={fbAction.formId}>
+          <FormFeedback fb={fbAction} />
+          <TextAreaField label={action.kind === 'approve' ? 'Approval note' : 'Reason for revoking'} required value={note} onChange={setNote} error={fbAction.errors.note} fieldKey="note" hint={`At least ${action.kind === 'approve' ? 5 : MIN_NOTE} characters; recorded permanently.`} />
           {action.kind === 'approve' && action.e.proposedByMe ? <CheckField label="I proposed this record myself and confirm self-approval" hint="Normally a second person approves. Self-approval is recorded." checked={selfAck} onChange={setSelfAck} /> : null}
           {approveCheck && !approveCheck.ok && note.length > 0 ? <p className="mt-1 text-xs text-risk">{approveCheck.reason}</p> : null}
           <div className="mt-2 flex gap-2">
             <Btn kind={action.kind === 'revoke' ? 'danger' : 'primary'} busy={busy} disabled={action.kind === 'approve' ? !approveCheck?.ok : revokeProblem !== null} onClick={() => void submitAction()}>{action.kind === 'approve' ? 'Approve' : 'Revoke'}</Btn>
-            <Btn kind="secondary" onClick={() => setAction(null)}>Cancel</Btn>
+            <Btn kind="secondary" onClick={() => { fbAction.clear(); setAction(null); }}>Cancel</Btn>
+          </div>
           </div>
         </Panel>
       ) : null}
