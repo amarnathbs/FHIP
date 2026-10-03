@@ -34,7 +34,7 @@ Descriptive User-Agent; `robots.txt` read once per host per run and honoured (an
 
 1. Apply migration `0252` (after `0241` and `0251`) to the target environment.
 2. Settle the fund-house terms question. For each source you accept, an entitlement approver records it:
-   * preferred: call `set_factsheet_source_terms_status(source_id, 'approved', '<note: who reviewed which terms, when>')` from that admin's own session (the function checks the entitlement-approver capability and writes the governance log);
+   * preferred: Market Index Data > Mappings > "Factsheet sources" > "Approve terms" (an entitlement approver's session; the note records who reviewed which terms, and when; it is checked again by `set_factsheet_source_terms_status` and written to the governance log);
    * operator fallback (SQL editor, owner role): `update ii_factsheet_sources set terms_review_status = 'approved', terms_reviewed_by = '<admin user id>', terms_reviewed_at = now(), terms_review_note = '<note of at least 10 characters>' where source_key = '<key>';` then record it with `select public.ii_bm_log_event('factsheet_source_terms_status_set', 'ii_factsheet_sources', id, null, jsonb_build_object('terms_review_status','approved'), '<note>') from ii_factsheet_sources where source_key = '<key>';`.
 3. Run a dry run first and read the plan.
 4. Register the schedule (not created by any migration), reusing the existing cron secret like the other jobs. Monthly is enough; a weekly tick lets failed fetches retry (re-runs within a month are idempotent):
@@ -66,7 +66,8 @@ Descriptive User-Agent; `robots.txt` read once per host per run and honoured (an
 | Market Index Data > Mappings > "Factsheet changes to review" (GET) | `view` (existing) | explicit 401 / 403; 503 if migration not applied; no personal data, no holder count |
 | Decide a queued change (POST `.../factsheet/changes/[id]/review`) | `catalogue` (existing) | approve uses the existing `review_benchmark_mapping` path inside `review_factsheet_change` |
 | Held-schemes list: last factsheet check and "declared, cannot be compared" | `view` (existing) | fail soft before migration |
-| Source terms status | entitlement approver (existing), inside `set_factsheet_source_terms_status` | no UI yet |
+| Market Index Data > Mappings > "Factsheet sources" (GET list) | `view` (existing) | AMC, document type, address, AMFI code, terms status, last result; reviewer identity is not returned |
+| Set a source's terms status (POST `.../factsheet/sources/[id]/terms`: Approve terms / Mark not reviewed / Reject terms, note of 10+ characters required) | `entitlementApprove` (existing), and again inside `set_factsheet_source_terms_status` | audited in the governance log; friendly 503 when 0252 is not applied |
 | The job itself | service role + `CRON_SECRET` | its only cross-user read returns instrument identities |
 
 No new capability. No exception to the standard was requested.
@@ -78,6 +79,7 @@ No new capability. No exception to the standard was requested.
 * The ICICI complete factsheet is expected to exceed the size cap (research: over 10 MB) and will end each month as "document too large".
 * No AMFI-hosted SID is seeded (none of the two read belongs to a held scheme).
 * A scheme's first auto-published mapping starts on the first sighting's date (document month start, flagged estimated) unless the document states one; earlier periods fall to the category reference.
-* Matching a held instrument to a source is by exact AMFI scheme code only (Regular and Direct plans have different codes: add each).
+* Matching a held instrument to a source is by exact AMFI scheme code only (Regular and Direct plans have different codes: add each). A rename does not matter to matching: ICICI Prudential Dividend Yield Equity Fund became ICICI Prudential Dividend Yield Fund w.e.f. 26-08-2026 (code 129310); a holding whose statement still prints the old name is matched by the code, and the source searches both names in the document (`document_scheme_aliases`).
+* A mapping the reader publishes starts from the date the document states; if it states none, from the first-sighting document month, flagged "estimated". It is never backdated. Examples from the supplied documents: ICICI Nifty 500 TRI states 01-01-2022; the HDFC change from 65:35 to 50:50 states no date in either SID (so it is estimated); SBI Multi Asset's composite states 31-10-2023 and its earlier benchmark is not named.
 
 Future-review owner: Product Owner (benchmark governance).

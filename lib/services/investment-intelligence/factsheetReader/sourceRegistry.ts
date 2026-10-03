@@ -67,6 +67,8 @@ export interface FactsheetSourceSeed {
   url: string;
   amfiSchemeCodes: readonly string[];
   documentSchemeName: string;
+  /** Former or alternative names the same document may use for the scheme (a RENAME), searched as well. */
+  documentSchemeAliases?: readonly string[];
   documentScope: DocumentScope;
   priority: number;
   termsReviewStatus: TermsReviewStatus;
@@ -183,11 +185,12 @@ export const FACTSHEET_SOURCE_SEED: readonly FactsheetSourceSeed[] = [
     documentType: 'amc_factsheet',
     url: 'https://www.icicipruamc.com/blob/knowledgecentre/factsheet-complete/Complete.pdf',
     amfiSchemeCodes: ['129310'],
-    documentSchemeName: 'ICICI Prudential Dividend Yield Equity Fund',
+    documentSchemeName: 'ICICI Prudential Dividend Yield Fund',
+    documentSchemeAliases: ['ICICI Prudential Dividend Yield Equity Fund'],
     documentScope: 'multi_scheme',
     priority: 10,
     termsReviewStatus: 'not_reviewed',
-    note: 'Complete factsheet. Research found these PDFs exceed 10 MB, so this row is EXPECTED to end as "document too large" (skipped, not truncated); it is registered so the gap is visible, not hidden.',
+    note: 'Complete factsheet. The scheme was renamed from "ICICI Prudential Dividend Yield Equity Fund" w.e.f. 26-08-2026, so both names are searched (matching a held scheme is by AMFI code 129310 only). Research found these PDFs exceed 10 MB, so this row is EXPECTED to end as "document too large" (skipped, not truncated); it is registered so the gap is visible, not hidden.',
   },
 ];
 
@@ -203,6 +206,7 @@ export function sourceFromSeed(seed: FactsheetSourceSeed, id: string): Factsheet
     host: hostOf(seed.url) ?? '',
     amfiSchemeCodes: seed.amfiSchemeCodes,
     documentSchemeName: seed.documentSchemeName,
+    documentSchemeAliases: seed.documentSchemeAliases ?? [],
     documentScope: seed.documentScope,
     priority: seed.priority,
     enabled: true,

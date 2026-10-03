@@ -58,6 +58,8 @@ export const apiPaths = {
   heldSchemes: () => `${API_BASE}/mappings/held`,
   factsheetChanges: () => `${API_BASE}/factsheet/changes`,
   factsheetChangeReview: (id: string) => `${API_BASE}/factsheet/changes/${seg(id)}/review`,
+  factsheetSources: () => `${API_BASE}/factsheet/sources`,
+  factsheetSourceTerms: (id: string) => `${API_BASE}/factsheet/sources/${seg(id)}/terms`,
   ingestionMode: (benchmarkId: string) => `${API_BASE}/ingestion/${seg(benchmarkId)}/mode`,
 } as const;
 

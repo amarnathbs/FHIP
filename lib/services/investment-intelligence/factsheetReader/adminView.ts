@@ -39,22 +39,12 @@ export interface FactsheetChangeView {
   canAcknowledge: boolean;
 }
 
-export interface FactsheetSourceView {
-  sourceKey: string;
-  amcName: string;
-  documentType: string;
-  host: string;
-  termsReviewStatus: string;
-  enabled: boolean;
-}
-
 export interface FactsheetChangesResponse {
   state: 'ok' | 'unavailable';
   reason?: string;
   items: FactsheetChangeView[];
   /** null = the switch could not be read by this caller (never "on" by assumption). */
   readerSwitchedOn: boolean | null;
-  sources: FactsheetSourceView[];
 }
 
 /** The last factsheet check of one scheme, for the held-schemes list. */

@@ -168,15 +168,17 @@ describe('the kill switch and the terms gate ship OFF', () => {
 
 describe('the SQL cannot drift from the code', () => {
   it('the seeded sources are exactly the TypeScript seed (key, fund house, type, URL, AMFI codes, scheme name, scope, priority) and every one is not_reviewed', () => {
-    const rows = [...code.matchAll(/\('([a-z0-9_]+)', '([a-z]+)', '([^']+)', '(amc_[a-z]+|other)',\s*'(https:[^']+)', '([^']+)', array\[([^\]]*)\], '([^']+)', '(single_scheme|multi_scheme)', (\d+), '(not_reviewed)'/g)];
+    const rows = [...code.matchAll(/\('([a-z0-9_]+)', '([a-z]+)', '([^']+)', '(amc_[a-z]+|other)',\s*'(https:[^']+)', '([^']+)', array\[([^\]]*)\], '([^']+)', ('\{\}'|array\[[^\]]*\]), '(single_scheme|multi_scheme)', (\d+), '(not_reviewed)'/g)];
     expect(rows).toHaveLength(FACTSHEET_SOURCE_SEED.length);
     for (const seed of FACTSHEET_SOURCE_SEED) {
       const r = rows.find((x) => x[1] === seed.sourceKey);
       expect(r, seed.sourceKey).toBeDefined();
       const row = r as RegExpExecArray;
-      expect(row.slice(2, 11)).toEqual([seed.amcKey, seed.amcName, seed.documentType, seed.url, new URL(seed.url).hostname, `'${seed.amfiSchemeCodes.join("','")}'`, seed.documentSchemeName, seed.documentScope, String(seed.priority)]);
+      const aliasesSql = row[9] === "'{}'" ? '' : [...row[9].matchAll(/'([^']+)'/g)].map((m) => m[1]).join('|');
+      expect(aliasesSql).toBe((seed.documentSchemeAliases ?? []).join('|'));
+      expect([row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[10], row[11]]).toEqual([seed.amcKey, seed.amcName, seed.documentType, seed.url, new URL(seed.url).hostname, `'${seed.amfiSchemeCodes.join("','")}'`, seed.documentSchemeName, seed.documentScope, String(seed.priority)]);
     }
-    expect(rows.every((r) => r[11] === 'not_reviewed')).toBe(true); // no source is seeded as approved
+    expect(rows.every((r) => r[12] === 'not_reviewed')).toBe(true); // no source is seeded as approved
   });
   it('the attempt outcome list, the version enums and the catalogue states match the TypeScript types', () => {
     const outcomes = checkList('ii_factsheet_attempts', 'outcome');

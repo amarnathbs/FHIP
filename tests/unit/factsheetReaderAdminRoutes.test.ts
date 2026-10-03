@@ -60,6 +60,8 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { GET as changesGET } from '@/app/api/admin/investment-intelligence/benchmark-data/factsheet/changes/route';
 import { POST as reviewPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/factsheet/changes/[id]/review/route';
+import { GET as sourcesGET } from '@/app/api/admin/investment-intelligence/benchmark-data/factsheet/sources/route';
+import { POST as termsPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/factsheet/sources/[id]/terms/route';
 import { GET as heldGET } from '@/app/api/admin/investment-intelligence/benchmark-data/mappings/held/route';
 import { POST as cronPOST } from '@/app/api/investment-intelligence/cron/factsheet-benchmark-reader/route';
 
@@ -84,6 +86,8 @@ const ROUTES: Array<{ name: string; allowed: Cap[]; call: () => Promise<Response
   { name: 'GET factsheet/changes', allowed: [...CAPS], call: () => changesGET() },
   { name: 'GET mappings/held (with the factsheet enrichment)', allowed: [...CAPS], call: () => heldGET() },
   { name: 'POST factsheet/changes/[id]/review', allowed: ['catalogue'], call: () => reviewPOST(json({ decision: 'reject', note: 'rejected: ambiguous tier' }), params) },
+  { name: 'GET factsheet/sources', allowed: [...CAPS], call: () => sourcesGET() },
+  { name: 'POST factsheet/sources/[id]/terms (entitlement approver only)', allowed: ['entitlementApprove'], call: () => termsPOST(json({ status: 'approved', note: 'terms reviewed by counsel' }), params) },
 ];
 
 const VERSION = {
@@ -175,7 +179,6 @@ describe('the queue', () => {
     const body = (await res.json()).data;
     expect(body.state).toBe('ok');
     expect(body.readerSwitchedOn).toBe(false);
-    expect(body.sources[0]).toMatchObject({ termsReviewStatus: 'not_reviewed' });
     const item = body.items.find((i: { versionId: string }) => i.versionId === 'v-2');
     expect(item).toMatchObject({ kind: 'changed', newBenchmark: expect.stringMatching(/50:50/), instrumentName: expect.stringMatching(/HDFC Balanced/), documentUrl: 'https://files.hdfcfund.com/x.pdf', proposalId: 'p-1', canApprove: true, extractionConfidence: 'high' });
     const wire = JSON.stringify(body);
@@ -188,16 +191,79 @@ describe('the queue', () => {
     expect((await res.json()).code).toBe('unavailable');
   });
   it('s13: any other read failure is an explicit error, never an empty success', async () => {
-    tableError.ii_factsheet_sources = { code: '57P01', message: 'terminating connection' };
+    tableError.ii_factsheet_version_events = { code: '57P01', message: 'terminating connection' };
     tableData.ii_scheme_declared_benchmark_versions = [];
     expect((await changesGET()).status).toBeGreaterThanOrEqual(500);
   });
   it('"cannot read the switch" is reported as unknown (null), never as on', async () => {
     tableError.ii_reference_job_control = { code: '42501', message: 'permission denied' };
     tableData.ii_scheme_declared_benchmark_versions = [];
-    tableData.ii_factsheet_sources = [];
     const body = (await (await changesGET()).json()).data;
     expect(body.readerSwitchedOn).toBeNull();
+  });
+});
+
+describe('Factsheet sources and their terms (entitlement-approver capability)', () => {
+  const SRC = { id: ID, source_key: 'sbi_contra_sid_2025_10', amc_name: 'SBI Mutual Fund', document_type: 'amc_sid', url: 'https://www.sbimf.com/x.pdf', host: 'www.sbimf.com', amfi_scheme_codes: ['102414'], terms_review_status: 'not_reviewed', terms_reviewed_at: null, terms_review_note: null, enabled: true };
+  it('lists the sources with their terms status and the reader\'s latest result; the reviewer is not identified; nothing personal', async () => {
+    tableData.ii_factsheet_sources = [{ ...SRC, terms_reviewed_by: 'someone-uuid' }];
+    tableData.ii_factsheet_attempts = [
+      { source_id: ID, attempted_at: '2026-09-03T02:00:00.000Z', outcome: 'document_too_large', document_date: null },
+      { source_id: ID, attempted_at: '2026-10-03T02:00:00.000Z', outcome: 'refused_terms_not_approved', document_date: null },
+    ];
+    const res = await sourcesGET();
+    expect(res.status).toBe(200);
+    const body = (await res.json()).data;
+    expect(body.sources).toHaveLength(1);
+    expect(body.sources[0]).toMatchObject({ sourceKey: 'sbi_contra_sid_2025_10', termsReviewStatus: 'not_reviewed', amfiSchemeCodes: ['102414'], enabled: true });
+    expect(body.sources[0].lastResult).toMatchObject({ outcome: 'refused_terms_not_approved', result: 'Not checked: the fund house terms are not approved yet' });
+    expect(JSON.stringify(body)).not.toMatch(/someone-uuid|reviewed_by|user_id|holder|folio|email/i);
+  });
+  it('s8: migration absent -> an explicit 503 with the friendly sentence (never an empty list); another failure is an explicit error', async () => {
+    tableError.ii_factsheet_sources = { code: '42P01', message: 'relation "ii_factsheet_sources" does not exist' };
+    const res = await sourcesGET();
+    expect(res.status).toBe(503);
+    expect((await res.json()).code).toBe('unavailable');
+    tableError.ii_factsheet_sources = { code: '57P01', message: 'terminating connection' };
+    expect((await sourcesGET()).status).toBeGreaterThanOrEqual(500);
+  });
+  it('NEGATIVE CONTROL: only the entitlement approver may set a status: a catalogue admin, an uploader, a publisher, a corrector and a view-only admin get 403 and never reach the RPC', async () => {
+    for (const cap of ['catalogue', 'upload', 'publish', 'correct', 'view'] as const) {
+      adminRow = hasOnly(cap);
+      expect((await termsPOST(json({ status: 'approved', note: 'terms reviewed by counsel' }), params)).status, cap).toBe(403);
+    }
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+  it('validates before any RPC: a known status, a note of at least 10 characters (a rejection needs its reason), a UUID', async () => {
+    adminRow = hasOnly('entitlementApprove');
+    expect((await termsPOST(json({ status: 'approved', note: 'short' }), params)).status).toBe(422);
+    expect((await termsPOST(json({ status: 'declined', note: '   ' }), params)).status).toBe(422);
+    expect((await termsPOST(json({ status: 'under_review', note: 'a long enough note' }), params)).status).toBe(422);
+    expect((await termsPOST(json({ status: 'approved', note: 'a long enough note' }), { params: Promise.resolve({ id: 'nope' }) })).status).toBe(422);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+  it('approve / mark not reviewed / reject each call the audited database function with the source, the status and the note', async () => {
+    adminRow = hasOnly('entitlementApprove');
+    for (const status of ['approved', 'not_reviewed', 'declined']) {
+      mockRpc.mockClear();
+      const res = await termsPOST(json({ status, note: 'terms reviewed by counsel on 3 Oct' }), params);
+      expect(res.status, status).toBe(200);
+      expect(mockRpc).toHaveBeenCalledWith('set_factsheet_source_terms_status', { p_source: ID, p_status: status, p_note: 'terms reviewed by counsel on 3 Oct' });
+    }
+  });
+  it('s8: the database function missing (0252 not applied) is a friendly 503; a database refusal (42501) is surfaced as a denial, not hidden', async () => {
+    adminRow = hasOnly('entitlementApprove');
+    mockRpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.set_factsheet_source_terms_status' } });
+    const missing = await termsPOST(json({ status: 'approved', note: 'terms reviewed by counsel' }), params);
+    expect(missing.status).toBe(503);
+    expect((await missing.json()).error).toMatch(/database update has not been applied/);
+    mockRpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'factsheet source terms: entitlement approver capability required' } });
+    expect((await termsPOST(json({ status: 'approved', note: 'terms reviewed by counsel' }), params)).status).toBe(403);
+  });
+  it('the new routes never import the service-role client', () => {
+    for (const f of ['app/api/admin/investment-intelligence/benchmark-data/factsheet/sources/route.ts', 'app/api/admin/investment-intelligence/benchmark-data/factsheet/sources/[id]/terms/route.ts']) {
+      expect(fs.readFileSync(path.join(ROOT, f), 'utf8'), f).not.toMatch(/createAdminClient|service_role|SUPABASE_SERVICE_ROLE/);
+    }
   });
 });
 

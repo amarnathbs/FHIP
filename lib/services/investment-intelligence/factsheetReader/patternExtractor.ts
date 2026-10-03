@@ -105,9 +105,11 @@ export function schemeNameRegex(name: string): RegExp {
 const MULTI_SCHEME_WINDOW = 3_500;
 
 /** The text to search: the whole document for a single-scheme document, else the windows after each mention of the scheme. */
-export function relevantText(text: string, schemeName: string, scope: 'single_scheme' | 'multi_scheme'): { present: boolean; text: string } {
-  const re = schemeNameRegex(schemeName);
-  const hits = [...text.matchAll(re)];
+export function relevantText(text: string, schemeName: string | readonly string[], scope: 'single_scheme' | 'multi_scheme'): { present: boolean; text: string } {
+  // A scheme can be RENAMED (ICICI Prudential Dividend Yield Equity Fund became ... Dividend Yield Fund on 26-08-2026): a
+  // document may use the current name or a former one, so any registered name counts as naming the scheme.
+  const names = (typeof schemeName === 'string' ? [schemeName] : [...schemeName]).filter((n) => n.trim().length >= 3);
+  const hits = names.flatMap((n) => [...text.matchAll(schemeNameRegex(n))]).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
   if (hits.length === 0) return { present: false, text: '' };
   if (scope === 'single_scheme') return { present: true, text };
   const windows: string[] = [];
@@ -243,11 +245,13 @@ function clip(s: string, n: number): string {
 export interface PatternInput {
   text: string;
   schemeName: string;
+  /** Former / alternative names the document may use for the same scheme (renames). */
+  schemeAliases?: readonly string[];
   scope: 'single_scheme' | 'multi_scheme';
 }
 
 export function extractWithPatterns(input: PatternInput): PatternOutcome {
-  const rel = relevantText(input.text, input.schemeName, input.scope);
+  const rel = relevantText(input.text, [input.schemeName, ...(input.schemeAliases ?? [])], input.scope);
   if (!rel.present) return { status: 'not_found', reason: 'The document does not name the scheme.', schemeNamePresent: false };
 
   const hits = labelHits(rel.text);

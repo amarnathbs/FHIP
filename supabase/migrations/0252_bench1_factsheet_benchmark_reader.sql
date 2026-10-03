@@ -62,6 +62,7 @@ create table if not exists ii_factsheet_sources (
   host text not null,
   amfi_scheme_codes text[] not null default '{}',
   document_scheme_name text not null check (length(trim(document_scheme_name)) >= 3),
+  document_scheme_aliases text[] not null default '{}',
   document_scope text not null default 'single_scheme' check (document_scope in ('single_scheme', 'multi_scheme')),
   priority integer not null default 100,
   enabled boolean not null default true,
@@ -90,31 +91,31 @@ comment on table ii_factsheet_sources is 'BENCH-1 (0252): fund-house documents t
 -- Seed: ONLY the official domains confirmed in the 2026-10-03 six-funds research. Every row is 'not_reviewed'.
 -- (No AMFI-hosted SID is seeded: none of the two read in research belongs to a held scheme. No monthly URL template:
 --  SBI's per-file "sfvrsn" token cannot be predicted.)
-insert into ii_factsheet_sources (source_key, amc_key, amc_name, document_type, url, host, amfi_scheme_codes, document_scheme_name, document_scope, priority, terms_review_status, note) values
+insert into ii_factsheet_sources (source_key, amc_key, amc_name, document_type, url, host, amfi_scheme_codes, document_scheme_name, document_scheme_aliases, document_scope, priority, terms_review_status, note) values
   ('hdfc_baf_fund_facts_2026_03', 'hdfc', 'HDFC Mutual Fund', 'amc_factsheet',
-   'https://files.hdfcfund.com/s3fs-public/Others/2026-03/Fund%20Facts%20-%20HDFC%20Balanced%20Advantage%20Fund_March%2026.pdf', 'files.hdfcfund.com', array['100119'], 'HDFC Balanced Advantage Fund', 'single_scheme', 10, 'not_reviewed',
+   'https://files.hdfcfund.com/s3fs-public/Others/2026-03/Fund%20Facts%20-%20HDFC%20Balanced%20Advantage%20Fund_March%2026.pdf', 'files.hdfcfund.com', array['100119'], 'HDFC Balanced Advantage Fund', '{}', 'single_scheme', 10, 'not_reviewed',
    'Fund Facts, March 2026 (research: benchmark line NIFTY 50 Hybrid Composite Debt 50:50 TRI).'),
   ('hdfc_baf_sid_2024_06', 'hdfc', 'HDFC Mutual Fund', 'amc_sid',
-   'https://files.hdfcfund.com/s3fs-public/SID/2024-06/SID%20-%20HDFC%20Balanced%20Advantage%20Fund%20dated%20June%2028,%202024.pdf', 'files.hdfcfund.com', array['100119'], 'HDFC Balanced Advantage Fund', 'single_scheme', 50, 'not_reviewed',
+   'https://files.hdfcfund.com/s3fs-public/SID/2024-06/SID%20-%20HDFC%20Balanced%20Advantage%20Fund%20dated%20June%2028,%202024.pdf', 'files.hdfcfund.com', array['100119'], 'HDFC Balanced Advantage Fund', '{}', 'single_scheme', 50, 'not_reviewed',
    'SID dated 28 June 2024. Older than the Fund Facts above, so it can never supersede it.'),
   ('hdfc_gold_fof_sid_2025_11', 'hdfc', 'HDFC Mutual Fund', 'amc_sid',
-   'https://files.hdfcfund.com/s3fs-public/SID/2025-11/SID%20-%20HDFC%20Gold%20ETF%20Fund%20of%20Fund%20dated%20November%2021,%202025.pdf', 'files.hdfcfund.com', array['115934'], 'HDFC Gold ETF Fund of Fund', 'single_scheme', 10, 'not_reviewed',
+   'https://files.hdfcfund.com/s3fs-public/SID/2025-11/SID%20-%20HDFC%20Gold%20ETF%20Fund%20of%20Fund%20dated%20November%2021,%202025.pdf', 'files.hdfcfund.com', array['115934'], 'HDFC Gold ETF Fund of Fund', '{}', 'single_scheme', 10, 'not_reviewed',
    'SID dated 21 November 2025. Benchmark is a commodity price: recorded as unsupported, never published.'),
   ('sbi_multi_asset_factsheet_2026_04', 'sbi', 'SBI Mutual Fund', 'amc_factsheet',
-   'https://www.sbimf.com/docs/default-source/scheme-factsheets/sbi-multi-asset-allocation-fund-factsheet-april-2026.pdf?sfvrsn=829ed1fb_2', 'www.sbimf.com', array['103408'], 'SBI Multi Asset Allocation Fund', 'single_scheme', 10, 'not_reviewed',
+   'https://www.sbimf.com/docs/default-source/scheme-factsheets/sbi-multi-asset-allocation-fund-factsheet-april-2026.pdf?sfvrsn=829ed1fb_2', 'www.sbimf.com', array['103408'], 'SBI Multi Asset Allocation Fund', '{}', 'single_scheme', 10, 'not_reviewed',
    'Factsheet, report as on 30 April 2026. Four-leg composite with a stated effective date: recorded as unsupported composite, never published.'),
   ('sbi_contra_factsheet_2025_08', 'sbi', 'SBI Mutual Fund', 'amc_factsheet',
-   'https://www.sbimf.com/docs/default-source/scheme-factsheets/sbi-contra-fund-factsheet-august-2025.pdf?sfvrsn=6d2d8066_2', 'www.sbimf.com', array['102414'], 'SBI Contra Fund', 'single_scheme', 10, 'not_reviewed',
+   'https://www.sbimf.com/docs/default-source/scheme-factsheets/sbi-contra-fund-factsheet-august-2025.pdf?sfvrsn=6d2d8066_2', 'www.sbimf.com', array['102414'], 'SBI Contra Fund', '{}', 'single_scheme', 10, 'not_reviewed',
    'Factsheet, report as on 31 August 2025 (research: First Tier Benchmark BSE 500 TRI).'),
   ('sbi_contra_sid_2025_10', 'sbi', 'SBI Mutual Fund', 'amc_sid',
-   'https://www.sbimf.com/docs/default-source/sif-forms/sid---sbi-contra-fund.pdf?sfvrsn=4a20c1ae_0', 'www.sbimf.com', array['102414'], 'SBI Contra Fund', 'single_scheme', 50, 'not_reviewed',
+   'https://www.sbimf.com/docs/default-source/sif-forms/sid---sbi-contra-fund.pdf?sfvrsn=4a20c1ae_0', 'www.sbimf.com', array['102414'], 'SBI Contra Fund', '{}', 'single_scheme', 50, 'not_reviewed',
    'SID dated 31 October 2025.'),
   ('nippon_power_infra_presentation', 'nippon', 'Nippon India Mutual Fund', 'other',
-   'https://mf.nipponindiaim.com/FundsAndPerformance/Presentation/NipponIndia-Power-Infra-Fund-Presentation.pdf', 'mf.nipponindiaim.com', array['101262'], 'Nippon India Power & Infra Fund', 'single_scheme', 10, 'not_reviewed',
+   'https://mf.nipponindiaim.com/FundsAndPerformance/Presentation/NipponIndia-Power-Infra-Fund-Presentation.pdf', 'mf.nipponindiaim.com', array['101262'], 'Nippon India Power & Infra Fund', '{}', 'single_scheme', 10, 'not_reviewed',
    'Fund presentation (research read a copy with data as on 30 July 2021). Document type is "other", so it can never auto-publish: a human decides.'),
   ('icici_dividend_yield_complete_factsheet', 'icici', 'ICICI Prudential Mutual Fund', 'amc_factsheet',
-   'https://www.icicipruamc.com/blob/knowledgecentre/factsheet-complete/Complete.pdf', 'www.icicipruamc.com', array['129310'], 'ICICI Prudential Dividend Yield Equity Fund', 'multi_scheme', 10, 'not_reviewed',
-   'Complete factsheet. Research found these PDFs exceed 10 MB, so this row is EXPECTED to end as "document too large" (skipped, not truncated); it is registered so the gap is visible, not hidden.')
+   'https://www.icicipruamc.com/blob/knowledgecentre/factsheet-complete/Complete.pdf', 'www.icicipruamc.com', array['129310'], 'ICICI Prudential Dividend Yield Fund', array['ICICI Prudential Dividend Yield Equity Fund'], 'multi_scheme', 10, 'not_reviewed',
+   'Complete factsheet. The scheme was renamed from "ICICI Prudential Dividend Yield Equity Fund" w.e.f. 26-08-2026, so both names are searched (a held scheme is matched by AMFI code 129310 only). Research found these PDFs exceed 10 MB, so this row is EXPECTED to end as "document too large" (skipped, not truncated); it is registered so the gap is visible, not hidden.')
 on conflict (source_key) do nothing;
 
 -- ===========================================================================

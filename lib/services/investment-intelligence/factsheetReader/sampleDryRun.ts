@@ -53,7 +53,7 @@ export function dryRunOnSample(input: SampleDryRunInput): SampleDryRunResult {
   const seed = (input.seeds ?? FACTSHEET_SOURCE_SEED).find((s) => s.sourceKey === input.sourceKey);
   if (!seed) throw new Error(`Unknown source key: ${input.sourceKey}`);
   const source = sourceFromSeed(seed, `sample-${seed.sourceKey}`);
-  const pattern = extractWithPatterns({ text: input.text, schemeName: source.documentSchemeName, scope: source.documentScope });
+  const pattern = extractWithPatterns({ text: input.text, schemeName: source.documentSchemeName, schemeAliases: source.documentSchemeAliases, scope: source.documentScope });
   const decision = decideObservation({
     instrumentId: input.instrumentId ?? '00000000-0000-4000-8000-000000000001',
     source,

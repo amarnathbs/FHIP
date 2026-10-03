@@ -9,7 +9,7 @@ import type { FactsheetChangeView, FactsheetChangesResponse } from '@/lib/servic
 import { usePost, useLoad, type Say } from './api';
 import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
 import { NOTE_FIELD_LABELS, NOTE_FIELD_MAP, NOTE_FIELD_ORDER } from './benchmarkDataFormErrors';
-import { EVIDENCE_SOURCE_OPTIONS, FACTSHEET_TERMS_WORDS, apiPaths, factsheetChangeHeading, formatDate, reviewProblem, safeExternalUrl } from './benchmarkDataUiLogic';
+import { EVIDENCE_SOURCE_OPTIONS, apiPaths, factsheetChangeHeading, formatDate, reviewProblem, safeExternalUrl } from './benchmarkDataUiLogic';
 import { Btn, CheckField, Chip, EmptyState, ErrorPanel, LoadingPanel, Notice, Panel, ScrollTable, Td, TextAreaField, Th } from './ui';
 
 const NOTE_SPEC: FormSpec = { order: NOTE_FIELD_ORDER, labels: NOTE_FIELD_LABELS, map: NOTE_FIELD_MAP };
@@ -71,27 +71,6 @@ export default function FactsheetChangesPanel({ refreshKey, canReview, onChanged
         {data.readerSwitchedOn === false ? <Notice tone="info">The monthly reader is switched off, so nothing is fetched. It stays off until a person switches it on and a fund house&apos;s terms are approved for each source.</Notice> : null}
         {data.readerSwitchedOn === null ? <Notice tone="info">Whether the monthly reader is switched on is not visible to your role.</Notice> : null}
         {data.readerSwitchedOn === true ? <Notice tone="warn">The monthly reader is switched on.</Notice> : null}
-        {data.sources.length > 0 ? (
-          <details className="mt-2 text-sm">
-            <summary className="cursor-pointer font-semibold text-trust">Registered documents ({data.sources.length}) and whether their terms are approved</summary>
-            <ScrollTable label="Registered fund-house documents" minWidth="min-w-[640px]">
-              <thead>
-                <tr><Th>Document</Th><Th>Fund house</Th><Th>Type</Th><Th>Site</Th><Th>Terms</Th></tr>
-              </thead>
-              <tbody>
-                {data.sources.map((s) => (
-                  <tr key={s.sourceKey}>
-                    <Td>{s.sourceKey}</Td>
-                    <Td>{s.amcName}</Td>
-                    <Td>{EVIDENCE_SOURCE_OPTIONS.find((o) => o.value === s.documentType)?.label ?? s.documentType}</Td>
-                    <Td>{s.host}</Td>
-                    <Td><Chip label={FACTSHEET_TERMS_WORDS[s.termsReviewStatus] ?? s.termsReviewStatus} tone={s.termsReviewStatus === 'approved' ? 'ok' : 'neutral'} /></Td>
-                  </tr>
-                ))}
-              </tbody>
-            </ScrollTable>
-          </details>
-        ) : null}
         <div className="mt-3">
           {data.items.length === 0 ? (
             <EmptyState title="No factsheet change is waiting">Nothing to review. A change appears here after the reader has read a fund house document whose declared benchmark differs from the one on record.</EmptyState>

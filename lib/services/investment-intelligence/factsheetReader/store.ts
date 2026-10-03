@@ -202,7 +202,7 @@ export function createSupabaseFactsheetStore(supabase: SupabaseClient): Factshee
       const rows = must(
         await supabase
           .from('ii_factsheet_sources')
-          .select('id, source_key, amc_key, amc_name, document_type, url_kind, url, host, amfi_scheme_codes, document_scheme_name, document_scope, priority, enabled, terms_review_status, last_etag, last_modified, last_checksum, last_fetched_at'),
+          .select('id, source_key, amc_key, amc_name, document_type, url_kind, url, host, amfi_scheme_codes, document_scheme_name, document_scheme_aliases, document_scope, priority, enabled, terms_review_status, last_etag, last_modified, last_checksum, last_fetched_at'),
         'list factsheet sources'
       ) as Array<Record<string, unknown>>;
       return rows.map((r) => ({
@@ -216,6 +216,7 @@ export function createSupabaseFactsheetStore(supabase: SupabaseClient): Factshee
         host: r.host as string,
         amfiSchemeCodes: ((r.amfi_scheme_codes as string[] | null) ?? []).map(String),
         documentSchemeName: r.document_scheme_name as string,
+        documentSchemeAliases: ((r.document_scheme_aliases as string[] | null) ?? []).map(String),
         documentScope: r.document_scope as FactsheetSource['documentScope'],
         priority: Number(r.priority ?? 100),
         enabled: r.enabled === true,

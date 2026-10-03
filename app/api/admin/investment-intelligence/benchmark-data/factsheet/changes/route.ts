@@ -50,8 +50,6 @@ export const GET = adminRoute(async () => {
     for (const r of (prev.data ?? []) as unknown as Array<{ id: string; tier1_name: string }>) previousNames.set(r.id, r.tier1_name);
   }
 
-  const src = await g.supabase.from('ii_factsheet_sources').select('source_key, amc_name, document_type, host, terms_review_status, enabled').order('source_key', { ascending: true }).limit(200);
-  if (src.error) return safeDbError(src.error, 'factsheet sources');
   // The switch lives in a table only some capabilities may read; "cannot read it" is reported as unknown, never as on.
   const sw = await g.supabase.from('ii_reference_job_control').select('enabled').eq('job_key', 'factsheet_benchmark_reader').maybeSingle();
   const readerSwitchedOn = sw.error || !sw.data ? null : (sw.data as { enabled: boolean }).enabled === true;
@@ -60,14 +58,6 @@ export const GET = adminRoute(async () => {
     state: 'ok',
     items: buildFactsheetChangeViews([...versions.values()], events, previousNames),
     readerSwitchedOn,
-    sources: ((src.data ?? []) as unknown as Array<Record<string, unknown>>).map((r) => ({
-      sourceKey: r.source_key as string,
-      amcName: r.amc_name as string,
-      documentType: r.document_type as string,
-      host: r.host as string,
-      termsReviewStatus: r.terms_review_status as string,
-      enabled: r.enabled === true,
-    })),
   };
   return ok(body);
 });

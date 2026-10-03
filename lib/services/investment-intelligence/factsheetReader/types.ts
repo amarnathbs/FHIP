@@ -72,6 +72,8 @@ export interface FactsheetSource {
   amfiSchemeCodes: readonly string[];
   /** The scheme name as the document prints it; the document must contain it or nothing is recorded. */
   documentSchemeName: string;
+  /** Former or alternative names the same document may use for the scheme (a RENAME), searched as well. */
+  documentSchemeAliases: readonly string[];
   documentScope: DocumentScope;
   priority: number;
   enabled: boolean;

@@ -330,11 +330,11 @@ async function processSource(ctx: Ctx, source: FactsheetSource, pending: HeldIns
         await deps.store.touchSource(source.id, { etag: fetched.etag, lastModified: fetched.lastModified, checksum, fetchedAt: deps.nowIso });
         return;
       }
-      const pattern = extractWithPatterns({ text: text.text, schemeName: source.documentSchemeName, scope: source.documentScope });
+      const pattern = extractWithPatterns({ text: text.text, schemeName: source.documentSchemeName, schemeAliases: source.documentSchemeAliases, scope: source.documentScope });
       let ai: AiOutcome | null = null;
       if (pattern.status !== 'found' && pattern.schemeNamePresent && ctx.aiOn && deps.ai && ctx.aiCalls < ctx.cfg.maxAiCallsPerRun) {
         ctx.aiCalls += 1;
-        ai = await runAiExtraction(deps.ai, { documentText: text.text, schemeName: source.documentSchemeName, scope: source.documentScope });
+        ai = await runAiExtraction(deps.ai, { documentText: text.text, schemeName: source.documentSchemeName, schemeAliases: source.documentSchemeAliases, scope: source.documentScope });
       }
       for (const p of pending) {
         await observeOne(ctx, source, p, prevMap.get(p.instrumentId) ?? null, { kind: 'read', checksum, pattern, ai, httpStatus: fetched.status, bytes: fetched.bytes.length }, tally);

@@ -102,6 +102,8 @@ check('0252 re-applies cleanly (idempotent)', second === null, second ? second.m
 const seeds = await all(`select source_key, terms_review_status, host from ii_factsheet_sources order by 1`);
 check('eight sources are seeded and ALL are not_reviewed (re-applying did not duplicate or change them)', seeds.length === 8 && seeds.every((s) => s.terms_review_status === 'not_reviewed'), JSON.stringify(seeds.map((s) => s.source_key)));
 check('only official hosts are seeded (hdfcfund.com, sbimf.com, mf.nipponindiaim.com, icicipruamc.com)', seeds.every((s) => /(^|\.)(hdfcfund\.com|sbimf\.com|mf\.nipponindiaim\.com|icicipruamc\.com)$/.test(s.host)), JSON.stringify([...new Set(seeds.map((s) => s.host))]));
+const icici = await one(`select document_scheme_name, document_scheme_aliases, amfi_scheme_codes from ii_factsheet_sources where source_key = 'icici_dividend_yield_complete_factsheet'`);
+check('the ICICI source carries the RENAME: current name, former name as an alias, matched by AMFI code 129310', icici.document_scheme_name === 'ICICI Prudential Dividend Yield Fund' && icici.document_scheme_aliases.join('|') === 'ICICI Prudential Dividend Yield Equity Fund' && icici.amfi_scheme_codes.join() === '129310', JSON.stringify(icici));
 const sw = await one(`select enabled, disabled_reason from ii_reference_job_control where job_key = 'factsheet_benchmark_reader'`);
 check('the kill switch ships DISABLED, with a reason', sw && sw.enabled === false && sw.disabled_reason?.length > 20);
 check('0252 registers NO pg_cron schedule', (await all(`select jobname from cron.job where jobname ilike '%factsheet%'`)).length === 0);

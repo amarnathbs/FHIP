@@ -82,6 +82,34 @@ describe('Enter manually prefill (day-first, nothing guessed)', () => {
   });
 });
 
+describe('Factsheet sources panel (terms approval)', () => {
+  const sp = read('components/admin/benchmarkData/FactsheetSourcesPanel.tsx');
+  it('lists AMC, document type, address, AMFI code, terms status and the last result; shows day-first dates through the shared formatter', () => {
+    for (const needle of ['s.amcName', 'EVIDENCE_SOURCE_OPTIONS', 's.url', 's.amfiSchemeCodes', 's.termsReviewStatus', 's.lastResult', 'formatDate(s.termsReviewedAt)', 'formatDate(s.lastResult.checkedAt)']) expect(sp, needle).toContain(needle);
+    expect(sp).not.toMatch(/toISOString|toLocaleDateString|\.slice\(0, 10\)|\/api\//);
+    expect(sp).toMatch(/rel="noopener noreferrer"/);
+  });
+  it('offers Approve terms, Mark not reviewed and Reject terms, each needing a note recorded permanently (a rejection needs its reason)', () => {
+    for (const label of ["button: 'Approve terms'", "button: 'Mark not reviewed'", "button: 'Reject terms'", 'Reason (required)']) expect(sp, label).toContain(label);
+    expect(sp).toMatch(/reviewProblem\(note\)/);
+    expect(sp).toMatch(/disabled=\{rp !== null\}/);
+    expect(sp).toMatch(/apiPaths\.factsheetSourceTerms\(act\.s\.id\)/);
+  });
+  it('the controls are shown only to the entitlement approver; others see a plain reason and read-only rows (the server and the database check it again)', () => {
+    expect(sp).toMatch(/canApproveTerms \? \(/);
+    expect(sp).toMatch(/\{!canApproveTerms \? <Notice/);
+    expect(tab).toMatch(/<FactsheetSourcesPanel [^>]*canApproveTerms=\{dec\.canApproveEntitlement\}/);
+    expect(tab).toMatch(/whyNot=\{dec\.why\.entitlementApprove\}/);
+  });
+  it('a friendly message when migration 0252 is absent, and approving warns that the reader will then fetch automatically', () => {
+    expect(sp).toMatch(/database update that has not been applied yet/);
+    expect(sp).toMatch(/Approving means the reader may fetch this document automatically/);
+  });
+  it('the terms words never claim a source is read unless approved', () => {
+    expect(FACTSHEET_TERMS_WORDS).toMatchObject({ not_reviewed: expect.stringMatching(/not read/), under_review: expect.stringMatching(/not read/), declined: expect.stringMatching(/not read/), approved: 'Terms approved' });
+  });
+});
+
 describe('wording and paths', () => {
   it('the queue headings say what the item is, in plain words', () => {
     expect(factsheetChangeHeading({ kind: 'changed', benchmarkKind: 'single_index', catalogueState: 'matched_verified' })).toBe('The fund house now declares a different benchmark');

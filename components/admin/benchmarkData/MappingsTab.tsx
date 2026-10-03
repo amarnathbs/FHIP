@@ -11,6 +11,7 @@ import type { UnmappedSummary } from '@/lib/services/investment-intelligence/ben
 import { matchBenchmarkName, type CatalogueEntryLite } from '@/lib/services/investment-intelligence/benchmarkData/benchmarkNameMatcher';
 import type { FactsheetChangeView } from '@/lib/services/investment-intelligence/factsheetReader/adminView';
 import FactsheetChangesPanel from './FactsheetChangesPanel';
+import FactsheetSourcesPanel from './FactsheetSourcesPanel';
 import { usePost, useLoad, type Say } from './api';
 import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
 import { MAPPING_DATE_KEYS, MAPPING_FIELD_LABELS, MAPPING_FIELD_MAP, MAPPING_FIELD_ORDER, NOTE_FIELD_LABELS, NOTE_FIELD_MAP, NOTE_FIELD_ORDER } from './benchmarkDataFormErrors';
@@ -127,6 +128,8 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
       </Panel>
 
       <FactsheetChangesPanel refreshKey={refreshKey} canReview={dec.canReviewMappings} onChanged={() => { reload(); onChanged(); }} onEnterManually={(c: FactsheetChangeView) => { setForm(mappingFormFromFactsheetChange(c)); setManualFor(c.versionId); fb.clear(); }} say={say} />
+
+      <FactsheetSourcesPanel refreshKey={refreshKey} canApproveTerms={dec.canApproveEntitlement} whyNot={dec.why.entitlementApprove} onChanged={onChanged} say={say} />
 
       <Panel title="Schemes with no benchmark mapping yet" description="Counts by AMFI category. Funds with no declared benchmark use the usual benchmark for their category at read time; it is never stored as a mapping.">
         {unmapped.state.status === 'loading' ? <LoadingPanel what="the schemes with no mapping" /> : unmapped.state.status === 'error' ? <ErrorPanel failure={unmapped.state.failure} what="the schemes with no mapping" onRetry={unmapped.reload} /> : (

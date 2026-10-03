@@ -94,7 +94,7 @@ export function buildAiUserPrompt(req: FactsheetAiRequest): string {
 const BENCHMARK_LINE = /benchmark|tier[\s-]*(?:1|i|2|ii|one|two)\b|w\.?\s?e\.?\s?f\.?|report\s+as\s+on|\bdated\b/i;
 
 /** Benchmark-bearing lines (with one line of context each) from the scheme's relevant text, capped. Empty when there are none. */
-export function buildAiExcerpt(text: string, schemeName: string, scope: 'single_scheme' | 'multi_scheme', maxChars: number = FACTSHEET_DEFAULTS.maxAiExcerptChars): string {
+export function buildAiExcerpt(text: string, schemeName: string | readonly string[], scope: 'single_scheme' | 'multi_scheme', maxChars: number = FACTSHEET_DEFAULTS.maxAiExcerptChars): string {
   const rel = relevantText(text, schemeName, scope);
   if (!rel.present) return '';
   const lines = rel.text.split(/\r?\n/);
@@ -140,7 +140,7 @@ export interface AiValidationInput {
   rawText: string;
   model: string;
   documentText: string;
-  schemeName: string;
+  schemeName: string | readonly string[];
   scope: 'single_scheme' | 'multi_scheme';
 }
 
@@ -200,8 +200,9 @@ export function validateAiResponse(i: AiValidationInput): AiOutcome {
 }
 
 /** Run the adapter on an excerpt and validate whatever comes back. A failure of any kind is a rejection or not-found, never a throw. */
-export async function runAiExtraction(extractor: FactsheetAiExtractor, input: { documentText: string; schemeName: string; scope: 'single_scheme' | 'multi_scheme' }): Promise<AiOutcome> {
-  const excerpt = buildAiExcerpt(input.documentText, input.schemeName, input.scope);
+export async function runAiExtraction(extractor: FactsheetAiExtractor, input: { documentText: string; schemeName: string; schemeAliases?: readonly string[]; scope: 'single_scheme' | 'multi_scheme' }): Promise<AiOutcome> {
+  const names = [input.schemeName, ...(input.schemeAliases ?? [])];
+  const excerpt = buildAiExcerpt(input.documentText, names, input.scope);
   if (!excerpt) return { status: 'not_found', reason: 'The document has no benchmark-bearing text to send.' };
   let raw: FactsheetAiRawResult;
   try {
@@ -210,7 +211,7 @@ export async function runAiExtraction(extractor: FactsheetAiExtractor, input: { 
     return { status: 'rejected', reason: 'The AI call failed.' };
   }
   if (!raw.ok) return { status: 'rejected', reason: `The AI call failed: ${raw.reason}` };
-  return validateAiResponse({ rawText: raw.rawText, model: raw.model, documentText: input.documentText, schemeName: input.schemeName, scope: input.scope });
+  return validateAiResponse({ rawText: raw.rawText, model: raw.model, documentText: input.documentText, schemeName: names, scope: input.scope });
 }
 
 export { FACTSHEET_AI_EXTRACTOR_VERSION };
