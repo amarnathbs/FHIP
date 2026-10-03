@@ -37,6 +37,20 @@ export function dayFirstDatesInText(text: string, style: DateStyle): string {
   return text.replace(ISO_IN_TEXT, (m) => formatDateShort(m, style));
 }
 
+/**
+ * The one date the Performance chapter states: the latest date any of its holdings is valued at. The engine's top-level
+ * asOfDate is the end of its valuation-SERIES (statement dates) and can sit months before the NAV date the terminal value
+ * and XIRR actually use, so it alone would mislabel the figures.
+ */
+export function performanceAsOf(results: { asOfDate: string; schemes?: ReadonlyArray<{ currentValueDate?: string | null }> | null }): string {
+  let latest = results.asOfDate;
+  for (const s of results.schemes ?? []) {
+    const d = s.currentValueDate;
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && d > latest) latest = d;
+  }
+  return latest;
+}
+
 export function asOfRuleSentence(asOfIso: string, reportDateIso: string | null | undefined, style: DateStyle): string {
   const asOf = formatDateShort(asOfIso.slice(0, 10), style);
   const rep = reportDateIso ? ` (the report date is ${formatDateShort(reportDateIso.slice(0, 10), style)})` : '';

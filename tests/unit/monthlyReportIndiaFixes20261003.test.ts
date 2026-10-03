@@ -26,7 +26,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildIndiaMfReport, formatIsoDateDMY, type IndiaMfReport, type IndiaMfReportInput, type MfTransaction, type OwnerRow } from '@/lib/engines/investment-intelligence/indiaMfReport';
 import { IndiaMfInvestmentReportSection } from '@/components/reports/IndiaMfInvestmentReportSection';
 import { taxTableRows, TAX_INSTRUMENT_NAME_MISSING } from '@/lib/engines/reportTaxTable';
-import { asOfRuleSentence, chapterDateStyle, dayFirstDatesInText, xirrReconciliationNote } from '@/lib/engines/reportIndiaChapterConsistency';
+import { asOfRuleSentence, chapterDateStyle, dayFirstDatesInText, performanceAsOf, xirrReconciliationNote } from '@/lib/engines/reportIndiaChapterConsistency';
 import { buildInvestmentPerformance, buildSipContribution, buildPortfolioXray, buildTaxAndCost, buildIndiaMfInvestmentReport } from '@/lib/engines/reportSectionsPremium';
 import { sipCadenceLabel } from '@/lib/engines/investment-intelligence/sip/sipDetection';
 import { formatDateInText, formatDateShort } from '@/lib/engines/date';
@@ -289,6 +289,12 @@ describe('FIX 2 - Tax & Cost table shows the fund name, a day-first date and rup
     expect(section.narrativeText).not.toContain('01/01/2025');
   });
 
+  it('the report loader prefers the canonical scheme names so a fund reads the same in every chapter', () => {
+    const src = read('lib/services/investmentIntelligenceReportData.ts');
+    expect(src).toContain("from('ii_scheme_master')");
+    expect(src).toContain('instrumentNames[r.instrument_id] = r.scheme_name');
+  });
+
   it('ReportPreview uses the shared row builder (no raw instrumentName / disposalDate / report-currency fmt in the tax table)', () => {
     const src = read('components/reports/ReportPreview.tsx');
     const taxStart = src.indexOf('Tax & Cost Intelligence (II-R6)');
@@ -384,6 +390,29 @@ describe('FIX 3 - Performance chapter and Mutual Fund section do not disagree si
   it('NEGATIVE CONTROL: the legacy chapter text (no reconciliation) fails the same check when the XIRRs differ', () => {
     const legacyLimitation = 'Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period.';
     expect(() => assertDifferenceExplained(0.3045, mf, legacyLimitation)).toThrow(/does not say why/);
+  });
+});
+
+describe('FIX 3 - the Performance chapter states the date its figures are actually valued at', () => {
+  const results = { asOfDate: '2025-06-30', schemes: [{ currentValueDate: '2026-09-24' }, { currentValueDate: '2026-09-01' }] };
+
+  it('uses the latest holding valuation date, not the end of the statement series (Sample C: 30-06-2025 vs 24-09-2026)', () => {
+    expect(performanceAsOf(results)).toBe('2026-09-24');
+    expect(performanceAsOf({ asOfDate: '2026-10-03', schemes: [{ currentValueDate: '2026-09-24' }] })).toBe('2026-10-03');
+    expect(performanceAsOf({ asOfDate: '2026-10-03' })).toBe('2026-10-03');
+    const fixture = perfFixture('2025-06-30', 0.1);
+    (fixture.results as unknown as { schemes: unknown }).schemes = results.schemes;
+    const section = buildInvestmentPerformance(AUD_SOURCE, { investmentPerformance: fixture } as unknown as PremiumSourceData);
+    expect(section.narrativeText).toContain('24-09-2026');
+    expect(section.limitationText).toContain('As-of date of this chapter: 24-09-2026');
+  });
+
+  it('NEGATIVE CONTROL: the legacy rule (the series end date) states a date 15 months before the valuation and the check throws', () => {
+    const assertStatedDateIsValuationDate = (stated: string) => {
+      if (stated !== '2026-09-24') throw new Error(`chapter states ${stated} but its holdings are valued at 2026-09-24`);
+    };
+    expect(() => assertStatedDateIsValuationDate(results.asOfDate)).toThrow(/states 2025-06-30/);
+    expect(() => assertStatedDateIsValuationDate(performanceAsOf(results))).not.toThrow();
   });
 });
 

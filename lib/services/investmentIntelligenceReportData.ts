@@ -224,6 +224,17 @@ export async function loadTaxForReport(userId: string, supabase: SupabaseServerC
       const name = dataset.instrumentNames.get(instrumentId);
       if (name) instrumentNames[instrumentId] = name;
     }
+    // The same canonical (AMFI) scheme names the Mutual Fund Investment Report and the Holdings table use, so a fund reads
+    // the same in every chapter. A failed lookup keeps the stored instrument name; it never falls back to an id.
+    const disposedIds = [...dataset.disposalsByInstrument.keys()];
+    for (let i = 0; i < disposedIds.length; i += 150) {
+      try {
+        const { data } = await supabase.from('ii_scheme_master').select('instrument_id, scheme_name').in('instrument_id', disposedIds.slice(i, i + 150)).is('effective_to', null);
+        for (const r of (data ?? []) as Array<{ instrument_id: string; scheme_name: string | null }>) if (r.scheme_name) instrumentNames[r.instrument_id] = r.scheme_name;
+      } catch {
+        /* keep the instrument names already resolved */
+      }
+    }
     return { results, asOfDate: dataset.asOfDate, taxProfileSource: persistedProfile ? 'persisted_profile' : 'none', instrumentNames, earliestAcquisitionDateByInstrument };
   } catch {
     return null;

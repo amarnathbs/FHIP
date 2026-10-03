@@ -9,7 +9,7 @@ import { hasCrossBorderEligibility, type PremiumSectionCode } from './reportElig
 import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
 import { formatDateInText } from './date';
-import { asOfRuleSentence, chapterDateStyle, dayFirstDatesInText, INDIA_DATE_STYLE, xirrReconciliationNote, type DateStyle } from './reportIndiaChapterConsistency';
+import { asOfRuleSentence, chapterDateStyle, performanceAsOf, dayFirstDatesInText, INDIA_DATE_STYLE, xirrReconciliationNote, type DateStyle } from './reportIndiaChapterConsistency';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { entityExclusionNote, ownerBreakupNarrative } from './reportOwnerBreakup';
@@ -740,9 +740,10 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
   const currencies = results.portfolios.map((p) => p.currencyCode).join(', ');
   const calculable = results.portfolios.filter((p) => p.portfolioXirr.status === 'CALCULATED').length;
   const style = chapterDateStyle(source.currency, results.portfolios.map((p) => p.currencyCode));
+  const asOf = performanceAsOf(results);
   const reconciliation = xirrReconciliationNote(
     results.portfolios.map((p) => ({ currencyCode: p.currencyCode, xirr: { status: p.portfolioXirr.status, rate: p.portfolioXirr.status === 'CALCULATED' ? p.portfolioXirr.value?.rate : undefined } })),
-    results.asOfDate,
+    asOf,
     premium.indiaMf?.status === 'ok' ? premium.indiaMf.report : null,
     style
   );
@@ -756,9 +757,9 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     sectionData: { results, ...(premium.ownerBreakup ? { ownerBreakup: premium.ownerBreakup } : {}) },
     narrativeText:
       portfolioCount > 1
-        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR) as of ${narrativeDate(results.asOfDate, style)}.`
+        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR) as of ${narrativeDate(asOf, style)}.`
         : portfolioCount === 1
-          ? `Your investment portfolio's XIRR and benchmark return as of ${narrativeDate(results.asOfDate, style)} are shown below, where enough history exists to calculate them.`
+          ? `Your investment portfolio's XIRR and benchmark return as of ${narrativeDate(asOf, style)} are shown below, where enough history exists to calculate them.`
           : null,
     // (owner-class breakup text is appended to the limitation text below so the existing narrative contract is unchanged)
     chartData: { portfolios: results.portfolios.map((p) => ({ currencyCode: p.currencyCode, performanceVsBenchmarkSeries: p.performanceVsBenchmarkSeries, drawdownSeries: p.drawdownSeries })) },
@@ -769,7 +770,7 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     // single portfolio total (Investment Analysis / Net Worth) does not
     // include those until the user adds them -- disclosed so the two figures
     // reconcile.
-    limitationText: `Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period. ${asOfRuleSentence(results.asOfDate, source.asOfDate, style)}${reconciliation ? ` ${reconciliation}` : ''}${unpublishedDisclosure(source, premium) ? ` ${unpublishedDisclosure(source, premium)}` : ''}${ownerBreakupNarrative(premium.ownerBreakup) ? ` ${ownerBreakupNarrative(premium.ownerBreakup)}` : ''}`,
+    limitationText: `Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period. ${asOfRuleSentence(asOf, source.asOfDate, style)}${reconciliation ? ` ${reconciliation}` : ''}${unpublishedDisclosure(source, premium) ? ` ${unpublishedDisclosure(source, premium)}` : ''}${ownerBreakupNarrative(premium.ownerBreakup) ? ` ${ownerBreakupNarrative(premium.ownerBreakup)}` : ''}`,
   };
 }
 
