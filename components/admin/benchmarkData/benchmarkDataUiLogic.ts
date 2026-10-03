@@ -55,6 +55,7 @@ export const apiPaths = {
   mappings: () => `${API_BASE}/mappings`,
   mappingReview: (id: string) => `${API_BASE}/mappings/${seg(id)}/review`,
   unmappedSchemes: () => `${API_BASE}/mappings/unmapped`,
+  heldSchemes: () => `${API_BASE}/mappings/held`,
   ingestionMode: (benchmarkId: string) => `${API_BASE}/ingestion/${seg(benchmarkId)}/mode`,
 } as const;
 
@@ -1346,6 +1347,40 @@ export interface MappingFormState {
 
 export function emptyMappingForm(): MappingFormState {
   return { instrumentId: '', benchmarkKey: '', proposedBenchmarkName: '', relationshipType: 'primary', effectiveFrom: '', effectiveTo: '', evidenceSource: '', evidenceUrl: '', evidenceTitle: '', evidenceDocumentDate: '', evidenceRetrievedAt: '', evidenceExcerpt: '', resolutionMethod: '', confidence: '', ambiguityReason: '' };
+}
+
+/**
+ * The propose form pre-filled for one HELD scheme. It targets the instrument by its own id, so a
+ * statement-created instrument with no scheme-master link is just as selectable as any other. When a
+ * VERIFIED declared-benchmark source holds this scheme's declaration (none exists today), the
+ * declaration's evidence is pre-filled too; otherwise only the instrument is, and nothing is guessed.
+ */
+export function mappingFormForHeldScheme(row: { instrumentId: string; prefilledDeclared?: ReadonlyArray<{ benchmarkName: string; effectiveFrom: string; effectiveTo?: string | null; evidenceSource: string; evidenceUrl: string; evidenceTitle?: string | null; evidenceDocumentDate: string; evidenceRetrievedAt: string; evidenceExcerpt?: string | null }> }): MappingFormState {
+  const base = { ...emptyMappingForm(), instrumentId: row.instrumentId };
+  const d = row.prefilledDeclared?.[0];
+  if (!d) return base;
+  return {
+    ...base,
+    proposedBenchmarkName: d.benchmarkName,
+    effectiveFrom: formatDateInput(d.effectiveFrom),
+    effectiveTo: formatDateInput(d.effectiveTo ?? null),
+    evidenceSource: d.evidenceSource,
+    evidenceUrl: d.evidenceUrl,
+    evidenceTitle: d.evidenceTitle ?? '',
+    evidenceDocumentDate: formatDateInput(d.evidenceDocumentDate),
+    evidenceRetrievedAt: formatDateInput(d.evidenceRetrievedAt),
+    evidenceExcerpt: d.evidenceExcerpt ?? '',
+  };
+}
+
+/**
+ * The OPTIONAL "enter the fund's declared benchmark from its factsheet" form for one held scheme. Only the
+ * instrument and the document type (factsheet) are filled; the reviewer enters the benchmark exactly as the
+ * factsheet prints it, its web address and date. Once approved, that declared mapping always wins over the
+ * category reference. Nothing is guessed or pre-filled from a category.
+ */
+export function mappingFormForFactsheet(instrumentId: string): MappingFormState {
+  return { ...emptyMappingForm(), instrumentId, evidenceSource: 'amc_factsheet' };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

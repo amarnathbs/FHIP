@@ -49,13 +49,24 @@ import {
   type Observation,
 } from './sip/dateAlignment';
 import type { SeriesPoint } from './benchmarkService';
+import { categoryReferenceBasisLabel, DECLARED_BENCHMARK_LABEL } from '@/lib/services/investment-intelligence/benchmarkData/categoryReference';
 
 export const HOLDING_BENCHMARK_COMPARISON_VERSION = 'holding-benchmark-replication-v1';
 export const BENCHMARK_UNAVAILABLE_TITLE = 'Benchmark data not available';
 
 export type SegmentReturnType = 'TRI' | 'PRI' | 'DEBT_INDEX' | 'COMMODITY_GOLD' | 'OTHER';
 
+export type BenchmarkBasis = 'declared' | 'category_reference';
+
+/** "Fund's declared benchmark" or "Compared with the usual benchmark for <category> funds (not this fund's own declared benchmark)". */
+export function benchmarkBasisLabel(basis: BenchmarkBasis, categoryLabel?: string | null): string {
+  return basis === 'category_reference' && categoryLabel ? categoryReferenceBasisLabel(categoryLabel) : DECLARED_BENCHMARK_LABEL;
+}
+
 export interface BenchmarkSegmentInput {
+  /** 'declared' (default) or 'category_reference'. A category reference is never mixed with a declared mapping. */
+  basis?: BenchmarkBasis;
+  categoryLabel?: string | null;
   benchmarkId: string;
   benchmarkKey: string;
   label: string;
@@ -113,6 +124,10 @@ export interface ComparisonUnavailable {
   detail: string;
   /** Present whenever the period itself is known, so the screen can still state it. */
   periodLabel?: string;
+  /** The benchmark's NAME and what it is (declared or category reference), shown even though no figure is: a user sees the name, not a number. */
+  benchmarkLabel?: string;
+  benchmarkBasis?: BenchmarkBasis;
+  benchmarkBasisLabel?: string;
   method: typeof HOLDING_BENCHMARK_COMPARISON_VERSION;
 }
 
@@ -132,6 +147,9 @@ export interface ComparisonOk {
   difference: number;
   benchmarkKey: string;
   benchmarkLabel: string;
+  /** 'declared' or 'category_reference'; benchmarkBasisLabel is the sentence that must accompany the figure. */
+  benchmarkBasis: BenchmarkBasis;
+  benchmarkBasisLabel: string;
   returnType: SegmentReturnType;
   /** Benchmarks in force over the period, in order (more than one = the benchmark changed inside the period). */
   segmentsUsed: Array<{ benchmarkKey: string; label: string; from: string; to: string }>;
@@ -273,7 +291,30 @@ function valuationLevel(seg: PreparedSegment, date: string, currencyCode: string
   return { ok: true, value: r.observation.value };
 }
 
-export function compareHoldingToBenchmark(input: HoldingComparisonInput): HoldingBenchmarkComparison {
+/**
+ * The comparison. When it cannot produce a figure it still says WHICH benchmark it would have used and
+ * whether that is the fund's declared benchmark or the category reference, so a user sees the name and the
+ * honest label even where there is no number.
+ */
+/** A declared mapping ALWAYS wins: when any declared segment exists, category-reference segments are dropped. */
+export function declaredWins(segments: readonly BenchmarkSegmentInput[]): BenchmarkSegmentInput[] {
+  const hasDeclared = segments.some((s) => (s.basis ?? 'declared') === 'declared');
+  return segments.filter((s) => !hasDeclared || (s.basis ?? 'declared') === 'declared');
+}
+
+export function compareHoldingToBenchmark(rawInput: HoldingComparisonInput): HoldingBenchmarkComparison {
+  const input: HoldingComparisonInput = { ...rawInput, segments: declaredWins(rawInput.segments) };
+  const r = compareInner(input);
+  if (r.status === 'ok') return r;
+  const asOf = iso(input.asOfDate);
+  const sorted = [...input.segments].sort((a, b) => iso(a.effectiveFrom).localeCompare(iso(b.effectiveFrom)));
+  const seg = [...sorted].reverse().find((s) => iso(s.effectiveFrom) <= asOf) ?? sorted[0];
+  if (!seg) return r;
+  const basis: BenchmarkBasis = seg.basis ?? 'declared';
+  return { ...r, benchmarkLabel: seg.label, benchmarkBasis: basis, benchmarkBasisLabel: benchmarkBasisLabel(basis, seg.categoryLabel) };
+}
+
+function compareInner(input: HoldingComparisonInput): HoldingBenchmarkComparison {
   const { currencyCode } = input;
   const flows = [...input.flows].filter((f) => Number.isFinite(f.amount) && f.amount !== 0).sort((a, b) => a.date.getTime() - b.date.getTime());
   const asOf = iso(input.asOfDate);
@@ -386,6 +427,8 @@ export function compareHoldingToBenchmark(input: HoldingComparisonInput): Holdin
     windowEnd: asOf,
     benchmarkKey: prepared.length === 1 ? first.benchmarkKey : prepared.map((p) => p.input.benchmarkKey).join(' > '),
     benchmarkLabel: prepared.length === 1 ? first.label : prepared.map((p) => p.input.label).join(', then '),
+    benchmarkBasis: (first.basis ?? 'declared') as BenchmarkBasis,
+    benchmarkBasisLabel: benchmarkBasisLabel(first.basis ?? 'declared', first.categoryLabel),
     returnType: first.returnType,
     segmentsUsed,
     notes,

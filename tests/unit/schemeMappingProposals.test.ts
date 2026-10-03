@@ -5,11 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildMappingProposals,
-  categoryKeyOf,
   isAutoPublishEligible,
   summariseUnmappedSchemes,
-  CATEGORY_DEFAULT_RULES,
-  CATEGORY_DEFAULTS_ENABLED,
   type DeclaredBenchmarkEvidence,
   type SchemeForMapping,
 } from '@/lib/services/investment-intelligence/benchmarkData/schemeMappingProposals';
@@ -40,14 +37,11 @@ describe('authority 1: the scheme\'s own document', () => {
     expect(d.rank).toBe(1);
     expect(d.payload).toMatchObject({ benchmark_id: CAT[0].benchmarkId, resolution_method: 'deterministic_exact', confidence: 'high', ambiguity_reason: null, evidence_source: 'amc_sid' });
     expect(d.autoPublishEligible).toBe(true);
-    expect(set.categoryOptions).toEqual([]); // a higher authority exists: no category default is offered
   });
 
   it('every payload fits the existing propose route\'s own zod schema (no new table, RPC or migration)', () => {
     const set = buildMappingProposals({ scheme: SCHEME, catalogue: CAT, declared: [DOC()] });
     expect(MappingBody.safeParse(set.drafts[0].payload).success).toBe(true);
-    const cat = buildMappingProposals({ scheme: SCHEME, catalogue: CAT, categoryDefaultsEnabled: true });
-    for (const o of cat.categoryOptions) expect(MappingBody.safeParse(o.payload).success).toBe(true);
   });
 
   it('a medium/low name match goes to a reviewer as admin_judgement and is NOT auto-publish eligible', () => {
@@ -90,86 +84,22 @@ describe('authority 1: the scheme\'s own document', () => {
   });
 });
 
-describe('RULE: category defaults are OFF by default (PO decision 2026-10-03)', () => {
-  it('the shipped switch is false', () => {
-    expect(CATEGORY_DEFAULTS_ENABLED).toBe(false);
-  });
-  it('with the shipped default no category-default proposal is generated for any category, and the reason says so', () => {
-    for (const sub of ['Large Cap Fund', 'Mid Cap Fund', 'Flexi Cap Fund', 'ELSS']) {
-      const s = buildMappingProposals({ scheme: { ...SCHEME, subCategory: sub }, catalogue: CAT });
-      expect(s.categoryOptions, sub).toEqual([]);
-      expect(s.skipped.find((k) => k.source === 'category_default')?.reason).toMatch(/switched off/);
-    }
-  });
-  it('the admin unmapped list hides default candidates with the shipped default', () => {
-    const s = summariseUnmappedSchemes([{ instrumentId: 'a', subCategory: 'Large Cap Fund', schemeName: 'A', amcName: 'X' }], new Set(), new Set());
-    expect(s.byCategory[0]).toMatchObject({ hasCategoryDefault: false, categoryDefaultCandidates: [] });
-  });
-  it('NEGATIVE CONTROL: with the switch forced ON the same input DOES generate options and show candidates, so the three tests above fail if the default is ever turned on', () => {
-    const on = buildMappingProposals({ scheme: SCHEME, catalogue: CAT, categoryDefaultsEnabled: true });
-    expect(on.categoryOptions.length).toBeGreaterThan(0);
-    const list = summariseUnmappedSchemes([{ instrumentId: 'a', subCategory: 'Large Cap Fund', schemeName: 'A', amcName: 'X' }], new Set(), new Set(), true);
-    expect(list.byCategory[0].hasCategoryDefault).toBe(true);
-  });
-});
-
-describe('RULE: a category default NEVER auto-publishes (named negative controls; switch forced ON to exercise the code)', () => {
-  const set = buildMappingProposals({ scheme: SCHEME, catalogue: CAT, categoryDefaultsEnabled: true }); // no document, no AMFI data; switch forced ON to exercise the code
-
-  it('is offered only as a fallback, one low-confidence option per permitted index (alternatives, not a ranking)', () => {
+describe('RULE: a fund\'s CATEGORY benchmark is never a proposal, so it can never auto-publish (named negative controls)', () => {
+  it('a Large Cap fund with no document gets NO proposal of any kind from the builder (the category benchmark is a read-time reference, see categoryReference.test.ts)', () => {
+    const set = buildMappingProposals({ scheme: SCHEME, catalogue: CAT });
     expect(set.drafts).toEqual([]);
-    expect(set.categoryOptions.map((o) => o.declaredName)).toEqual(['NIFTY 100 TRI', 'BSE 100 TRI']);
-    expect(set.categoryOptions.every((o) => o.rank === 3 && o.authority === 'category_default')).toBe(true);
-    expect(set.categoryOptions[0].warnings.join(' ')).toMatch(/alternatives, not a ranking/);
+    expect('categoryOptions' in set).toBe(false);
+    expect(set.skipped.every((s) => s.source !== ('category_default' as never))).toBe(true);
   });
 
-  it('every option is low confidence, admin_judgement, evidence_source "other", with the category caveat, and is not auto-publish eligible', () => {
-    for (const o of set.categoryOptions) {
-      expect(o.payload).toMatchObject({ confidence: 'low', resolution_method: 'admin_judgement', evidence_source: 'other' });
-      expect(o.payload?.ambiguity_reason).toMatch(/CATEGORY DEFAULT, not this scheme's own document/);
-      expect(o.autoPublishEligible).toBe(false);
-      expect(o.requiresAdminReview).toBe(true);
-    }
-  });
-
-  it('NEGATIVE CONTROL: even a verified, exactly matching entry cannot make a category default eligible - the eligibility test rejects it on three independent grounds', () => {
-    const p = set.categoryOptions[0].payload!;
-    expect(isAutoPublishEligible(p, CAT[0])).toBe(false);
-    // Flip each disqualifier in turn; only changing ALL THREE (confidence, method, evidence source) makes it eligible,
-    // which proves each one is doing work on its own.
-    expect(isAutoPublishEligible({ ...p, confidence: 'high' }, CAT[0])).toBe(false);
-    expect(isAutoPublishEligible({ ...p, confidence: 'high', resolution_method: 'deterministic_exact' }, CAT[0])).toBe(false);
-    expect(isAutoPublishEligible({ ...p, confidence: 'high', resolution_method: 'deterministic_exact', evidence_source: 'amc_sid', ambiguity_reason: null }, CAT[0])).toBe(true);
-  });
-
-  it('is suppressed when a higher-authority document exists', () => {
-    const withDoc = buildMappingProposals({ scheme: SCHEME, catalogue: CAT, declared: [DOC()], categoryDefaultsEnabled: true });
-    expect(withDoc.categoryOptions).toEqual([]);
-    expect(withDoc.skipped.map((s) => s.source)).toContain('category_default');
-  });
-
-  it('is not invented for categories whose benchmark depends on a list nobody read or on the scheme\'s own index/theme', () => {
-    for (const sub of ['Liquid Fund', 'Corporate Bond Fund', 'Gilt Fund', 'Index Funds', 'Sectoral/ Thematic', 'FoF Overseas', 'Gold ETF', 'Multi Asset Allocation', null]) {
-      const s = buildMappingProposals({ scheme: { ...SCHEME, subCategory: sub }, catalogue: CAT, categoryDefaultsEnabled: true });
-      expect(s.categoryOptions, String(sub)).toEqual([]);
-      expect(s.skipped.some((k) => k.source === 'category_default' && /No category default is available/.test(k.reason)), String(sub)).toBe(true);
-    }
-  });
-
-  it('every category list is labelled UNVERIFIED (AMFI\'s own list was not read)', () => {
-    expect(CATEGORY_DEFAULT_RULES.every((r) => r.listStatus === 'UNVERIFIED_SECONDARY')).toBe(true);
-  });
-
-  it('maps AMFI sub-category spellings to a category key', () => {
-    expect(categoryKeyOf('Large Cap Fund')).toBe('large_cap');
-    expect(categoryKeyOf('Large & Mid Cap Fund')).toBe('large_mid_cap');
-    expect(categoryKeyOf('Mid Cap Fund')).toBe('mid_cap');
-    expect(categoryKeyOf('Small Cap Fund')).toBe('small_cap');
-    expect(categoryKeyOf('Flexi Cap Fund')).toBe('flexi_cap');
-    expect(categoryKeyOf('ELSS')).toBe('elss');
-    expect(categoryKeyOf('Dynamic Asset Allocation or Balanced Advantage')).toBe('balanced_advantage');
-    expect(categoryKeyOf('Dividend Yield Fund')).toBe('dividend_yield');
-    expect(categoryKeyOf('Sectoral/ Thematic')).toBeNull();
+  it('NEGATIVE CONTROL: a payload shaped like the OLD category default (low, admin_judgement, evidence "other") fails the database auto-publish test on each of its three grounds, and one fixed up on all three would pass, so the test bites', () => {
+    const verified = { benchmarkId: 'x', benchmarkKey: 'K', officialName: 'NIFTY 100 TRI', returnVariant: 'total_return' as const, verified: true, active: true };
+    const oldShape = { instrument_id: SCHEME.instrumentId, benchmark_id: 'x', proposed_benchmark_name: 'NIFTY 100 TRI', relationship_type: 'primary' as const, effective_from: '2021-12-01', effective_to: null, evidence_source: 'other' as const, evidence_url: 'https://example.test/c', evidence_title: null, evidence_document_date: '2021-10-27', evidence_retrieved_at: '2026-10-01', evidence_excerpt: null, resolution_method: 'admin_judgement' as const, confidence: 'low' as const, ambiguity_reason: 'category' };
+    expect(isAutoPublishEligible(oldShape, verified)).toBe(false);
+    expect(isAutoPublishEligible({ ...oldShape, confidence: 'high', ambiguity_reason: null, evidence_source: 'amc_sid' }, verified)).toBe(false); // still admin_judgement
+    expect(isAutoPublishEligible({ ...oldShape, resolution_method: 'deterministic_exact', ambiguity_reason: null, evidence_source: 'amc_sid' }, verified)).toBe(false); // still low
+    expect(isAutoPublishEligible({ ...oldShape, resolution_method: 'deterministic_exact', confidence: 'high', ambiguity_reason: null }, verified)).toBe(false); // still 'other'
+    expect(isAutoPublishEligible({ ...oldShape, resolution_method: 'deterministic_exact', confidence: 'high', ambiguity_reason: null, evidence_source: 'amc_sid' }, verified)).toBe(true);
   });
 });
 
@@ -179,7 +109,6 @@ describe('authority 2: AMFI per-scheme name is skipped unless verified usable', 
     const set = buildMappingProposals({ scheme: SCHEME, catalogue: CAT, amfi: { ...amfi, verifiedUsable: false } });
     expect(set.drafts).toEqual([]);
     expect(set.skipped.find((s) => s.source === 'amfi_per_scheme')?.reason).toMatch(/not been verified/);
-    expect(buildMappingProposals({ scheme: SCHEME, catalogue: CAT, amfi: { ...amfi, verifiedUsable: false }, categoryDefaultsEnabled: true }).categoryOptions.length).toBeGreaterThan(0); // with the switch ON it falls through to the review-only option
   });
   it('NEGATIVE CONTROL: the same data marked verified IS used, ranks below the scheme document and is amfi_disclosure evidence', () => {
     const set = buildMappingProposals({ scheme: SCHEME, catalogue: CAT, amfi: { ...amfi, verifiedUsable: true }, declared: [DOC({ effectiveFrom: '2018-02-01', effectiveTo: '2021-12-31' })] });
@@ -230,13 +159,13 @@ describe('admin list: schemes with no mapping yet, counts by category', () => {
     { instrumentId: 'd', subCategory: 'Liquid Fund', schemeName: 'D', amcName: 'Y' },
     { instrumentId: 'e', subCategory: null, schemeName: 'E', amcName: null },
   ];
-  const s = summariseUnmappedSchemes(rows, new Set(['a']), new Set(['b', 'd']), true);
+  const s = summariseUnmappedSchemes(rows, new Set(['a']), new Set(['b', 'd']));
 
   it('counts mapped, unmapped and already-waiting-for-review per category', () => {
     const large = s.byCategory.find((c) => c.category === 'Large Cap Fund')!;
-    expect(large).toMatchObject({ schemeRows: 3, mappedRows: 1, unmappedRows: 2, openProposalRows: 1, hasCategoryDefault: true });
-    expect(large.categoryDefaultCandidates).toEqual(['NIFTY 100 TRI', 'BSE 100 TRI']);
-    expect(s.byCategory.find((c) => c.category === 'Liquid Fund')).toMatchObject({ unmappedRows: 1, openProposalRows: 1, hasCategoryDefault: false });
+    expect(large).toMatchObject({ schemeRows: 3, mappedRows: 1, unmappedRows: 2, openProposalRows: 1, categoryReferenceBenchmark: 'NIFTY 100 TRI' });
+    expect(large.categoryReferenceLabel).toBe("Compared with the usual benchmark for Large Cap funds (not this fund's own declared benchmark)");
+    expect(s.byCategory.find((c) => c.category === 'Liquid Fund')).toMatchObject({ unmappedRows: 1, openProposalRows: 1, categoryReferenceBenchmark: null, categoryReferenceLabel: null });
     expect(s.byCategory.find((c) => c.category === 'Category not recorded')).toMatchObject({ unmappedRows: 1 });
     expect(s).toMatchObject({ totalSchemeRows: 5, mappedRows: 1, unmappedRows: 4 });
   });

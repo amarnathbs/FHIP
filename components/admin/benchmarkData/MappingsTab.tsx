@@ -6,6 +6,7 @@
 // scheme uses a benchmark: the evidence must be the scheme's own document.
 import { useState } from 'react';
 import type { MappingProposalView, OverviewResponse } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
+import type { HeldSchemesResponse } from '@/lib/services/investment-intelligence/benchmarkData/heldSchemes';
 import type { UnmappedSummary } from '@/lib/services/investment-intelligence/benchmarkData/schemeMappingProposals';
 import { matchBenchmarkName, type CatalogueEntryLite } from '@/lib/services/investment-intelligence/benchmarkData/benchmarkNameMatcher';
 import { usePost, useLoad, type Say } from './api';
@@ -22,6 +23,8 @@ import {
   canReviewMapping,
   capabilityDecisions,
   emptyMappingForm,
+  mappingFormForHeldScheme,
+  mappingFormForFactsheet,
   formatDate,
   mappingStatusChip,
   reviewProblem,
@@ -38,6 +41,7 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
   const caps = ov.capabilities;
   const dec = capabilityDecisions(caps);
   const { state, reload } = useLoad<MappingProposalView[]>(`${apiPaths.mappings()}?r=${refreshKey}`, 'load the mapping proposals');
+  const held = useLoad<HeldSchemesResponse>(`${apiPaths.heldSchemes()}?r=${refreshKey}`, 'load the held schemes');
   const unmapped = useLoad<UnmappedSummary>(`${apiPaths.unmappedSchemes()}?r=${refreshKey}`, 'load the schemes with no mapping');
   const { busy, post } = usePost(say);
   const [form, setForm] = useState<MappingFormState | null>(null);
@@ -101,10 +105,44 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
 
   return (
     <div className="space-y-4">
-      <Panel title="Schemes with no benchmark mapping yet" description="Counts by AMFI category. Category defaults are switched off until AMFI's own list has been checked, so every mapping needs the scheme's own document. A default, if ever switched on, is only a low-confidence suggestion a reviewer must approve.">
+      <Panel title="Held schemes and the benchmark that applies" description="The schemes users actually hold, first. Holder numbers are counts only (shown only where at least 10 people hold the scheme); no user, account or amount is shown. A fund with no declared benchmark is compared, automatically, with the usual benchmark for its category and is always labelled as such. Entering the fund's declared benchmark from its factsheet is optional; once approved it replaces the category benchmark. The category table is unverified (AMFI's own list could not be read), and a return figure appears only where the benchmark is verified, total return and entitled.">
+        {held.state.status === 'loading' ? <LoadingPanel what="the held schemes" /> : held.state.status === 'error' ? (/database update/i.test(held.state.failure.message) ? <Notice tone="info">This list needs a database update that has not been applied yet. Everything else on this tab works; the list will appear once the update is applied.</Notice> : <ErrorPanel failure={held.state.failure} what="the held schemes" onRetry={held.reload} />) : held.state.data.rows.length === 0 ? (
+          <EmptyState title="No held schemes found">No scheme has a counted transaction yet.</EmptyState>
+        ) : (
+          <>
+            <p className="mb-2 text-sm text-muted">{held.state.data.counts.held} held: {held.state.data.counts.declared} with a declared benchmark, {held.state.data.counts.categoryReference} using the category benchmark, {held.state.data.counts.noBenchmark} with no benchmark for their category; {held.state.data.counts.proposalWaiting} declared proposals waiting for review.</p>
+            <ScrollTable label="Held schemes and the benchmark that applies" minWidth="min-w-[900px]">
+              <thead><tr><Th>Scheme</Th><Th>Fund house</Th><Th>Category</Th><Th>Holders</Th><Th>First held</Th><Th>Benchmark that applies</Th><Th>Action</Th></tr></thead>
+              <tbody>
+                {held.state.data.rows.map((h) => (
+                  <tr key={h.instrumentId}>
+                    <Td><span title={h.originalName}>{h.displayName}</span><br /><span className="text-xs text-muted">{h.planType}; as printed: {h.originalName}</span></Td>
+                    <Td>{h.amcName ?? 'Unknown'}</Td>
+                    <Td>{h.category}{h.categorySource === 'name_hint' ? <><br /><span className="text-xs text-muted">Guessed from the name</span></> : null}</Td>
+                    <Td>{h.holderCount === null ? <span className="text-xs text-muted">Fewer than 10 holders</span> : h.holderCount}</Td>
+                    <Td>{h.firstHeldDate ? formatDate(h.firstHeldDate) : <span className="text-xs text-muted">Not shown</span>}</Td>
+                    <Td>
+                      {h.benchmark.kind === 'declared' ? (
+                        <><Chip label="Declared (admin)" tone="ok" /><br /><span className="text-xs text-muted">{h.benchmark.label}</span></>
+                      ) : h.benchmark.kind === 'category_reference' ? (
+                        <><Chip label={`Category benchmark: ${h.benchmark.benchmarkLabel}`} tone="info" /><br /><span className="text-xs text-muted">{h.benchmark.basisLabel}{h.benchmark.unsure ? '. Less certain choice for this category.' : ''}</span>{h.status === 'proposal_waiting' ? <><br /><span className="text-xs text-attention">A declared benchmark is waiting for review.</span></> : null}{h.benchmark.declaredDiffers ? <><br /><span className="text-xs font-medium text-attention">Declared benchmark differs from category benchmark - enter declared.</span><br /><span className="text-xs text-muted">The fund&apos;s own document names {h.benchmark.declaredDiffers.declaredName} ({h.benchmark.declaredDiffers.evidenceRef}; evidence: {h.benchmark.declaredDiffers.evidenceStatus}).</span></> : null}</>
+                      ) : (
+                        <><Chip label="No benchmark for this category" tone="neutral" /><br /><span className="max-w-xs whitespace-normal text-xs text-muted">{h.benchmark.message}</span></>
+                      )}
+                    </Td>
+                    <Td>{dec.canReviewMappings && h.status === 'not_mapped' ? <Btn kind="secondary" onClick={() => { setForm(h.sourcePrefilled ? mappingFormForHeldScheme(h) : mappingFormForFactsheet(h.instrumentId)); fb.clear(); }}>{`Enter declared benchmark from factsheet (${h.displayName})`}</Btn> : null}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </ScrollTable>
+          </>
+        )}
+      </Panel>
+
+      <Panel title="Schemes with no benchmark mapping yet" description="Counts by AMFI category. Funds with no declared benchmark use the usual benchmark for their category at read time; it is never stored as a mapping.">
         {unmapped.state.status === 'loading' ? <LoadingPanel what="the schemes with no mapping" /> : unmapped.state.status === 'error' ? <ErrorPanel failure={unmapped.state.failure} what="the schemes with no mapping" onRetry={unmapped.reload} /> : (
           <ScrollTable label="Schemes with no mapping, by category" minWidth="min-w-[760px]">
-            <thead><tr><Th>Category</Th><Th>Schemes (plans and options)</Th><Th>No mapping yet</Th><Th>Waiting for review</Th><Th>Category default (review only)</Th></tr></thead>
+            <thead><tr><Th>Category</Th><Th>Schemes (plans and options)</Th><Th>No mapping yet</Th><Th>Waiting for review</Th><Th>Category benchmark (read time)</Th></tr></thead>
             <tbody>
               {unmapped.state.data.byCategory.map((c) => (
                 <tr key={c.category}>
@@ -112,7 +150,7 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
                   <Td>{c.schemeRows}</Td>
                   <Td>{c.unmappedRows}</Td>
                   <Td>{c.openProposalRows}</Td>
-                  <Td>{c.hasCategoryDefault ? <>{c.categoryDefaultCandidates.join(' or ')}<br /><span className="text-xs text-muted">Unverified list: the scheme&apos;s own document decides.</span></> : <span className="text-xs text-muted">None available</span>}</Td>
+                  <Td>{c.categoryReferenceBenchmark ? <>{c.categoryReferenceBenchmark}<br /><span className="text-xs text-muted">Unverified table; not this fund&apos;s own declared benchmark.</span></> : <span className="text-xs text-muted">None for this category</span>}</Td>
                 </tr>
               ))}
             </tbody>
@@ -178,6 +216,9 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
           <div data-form={fb.formId}>
           <FormFeedback fb={fb} />
           <div className="grid gap-3 sm:grid-cols-2">
+            {held.state.status === 'ready' ? (
+              <SelectField label="Held scheme (fills the instrument id)" value={held.state.data.rows.some((h) => h.instrumentId === form.instrumentId) ? form.instrumentId : ''} onChange={(v) => set({ instrumentId: v })} options={held.state.data.rows.map((h) => ({ value: h.instrumentId, label: `${h.displayName} (${h.planType})` }))} placeholder="Another scheme: type its instrument id below" />
+            ) : null}
             <TextField label="Instrument id" required value={form.instrumentId} onChange={(v) => set({ instrumentId: v })} error={errors.instrumentId} fieldKey="instrumentId" hint="The scheme's instrument id (UUID)." />
             <SelectField label="Catalogue benchmark (if it exists)" value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v })} options={ov.rows.map((r) => ({ value: r.catalogue.benchmarkKey, label: `${r.catalogue.label} (${r.catalogue.catalogueStatus})` }))} placeholder="Not in the catalogue yet" error={errors.benchmarkKey} fieldKey="benchmarkKey" />
             <TextField label="Benchmark name as the document states it" required value={form.proposedBenchmarkName} onChange={(v) => set({ proposedBenchmarkName: v })} error={errors.proposedBenchmarkName} fieldKey="proposedBenchmarkName" hint={nameHint ? (nameHint.unsupported ? 'This looks like a composite or a commodity price: one catalogue series cannot represent it.' : nameHint.best ? `Closest catalogue entry: ${nameHint.best.entry.benchmarkKey} (${nameHint.best.confidence} confidence${nameHint.best.entryVerified ? '' : ', not yet verified'}). A price index is never suggested for a total-return benchmark.` : 'No catalogue entry matches this name safely.') : undefined} />

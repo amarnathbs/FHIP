@@ -251,17 +251,23 @@ export function detectOpenReconciliationCases(userId: string, cases: Reconciliat
 // Reads the REAL R4 ii_analytics_results row shape (migration 0043 — the
 // table R4 rebuilt from the R1-era placeholder, not the placeholder
 // schema): metric_key='scheme_active_return' at scope_type='scheme',
-// result_value = { status, value: { activeReturn, family, benchmarkKey } | null, ... },
-// where activeReturn is a CAGR-fraction difference (scheme CAGR minus
-// benchmark CAGR since inception — see analyticsOrchestrator.ts's
-// computeSchemeActive()), never a recomputation of it (spec section 130).
+// result_value = { status, value: { activeReturn, family, benchmarkKey, benchmarkBasis?, benchmarkBasisLabel? } | null, ... },
+// where activeReturn is the holding's XIRR minus the XIRR of the same cash flows replayed into the
+// benchmark over the investor's own holding period (see analyticsOrchestrator.ts's
+// compareSchemeToBenchmark()), never a recomputation of it (spec section 130). The benchmark is either
+// the fund's DECLARED benchmark or, when none is recorded, the read-time CATEGORY reference; the
+// wording below says which, so a category comparison is never presented as the fund's own.
 // Only quality_status='ok' rows are eligible — an 'unavailable'/'stale'
 // result carries no comparable number to threshold against.
 // ---------------------------------------------------------------------------
 export interface PerformanceMetricInput {
   scopeId: string;
   metricKey: string;
-  activeReturn: number | null; // result_value.value.activeReturn, a CAGR-fraction difference (e.g. -0.02 = -2%)
+  activeReturn: number | null; // result_value.value.activeReturn, a fraction difference (e.g. -0.02 = -2%)
+  /** 'declared' | 'category_reference'; absent on rows written before the basis was recorded. */
+  benchmarkBasis?: string | null;
+  /** The sentence that accompanies a category-reference comparison. */
+  benchmarkBasisLabel?: string | null;
   qualityStatus: string;
   engineVersion: string;
 }
@@ -274,9 +280,12 @@ export function detectBenchmarkUnderperformance(userId: string, metrics: Perform
       category: rule.category,
       severity: rule.defaultSeverity,
       complianceClassification: rule.complianceClassification,
-      title: 'Position trailing its benchmark',
-      description: `This position's since-inception return trails its benchmark by ${Math.abs((m.activeReturn as number) * 100).toFixed(2)} percentage points, based on certified R4 performance analytics.`,
-      evidence: { instrumentId: m.scopeId, activeReturn: m.activeReturn, thresholdFraction, engineVersion: m.engineVersion },
+      title: m.benchmarkBasis === 'category_reference' ? 'Position trailing its category benchmark' : 'Position trailing its benchmark',
+      description:
+        m.benchmarkBasis === 'category_reference'
+          ? `${m.benchmarkBasisLabel ?? "Compared with the usual benchmark for this fund's category (not this fund's own declared benchmark)"}: over your holding period this position trails it by ${Math.abs((m.activeReturn as number) * 100).toFixed(2)} percentage points a year, based on certified R4 performance analytics.`
+          : `Over your holding period this position trails ${m.benchmarkBasis === 'declared' ? "the fund's declared benchmark" : 'its benchmark'} by ${Math.abs((m.activeReturn as number) * 100).toFixed(2)} percentage points a year, based on certified R4 performance analytics.`,
+      evidence: { instrumentId: m.scopeId, activeReturn: m.activeReturn, thresholdFraction, engineVersion: m.engineVersion, benchmarkBasis: m.benchmarkBasis ?? null },
       sourceModule: 'ii_r4_performance' as IiReviewSourceModule,
       sourceRecordId: m.scopeId,
       sourceRecordVersion: m.engineVersion,

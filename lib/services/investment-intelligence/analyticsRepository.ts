@@ -26,6 +26,7 @@ import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmar
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
+import { loadCategoryReferenceMappings } from './benchmarkData/categoryReferenceLoader';
 import { accessAllows, blockedReason, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
 import { selectLatestEligibleNav, type NavObservationRow, type StatementPositionInput, type UnitMovementInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
@@ -248,8 +249,13 @@ export async function loadAnalyticsDataset(
   }
 
   // ---- Effective-dated benchmark mapping (spec sections 30-31) ---------
-  const { mappings, benchmarkIds, mappingVersion, mappingWarnings, benchmarkFacts } = await loadBenchmarkMappings(supabase, instrumentIds);
+  const { mappings, benchmarkIds: declaredBenchmarkIds, mappingVersion, mappingWarnings, benchmarkFacts } = await loadBenchmarkMappings(supabase, instrumentIds);
   warnings.push(...mappingWarnings);
+  // READ-TIME category references for funds with NO declared mapping (a declared mapping always wins).
+  // In memory only; used by the per-scheme comparison, never by the blended portfolio benchmark.
+  const categoryReference = await loadCategoryReferenceMappings(supabase, instrumentIds, new Set(mappings.map((m) => m.instrumentId)));
+  for (const [id, f] of categoryReference.facts) if (!benchmarkFacts.has(id)) benchmarkFacts.set(id, f);
+  const benchmarkIds = [...new Set([...declaredBenchmarkIds, ...categoryReference.benchmarkIds])];
   // Per-benchmark facts for the holding-period comparison (catalogue label, verified?, entitled?).
   const benchmarkMeta: NonNullable<AnalyticsDataset['benchmarkMeta']> = {};
 
@@ -671,6 +677,8 @@ export async function loadAnalyticsDataset(
       benchmarkDataVersion,
       benchmarkMappingVersion: mappingVersion,
       benchmarkMeta,
+      categoryReferenceMappings: categoryReference.mappings,
+      categoryNoBenchmark: Object.fromEntries(categoryReference.noBenchmark),
       frequency: 'monthly',
     },
     warnings,

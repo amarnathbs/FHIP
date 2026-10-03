@@ -33,12 +33,14 @@ import { benchmarkWindowReturn, type SeriesPoint } from '@/lib/engines/investmen
 import { missingReferenceData, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
 import {
   compareHoldingToBenchmark,
+  withheldComparison,
   type BenchmarkSegmentInput,
   type HoldingBenchmarkComparison,
 } from '@/lib/engines/investment-intelligence/holdingBenchmarkComparison';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { accessAllows, blockedReason, clampToScope, loadBenchmarkAccess, type BenchmarkAccess, type BenchmarkAccessMap } from './benchmarkAccess';
 import { fetchAllRows } from './pagination';
+import { loadCategoryReferenceMappings } from './benchmarkData/categoryReferenceLoader';
 
 export interface BenchmarkComparable {
   benchmarkKey: string;
@@ -69,6 +71,22 @@ export interface InstrumentBenchmarkContext {
   accessByBenchmarkId: BenchmarkAccessMap;
   /** Set when the entitlement lookup itself failed; every benchmark is then reported blocked. */
   accessError: string | null;
+  /**
+   * READ-TIME category references (basis 'category_reference') for instruments with NO declared primary
+   * mapping. In memory only: never stored, never counted as "mapped" by summarizeBenchmarkCoverage and never
+   * used by the legacy lump-sum comparable. A declared mapping always wins (the instrument is simply absent here).
+   */
+  categoryReferenceByInstrument: Map<string, BenchmarkMapping[]>;
+  /** instrumentId -> the sentence shown instead of a number ("Benchmark not available for this fund category"). */
+  categoryNoBenchmark: Map<string, string>;
+}
+
+/** Every benchmark id whose series may be needed: declared mappings AND category references. */
+export function benchmarkIdsToLoad(ctx: InstrumentBenchmarkContext): string[] {
+  const ids = new Set<string>();
+  for (const list of ctx.mappingsByInstrument.values()) for (const m of list) ids.add(m.benchmarkId);
+  for (const list of ctx.categoryReferenceByInstrument.values()) for (const m of list) ids.add(m.benchmarkId);
+  return [...ids];
 }
 
 interface RawMappingRow {
@@ -100,7 +118,9 @@ export async function loadInstrumentBenchmarkContext(
 ): Promise<InstrumentBenchmarkContext> {
   const mappingsByInstrument = new Map<string, BenchmarkMapping[]>();
   const metaByBenchmarkId = new Map<string, BenchmarkMeta>();
-  if (instrumentIds.length === 0) return { mappingsByInstrument, metaByBenchmarkId, accessByBenchmarkId: new Map(), accessError: null };
+  const categoryReferenceByInstrument = new Map<string, BenchmarkMapping[]>();
+  const categoryNoBenchmark = new Map<string, string>();
+  if (instrumentIds.length === 0) return { mappingsByInstrument, metaByBenchmarkId, accessByBenchmarkId: new Map(), accessError: null, categoryReferenceByInstrument, categoryNoBenchmark };
 
   const query = (cols: string) =>
     supabase.from('ii_instrument_benchmarks').select(cols).in('instrument_id', instrumentIds).eq('relationship_type', 'primary');
@@ -142,8 +162,20 @@ export async function loadInstrumentBenchmarkContext(
       });
     }
   }
+  // Category references for the instruments with no declared mapping (a declared mapping always wins).
+  const cat = await loadCategoryReferenceMappings(supabase, instrumentIds, new Set(mappingsByInstrument.keys()));
+  for (const m of cat.mappings) {
+    const list = categoryReferenceByInstrument.get(m.instrumentId) ?? [];
+    list.push(m);
+    categoryReferenceByInstrument.set(m.instrumentId, list);
+    const facts = cat.facts.get(m.benchmarkId);
+    if (!metaByBenchmarkId.has(m.benchmarkId)) {
+      metaByBenchmarkId.set(m.benchmarkId, { key: m.benchmarkKey, label: facts?.label ?? m.benchmarkKey, returnType: m.returnType, licenceStatus: null, lifecycleStatus: 'active', catalogueStatus: facts?.catalogueVerified ? 'verified' : null });
+    }
+  }
+  for (const [id, msg] of cat.noBenchmark) categoryNoBenchmark.set(id, msg);
   const { access, error: accessError } = await loadBenchmarkAccess(supabase, [...metaByBenchmarkId.keys()]);
-  return { mappingsByInstrument, metaByBenchmarkId, accessByBenchmarkId: access, accessError };
+  return { mappingsByInstrument, metaByBenchmarkId, accessByBenchmarkId: access, accessError, categoryReferenceByInstrument, categoryNoBenchmark };
 }
 
 /**
@@ -305,13 +337,21 @@ export function resolveHoldingBenchmarkComparison(
   currencyCode: string,
   benchmarkSeriesById: Map<string, SeriesPoint[]>
 ): HoldingBenchmarkComparison {
-  const mappings = ctx.mappingsByInstrument.get(instrumentId) ?? [];
+  const declared = ctx.mappingsByInstrument.get(instrumentId) ?? [];
+  // A declared mapping ALWAYS wins; only an instrument with none falls back to its category reference.
+  const mappings = declared.length > 0 ? declared : (ctx.categoryReferenceByInstrument.get(instrumentId) ?? []);
+  if (mappings.length === 0) {
+    const why = ctx.categoryNoBenchmark.get(instrumentId);
+    if (why) return withheldComparison('NO_MAPPING', why);
+  }
   const segments: BenchmarkSegmentInput[] = mappings.map((m) => {
     const meta = ctx.metaByBenchmarkId.get(m.benchmarkId);
     const grant = ctx.accessByBenchmarkId.get(m.benchmarkId);
     const label = meta?.label ?? m.benchmarkKey;
     const entitled = accessAllows(grant, 'display_comparison');
     return {
+      basis: m.basis ?? 'declared',
+      categoryLabel: m.categoryLabel ?? null,
       benchmarkId: m.benchmarkId,
       benchmarkKey: m.benchmarkKey,
       label,

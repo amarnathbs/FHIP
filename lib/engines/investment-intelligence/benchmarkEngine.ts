@@ -35,6 +35,15 @@ export interface BenchmarkMapping {
   returnType: 'TRI' | 'PRI' | 'DEBT_INDEX' | 'COMMODITY_GOLD' | 'OTHER';
   effectiveFrom: Date;
   effectiveTo: Date | null;
+  /**
+   * Where the mapping comes from. Absent / 'declared' = a stored, reviewed mapping. 'category_reference' =
+   * an IN-MEMORY read-time reference ("the usual benchmark for this fund's category"); never stored, never
+   * 'primary' in the database, never used by the blended portfolio benchmark.
+   */
+  basis?: 'declared' | 'category_reference';
+  /** For 'category_reference': the category wording, and the sentence that must accompany any figure. */
+  categoryLabel?: string;
+  basisLabel?: string;
 }
 
 /** Resolve the effective primary benchmark mapping for an instrument on a given date. Never hard-coded. */

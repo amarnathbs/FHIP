@@ -94,13 +94,21 @@ describe('Holdings table: benchmarkComparison', () => {
     expect(c).toMatchObject({ status: 'unavailable', reason: 'PRICE_INDEX_NOT_TOTAL_RETURN' });
   });
 
-  it('NEGATIVE: no mapping at all => unavailable, no number', async () => {
-    const c = (await holding(tables({ over: { ii_instrument_benchmarks: [] } }))).benchmarkComparison;
+  // A fund whose category cannot be recognised has no category benchmark either (see categoryReference.test.ts
+  // for the category reference that applies to recognisable funds), so "no mapping" stays a clean no-number state.
+  const unrecognisable = (t: Record<string, unknown[]>) => {
+    (t.ii_instruments[0] as Record<string, unknown>).instrument_name = 'Test Holding';
+    return t;
+  };
+
+  it('NEGATIVE: no mapping at all and no recognisable category => unavailable, no number', async () => {
+    const c = (await holding(unrecognisable(tables({ over: { ii_instrument_benchmarks: [] } })))).benchmarkComparison;
     expect(c).toMatchObject({ status: 'unavailable', reason: 'NO_MAPPING' });
+    expect((c as { detail: string }).detail).toMatch(/Benchmark not available for this fund category/);
   });
 
-  it('NEGATIVE: a superseded mapping row is ignored like the analytics loader ignores it', async () => {
-    const t = tables();
+  it('NEGATIVE: a superseded mapping row is ignored like the analytics loader ignores it (and, for an unrecognisable fund, nothing replaces it)', async () => {
+    const t = unrecognisable(tables());
     (t.ii_instrument_benchmarks[0] as Record<string, unknown>).quality_status = 'superseded';
     expect((await holding(t)).benchmarkComparison).toMatchObject({ status: 'unavailable', reason: 'NO_MAPPING' });
   });
