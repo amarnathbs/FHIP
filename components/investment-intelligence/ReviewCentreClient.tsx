@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { OwnerChangeDialog, type OwnerSubmitExtra, type OwnerSubmitResult } from './OwnerChangeDialog';
 import { apiErrorMessage, type OwnerSelectionBody } from './ownerChange';
 import { fmtDate } from './dateDisplay';
+import { ProbableDuplicateReview } from './ProbableDuplicateReview';
 
 // R9 — Review Centre UX (spec sections 56, 59, 134). Sections mirror the
 // spec's suggested layout: Overview (severity counts) + a filterable list.
@@ -99,8 +100,6 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
   // reconciliation-cases/[id]/resolve-cross-source's header for the full
   // category-D rationale (the exact/high-confidence duplicate siblings are
   // already auto-resolved by the system and never reach this screen open).
-  const [resolvingCrossSourceItemId, setResolvingCrossSourceItemId] = useState<string | null>(null);
-  const [resolveCrossSourceError, setResolveCrossSourceError] = useState<Record<string, string>>({});
   // Document2 final non-benchmark closure #10 (2026-09-30): a genuine
   // resolution path for 'transaction_unclassified' — see
   // reconciliation-cases/[id]/resolve-classification's header for why this
@@ -204,26 +203,6 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
       setResolveInstrumentError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not resolve this instrument.' }));
     } finally {
       setResolvingInstrumentItemId(null);
-    }
-  }
-
-  async function resolveCrossSource(itemId: string, caseId: string, decision: 'confirmed_duplicate' | 'confirmed_distinct') {
-    setResolvingCrossSourceItemId(itemId);
-    setResolveCrossSourceError((prev) => ({ ...prev, [itemId]: '' }));
-    try {
-      const res = await fetch(`/api/investment-intelligence/reconciliation-cases/${encodeURIComponent(caseId)}/resolve-cross-source`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not record that decision.');
-      await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
-      await load(statusFilter);
-    } catch (e) {
-      setResolveCrossSourceError((prev) => ({ ...prev, [itemId]: e instanceof Error ? e.message : 'Could not record that decision.' }));
-    } finally {
-      setResolvingCrossSourceItemId(null);
     }
   }
 
@@ -541,30 +520,18 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
                       {resolveInstrumentError[item.id] && <p className="w-full text-xs text-red-600">{resolveInstrumentError[item.id]}</p>}
                     </div>
                   )}
-                  {statusFilter === 'open' && isCrossSourceConflictCase && (
-                    <div className="mt-2 flex flex-col items-start gap-2">
-                      <p className="text-xs text-amber-800">
-                        A different statement recorded a transaction that may be the same real-world event as one already on file, but the details don’t match closely enough to
-                        be sure automatically. Is this the same transaction, recorded twice?
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => resolveCrossSource(item.id, caseId as string, 'confirmed_duplicate')}
-                          disabled={resolvingCrossSourceItemId === item.id}
-                          className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
-                        >
-                          Yes, same transaction
-                        </button>
-                        <button
-                          onClick={() => resolveCrossSource(item.id, caseId as string, 'confirmed_distinct')}
-                          disabled={resolvingCrossSourceItemId === item.id}
-                          className="rounded-md border px-2 py-1 text-xs font-medium text-primary disabled:opacity-50"
-                        >
-                          No, these are different transactions
-                        </button>
-                      </div>
-                      {resolveCrossSourceError[item.id] && <p className="w-full text-xs text-red-600">{resolveCrossSourceError[item.id]}</p>}
-                    </div>
+                  {(statusFilter === 'open' || statusFilter === 'resolved') && isCrossSourceConflictCase && (
+                    // Document2 D-5 (PO 2026-10-03): a probable duplicate is a non-blocking
+                    // highlight; the user chooses (keep both / accept the statement / reject
+                    // the statement entry) and can undo. See ProbableDuplicateReview.tsx.
+                    <ProbableDuplicateReview
+                      caseId={caseId as string}
+                      currencyCode={dateCurrency}
+                      onChanged={async () => {
+                        await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
+                        await load(statusFilter);
+                      }}
+                    />
                   )}
                   {statusFilter === 'open' && isClassifiableTransaction && (
                     <div className="mt-2 flex flex-col items-start gap-2">

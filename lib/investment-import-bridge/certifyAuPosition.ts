@@ -33,6 +33,7 @@ import { evaluateCertification } from '@/lib/services/investment-intelligence/ce
 import { isoDateDaysBetween } from '@/lib/services/investment-intelligence/dateNormalisation';
 import { parseExactDecimal, scaledToDecimalString, ZERO } from '@/lib/services/investment-intelligence/decimal';
 import { OPENING_BALANCE_SOURCE_REFERENCE } from '@/lib/services/investment-intelligence/openingBalanceMarker';
+import { filterCertificationBlockingCases } from '@/lib/services/investment-intelligence/crossSourceReviewPolicy';
 import { fetchAllRows } from '@/lib/services/investment-intelligence/pagination';
 import { determineHistoryCompleteness, reconcilePosition, type ReconciliationTransactionInput } from '@/lib/services/investment-intelligence/reconciliation';
 import { loadActiveReconciliationConfig } from '@/lib/services/investment-intelligence/reconciliationConfig';
@@ -119,7 +120,9 @@ export async function certifyAuPosition(userId: string, accountId: string, instr
     .eq('status', 'open')
     .eq('subject_id', accountId)
     .in('severity', ['blocking', 'high']);
-  const cases = (blockingCases ?? []) as { discrepancy_type: string; severity: string }[];
+  // D-5 (PO 2026-10-03): an open cross-source probable duplicate is shown to
+  // the user but never blocks certification.
+  const cases = filterCertificationBlockingCases((blockingCases ?? []) as { discrepancy_type: string; severity: string }[]);
 
   const effectiveOwnership = await loadAccountOwnership(admin, userId, accountId);
   const ownerUnresolved = effectiveOwnership ? effectiveOwnership.ownership.kind === 'unassigned' : !account.owner_member_id;

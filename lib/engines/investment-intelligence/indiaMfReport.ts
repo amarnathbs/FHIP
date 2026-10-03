@@ -97,6 +97,7 @@ import { unitDeltaForTransaction } from '@/lib/services/investment-intelligence/
 import { computeCostValue, type CostBasisTransaction } from '@/lib/services/investment-intelligence/costBasis';
 import { buildTaxLots, consumeLotsFifo, type AcquisitionEvent, type TaxLot } from './tax/taxLotEngine';
 import type { IiTransactionType } from '@/lib/services/investment-intelligence/types';
+import { isUserSuppliedInvestmentDateReference } from '@/lib/investment-intelligence/investmentDate';
 
 export const INDIA_MF_REPORT_VERSION = 'india-mf-report-v1';
 /** Units are printed to 3-4 dp on a real statement; below this is rounding noise. */
@@ -685,7 +686,11 @@ export function computePosition(input: PositionInputs): MfPositionMetrics {
   const startForLabel = openingDate ?? historyStartDate;
   let label: string | null = null;
   if (flags.noTransactions) {
-    label = 'holding only; no transactions uploaded';
+    // D-3 (PO 2026-10-03): the holding has no purchase date; the user is asked for it.
+    label = 'holding only; investment date needed';
+  } else if (!partial && txns.some((t) => isUserSuppliedInvestmentDateReference(t.sourceReference))) {
+    // Honest evidence label: the date is the user's and the cost is the NAV on that date, not a statement line.
+    label = 'purchase date supplied by you; cost is the fund price on that date';
   } else if (partial) {
     label = startForLabel ? `from ${formatIsoDateDMY(startForLabel)}; earlier history not uploaded` : 'earlier history not uploaded';
     if (reasons.includes('unit_adjustment_not_modelled') && reasons.length === 1) label = 'includes a unit adjustment not modelled in cost';
@@ -699,7 +704,7 @@ export function computePosition(input: PositionInputs): MfPositionMetrics {
   }
   let xirrOutcome: XirrOutcome;
   if (flags.noTransactions) {
-    xirrOutcome = { status: 'na', reason: 'INSUFFICIENT_HISTORY', detail: 'no transactions uploaded for this holding' };
+    xirrOutcome = { status: 'na', reason: 'INSUFFICIENT_HISTORY', detail: 'no purchase date is recorded for this holding; add the investment date' };
   } else if (unitsWithCost > EPS && !terminal) {
     xirrOutcome = { status: 'na', reason: 'NO_VALUATION', detail: XIRR_REASON_TEXT.NO_VALUATION };
   } else {
@@ -1101,7 +1106,7 @@ function buildFootnotes(positions: MfPositionMetrics[], sections: OwnerSection[]
   );
   add(
     'NO_TRANSACTIONS',
-    'These holdings come from a statement closing balance with no transactions uploaded. Current value is shown; cost-based figures and XIRR are not available because no purchases are recorded.',
+    'These holdings come from a statement closing balance with no purchase date. Current value is shown; cost-based figures and XIRR are not available until you add the investment date (Investment Intelligence, Statements & data).',
     affected((p) => p.flags.noTransactions)
   );
   add(
