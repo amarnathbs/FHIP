@@ -39,13 +39,15 @@ export interface MetricResult<T extends Record<string, unknown> = Record<string,
   value?: T;
 }
 
-function sampleStdDev(xs: number[]): number {
+/** Exported (NAV2 reuses it rather than keeping a second copy): sample (n-1) standard deviation. */
+export function sampleStdDev(xs: number[]): number {
   const n = xs.length;
   const mean = xs.reduce((s, x) => s + x, 0) / n;
   const variance = xs.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1);
   return Math.sqrt(variance);
 }
-function mean(xs: number[]): number {
+/** Exported (NAV2 reuses it rather than keeping a second copy): arithmetic mean. */
+export function mean(xs: number[]): number {
   return xs.reduce((s, x) => s + x, 0) / xs.length;
 }
 
