@@ -121,3 +121,21 @@ No NAV2 module reads a clock (`Date.now()` / `new Date()`); the as-of date and t
 | 13 UI | disclosures and plain sentences are produced here; the UI is Stage 2 |
 | 15 monitoring | Stage 2 |
 | 16, 17 fixtures / matrix | `tests/unit/nav2/*`, `NAV2_TEST_MATRIX_AND_STAGE_PLAN.md` |
+
+## 8. Stage 2 module map (Fund analytics report, integration, admin)
+
+Everything in Stage 2 sits AROUND the Stage 1 engine; the engine is unchanged except where noted. Evidence: unit-tested and PGlite-verified, not run on DEV.
+
+| Area | Files |
+|---|---|
+| Report assembly (pure) | `lib/engines/nav2/fundAnalyticsReport.ts` (per-scheme blocks, compact stored trends, down-sampled chart with SMA 50 / 200, held rankings and pair correlations, scope notes, manifest and its checksum, shared-cache key); `lib/engines/nav2/presentation.ts` (how every typed state is shown); `analysisSpec.ts` (`reportAnalysisSpec`, the period choice) |
+| Loaders (read-only, user-scoped) | `lib/services/investment-intelligence/nav2/fundAnalyticsLoader.ts` (composes `loadOwnerClassScopeForReport` and `loadAnalyticsDataset`; adds plan / option / category, raw NAV rows with lineage, open coverage gaps, the gate's hydration state, the declared benchmark segments, the risk-free dataset); `riskFreeDatasetLoader.ts` |
+| Service | `fundAnalyticsReportService.ts` (switch, Premium, NAV gate, optional planner step, shared cache, pinned version and dependency manifest); `nav2ResultCacheStore.ts` (bundle cache and the correction worker); `nav2Flags.ts` |
+| Integration with the existing fetch | `nav2TriggerRunner.ts` (the kick's default runner: planner when `nav2_trigger_planner` is on, the previous behaviour when off); `pc6/userNavHistoryKick.ts` now delegates to it |
+| Customer surface | `app/(app)/reports/fund-analytics`, `app/api/reports/fund-analytics/**` (list, generate, read, export), `app/(print)/reports/fund-analytics/print`, `fundAnalyticsPdfRenderer.ts`, `components/reports/FundAnalyticsReport{View,Client}.tsx`; Reports menu entry |
+| Risk-free | see the dependency register, section 7 |
+| Admin | `lib/services/investment-intelligence/nav2/riskFreeAdmin*.ts`, `components/admin/RiskFreeDataClient.tsx`, `Nav2MonitoringClient.tsx`, `lib/admin/adminNav.ts`, `app/api/admin/me/route.ts`, `app/api/admin/investment-intelligence/nav2-monitoring` |
+| Cron routes (both default OFF) | `app/api/investment-intelligence/cron/nav2-correction-worker`, `nav2-risk-free-refresh` |
+| Database | migrations 0260, 0261, 0262 (hand-over; `po_apply_0260_0262/README.md`) |
+
+Where Stage 2 reuses rather than rebuilds: `loadOwnerClassScopeForReport` (entity exclusion), `loadAnalyticsDataset` (flows, the one valuation rule, entitlement-gated benchmark series), `checkReportNavHistoryGate` and `kickUserNavHistory` (price-history readiness), `runUserNavHistoryBatch` (the fetch itself), `ii_reference_job_control` (every switch), the forecast report's PDF pattern (render token plus Playwright), the market-index admin pattern (capability column, predicate, SECURITY DEFINER commit function, append-only ledger), and the AIE gateway (the AI second opinion).
