@@ -41,7 +41,7 @@ describe('computeReportNavDependencyRange', () => {
     expect(r.navDateTo).toBe(AS_OF);
   });
 
-  it('twr_since_opening_balance behaves identically to xirr_since_inception on the transaction-date binding', () => {
+  it('legacy twr_since_opening_balance rows (written before 2026-10-03, no longer written) still resolve identically to xirr_since_inception', () => {
     const r = computeReportNavDependencyRange({
       instrumentId: INSTRUMENT,
       basis: 'twr_since_opening_balance',

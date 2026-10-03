@@ -68,10 +68,8 @@ interface PortfolioBlock {
   currencyCode: string;
   schemeCount: number;
   totalValue: number;
-  portfolioTwrr: Outcome<{ twrr: number }>;
   portfolioXirr: Outcome<{ rate: number }>;
   blendedBenchmarkReturn: Outcome<{ blendedReturn: number; coveragePct: number }>;
-  activeReturn: Outcome<{ activeReturn: number }>;
   risk: {
     volatility: Outcome<{ annualisedVolatility: number; observationCount: number }>;
     downsideDeviation: Outcome<{ annualisedDownsideDeviation: number }>;
@@ -324,31 +322,24 @@ function PortfolioSection({
         </p>
       </header>
 
-      {/* PC4 section 13: these two rows were previously one undifferentiated
-          grid. TWRR/XIRR need only this portfolio's own valuation and
-          cashflow history -- always computable once statements are in.
-          Blended benchmark return and active return additionally require an
-          external market-index series mapped to every holding, which is
-          reference data this household's own statements can never supply.
-          Grouped under separate sub-headings so a genuinely-unavailable
-          benchmark figure reads as "this needs data we don't have yet", not
-          as parity with a metric that should always be there. */}
+      {/* PC4 section 13: the XIRR needs only this portfolio's own cashflow
+          history -- always computable once statements are in. The blended
+          benchmark return additionally requires an external market-index
+          series mapped to every holding, which is reference data this
+          household's own statements can never supply. Grouped under separate
+          sub-headings so a genuinely-unavailable benchmark figure reads as
+          "this needs data we don't have yet", not as parity with a metric
+          that should always be there. */}
       <p className="text-xs font-medium uppercase tracking-wide text-muted">From your own statements</p>
       <div className="mt-2 grid gap-4 sm:grid-cols-2">
         <MetricValue
-          label="Time-weighted return (TWRR)"
-          outcome={p.portfolioTwrr as never}
-          render={(v: never) => pct((v as { twrr: number }).twrr)}
-        />
-        <MetricValue
-          label="Money-weighted return (XIRR)"
+          label="Your return (XIRR)"
           outcome={p.portfolioXirr as never}
           render={(v: never) => pct((v as { rate: number }).rate)}
         />
       </div>
       <p className="mt-3 text-xs leading-relaxed text-muted">
-        TWRR measures how the underlying investments performed, independent of when you added or withdrew money. XIRR measures your own outcome,
-        including the effect of your contribution timing. The two answer different questions and are not interchangeable.
+        XIRR is your own annualised return. It reflects the dates and amounts of the money you actually put in and took out.
       </p>
 
       <p className="mt-6 text-xs font-medium uppercase tracking-wide text-muted">Compared against a market benchmark</p>
@@ -358,14 +349,9 @@ function PortfolioSection({
           outcome={p.blendedBenchmarkReturn as never}
           render={(v: never) => pct((v as { blendedReturn: number }).blendedReturn)}
         />
-        <MetricValue
-          label="Active return vs benchmark"
-          outcome={p.activeReturn as never}
-          render={(v: never) => pct((v as { activeReturn: number }).activeReturn)}
-        />
       </div>
       <p className="mt-3 text-xs leading-relaxed text-muted">
-        These figures need a market index mapped to every holding, with its own return history for the period. Where that mapping or history is
+        This figure needs a market index mapped to every holding, with its own return history for the period. Where that mapping or history is
         incomplete, the comparison is withheld rather than calculated against partial coverage.
       </p>
 

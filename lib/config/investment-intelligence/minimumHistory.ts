@@ -15,8 +15,6 @@ export const MINIMUM_OBSERVATIONS = {
   /** CAGR needs a valid beginning and ending valuation, horizon >= 1 year for annualisation to be meaningful without qualification. */
   cagrMinDays: 1,
   cagrAnnualisationThresholdDays: 365,
-  /** TWRR needs at least one sub-period, i.e. 2 valuation points bracketing zero or more external flows. */
-  twrrMinValuationPoints: 2,
   /** Volatility / downside deviation: at least this many periodic return observations. */
   volatilityMinObservations: 12, // e.g. 12 monthly observations (~1Y) minimum
   /** Sharpe/Sortino inherit the volatility minimum plus a valid risk-free series. */
@@ -38,7 +36,6 @@ export const MINIMUM_OBSERVATIONS = {
 export type MetricKey =
   | 'trailingReturn'
   | 'cagr'
-  | 'twrr'
   | 'xirr'
   | 'volatility'
   | 'downsideDeviation'

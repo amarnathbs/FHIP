@@ -16,7 +16,7 @@
 // expenses / liabilities or any R3 publication row.
 
 import { computeSchemePerformance, computePortfolioPerformance } from './PerformanceEngine';
-import { computeBlendedBenchmark, computePortfolioActiveReturn, valueOnOrBefore, type SeriesPoint, type InstrumentValuationSeries } from './benchmarkService';
+import { computeBlendedBenchmark, valueOnOrBefore, type SeriesPoint, type InstrumentValuationSeries } from './benchmarkService';
 import {
   compareHoldingToBenchmark,
   splitTerminalFlow,
@@ -27,13 +27,15 @@ import {
 } from './holdingBenchmarkComparison';
 import { computeRiskMetrics, periodicReturnsFromLevels, type RiskMetricsResult, type ReturnFrequency } from './riskMetricsService';
 import { computeRollingReturns, toMonthEndSeries, type RollingReturnServiceResult } from './rollingReturnService';
-import { fromXirr, fromTwrr, insufficientHistory, toPersistedQualityStatus, markStale, type CalculationOutcome, type CalculationStatus } from './calculationStatus';
+import { fromXirr, insufficientHistory, toPersistedQualityStatus, markStale, type CalculationOutcome, type CalculationStatus } from './calculationStatus';
 import { fingerprintInputs, isStale, PERFORMANCE_ENGINE_VERSION, ENGINE_SUB_VERSIONS } from './analyticsVersioning';
 import type { DataQualityAnnotation } from './dataQuality';
 import type { CashFlow } from './xirr';
-import type { ValuationPoint, ExternalFlow } from './twrr';
 import type { BenchmarkMapping } from './benchmarkEngine';
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
+
+/** A dated portfolio value (used for the blend weights, drawdown and comparison chart). */
+type ValuationPoint = SeriesPoint;
 
 /**
  * Multi-folio fix (2026-10-01). One folio's own slice of a scheme that is held
@@ -94,15 +96,15 @@ export interface SchemeDataset {
   // Production defect found 2026-09-29: valuationSeries above is built
   // exclusively from ii_holding_snapshots, which in production carries
   // exactly ONE as_of_date per position (the investor's latest uploaded
-  // statement) -- never enough for TWRR (needs a start AND end valuation)
-  // or a benchmark blend, no matter how many years of daily NAV price
+  // statement) -- never enough for a benchmark blend (needs a start AND end
+  // valuation), no matter how many years of daily NAV price
   // history NAV1 has actually hydrated for the instrument. This optional
   // field is a DERIVED (not certified) valuation series -- the investor's
   // own certified unit ledger replayed against the daily NAV feed -- built
   // by analyticsRepository.ts only when the position's own reconciliation
   // supports it (complete_from_inception + unit_variance_within_tolerance).
-  // Consumers that need more than one dated valuation point (portfolio
-  // TWRR, benchmark blending, drawdown/comparison charts) should prefer
+  // Consumers that need more than one dated valuation point (benchmark
+  // blending, drawdown/comparison charts) should prefer
   // this over valuationSeries when it has >= 2 points; anything that needs
   // the certified point-in-time snapshot itself must keep using
   // valuationSeries directly.
@@ -173,10 +175,8 @@ export interface PortfolioCurrencyAnalytics {
   currencyCode: string;
   schemeCount: number;
   totalValue: number;
-  portfolioTwrr: CalculationOutcome<{ twrr: number }>;
   portfolioXirr: CalculationOutcome<{ rate: number }>;
   blendedBenchmarkReturn: CalculationOutcome<{ blendedReturn: number; coveragePct: number }>;
-  activeReturn: CalculationOutcome<{ activeReturn: number }>;
   risk: RiskMetricsResult;
   rolling: RollingReturnServiceResult;
   drawdownSeries: Array<{ date: string; value: number; drawdown: number }>;
@@ -390,6 +390,22 @@ function schemeRealFlows(s: SchemeDataset): CashFlow[] {
 }
 
 /**
+ * A scheme with nothing held now (currentValue 0) contributes 0 from the day
+ * after its last valued point (or its own zero-valuation date, if later) onward.
+ * A series that already ends on a zero, or a scheme still holding value, is
+ * returned unchanged. Pure; never mutates its input.
+ */
+export function closeRedeemedSeries(points: SeriesPoint[], s: Pick<SchemeDataset, 'currentValue' | 'currentValueDate'>): SeriesPoint[] {
+  if (points.length === 0 || s.currentValue > 0) return points;
+  const sorted = [...points].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const last = sorted[sorted.length - 1];
+  if (!(last.value > 0)) return points;
+  const dayAfterLast = last.date.getTime() + 86_400_000;
+  const closeAt = Math.max(s.currentValueDate.getTime(), dayAfterLast);
+  return [...sorted, { date: new Date(closeAt), value: 0 }];
+}
+
+/**
  * Document2 D-3 (PO decision 2026-10-03). A holdings-only scheme (a statement
  * holding with NO usable transaction) has a current value but no cost flow, so
  * counting its value in the portfolio terminal value inflates the portfolio
@@ -421,11 +437,22 @@ function analysePortfolioCurrency(
   // Prefer each scheme's derived, unit-ledger-x-NAV reconstruction over its
   // single certified snapshot point whenever it actually has enough points
   // to be useful -- see SchemeDataset.reconstructedValuationSeries. A
-  // portfolio's TWRR/benchmark-blend/drawdown genuinely need a valuation
+  // portfolio's benchmark-blend/drawdown genuinely need a valuation
   // TIME SERIES, which a single statement snapshot per position can never
   // provide regardless of how much NAV history exists for the instrument.
+  //
+  // Redeemed-fund fix (2026-10-03): every reader takes "the latest point on or
+  // before the date", so a scheme that is fully redeemed (nothing held now)
+  // must END on an explicit zero or its last pre-exit value is carried forward
+  // as a phantom position into the portfolio total, the drawdown and growth-of-100
+  // series and the benchmark blend weights. The unit-ledger reconstruction now
+  // writes that zero itself; closeRedeemedSeries() is the safety net for a
+  // series that does not (e.g. a lone statement snapshot taken before the exit).
   const schemeSeries = (s: SchemeDataset): SeriesPoint[] =>
-    s.reconstructedValuationSeries && s.reconstructedValuationSeries.length >= 2 ? s.reconstructedValuationSeries : s.valuationSeries;
+    closeRedeemedSeries(
+      s.reconstructedValuationSeries && s.reconstructedValuationSeries.length >= 2 ? s.reconstructedValuationSeries : s.valuationSeries,
+      s
+    );
 
   const allDates = new Set<number>();
   for (const s of group) for (const p of schemeSeries(s)) allDates.add(p.date.getTime());
@@ -436,10 +463,7 @@ function analysePortfolioCurrency(
     value: group.reduce((sum, s) => sum + (valueOnOrBefore(schemeSeries(s), d)?.value ?? 0), 0),
   }));
 
-  // External flows = investor cash flows, sign-flipped to the portfolio's
-  // perspective (investor outflow to buy = money INTO the portfolio).
-  //
-  // PC4 section 9 finding (2026-09-07): portfolioTwrr/portfolioXirr used to
+  // PC4 section 9 finding (2026-09-07): the portfolio XIRR used to
   // be fed the RAW, un-netted concatenation of every scheme's own
   // cashFlows. A switch between two schemes in the SAME household is a
   // scheme-level outflow (switch_in, OUTFLOW_TYPES) paired with a
@@ -467,12 +491,8 @@ function analysePortfolioCurrency(
   // used for scheme-level analytics -- this is what actually fixes the
   // settlement-date-lag case: exclusion happens by transaction TYPE, not by
   // hoping two dates coincidentally match.
-  const flowMap = new Map<number, number>();
   const netInvestorFlowMap = new Map<number, number>();
   for (const s of group) {
-    for (const cf of s.externalCashFlows) {
-      flowMap.set(cf.date.getTime(), (flowMap.get(cf.date.getTime()) ?? 0) + -cf.amount);
-    }
     // App Review 2026-09-15, item 2 — ROOT CAUSE of the portfolio XIRR card
     // reading "Could not be calculated — No sign change found for NPV(r)
     // across the search domain."
@@ -500,14 +520,6 @@ function analysePortfolioCurrency(
       netInvestorFlowMap.set(cf.date.getTime(), (netInvestorFlowMap.get(cf.date.getTime()) ?? 0) + cf.amount);
     }
   }
-  // The terminal current-value flow is a valuation, not an external flow.
-  const terminal = dates.length ? dates[dates.length - 1].getTime() : 0;
-  flowMap.delete(terminal);
-  const externalFlows: ExternalFlow[] = [...flowMap.entries()]
-    .filter(([, amount]) => amount !== 0)
-    .map(([t, amount]) => ({ date: new Date(t), amount }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-
   // One terminal inflow for the whole portfolio: the sum of every scheme's
   // current value, dated at the LATEST valuation date in the group (the date
   // as at which that total is true, and the same date the Overview and the
@@ -534,8 +546,7 @@ function analysePortfolioCurrency(
     investorCashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
   }
 
-  const perf = computePortfolioPerformance({ valuations, externalFlows, investorCashFlows });
-  const portfolioTwrr = fromTwrr(perf.portfolioTwrr, () => ({ twrr: perf.portfolioTwrr.twrr! }));
+  const perf = computePortfolioPerformance({ valuations, investorCashFlows });
   const portfolioXirr = fromXirr(perf.portfolioXirr, () => ({ rate: perf.portfolioXirr.rate! }));
 
   // ---- Blended benchmark ---------------------------------------------
@@ -564,24 +575,6 @@ function analysePortfolioCurrency(
             blend.blended.reason === 'INSUFFICIENT_BENCHMARK_COVERAGE'
               ? `Only ${((blend.blended.coveragePct ?? 0) * 100).toFixed(1)}% of this portfolio's value has a mapped benchmark with usable history, below the ${(blend.minCoverageThreshold * 100).toFixed(0)}% minimum required to draw a benchmark conclusion. The comparison is withheld rather than presented as if coverage were complete.`
               : 'There is not enough valuation history to construct a blended benchmark for this period.',
-        };
-
-  // ---- Portfolio active return (TWRR vs blended TWRR only) ------------
-  const activeRaw = computePortfolioActiveReturn(
-    portfolioTwrr.status === 'CALCULATED' ? portfolioTwrr.value!.twrr : undefined,
-    blendedOutcome.status === 'CALCULATED' ? blendedOutcome.value!.blendedReturn : undefined
-  );
-  const activeReturn: CalculationOutcome<{ activeReturn: number }> =
-    activeRaw.status === 'ok'
-      ? { status: 'CALCULATED', value: { activeReturn: activeRaw.activeReturn! } }
-      : {
-          status: 'MISSING_REFERENCE_DATA',
-          qualityFlag: activeRaw.reason === 'BENCHMARK_UNAVAILABLE' ? 'BENCHMARK_MAPPING_MISSING' : 'NAV_HISTORY_INCOMPLETE',
-          engineReason: activeRaw.reason,
-          detail:
-            activeRaw.reason === 'BENCHMARK_UNAVAILABLE'
-              ? 'A blended benchmark return is not available for this period, so active return cannot be shown.'
-              : 'The portfolio time-weighted return is not available for this period, so active return cannot be shown.',
         };
 
   // ---- Risk metrics ---------------------------------------------------
@@ -634,7 +627,7 @@ function analysePortfolioCurrency(
   const inputFingerprint = fingerprintInputs([
     currencyCode,
     valuations.map((v) => ({ d: v.date.toISOString(), v: v.value })),
-    externalFlows.map((f) => ({ d: f.date.toISOString(), a: f.amount })),
+    investorCashFlows.map((f) => ({ d: f.date.toISOString(), a: f.amount })),
     ds.mappings.map((m) => ({ i: m.instrumentId, b: m.benchmarkId, f: m.effectiveFrom.toISOString(), t: m.effectiveTo?.toISOString() ?? null })),
     ds.navDataVersion,
     ds.benchmarkDataVersion,
@@ -646,10 +639,8 @@ function analysePortfolioCurrency(
     currencyCode,
     schemeCount: group.length,
     totalValue: valuations.length ? valuations[valuations.length - 1].value : 0,
-    portfolioTwrr,
     portfolioXirr,
     blendedBenchmarkReturn: blendedOutcome,
-    activeReturn,
     risk,
     rolling,
     drawdownSeries,
@@ -787,10 +778,8 @@ export function toPersistableRows(userId: string, rs: AnalyticsResultSet, ds: An
   for (const p of rs.portfolios) {
     const rfv = p.risk.riskFree.status === 'ok' ? (p.risk.riskFree.version ?? null) : null;
     const scope = `currency:${p.currencyCode}`;
-    push('portfolio', scope, 'portfolio_twrr', ENGINE_SUB_VERSIONS.twrr, p.portfolioTwrr, p.inputFingerprint, rfv);
     push('portfolio', scope, 'portfolio_xirr', ENGINE_SUB_VERSIONS.xirr, p.portfolioXirr, p.inputFingerprint, rfv);
     push('portfolio', scope, 'blended_benchmark_return', ENGINE_SUB_VERSIONS.blendedBenchmark, p.blendedBenchmarkReturn, p.inputFingerprint, rfv);
-    push('portfolio', scope, 'portfolio_active_return', ENGINE_SUB_VERSIONS.blendedBenchmark, p.activeReturn, p.inputFingerprint, rfv);
     const riskMetrics: Array<[string, CalculationOutcome<unknown>]> = [
       ['volatility', p.risk.volatility],
       ['downside_deviation', p.risk.downsideDeviation],

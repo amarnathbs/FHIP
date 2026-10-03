@@ -5,7 +5,7 @@
 // helper returns every row. That is necessary but not sufficient: the spec
 // requires evidence that the truncation changed an ANSWER, not just a row
 // count. This suite therefore drives the genuine R4 pipeline —
-// loadAnalyticsDataset -> runAnalytics (the real XIRR/TWRR/benchmark engines,
+// loadAnalyticsDataset -> runAnalytics (the real XIRR/benchmark engines,
 // untouched by the pagination fix) — over a realistic multi-year daily NAV and
 // transaction history, and compares:
 //

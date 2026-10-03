@@ -6,7 +6,6 @@
 
 import { createHash } from 'crypto';
 import { XIRR_METHOD_VERSION } from './xirr';
-import { TWRR_METHOD_VERSION } from './twrr';
 import { NAV_RETURN_METHOD_VERSION } from './navReturn';
 import { RISK_METRICS_METHOD_VERSION } from './riskMetrics';
 import { BLENDED_BENCHMARK_METHOD_VERSION } from './benchmarkEngine';
@@ -20,7 +19,6 @@ export const PERFORMANCE_ENGINE_VERSION = 'performance-engine-r4-v1';
 
 export const ENGINE_SUB_VERSIONS = {
   xirr: XIRR_METHOD_VERSION,
-  twrr: TWRR_METHOD_VERSION,
   navReturn: NAV_RETURN_METHOD_VERSION,
   riskMetrics: RISK_METRICS_METHOD_VERSION,
   blendedBenchmark: BLENDED_BENCHMARK_METHOD_VERSION,

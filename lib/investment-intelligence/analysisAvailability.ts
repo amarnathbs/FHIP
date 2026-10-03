@@ -26,7 +26,6 @@
 
 import type { CalculationStatus } from '@/lib/engines/investment-intelligence/calculationStatus';
 import { MIN_CONTRIBUTIONS_FOR_INFERENCE } from '@/lib/config/investment-intelligence/sipThresholds';
-import { MINIMUM_OBSERVATIONS } from '@/lib/config/investment-intelligence/minimumHistory';
 
 export type AnalysisAvailability =
   /** The analysis can be produced from this user's certified data right now. */
@@ -155,8 +154,6 @@ export function performanceAvailability(s: OverviewSignals): AnalysisCard {
       detail: 'We do not hold a price history for the schemes you own, so returns cannot be calculated.',
     };
   }
-  // twrrMinValuationPoints is the engine's own floor: with a single valuation
-  // point there is no sub-period, so no time-weighted return exists at all.
   if (s.instrumentsWithNavCount < 1 || s.positionCount < 1) {
     return { ...base, status: 'NOT_ENOUGH_DATA', detail: 'Not enough valuation history yet.' };
   }
@@ -367,5 +364,4 @@ export function nextStep(s: OverviewSignals, publishedCount: number): NextStep {
 /** Re-exported so callers cannot drift from the engines' own eligibility floors. */
 export const OVERVIEW_THRESHOLDS = {
   minContributionsForRecurring: MIN_CONTRIBUTIONS_FOR_INFERENCE,
-  minValuationPointsForTwrr: MINIMUM_OBSERVATIONS.twrrMinValuationPoints,
 } as const;

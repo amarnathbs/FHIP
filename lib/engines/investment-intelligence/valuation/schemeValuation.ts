@@ -24,7 +24,7 @@
 //     the summed value.
 //
 // This module only assembles the valuation INPUT. It performs no return,
-// XIRR, TWRR or exposure arithmetic.
+// XIRR or exposure arithmetic.
 
 import {
   valueHoldingAsOf,

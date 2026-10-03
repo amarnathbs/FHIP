@@ -18,12 +18,11 @@
 // (status 'unavailable', reason INSUFFICIENT_BENCHMARK_COVERAGE) rather
 // than silently presented as if coverage were 100%.
 //
-// Active return = Portfolio TWRR - Blended Benchmark TWRR for the SAME
-// period. Scheme active return = scheme CAGR/point-to-point return minus
-// the SAME metric type for the benchmark (never annualised-vs-non-annualised
-// mixing). Portfolio active return NEVER mixes Portfolio XIRR with
-// Benchmark TWRR — both sides of the subtraction must be the same
-// metric family.
+// Scheme active return = scheme CAGR/point-to-point return minus the SAME
+// metric type for the benchmark (never annualised-vs-non-annualised mixing).
+// There is no portfolio-level active return: the platform shows the investor
+// XIRR only (PO decision 2026-10-03), and an XIRR must never be differenced
+// against a chain-linked benchmark return, so that comparison is not offered.
 
 export const BLENDED_BENCHMARK_METHOD_VERSION = 'blended-benchmark-monthly-rebalance-v1';
 export const REBALANCE_FREQUENCY = 'monthly' as const;
@@ -111,14 +110,14 @@ export interface ActiveReturnResult {
 /**
  * Active return = Portfolio metric - Benchmark metric for the SAME metric
  * family and SAME period. `metricFamily` is required and self-documenting
- * so callers cannot silently mix e.g. XIRR (portfolio) with TWRR
- * (benchmark) — both `portfolioMetric` and `benchmarkMetric` MUST be
+ * so callers cannot silently mix e.g. a CAGR with a point-to-point
+ * figure — both `portfolioMetric` and `benchmarkMetric` MUST be
  * pre-verified by the caller to be the same family before calling this.
  */
 export function activeReturn(
   portfolioMetric: number | undefined,
   benchmarkMetric: number | undefined,
-  metricFamily: 'TWRR' | 'CAGR' | 'POINT_TO_POINT'
+  metricFamily: 'CAGR' | 'POINT_TO_POINT'
 ): ActiveReturnResult {
   if (portfolioMetric === undefined) return { status: 'unavailable', reason: 'PORTFOLIO_METRIC_UNAVAILABLE' };
   if (benchmarkMetric === undefined) return { status: 'unavailable', reason: 'BENCHMARK_UNAVAILABLE' };

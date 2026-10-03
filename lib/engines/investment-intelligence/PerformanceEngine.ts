@@ -1,5 +1,5 @@
 // R4 — PerformanceEngine: the single orchestration point that combines
-// xirr.ts / twrr.ts / navReturn.ts / riskMetrics.ts / benchmarkEngine.ts /
+// xirr.ts / navReturn.ts / riskMetrics.ts / benchmarkEngine.ts /
 // rollingReturns.ts into the investor-facing results described in the R4
 // spec (section 67-68: centralise in bounded services, never calculate
 // returns inside React components or duplicate a formula per API route).
@@ -12,7 +12,6 @@
 
 import { xirr, type CashFlow, type XirrResult } from './xirr';
 import { pointToPointReturn, cagr, type PointToPointReturnResult } from './navReturn';
-import { twrr, type ValuationPoint, type ExternalFlow, type TwrrResult } from './twrr';
 import { sinceInceptionXirrEligible, optionTotalReturnEligible, type DataQualityAnnotation } from './dataQuality';
 import { fingerprintInputs, PERFORMANCE_ENGINE_VERSION } from './analyticsVersioning';
 
@@ -94,28 +93,25 @@ export function computeSchemePerformance(input: SchemePerformanceInput): SchemeP
 }
 
 export interface PortfolioPerformanceInput {
-  valuations: ValuationPoint[];
-  externalFlows: ExternalFlow[];
+  /** Dated portfolio valuations; part of the input fingerprint only (XIRR itself needs just the cash flows). */
+  valuations: Array<{ date: Date; value: number }>;
   investorCashFlows: CashFlow[]; // for portfolio-level XIRR
 }
 
 export interface PortfolioPerformanceResult {
-  portfolioTwrr: TwrrResult;
   portfolioXirr: XirrResult;
   inputFingerprint: string;
   engineVersion: string;
 }
 
 export function computePortfolioPerformance(input: PortfolioPerformanceInput): PortfolioPerformanceResult {
-  const portfolioTwrr = twrr(input.valuations, input.externalFlows);
   const portfolioXirr = xirr(input.investorCashFlows);
   const inputFingerprint = fingerprintInputs([
     input.valuations.map((v) => ({ d: v.date.toISOString(), v: v.value })),
-    input.externalFlows.map((f) => ({ d: f.date.toISOString(), a: f.amount })),
     input.investorCashFlows.map((c) => ({ d: c.date.toISOString(), a: c.amount })),
     PERFORMANCE_ENGINE_VERSION,
   ]);
-  return { portfolioTwrr, portfolioXirr, inputFingerprint, engineVersion: PERFORMANCE_ENGINE_VERSION };
+  return { portfolioXirr, inputFingerprint, engineVersion: PERFORMANCE_ENGINE_VERSION };
 }
 
 export { pointToPointReturn };

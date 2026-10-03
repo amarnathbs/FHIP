@@ -17,6 +17,15 @@ import type { DisposalEvent } from '@/lib/engines/investment-intelligence/tax/ta
 // SIMULATION ONLY — carries the same `disclaimer`; never "Final Tax
 // Payable"/"You Owe" language (Section 24).
 
+// A name or folio label is shown to the user, so a missing one must degrade to
+// plain words -- never to the internal id the lookup was keyed on.
+function readableName(name: string | undefined): string {
+  return name && name.trim() ? name : 'Unnamed fund';
+}
+function readableFolioLabel(label: string | undefined): string {
+  return label && label.trim() ? label : 'a folio without a recorded number';
+}
+
 export async function POST(request: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
@@ -29,11 +38,15 @@ export async function POST(request: Request) {
   }
 
   const { instrumentId, accountId, units, pricePerUnit, disposalDate } = body;
-  if (!instrumentId || typeof instrumentId !== 'string') return bad('instrumentId is required.');
-  if (accountId !== undefined && typeof accountId !== 'string') return bad('accountId, when supplied, must be a string.');
-  if (typeof units !== 'number' || !(units > 0)) return bad('units must be a positive number.');
-  if (typeof pricePerUnit !== 'number' || !(pricePerUnit > 0)) return bad('pricePerUnit must be a positive number.');
-  if (!disposalDate || !/^\d{4}-\d{2}-\d{2}$/.test(disposalDate)) return bad('disposalDate is required, format YYYY-MM-DD.');
+  // User-facing wording: the screen validates first and shows its own day-first
+  // messages; these only fire for a malformed direct call. They never name an
+  // internal field or the ISO wire format (PO rule, Document2 D-6/D-7).
+  if (!instrumentId || typeof instrumentId !== 'string') return bad('Choose the fund you want to redeem.');
+  if (accountId !== undefined && typeof accountId !== 'string') return bad('The folio for this redemption is not valid. Choose the fund again.');
+  if (typeof units !== 'number' || !(units > 0)) return bad('Enter the number of units to redeem as a number greater than zero.');
+  if (typeof pricePerUnit !== 'number' || !(pricePerUnit > 0)) return bad('Enter the price per unit as an amount greater than zero.');
+  // The wire format is ISO (the screen converts the typed day-first date); the wording below never mentions it.
+  if (!disposalDate || !/^\d{4}-\d{2}-\d{2}$/.test(disposalDate)) return bad('A valid redemption date is required.');
 
   try {
     const supabase = await createClient();
@@ -72,7 +85,7 @@ export async function POST(request: Request) {
     } else if (candidateAccounts.length === 1) {
       resolvedAccountId = candidateAccounts[0];
     } else {
-      const choices = candidateAccounts.map((id) => ({ accountId: id, label: dataset.accountLabels.get(id) ?? id }));
+      const choices = candidateAccounts.map((id) => ({ accountId: id, label: readableFolioLabel(dataset.accountLabels.get(id)) }));
       return bad(
         `You hold this scheme in ${candidateAccounts.length} folios. Redemptions are matched FIFO within a single folio, so please specify which one: ` +
           `${choices.map((c) => c.label).join('; ')}.`,
@@ -117,11 +130,13 @@ export async function POST(request: Request) {
       hypothetical: true,
       persisted: false,
       disclaimer: result.disclaimer,
-      instrumentName: dataset.instrumentNames.get(instrumentId) ?? instrumentId,
+      instrumentName: readableName(dataset.instrumentNames.get(instrumentId)),
       // II-PC1-F1: state plainly which folio this simulation was matched
       // against, so the figure is never read as a whole-scheme answer.
       accountId: resolvedAccountId,
-      accountLabel: dataset.accountLabels.get(resolvedAccountId) ?? resolvedAccountId,
+      accountLabel: readableFolioLabel(dataset.accountLabels.get(resolvedAccountId)),
+      // Echoed so the screen can show the date back day-first (it converts; this stays ISO on the wire).
+      disposalDate,
       totalTaxableGain: hypotheticalResults.reduce((s, d) => s + (d.taxableGain ?? 0), 0),
       totalExitLoadAmount: hypotheticalExitLoad.reduce((s, e) => s + e.exitLoadAmount, 0),
       lotBreakdown: hypotheticalResults.map((d) => ({

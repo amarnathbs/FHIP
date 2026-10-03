@@ -5,6 +5,7 @@ import { fmtDate } from './dateDisplay';
 import { OwnerClassBar } from './OwnerClassBar';
 import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { formatMoneyCode } from '@/lib/engines/money';
+import { RedemptionSimulator } from './RedemptionSimulator';
 
 // R6-FINAL — India Tax & Cost Intelligence UX (spec Section 27).
 //
@@ -69,6 +70,8 @@ interface TaxLotView {
   lotId: string;
   instrumentId: string;
   instrumentName: string;
+  accountId?: string | null;
+  accountLabel?: string | null;
   kind: string;
   acquisitionDate: string;
   unitsAcquired: number;
@@ -126,11 +129,6 @@ function TaxIntelligenceClientInner({ ownerClass }: { ownerClass: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [taxpayerType, setTaxpayerType] = useState('');
-  const [simForm, setSimForm] = useState({ instrumentId: '', units: '', pricePerUnit: '', disposalDate: '' });
-  const [simResult, setSimResult] = useState<Record<string, unknown> | null>(null);
-  const [simError, setSimError] = useState<string | null>(null);
-  const [simLoading, setSimLoading] = useState(false);
-
   // Fetches only — deliberately does NOT call setLoading(true)/setError(null)
   // synchronously (those happen in the caller, which is either the initial
   // effect — where `loading` already starts `true` — or a click handler,
@@ -182,31 +180,6 @@ function TaxIntelligenceClientInner({ ownerClass }: { ownerClass: string }) {
       cancelled = true;
     };
   }, [ownerClass]);
-
-  async function runSimulation() {
-    setSimLoading(true);
-    setSimError(null);
-    setSimResult(null);
-    try {
-      const res = await fetch('/api/investment-intelligence/tax/redemption-simulation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instrumentId: simForm.instrumentId,
-          units: Number(simForm.units),
-          pricePerUnit: Number(simForm.pricePerUnit),
-          disposalDate: simForm.disposalDate,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? 'Request failed');
-      setSimResult(body.data);
-    } catch (e) {
-      setSimError(e instanceof Error ? e.message : 'Unknown error');
-    } finally {
-      setSimLoading(false);
-    }
-  }
 
   if (loading) return <p className="text-sm text-muted">Loading…</p>;
   if (error) return <NotAvailable text={error} />;
@@ -352,57 +325,7 @@ function TaxIntelligenceClientInner({ ownerClass }: { ownerClass: string }) {
       </section>
 
       {/* Redemption simulator */}
-      <section className="rounded-lg border border-line bg-surface p-4">
-        <h2 className="text-lg font-semibold text-ink">Redemption simulator</h2>
-        <p className="mt-1 text-sm text-muted">
-          Preview the estimated tax impact of a hypothetical redemption. Nothing here is saved or affects your real holdings.
-        </p>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <input
-            className="rounded border border-line px-2 py-1 text-sm"
-            placeholder="Instrument ID"
-            value={simForm.instrumentId}
-            onChange={(e) => setSimForm((f) => ({ ...f, instrumentId: e.target.value }))}
-            data-testid="sim-instrument-id"
-          />
-          <input
-            className="rounded border border-line px-2 py-1 text-sm"
-            placeholder="Units"
-            value={simForm.units}
-            onChange={(e) => setSimForm((f) => ({ ...f, units: e.target.value }))}
-            data-testid="sim-units"
-          />
-          <input
-            className="rounded border border-line px-2 py-1 text-sm"
-            placeholder="Price per unit"
-            value={simForm.pricePerUnit}
-            onChange={(e) => setSimForm((f) => ({ ...f, pricePerUnit: e.target.value }))}
-            data-testid="sim-price"
-          />
-          <input
-            className="rounded border border-line px-2 py-1 text-sm"
-            placeholder="Disposal date (YYYY-MM-DD)"
-            value={simForm.disposalDate}
-            onChange={(e) => setSimForm((f) => ({ ...f, disposalDate: e.target.value }))}
-            data-testid="sim-date"
-          />
-        </div>
-        <button className="mt-3 rounded border border-line bg-ink px-3 py-1 text-sm text-white" onClick={() => void runSimulation()} disabled={simLoading} data-testid="sim-run">
-          {simLoading ? 'Simulating…' : 'Simulate'}
-        </button>
-        {simError && <div className="mt-3"><NotAvailable text={simError} /></div>}
-        {simResult && (
-          <div className="mt-3 rounded border border-line bg-surface-alt p-3 text-sm" data-testid="sim-result">
-            <p>
-              Estimated taxable gain: <span className="font-medium">{fmtInr(simResult.totalTaxableGain as number)}</span>
-            </p>
-            <p>
-              Estimated exit load: <span className="font-medium">{fmtInr(simResult.totalExitLoadAmount as number)}</span>
-            </p>
-            <p className="mt-2 text-xs text-muted">{simResult.disclaimer as string}</p>
-          </div>
-        )}
-      </section>
+      <RedemptionSimulator lots={lots ?? []} />
     </div>
   );
 }

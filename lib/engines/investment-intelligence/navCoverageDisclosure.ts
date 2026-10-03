@@ -6,7 +6,7 @@
 // That function is a certified, pure engine (PC4/R4/R11 have all
 // independently verified it); this is a purely ADDITIVE, informational
 // disclosure that has nothing to do with how a metric is calculated — the
-// scheme's XIRR/TWR/rolling-return figures are computed exactly as before,
+// scheme's XIRR/rolling-return figures are computed exactly as before,
 // from whatever NAV rows currently exist (ii_nav_source_coverage_gaps,
 // migration 0219, only ever records a gap ALREADY confirmed unrecoverable
 // FROM SOURCE if ever deleted — it says nothing about today's stored data

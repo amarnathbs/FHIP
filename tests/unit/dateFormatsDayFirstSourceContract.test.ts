@@ -41,8 +41,10 @@ const UI_FILES = [
   'components/investment-intelligence/PortfolioXrayClient.tsx',
   'components/investment-intelligence/OwnerChangeDialog.tsx',
   'components/investment-intelligence/OwnerClassBar.tsx',
+  'components/investment-intelligence/RedemptionSimulator.tsx',
   'components/investment-intelligence/ResolutionHistoryClient.tsx',
   'components/investment-intelligence/ReviewCentreClient.tsx',
+  'components/investment-intelligence/TaxIntelligenceClient.tsx',
   'components/pc5/ResolutionDetailClient.tsx',
   'components/ownership/OwnerSelector.tsx',
 ];

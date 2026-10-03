@@ -135,7 +135,7 @@ export async function GET(request: Request) {
       taxYearAggregation: result.taxYearAggregation,
       disposalResults: result.disposalResults.map((d) => ({
         instrumentId: d.instrumentKey,
-        instrumentName: dataset.instrumentNames.get(d.instrumentKey) ?? d.instrumentKey,
+        instrumentName: dataset.instrumentNames.get(d.instrumentKey) ?? 'Unnamed fund',
         acquisitionDate: d.acquisitionDate,
         disposalDate: d.disposalDate,
         unitsConsumed: d.unitsConsumed,

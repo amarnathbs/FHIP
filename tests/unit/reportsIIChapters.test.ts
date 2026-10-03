@@ -63,9 +63,7 @@ describe('II-R10 continuation — Investment Performance chapter (R4)', () => {
           schemeCount: 3,
           totalValue: 500000,
           portfolioXirr: { status: 'CALCULATED', value: { rate: 0.1234 } },
-          portfolioTwrr: { status: 'CALCULATED', value: { twrr: 0.1189 } },
           blendedBenchmarkReturn: { status: 'CALCULATED', value: { blendedReturn: 0.1, coveragePct: 90 } },
-          activeReturn: { status: 'CALCULATED', value: { activeReturn: 0.0234 } },
           risk: {},
           rolling: {},
           drawdownSeries: [],
@@ -100,9 +98,7 @@ describe('II-R10 continuation — Investment Performance chapter (R4)', () => {
         {
           currencyCode: 'AUD',
           portfolioXirr: { status: 'CALCULATED', value: { rate: 0.05 } },
-          portfolioTwrr: { status: 'INSUFFICIENT_DATA' },
           blendedBenchmarkReturn: { status: 'BENCHMARK_UNAVAILABLE' },
-          activeReturn: { status: 'BENCHMARK_UNAVAILABLE' },
           drawdownSeries: [],
           performanceVsBenchmarkSeries: [],
         },
@@ -115,7 +111,7 @@ describe('II-R10 continuation — Investment Performance chapter (R4)', () => {
     // flip to 'CALCULATED' with a value of 0.
     const portfolio = (section.sectionData.results as typeof engineResult).portfolios[0];
     expect(portfolio.blendedBenchmarkReturn.status).not.toBe('CALCULATED');
-    expect(portfolio.portfolioTwrr.status).not.toBe('CALCULATED');
+    expect(Object.keys(portfolio).some((k) => /twr/i.test(k))).toBe(false);
   });
 });
 

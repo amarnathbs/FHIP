@@ -198,7 +198,7 @@ function computeCalmar(
  * Derive periodic returns from a valuation series where the series
  * represents a NAV/index level (no external flows). Used for benchmark
  * series and for scheme-level NAV returns; NEVER used for a portfolio
- * with contributions/withdrawals — that path must go through TWRR.
+ * with contributions/withdrawals — the investor's own return for that is the XIRR.
  */
 export function periodicReturnsFromLevels(levels: Array<{ date: Date; value: number }>): number[] {
   const sorted = [...levels].sort((a, b) => a.date.getTime() - b.date.getTime());

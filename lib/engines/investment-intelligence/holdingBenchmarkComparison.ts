@@ -18,8 +18,7 @@
 //        - under one year   : NOT annualised. Absolute gain on money invested,
 //                             both sides over exactly the same dates and
 //                             amounts, labelled as such.
-//   XIRR is the only annualised measure used. No time-weighted return is
-//   computed here.
+//   XIRR is the only annualised measure used.
 //
 // HONESTY (each rule has a named negative control in
 // tests/unit/holdingBenchmarkComparison.test.ts). Whenever a number cannot be

@@ -61,7 +61,7 @@
 // and summed by valuation/schemeValuation.ts; this module itself always values
 // ONE position (one folio).
 //
-// This module deliberately does NOT touch XIRR/TWRR/R4/R5/R6 arithmetic; it
+// This module deliberately does NOT touch XIRR/R4/R5/R6 arithmetic; it
 // only selects the valuation INPUT those figures are computed from.
 
 import { formatDateInText } from '@/lib/engines/date';

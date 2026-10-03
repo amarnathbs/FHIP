@@ -1387,19 +1387,17 @@ export function ReportPreview({
                     <tr>
                       <th className="py-1">Currency</th>
                       <th className="py-1">XIRR</th>
-                      <th className="py-1">TWRR</th>
                       <th className="py-1">Benchmark return</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(
-                      (investmentPerformance.sectionData.results as { portfolios: { currencyCode: string; portfolioXirr: { status: string; value?: { rate: number } }; portfolioTwrr: { status: string; value?: { twrr: number } }; blendedBenchmarkReturn: { status: string; value?: { blendedReturn: number } } }[] } | undefined
+                      (investmentPerformance.sectionData.results as { portfolios: { currencyCode: string; portfolioXirr: { status: string; value?: { rate: number } }; blendedBenchmarkReturn: { status: string; value?: { blendedReturn: number } } }[] } | undefined
                       )?.portfolios ?? []
                     ).map((p, i) => (
                       <tr key={i} className="border-t align-top">
                         <td className="py-2">{p.currencyCode}</td>
                         <td className="py-2">{p.portfolioXirr.status === 'CALCULATED' && p.portfolioXirr.value ? `${(p.portfolioXirr.value.rate * 100).toFixed(1)}%` : 'Not available'}</td>
-                        <td className="py-2">{p.portfolioTwrr.status === 'CALCULATED' && p.portfolioTwrr.value ? `${(p.portfolioTwrr.value.twrr * 100).toFixed(1)}%` : 'Not available'}</td>
                         <td className="py-2">{p.blendedBenchmarkReturn.status === 'CALCULATED' && p.blendedBenchmarkReturn.value ? `${(p.blendedBenchmarkReturn.value.blendedReturn * 100).toFixed(1)}%` : 'Benchmark data not available'}</td>
                       </tr>
                     ))}

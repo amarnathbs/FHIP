@@ -10,7 +10,6 @@
 
 import type { DataQualityFlag } from './dataQuality';
 import type { XirrUnavailableReason } from './xirr';
-import type { TwrrUnavailableReason } from './twrr';
 import type { RiskUnavailableReason } from './riskMetrics';
 
 export type CalculationStatus =
@@ -52,13 +51,6 @@ const XIRR_MAP: Record<XirrUnavailableReason, { status: CalculationStatus; flag:
   MULTIPLE_ROOTS_AMBIGUOUS: { status: 'AMBIGUOUS', flag: 'PARTIAL_TRANSACTION_HISTORY' },
 };
 
-const TWRR_MAP: Record<TwrrUnavailableReason, { status: CalculationStatus; flag: DataQualityFlag }> = {
-  INSUFFICIENT_VALUATION_HISTORY: { status: 'INSUFFICIENT_HISTORY', flag: 'NAV_HISTORY_INCOMPLETE' },
-  MISSING_BOUNDARY_VALUATION: { status: 'MISSING_REFERENCE_DATA', flag: 'NAV_HISTORY_INCOMPLETE' },
-  INVALID_INPUT: { status: 'FAILED', flag: 'NAV_HISTORY_INCOMPLETE' },
-  NEGATIVE_OR_ZERO_SUBPERIOD_START: { status: 'FAILED', flag: 'NAV_HISTORY_INCOMPLETE' },
-};
-
 const RISK_MAP: Record<RiskUnavailableReason, { status: CalculationStatus; flag: DataQualityFlag }> = {
   INSUFFICIENT_HISTORY: { status: 'INSUFFICIENT_HISTORY', flag: 'INSUFFICIENT_HISTORY' },
   ZERO_VOLATILITY: { status: 'NOT_APPLICABLE', flag: 'COMPLETE' },
@@ -91,15 +83,6 @@ export function fromXirr<T>(
 ): CalculationOutcome<T> {
   if (r.status === 'ok') return { status: 'CALCULATED', value: buildValue() };
   return classify(XIRR_MAP, r.reason, r.detail) as CalculationOutcome<T>;
-}
-
-/** Wrap a twrr() result into the shared status vocabulary. */
-export function fromTwrr<T>(
-  r: { status: 'ok' | 'unavailable'; reason?: TwrrUnavailableReason; detail?: string },
-  buildValue: () => T
-): CalculationOutcome<T> {
-  if (r.status === 'ok') return { status: 'CALCULATED', value: buildValue() };
-  return classify(TWRR_MAP, r.reason, r.detail) as CalculationOutcome<T>;
 }
 
 /** Wrap any riskMetrics MetricResult into the shared status vocabulary. */

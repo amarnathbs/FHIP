@@ -3,7 +3,6 @@
 // inputs are insufficient.
 import { describe, it, expect } from 'vitest';
 import { xirr } from '@/lib/engines/investment-intelligence/xirr';
-import { twrr } from '@/lib/engines/investment-intelligence/twrr';
 import { sinceInceptionXirrEligible, optionTotalReturnEligible } from '@/lib/engines/investment-intelligence/dataQuality';
 import { sharpeRatio, beta, informationRatio, captureRatios } from '@/lib/engines/investment-intelligence/riskMetrics';
 import { rollingReturnSeries } from '@/lib/engines/investment-intelligence/rollingReturns';
@@ -205,13 +204,3 @@ describe('No-fabrication: XIRR never returns NaN/Infinity, always an explicit st
   });
 });
 
-describe('No-fabrication: TWRR never interpolates across a missing boundary valuation', () => {
-  it('is unavailable rather than guessing an intermediate value', () => {
-    const r = twrr(
-      [{ date: d('2021-01-01'), value: 1000 }, { date: d('2022-01-01'), value: 1200 }],
-      [{ date: d('2021-06-01'), amount: 100 }]
-    );
-    expect(r.status).toBe('unavailable');
-    expect(r.twrr).toBeUndefined();
-  });
-});

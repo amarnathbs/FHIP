@@ -58,7 +58,7 @@ describe('deriveReportNavDependencyInputs', () => {
     expect(deriveReportNavDependencyInputs(null, AS_OF)).toEqual([]);
   });
 
-  it('investmentPerformance produces xirr_since_inception + twr_since_opening_balance (both bounded at the real earliest cash-flow date) + rolling_return_window (unbounded by transaction date) per scheme', () => {
+  it('investmentPerformance produces xirr_since_inception (bounded at the real earliest cash-flow date) + rolling_return_window (unbounded by transaction date) per scheme, and no longer writes the legacy time-weighted basis', () => {
     const premium = fixturePremium({
       investmentPerformance: {
         results: { schemes: [{ instrumentId: INSTR_A }, { instrumentId: INSTR_B }] } as never,
@@ -69,9 +69,9 @@ describe('deriveReportNavDependencyInputs', () => {
     const inputs = deriveReportNavDependencyInputs(premium, AS_OF);
     const forA = inputs.filter((i) => i.instrumentId === INSTR_A);
     const forB = inputs.filter((i) => i.instrumentId === INSTR_B);
-    expect(forA.map((i) => i.basis).sort()).toEqual(['rolling_return_window', 'twr_since_opening_balance', 'xirr_since_inception']);
+    expect(forA.map((i) => i.basis).sort()).toEqual(['rolling_return_window', 'xirr_since_inception']);
     expect(forA.find((i) => i.basis === 'xirr_since_inception')?.earliestTransactionDate).toBe('2021-05-10');
-    expect(forA.find((i) => i.basis === 'twr_since_opening_balance')?.earliestTransactionDate).toBe('2021-05-10');
+    expect(inputs.some((i) => i.basis === 'twr_since_opening_balance')).toBe(false);
     expect(forB.find((i) => i.basis === 'xirr_since_inception')?.earliestTransactionDate ?? null).toBeNull();
   });
 
@@ -108,7 +108,7 @@ describe('deriveReportNavDependencyInputs', () => {
     const keys = inputs.map((i) => `${i.instrumentId}|${i.basis}`);
     expect(new Set(keys).size).toBe(keys.length); // no duplicate (instrument, basis) pair
     expect(keys.sort()).toEqual(
-      [`${INSTR_A}|xirr_since_inception`, `${INSTR_A}|twr_since_opening_balance`, `${INSTR_A}|rolling_return_window`, `${INSTR_A}|sip_xray_transaction_history`, `${INSTR_A}|tax_lot_fifo`].sort()
+      [`${INSTR_A}|xirr_since_inception`, `${INSTR_A}|rolling_return_window`, `${INSTR_A}|sip_xray_transaction_history`, `${INSTR_A}|tax_lot_fifo`].sort()
     );
   });
 });

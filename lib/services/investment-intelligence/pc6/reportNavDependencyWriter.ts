@@ -31,13 +31,12 @@
 //     activeReturn/benchmark comparison computed over the SAME grounded
 //     BENCHMARK_LOOKBACK_DAYS window navRetentionPolicy.ts's own
 //     benchmark-dependency hydration already uses (rolling_return_window).
-//     Portfolio-level TWRR (PortfolioCurrencyAnalytics.portfolioTwrr) is an
-//     aggregate OVER these same per-scheme series from the same real
-//     inception point, so twr_since_opening_balance reuses the identical
-//     earliest-cash-flow bound rather than inventing a second, possibly
-//     inconsistent one — computeReportNavDependencyRange() itself treats
-//     these two bases identically (same switch-case branch), so this is not
-//     a redundant guess, it is the documented, shared formula for both.
+//     The legacy 'twr_since_opening_balance' basis is no longer written (the
+//     platform no longer calculates or shows a time-weighted return, PO
+//     decision 2026-10-03). It protected exactly the same earliest-cash-flow
+//     range as xirr_since_inception, so no NAV row loses protection. The
+//     basis value stays in the type and the DB CHECK (migration 0172) only so
+//     that previously written dependency rows keep reading correctly.
 //   - sip (R5, r5Repository.ts's loadSipDataset — the ONLY r5Repository
 //     dataset that reads ii_prices_nav at all; loadXrayDataset does not,
 //     confirmed by reading it in full, so X-Ray deliberately gets NO
@@ -110,7 +109,6 @@ export function deriveReportNavDependencyInputs(
     for (const scheme of results.schemes) {
       const earliest = earliestCashFlowDateByInstrument[scheme.instrumentId] ?? null;
       push(scheme.instrumentId, 'xirr_since_inception', earliest);
-      push(scheme.instrumentId, 'twr_since_opening_balance', earliest);
       push(scheme.instrumentId, 'rolling_return_window');
     }
   }
