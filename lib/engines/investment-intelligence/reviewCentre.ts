@@ -246,7 +246,7 @@ export function detectOpenReconciliationCases(userId: string, cases: Reconciliat
 
 // ---------------------------------------------------------------------------
 // 6. Benchmark underperformance (spec section 43, consumes R4 output only —
-//    spec section 130, "must not independently implement XIRR/TWRR").
+//    spec section 130, "must not independently implement XIRR").
 //
 // Reads the REAL R4 ii_analytics_results row shape (migration 0043 — the
 // table R4 rebuilt from the R1-era placeholder, not the placeholder

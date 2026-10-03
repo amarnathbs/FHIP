@@ -234,10 +234,10 @@ export function trackingError(fundReturns: number[], benchmarkReturns: number[],
  * Information Ratio = Annualised Active Return / Annualised Tracking
  * Error. Uses ARITHMETIC annualisation of the mean periodic active return
  * (mean(active) * periodsPerYear) — the industry-standard convention for
- * this specific ratio, distinct from the chain-linked/geometric "Active
- * Return" headline figure computed elsewhere (BenchmarkEngine) from TWRR
- * minus blended-benchmark TWRR. Both conventions are documented; they are
- * not interchangeable and must never be silently swapped.
+ * this specific ratio, distinct from the scheme-level "Active Return"
+ * figure (BenchmarkEngine: scheme CAGR minus benchmark CAGR). Both
+ * conventions are documented; they are not interchangeable and must never
+ * be silently swapped.
  */
 export function informationRatio(fundReturns: number[], benchmarkReturns: number[], periodsPerYear: number): MetricResult<{ informationRatio: number }> {
   const te = trackingError(fundReturns, benchmarkReturns, periodsPerYear);

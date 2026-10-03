@@ -1,14 +1,14 @@
 // Investment Intelligence — unit tests for
 // lib/services/investment-intelligence/unitWeightedValuation.ts.
 //
-// Production defect found 2026-09-29 (PO report: XIRR/TWRR and
+// Production defect found 2026-09-29 (PO report: the performance figures and
 // active-return-vs-benchmark showing "not enough history" on holdings that
 // plainly have years of NAV price history): confirmed live against
 // production that EVERY row in ii_holding_snapshots carries exactly one
 // as_of_date per (user, instrument) -- the analytics engine's
 // SchemeDataset.valuationSeries was therefore always a single point,
 // regardless of how much daily NAV history NAV1 had actually hydrated for
-// the instrument, so portfolio TWRR (needs a start AND end valuation) could
+// the instrument, so the portfolio benchmark blend (needs a start AND end valuation) could
 // never be computed for any household. This module replays the position's
 // own certified, signed unit ledger (the same taxonomy
 // reconciliation.ts's unitDeltaForTransaction already certifies) against

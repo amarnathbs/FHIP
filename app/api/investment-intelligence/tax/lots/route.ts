@@ -54,13 +54,13 @@ export async function GET(request: Request) {
       lots: result.lots.map((l) => ({
         lotId: l.lotId,
         instrumentId: l.instrumentKey,
-        instrumentName: dataset.instrumentNames.get(l.instrumentKey) ?? l.instrumentKey,
+        instrumentName: dataset.instrumentNames.get(l.instrumentKey) ?? 'Unnamed fund',
         // II-PC1-F1: FIFO is scoped to (account, instrument), so a lot list
         // that showed only the instrument would imply the wrong thing to a
         // user holding one scheme in two folios — two separate FIFO queues
         // would look like one pooled queue. The folio is now explicit.
         accountId: l.accountKey,
-        accountLabel: dataset.accountLabels.get(l.accountKey) ?? l.accountKey,
+        accountLabel: dataset.accountLabels.get(l.accountKey) ?? 'Folio without a recorded number',
         kind: l.kind,
         acquisitionDate: l.acquisitionDate,
         unitsAcquired: l.unitsAcquired,

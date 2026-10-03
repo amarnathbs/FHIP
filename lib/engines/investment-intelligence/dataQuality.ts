@@ -1,7 +1,7 @@
 // R4 — Deterministic data-quality flag vocabulary (spec section 66).
 // Every engine result that is 'unavailable' carries one of these flags
 // (or a metric-specific reason already using this vocabulary in spirit —
-// see xirr.ts/twrr.ts/riskMetrics.ts's own `reason` unions, which are the
+// see xirr.ts/riskMetrics.ts's own `reason` unions, which are the
 // metric-specific detail; DataQualityFlag below is the coarser, UI-facing
 // classification each of those maps onto). A missing input NEVER produces
 // a silent 0 — it produces one of these flags plus a human-readable

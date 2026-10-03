@@ -51,7 +51,7 @@ export const INFLOW_TYPES = new Set(['redemption', 'switch_out', 'dividend']);
 // leaves the household at all. Used to build each scheme's separate
 // externalCashFlows list (below), which the PORTFOLIO-level engine
 // (analyticsOrchestrator.ts) uses instead of cashFlows for portfolioXirr/
-// portfolioTwrr -- excluding switches entirely at the source is what
+// the portfolio XIRR -- excluding switches entirely at the source is what
 // correctly handles a settlement-date lag or fee/STT differential
 // between a switch's two legs, which a same-date netting approach alone
 // cannot catch.
@@ -85,7 +85,7 @@ function toDate(s: string): Date {
  * That silent truncation is dangerous here rather than merely incomplete: a
  * few years of daily NAV/transaction/snapshot/benchmark history for even one
  * instrument exceeds 1000 rows, so a plain select would silently drop the
- * most recent history — wrong as-of dates, wrong coverage, wrong XIRR/TWRR/
+ * most recent history — wrong as-of dates, wrong coverage, wrong XIRR/
  * benchmark figures, all with no error surfaced anywhere.
  *
  * Every large time-series read in this module therefore goes through this
@@ -570,7 +570,7 @@ export async function loadAnalyticsDataset(
     // Production defect found 2026-09-29: valuationSeries above is a single
     // certified snapshot point in the overwhelming common case (confirmed
     // live: every row in production's ii_holding_snapshots has exactly one
-    // as_of_date per position), so TWRR/benchmark-blend/drawdown can never
+    // as_of_date per position), so the benchmark-blend/drawdown can never
     // get the start-and-end valuation series they need from it alone, no
     // matter how deep NAV1's own daily price history goes for the
     // instrument. Reconstruct a derived valuation series from the position's

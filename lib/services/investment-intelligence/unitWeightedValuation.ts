@@ -5,17 +5,15 @@
 // independently-guessed direction table) against the daily NAV feed (NAV1 /
 // pc6_selective_historical_hydration writes ii_prices_nav every day).
 //
-// WHY THIS EXISTS (production defect found 2026-09-29, PO report: XIRR/TWRR
-// and active-return-vs-benchmark showing "not enough history" for holdings
+// WHY THIS EXISTS (production defect found 2026-09-29, PO report: the performance
+// figures and active-return-vs-benchmark showing "not enough history" for holdings
 // that plainly have years of NAV price history). Confirmed live against
 // production (twwpnltizhtjxhamyoxt): EVERY row in ii_holding_snapshots — the
 // ONLY source analyticsRepository.ts ever built SchemeDataset.valuationSeries
 // from — carries exactly ONE as_of_date per (user, instrument): the date of
 // the investor's most recently uploaded statement (53/53 rows in production,
-// one distinct date each). TWRR needs at least a start AND an end valuation
-// to compute even a single sub-period return (twrrMinValuationPoints = 2,
-// lib/config/investment-intelligence/minimumHistory.ts); a single point can
-// never satisfy that, no matter how many YEARS of daily NAV price history
+// one distinct date each). A benchmark blend needs at least a start AND an end
+// valuation; a single point can never satisfy that, no matter how many YEARS of daily NAV price history
 // the platform has actually hydrated for the instrument — which is why
 // "not enough history" was showing up on funds NAV1 has priced back to 2006.
 // The gap was never NAV coverage; it was that the daily NAV feed was never

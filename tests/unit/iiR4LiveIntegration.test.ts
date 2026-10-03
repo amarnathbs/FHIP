@@ -294,13 +294,13 @@ d('R4 live integration — real code path against DEV', () => {
       user_id: state.userId,
       scope_type: 'portfolio',
       scope_id: 'currency:INR',
-      metric_key: 'portfolio_twrr',
+      metric_key: 'portfolio_xirr',
       metric_version: 'forged',
       engine_version: 'forged',
       data_as_of_date: '2023-12-31',
       input_snapshot_version: 'f'.repeat(64),
       quality_status: 'ok',
-      result_value: { status: 'CALCULATED', value: { twrr: 9.99 } },
+      result_value: { status: 'CALCULATED', value: { rate: 9.99 } },
     });
     expect(error).not.toBeNull();
     expect(error!.message).toMatch(/row-level security/i);

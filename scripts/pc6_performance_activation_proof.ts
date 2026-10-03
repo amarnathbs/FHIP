@@ -9,7 +9,6 @@
 // engine that was certified in R4/R5 and is imported unmodified:
 //
 //   lib/engines/investment-intelligence/PerformanceEngine.ts   XIRR, CAGR, point-to-point
-//   lib/engines/investment-intelligence/twrr.ts                TWRR
 //   lib/engines/investment-intelligence/riskMetricsService.ts  volatility, downside vol,
 //                                                             Sharpe, Sortino, drawdown, beta,
 //                                                             alpha, tracking error, information
@@ -171,22 +170,17 @@ async function main() {
     horizons.length >= 3 && finiteHorizons.length === horizons.length && perf.navPointToPoint['SINCE_INCEPTION']?.status === 'ok',
     `${finiteHorizons.length}/${horizons.length} finite — ${horizons.map(([k, v]) => `${k}=${v.status === 'ok' ? (v.pointToPointReturn! * 100).toFixed(2) + '%' + (v.cagr !== undefined ? ` (cagr ${(v.cagr * 100).toFixed(2)}%)` : '') : v.status}`).join(', ')}`);
 
-  const flows = contributions.map((c) => ({ date: new Date(`${c.date}T00:00:00.000Z`), amount: c.amount }));
-  // Valuation is taken AFTER that date's contribution has bought units. Taking
-  // it before leaves the first sub-period starting at a value of zero, which
-  // the certified TWRR engine correctly refuses as
-  // NEGATIVE_OR_ZERO_SUBPERIOD_START — a real guard, and one this proof was
-  // originally tripping over rather than testing.
+  // Valuation is taken AFTER that date's contribution has bought units.
   const valuations: Array<{ date: Date; value: number }> = [];
   let cumUnits = 0;
   for (const p of series) {
     if (contributions.some((c) => c.date === p.date)) cumUnits += CONTRIBUTION / p.value;
     valuations.push({ date: new Date(`${p.date}T00:00:00.000Z`), value: cumUnits * p.value });
   }
-  const portfolio = computePortfolioPerformance({ valuations, externalFlows: flows, investorCashFlows: cashFlows });
-  check('TWRR activates from the certified chain-linked engine and produces a real number',
-    portfolio.portfolioTwrr.status === 'ok' && Number.isFinite(portfolio.portfolioTwrr.twrr) && portfolio.portfolioXirr.status === 'ok',
-    `portfolioTwrr=${portfolio.portfolioTwrr.status}${portfolio.portfolioTwrr.status === 'ok' ? ` twrr=${portfolio.portfolioTwrr.twrr?.toFixed(6)} subPeriods=${portfolio.portfolioTwrr.subPeriods?.length} method=${portfolio.portfolioTwrr.method}` : ` reason=${(portfolio.portfolioTwrr as { reason?: string }).reason}`}, portfolioXirr=${portfolio.portfolioXirr.status} rate=${portfolio.portfolioXirr.rate?.toFixed(6)}`);
+  const portfolio = computePortfolioPerformance({ valuations, investorCashFlows: cashFlows });
+  check('portfolio XIRR activates from the certified engine and produces a real number',
+    portfolio.portfolioXirr.status === 'ok' && Number.isFinite(portfolio.portfolioXirr.rate),
+    `portfolioXirr=${portfolio.portfolioXirr.status} rate=${portfolio.portfolioXirr.rate?.toFixed(6)}`);
 
   check('every metric carries a reproducible input fingerprint and engine version',
     perf.inputFingerprint.length > 0 && portfolio.inputFingerprint.length > 0 && perf.engineVersion.length > 0,

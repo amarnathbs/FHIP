@@ -34,7 +34,7 @@
 // `ii_xray`/`ii_tax` snapshot_type writes) reads from
 // lib/services/investment-intelligence/{analyticsRepository,r5Repository,
 // taxRepository}.ts, all of which operate over an instrument's
-// TRANSACTION history (XIRR/TWR since real cash flows) or, for a
+// TRANSACTION history (XIRR since real cash flows) or, for a
 // benchmark/rolling-return comparison, the SAME grounded lookback window
 // navRetentionPolicy.ts's BENCHMARK_LOOKBACK_DAYS already derives from
 // rollingReturnService.ts/rollingReturns.ts. This file reuses that
@@ -114,7 +114,7 @@ export function computeReportNavDependencyRange(input: ReportNavDependencyInput)
     case 'twr_since_opening_balance':
     case 'sip_xray_transaction_history':
     case 'tax_lot_fifo':
-      // All four read the holding's real transaction history (XIRR/TWR
+      // All four read the holding's real transaction history (XIRR
       // since actual cash flows, SIP/X-Ray and FIFO cost-basis over every
       // lot) -- grounded in NAV 1.06's own consumer inventory
       // (analyticsRepository.ts / r5Repository.ts / taxRepository.ts).

@@ -1,7 +1,7 @@
 // Investment Intelligence — regression test for a real production defect
-// found 2026-09-29: the Performance tab's portfolio TWRR (and everything
-// gated on it -- blended benchmark comparison, portfolio active return,
-// drawdown/comparison charts) showed "not enough history" for every
+// found 2026-09-29: the Performance tab's portfolio valuation series (and
+// everything gated on it -- blended benchmark comparison, drawdown and
+// comparison charts) showed "not enough history" for every
 // household in production, regardless of how many years of daily NAV price
 // history NAV1 (pc6_selective_historical_hydration) had actually hydrated
 // for the instruments held.
@@ -10,12 +10,11 @@
 // SchemeDataset.valuationSeries was built exclusively from
 // ii_holding_snapshots, and EVERY row of that table in production carries
 // exactly ONE as_of_date per (user, instrument) -- the date of the
-// investor's most recently uploaded statement. twrr() correctly (and by
-// design -- see docs/investment-intelligence/R4_TWRR_CERTIFICATION.md)
-// refuses to compute from fewer than 2 valuation points and never
-// interpolates a missing one, so with a single point it always returned
-// INSUFFICIENT_HISTORY, no matter how deep the instrument's own NAV history
-// went. The task pointer in the original bug report (computeSchemeActive's
+// investor's most recently uploaded statement. The benchmark blend and the
+// charts correctly refuse to compute from fewer than 2 valuation points and
+// never interpolate a missing one, so with a single point they always
+// returned "not enough history", no matter how deep the instrument's own NAV
+// history went. The task pointer in the original bug report (computeSchemeActive's
 // NAV_HISTORY_INCOMPLETE gate) turned out NOT to be the culprit when
 // checked against real data: SINCE_INCEPTION CAGR computed fine for every
 // scheme with real NAV history in every production household inspected.
@@ -25,10 +24,14 @@
 // tests/unit/iiR4AnalyticsRepositoryPagination.test.ts): a household with
 // the exact production shape (ONE holding-snapshot row, but rich
 // ii_transactions.units and rich ii_prices_nav history) now gets a real
-// portfolioTwrr, because analyticsRepository.ts reconstructs a derived
+// multi-point portfolio valuation series (drawdown/comparison series),
+// because analyticsRepository.ts reconstructs a derived
 // valuation series from the certified unit ledger x the daily NAV feed --
 // but ONLY when the position's own reconciliation actually supports it
 // (negative control below proves the gate is real, not a no-op).
+//
+// 2026-10-03: re-pointed at the series the reconstruction feeds (drawdown /
+// comparison series); the reconstruction itself is unchanged.
 
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -93,7 +96,7 @@ function makeSupabaseMock(tables: Record<string, MockRow[]>): SupabaseClient {
   } as unknown as SupabaseClient;
 }
 
-const userId = 'user-twrr-test';
+const userId = 'user-valuation-test';
 const instrumentId = 'inst-1';
 const accountId = 'acct-1';
 
@@ -176,7 +179,7 @@ function baseTables(unitVarianceWithinTolerance: boolean | null): Record<string,
   };
 }
 
-describe('TWRR-RECON-001: production shape (one snapshot, rich NAV+unit history) now yields a real portfolio TWRR', () => {
+describe('VAL-RECON-001: production shape (one snapshot, rich NAV+unit history) now yields a real portfolio valuation series', () => {
   it('reconstructedValuationSeries is populated with one point per NAV date from the purchase onward', async () => {
     const supabase = makeSupabaseMock(baseTables(true));
     const { dataset } = await loadAnalyticsDataset(supabase, userId);
@@ -185,23 +188,23 @@ describe('TWRR-RECON-001: production shape (one snapshot, rich NAV+unit history)
     expect(dataset!.schemes[0].reconstructedValuationSeries).toHaveLength(NAV_DAYS);
   });
 
-  it('portfolioTwrr is CALCULATED, not INSUFFICIENT_HISTORY -- the actual production symptom being fixed', async () => {
+  it('the portfolio drawdown series has one point per NAV date, not a single point -- the actual production symptom being fixed', async () => {
     const supabase = makeSupabaseMock(baseTables(true));
     const { dataset } = await loadAnalyticsDataset(supabase, userId);
     const result = runAnalytics(dataset!);
     expect(result.portfolios).toHaveLength(1);
-    expect(result.portfolios[0].portfolioTwrr.status).toBe('CALCULATED');
-    expect(result.portfolios[0].portfolioTwrr.value!.twrr).toBeGreaterThan(0); // NAV rose monotonically over the period
+    expect(result.portfolios[0].drawdownSeries).toHaveLength(NAV_DAYS);
+    expect(result.portfolios[0].portfolioXirr.status).toBe('CALCULATED');
   });
 });
 
-describe('TWRR-RECON-002: negative control -- an unreconciled unit ledger must NOT get a fabricated valuation series', () => {
-  it('unit_variance_within_tolerance = false disqualifies the reconstruction; valuationSeries/TWRR behave exactly as before this fix', async () => {
+describe('VAL-RECON-002: negative control -- an unreconciled unit ledger must NOT get a fabricated valuation series', () => {
+  it('unit_variance_within_tolerance = false disqualifies the reconstruction; the portfolio series behaves exactly as before this fix', async () => {
     const supabase = makeSupabaseMock(baseTables(false));
     const { dataset } = await loadAnalyticsDataset(supabase, userId);
     expect(dataset!.schemes[0].reconstructedValuationSeries).toEqual([]);
     const result = runAnalytics(dataset!);
-    expect(result.portfolios[0].portfolioTwrr.status).toBe('INSUFFICIENT_HISTORY');
+    expect(result.portfolios[0].drawdownSeries).toHaveLength(1); // single certified snapshot only
   });
 
   it('unit_variance_within_tolerance = null (not yet evaluated) is treated as NOT reliable -- never assumed fine', async () => {
@@ -209,11 +212,11 @@ describe('TWRR-RECON-002: negative control -- an unreconciled unit ledger must N
     const { dataset } = await loadAnalyticsDataset(supabase, userId);
     expect(dataset!.schemes[0].reconstructedValuationSeries).toEqual([]);
     const result = runAnalytics(dataset!);
-    expect(result.portfolios[0].portfolioTwrr.status).toBe('INSUFFICIENT_HISTORY');
+    expect(result.portfolios[0].drawdownSeries).toHaveLength(1); // single certified snapshot only
   });
 });
 
-describe('TWRR-RECON-003: negative control -- history_completeness short of complete_from_inception also disqualifies reconstruction', () => {
+describe('VAL-RECON-003: negative control -- history_completeness short of complete_from_inception also disqualifies reconstruction', () => {
   it('partial_history never gets a reconstructed series even with a perfectly reconciled unit ledger', async () => {
     const tables = baseTables(true);
     tables.ii_portfolio_truth_status = [{ ...truthRow(true)[0], history_completeness: 'partial_history' }];
@@ -221,6 +224,6 @@ describe('TWRR-RECON-003: negative control -- history_completeness short of comp
     const { dataset } = await loadAnalyticsDataset(supabase, userId);
     expect(dataset!.schemes[0].reconstructedValuationSeries).toEqual([]);
     const result = runAnalytics(dataset!);
-    expect(result.portfolios[0].portfolioTwrr.status).toBe('INSUFFICIENT_HISTORY');
+    expect(result.portfolios[0].drawdownSeries).toHaveLength(1); // single certified snapshot only
   });
 });

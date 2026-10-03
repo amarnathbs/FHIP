@@ -11,7 +11,7 @@
 //
 // For financial data that silent truncation is not "incomplete data", it is
 // WRONG ANSWERS with no error anywhere: truncated NAV/transaction history
-// yields wrong XIRR/TWRR/benchmark figures, truncated tax lots yield a wrong
+// yields wrong XIRR/benchmark figures, truncated tax lots yield a wrong
 // cost basis, and a truncated instrument universe makes scheme resolution
 // mint duplicate canonical instruments.
 //

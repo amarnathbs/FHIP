@@ -739,9 +739,9 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     sectionData: { results, ...(premium.ownerBreakup ? { ownerBreakup: premium.ownerBreakup } : {}) },
     narrativeText:
       portfolioCount > 1
-        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR/TWRR) as of ${narrativeDate(results.asOfDate, source.currency)}.`
+        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR) as of ${narrativeDate(results.asOfDate, source.currency)}.`
         : portfolioCount === 1
-          ? `Your investment portfolio's XIRR, TWRR and benchmark comparison as of ${narrativeDate(results.asOfDate, source.currency)} are shown below, where enough history exists to calculate them.`
+          ? `Your investment portfolio's XIRR and benchmark return as of ${narrativeDate(results.asOfDate, source.currency)} are shown below, where enough history exists to calculate them.`
           : null,
     // (owner-class breakup text is appended to the limitation text below so the existing narrative contract is unchanged)
     chartData: { portfolios: results.portfolios.map((p) => ({ currencyCode: p.currencyCode, performanceVsBenchmarkSeries: p.performanceVsBenchmarkSeries, drawdownSeries: p.drawdownSeries })) },

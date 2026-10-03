@@ -2,8 +2,8 @@
 // the mark-to-market fix (commits 4072260, c632533, both live on main), built
 // 2026-09-30. The PO asked for a much more thorough regression proof than
 // tests/unit/iiNavMarkToMarket.test.ts (MTM-001..004, scenarios 1/2 of the
-// PO's list) and tests/unit/iiPortfolioTwrrValuationReconstruction.test.ts
-// (TWRR-RECON-001..003) already give, covering specific additional scenarios
+// PO's list) and tests/unit/iiPortfolioValuationReconstruction.test.ts
+// (VAL-RECON-001..003) already give, covering specific additional scenarios
 // with EXACT, independently hand-computed expected values:
 //
 //   3. Fully redeemed holding (0 units)              -> GOLD-003
@@ -12,7 +12,7 @@
 //   7. Missing / stale / gapped NAV disclosure         -> GOLD-007
 //   8. Future-dated NAV defense-in-depth               -> GOLD-008
 //   9. Multi-currency holdings                         -> GOLD-009
-//  10. TWRR/XIRR exact dated cash flows/endpoints       -> GOLD-010
+//  10. XIRR exact dated cash flows/endpoints            -> GOLD-010
 //
 // Scenarios 1 and 2 (a newer NAV vs. only a statement-date NAV) are already
 // covered with exact values by MTM-001/MTM-002 and are not duplicated here.
@@ -34,12 +34,12 @@
 // fix is a 6-line, purely-restrictive change (it can only turn an
 // already-firing mark-to-market into a no-op or an earlier NAV point, never
 // the reverse), it does not touch any other consumer of navByInstrument /
-// navSeriesForInstrument, and the full existing MTM-00x / TWRR-RECON-00x
+// navSeriesForInstrument, and the full existing MTM-00x / VAL-RECON-00x
 // suites (whose fixtures never contain a future-dated row) are unaffected --
 // verified by running them alongside this file.
 //
 // Same hermetic mock Supabase query builder pattern as
-// iiNavMarkToMarket.test.ts / iiPortfolioTwrrValuationReconstruction.test.ts.
+// iiNavMarkToMarket.test.ts / iiPortfolioValuationReconstruction.test.ts.
 
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -513,16 +513,15 @@ describe('GOLD-009: a multi-currency household — no FX mixing through the mark
 });
 
 // ===========================================================================
-// GOLD-010 — TWRR and XIRR must use the CORRECT dated cash flows and
-// valuation endpoints post-fix: exact hand-computed values, not just "some"
-// number and not just ">0" (unlike TWRR-RECON-001, which only asserts the
-// sign). All arithmetic below is worked out independently of the
+// GOLD-010 — XIRR must use the CORRECT dated cash flows and valuation
+// endpoints post-fix: exact hand-computed values, not just "some" number and
+// not just ">0". All arithmetic below is worked out independently of the
 // implementation, spreadsheet-style, per this module's own convention (see
 // tests/unit/iiXirrPortfolioTerminalValue.test.ts).
 // ===========================================================================
-describe('GOLD-010: TWRR and XIRR use the exact post-fix dated cash flows and valuation endpoints', () => {
-  const instrumentId = 'inst-twrr-xirr';
-  const accountId = 'acct-twrr-xirr';
+describe('GOLD-010: XIRR uses the exact post-fix dated cash flows and valuation endpoints', () => {
+  const instrumentId = 'inst-xirr';
+  const accountId = 'acct-xirr';
   const day0 = '2026-01-01';
   const day100 = '2026-04-11'; // exactly 100 days after 2026-01-01
 
@@ -543,7 +542,7 @@ describe('GOLD-010: TWRR and XIRR use the exact post-fix dated cash flows and va
       ii_holding_snapshots: [
         { id: 'snap-tx-1', user_id: userId, instrument_id: instrumentId, as_of_date: day0, units: 1000, value: 10000, currency_code: 'INR', quality_status: 'certified' },
       ],
-      ii_instruments: [{ id: instrumentId, instrument_name: 'TWRR/XIRR Fund', base_currency: 'INR', country_of_domicile: 'IN' }],
+      ii_instruments: [{ id: instrumentId, instrument_name: 'XIRR Fund', base_currency: 'INR', country_of_domicile: 'IN' }],
       ii_prices_nav: [
         { id: 'nav-tx-1', instrument_id: instrumentId, price_date: day0, price: 10, data_version: 'nav-v1', quality_status: 'ok' },
         // NAV rises 20% over the 100 days: 10 -> 12.
@@ -569,22 +568,6 @@ describe('GOLD-010: TWRR and XIRR use the exact post-fix dated cash flows and va
     // agree, as they must for a position with no intervening transactions.
     expect(scheme.currentValue).toBe(12000);
     expect(scheme.currentValueDate.toISOString().slice(0, 10)).toBe(day100);
-  });
-
-  it('portfolio TWRR = exactly 20.00% -- hand-computed: (12000 - 0) / 10000 - 1 = 0.20, single sub-period, no external flow at the end boundary', async () => {
-    const supabase = makeSupabaseMock(tables());
-    const { dataset } = await loadAnalyticsDataset(supabase, userId, { asOfDate: new Date(`${day100}T00:00:00.000Z`) });
-    const result = runAnalytics(dataset!);
-    expect(result.portfolios).toHaveLength(1);
-    const p = result.portfolios[0];
-    expect(p.portfolioTwrr.status).toBe('CALCULATED');
-    // Exact, not approximate: the only external flow (the day0 purchase)
-    // coincides with the period's own start boundary, so there is exactly
-    // ONE sub-period (day0 -> day100) with no flow at its END boundary:
-    //   subPeriodReturn = (endValue - flowAtEnd) / startValue - 1
-    //                   = (12000 - 0) / 10000 - 1 = 0.20
-    //   TWRR = product of (1 + subPeriodReturn) - 1 = 0.20
-    expect(p.portfolioTwrr.value!.twrr).toBeCloseTo(0.2, 12);
   });
 
   it('portfolio XIRR ~= 94.541% annualised -- hand-computed via -10000 + 12000/(1+r)^(100/365) = 0, cross-checked against the certified xirr() solver called directly on the same hand-derived flows', async () => {

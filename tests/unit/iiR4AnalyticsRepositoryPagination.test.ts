@@ -14,7 +14,7 @@
 // .range()/.limit(). A few years of daily NAV for even one fund exceeds 1000
 // rows, so the performance/benchmark engine could silently compute over
 // truncated history — understated coverage, wrong as-of dates, wrong
-// XIRR/TWRR/benchmark figures — with no error anywhere in the stack.
+// XIRR/benchmark figures — with no error anywhere in the stack.
 //
 // This test is hermetic (no live DB): it uses a small mock Supabase query
 // builder that faithfully reproduces PostgREST's behaviour — an unbounded

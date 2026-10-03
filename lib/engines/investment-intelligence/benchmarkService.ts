@@ -214,20 +214,6 @@ export function computeBlendedBenchmark(req: BlendedBenchmarkRequest): BlendedBe
 }
 
 /**
- * Portfolio active return. Deliberately accepts ONLY a TWRR-vs-blended-TWRR
- * pair (spec section 36): portfolio XIRR must never be differenced against a
- * benchmark time-weighted return. The `'TWRR'` family argument is fixed
- * here rather than caller-supplied, so the incompatible combination is
- * unrepresentable at this call site.
- */
-export function computePortfolioActiveReturn(
-  portfolioTwrr: number | undefined,
-  blendedBenchmarkTwrr: number | undefined
-): ActiveReturnResult {
-  return activeReturn(portfolioTwrr, blendedBenchmarkTwrr, 'TWRR');
-}
-
-/**
  * Scheme active return against its own primary benchmark, restricted to a
  * compatible measure pair. `family` describes BOTH sides of the subtraction.
  */

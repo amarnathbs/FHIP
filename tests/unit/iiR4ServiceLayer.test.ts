@@ -9,7 +9,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   fromXirr,
-  fromTwrr,
   fromRiskMetric,
   missingReferenceData,
   markStale,
@@ -20,8 +19,8 @@ import {
   monthlyRebalanceDates,
   valueOnOrBefore,
   computeBlendedBenchmark,
-  computePortfolioActiveReturn,
   benchmarkWindowReturn,
+  computeSchemeActiveReturn,
 } from '@/lib/engines/investment-intelligence/benchmarkService';
 import { computeRiskMetrics, periodicReturnsFromLevels } from '@/lib/engines/investment-intelligence/riskMetricsService';
 import { computeRollingReturns, toMonthEndSeries } from '@/lib/engines/investment-intelligence/rollingReturnService';
@@ -72,10 +71,10 @@ describe('SVC-STATUS-003: missing risk-free data is MISSING_REFERENCE_DATA', () 
   });
 });
 
-describe('SVC-STATUS-004: TWRR boundary gap is MISSING_REFERENCE_DATA not zero', () => {
-  it('classifies MISSING_BOUNDARY_VALUATION', () => {
-    const out = fromTwrr({ status: 'unavailable', reason: 'MISSING_BOUNDARY_VALUATION' }, () => ({ twrr: 0 }));
-    expect(out.status).toBe('MISSING_REFERENCE_DATA');
+describe('SVC-STATUS-004: an unavailable XIRR is never a number', () => {
+  it('classifies NOT_BRACKETED as FAILED with no value', () => {
+    const out = fromXirr({ status: 'unavailable', reason: 'NOT_BRACKETED' }, () => ({ rate: 0 }));
+    expect(out.status).toBe('FAILED');
     expect(out.value).toBeUndefined();
   });
 });
@@ -217,11 +216,11 @@ describe('SVC-BENCH-005: PRI standing in for a required TRI is flagged, never si
   });
 });
 
-describe('SVC-BENCH-006: portfolio active return is TWRR-vs-TWRR only', () => {
+describe('SVC-BENCH-006: scheme active return is like-for-like only', () => {
   it('returns unavailable when either side is missing rather than mixing families', () => {
-    expect(computePortfolioActiveReturn(undefined, 0.05).status).toBe('unavailable');
-    expect(computePortfolioActiveReturn(0.07, undefined).status).toBe('unavailable');
-    const ok = computePortfolioActiveReturn(0.07, 0.05);
+    expect(computeSchemeActiveReturn(undefined, 0.05, 'CAGR').status).toBe('unavailable');
+    expect(computeSchemeActiveReturn(0.07, undefined, 'CAGR').status).toBe('unavailable');
+    const ok = computeSchemeActiveReturn(0.07, 0.05, 'CAGR');
     expect(ok.status).toBe('ok');
     expect(ok.activeReturn).toBeCloseTo(0.02, 12);
   });
@@ -629,8 +628,6 @@ describe('SVC-ORCH-005: no metric is ever emitted as a misleading zero', () => {
     expect(p.blendedBenchmarkReturn.status).not.toBe('CALCULATED');
     expect(p.blendedBenchmarkReturn.value).toBeUndefined();
     expect(p.blendedBenchmarkReturn.detail).toBeTruthy();
-    expect(p.activeReturn.status).not.toBe('CALCULATED');
-    expect(p.activeReturn.value).toBeUndefined();
     expect(rs.schemes[0].activeReturn.status).toBe('MISSING_REFERENCE_DATA');
   });
 });
@@ -694,7 +691,7 @@ describe('SVC-ORCH-007: suppressed blended benchmark suppresses EVERY benchmark-
     const p = runAnalytics(belowCoverageDataset()).portfolios[0];
     expect(p.risk.volatility.status).toBe('CALCULATED');
     expect(p.risk.maxDrawdown.status).toBe('CALCULATED');
-    expect(p.portfolioTwrr.status).toBe('CALCULATED');
+    expect(p.portfolioXirr.status).toBe('CALCULATED');
   });
 
   it('tracking error is not silently equal to volatility (the fabrication signature)', () => {
