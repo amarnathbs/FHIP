@@ -292,7 +292,7 @@ describe('partial history shows a labelled value, never a blanket n/a', () => {
     expect(row.currentValue).toBeCloseTo(15000, 6);
     expect(row.navSource).toBe('statement_value');
     expect(row.avgNav).toBeNull();
-    expect(row.basis.label).toBe('holding only; no transactions uploaded');
+    expect(row.basis.label).toBe('holding only; investment date needed');
   });
 });
 

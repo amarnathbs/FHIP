@@ -45,6 +45,7 @@ import {
   readJsonSafely,
   type AdminFailure,
 } from '@/lib/resources/admin/resultState';
+import { cell, fmt, fmtCell, type Row } from '@/components/admin/adminBenchmarksCells';
 
 type Tab = 'sources' | 'datasets' | 'cohorts' | 'values' | 'target-ranges' | 'update-runs';
 
@@ -97,39 +98,6 @@ const TABS: { key: Tab; label: string; purpose: string; subject: string; helpTas
 ];
 
 const TABS_WITH_ACTIONS: Tab[] = ['sources', 'datasets'];
-
-// §18 — one register for every raw lifecycle value this screen can show, so
-// an operator never has to interpret a database enum. An unmapped value
-// falls back to its raw text rather than being hidden, so a new status
-// added by a later migration is visibly unmapped rather than silently
-// mis-labelled.
-const STATUS_LABELS: Record<string, string> = {
-  draft: 'Draft',
-  under_review: 'Under review',
-  approved: 'Approved',
-  active: 'Active',
-  superseded: 'Superseded',
-  suspended: 'Suspended',
-  archived: 'Archived',
-  retired: 'Retired',
-  rejected: 'Rejected',
-  pending: 'Pending',
-};
-
-type Row = Record<string, unknown>;
-
-function fmt(v: unknown): string {
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'object') return JSON.stringify(v);
-  return String(v);
-}
-
-function fmtCell(col: string, v: unknown): string {
-  const raw = fmt(v);
-  if (col === 'Status' || col === 'Approval') return STATUS_LABELS[raw] ?? raw;
-  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
-  return raw;
-}
 
 type PendingAction =
   | { kind: 'activate'; id: string; name: string }
@@ -551,44 +519,6 @@ const COLUMN_LABELS: Record<string, string> = {
   rows_rejected: 'Rows rejected',
   evidence_level: 'Evidence level',
 };
-
-function cell(r: Row, col: string): unknown {
-  const map: Record<string, string> = {
-    Source: 'source_name',
-    Publisher: 'publisher',
-    Status: col === 'Status' && 'status' in r ? 'status' : 'data_status',
-    'Country/Quality': 'country_code',
-    Dataset: 'dataset_name',
-    Version: 'version',
-    Class: 'benchmark_class',
-    Evidence: 'evidence_level',
-    'Effective From': 'effective_from',
-    'Review Due': 'review_due_at',
-    'Cohort Code': 'cohort_code',
-    Tier: 'cohort_tier',
-    Description: 'cohort_description',
-    Metric: 'metric_definition_id',
-    Statistic: 'statistic_type',
-    Value: 'value_numeric',
-    Currency: 'original_currency',
-    'Band Label': 'band_label',
-    'Band Tier': 'band_tier',
-    Min: 'lower_bound',
-    Max: 'upper_bound',
-    Approval: 'approval_status',
-    'Imported At': 'created_at',
-  };
-  const key = map[col];
-  if (key && key in r) return r[key];
-  // nested join fields
-  const sources = r['benchmark_sources'] as Row | undefined;
-  const datasets = r['benchmark_datasets'] as Row | undefined;
-  const metricDefs = r['benchmark_metric_definitions'] as Row | undefined;
-  if (col === 'Publisher' && sources) return sources.publisher ?? sources.source_name;
-  if (col === 'Dataset' && datasets) return datasets.dataset_name;
-  if (col === 'Metric' && metricDefs) return metricDefs.metric_name ?? metricDefs.metric_code;
-  return r[col] ?? '—';
-}
 
 function columnsFor(tab: Tab): string[] {
   switch (tab) {

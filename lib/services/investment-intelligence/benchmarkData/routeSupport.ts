@@ -12,9 +12,53 @@ export const UuidSchema = z.string().uuid();
 
 export const VariantSchema = z.enum(['price', 'total_return', 'net_total_return']);
 
+// A database CHECK constraint the form can break, translated into plain sentences and the API field
+// paths that cause it. The raw engine text ("new row for relation ... violates check constraint ...")
+// is never forwarded: the client would (rightly) refuse to show it and fall back to a generic banner
+// with no field marked, which is exactly the defect this table closes.
+const CONSTRAINT_FAILURES: Record<string, { error: string; fields: Record<string, string> }> = {
+  ii_benchmark_entitlements_public_needs_evidence: {
+    error: 'A public-use permission needs the web address of its document, the date of that document and the date you retrieved it.',
+    fields: {
+      evidence_url: 'A public-use permission needs the web address of the document that grants it.',
+      evidence_document_date: 'A public-use permission needs the date of that document.',
+      evidence_retrieved_at: 'A public-use permission needs the date you retrieved that document.',
+    },
+  },
+  ii_benchmark_entitlements_rights_coherent: {
+    error: 'The rights chosen do not fit together. Manual ingestion, automation and calculation need the storage right; customer display needs calculation; report export needs customer display.',
+    fields: { rights: 'These rights do not fit together: manual ingestion, automation and calculation each need the storage right.' },
+  },
+  ii_benchmark_entitlements_term: { error: 'The end date cannot be before the start date.', fields: { valid_to: 'The end date cannot be before the start date.' } },
+  ii_benchmark_entitlements_data_range: { error: 'The last data date cannot be before the first.', fields: { data_to: 'The last data date cannot be before the first.' } },
+};
+
+const GENERIC_CONSTRAINT_MESSAGE = 'One of the values breaks a rule the database enforces. Check the dates and the options chosen, then try again. Nothing was changed.';
+
+/** The API field a curated RPC sentence is about, when it names one (the benchmark chosen). */
+function rpcFieldsFor(message: string): Record<string, string> | undefined {
+  if (/unknown benchmark|catalogue row has no declared|must equal the catalogue row/i.test(message)) return { benchmark_id: message };
+  return undefined;
+}
+
 export function rpcFailureResponse(error: { code?: string; message?: string }): Response {
   const f = mapRpcError(error);
-  return Response.json({ error: f.message, code: f.kind }, { status: f.httpStatus });
+  const raw = error.message ?? '';
+  let message = f.message;
+  let fields: Record<string, string> | undefined;
+  if (f.httpStatus === 422 || /violates check constraint/i.test(raw)) {
+    const name = /constraint "([^"]+)"/.exec(raw)?.[1];
+    const known = name ? CONSTRAINT_FAILURES[name] : undefined;
+    if (known) {
+      message = known.error;
+      fields = known.fields;
+    } else if (/violates|constraint|relation "|column "|null value/i.test(message)) {
+      message = GENERIC_CONSTRAINT_MESSAGE;
+    } else {
+      fields = rpcFieldsFor(message);
+    }
+  }
+  return Response.json(fields ? { error: message, code: f.kind, fields } : { error: message, code: f.kind }, { status: f.httpStatus });
 }
 
 export function isMissingRelation(error: { code?: string; message?: string } | null | undefined): boolean {

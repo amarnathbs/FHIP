@@ -765,7 +765,7 @@ export function stepIssues(step: StepNumber, ctx: UploadContext): string[] {
   if (!ctx.caps.upload) out.push('You do not have the upload permission, so you cannot stage a file.');
   const fp = fileProblem(ctx.file, ctx.maxBytes);
   if (fp) out.push(fp);
-  if (!f.dateFormat) out.push('Choose the date format used in the file. It is never guessed, because 03/04/2024 can mean two different days.');
+  if (!f.dateFormat) out.push('Choose the date format used in the file. It is never guessed, because a date such as 03-04-2024 could be 3 April or 4 March.');
   if (!f.numberLocale) out.push('Choose how numbers are written in the file (for example 12,345.67 or 12.345,67).');
   const kind = ctx.file ? fileKindFromName(ctx.file.name) : null;
   if (kind === 'csv' && (f.dateFormat === 'excel_1900' || f.dateFormat === 'excel_1904')) out.push('Excel date numbers only apply to .xlsx files. Choose the written date format used in the CSV.');
@@ -1125,7 +1125,11 @@ export function validateCatalogueForm(f: CatalogueFormState): Record<string, str
   const e: Record<string, string> = {};
   if (!BENCHMARK_KEY_PATTERN.test(f.benchmarkKey)) e.benchmarkKey = 'The key must be 3 to 64 characters: capital letters A-Z, digits 0-9 and underscores only.';
   if (f.officialName.trim().length < 2) e.officialName = 'Enter the exact official name.';
+  else if (f.officialName.trim().length > 200) e.officialName = 'Use at most 200 characters.';
   if (f.ownerName.trim().length < 2) e.ownerName = 'Enter the index owner.';
+  else if (f.ownerName.trim().length > 200) e.ownerName = 'Use at most 200 characters.';
+  if (f.label.trim() && (f.label.trim().length < 2 || f.label.trim().length > 200)) e.label = 'The display label must be 2 to 200 characters, or left empty.';
+  if (f.calendarCode.trim().length > 40) e.calendarCode = 'Use at most 40 characters.';
   if (f.officialIdentifier.trim().length > 100) e.officialIdentifier = 'The official identifier can be at most 100 characters.';
   if (!ASSET_CLASS_OPTIONS.some((o) => o.value === f.assetClass)) e.assetClass = 'Choose the asset class.';
   if (!/^[A-Za-z]{2}$/.test(f.countryCode.trim())) e.countryCode = 'Enter the two-letter country code, such as IN.';
@@ -1141,8 +1145,10 @@ export function validateCatalogueForm(f: CatalogueFormState): Record<string, str
   if ((f.historyClass === 'backtested' || f.historyClass === 'mixed') && !f.backtestedThrough.trim()) e.backtestedThrough = 'Say up to which date the history is backtested.';
   for (const k of ['methodologyUrl', 'sourceUrl'] as const) {
     if (f[k].trim() && !isHttpUrl(f[k])) e[k] = 'Enter a full web address starting with https://';
+    else if (f[k].trim().length > 500) e[k] = 'The web address can be at most 500 characters.';
   }
   if (f.evidenceRef.trim().length < 5) e.evidenceRef = 'Say where the facts above come from (a document title or reference).';
+  else if (f.evidenceRef.trim().length > 500) e.evidenceRef = 'Use at most 500 characters.';
   if (!f.evidenceRetrievedAt.trim()) e.evidenceRetrievedAt = 'Enter the date you retrieved the evidence.';
   return e;
 }
@@ -1216,16 +1222,30 @@ export function emptyEntitlementForm(): EntitlementFormState {
   };
 }
 
-export function validateEntitlementForm(f: EntitlementFormState): Record<string, string> {
+/** The catalogue must declare a variant and a 3-letter currency before an entitlement can be proposed for it (the server and database both require the proposal to equal them). */
+export const NO_DECLARED_VARIANT_MESSAGE = 'This benchmark has no declared return type or currency in the catalogue. Complete the catalogue entry first.';
+export const POST_EXPIRY_STORAGE_VALUES = ['retain', 'delete', 'unknown'] as const;
+
+/**
+ * `row` is the catalogue row for the chosen benchmark (the form only holds its key). Passing it lets the
+ * client refuse, in the form, what the server and database would refuse: a benchmark with no declared
+ * variant or currency. Every rule here mirrors one the API schema (routeSupport.ts EntitlementBody) or the
+ * database (ii_benchmark_entitlements checks, migration 0241) enforces; tests/unit/benchmarkDataFormContract
+ * proves no form state passes here and fails there.
+ */
+export function validateEntitlementForm(f: EntitlementFormState, row?: Pick<CatalogueRowView, 'returnVariant' | 'currencyCode'> | null): Record<string, string> {
   const e: Record<string, string> = {};
   if (!f.benchmarkKey) e.benchmarkKey = 'Choose the benchmark.';
+  else if (row && (!row.returnVariant || !row.currencyCode || !/^[A-Za-z]{3}$/.test(row.currencyCode.trim()))) e.benchmarkKey = NO_DECLARED_VARIANT_MESSAGE;
   if (!f.kind) e.kind = 'Choose the kind of permission.';
+  if (!(POST_EXPIRY_STORAGE_VALUES as readonly string[]).includes(f.postExpiryStorage)) e.postExpiryStorage = 'Choose what happens to stored data after expiry: may be kept, must be deleted or not stated.';
   const r = f.rights;
   if (!Object.values(r).some(Boolean)) e.rights = 'Tick at least one right. A record that grants nothing has no purpose.';
   else if (r.calculation && !r.storage) e.rights = 'Calculation needs the storage right as well.';
   else if (r.customerDisplay && !r.calculation) e.rights = 'Customer display needs the calculation right as well.';
   else if (r.reportExport && !r.customerDisplay) e.rights = 'Report and export needs the customer display right as well.';
   else if (r.automation && !r.storage) e.rights = 'Automated ingestion needs the storage right as well.';
+  else if (r.ingestManual && !r.storage) e.rights = 'Manual ingestion needs the storage right as well.';
   const validFromIso = typedDateToIso(f.validFrom);
   if (validFromIso === null) e.validFrom = `Enter the date the permission starts (${DATE_TYPING_HELP}).`;
   if (f.validTo.trim()) {
@@ -1236,9 +1256,14 @@ export function validateEntitlementForm(f: EntitlementFormState): Record<string,
   for (const k of ['dataFrom', 'dataTo'] as const) if (f[k].trim() && typedDateToIso(f[k]) === null) e[k] = `Use a valid date (${DATE_TYPING_HELP}), or leave empty for no limit.`;
   if (!e.dataFrom && !e.dataTo && f.dataFrom.trim() && f.dataTo.trim() && (typedDateToIso(f.dataTo) as string) < (typedDateToIso(f.dataFrom) as string)) e.dataTo = 'The last data date cannot be before the first.';
   if (f.evidenceReference.trim().length < 5) e.evidenceReference = 'Give a document title or reference that supports this permission.';
+  else if (f.evidenceReference.trim().length > 500) e.evidenceReference = 'Use at most 500 characters.';
+  if (f.attributionText.trim().length > 500) e.attributionText = 'Use at most 500 characters.';
   if (f.evidenceUrl.trim() && !isHttpUrl(f.evidenceUrl)) e.evidenceUrl = 'Enter a full web address starting with https://';
+  else if (f.evidenceUrl.trim().length > 500) e.evidenceUrl = 'The web address can be at most 500 characters.';
+  if (f.notes.trim().length > 1000) e.notes = 'Use at most 1000 characters.';
   if (f.kind === 'public_use_permission') {
-    if (!f.evidenceUrl.trim()) e.evidenceUrl = 'A public-use permission needs the web address of the document that grants it.';
+    if (!f.evidenceUrl.trim()) e.evidenceUrl = 'A public-use permission needs the web address of the document that grants it (required for a public-use permission).';
+    else if (!/^https:\/\//i.test(f.evidenceUrl.trim())) e.evidenceUrl = 'The web address must start with https:// (a public-use permission is evidenced by a secure link to the published terms).';
     if (typedDateToIso(f.evidenceDocumentDate) === null) e.evidenceDocumentDate = `A public-use permission needs the date of that document (${DATE_TYPING_HELP}).`;
     if (typedDateToIso(f.evidenceRetrievedAt) === null) e.evidenceRetrievedAt = `A public-use permission needs the date you retrieved that document (${DATE_TYPING_HELP}).`;
   } else {
@@ -1253,6 +1278,7 @@ export function buildEntitlementBody(f: EntitlementFormState, row: Pick<Catalogu
     benchmark_id: row.id,
     entitlement_kind: f.kind,
     return_variant: row.returnVariant,
+    // Exactly the catalogue's own value: the database compares it for equality with the catalogue row.
     currency_code: row.currencyCode,
     allow_manual_ingest: f.rights.ingestManual,
     allow_automation: f.rights.automation,
@@ -1327,6 +1353,9 @@ export function validateMappingForm(f: MappingFormState): Record<string, string>
   const e: Record<string, string> = {};
   if (!UUID_RE.test(f.instrumentId.trim())) e.instrumentId = 'Enter the instrument id (a UUID, as shown in the instrument record).';
   if (f.proposedBenchmarkName.trim().length < 3) e.proposedBenchmarkName = 'Enter the benchmark name exactly as the scheme document states it.';
+  else if (f.proposedBenchmarkName.trim().length > 200) e.proposedBenchmarkName = 'Use at most 200 characters.';
+  if (f.evidenceTitle.trim().length > 300) e.evidenceTitle = 'Use at most 300 characters.';
+  if (f.ambiguityReason.trim().length > 400) e.ambiguityReason = 'Use at most 400 characters.';
   const effectiveFromIso = typedDateToIso(f.effectiveFrom);
   if (effectiveFromIso === null) e.effectiveFrom = `Enter the date the benchmark became effective (${DATE_TYPING_HELP}).`;
   if (f.effectiveTo.trim()) {
@@ -1336,6 +1365,7 @@ export function validateMappingForm(f: MappingFormState): Record<string, string>
   }
   if (!EVIDENCE_SOURCE_OPTIONS.some((o) => o.value === f.evidenceSource)) e.evidenceSource = 'Choose the type of document.';
   if (!isHttpUrl(f.evidenceUrl)) e.evidenceUrl = 'Enter the full web address of the document, starting with https://';
+  else if (f.evidenceUrl.trim().length > 500) e.evidenceUrl = 'The web address can be at most 500 characters.';
   if (typedDateToIso(f.evidenceDocumentDate) === null) e.evidenceDocumentDate = `Enter the date of the document (${DATE_TYPING_HELP}).`;
   if (typedDateToIso(f.evidenceRetrievedAt) === null) e.evidenceRetrievedAt = `Enter the date you retrieved the document (${DATE_TYPING_HELP}).`;
   if (f.evidenceExcerpt.length > 400) e.evidenceExcerpt = 'The excerpt can be at most 400 characters.';

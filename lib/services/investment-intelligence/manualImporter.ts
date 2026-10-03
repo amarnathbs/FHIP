@@ -8,6 +8,7 @@ import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction
 import { loadActiveReconciliationConfig } from './reconciliationConfig';
 import { openReconciliationCase } from './documentProcessing';
 import { fetchAllRows } from './pagination';
+import { CROSS_SOURCE_INSERT_STATUS, CROSS_SOURCE_REVIEW_SEVERITY } from './crossSourceReviewPolicy';
 
 // The controlled, deterministic manual/test importer (R1_IMPLEMENTATION_SPEC.md
 // section 8) — NOT the production CAS parser (explicit non-goal). Proves the
@@ -352,7 +353,9 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
         status: r.status as string,
       }));
 
-    let crossSourceStatus: 'parsed' | 'review_required' = 'parsed';
+    // D-5 (PO 2026-10-03): a possible duplicate is inserted COUNTED and only
+    // highlighted; the user decides in Review. See crossSourceReviewPolicy.ts.
+    const crossSourceStatus = CROSS_SOURCE_INSERT_STATUS;
     if (crossSourceCandidates.length > 0) {
       const match = resolveCrossSourceTransactionMatch(
         {
@@ -405,19 +408,17 @@ export async function importManualFixture(userId: string, fixture: IiManualFixtu
 
       if (match.state === 'conflict' || match.state === 'ambiguous') {
         // Never silently merge — insert this row too (both pieces of
-        // evidence preserved), but excluded from analytical aggregation
-        // until a human resolves the case (same contract as
-        // documentProcessing.ts).
+        // evidence preserved). D-5 (2026-10-03): counted, with a non-blocking
+        // highlight; a human decides (same contract as documentProcessing.ts).
         pendingCrossSourceConflictCaseId = await openReconciliationCase(userId, {
           subjectType: 'transaction',
           subjectId: accountResult.accountId as string,
           discrepancyType: match.state === 'conflict' ? 'cross_source_conflict' : 'cross_source_review_required',
-          severity: 'high',
+          severity: CROSS_SOURCE_REVIEW_SEVERITY,
           sourceDocumentId: doc.id as string,
           details: { matchedFields: match.matchedFields, differingFields: match.differingFields, rationale: match.rationale, transactionDate: tx.transactionDate },
           evidence: { comparedTransactionIds: match.ambiguousCandidateIds.length > 0 ? match.ambiguousCandidateIds : match.matchedExistingId ? [match.matchedExistingId] : [], engineVersion: match.engineVersion, newSourceDocumentId: doc.id },
         });
-        crossSourceStatus = 'review_required';
       }
     }
 

@@ -169,12 +169,13 @@ function describedBy(...ids: Array<string | null | false | undefined>): string |
   return v || undefined;
 }
 
-export function FieldShell({ id, label, hint, error, children, required }: { id: string; label: string; hint?: ReactNode; error?: string | null; children: ReactNode; required?: boolean }) {
+export function FieldShell({ id, label, hint, error, children, required }: { id: string; label: string; hint?: ReactNode; error?: string | null; children: ReactNode; required?: boolean | string }) {
   return (
     <div className="min-w-0">
       <label htmlFor={id} className="block text-sm font-medium text-ink">
         {label}
-        {required ? <span className="text-risk"> (required)</span> : null}
+        {required === true ? <span className="text-risk"> (required)</span> : null}
+        {typeof required === 'string' && required ? <span className="text-muted"> ({required})</span> : null}
       </label>
       {hint ? (
         <p id={`${id}-hint`} className="mt-0.5 text-xs text-muted">
@@ -191,13 +192,17 @@ export function FieldShell({ id, label, hint, error, children, required }: { id:
   );
 }
 
-const INPUT = `block min-h-11 w-full rounded border border-line bg-white px-3 py-2 text-sm text-ink disabled:bg-gray-100 disabled:text-muted ${FOCUS}`;
+const INPUT_BASE = `block min-h-11 w-full rounded border bg-white px-3 py-2 text-sm text-ink disabled:bg-gray-100 disabled:text-muted ${FOCUS}`;
+/** A field with an error gets a red border and ring as well as its red message (never colour alone: the message and aria-invalid say it too). */
+function inputClass(error?: string | null): string {
+  return `${INPUT_BASE} ${error ? 'border-risk ring-1 ring-risk' : 'border-line'}`;
+}
 
-export function TextField({ label, value, onChange, hint, error, required, disabled, type = 'text', placeholder, maxLength, list }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; required?: boolean; disabled?: boolean; type?: 'text' | 'number' | 'url'; placeholder?: string; maxLength?: number; list?: string }) {
+export function TextField({ label, value, onChange, hint, error, fieldKey, required, disabled, type = 'text', placeholder, maxLength, list }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; fieldKey?: string; required?: boolean | string; disabled?: boolean; type?: 'text' | 'number' | 'url'; placeholder?: string; maxLength?: number; list?: string }) {
   const id = useId();
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} required={required}>
-      <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} maxLength={maxLength} list={list} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={INPUT} />
+      <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} maxLength={maxLength} list={list} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={inputClass(error)} data-field-key={fieldKey} />
     </FieldShell>
   );
 }
@@ -208,7 +213,7 @@ export function TextField({ label, value, onChange, hint, error, required, disab
  * Document2 findings #8/#19). The operator types DD-MM-YYYY (/ or . also
  * work); the logic layer converts to the ISO value the API expects.
  */
-export function DateField({ label, value, onChange, hint, error, required, disabled }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; required?: boolean; disabled?: boolean }) {
+export function DateField({ label, value, onChange, hint, error, fieldKey, required, disabled }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; fieldKey?: string; required?: boolean | string; disabled?: boolean }) {
   const id = useId();
   const fullHint: ReactNode = hint ? (
     <>
@@ -219,16 +224,16 @@ export function DateField({ label, value, onChange, hint, error, required, disab
   );
   return (
     <FieldShell id={id} label={label} hint={fullHint} error={error} required={required}>
-      <input id={id} type="text" inputMode="numeric" autoComplete="off" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={DATE_INPUT_PLACEHOLDER} maxLength={10} aria-invalid={error ? true : undefined} aria-describedby={describedBy(`${id}-hint`, error ? `${id}-error` : null)} className={INPUT} />
+      <input id={id} type="text" inputMode="numeric" autoComplete="off" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={DATE_INPUT_PLACEHOLDER} maxLength={10} aria-invalid={error ? true : undefined} aria-describedby={describedBy(`${id}-hint`, error ? `${id}-error` : null)} className={inputClass(error)} data-field-key={fieldKey} />
     </FieldShell>
   );
 }
 
-export function TextAreaField({ label, value, onChange, hint, error, required, disabled, rows = 3, maxLength }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; required?: boolean; disabled?: boolean; rows?: number; maxLength?: number }) {
+export function TextAreaField({ label, value, onChange, hint, error, fieldKey, required, disabled, rows = 3, maxLength }: { label: string; value: string; onChange: (v: string) => void; hint?: ReactNode; error?: string | null; fieldKey?: string; required?: boolean | string; disabled?: boolean; rows?: number; maxLength?: number }) {
   const id = useId();
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} required={required}>
-      <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={rows} disabled={disabled} maxLength={maxLength} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={INPUT} />
+      <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={rows} disabled={disabled} maxLength={maxLength} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={inputClass(error)} data-field-key={fieldKey} />
     </FieldShell>
   );
 }
@@ -238,11 +243,11 @@ export interface Opt {
   label: string;
 }
 
-export function SelectField({ label, value, onChange, options, placeholder = 'Choose...', hint, error, required, disabled }: { label: string; value: string; onChange: (v: string) => void; options: readonly Opt[]; placeholder?: string; hint?: ReactNode; error?: string | null; required?: boolean; disabled?: boolean }) {
+export function SelectField({ label, value, onChange, options, placeholder = 'Choose...', hint, error, fieldKey, required, disabled }: { label: string; value: string; onChange: (v: string) => void; options: readonly Opt[]; placeholder?: string; hint?: ReactNode; error?: string | null; fieldKey?: string; required?: boolean | string; disabled?: boolean }) {
   const id = useId();
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} required={required}>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={INPUT}>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={inputClass(error)} data-field-key={fieldKey}>
         <option value="">{placeholder}</option>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -254,11 +259,11 @@ export function SelectField({ label, value, onChange, options, placeholder = 'Ch
   );
 }
 
-export function CheckField({ label, checked, onChange, disabled, hint }: { label: ReactNode; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; hint?: ReactNode }) {
+export function CheckField({ label, checked, onChange, disabled, hint, error, fieldKey }: { label: ReactNode; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; hint?: ReactNode; error?: string | null; fieldKey?: string }) {
   const id = useId();
   return (
     <div className="flex min-h-11 items-start gap-2">
-      <input id={id} type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-describedby={hint ? `${id}-hint` : undefined} className={`mt-1 h-5 w-5 shrink-0 ${FOCUS}`} />
+      <input id={id} type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} data-field-key={fieldKey} className={`mt-1 h-5 w-5 shrink-0 ${error ? 'rounded border-2 border-risk ring-1 ring-risk' : ''} ${FOCUS}`} />
       <label htmlFor={id} className="text-sm text-ink">
         {label}
         {hint ? (
@@ -266,15 +271,20 @@ export function CheckField({ label, checked, onChange, disabled, hint }: { label
             {hint}
           </span>
         ) : null}
+        {error ? (
+          <span id={`${id}-error`} role="alert" className="mt-0.5 block text-xs font-medium text-risk">
+            {error}
+          </span>
+        ) : null}
       </label>
     </div>
   );
 }
 
-export function RadioGroup({ legend, name, value, onChange, options, disabled }: { legend: string; name: string; value: string; onChange: (v: string) => void; options: ReadonlyArray<{ value: string; label: ReactNode; description?: ReactNode }>; disabled?: boolean }) {
+export function RadioGroup({ legend, name, value, onChange, options, disabled, error, fieldKey }: { error?: string | null; fieldKey?: string; legend: string; name: string; value: string; onChange: (v: string) => void; options: ReadonlyArray<{ value: string; label: ReactNode; description?: ReactNode }>; disabled?: boolean }) {
   const base = useId();
   return (
-    <fieldset className="min-w-0">
+    <fieldset data-field-key={fieldKey} tabIndex={fieldKey ? -1 : undefined} aria-invalid={error ? true : undefined} className={`min-w-0 ${error ? 'rounded-compact border border-risk p-2 ring-1 ring-risk' : ''}`}>
       <legend className="text-sm font-medium text-ink">{legend}</legend>
       <div className="mt-1 space-y-1">
         {options.map((o) => {
@@ -294,6 +304,11 @@ export function RadioGroup({ legend, name, value, onChange, options, disabled }:
           );
         })}
       </div>
+      {error ? (
+        <p role="alert" className="mt-1 text-xs font-medium text-risk">
+          {error}
+        </p>
+      ) : null}
     </fieldset>
   );
 }

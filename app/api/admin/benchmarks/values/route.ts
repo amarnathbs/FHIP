@@ -8,7 +8,7 @@ export const GET = adminRoute(async (req: Request) => {
   const datasetId = url.searchParams.get('dataset_id');
   let query = adminClient()
     .from('benchmark_values')
-    .select('*, benchmark_metric_definitions(metric_name), benchmark_datasets(dataset_name)')
+    .select('*, benchmark_metric_definitions(metric_code, metric_name), benchmark_datasets(dataset_name)')
     .order('created_at', { ascending: false })
     .limit(200);
   if (datasetId) query = query.eq('dataset_id', datasetId);
