@@ -78,7 +78,14 @@ export function gateBenchmark(
   });
   const all = segmentsIn ?? [];
   if (all.length === 0) return fail('no_benchmark_mapping', 'Benchmark data unavailable: no benchmark is mapped to this scheme.');
-  const segments = declaredWins(all) as Nav2BenchmarkInput[];
+  // PO decision 04-10-2026: a category-reference benchmark (UNVERIFIED table, read-time, never stored) is not used for beta or
+  // alpha unless the policy says so. A DECLARED mapping always wins over it when both exist.
+  const declaredOnly = !ctx.policy.benchmark.allowCategoryReference;
+  const candidates = declaredOnly ? all.filter((s) => (s.basis ?? 'declared') === 'declared') : all;
+  if (candidates.length === 0) {
+    return fail('benchmark_category_reference_not_allowed', "Benchmark data unavailable: only the usual benchmark for this fund's category exists, and that is not used for beta or alpha. A benchmark declared for this scheme is needed.");
+  }
+  const segments = declaredWins(candidates) as Nav2BenchmarkInput[];
   const overlapping = segments
     .filter((s) => iso(s.effectiveFrom) <= window.end && (s.effectiveTo === null || iso(s.effectiveTo) >= window.start))
     .sort((a, b) => iso(a.effectiveFrom).localeCompare(iso(b.effectiveFrom)));

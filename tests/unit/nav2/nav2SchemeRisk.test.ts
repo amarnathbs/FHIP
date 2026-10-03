@@ -18,7 +18,8 @@
 //          missing days leaves fewer common returns, and below the minimum it is benchmark_missing);
 //   NC-K6  correlation is on RETURNS: two series whose NAV LEVELS correlate at 0.9996 have return
 //          correlation -1, and the engine reports -1;
-//   NC-K7  correlation is refused for a scheme not held in scope.
+//   NC-K7  correlation is refused for a scheme not held in scope;
+//   NC-K8  beta / alpha are refused on the category-reference benchmark (PO decision 04-10-2026).
 import { describe, expect, it } from 'vitest';
 import { withPolicyOverrides } from '@/lib/config/nav2/metricPolicy';
 import { beta, correlationBetweenHeldSchemes, jensenAlpha, maxDrawdown, sharpeRatio, volatility } from '@/lib/engines/nav2/schemeRisk';
@@ -209,21 +210,32 @@ describe('Fixture B -- beta, alpha, correlation (matrix 21)', () => {
     }
   });
 
-  it('a declared mapping wins over a category reference; a category reference carries its honest label, only through the same gates', () => {
+  it('NC-K8 (PO decision 04-10-2026): beta and alpha are NOT shown on the category-reference benchmark; a declared one wins when both exist', () => {
     const declared = { ...benchmarks[0], basis: 'declared' as const };
     const category = { ...benchmarks[0], basis: 'category_reference' as const, categoryLabel: 'Flexi Cap', benchmarkId: 'bm-cat', benchmarkKey: 'IN_NIFTY_500_TRI', label: 'Nifty 500 TRI' };
     const both = beta(scheme, ctxInr(), [category, declared]);
     if (both.state !== 'available') throw new Error(both.state);
     expect(both.provenance.benchmark?.basis).toBe('declared');
-    const onlyCategory = beta(scheme, ctxInr(), [category]);
-    if (onlyCategory.state !== 'available') throw new Error(onlyCategory.state);
-    expect(onlyCategory.provenance.benchmark?.basis).toBe('category_reference');
-    expect(onlyCategory.provenance.benchmark?.basisLabel).toContain('Flexi Cap');
-    expect(onlyCategory.provenance.benchmark?.basisLabel).toContain("not this fund's own declared benchmark");
-    expect(onlyCategory.disclosures.find((d) => d.code === 'benchmark_basis')?.detail).toContain('Flexi Cap');
-    // the category reference is gated exactly like a declared one
-    expect(beta(scheme, ctxInr(), [{ ...category, entitled: false }]).state).toBe('benchmark_missing');
-    expect(beta(scheme, ctxInr(), [{ ...category, returnType: 'PRI' }]).state).toBe('benchmark_missing');
+    expect(both.provenance.benchmark?.benchmarkKey).toBe('IN_TEST_TRI'); // the declared one, not the category's
+    for (const r of [beta(scheme, ctxInr(), [category]), jensenAlpha(scheme, ctxInr(), [category], weeklyDataset(6.5))]) {
+      expect(r.state).toBe('benchmark_missing');
+      expect(r.state === 'benchmark_missing' && r.reason).toBe('benchmark_category_reference_not_allowed');
+      expect('value' in r).toBe(false);
+    }
+    // control: the SAME series as a declared benchmark gives a number, so it is the label that blocks it, not the data
+    expect(beta(scheme, ctxInr(), [{ ...category, basis: 'declared' }]).state).toBe('available');
+  });
+
+  it('the category-reference rule is a policy flag (versioned): when a future decision enables it, the honest label travels and the same gates apply', () => {
+    const allow = withPolicyOverrides({ benchmark: { allowCategoryReference: true } }, 'test-allow-category');
+    const category = { ...benchmarks[0], basis: 'category_reference' as const, categoryLabel: 'Flexi Cap', benchmarkId: 'bm-cat', benchmarkKey: 'IN_NIFTY_500_TRI', label: 'Nifty 500 TRI' };
+    const r = beta(scheme, ctxInr(allow), [category]);
+    if (r.state !== 'available') throw new Error(r.state);
+    expect(r.provenance.benchmark?.basis).toBe('category_reference');
+    expect(r.provenance.benchmark?.basisLabel).toContain("not this fund's own declared benchmark");
+    expect(r.disclosures.find((d) => d.code === 'benchmark_basis')?.detail).toContain('Flexi Cap');
+    expect(beta(scheme, ctxInr(allow), [{ ...category, entitled: false }]).state).toBe('benchmark_missing');
+    expect(beta(scheme, ctxInr(allow), [{ ...category, returnType: 'PRI' }]).state).toBe('benchmark_missing');
   });
 
   it('a flat benchmark has zero variance: not_applicable (zero_benchmark_variance), no beta', () => {

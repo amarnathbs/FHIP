@@ -73,6 +73,7 @@ export type Nav2Reason =
   | 'benchmark_price_index'
   | 'benchmark_return_type_unknown'
   | 'benchmark_no_series'
+  | 'benchmark_category_reference_not_allowed'
   | 'benchmark_mapping_not_effective'
   | 'benchmark_changed_in_window'
   | 'benchmark_history_incomplete'

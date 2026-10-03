@@ -114,6 +114,14 @@ export interface Nav2Policy {
   /** Largest age, in days, a risk-free observation may have and still be in force, by series id. */
   riskFreeMaxStalenessDays: Record<string, number>;
 
+  /**
+   * Beta and alpha benchmark rules (PO decision 04-10-2026). The read-time CATEGORY REFERENCE table is UNVERIFIED and no
+   * licensed series exists, so beta and alpha are shown ONLY for a DECLARED benchmark (admin / factsheet published) that is
+   * verified, total-return, entitled and has a series; otherwise `benchmark_missing`. Flip only when the category table is
+   * verified AND the PO says so.
+   */
+  benchmark: { allowCategoryReference: boolean };
+
   /** Declared conventions (spec 8.8, 8.9, 8.12), carried verbatim into provenance. */
   conventions: {
     riskFreeConversion: 'compound_per_period_1_over_n';
@@ -170,6 +178,7 @@ export const NAV2_POLICY: Nav2Policy = {
     reconstructionBufferDays: 10,
   },
   riskFreeMaxStalenessDays: { ...RISK_FREE_MAX_STALENESS_DAYS },
+  benchmark: { allowCategoryReference: false },
   conventions: {
     riskFreeConversion: 'compound_per_period_1_over_n',
     sharpe: 'mean_excess_over_sample_sd_excess',

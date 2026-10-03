@@ -14,13 +14,17 @@
 //          identifier is NOT fuzzily joined to the old one;
 //   NC-E3  an ISIN that matches nothing is unresolved; an ISIN held by two instruments is ambiguous;
 //   NC-E4  a typo / respacing of the name does not match (no fuzzy matching);
+//   NC-F1  (NAV2-F1, fixed in Stage 2) two exact identifiers that disagree are ambiguous, never a silent ISIN win;
 //   NC-C1  a corrected NAV changes the series checksum, hence the cache key: the old entry cannot be served;
 //   NC-C2  invalidation touches only the corrected scheme (and only results that could have used that date);
 //   NC-C3  a user's id never appears in a key; scheme-performance keys carry no scope at all.
 import { describe, expect, it } from 'vitest';
 import { NAV2_METRICS, NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
 import { buildResultCacheKey, scopeHash, selectInvalidated, type CachedResultMeta, type ResultCacheKeyParts } from '@/lib/engines/nav2/cacheKeys';
+import fs from 'node:fs';
+import path from 'node:path';
 import { resolveScheme, type ExistingInstrumentForResolution, type SchemeResolutionQuery } from '@/lib/services/investment-intelligence/schemeResolution';
+import { matchInstrumentsReadOnly } from '@/lib/aie/adapters/investment-intelligence/instrumentMatching';
 import { prepareSeries, type RawNavRow } from '@/lib/engines/nav2/series';
 import { absoluteReturn } from '@/lib/engines/nav2/schemeReturns';
 import { buildSeries, ctxInr, IDENTITY, rowsFor, weekdays } from './support/fixtures';
@@ -112,13 +116,46 @@ describe('Fixture E -- scheme identity fails closed (matrix 5, 6)', () => {
     expect(resolveScheme(query({ normalisedSchemeName: 'abc flexi cap' }), EXISTING, []).kind).toBe('unresolved');
   });
 
-  it('FINDING NAV2-F1 (characterisation, decision for the PO): when the ISIN and the AMFI code point at DIFFERENT instruments the resolver silently takes the ISIN match', () => {
-    // Spec 4.3 orders AMFI code first and demands fail-closed behaviour on ambiguity. The existing resolver (R2) tries the ISIN first
-    // and never checks that the AMFI code agrees. Here a statement line carrying the direct-growth ISIN and the REGULAR-growth AMFI
-    // code resolves to the direct-growth fund with full confidence. If this changes (a cross-check that returns `ambiguous`), update
-    // this test deliberately: it exists so the behaviour is not forgotten.
+  it('NAV2-F1 FIXED (PO decision 04-10-2026): when the ISIN and the AMFI code point at DIFFERENT instruments the match is AMBIGUOUS (fail closed), never a silent win for the ISIN', () => {
+    // direct-growth ISIN + REGULAR-growth AMFI code on one statement line. It used to resolve to direct-growth at confidence 1.
     const r = resolveScheme(query({ isin: 'INF000A01001', amfiSchemeCode: '100002', planType: 'not_applicable', optionType: 'not_applicable' }), EXISTING, []);
-    expect(r).toMatchObject({ kind: 'resolved', instrumentId: 'abc-direct-growth', matchedVia: 'isin', confidence: 1 });
+    expect(r.kind).toBe('ambiguous');
+    if (r.kind !== 'ambiguous') throw new Error(r.kind);
+    expect([...r.candidateInstrumentIds].sort()).toEqual(['abc-direct-growth', 'abc-regular-growth']);
+    expect(r.reason).toMatch(/point at different instruments/);
+  });
+
+  it('NC-F1: the guard is not vacuous -- agreeing identifiers still resolve; an ISIN alone, or an AMFI code that matches nothing, is not a conflict', () => {
+    const agree = resolveScheme(query({ isin: 'INF000A01003', amfiSchemeCode: '100003', planType: 'not_applicable', optionType: 'not_applicable' }), EXISTING, []);
+    expect(agree).toMatchObject({ kind: 'resolved', instrumentId: 'abc-direct-idcw', matchedVia: 'isin', confidence: 1 });
+    expect(resolveScheme(query({ isin: 'INF000A01003', planType: 'not_applicable', optionType: 'not_applicable' }), EXISTING, [])).toMatchObject({ kind: 'resolved', instrumentId: 'abc-direct-idcw' });
+    expect(resolveScheme(query({ isin: 'INF000A01003', amfiSchemeCode: '999999', planType: 'not_applicable', optionType: 'not_applicable' }), EXISTING, [])).toMatchObject({ kind: 'resolved', instrumentId: 'abc-direct-idcw' });
+    // the AMFI code alone is unchanged
+    expect(resolveScheme(query({ amfiSchemeCode: '100004', planType: 'not_applicable', optionType: 'not_applicable' }), EXISTING, [])).toMatchObject({ kind: 'resolved', instrumentId: 'abc-regular-idcw', matchedVia: 'amfi_scheme_code' });
+  });
+
+  it('NC-F1: an AMFI code shared by two instruments is ambiguous even when the ISIN names one of them', () => {
+    const dup = [...EXISTING, variant('abc-dup-amfi', 'direct', 'growth', 'INF000A09999', '100001')];
+    const r = resolveScheme(query({ isin: 'INF000A01001', amfiSchemeCode: '100001', planType: 'not_applicable', optionType: 'not_applicable' }), dup, []);
+    expect(r.kind).toBe('ambiguous');
+  });
+
+  it('NC-F1: the read-only AIE matcher inherits the same refusal', () => {
+    const out = matchInstrumentsReadOnly(
+      [{ isin: 'INF000A01001', amfiSchemeCode: '100002', normalisedSchemeName: 'abc flexi cap fund', amcName: AMC, planType: 'not_applicable', optionType: 'not_applicable' } as never],
+      'IN',
+      EXISTING,
+      []
+    );
+    expect([...out.values()].map((o) => o.kind)).toEqual(['ambiguous']);
+  });
+
+  it('an ambiguous outcome is what both production callers turn into a reconciliation case (ambiguous_instrument, high severity), never a guess', () => {
+    for (const f of ['lib/services/investment-intelligence/documentProcessing.ts', 'lib/services/investment-intelligence/aiExtractionReviewApply.ts']) {
+      const src = fs.readFileSync(path.join(process.cwd(), f), 'utf8');
+      expect(src, f).toMatch(/outcome\.kind === 'ambiguous'|else \{\s*\/\/ ambiguous/);
+      expect(src, f).toMatch(/discrepancyType: 'ambiguous_instrument'/);
+    }
   });
 });
 
