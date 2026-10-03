@@ -9,6 +9,8 @@
 //          gate) and shown to differ from the gated behaviour.
 //   NC-G2  no path bypasses the gate: generateReport is the single builder.
 //   NC-G3  never forever: every reason releases, with the fund named.
+import fs from 'node:fs';
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryDb, type InMemoryDb, type Row } from './support/inMemorySupabase';
 
@@ -93,7 +95,7 @@ describe('evaluateReportNavGate (pure)', () => {
       ['a confirmed unrecoverable coverage gap (e.g. HSBC AMFI 151069)', fund('hsbc', { overlapsCoverageGap: true, schemeName: 'HSBC Short Term Fund' }), null],
       ['a fund with no AMFI scheme code', fund('nocode', { attempt: { lastAttemptedAt: NOW, lastOutcome: 'unresolvable_identifier', consecutiveFailures: 1 } }), null],
       ['attempts exhausted', fund('tried', { attempt: { lastAttemptedAt: NOW, lastOutcome: 'fetch_failed', consecutiveFailures: REPORT_NAV_MAX_FAILED_ATTEMPTS } }), null],
-      ['the bounded retry window elapsing (also covers kill switch off and rate limit, which leave no failure record)', fund('slow'), minutesAgo(REPORT_NAV_RETRY_WINDOW_MINUTES)],
+      ['the bounded retry window elapsing (also covers the rate limit, which leaves no failure record)', fund('slow'), minutesAgo(REPORT_NAV_RETRY_WINDOW_MINUTES)],
     ];
     for (const [label, f, heldSince] of cases) {
       it(label, () => {
@@ -159,6 +161,7 @@ function seed(over: Record<string, Row[]> = {}) {
     ii_nav_hydration_attempts: [],
     ii_nav_source_coverage_gaps: [],
     ii_audit_events: [],
+    ii_reference_job_control: [{ job_key: 'pc6_selective_historical_hydration', enabled: true }],
     ...over,
   });
   return currentDb;
@@ -217,6 +220,66 @@ describe('checkReportNavHistoryGate', () => {
     expect((await check(outside, { createAnchor: true })).hold).toBe(true);
     const resolved = seed({ ii_nav_source_coverage_gaps: [{ instrument_id: 'f2', gap_from: '2020-01-01', gap_to: '2023-06-30', resolved_at: '2026-01-01' }] });
     expect((await check(resolved, { createAnchor: true })).hold).toBe(true);
+  });
+
+  describe('NC-H1: kill switch OFF releases immediately with the disclosure (the old behaviour waited the full window)', () => {
+    const off = { ii_reference_job_control: [{ job_key: 'pc6_selective_historical_hydration', enabled: false }] };
+
+    it('OLD behaviour reproduced: with the switch ON (or unread) a gapped fund holds for the window; nothing else differs', async () => {
+      const db = seed();
+      const g = await check(db, { createAnchor: true });
+      expect(g.hold).toBe(true); // what happened with the switch off before this rule: it waited
+      // the pure rule without the switch knowledge (the old signature) holds the same way
+      expect(evaluateReportNavGate({ schemes: [fund('a')], heldSinceIso: NOW, nowIso: NOW }).hold).toBe(true);
+    });
+
+    it('switch OFF: released at once, the fund is named, no window needed, no anchor written, nothing kicked', async () => {
+      const db = seed(off);
+      const kick = vi.fn();
+      const g = await check(db, { createAnchor: true, kick });
+      expect(g).toMatchObject({ hold: false, unavailable: [{ instrumentId: 'f2', reason: 'fetching_disabled' }], loaded: 1 });
+      expect(g.disclosures).toEqual(['Price history for Fund Two could not be loaded; its figures are marked not available.']);
+      expect(kick).not.toHaveBeenCalled();
+      expect(db.tables.ii_audit_events).toHaveLength(0);
+    });
+
+    it('a MISSING control row counts as off, exactly as the hydration code treats it', async () => {
+      const db = seed({ ii_reference_job_control: [] });
+      expect((await check(db, { createAnchor: true })).hold).toBe(false);
+    });
+
+    it('switch OFF with every fund loaded: nothing to disclose, unaffected', async () => {
+      const db = seed({ ...off, ii_prices_nav: [{ instrument_id: 'f1', price_date: '2021-01-01', price: 10 }, { instrument_id: 'f2', price_date: '2022-01-01', price: 10 }] });
+      expect(await check(db, { createAnchor: true })).toMatchObject({ hold: false, disclosures: [], loaded: 2 });
+    });
+
+    it('a switch that cannot be read is treated as on: the normal bounded wait applies (never a trap, never a silent release)', async () => {
+      const db = seed(off);
+      const g = await checkReportNavHistoryGate({ db: db.client as never, userId: USER, today: '2026-10-03', nowIso: NOW, createAnchor: true, readFetchingEnabled: async () => null });
+      expect(g.hold).toBe(true);
+    });
+
+    it('the switch is read ONCE per check', async () => {
+      const db = seed();
+      const read = vi.fn(async () => true);
+      await checkReportNavHistoryGate({ db: db.client as never, userId: USER, today: '2026-10-03', nowIso: NOW, readFetchingEnabled: read });
+      expect(read).toHaveBeenCalledTimes(1);
+    });
+
+    it('the pure rule: fetchingEnabled=false releases every gapped fund, loaded funds stay loaded', () => {
+      const g = evaluateReportNavGate({ schemes: [loaded('a'), fund('b'), fund('c')], heldSinceIso: null, nowIso: NOW, fetchingEnabled: false });
+      expect(g.hold).toBe(false);
+      expect(g.unavailable.map((f) => f.reason)).toEqual(['fetching_disabled', 'fetching_disabled']);
+      expect(g.loaded).toBe(1);
+    });
+
+    it('applies to the Performance gate and the gate endpoint too: both use this one function', () => {
+      const route = fs.readFileSync(path.join(process.cwd(), 'app/api/investment-intelligence/nav-history/gate/route.ts'), 'utf8');
+      expect(route).toContain('checkReportNavHistoryGate(');
+      const comp = fs.readFileSync(path.join(process.cwd(), 'components/investment-intelligence/PriceHistoryGate.tsx'), 'utf8');
+      expect(comp).toContain('/api/investment-intelligence/nav-history/gate');
+      expect(fs.readFileSync(path.join(process.cwd(), 'lib/services/reportsData.ts'), 'utf8')).toContain('checkReportNavHistoryGate(');
+    });
   });
 
   it('without createAnchor (a read-only look) nothing is written and nothing is kicked', async () => {

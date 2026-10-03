@@ -19,9 +19,13 @@
 //       - it has no AMFI scheme code (an unresolvable identifier failed);
 //       - its attempts are exhausted (REPORT_NAV_MAX_FAILED_ATTEMPTS consecutive
 //         failures in the job's own attempt ledger);
+//       - the NAV fetch kill switch (pc6_selective_historical_hydration) is OFF:
+//         nothing will be fetched, so the report is released AT ONCE, not after
+//         the window (one read per check; a switch that cannot be read is treated
+//         as on and the normal bounded wait applies);
 //       - the bounded retry window has elapsed (REPORT_NAV_RETRY_WINDOW_MINUTES
-//         since this hold began), which also covers the kill switch being off
-//         and the per-user rate limit, neither of which leaves a failure record.
+//         since this hold began), which also covers the per-user rate limit,
+//         which leaves no failure record.
 //     The report then generates and says, in plain words, "Price history for
 //     <fund> could not be loaded; its figures are marked not available."
 //
@@ -57,7 +61,10 @@ export const REPORT_NAV_ANCHOR_KIND = 'report_nav_history_gate_held';
 export const REPORT_NAV_ANCHOR_MAX_AGE_MINUTES = 60;
 
 export type GateFundState = 'loaded' | 'waiting' | 'unavailable';
-export type UnavailableReason = 'coverage_gap' | 'unresolvable' | 'attempts_exhausted' | 'retry_window_elapsed';
+export type UnavailableReason = 'coverage_gap' | 'unresolvable' | 'attempts_exhausted' | 'fetching_disabled' | 'retry_window_elapsed';
+
+/** The kill switch the NAV hydration code (job and user path alike) obeys. */
+export const NAV_FETCH_KILL_SWITCH_JOB_KEY = 'pc6_selective_historical_hydration';
 
 export interface GateFund {
   instrumentId: string;
@@ -100,7 +107,13 @@ export function heldHeadline(loaded: number, total: number): string {
 }
 
 /** Pure. See the module header for the rule. */
-export function evaluateReportNavGate(input: { schemes: readonly GateSchemeInput[]; heldSinceIso: string | null; nowIso: string }): ReportNavGate {
+export function evaluateReportNavGate(input: {
+  schemes: readonly GateSchemeInput[];
+  heldSinceIso: string | null;
+  nowIso: string;
+  /** False = the NAV fetch kill switch is OFF, so nothing is going to be fetched: waiting would be pointless. Default true. */
+  fetchingEnabled?: boolean;
+}): ReportNavGate {
   const windowMs = REPORT_NAV_RETRY_WINDOW_MINUTES * 60_000;
   const windowElapsed = input.heldSinceIso !== null && new Date(input.nowIso).getTime() - new Date(input.heldSinceIso).getTime() >= windowMs;
 
@@ -110,6 +123,8 @@ export function evaluateReportNavGate(input: { schemes: readonly GateSchemeInput
     if (s.overlapsCoverageGap) return { ...base, state: 'unavailable' as const, reason: 'coverage_gap' as const };
     if (s.attempt && s.attempt.lastOutcome === 'unresolvable_identifier' && s.attempt.consecutiveFailures >= 1) return { ...base, state: 'unavailable' as const, reason: 'unresolvable' as const };
     if (s.attempt && s.attempt.consecutiveFailures >= REPORT_NAV_MAX_FAILED_ATTEMPTS) return { ...base, state: 'unavailable' as const, reason: 'attempts_exhausted' as const };
+    // PO 2026-10-03: with the kill switch OFF nothing will be fetched, so release at once rather than wait out the window.
+    if (input.fetchingEnabled === false) return { ...base, state: 'unavailable' as const, reason: 'fetching_disabled' as const };
     if (windowElapsed) return { ...base, state: 'unavailable' as const, reason: 'retry_window_elapsed' as const };
     return { ...base, state: 'waiting' as const, reason: null };
   });
@@ -176,6 +191,20 @@ async function loadOverlappingCoverageGapIds(db: Db, windows: Map<string, { from
   return out;
 }
 
+/**
+ * The same switch the hydration code reads (isEnabled in selectiveHistoricalHydrationJobLive.ts): a missing
+ * row counts as OFF there, so it does here. Returns null when the read itself fails.
+ */
+async function readFetchingEnabled(db: Db): Promise<boolean | null> {
+  try {
+    const { data, error } = await db.from('ii_reference_job_control').select('enabled').eq('job_key', NAV_FETCH_KILL_SWITCH_JOB_KEY).maybeSingle();
+    if (error) return null;
+    return (data as { enabled?: boolean } | null)?.enabled === true;
+  } catch {
+    return null;
+  }
+}
+
 async function findAnchor(db: Db, userId: string, nowIso: string): Promise<string | null> {
   const since = new Date(new Date(nowIso).getTime() - REPORT_NAV_ANCHOR_MAX_AGE_MINUTES * 60_000).toISOString();
   const { data } = await db
@@ -206,6 +235,8 @@ export async function checkReportNavHistoryGate(args: {
   nowIso?: string;
   createAnchor?: boolean;
   kick?: (userId: string) => boolean;
+  /** Test seam: reads the kill switch. Default reads ii_reference_job_control. */
+  readFetchingEnabled?: () => Promise<boolean | null>;
 }): Promise<ReportNavGate> {
   const nowIso = args.nowIso ?? new Date().toISOString();
   const needs = await loadUserSchemeNeeds(args.db, args.userId);
@@ -225,13 +256,16 @@ export async function checkReportNavHistoryGate(args: {
     overlapsCoverageGap: overlapping.has(n.instrumentId),
   }));
 
+  // One cheap read per check (a check runs once per request). Unreadable = we cannot tell, so the normal bounded wait applies.
+  const fetchingEnabled = (await (args.readFetchingEnabled ?? (() => readFetchingEnabled(args.db)))()) !== false;
+
   let heldSince = await findAnchor(args.db, args.userId, nowIso);
-  let gate = evaluateReportNavGate({ schemes, heldSinceIso: heldSince, nowIso });
+  let gate = evaluateReportNavGate({ schemes, heldSinceIso: heldSince, nowIso, fetchingEnabled });
   if (gate.hold && heldSince === null && args.createAnchor) {
     // The first hold of this window: remember when it began (audit trail, no migration).
     await emitAuditEvent({ userId: args.userId, eventType: 'calculation', subjectType: 'reports', actorType: 'system', metadata: { kind: REPORT_NAV_ANCHOR_KIND, waiting: gate.waiting.length, total: gate.total } }).catch(() => ({ error: 'anchor not saved' }));
     heldSince = nowIso;
-    gate = evaluateReportNavGate({ schemes, heldSinceIso: heldSince, nowIso });
+    gate = evaluateReportNavGate({ schemes, heldSinceIso: heldSince, nowIso, fetchingEnabled });
   }
   if (gate.hold && args.createAnchor && args.kick) args.kick(args.userId); // idempotent and bounded: the user-scoped batch is single-flight, rate limited and time-boxed
   return gate;
