@@ -32,6 +32,7 @@ import {
 } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import {
   loadInstrumentBenchmarkContext,
+  benchmarkIdsToLoad,
   loadBenchmarkSeriesById,
   resolveHoldingBenchmarkComparable,
   resolveHoldingBenchmarkComparison,
@@ -304,7 +305,8 @@ export async function loadHoldingsTable(
   // then one batch query for exactly the benchmark series those mappings
   // resolved to -- never one query per row, and never the whole catalogue.
   const benchmarkCtx = await loadInstrumentBenchmarkContext(supabase, instrumentIds);
-  const mappedBenchmarkIds = [...new Set([...benchmarkCtx.mappingsByInstrument.values()].flat().map((m) => m.benchmarkId))];
+  // Declared mappings AND read-time category references (the series for both are entitlement-gated alike).
+  const mappedBenchmarkIds = benchmarkIdsToLoad(benchmarkCtx);
   const benchmarkSeriesById = await loadBenchmarkSeriesById(supabase, mappedBenchmarkIds, benchmarkCtx.accessByBenchmarkId);
 
   const holdings: HoldingRow[] = [];

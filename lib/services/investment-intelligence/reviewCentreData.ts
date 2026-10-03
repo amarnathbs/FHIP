@@ -138,7 +138,7 @@ export async function runReviewCentreRefresh(userId: string): Promise<{ created:
   // placeholder columns).
   const perfRule = rules.get('benchmark_underperformance');
   if (perfRule) {
-    const rows = await fetchAllPages<{ scope_id: string; metric_key: string; result_value: { value?: { activeReturn?: number } | null } | null; quality_status: string; engine_version: string }>((from, to) =>
+    const rows = await fetchAllPages<{ scope_id: string; metric_key: string; result_value: { value?: { activeReturn?: number; benchmarkBasis?: string; benchmarkBasisLabel?: string } | null } | null; quality_status: string; engine_version: string }>((from, to) =>
       admin
         .from('ii_analytics_results')
         .select('scope_id, metric_key, result_value, quality_status, engine_version')
@@ -155,6 +155,8 @@ export async function runReviewCentreRefresh(userId: string): Promise<{ created:
           scopeId: r.scope_id,
           metricKey: r.metric_key,
           activeReturn: r.result_value?.value?.activeReturn ?? null,
+          benchmarkBasis: r.result_value?.value?.benchmarkBasis ?? null,
+          benchmarkBasisLabel: r.result_value?.value?.benchmarkBasisLabel ?? null,
           qualityStatus: r.quality_status,
           engineVersion: r.engine_version,
         })),

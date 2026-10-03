@@ -19,7 +19,7 @@ Applies: `docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md` v1.0 (read in full bef
 
 | Route (under `/api/admin/investment-intelligence/benchmark-data/`) | Capability | Database enforcement |
 |---|---|---|
-| `GET overview`, `jobs`, `jobs/[id]`, `jobs/[id]/errors`, `templates/[name]`, `help`, `catalogue`, `entitlements`, `mappings`, `mappings/unmapped` (counts of schemes with no mapping, by category; reference data only) | view | RLS on every table via `is_benchmark_data_viewer()` |
+| `GET overview`, `jobs`, `jobs/[id]`, `jobs/[id]/errors`, `templates/[name]`, `help`, `catalogue`, `entitlements`, `mappings`, `mappings/unmapped` (counts of schemes with no mapping, by category; reference data only), `mappings/held` (held schemes and which benchmark applies; aggregate RPC `benchmark_held_schemes`, holder counts only) | view | RLS on every table via `is_benchmark_data_viewer()` |
 | `POST upload`, `upload/inspect` | upload | `create_benchmark_import_job`, `stage_benchmark_import_rows`, `finalize_benchmark_import_job` check `auth.uid()` + `is_market_index_data_admin()` and that the caller owns the job |
 | `POST jobs/[id]/publish` | publish (new history) / correct (correction), by the job's mode | `publish_benchmark_import` checks the mode-specific predicate, entitlement, checksum, digest, counts, current series; separation of duties (self-publish needs explicit acknowledgement) |
 | `POST jobs/[id]/cancel` | upload, publish or correct | `cancel_benchmark_import_job` (staging admin or publisher/corrector) |

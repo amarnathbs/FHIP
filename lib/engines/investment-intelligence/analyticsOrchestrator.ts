@@ -133,6 +133,14 @@ export interface AnalyticsDataset {
    * from this map is treated as NOT verified and NOT entitled (fail closed).
    */
   benchmarkMeta?: Record<string, { label: string; catalogueVerified: boolean; entitled: boolean; entitlementDetail?: string }>;
+  /**
+   * Read-time CATEGORY REFERENCE mappings (basis 'category_reference') for funds with no declared mapping.
+   * Used ONLY by the per-scheme comparison, after a declared mapping (which always wins). Never stored, never
+   * part of the blended portfolio benchmark.
+   */
+  categoryReferenceMappings?: BenchmarkMapping[];
+  /** instrumentId -> the sentence shown when the fund's category has no benchmark in the catalogue. */
+  categoryNoBenchmark?: Record<string, string>;
   /** Frequency of the periodic-return series used for risk metrics. */
   frequency?: ReturnFrequency;
 }
@@ -165,7 +173,7 @@ export interface SchemeAnalytics {
    * for a holding period of a year or more; shorter periods are not annualised
    * and are carried in `benchmarkComparison` instead.
    */
-  activeReturn: CalculationOutcome<{ activeReturn: number; family: string; benchmarkKey: string }>;
+  activeReturn: CalculationOutcome<{ activeReturn: number; family: string; benchmarkKey: string; benchmarkBasis?: 'declared' | 'category_reference'; benchmarkBasisLabel?: string }>;
   /** The full holding-period comparison (absolute and non-annualised under a year). Never persisted. Always set by runAnalytics; optional only so older hand-built fixtures still type-check. */
   benchmarkComparison?: HoldingBenchmarkComparison;
   annotations: DataQualityAnnotation[];
@@ -323,11 +331,16 @@ function analyseScheme(s: SchemeDataset, ds: AnalyticsDataset): SchemeAnalytics 
  */
 function compareSchemeToBenchmark(s: SchemeDataset, ds: AnalyticsDataset): HoldingBenchmarkComparison {
   const split = splitTerminalFlow(s.cashFlows, s.currentValue, s.currentValueDate);
-  const segments: BenchmarkSegmentInput[] = ds.mappings
-    .filter((m) => m.instrumentId === s.instrumentId)
+  // A declared mapping ALWAYS wins; only a fund with none falls back to its read-time category reference.
+  const declared = ds.mappings.filter((m) => m.instrumentId === s.instrumentId);
+  const chosen = declared.length > 0 ? declared : (ds.categoryReferenceMappings ?? []).filter((m) => m.instrumentId === s.instrumentId);
+  if (chosen.length === 0 && ds.categoryNoBenchmark?.[s.instrumentId]) return withheldComparison('NO_MAPPING', ds.categoryNoBenchmark[s.instrumentId]);
+  const segments: BenchmarkSegmentInput[] = chosen
     .map((m) => {
       const meta = ds.benchmarkMeta?.[m.benchmarkId];
       return {
+        basis: m.basis ?? 'declared',
+        categoryLabel: m.categoryLabel ?? null,
         benchmarkId: m.benchmarkId,
         benchmarkKey: m.benchmarkKey,
         label: meta?.label ?? m.benchmarkKey,
@@ -355,10 +368,10 @@ function compareSchemeToBenchmark(s: SchemeDataset, ds: AnalyticsDataset): Holdi
  * annualised, so it has no annualised active return; the non-annualised figures
  * live on `benchmarkComparison`.
  */
-function activeReturnFromComparison(c: HoldingBenchmarkComparison): CalculationOutcome<{ activeReturn: number; family: string; benchmarkKey: string }> {
+function activeReturnFromComparison(c: HoldingBenchmarkComparison): SchemeAnalytics['activeReturn'] {
   if (c.status === 'ok') {
     if (c.basis === 'annualised_xirr') {
-      return { status: 'CALCULATED', value: { activeReturn: c.difference, family: 'XIRR', benchmarkKey: c.benchmarkKey } };
+      return { status: 'CALCULATED', value: { activeReturn: c.difference, family: 'XIRR', benchmarkKey: c.benchmarkKey, benchmarkBasis: c.benchmarkBasis, benchmarkBasisLabel: c.benchmarkBasisLabel } };
     }
     return insufficientHistory('INSUFFICIENT_HISTORY', 'Held for less than a year: the comparison is shown as an absolute, non-annualised gain, so there is no annualised active return.');
   }

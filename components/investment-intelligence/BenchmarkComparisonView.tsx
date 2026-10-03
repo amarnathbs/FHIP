@@ -23,6 +23,9 @@ export default function BenchmarkComparisonView({ comparison }: { comparison: Ho
   if (comparison.status === 'unavailable') {
     return (
       <div className="text-xs text-muted" title={comparison.detail}>
+        {/* The benchmark's NAME and what it is are shown even without a figure. */}
+        {comparison.benchmarkLabel ? <p className="font-medium text-ink">{comparison.benchmarkLabel}</p> : null}
+        {comparison.benchmarkBasisLabel ? <p className="whitespace-normal font-normal">{comparison.benchmarkBasisLabel}</p> : null}
         <p className="font-medium">{comparison.title}</p>
         <p className="mt-0.5 max-w-xs whitespace-normal font-normal">{comparison.detail}</p>
         {comparison.periodLabel ? <p className="mt-0.5 font-normal">{comparison.periodLabel}</p> : null}
@@ -33,7 +36,7 @@ export default function BenchmarkComparisonView({ comparison }: { comparison: Ho
   return (
     <div className="text-xs" data-testid="benchmark-comparison">
       <p className="text-ink">
-        <span className="font-medium">{comparison.benchmarkKey}</span>{' '}
+        <span className="font-medium">{comparison.benchmarkLabel}</span>{' '}
         <span className="tabular-nums">{pct(comparison.benchmarkReturn)}</span>
         {annualised ? <span className="text-muted"> a year</span> : <span className="text-muted"> (not annualised)</span>}
       </p>
@@ -41,7 +44,8 @@ export default function BenchmarkComparisonView({ comparison }: { comparison: Ho
         You <span className="tabular-nums">{pct(comparison.holdingReturn)}</span>{' '}
         <span className="tabular-nums text-muted">({points(comparison.difference)})</span>
       </p>
-      <p className="mt-0.5 whitespace-normal text-muted">{comparison.periodLabel}</p>
+      <p className="mt-0.5 whitespace-normal text-muted">{comparison.benchmarkBasisLabel}</p>
+      <p className="whitespace-normal text-muted">{comparison.periodLabel}</p>
       <p className="whitespace-normal text-muted">{comparison.basisLabel}</p>
       {comparison.notes.map((n) => (
         <p key={n} className="mt-0.5 max-w-xs whitespace-normal text-muted">
