@@ -88,7 +88,7 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
 
   return (
     <div className="space-y-4">
-      <Panel title="Schemes with no benchmark mapping yet" description="Counts by AMFI category. A category default is only ever a low-confidence suggestion that a reviewer must approve; it is never applied by itself, and it is never evidence for one scheme.">
+      <Panel title="Schemes with no benchmark mapping yet" description="Counts by AMFI category. Category defaults are switched off until AMFI's own list has been checked, so every mapping needs the scheme's own document. A default, if ever switched on, is only a low-confidence suggestion a reviewer must approve.">
         {unmapped.state.status === 'loading' ? <LoadingPanel what="the schemes with no mapping" /> : unmapped.state.status === 'error' ? <ErrorPanel failure={unmapped.state.failure} what="the schemes with no mapping" onRetry={unmapped.reload} /> : (
           <ScrollTable label="Schemes with no mapping, by category" minWidth="min-w-[760px]">
             <thead><tr><Th>Category</Th><Th>Schemes (plans and options)</Th><Th>No mapping yet</Th><Th>Waiting for review</Th><Th>Category default (review only)</Th></tr></thead>

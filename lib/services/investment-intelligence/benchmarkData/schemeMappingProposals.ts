@@ -30,6 +30,16 @@ import { matchBenchmarkName, type BenchmarkMatchResult, type BenchmarkNameMatch,
 
 export const MAPPING_PROPOSAL_RULES_VERSION = 'scheme-benchmark-proposals-v1';
 
+/**
+ * MASTER SWITCH for category-default proposals. PO decision 2026-10-03: OFF.
+ * While false, no category-default proposal is generated and none is shown in
+ * admin (the unmapped-scheme list also hides default candidates). Flip it only
+ * after someone has read AMFI's own Tier-1 / PRC lists and confirmed the
+ * CATEGORY_DEFAULT_RULES against them (they are UNVERIFIED_SECONDARY today).
+ * Server-side constant: it is not a user or admin setting.
+ */
+export const CATEGORY_DEFAULTS_ENABLED = false;
+
 export type EvidenceSource = 'amc_sid' | 'amc_kim' | 'amc_factsheet' | 'amc_addendum' | 'amfi_disclosure' | 'other';
 export type ProposalAuthority = 'scheme_document' | 'amfi_per_scheme' | 'category_default';
 export const AUTHORITY_RANK: Record<ProposalAuthority, 1 | 2 | 3> = { scheme_document: 1, amfi_per_scheme: 2, category_default: 3 };
@@ -322,6 +332,8 @@ export interface BuildProposalsInput {
   /** Authority 2. Skipped unless verifiedUsable is true. */
   amfi?: AmfiSchemeBenchmark | null;
   categoryDefaultEffectiveFrom?: string;
+  /** Override of CATEGORY_DEFAULTS_ENABLED (tests only; production code leaves this unset). */
+  categoryDefaultsEnabled?: boolean;
 }
 
 export function buildMappingProposals(input: BuildProposalsInput): SchemeProposalSet {
@@ -369,7 +381,9 @@ export function buildMappingProposals(input: BuildProposalsInput): SchemeProposa
 
   // 3. Category default: only as a fallback when nothing better exists.
   let categoryOptions: ProposalDraft[] = [];
-  if (drafts.some((d) => d.payload !== null)) {
+  if (!(input.categoryDefaultsEnabled ?? CATEGORY_DEFAULTS_ENABLED)) {
+    skipped.push({ source: 'category_default', reason: 'Category defaults are switched off (PO decision): the AMFI list has not been read, so none is offered.' });
+  } else if (drafts.some((d) => d.payload !== null)) {
     skipped.push({ source: 'category_default', reason: 'A higher-authority proposal exists, so no category default is offered.' });
   } else {
     const cat = buildCategoryOptions(scheme, catalogue, input.categoryDefaultEffectiveFrom ?? CATEGORY_RULE_EVIDENCE.defaultEffectiveFrom);
@@ -410,12 +424,17 @@ export interface UnmappedSummary {
 }
 
 /** Counts, by AMFI sub-category, of scheme rows with no APPROVED mapping, plus how many already wait for review. */
-export function summariseUnmappedSchemes(schemes: readonly SchemeMasterLite[], mappedInstrumentIds: ReadonlySet<string>, openProposalInstrumentIds: ReadonlySet<string>): UnmappedSummary {
+export function summariseUnmappedSchemes(
+  schemes: readonly SchemeMasterLite[],
+  mappedInstrumentIds: ReadonlySet<string>,
+  openProposalInstrumentIds: ReadonlySet<string>,
+  categoryDefaultsEnabled: boolean = CATEGORY_DEFAULTS_ENABLED
+): UnmappedSummary {
   const by = new Map<string, UnmappedCategoryRow>();
   for (const s of schemes) {
     const category = (s.subCategory ?? '').trim() || 'Category not recorded';
     const key = categoryKeyOf(s.subCategory);
-    const rule = key ? CATEGORY_DEFAULT_RULES.find((r) => r.key === key) : undefined;
+    const rule = key && categoryDefaultsEnabled ? CATEGORY_DEFAULT_RULES.find((r) => r.key === key) : undefined;
     const row = by.get(category) ?? { category, schemeRows: 0, mappedRows: 0, unmappedRows: 0, openProposalRows: 0, hasCategoryDefault: Boolean(rule), categoryDefaultCandidates: rule?.candidates ?? [] };
     row.schemeRows += 1;
     if (mappedInstrumentIds.has(s.instrumentId)) row.mappedRows += 1;
