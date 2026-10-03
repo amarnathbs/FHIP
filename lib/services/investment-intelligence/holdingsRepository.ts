@@ -34,8 +34,14 @@ import {
   loadInstrumentBenchmarkContext,
   loadBenchmarkSeriesById,
   resolveHoldingBenchmarkComparable,
+  resolveHoldingBenchmarkComparison,
   type BenchmarkCoverageOutcome,
 } from './benchmarkCoverage';
+import {
+  splitTerminalFlow,
+  withheldComparison,
+  type HoldingBenchmarkComparison,
+} from '@/lib/engines/investment-intelligence/holdingBenchmarkComparison';
 
 type XirrOutcome = CalculationOutcome<{ rate: number }>;
 
@@ -106,7 +112,18 @@ export interface HoldingRow {
   // guessed index (mission BENCH-1 section 12). Reuses the same certified
   // resolveBenchmarkForDate/benchmarkWindowReturn PerformanceClient already
   // uses; no benchmark arithmetic is reimplemented here.
+  //
+  // NOTE: this is the legacy lump-sum point-to-point figure (first transaction ->
+  // statement date). It is kept for existing consumers and is NOT what the
+  // table shows any more; see benchmarkComparison below.
   benchmark: BenchmarkCoverageOutcome;
+  // Holding-period, money-weighted comparison (2026-10-03): this holding's own
+  // purchases and sales replayed into its declared benchmark, XIRR vs XIRR when
+  // held a year or more, or the absolute, NON-annualised gain when held less
+  // than a year, over the investor's own first-investment-to-valuation window.
+  // Unavailable (no number) without a mapping in force, a verified catalogue
+  // entry, an approved entitlement, or benchmark history covering the window.
+  benchmarkComparison: HoldingBenchmarkComparison;
 }
 
 export interface HoldingsTableResult {
@@ -383,6 +400,39 @@ export async function loadHoldingsTable(
       benchmarkSeriesById
     );
 
+    // Holding-period money-weighted comparison, from the SAME flows and terminal
+    // value the XIRR shown on this row came from (this folio's own when the scheme
+    // spans several folios, otherwise the scheme's).
+    let benchmarkComparison: HoldingBenchmarkComparison;
+    if (dataQuality.status !== 'ok') {
+      benchmarkComparison = withheldComparison('INVALID_TERMINAL_VALUE', 'Withheld: this scheme has an unresolved data-quality issue (see badge).');
+    } else if (displayXirr.status !== 'CALCULATED') {
+      // The comparison replays the SAME flows the XIRR above is built from; when that
+      // return is not established (e.g. history not complete from inception) the
+      // replay would be built on an incomplete record, so no comparison is shown.
+      benchmarkComparison = withheldComparison('XIRR_UNAVAILABLE', 'Your own return could not be established for this holding, so no benchmark comparison is shown.');
+    } else {
+      const schemeData = dataset.schemes.find((x) => x.instrumentId === truth.instrument_id);
+      const folio = schemeData?.folios?.find((f) => f.accountId === truth.account_id);
+      if (!schemeData) {
+        benchmarkComparison = withheldComparison('NO_PURCHASE_FLOWS', 'No transaction history is available for this holding.');
+      } else {
+        const own = folio
+          ? { cashFlows: folio.cashFlows, currentValue: folio.currentValue, currentValueDate: folio.currentValueDate }
+          : { cashFlows: schemeData.cashFlows, currentValue: schemeData.currentValue, currentValueDate: schemeData.currentValueDate };
+        const split = splitTerminalFlow(own.cashFlows, own.currentValue, own.currentValueDate);
+        benchmarkComparison = resolveHoldingBenchmarkComparison(
+          benchmarkCtx,
+          truth.instrument_id,
+          split.flows,
+          split.terminalValue,
+          own.currentValueDate,
+          account.currency_code,
+          benchmarkSeriesById
+        );
+      }
+    }
+
     holdings.push({
       accountId: truth.account_id,
       instrumentId: truth.instrument_id,
@@ -410,6 +460,7 @@ export async function loadHoldingsTable(
       dataQuality,
       sourceDocumentId: truth.latest_source_document_id,
       benchmark,
+      benchmarkComparison,
     });
   }
 

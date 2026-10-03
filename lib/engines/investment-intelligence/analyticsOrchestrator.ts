@@ -16,7 +16,15 @@
 // expenses / liabilities or any R3 publication row.
 
 import { computeSchemePerformance, computePortfolioPerformance } from './PerformanceEngine';
-import { computeBlendedBenchmark, computePortfolioActiveReturn, benchmarkWindowReturn, valueOnOrBefore, type SeriesPoint, type InstrumentValuationSeries } from './benchmarkService';
+import { computeBlendedBenchmark, computePortfolioActiveReturn, valueOnOrBefore, type SeriesPoint, type InstrumentValuationSeries } from './benchmarkService';
+import {
+  compareHoldingToBenchmark,
+  splitTerminalFlow,
+  withheldComparison,
+  HOLDING_BENCHMARK_COMPARISON_VERSION,
+  type BenchmarkSegmentInput,
+  type HoldingBenchmarkComparison,
+} from './holdingBenchmarkComparison';
 import { computeRiskMetrics, periodicReturnsFromLevels, type RiskMetricsResult, type ReturnFrequency } from './riskMetricsService';
 import { computeRollingReturns, toMonthEndSeries, type RollingReturnServiceResult } from './rollingReturnService';
 import { fromXirr, fromTwrr, insufficientHistory, toPersistedQualityStatus, markStale, type CalculationOutcome, type CalculationStatus } from './calculationStatus';
@@ -115,6 +123,13 @@ export interface AnalyticsDataset {
   navDataVersion: string | null;
   benchmarkDataVersion: string | null;
   benchmarkMappingVersion: string | null;
+  /**
+   * Per-benchmark facts the holding-period comparison needs and the engine cannot
+   * infer: the catalogue label, whether the catalogue entry is VERIFIED, and whether
+   * the central entitlement gate allowed calculation + display. A benchmark absent
+   * from this map is treated as NOT verified and NOT entitled (fail closed).
+   */
+  benchmarkMeta?: Record<string, { label: string; catalogueVerified: boolean; entitled: boolean; entitlementDetail?: string }>;
   /** Frequency of the periodic-return series used for risk metrics. */
   frequency?: ReturnFrequency;
 }
@@ -140,7 +155,16 @@ export interface SchemeAnalytics {
    */
   folioXirr?: Record<string, CalculationOutcome<{ rate: number }>>;
   navReturns: Record<string, CalculationOutcome<{ pointToPoint?: number; cagr?: number }>>;
+  /**
+   * Active return over the investor's OWN holding period (first investment ->
+   * valuation), money-weighted: the holding's XIRR minus the XIRR of the same
+   * cash flows replayed into the scheme's declared benchmark. CALCULATED only
+   * for a holding period of a year or more; shorter periods are not annualised
+   * and are carried in `benchmarkComparison` instead.
+   */
   activeReturn: CalculationOutcome<{ activeReturn: number; family: string; benchmarkKey: string }>;
+  /** The full holding-period comparison (absolute and non-annualised under a year). Never persisted. Always set by runAnalytics; optional only so older hand-built fixtures still type-check. */
+  benchmarkComparison?: HoldingBenchmarkComparison;
   annotations: DataQualityAnnotation[];
   inputFingerprint: string;
 }
@@ -243,9 +267,17 @@ function analyseScheme(s: SchemeDataset, ds: AnalyticsDataset): SchemeAnalytics 
         : { status: 'FAILED', qualityFlag: 'NAV_HISTORY_INCOMPLETE', engineReason: r.reason, detail: r.detail };
   }
 
-  // Scheme active return: compare like with like (spec section 32). We use
-  // the SINCE_INCEPTION CAGR on both sides when available.
-  const activeReturn = computeSchemeActive(s, ds, perf.navPointToPoint['SINCE_INCEPTION']);
+  // Scheme active return over the INVESTOR'S OWN holding period, money-weighted
+  // (2026-10-03). It used to compare the fund's since-inception NAV CAGR with the
+  // benchmark's over the same fund-life window, which gave every holder of a fund
+  // the same figure no matter when they invested. Now the holding's real cash flows
+  // are replayed into the declared benchmark (holdingBenchmarkComparison.ts); the
+  // comparison is withheld whenever the holding's own XIRR is not established.
+  const benchmarkComparison: HoldingBenchmarkComparison =
+    perf.investorXirr.status !== 'ok'
+      ? withheldComparison('XIRR_UNAVAILABLE', 'Your own return could not be established for this holding (history not complete enough), so no benchmark comparison is shown.')
+      : compareSchemeToBenchmark(s, ds);
+  const activeReturn = activeReturnFromComparison(benchmarkComparison);
 
   // Per-folio XIRR through the SAME engine call (same history-completeness
   // gate, same solver), fed each folio's own flows and own terminal value.
@@ -276,49 +308,65 @@ function analyseScheme(s: SchemeDataset, ds: AnalyticsDataset): SchemeAnalytics 
     ...(folioXirr ? { folioXirr } : {}),
     navReturns,
     activeReturn,
+    benchmarkComparison,
     annotations: perf.dataQualityAnnotations,
     inputFingerprint: perf.inputFingerprint,
   };
 }
 
-function computeSchemeActive(
-  s: SchemeDataset,
-  ds: AnalyticsDataset,
-  schemeSinceInception: { status: 'ok' | 'unavailable'; cagr?: number } | undefined
-): CalculationOutcome<{ activeReturn: number; family: string; benchmarkKey: string }> {
-  const sorted = [...s.navSeries].sort((a, b) => a.date.getTime() - b.date.getTime());
-  if (sorted.length < 2 || !schemeSinceInception || schemeSinceInception.status !== 'ok' || schemeSinceInception.cagr === undefined) {
-    return insufficientHistory('NAV_HISTORY_INCOMPLETE', 'An annualised scheme return could not be computed for this period, so an active return against the benchmark is not shown.');
+/**
+ * The holding-period comparison for one scheme from the loaded dataset. The
+ * benchmark series in the dataset are already entitlement-gated by the loader;
+ * `benchmarkMeta` carries the verified / entitled facts per benchmark. A
+ * benchmark with no meta entry is NOT verified and NOT entitled (fail closed).
+ */
+function compareSchemeToBenchmark(s: SchemeDataset, ds: AnalyticsDataset): HoldingBenchmarkComparison {
+  const split = splitTerminalFlow(s.cashFlows, s.currentValue, s.currentValueDate);
+  const segments: BenchmarkSegmentInput[] = ds.mappings
+    .filter((m) => m.instrumentId === s.instrumentId)
+    .map((m) => {
+      const meta = ds.benchmarkMeta?.[m.benchmarkId];
+      return {
+        benchmarkId: m.benchmarkId,
+        benchmarkKey: m.benchmarkKey,
+        label: meta?.label ?? m.benchmarkKey,
+        returnType: m.returnType,
+        effectiveFrom: m.effectiveFrom,
+        effectiveTo: m.effectiveTo,
+        catalogueVerified: meta?.catalogueVerified === true,
+        entitled: meta?.entitled === true,
+        entitlementDetail: meta?.entitlementDetail,
+        series: ds.benchmarkSeriesById[m.benchmarkId] ?? [],
+      };
+    });
+  return compareHoldingToBenchmark({
+    flows: split.flows,
+    terminalValue: split.terminalValue,
+    asOfDate: s.currentValueDate,
+    currencyCode: s.currencyCode,
+    segments,
+  });
+}
+
+/**
+ * Persisted/legacy "active return" view of a comparison. A figure exists only for
+ * a holding period of a year or more (XIRR minus XIRR). A shorter period is never
+ * annualised, so it has no annualised active return; the non-annualised figures
+ * live on `benchmarkComparison`.
+ */
+function activeReturnFromComparison(c: HoldingBenchmarkComparison): CalculationOutcome<{ activeReturn: number; family: string; benchmarkKey: string }> {
+  if (c.status === 'ok') {
+    if (c.basis === 'annualised_xirr') {
+      return { status: 'CALCULATED', value: { activeReturn: c.difference, family: 'XIRR', benchmarkKey: c.benchmarkKey } };
+    }
+    return insufficientHistory('INSUFFICIENT_HISTORY', 'Held for less than a year: the comparison is shown as an absolute, non-annualised gain, so there is no annualised active return.');
   }
-  const start = sorted[0].date;
-  const end = sorted[sorted.length - 1].date;
-  const mapping = ds.mappings.find(
-    (m) => m.instrumentId === s.instrumentId && m.effectiveFrom.getTime() <= end.getTime() && (m.effectiveTo === null || m.effectiveTo.getTime() >= end.getTime())
-  );
-  if (!mapping) {
-    return {
-      status: 'MISSING_REFERENCE_DATA',
-      qualityFlag: 'BENCHMARK_MAPPING_MISSING',
-      detail: 'This scheme has no benchmark mapping effective for the selected period, so an active return cannot be calculated.',
-    };
-  }
-  const series = ds.benchmarkSeriesById[mapping.benchmarkId] ?? [];
-  const bench = benchmarkWindowReturn(series, start, end);
-  if (bench.status !== 'ok' || bench.cagr === undefined) {
-    return {
-      status: 'MISSING_REFERENCE_DATA',
-      qualityFlag: 'BENCHMARK_HISTORY_INCOMPLETE',
-      detail: 'The mapped benchmark has no index values at the period boundaries, so an active return cannot be calculated.',
-    };
-  }
-  // Both sides are CAGR over the identical window — a compatible pair.
+  const mappingGap = c.reason === 'NO_MAPPING' || c.reason === 'NO_MAPPING_FOR_START' || c.reason === 'NO_MAPPING_FOR_END' || c.reason === 'MAPPING_GAP' || c.reason === 'MAPPING_OVERLAP';
   return {
-    status: 'CALCULATED',
-    value: {
-      activeReturn: schemeSinceInception.cagr - bench.cagr,
-      family: 'CAGR',
-      benchmarkKey: mapping.benchmarkKey,
-    },
+    status: 'MISSING_REFERENCE_DATA',
+    qualityFlag: mappingGap ? 'BENCHMARK_MAPPING_MISSING' : 'BENCHMARK_HISTORY_INCOMPLETE',
+    engineReason: c.reason,
+    detail: c.detail,
   };
 }
 
@@ -730,7 +778,7 @@ export function toPersistableRows(userId: string, rs: AnalyticsResultSet, ds: An
 
   for (const s of rs.schemes) {
     push('scheme', s.instrumentId, 'investor_xirr', ENGINE_SUB_VERSIONS.xirr, s.investorXirr, s.inputFingerprint, null);
-    push('scheme', s.instrumentId, 'scheme_active_return', ENGINE_SUB_VERSIONS.blendedBenchmark, s.activeReturn, s.inputFingerprint, null);
+    push('scheme', s.instrumentId, 'scheme_active_return', HOLDING_BENCHMARK_COMPARISON_VERSION, s.activeReturn, s.inputFingerprint, null);
     for (const [horizon, outcome] of Object.entries(s.navReturns)) {
       push('scheme', s.instrumentId, `scheme_nav_return_${horizon.toLowerCase()}`, ENGINE_SUB_VERSIONS.navReturn, outcome, s.inputFingerprint, null);
     }

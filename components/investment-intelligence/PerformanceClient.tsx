@@ -14,6 +14,8 @@ import {
 } from 'recharts';
 import { fmtDate } from './dateDisplay';
 import { HoldingsTable } from './HoldingsTable';
+import BenchmarkComparisonView from './BenchmarkComparisonView';
+import type { HoldingBenchmarkComparison } from '@/lib/engines/investment-intelligence/holdingBenchmarkComparison';
 import { OwnerClassBar } from './OwnerClassBar';
 import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { formatMoneyCode } from '@/lib/engines/money';
@@ -107,6 +109,8 @@ interface SchemeBlock {
   investorXirr: Outcome<{ rate: number }>;
   navReturns: Record<string, Outcome<{ pointToPoint?: number; cagr?: number }>>;
   activeReturn: Outcome<{ activeReturn: number; family: string; benchmarkKey: string }>;
+  // Holding-period, money-weighted comparison over the investor's own first-investment-to-valuation window.
+  benchmarkComparison?: HoldingBenchmarkComparison;
   annotations: Annotation[];
   inputFingerprint: string;
 }
@@ -652,7 +656,7 @@ function SchemeTable({ schemes }: { schemes: SchemeBlock[] }) {
               <th className="py-2 pr-4 font-medium">Scheme</th>
               <th className="py-2 pr-4 font-medium">Currency</th>
               <th className="py-2 pr-4 font-medium">Your return (XIRR)</th>
-              <th className="py-2 pr-4 font-medium">Active vs benchmark</th>
+              <th className="py-2 pr-4 font-medium">Against its benchmark, over your holding period</th>
               <th className="py-2 pr-4 font-medium" />
             </tr>
           </thead>
@@ -680,15 +684,11 @@ function SchemeTable({ schemes }: { schemes: SchemeBlock[] }) {
                       <span className="text-xs text-muted">{STATUS_LABEL[s.investorXirr.status]}</span>
                     )}
                   </td>
-                  <td className="py-3 pr-4">
-                    {s.activeReturn.status === 'CALCULATED' && s.activeReturn.value ? (
-                      <span className="tabular-nums text-ink">
-                        {pct(s.activeReturn.value.activeReturn)}{' '}
-                        <span className="text-xs text-muted">vs {s.activeReturn.value.benchmarkKey}</span>
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted">{STATUS_LABEL[s.activeReturn.status]}</span>
-                    )}
+                  <td className="min-w-[14rem] py-3 pr-4">
+                    {/* Money-weighted, over THIS investor's own period: their purchases and sales replayed into
+                        the declared benchmark. XIRR vs XIRR from a year, absolute and not annualised below a year.
+                        Never a number without a mapping, a verified benchmark and an approved entitlement. */}
+                    <BenchmarkComparisonView comparison={s.benchmarkComparison} />
                   </td>
                   <td className="py-3 pr-4">
                     <button

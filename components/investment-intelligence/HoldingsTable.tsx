@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fmtDate } from './dateDisplay';
 import { TransactionDetailModal } from './TransactionDetailModal';
+import BenchmarkComparisonView from './BenchmarkComparisonView';
+import type { HoldingBenchmarkComparison } from '@/lib/engines/investment-intelligence/holdingBenchmarkComparison';
 
 // Investment Intelligence — Performance tab Holdings drilldown (2026-09-17).
 //
@@ -82,6 +84,8 @@ interface HoldingRowView {
   // badge's tooltip as the only information the user gets.
   sourceDocumentId: string | null;
   benchmark: BenchmarkOutcomeView;
+  // Holding-period, money-weighted comparison (see holdingBenchmarkComparison.ts).
+  benchmarkComparison?: HoldingBenchmarkComparison;
 }
 
 interface HoldingsApiPayload {
@@ -260,16 +264,11 @@ export function HoldingsTable({ ownerClass = 'all' }: { ownerClass?: string } = 
                   <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">
                     {h.xirr.status === 'CALCULATED' && h.xirr.value ? pct(h.xirr.value.rate) : '—'}
                   </td>
-                  <td className="py-3 pr-4 whitespace-nowrap">
-                    {h.benchmark.status === 'CALCULATED' && h.benchmark.value ? (
-                      <span title={`${h.benchmark.value.benchmarkLabel} — comparable return over this holding's own window`}>
-                        {h.benchmark.value.benchmarkKey} {pct(h.benchmark.value.pointToPointReturn)}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted" title={h.benchmark.detail ?? 'No benchmark comparison is available for this scheme.'}>
-                        Unavailable
-                      </span>
-                    )}
+                  <td className="min-w-[14rem] py-3 pr-4 align-top">
+                    {/* The comparison is over THIS holding's own period and cash flows, money-weighted;
+                        the engine says so in words. Never a bare lump-sum figure, never a number without
+                        a mapping, a verified benchmark and an approved entitlement. */}
+                    <BenchmarkComparisonView comparison={h.benchmarkComparison} />
                   </td>
                   <td className="py-3 pr-4">
                     <span className={`inline-block rounded border px-2 py-0.5 text-xs font-medium ${badge.className}`} title={h.dataQuality.detail ?? undefined}>

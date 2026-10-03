@@ -19,7 +19,7 @@ const LOGIC = 'components/admin/benchmarkData/benchmarkDataUiLogic.ts';
 const CONTRACT_PATHS = new Set([
   'overview', 'upload/inspect', 'upload', 'jobs', 'jobs/:id', 'jobs/:id/errors', 'jobs/:id/publish', 'jobs/:id/cancel', 'jobs/:id/rollback',
   'templates/:name', 'help', 'catalogue', 'catalogue/:id/verify', 'entitlements', 'entitlements/:id/approve', 'entitlements/:id/revoke',
-  'mappings', 'mappings/:id/review', 'ingestion/:id/mode',
+  'mappings', 'mappings/:id/review', 'mappings/unmapped', 'ingestion/:id/mode',
 ]);
 
 describe('Market Index Data client: static render contract', () => {
@@ -30,7 +30,12 @@ describe('Market Index Data client: static render contract', () => {
   });
 
   it('NEVER imports server-only modules: only type imports and pure helpers from the services tree', () => {
-    const allowedRuntime = new Set(['@/lib/services/investment-intelligence/benchmarkData/fileIngest/layouts']);
+    // Pure helpers only (no imports of their own, no I/O): the layout list, and the benchmark-name matcher
+    // the mapping form uses to SUGGEST a catalogue entry for what the reviewer typed.
+    const allowedRuntime = new Set([
+      '@/lib/services/investment-intelligence/benchmarkData/fileIngest/layouts',
+      '@/lib/services/investment-intelligence/benchmarkData/benchmarkNameMatcher',
+    ]);
     for (const [name, src] of sources) {
       for (const m of src.matchAll(/^import\s+(type\s+)?[\s\S]*?from\s+'([^']+)';/gm)) {
         const spec = m[2];

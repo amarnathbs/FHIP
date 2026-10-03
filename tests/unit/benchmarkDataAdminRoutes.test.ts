@@ -31,7 +31,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => { adminClientU
 function chain(table: string) {
   const b: Record<string, unknown> = {};
   const self = () => b;
-  for (const m of ['select', 'eq', 'neq', 'in', 'order', 'limit', 'gte', 'lte']) b[m] = self;
+  for (const m of ['select', 'eq', 'neq', 'in', 'order', 'limit', 'gte', 'lte', 'is', 'range']) b[m] = self;
   b.maybeSingle = async () => {
     if (table === 'ii_benchmark_import_jobs') return { data: jobMode ? { mode: jobMode, id: 'j' } : null, error: tableError };
     return { data: (tableData[table] ?? [])[0] ?? null, error: tableError };
@@ -71,6 +71,7 @@ import { POST as approvePOST } from '@/app/api/admin/investment-intelligence/ben
 import { POST as revokePOST } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/revoke/route';
 import { GET as mappingsGET, POST as mappingsPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/mappings/route';
 import { POST as reviewPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/mappings/[id]/review/route';
+import { GET as unmappedGET } from '@/app/api/admin/investment-intelligence/benchmark-data/mappings/unmapped/route';
 import { POST as modePOST } from '@/app/api/admin/investment-intelligence/benchmark-data/ingestion/[id]/mode/route';
 import { flagsFromAdminRow, requireBenchmarkPage, NO_BENCHMARK_CAPABILITIES } from '@/lib/services/investment-intelligence/benchmarkData/guards';
 import { mapRpcError } from '@/lib/services/investment-intelligence/benchmarkData/publishService';
@@ -134,6 +135,7 @@ const ROUTES: RouteCase[] = [
   { name: 'POST entitlements/[id]/approve', allowed: ['entitlementApprove'], call: () => approvePOST(json({ note: 'approved after review' }), params) },
   { name: 'POST entitlements/[id]/revoke', allowed: ['entitlementApprove'], call: () => revokePOST(json({ reason: 'licence ended on the owner side' }), params) },
   { name: 'GET mappings', allowed: READ_ALLOWED, call: () => mappingsGET() },
+  { name: 'GET mappings/unmapped (schemes with no mapping, counts by category)', allowed: READ_ALLOWED, call: () => unmappedGET() },
   { name: 'POST mappings (propose)', allowed: ['catalogue'], call: () => mappingsPOST(json({})) },
   { name: 'POST mappings/[id]/review', allowed: ['catalogue'], call: () => reviewPOST(json({ decision: 'reject', note: 'rejected: ambiguous tier' }), params) },
   { name: 'POST ingestion/[id]/mode', allowed: ['catalogue'], call: () => modePOST(json({ mode: 'manual_import', automationEnabled: false, reason: 'governed manual import mode' }), params) },
