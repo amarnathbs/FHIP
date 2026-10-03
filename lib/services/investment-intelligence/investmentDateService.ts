@@ -17,13 +17,16 @@
 //      the date. If there is none yet the input waits as 'awaiting_nav'.
 //   5. One 'user_correction' audit event (kind investment_date_supplied).
 //
-// NO PARALLEL NAV PIPELINE. This module fetches nothing from any provider. The
-// scheduled selective hydration job (migration 0193) already treats every
-// held instrument as needing its history from inception (migration 0189), so
-// the fund's NAV for the date arrives through that existing path; a position
-// waiting on it is completed by applyPendingInvestmentDates() the next time
-// the list is read. (A user-triggered immediate fetch is deliberately not
-// built; see the report's open questions.)
+// NO PARALLEL NAV PIPELINE. This module fetches nothing from any provider
+// itself. When no NAV is on file for the date, it asks the injected `fetchNav`
+// to fetch THAT ONE fund's missing history right away (PO 2026-10-03): the
+// route wires it to runUserNavHistoryBatch({ onlyInstrumentIds: [fund] }), the
+// bounded, rate-limited, single-flight user path built on the NAV 1 adapters
+// and the hydration job's own insert rule (pc6/userInstrumentNavFetch.ts), then
+// the answer is applied in the same request. If the fetch fails, has no data,
+// is rate limited or is switched off, the answer is KEPT as 'awaiting_nav'
+// ("we will keep trying"); the scheduled job (migration 0193) is the fallback
+// and applyPendingInvestmentDates() completes it the next time the list is read.
 //
 // OWNERSHIP IS UNTOUCHED: the derived row hangs off the same account, and
 // nothing here reads or writes ii_ownership_allocation / owner columns.
@@ -75,8 +78,27 @@ export interface InvestmentDateItem {
   earliestKnownNavDate: string | null;
 }
 
+/** What the immediate NAV fetch did, as the date flow needs to know it. */
+export type NavFetchSummary = { outcome: 'fetched' | 'no_data' | 'failed' | 'rate_limited' | 'disabled' | 'unresolvable' | 'nothing_to_fetch' };
+export type NavFetcher = (args: { userId: string; instrumentId: string }) => Promise<NavFetchSummary>;
+
+/** applied: done. waiting_for_nav: saved, the price history is not in yet. failed: saved, the fetch itself failed. */
+export type NavStatus = 'applied' | 'waiting_for_nav' | 'failed';
+
+/** Plain words for the user. No ids, no dates (the screen adds the date day-first). */
+export const NAV_STATUS_MESSAGE: Record<NavStatus, string> = {
+  applied: 'Done. Your return is now worked out from the date you gave.',
+  waiting_for_nav: 'We have your date. This fund’s price history for it is not available yet. We will keep trying.',
+  failed: 'We have your date, but could not fetch this fund’s price history just now. We will keep trying.',
+};
+
+export function navStatusFor(state: 'applied' | 'awaiting_nav', fetchOutcome: NavFetchSummary['outcome'] | null): NavStatus {
+  if (state === 'applied') return 'applied';
+  return fetchOutcome === 'failed' ? 'failed' : 'waiting_for_nav';
+}
+
 export type SubmitInvestmentDateResult =
-  | { ok: true; state: 'applied' | 'awaiting_nav'; inputId: string; investmentDate: string; unchanged: boolean }
+  | { ok: true; state: 'applied' | 'awaiting_nav'; navStatus: NavStatus; message: string; /** a derived purchase was created by THIS request */ appliedNow: boolean; inputId: string; investmentDate: string; unchanged: boolean }
   | { ok: false; status: 404 | 409 | 422 | 500; code: InvestmentDateErrorCode | 'account_not_found' | 'no_holding' | 'not_holdings_only' | 'write_failed'; message: string };
 
 function maskFolioForDisplay(folio: string | null): string | null {
@@ -189,10 +211,11 @@ async function applyInput(db: Db, userId: string, input: InputRow, currencyCode:
 }
 
 /** Complete every saved date that was waiting for price history. Safe to call on every read. */
-export async function applyPendingInvestmentDates(userId: string, db: Db = createAdminClient()): Promise<{ applied: number; stillWaiting: number }> {
+export async function applyPendingInvestmentDates(userId: string, db: Db = createAdminClient()): Promise<{ applied: number; stillWaiting: number; appliedPositions: Array<{ accountId: string; instrumentId: string }> }> {
   const waiting = (await loadActiveInputs(db, userId)).filter((r) => r.status === 'awaiting_nav');
   let applied = 0;
   let stillWaiting = 0;
+  const appliedPositions: Array<{ accountId: string; instrumentId: string }> = [];
   for (const input of waiting) {
     const { data: account } = await db.from('ii_accounts').select('currency_code').eq('id', input.account_id).eq('user_id', userId).maybeSingle();
     const currency = (account as { currency_code?: string } | null)?.currency_code;
@@ -201,10 +224,12 @@ export async function applyPendingInvestmentDates(userId: string, db: Db = creat
       continue;
     }
     const outcome = await applyInput(db, userId, input, currency);
-    if (outcome === 'applied') applied++;
-    else stillWaiting++;
+    if (outcome === 'applied') {
+      applied++;
+      appliedPositions.push({ accountId: input.account_id, instrumentId: input.instrument_id });
+    } else stillWaiting++;
   }
-  return { applied, stillWaiting };
+  return { applied, stillWaiting, appliedPositions };
 }
 
 /** Holdings-only positions (and ones the user already answered), for the call-to-action panel. */
@@ -293,9 +318,29 @@ export async function submitInvestmentDate(args: {
   dateText: string | null | undefined;
   todayIso: string;
   db?: Db;
+  /** Fetches this one fund's missing NAV history right away. Optional: without it the answer waits for the scheduled job. */
+  fetchNav?: NavFetcher;
 }): Promise<SubmitInvestmentDateResult> {
   const db = args.db ?? createAdminClient();
   const { userId, accountId, instrumentId } = args;
+
+  /**
+   * Apply a waiting answer; if there is still no NAV for it, fetch THIS fund's
+   * history now (never throws, never loses the answer) and try once more.
+   */
+  const applyWithImmediateFetch = async (input: InputRow, currency: string): Promise<{ result: 'applied' | 'awaiting_nav'; fetchOutcome: NavFetchSummary['outcome'] | null }> => {
+    const first = await applyInput(db, userId, input, currency);
+    if (first === 'applied') return { result: 'applied', fetchOutcome: null };
+    if (!args.fetchNav) return { result: 'awaiting_nav', fetchOutcome: null };
+    let fetchOutcome: NavFetchSummary['outcome'] = 'failed';
+    try {
+      fetchOutcome = (await args.fetchNav({ userId, instrumentId })).outcome;
+    } catch {
+      fetchOutcome = 'failed'; // the answer is already saved: a fetch problem only means "we will keep trying"
+    }
+    const second = await applyInput(db, userId, input, currency);
+    return { result: second === 'applied' ? 'applied' : 'awaiting_nav', fetchOutcome };
+  };
 
   const { data: account } = await db.from('ii_accounts').select('id, currency_code').eq('id', accountId).eq('user_id', userId).maybeSingle();
   if (!account) return { ok: false, status: 404, code: 'account_not_found', message: 'That investment could not be found.' };
@@ -328,8 +373,11 @@ export async function submitInvestmentDate(args: {
   const active = (await loadActiveInputs(db, userId)).find((i) => i.account_id === accountId && i.instrument_id === instrumentId) ?? null;
   if (active && active.investment_date === validation.iso) {
     // Same answer again: nothing to change; finish it if it was waiting.
-    const state = active.status === 'applied' ? 'applied' : await applyInput(db, userId, active, currencyCode);
-    return { ok: true, state: state === 'applied' ? 'applied' : 'awaiting_nav', inputId: active.id, investmentDate: active.investment_date, unchanged: true };
+    // This is also the "check again" path for an answer that was waiting for price history.
+    const wasApplied = active.status === 'applied';
+    const done = wasApplied ? { result: 'applied' as const, fetchOutcome: null } : await applyWithImmediateFetch(active, currencyCode);
+    const navStatus = navStatusFor(done.result, done.fetchOutcome);
+    return { ok: true, state: done.result, navStatus, message: NAV_STATUS_MESSAGE[navStatus], appliedNow: !wasApplied && done.result === 'applied', inputId: active.id, investmentDate: active.investment_date, unchanged: true };
   }
 
   const nowIso = new Date().toISOString();
@@ -376,7 +424,9 @@ export async function submitInvestmentDate(args: {
     nav_date: null,
     derived_transaction_id: null,
   };
-  const outcome = await applyInput(db, userId, created, currencyCode);
+  const done = await applyWithImmediateFetch(created, currencyCode);
+  const outcome = done.result;
+  const navStatus = navStatusFor(done.result, done.fetchOutcome);
 
   await emitAuditEvent({
     userId,
@@ -393,8 +443,9 @@ export async function submitInvestmentDate(args: {
       investmentDate: validation.iso,
       previousInvestmentDate: active ? active.investment_date : null,
       state: outcome === 'applied' ? 'applied' : 'awaiting_nav',
+      navFetch: done.fetchOutcome,
     },
   });
 
-  return { ok: true, state: outcome === 'applied' ? 'applied' : 'awaiting_nav', inputId, investmentDate: validation.iso, unchanged: false };
+  return { ok: true, state: outcome, navStatus, message: NAV_STATUS_MESSAGE[navStatus], appliedNow: outcome === 'applied', inputId, investmentDate: validation.iso, unchanged: false };
 }

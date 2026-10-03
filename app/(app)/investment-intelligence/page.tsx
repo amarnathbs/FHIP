@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { OverviewClient } from '@/components/investment-intelligence/OverviewClient';
 import { InvestmentDatePanel } from '@/components/investment-intelligence/InvestmentDatePanel';
+import { NavHistoryStatusPanel } from '@/components/investment-intelligence/NavHistoryStatusPanel';
 import { ProbableDuplicateBanner } from '@/components/investment-intelligence/ProbableDuplicateBanner';
 
 // II-PC2 — the Investment Intelligence workspace OVERVIEW (spec sections 10,
@@ -42,6 +43,7 @@ export default async function InvestmentIntelligencePage() {
       <InvestmentIntelligenceSubNav />
       <ProbableDuplicateBanner />
       <InvestmentDatePanel />
+      <NavHistoryStatusPanel />
       <OverviewClient />
     </div>
   );

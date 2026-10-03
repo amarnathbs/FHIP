@@ -209,3 +209,95 @@ describe('listInvestmentDateItems', () => {
     expect(await listInvestmentDateItems(USER, db.client as never)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// PO 2026-10-03: saving a date fetches THAT ONE fund's missing history at once.
+// NC-E1 fetch is only for the one fund and only when no NAV is on file
+// NC-E2 a failed / empty / throwing fetch never loses the answer
+// NC-E3 after rows arrive the answer is applied in the SAME request
+// ---------------------------------------------------------------------------
+describe('immediate NAV fetch on save', () => {
+  const withFetch = (db: ReturnType<typeof seed>, fetchNav: (a: { userId: string; instrumentId: string }) => Promise<{ outcome: 'fetched' | 'no_data' | 'failed' | 'rate_limited' | 'disabled' | 'unresolvable' | 'nothing_to_fetch' }>, date = '14-03-2024') =>
+    submitInvestmentDate({ userId: USER, accountId: 'acc-1', instrumentId: 'ins-1', dateText: date, todayIso: TODAY, db: db.client as never, fetchNav });
+
+  it('NC-E3: no NAV on file -> fetch THIS fund -> rows arrive -> applied in the same request, with a plain status', async () => {
+    const db = seed({ ii_prices_nav: [] });
+    const fetchNav = vi.fn(async () => {
+      db.tables.ii_prices_nav.push({ instrument_id: 'ins-1', price_date: '2024-03-14', price: 40, quality_status: 'accepted' });
+      return { outcome: 'fetched' as const };
+    });
+    const res = await withFetch(db, fetchNav);
+    expect(res).toMatchObject({ ok: true, state: 'applied', navStatus: 'applied', appliedNow: true });
+    expect(res.ok && res.message).toContain('Done');
+    expect(fetchNav).toHaveBeenCalledTimes(1);
+    expect(fetchNav).toHaveBeenCalledWith({ userId: USER, instrumentId: 'ins-1' }); // one user, one fund: nothing wider can be asked
+    expect(db.tables.ii_transactions).toHaveLength(1);
+    expect(db.tables.ii_investment_date_inputs[0]).toMatchObject({ status: 'applied', nav_price: 40 });
+    expect(emitAuditEvent.mock.calls[0][0].metadata).toMatchObject({ state: 'applied', navFetch: 'fetched' });
+  });
+
+  it('NC-E1: when the NAV is already on file nothing is fetched', async () => {
+    const db = seed();
+    const fetchNav = vi.fn(async () => ({ outcome: 'fetched' as const }));
+    const res = await withFetch(db, fetchNav);
+    expect(res).toMatchObject({ ok: true, state: 'applied', navStatus: 'applied' });
+    expect(fetchNav).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no_data', 'waiting_for_nav'],
+    ['rate_limited', 'waiting_for_nav'],
+    ['disabled', 'waiting_for_nav'],
+    ['unresolvable', 'waiting_for_nav'],
+    ['failed', 'failed'],
+  ] as const)('NC-E2: a fetch that ends %s keeps the answer as awaiting_nav (%s), the save still succeeds, "we will keep trying"', async (outcome, navStatus) => {
+    const db = seed({ ii_prices_nav: [] });
+    const res = await withFetch(db, async () => ({ outcome }));
+    expect(res).toMatchObject({ ok: true, state: 'awaiting_nav', navStatus, appliedNow: false });
+    expect(res.ok && res.message).toContain('We will keep trying');
+    expect(db.tables.ii_investment_date_inputs[0]).toMatchObject({ status: 'awaiting_nav', investment_date: '2024-03-14', provenance: 'user_supplied' });
+    expect(db.tables.ii_transactions).toHaveLength(0);
+  });
+
+  it('NC-E2: a fetcher that THROWS never loses the answer either', async () => {
+    const db = seed({ ii_prices_nav: [] });
+    const res = await withFetch(db, async () => { throw new Error('source exploded'); });
+    expect(res).toMatchObject({ ok: true, state: 'awaiting_nav', navStatus: 'failed' });
+    expect(db.tables.ii_investment_date_inputs).toHaveLength(1);
+  });
+
+  it('retry: saving the SAME date again re-runs the fetch for an answer that was waiting, and applies it when the data arrives', async () => {
+    const db = seed({ ii_prices_nav: [] });
+    await withFetch(db, async () => ({ outcome: 'no_data' }));
+    const retry = await withFetch(db, async () => {
+      db.tables.ii_prices_nav.push({ instrument_id: 'ins-1', price_date: '2024-03-14', price: 40, quality_status: 'accepted' });
+      return { outcome: 'fetched' };
+    });
+    expect(retry).toMatchObject({ ok: true, state: 'applied', unchanged: true, appliedNow: true });
+    expect(db.tables.ii_investment_date_inputs).toHaveLength(1); // the same answer, not a second one
+    expect(db.tables.ii_transactions).toHaveLength(1);
+  });
+
+  it('an already-applied answer repeated does not fetch or re-apply', async () => {
+    const db = seed();
+    await withFetch(db, async () => ({ outcome: 'fetched' }));
+    const fetchNav = vi.fn(async () => ({ outcome: 'fetched' as const }));
+    const again = await withFetch(db, fetchNav);
+    expect(again).toMatchObject({ ok: true, unchanged: true, appliedNow: false });
+    expect(fetchNav).not.toHaveBeenCalled();
+  });
+
+  it('without a fetcher (the previous behaviour) the answer simply waits for the scheduled job', async () => {
+    const db = seed({ ii_prices_nav: [] });
+    const res = await submit(db, '14-03-2024');
+    expect(res).toMatchObject({ ok: true, state: 'awaiting_nav', navStatus: 'waiting_for_nav' });
+  });
+
+  it('a refused answer (validation) never triggers a fetch', async () => {
+    const db = seed({ ii_prices_nav: [] });
+    const fetchNav = vi.fn(async () => ({ outcome: 'fetched' as const }));
+    const res = await withFetch(db, fetchNav, '04-10-2026');
+    expect(res).toMatchObject({ ok: false, code: 'in_future' });
+    expect(fetchNav).not.toHaveBeenCalled();
+  });
+});

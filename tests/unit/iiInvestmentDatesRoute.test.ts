@@ -20,6 +20,8 @@ vi.mock('@/lib/services/investment-intelligence/investmentDateService', () => ({
   listInvestmentDateItems: (...a: unknown[]) => listInvestmentDateItems(...a),
   submitInvestmentDate: (...a: unknown[]) => submitInvestmentDate(...a),
 }));
+const liveFetchNavForOneFund = vi.fn();
+vi.mock('@/lib/services/investment-intelligence/pc6/userNavHistoryLive', () => ({ liveFetchNavForOneFund: (...a: unknown[]) => liveFetchNavForOneFund(...a) }));
 vi.mock('@/lib/services/investment-intelligence/documentProcessing', () => ({ recertifyPosition: (...a: unknown[]) => recertifyPosition(...a) }));
 
 import { GET, POST } from '@/app/api/investment-intelligence/investment-dates/route';
@@ -59,7 +61,7 @@ describe('investment-dates route', () => {
   });
 
   it('POST hands the TYPED text to the server validator, scoped by the caller\'s id (a user id in the body is ignored)', async () => {
-    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'applied', inputId: 'in-1', investmentDate: '2024-03-14', unchanged: false });
+    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'applied', navStatus: 'applied', message: 'Done.', appliedNow: true, inputId: 'in-1', investmentDate: '2024-03-14', unchanged: false });
     const res = await post({ accountId: 'acc-1', instrumentId: 'ins-1', date: '14-03-2024', userId: 'someone-else' });
     expect(res.status).toBe(200);
     expect(submitInvestmentDate.mock.calls[0][0]).toMatchObject({ userId: USER, accountId: 'acc-1', instrumentId: 'ins-1', dateText: '14-03-2024' });
@@ -68,20 +70,20 @@ describe('investment-dates route', () => {
   });
 
   it('re-evaluates the position (the existing Re-evaluate function) once a date is applied, but not on an unchanged repeat or while waiting for prices', async () => {
-    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'applied', inputId: 'in-1', investmentDate: '2024-03-14', unchanged: false });
+    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'applied', navStatus: 'applied', message: 'Done.', appliedNow: true, inputId: 'in-1', investmentDate: '2024-03-14', unchanged: false });
     await post({ accountId: 'acc-1', instrumentId: 'ins-1', date: '14-03-2024' });
     expect(recertifyPosition).toHaveBeenCalledWith(USER, 'acc-1', 'ins-1');
 
     recertifyPosition.mockClear();
-    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'applied', inputId: 'in-1', investmentDate: '2024-03-14', unchanged: true });
+    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'applied', navStatus: 'applied', message: 'Done.', appliedNow: false, inputId: 'in-1', investmentDate: '2024-03-14', unchanged: true });
     await post({ accountId: 'acc-1', instrumentId: 'ins-1', date: '14-03-2024' });
-    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'awaiting_nav', inputId: 'in-1', investmentDate: '2024-03-14', unchanged: false });
+    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'awaiting_nav', navStatus: 'waiting_for_nav', message: 'We will keep trying.', appliedNow: false, inputId: 'in-1', investmentDate: '2024-03-14', unchanged: false });
     await post({ accountId: 'acc-1', instrumentId: 'ins-1', date: '14-03-2024' });
     expect(recertifyPosition).not.toHaveBeenCalled();
   });
 
   it('a failure of the re-evaluation never undoes the saved date', async () => {
-    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'applied', inputId: 'in-1', investmentDate: '2024-03-14', unchanged: false });
+    submitInvestmentDate.mockResolvedValue({ ok: true, state: 'applied', navStatus: 'applied', message: 'Done.', appliedNow: true, inputId: 'in-1', investmentDate: '2024-03-14', unchanged: false });
     recertifyPosition.mockRejectedValueOnce(new Error('boom'));
     expect((await post({ accountId: 'acc-1', instrumentId: 'ins-1', date: '14-03-2024' })).status).toBe(200);
   });

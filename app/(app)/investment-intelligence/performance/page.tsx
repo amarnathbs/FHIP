@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { PerformanceClient } from '@/components/investment-intelligence/PerformanceClient';
+import { NavHistoryStatusPanel } from '@/components/investment-intelligence/NavHistoryStatusPanel';
 
 // R4 — Performance & Benchmark UX (spec sections 60-65).
 //
@@ -26,6 +27,7 @@ export default async function InvestmentPerformancePage() {
         </p>
       </header>
       <InvestmentIntelligenceSubNav />
+      <NavHistoryStatusPanel />
       <PerformanceClient />
     </div>
   );

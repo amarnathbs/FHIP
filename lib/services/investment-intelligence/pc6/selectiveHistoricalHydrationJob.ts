@@ -17,7 +17,7 @@
 // bottom wires the injected functions to the real Supabase admin client and
 // the TIGZIG adapter for actual use.
 
-import type { HistoricalNavAdapter } from './adapters/historicalNavAdapter';
+import type { HistoricalNavAdapter, HistoricalNavResult } from './adapters/historicalNavAdapter';
 import {
   determineHydrationRequirement,
   type AcceptedDependency,
@@ -657,26 +657,9 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
         }
 
         const existingObs = await deps.fetchExistingObservations(instrumentId, chunk.fromDate, chunk.toDate);
-        const importBatchId = crypto.randomUUID();
-        // Stamp the provider that ACTUALLY supplied these rows, not the adapter
-        // object: with a fallback in the chain, adapter.providerKey names the
-        // composite ('amfi+tigzig'), and a TIGZIG-sourced row labelled that way
-        // could not be told apart from an AMFI one.
-        const dataVersion = `${fetchResult.provider.key}:${fetchResult.provider.adapterVersion}:${fetchResult.provider.rawResponseChecksum.slice(0, 12)}`;
-        const rowsToWrite: HydrationWriteRow[] = [];
-        for (const obs of fetchResult.observations) {
-          if (earliestSeen === null || obs.date < earliestSeen) earliestSeen = obs.date;
-          const recordChecksum = simpleChecksum(`${instrumentId}|${obs.date}|${obs.nav}`);
-          const decision = decideUpsert(existingObs.get(`${instrumentId}|${obs.date}`) ?? null, { value: obs.nav, recordChecksum });
-          if (decision.action === 'insert') {
-            rowsToWrite.push({ instrumentId, priceDate: obs.date, price: obs.nav, currencyCode: 'INR', recordChecksum, dataVersion, importBatchId });
-          }
-          // 'skip'/'supersede' handling for a hydration job intentionally does
-          // not re-implement correction semantics here -- a hydration fetch
-          // finding a DIFFERENT value for a date the daily/backfill job already
-          // wrote is a cross-source discrepancy for a human to review (N.11
-          // quality surface), not something this job silently overwrites.
-        }
+        const built = buildHydrationWriteRows({ instrumentId, fetchResult, existingObs });
+        const rowsToWrite = built.rows;
+        if (built.earliestSeen !== null && (earliestSeen === null || built.earliestSeen < earliestSeen)) earliestSeen = built.earliestSeen;
 
         if (rowsToWrite.length > 0) {
           const writeResult = await deps.writeRows(rowsToWrite);
@@ -841,6 +824,45 @@ export async function runSelectiveHistoricalHydration(args: HydrationJobArgs): P
     }
   }
   return result;
+}
+
+/**
+ * One fetched chunk -> the rows to write. The ONE place the rule lives, shared
+ * by the scheduled hydration job above and by the user-triggered, one-scheme
+ * fetch (userInstrumentNavFetch.ts), so both stamp the same provenance
+ * (data_version = provider:adapterVersion:checksum of the response that ACTUALLY
+ * supplied the rows) and apply the same decideUpsert rule (only a date not
+ * already on file is inserted; a different value for a date already on file is
+ * a discrepancy for a human, never silently overwritten).
+ */
+export function buildHydrationWriteRows(args: {
+  instrumentId: string;
+  fetchResult: HistoricalNavResult;
+  existingObs: Map<string, ExistingObservation>;
+  importBatchId?: string;
+}): { rows: HydrationWriteRow[]; earliestSeen: string | null; dataVersion: string; importBatchId: string } {
+  const { instrumentId, fetchResult, existingObs } = args;
+  const importBatchId = args.importBatchId ?? crypto.randomUUID();
+  // Stamp the provider that ACTUALLY supplied these rows, not the adapter
+  // object: with a fallback in the chain, adapter.providerKey names the
+  // composite ('amfi+tigzig'), and a TIGZIG-sourced row labelled that way
+  // could not be told apart from an AMFI one.
+  const dataVersion = `${fetchResult.provider.key}:${fetchResult.provider.adapterVersion}:${fetchResult.provider.rawResponseChecksum.slice(0, 12)}`;
+  const rows: HydrationWriteRow[] = [];
+  let earliestSeen: string | null = null;
+  for (const obs of fetchResult.observations) {
+    if (earliestSeen === null || obs.date < earliestSeen) earliestSeen = obs.date;
+    const recordChecksum = simpleChecksum(`${instrumentId}|${obs.date}|${obs.nav}`);
+    const decision = decideUpsert(existingObs.get(`${instrumentId}|${obs.date}`) ?? null, { value: obs.nav, recordChecksum });
+    if (decision.action === 'insert') {
+      rows.push({ instrumentId, priceDate: obs.date, price: obs.nav, currencyCode: 'INR', recordChecksum, dataVersion, importBatchId });
+    }
+    // 'skip'/'supersede' handling intentionally does not re-implement
+    // correction semantics here -- a fetch finding a DIFFERENT value for a date
+    // the daily/backfill job already wrote is a cross-source discrepancy for a
+    // human to review (N.11 quality surface), not something silently overwritten.
+  }
+  return { rows, earliestSeen, dataVersion, importBatchId };
 }
 
 function addDays(iso: string, delta: number): string {
