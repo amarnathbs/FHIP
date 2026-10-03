@@ -307,11 +307,27 @@ begin
   if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) = 0 or jsonb_array_length(p_rows) > 5000 then
     raise exception 'risk-free upload: rows must be a non-empty array of at most 5000 entries' using errcode = '22023';
   end if;
+  if p_verified_through is not null and p_verified_through > current_date then
+    raise exception 'risk-free upload: the verified-through date cannot be in the future' using errcode = '22023';
+  end if;
 
   select * into v_existing from public.ii_risk_free_batches
    where series_id = p_series_id and file_sha256 = p_file_sha256 and source_kind = 'admin_csv';
   if found then
-    return jsonb_build_object('already_committed', true, 'batch_id', v_existing.id, 'inserted', v_existing.rows_inserted, 'identical', v_existing.rows_identical_skipped);
+    -- The same file again. Its rows are already in; only a NEW "verified through" confirmation (the day a policy-change
+    -- series was last confirmed complete) is applied, and it is recorded in the append-only state log (who, when, to what).
+    if p_verified_through is not null
+       and exists (select 1 from public.ii_risk_free_series x where x.series_id = p_series_id and (x.verified_through_date is null or x.verified_through_date < p_verified_through)) then
+      -- Only a date that moves the confirmation FORWARD is applied and logged; an earlier or equal date is a no-op.
+      update public.ii_risk_free_series
+         set verified_through_date = p_verified_through, updated_at = now()
+       where series_id = p_series_id;
+      insert into public.ii_risk_free_series_state_log (series_id, previous_enabled, new_enabled, previous_terms_status, new_terms_status, reason, actor_user_id)
+      select s.series_id, s.enabled, s.enabled, s.terms_review_status, s.terms_review_status,
+             'Verified-through date confirmed through ' || to_char(p_verified_through, 'DD-MM-YYYY') || ' (re-submitted file).', v_uid
+        from public.ii_risk_free_series s where s.series_id = p_series_id;
+    end if;
+    return jsonb_build_object('already_committed', true, 'batch_id', v_existing.id, 'inserted', v_existing.rows_inserted, 'identical', v_existing.rows_identical_skipped, 'verified_through_recorded', p_verified_through is not null);
   end if;
 
   create temporary table if not exists tmp_rf_in (

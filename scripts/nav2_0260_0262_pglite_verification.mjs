@@ -93,6 +93,15 @@ const r1 = await asRole('authenticated', U.up, call('d'.repeat(64), [row('2026-0
 check('a clean upload inserts both rows', r1.ok && r1.v.inserted === 2, JSON.stringify(r1));
 const r2 = await asRole('authenticated', U.up, call('d'.repeat(64), [row('2026-09-30', 5.5199), row('2026-09-16', 5.2801)]));
 check('IDEMPOTENT: the same file again is already_committed and adds nothing', r2.ok && r2.v.already_committed === true && (await one(`select count(*)::int v from ii_risk_free_observations`)).v === base + 2, JSON.stringify(r2));
+const callV = (sha, rows, through, who = U.up) => asRole('authenticated', who, `select commit_risk_free_upload('RBI_91D_TBILL_CUTOFF_YIELD', '${sha}', 'first_load.csv', '${JSON.stringify(rows)}'::jsonb, true, 'I confirm that I am entitled to load this data and accept the recorded terms position.', 'admin_upload', ${through}) v`);
+const rv1 = await callV('d'.repeat(64), [row('2026-09-30', 5.5199), row('2026-09-16', 5.2801)], `'2026-10-02'::date`);
+check('the SAME file again with a verified-through date records the confirmation (rows unchanged), audited in the state log', rv1.ok && rv1.v.already_committed === true && rv1.v.verified_through_recorded === true && (await one(`select to_char(verified_through_date, 'YYYY-MM-DD') v from ii_risk_free_series where series_id='RBI_91D_TBILL_CUTOFF_YIELD'`)).v === '2026-10-02' && (await one(`select count(*)::int v from ii_risk_free_series_state_log where reason like 'Verified-through date confirmed through 02-10-2026%'`)).v === 1 && (await one(`select count(*)::int v from ii_risk_free_observations`)).v === base + 2, JSON.stringify(rv1));
+const rv2 = await callV('d'.repeat(64), [row('2026-09-30', 5.5199), row('2026-09-16', 5.2801)], `'2026-09-01'::date`);
+check('a verified-through date can only move FORWARD (an earlier date neither moves it back nor adds a log entry)', rv2.ok && (await one(`select count(*)::int v from ii_risk_free_series_state_log where reason like 'Verified-through%'`)).v === 1 && (await one(`select to_char(verified_through_date, 'YYYY-MM-DD') v from ii_risk_free_series where series_id='RBI_91D_TBILL_CUTOFF_YIELD'`)).v === '2026-10-02', JSON.stringify(rv2));
+const rv3 = await callV('9'.repeat(64), [row('2026-09-08', 5.3)], `'2030-01-01'::date`);
+check('NEGATIVE CONTROL: a verified-through date in the future is refused and nothing is written', !rv3.ok && /future/.test(rv3.msg) && (await one(`select count(*)::int v from ii_risk_free_observations where observation_date='2026-09-08'`)).v === 0, JSON.stringify(rv3));
+const rv4 = await callV('d'.repeat(64), [row('2026-09-30', 5.5199)], `'2026-10-03'::date`, U.sw);
+check('NEGATIVE CONTROL: the verified-through path of a re-submitted file is capability-gated like any upload (switch-only user refused)', !rv4.ok && /not authorised/.test(rv4.msg), JSON.stringify(rv4));
 const r3 = await asRole('authenticated', U.up, call('e'.repeat(64), [row('2026-09-30', 5.6)]));
 check('NEGATIVE CONTROL: a DIFFERENT value for a published date is refused (never an overwrite)', !r3.ok && /different published value/.test(r3.msg), JSON.stringify(r3));
 check('...and the published value is unchanged', Number((await one(`select value_percent v from ii_risk_free_observations where series_id='RBI_91D_TBILL_CUTOFF_YIELD' and observation_date='2026-09-30'`)).v) === 5.5199);
@@ -135,7 +144,7 @@ check('set_risk_free_series_state: the UPLOAD capability cannot switch a series 
 const s2 = await asRole('authenticated', U.sw, `select set_risk_free_series_state('RBI_91D_TBILL_CUTOFF_YIELD', false, 'po_accepted_2026-10-03', 'short') v`);
 check('NEGATIVE CONTROL: a state change without a 20-character reason is refused', !s2.ok);
 const s3 = await asRole('authenticated', U.sw, `select set_risk_free_series_state('RBI_91D_TBILL_CUTOFF_YIELD', false, 'po_accepted_2026-10-03', 'Switching off while the terms position is reviewed') v`);
-check('the switch capability turns the series off, audited, with no data deleted', s3.ok && (await one(`select enabled v from ii_risk_free_series where series_id='RBI_91D_TBILL_CUTOFF_YIELD'`)).v === false && (await one(`select count(*)::int v from ii_risk_free_series_state_log`)).v === 1 && (await one(`select count(*)::int v from ii_risk_free_observations`)).v >= 4, JSON.stringify(s3));
+check('the switch capability turns the series off, audited, with no data deleted', s3.ok && (await one(`select enabled v from ii_risk_free_series where series_id='RBI_91D_TBILL_CUTOFF_YIELD'`)).v === false && (await one(`select count(*)::int v from ii_risk_free_series_state_log`)).v === 2 && (await one(`select count(*)::int v from ii_risk_free_observations`)).v >= 4, JSON.stringify(s3));
 await db.exec(`update ii_risk_free_series set enabled = true where series_id = 'RBI_91D_TBILL_CUTOFF_YIELD';`);
 
 // --- refresh results (service role only) ------------------------------------------------------------
