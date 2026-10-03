@@ -30,6 +30,8 @@ export interface HeldSchemeRaw {
   /** null when fewer than 10 people hold the scheme (Admin Standard section 7.2; withheld inside the database). */
   holderCount: number | null;
   firstHeldDate: string | null; // ISO yyyy-mm-dd (data; formatted day-first at the screen); null with holderCount
+  /** ii_scheme_master.scheme_name for the instrument (AMFI's canonical name) when linked; filled in by the route. */
+  schemeMasterName?: string | null;
   mapped: boolean;
   proposalWaiting: boolean;
 }
@@ -66,8 +68,11 @@ export type HeldBenchmarkState =
 
 export interface HeldSchemeRow {
   instrumentId: string;
-  /** Cleaned for display only. */
+  /** Short name for the table: the scheme-master name when linked, else the cleaned statement name; plan/option and "formerly" noise removed. DISPLAY ONLY. */
   displayName: string;
+  /** The longer name behind it (scheme-master name or cleaned statement name), for the details view and tooltip. */
+  fullName: string;
+  nameSource: 'scheme_master' | 'statement';
   /** The name exactly as the statement printed it (tooltip / secondary text). */
   originalName: string;
   planType: PlanType;
@@ -117,6 +122,24 @@ export function cleanSchemeName(raw: string): string {
   }
   s = s.replace(/\(\s*(?:non[\s-]*demat|demat)\s*\)/gi, ' ');
   return s.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A SHORT name for the table. Drops what is already shown elsewhere or is noise: the "(formerly ...)" /
+ * "(erstwhile ...)" parentheticals, "(Non-Demat)", and trailing plan / option words (Regular, Direct, Growth,
+ * Plan, Option, IDCW, ...) because the plan is its own column. DISPLAY ONLY. Falls back to the unshortened
+ * name rather than ever returning an empty string.
+ */
+export function shortSchemeName(name: string): string {
+  const base = cleanSchemeName(name);
+  let s = base
+    .replace(/\s*\((?:formerly|erstwhile|earlier|previously)\b[^()]*(?:\([^()]*\)[^()]*)*\)/gi, ' ')
+    .replace(/\(\s*non[\s-]*demat\s*\)/gi, ' ');
+  const tail = /(?:[\s,\-\u2013]*\b(?:regular|direct|growth|option|idcw|dividend|payout|reinvestment|bonus|plan)\b)+[\s\-\u2013]*$/i.exec(s);
+  // Only a tail that names a plan or option is noise; a lone trailing "Plan" (e.g. "Retirement Savings Plan") is part of the name.
+  if (tail && /\b(?:regular|direct|growth|option|idcw|dividend|payout|reinvestment|bonus)\b/i.test(tail[0])) s = s.slice(0, tail.index);
+  s = s.replace(/\s+/g, ' ').replace(/[\s,\-\u2013]+$/, '').trim();
+  return s.length >= 3 ? s : base;
 }
 
 export function planTypeFromName(name: string): PlanType {
@@ -222,7 +245,9 @@ export function buildHeldSchemeRows(raw: readonly HeldSchemeRaw[], opts: BuildHe
     const prefilledDeclared = status === 'not_mapped' ? declaredBenchmarksFor(r.amfiSchemeCode, enabled, opts.verifiedSources) : [];
     return {
       instrumentId: r.instrumentId,
-      displayName: cleanSchemeName(r.instrumentName) || r.instrumentName,
+      displayName: shortSchemeName(r.schemeMasterName?.trim() || r.instrumentName) || r.instrumentName,
+      fullName: r.schemeMasterName?.trim() || cleanSchemeName(r.instrumentName) || r.instrumentName,
+      nameSource: r.schemeMasterName?.trim() ? 'scheme_master' : 'statement',
       originalName: r.instrumentName,
       planType: planTypeFromName(r.instrumentName),
       amcName: r.amcName,
@@ -253,6 +278,11 @@ export function buildHeldSchemeRows(raw: readonly HeldSchemeRaw[], opts: BuildHe
       proposalWaiting: rows.filter((r) => r.status === 'proposal_waiting').length,
     },
   };
+}
+
+/** Attach the scheme-master names (instrument id -> name) read separately by the route. */
+export function withSchemeMasterNames(raw: readonly HeldSchemeRaw[], names: ReadonlyMap<string, string>): HeldSchemeRaw[] {
+  return raw.map((r) => ({ ...r, schemeMasterName: names.get(r.instrumentId) ?? null }));
 }
 
 /** Coerce the RPC's rows; anything unexpected is dropped rather than shown (fail closed). */

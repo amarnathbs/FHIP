@@ -85,7 +85,7 @@ describe('the held list', () => {
     const a = rows.find((r) => r.instrumentId === unlinked.instrumentId)!;
     expect(a.category).toBe('Large Cap');
     expect(a.categorySource).toBe('name_hint');
-    expect(a.displayName).toBe('HDFC Large Cap Fund - Regular Plan - Growth');
+    expect(a.displayName).toBe('HDFC Large Cap Fund');
     expect(a.originalName).toBe('H44-HDFC Large Cap Fund - Regular Plan - Growth (Non-Demat)');
     expect(a.benchmark).toMatchObject({ kind: 'category_reference', categorySource: 'name_inference', benchmarkLabel: 'NIFTY 100 TRI' });
     expect(rows.find((r) => r.instrumentId === nameless.instrumentId)).toMatchObject({ category: 'Unknown', categorySource: 'unknown', benchmark: { kind: 'none' } });
@@ -167,7 +167,7 @@ describe('RULE (Admin Standard 7.2): fewer than 10 holders => no count and no da
     expect(out).toMatchObject({ holderCount: 10, firstHeldDate: '2016-04-01', holdersSuppressed: false });
   });
   it('the screen says "Fewer than 10 holders" and shows no date', () => {
-    const tab = fs.readFileSync(path.join(ROOT, 'components/admin/benchmarkData/MappingsTab.tsx'), 'utf8');
+    const tab = fs.readFileSync(path.join(ROOT, 'components/admin/benchmarkData/HeldSchemesTable.tsx'), 'utf8');
     expect(tab).toMatch(/Fewer than 10 holders/);
     expect(tab).toMatch(/Not shown/);
   });
@@ -201,7 +201,7 @@ describe('a held scheme whose declared benchmark (per the repository\'s own evid
     for (const n of DECLARED_BENCHMARK_EVIDENCE_NOTES) expect(csv).toContain(n.amfiSchemeCode);
   });
   it('the panel says "Declared benchmark differs from category benchmark - enter declared."', () => {
-    expect(fs.readFileSync(path.join(ROOT, 'components/admin/benchmarkData/MappingsTab.tsx'), 'utf8')).toMatch(/Declared benchmark differs from category benchmark - enter declared\./);
+    expect(fs.readFileSync(path.join(ROOT, 'components/admin/benchmarkData/HeldSchemesTable.tsx'), 'utf8')).toMatch(/Declared benchmark differs from category benchmark - enter declared/);
   });
 });
 
@@ -281,13 +281,27 @@ describe('migration 0251 contract (source)', () => {
 
 // ---- the route ---------------------------------------------------------------------------------
 const rpc = vi.fn();
+let masterRows: unknown[] = [];
+let masterError: { message: string } | null = null;
+const fromSpy = vi.fn();
+const masterChain = () => {
+  const b: Record<string, unknown> = {};
+  for (const m of ['select', 'in', 'is']) b[m] = () => b;
+  b.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: masterError ? null : masterRows, error: masterError }).then(res);
+  return b;
+};
 vi.mock('@/lib/services/investment-intelligence/benchmarkData/routeSupport', async (orig) => {
   const real = await orig<typeof import('@/lib/services/investment-intelligence/benchmarkData/routeSupport')>();
-  return { ...real, guarded: async () => ({ ok: true as const, user: { id: 'admin' }, flags: {}, supabase: { rpc } }) };
+  return { ...real, guarded: async () => ({ ok: true as const, user: { id: 'admin' }, flags: {}, supabase: { rpc, from: (t: string) => { fromSpy(t); return masterChain(); } } }) };
 });
 
 describe('GET mappings/held', () => {
-  beforeEach(() => rpc.mockReset());
+  beforeEach(() => {
+    rpc.mockReset();
+    fromSpy.mockReset();
+    masterRows = [];
+    masterError = null;
+  });
   it('returns the held rows built from the aggregate RPC, with counts only', async () => {
     rpc.mockResolvedValue({ data: [{ instrument_id: '77777777-7777-4777-8777-777777777777', instrument_name: 'K123-Kotak Mid Cap Fund Regular Growth (Non-Demat)', amc_name: 'Kotak Mahindra Mutual Fund', amfi_scheme_code: '104908', sub_category: 'Mid Cap Fund', category_header_raw: 'x', holder_count: 2, first_held_date: '2022-08-23', mapped: false, proposal_waiting: false }], error: null });
     const { GET } = await import('@/app/api/admin/investment-intelligence/benchmark-data/mappings/held/route');
@@ -295,9 +309,21 @@ describe('GET mappings/held', () => {
     const body = (await res.json()) as { data: { rows: Array<{ displayName: string; benchmark: { kind: string; benchmarkLabel?: string } }>; counts: { categoryReference: number } } };
     expect(res.status).toBe(200);
     expect(rpc).toHaveBeenCalledWith('benchmark_held_schemes');
-    expect(body.data.rows[0].displayName).toBe('Kotak Mid Cap Fund Regular Growth');
+    expect(body.data.rows[0].displayName).toBe('Kotak Mid Cap Fund');
     expect(body.data.rows[0].benchmark).toMatchObject({ kind: 'category_reference', benchmarkLabel: 'Nifty Midcap 150 TRI' });
     expect(body.data.counts.categoryReference).toBe(1);
+  });
+  it('the display name comes from the SCHEME MASTER when linked (and says so); a failed master read falls back to the cleaned statement name', async () => {
+    const row = { instrument_id: '88888888-8888-4888-8888-888888888888', instrument_name: 'B92-Aditya Birla Sun Life Large Cap Fund -Growth-Regular Plan(formerly known as Aditya Birla Sun Life Frontline Equity Fund) (Non-Demat)', amc_name: 'Aditya Birla Sun Life Mutual Fund', amfi_scheme_code: '103174', sub_category: 'Large Cap Fund', category_header_raw: null, holder_count: 12, first_held_date: '2015-08-21', mapped: false, proposal_waiting: false };
+    rpc.mockResolvedValue({ data: [row], error: null });
+    masterRows = [{ instrument_id: row.instrument_id, scheme_name: 'Aditya Birla Sun Life Large Cap Fund' }];
+    const { GET } = await import('@/app/api/admin/investment-intelligence/benchmark-data/mappings/held/route');
+    const ok = (await (await GET()).json()) as { data: { rows: Array<{ displayName: string; fullName: string; nameSource: string }> } };
+    expect(fromSpy).toHaveBeenCalledWith('ii_scheme_master');
+    expect(ok.data.rows[0]).toMatchObject({ displayName: 'Aditya Birla Sun Life Large Cap Fund', fullName: 'Aditya Birla Sun Life Large Cap Fund', nameSource: 'scheme_master' });
+    masterError = { message: 'boom' };
+    const fb = (await (await GET()).json()) as { data: { rows: Array<{ displayName: string; nameSource: string }> } };
+    expect(fb.data.rows[0]).toMatchObject({ displayName: 'Aditya Birla Sun Life Large Cap Fund', nameSource: 'statement' }); // shortened from the statement name
   });
   it('an unapplied migration is an explicit 503, never an empty list', async () => {
     rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.benchmark_held_schemes' } });

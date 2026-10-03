@@ -376,6 +376,7 @@ Adds `promo_codes.bound_email_hash` (+ two new CHECKs on that new column only), 
 **Amplify environment (server-side; `amplify.yml` now forwards the `PREMIUM_PROMO_EMAIL_` prefix, so these reach the runtime):**
 - `PREMIUM_PROMO_EMAIL_ENABLED=true` — the switch; **leave unset (OFF) until the rehearsal passes.** Only the exact text `true` turns it on.
 - `PREMIUM_PROMO_EMAIL_BIND_SECRET` — any long random string; needed for "Only this email address can redeem". Without it the binding is unavailable (create refuses, 503). Rotating it later invalidates existing bound codes.
+- `PREMIUM_PROMO_EMAIL_FROM_NAME` — **optional**; the sender DISPLAY NAME of the promo-code and Premium expiry-reminder e-mails. Default `FHIP` (see 17.9). Already forwarded by the `PREMIUM_PROMO_EMAIL_` prefix in `amplify.yml` (verified: `env | grep -e PREMIUM_PROMO_EMAIL_` matches it); leave unset to get `FHIP`.
 - Already present and reused: `RESEND_API_KEY`, `CONTACT_FROM_EMAIL` (or `PREMIUM_REMINDER_FROM_EMAIL`), `APP_BASE_URL`, `CRON_SECRET`, `PROMO_IP_HASH_SECRET`.
 - The `can_manage_promo_codes` capability is unchanged; no new capability.
 
@@ -394,3 +395,14 @@ Adds `promo_codes.bound_email_hash` (+ two new CHECKs on that new column only), 
 3. **A mailer failure after 3 attempts is final for that request** (the code is shown to the admin; resending means "Generate a replacement code and email it") — confirm there is no background retry.
 4. Admin-triggered e-mails use AU date format because the recipient's country is not looked up — confirm, or ask for a lookup by e-mail.
 5. When to set `PREMIUM_PROMO_EMAIL_ENABLED=true` on production.
+
+
+### 17.9 Sender display name (fix `fix/promo-email-sender-name-20261003`)
+
+After the production test the promo e-mail arrived from "FHIP Contact Form <no-reply@auth.financialhealthplatform.com>" because the Premium mailer passed the Contact form's configured sender through unchanged. Fixed for the Premium e-mails only:
+
+- **New helper** `lib/services/mailFromHeader.ts`: the From header is `Name <address>`. The **address** is exactly what is configured today (the address part of `PREMIUM_REMINDER_FROM_EMAIL`, else `CONTACT_FROM_EMAIL`, else the default `no-reply@auth.financialhealthplatform.com`); any display name inside that configured value (e.g. "FHIP Contact Form") is discarded. The **name** is `PREMIUM_PROMO_EMAIL_FROM_NAME`, default **`FHIP`**. The domain and the address are unchanged; nothing is invented.
+- **Header-injection safety:** the name is reduced to letters, digits, spaces and `. & _ -` (so no angle brackets, quotes, backslashes, commas, colons, semicolons, `@`, parentheses, CR, LF, NUL or Unicode line separators), whitespace is collapsed, length is capped at 60, and an empty/blank/all-invalid/non-string value falls back to `FHIP`. A configured address that is not a single plain address (spaces, control characters, two bracketed parts, no `@`) falls back to the default address; it is never merged into the header.
+- **Scope:** the promo-code e-mails and the Premium expiry-reminder e-mails both use the same `createResendMailer().from()`, so both are fixed by the one change (the shared path is natural, so they are not split). **The Contact form route is untouched** and still sends exactly "FHIP Contact Form <...>" (source-guarded and tested).
+- **Tests** (`tests/unit/mailFromHeader.test.ts`, 12, plus the adjusted `premiumExpiryReminderRunner` expectations): default name is `FHIP` (control: the old pass-through fails "the default name must be FHIP"); the address part is unchanged (control: a rebuilt address fails "the address part must be unchanged"); header-injection attempts (CR/LF, quotes, brackets, NUL, Unicode separators, commas) are neutralised (control: naive concatenation fails "header injection must be neutralised"); the Contact form's From is unchanged by the setting (control: routing it through the new builder fails "contact-form From is unchanged"); the header actually sent to Resend is the built header.
+- **PO action:** none required (the default reads "FHIP"). To use a different name set `PREMIUM_PROMO_EMAIL_FROM_NAME` on Amplify (e.g. `FHIP Premium`). No database change, no migration.

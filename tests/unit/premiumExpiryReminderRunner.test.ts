@@ -246,8 +246,9 @@ describe('the Resend mailer reuses the Contact path and cannot send in tests', (
     expect(none.configured()).toBe(false);
     expect(await none.send({ to: 'a@b.test', from: 'f', subject: 's', text: 't', idempotencyKey: 'k' })).toEqual({ ok: false, error: 'mailer_not_configured' });
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(createResendMailer({ RESEND_API_KEY: 'k', PREMIUM_REMINDER_FROM_EMAIL: 'P <p@x.test>', CONTACT_FROM_EMAIL: 'C <c@x.test>' }, fetchSpy as never).from()).toBe('P <p@x.test>');
-    expect(createResendMailer({ RESEND_API_KEY: 'k', CONTACT_FROM_EMAIL: 'C <c@x.test>' }, fetchSpy as never).from()).toBe('C <c@x.test>');
+    // The ADDRESS chain is unchanged; the display name is now the separate PREMIUM_PROMO_EMAIL_FROM_NAME (default "FHIP").
+    expect(createResendMailer({ RESEND_API_KEY: 'k', PREMIUM_REMINDER_FROM_EMAIL: 'P <p@x.test>', CONTACT_FROM_EMAIL: 'C <c@x.test>' }, fetchSpy as never).from()).toBe('FHIP <p@x.test>');
+    expect(createResendMailer({ RESEND_API_KEY: 'k', CONTACT_FROM_EMAIL: 'C <c@x.test>' }, fetchSpy as never).from()).toBe('FHIP <c@x.test>');
     expect(createResendMailer({ RESEND_API_KEY: 'k' }, fetchSpy as never).from()).toMatch(/no-reply@auth\.financialhealthplatform\.com/);
   });
 

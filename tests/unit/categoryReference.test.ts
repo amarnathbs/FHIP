@@ -363,7 +363,7 @@ describe('static guarantees (source)', () => {
   });
   it('the label wording is on every surface that shows a comparison', () => {
     expect(read('components/investment-intelligence/BenchmarkComparisonView.tsx')).toMatch(/benchmarkBasisLabel/);
-    expect(read('components/admin/benchmarkData/MappingsTab.tsx')).toMatch(/basisLabel/);
+    expect(read('components/admin/benchmarkData/HeldSchemesTable.tsx')).toMatch(/basisLabel/);
     expect(read('lib/engines/investment-intelligence/reviewCentre.ts')).toMatch(/not this fund's own declared benchmark/);
     expect(read('lib/services/investment-intelligence/benchmarkData/categoryReference.ts')).toMatch(/Compared with the usual benchmark for \$\{categoryLabel\} funds \(not this fund's own declared benchmark\)/);
     // The Holdings table and the Performance scheme row both render the shared view.
