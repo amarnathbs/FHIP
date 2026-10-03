@@ -8,6 +8,7 @@
 // requested, and a history requirement always corresponds to a metric.
 
 import type { Nav2Policy, ReturnFrequency } from '@/lib/config/nav2/metricPolicy';
+import { subtractMonthsIso } from './dates';
 
 export interface PointToPointRequest {
   id: string;
@@ -70,4 +71,41 @@ export function standardAnalysisSpec(asOfDate: string, policy: Nav2Policy): Anal
     benchmarkRelative: true,
     frequency: 'daily',
   };
+}
+
+// ---------------------------------------------------------------------------
+// The Fund analytics REPORT's period choice (Stage 2). One choice, applied to every scheme.
+// ---------------------------------------------------------------------------
+
+export type ReportPeriodChoice = 'since_first_held' | '1y' | '3y' | '5y' | 'all_history';
+
+export const REPORT_PERIOD_CHOICES: readonly ReportPeriodChoice[] = ['since_first_held', '1y', '3y', '5y', 'all_history'];
+
+export const REPORT_PERIOD_LABELS: Record<ReportPeriodChoice, string> = {
+  since_first_held: 'Since you first held each fund',
+  '1y': 'Last 1 year',
+  '3y': 'Last 3 years',
+  '5y': 'Last 5 years',
+  all_history: 'All available history',
+};
+
+export function isReportPeriodChoice(x: unknown): x is ReportPeriodChoice {
+  return typeof x === 'string' && (REPORT_PERIOD_CHOICES as readonly string[]).includes(x);
+}
+
+/**
+ * The spec for a Fund analytics report. The point-to-point periods are the three trailing ones (1Y, 3Y, 5Y); the analysis
+ * window follows the user's choice. `since_first_held` and `all_history` leave analysisStart null here: the planner then
+ * starts from each scheme's earliest held date (the "first endpoint"), and the report assembler narrows the metric window
+ * per scheme to its own first held date for `since_first_held`.
+ */
+export function reportAnalysisSpec(asOfDate: string, policy: Nav2Policy, choice: ReportPeriodChoice): AnalysisSpec {
+  const base = standardAnalysisSpec(asOfDate, policy);
+  const trailing: PointToPointRequest[] = [
+    { id: '1Y', start: subtractMonthsIso(asOfDate, 12), end: asOfDate },
+    { id: '3Y', start: subtractMonthsIso(asOfDate, 36), end: asOfDate },
+    { id: '5Y', start: subtractMonthsIso(asOfDate, 60), end: asOfDate },
+  ];
+  const fixedStart = choice === '1y' ? subtractMonthsIso(asOfDate, 12) : choice === '3y' ? subtractMonthsIso(asOfDate, 36) : choice === '5y' ? subtractMonthsIso(asOfDate, 60) : null;
+  return { ...base, pointToPoint: trailing, analysisStart: fixedStart };
 }

@@ -16,7 +16,6 @@
 // difference (spec 2.2: "explain the difference in plain language").
 
 import { xirr, XIRR_METHOD_VERSION, type CashFlow, type XirrUnavailableReason } from '@/lib/engines/investment-intelligence/xirr';
-import type { HoldingValuation } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import { available, makeProvenance, showDate, unavailable, type Disclosure, type Nav2Context, type Nav2Result, type Nav2UnavailableState } from './types';
 
 export const SCHEME_CAGR_LABEL = "Scheme CAGR (the fund's own growth, not your personal return)";
@@ -26,12 +25,30 @@ export const SCHEME_VS_INVESTOR_EXPLANATION =
   'Your return (XIRR) shows what you actually earned, because it follows the dates and amounts of your own investments and withdrawals. ' +
   'The two usually differ, and a difference does not mean either is wrong.';
 
+/**
+ * What the investor family needs to know about a holding's value. Both the one-folio HoldingValuation
+ * (valueHoldingAsOf) and the scheme-level SchemeValuation (valueSchemeAcrossFolios, summed over folios) satisfy it;
+ * the NAV, NAV date and statement fields exist only for a single folio and are optional.
+ */
+export interface ValuationView {
+  basis: 'market_nav' | 'statement' | 'redeemed' | 'unavailable';
+  units: number | null;
+  marketValue: number | null;
+  valuationDate: string | null;
+  stale: boolean;
+  nav?: number | null;
+  navDate?: string | null;
+  statementValue?: number | null;
+  statementAsOfDate?: string | null;
+  statementSuperseded?: boolean;
+}
+
 export interface InvestorExperienceInput {
   instrumentId: string;
   /** Investor-perspective cash flows EXCLUDING the terminal value: purchases negative, redemptions and cash distributions positive. */
   flows: readonly CashFlow[];
   /** The holding's value from valueHoldingAsOf (the one valuation rule). */
-  valuation: HoldingValuation;
+  valuation: ValuationView;
   /** Calculation date, ISO. */
   asOfDate: string;
 }
@@ -44,7 +61,7 @@ export interface XirrValue {
   terminalValue: number;
   /** The date of the NAV (or statement) the terminal value rests on. */
   terminalValueDate: string | null;
-  terminalBasis: HoldingValuation['basis'];
+  terminalBasis: ValuationView['basis'];
   solver: typeof XIRR_METHOD_VERSION;
   label: typeof INVESTOR_XIRR_LABEL;
 }
@@ -119,7 +136,7 @@ export function computeInvestorExperience(input: InvestorExperienceInput, ctx: N
   } else {
     const disclosures: Disclosure[] = [];
     if (v.basis === 'statement') {
-      disclosures.push({ code: 'statement_value', detail: `Statement value as at ${showDate(ctx, v.statementAsOfDate)}; no newer published price was used.` });
+      disclosures.push({ code: 'statement_value', detail: `Statement value as at ${showDate(ctx, v.statementAsOfDate ?? null)}; no newer published price was used.` });
     }
     if (v.stale) {
       disclosures.push({ code: 'stale_nav', detail: `The price used is dated ${showDate(ctx, v.valuationDate)}, which is not recent.` });
@@ -129,11 +146,11 @@ export function computeInvestorExperience(input: InvestorExperienceInput, ctx: N
         value: v.marketValue,
         basis: v.basis,
         units: v.units,
-        nav: v.nav,
-        navDate: v.navDate,
-        statementValue: v.statementValue,
-        statementAsOfDate: v.statementAsOfDate,
-        statementSuperseded: v.statementSuperseded,
+        nav: v.nav ?? null,
+        navDate: v.navDate ?? null,
+        statementValue: v.statementValue ?? null,
+        statementAsOfDate: v.statementAsOfDate ?? null,
+        statementSuperseded: v.statementSuperseded ?? false,
         stale: v.stale,
       },
       makeProvenance(ctx, 'current_value', { ...base, actual: { start: null, end: v.valuationDate } }),
@@ -180,7 +197,7 @@ export function computeInvestorExperience(input: InvestorExperienceInput, ctx: N
       const sorted = [...cashFlows].sort((a, b) => a.date.getTime() - b.date.getTime());
       const disclosures: Disclosure[] = [];
       if (v.basis === 'statement') {
-        disclosures.push({ code: 'statement_value', detail: `The current value is the statement value as at ${showDate(ctx, v.statementAsOfDate)}, not a market price, so this return is measured to that date.` });
+        disclosures.push({ code: 'statement_value', detail: `The current value is the statement value as at ${showDate(ctx, v.statementAsOfDate ?? null)}, not a market price, so this return is measured to that date.` });
       }
       xirrResult = available(
         {
