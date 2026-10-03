@@ -1,0 +1,198 @@
+// NAV2 Stage 2 -- generate, list and read the Fund analytics report (Premium only; a separate report under Reports).
+//
+// Order of checks in generateFundAnalyticsReport (each one fails CLOSED and stops):
+//   1. the feature switch (job-control row nav2_fund_analytics; OFF unless the row exists and is enabled)  -> 'disabled'
+//   2. Premium (getPlanTier on the service client, honouring the entitlement validity window)             -> 'forbidden'
+//   3. the report NAV gate (price history still being prepared; starts the bounded retry + the user fetch) -> 'preparing'
+//   4. the household holds at least one Indian mutual fund this report covers                              -> 'no_funds'
+//   5. build the report (pure), reuse the shared scheme-performance cache, persist the pinned row.
+//
+// The persisted row is IMMUTABLE (migration 0261): a regenerated report is a NEW version
+// (version_number = previous + 1, supersedes_report_id = previous); an earlier version is never edited.
+// Its NAV range per fund is pinned in nav2_report_nav_dependencies so the NAV retention job cannot delete the
+// observations the report rests on.
+
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { isReportPeriodChoice, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
+import { buildFundAnalyticsReport, compactSchemeFamily, manifestChecksum, schemeBundleCacheKey, schemeBundleCacheParts, type FundAnalyticsInput, type FundAnalyticsManifest, type FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
+import { getPlanTier } from '@/lib/services/entitlements';
+import type { SupabaseServerClient } from '@/lib/services/dashboardData';
+import { checkReportNavHistoryGate, waitingBody, type ReportNavGate } from '../pc6/reportNavHistoryGate';
+import { kickUserNavHistory } from '../pc6/userNavHistoryKick';
+import { loadFundAnalyticsInput, type FundAnalyticsLoadResult } from './fundAnalyticsLoader';
+import { isNav2FlagOn, NAV2_JOB_KEYS } from './nav2Flags';
+import { readCachedBundles, writeCachedBundles, type CacheWrite } from './nav2ResultCacheStore';
+
+export const FUND_ANALYTICS_DISABLED_MESSAGE = 'The Fund analytics report is not available yet.';
+export const FUND_ANALYTICS_PREMIUM_MESSAGE = 'The Fund analytics report is part of the Premium plan.';
+export const FUND_ANALYTICS_NO_FUNDS_MESSAGE = 'The Fund analytics report covers Indian mutual funds. Upload a mutual fund statement to see it.';
+
+export interface StoredReportSummary {
+  id: string;
+  versionNumber: number;
+  asOfDate: string;
+  schemeCount: number;
+  createdAt: string;
+  periodChoice: ReportPeriodChoice | null;
+}
+
+export type GenerateResult =
+  | { status: 'disabled'; message: string }
+  | { status: 'forbidden'; message: string }
+  | { status: 'preparing'; message: string; waiting: ReturnType<typeof waitingBody> }
+  | { status: 'no_funds'; message: string }
+  | { status: 'ready'; report: StoredReportSummary; cache: { hits: number; computed: number; stored: number } };
+
+export interface FundAnalyticsDeps {
+  isFlagOn: (admin: SupabaseClient) => Promise<boolean>;
+  isPremium: (userId: string, admin: SupabaseClient) => Promise<boolean>;
+  gate: (args: { admin: SupabaseClient; userId: string; today: string }) => Promise<ReportNavGate>;
+  load: (args: Parameters<typeof loadFundAnalyticsInput>[0]) => Promise<FundAnalyticsLoadResult>;
+  nowIso: () => string;
+}
+
+const defaultDeps: FundAnalyticsDeps = {
+  isFlagOn: (admin) => isNav2FlagOn(admin, NAV2_JOB_KEYS.fundAnalytics),
+  isPremium: async (userId, admin) => (await getPlanTier(userId, admin as unknown as SupabaseServerClient)) === 'premium',
+  gate: ({ admin, userId, today }) => checkReportNavHistoryGate({ db: admin as never, userId, today, createAnchor: true, kick: kickUserNavHistory }),
+  load: loadFundAnalyticsInput,
+  nowIso: () => new Date().toISOString(),
+};
+
+/** Parses the requested period; anything unrecognised is the default (never an error that leaks internals). */
+export function parsePeriodChoice(raw: unknown): ReportPeriodChoice {
+  return isReportPeriodChoice(raw) ? raw : 'since_first_held';
+}
+
+interface ReportRow {
+  id: string;
+  version_number: number;
+  as_of_date: string;
+  scheme_count: number;
+  created_at: string;
+  report_json?: { periodChoice?: string } | null;
+}
+
+const toSummary = (r: ReportRow): StoredReportSummary => ({
+  id: r.id,
+  versionNumber: r.version_number,
+  asOfDate: String(r.as_of_date).slice(0, 10),
+  schemeCount: r.scheme_count,
+  createdAt: r.created_at,
+  periodChoice: r.report_json?.periodChoice && isReportPeriodChoice(r.report_json.periodChoice) ? r.report_json.periodChoice : null,
+});
+
+export async function generateFundAnalyticsReport(args: {
+  userId: string;
+  sessionClient: SupabaseServerClient;
+  adminClient: SupabaseClient;
+  periodChoice?: unknown;
+  /** ISO date; defaults to today (UTC). */
+  asOfDate?: string;
+  deps?: Partial<FundAnalyticsDeps>;
+}): Promise<GenerateResult> {
+  const deps = { ...defaultDeps, ...(args.deps ?? {}) };
+  const admin = args.adminClient;
+  if (!(await deps.isFlagOn(admin))) return { status: 'disabled', message: FUND_ANALYTICS_DISABLED_MESSAGE };
+  if (!(await deps.isPremium(args.userId, admin))) return { status: 'forbidden', message: FUND_ANALYTICS_PREMIUM_MESSAGE };
+
+  const nowIso = deps.nowIso();
+  const asOfDate = args.asOfDate ?? nowIso.slice(0, 10);
+  const periodChoice = parsePeriodChoice(args.periodChoice);
+
+  const gate = await deps.gate({ admin, userId: args.userId, today: asOfDate });
+  if (gate.hold) return { status: 'preparing', message: gate.headline ?? 'Price history is being prepared.', waiting: waitingBody(gate) };
+
+  const loaded = await deps.load({ userId: args.userId, sessionClient: args.sessionClient, adminClient: admin, asOfDate, displayCurrency: 'INR', periodChoice, gate });
+  if (!loaded.input || loaded.input.schemes.length === 0) return { status: 'no_funds', message: FUND_ANALYTICS_NO_FUNDS_MESSAGE };
+
+  // ---- reuse the shared per-scheme cache --------------------------------------------------------------------------
+  const base: FundAnalyticsInput = loaded.input;
+  const keyed = base.schemes.map((h) => ({ h, key: schemeBundleCacheKey(base, h) }));
+  const cached = await readCachedBundles(admin, keyed.map((k) => k.key));
+  const withCache: FundAnalyticsInput = { ...base, schemes: keyed.map(({ h, key }) => ({ ...h, cachedScheme: cached.get(key) ?? null })) };
+  const { report, manifest } = buildFundAnalyticsReport(withCache);
+
+  const writes: CacheWrite[] = [];
+  for (const { h, key } of keyed) {
+    if (cached.has(key)) continue;
+    const block = report.schemes.find((b) => b.instrumentId === h.instrumentId);
+    if (block) writes.push({ key, parts: schemeBundleCacheParts(base, h), payload: compactSchemeFamily(block.analytics.scheme) });
+  }
+  const stored = writes.length ? await writeCachedBundles(admin, writes) : 0;
+
+  const summary = await persistReport({ admin, userId: args.userId, report, manifest, nowIso });
+  return { status: 'ready', report: summary, cache: { hits: cached.size, computed: writes.length, stored } };
+}
+
+/** Persists the next version of the pinned report and its NAV dependency manifest. Retries once on a version race. */
+export async function persistReport(args: { admin: SupabaseClient; userId: string; report: FundAnalyticsReport; manifest: FundAnalyticsManifest; nowIso: string }): Promise<StoredReportSummary> {
+  const { admin, userId, report, manifest } = args;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data: prev, error: perr } = await admin
+      .from('nav2_fund_analytics_reports')
+      .select('id, version_number')
+      .eq('user_id', userId)
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (perr) throw new Error('Could not read earlier report versions.');
+    const prevRow = prev as { id: string; version_number: number } | null;
+    const row = {
+      user_id: userId,
+      version_number: (prevRow?.version_number ?? 0) + 1,
+      supersedes_report_id: prevRow?.id ?? null,
+      as_of_date: report.asOfDate,
+      reporting_currency: report.displayCurrency,
+      scheme_count: report.schemes.length,
+      policy_version: report.policyVersion,
+      engine_version: report.engineVersion,
+      risk_free_dataset_version: manifest.riskFree?.datasetVersion ?? null,
+      report_json: report,
+      manifest_json: manifest,
+      manifest_checksum: manifestChecksum(manifest),
+      state_counts: report.stateCounts,
+    };
+    const { data: ins, error: ierr } = await admin.from('nav2_fund_analytics_reports').insert(row).select('id, version_number, as_of_date, scheme_count, created_at').single();
+    if (ierr) {
+      // 23505 = another generation took this version number first: read again and take the next one.
+      if ((ierr as { code?: string }).code === '23505' && attempt === 0) continue;
+      throw new Error('The report could not be saved.');
+    }
+    const saved = ins as ReportRow;
+    const deps = manifest.schemes
+      .filter((s) => s.navRange.to)
+      .map((s) => ({ report_id: saved.id, instrument_id: s.instrumentId, nav_date_from: s.navRange.from, nav_date_to: s.navRange.to as string, series_checksum: s.navSeries.checksum }));
+    if (deps.length) {
+      const { error: derr } = await admin.from('nav2_report_nav_dependencies').insert(deps);
+      // A report whose NAV range could not be pinned must not be left looking final.
+      if (derr) throw new Error('The report could not be saved (price history could not be protected).');
+    }
+    return toSummary({ ...saved, report_json: { periodChoice: report.periodChoice } });
+  }
+  throw new Error('The report could not be saved.');
+}
+
+export async function listFundAnalyticsReports(userClient: SupabaseServerClient, userId: string, limit = 20): Promise<StoredReportSummary[]> {
+  const { data, error } = await (userClient as unknown as SupabaseClient)
+    .from('nav2_fund_analytics_reports')
+    .select('id, version_number, as_of_date, scheme_count, created_at')
+    .eq('user_id', userId)
+    .order('version_number', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error('Could not list reports.');
+  return ((data ?? []) as ReportRow[]).map(toSummary);
+}
+
+/** One of the caller's own reports (RLS + an explicit user filter); null when it does not exist or is not theirs. */
+export async function getFundAnalyticsReport(userClient: SupabaseServerClient, userId: string, id: string): Promise<{ summary: StoredReportSummary; report: FundAnalyticsReport; manifestChecksum: string } | null> {
+  const { data, error } = await (userClient as unknown as SupabaseClient)
+    .from('nav2_fund_analytics_reports')
+    .select('id, version_number, as_of_date, scheme_count, created_at, report_json, manifest_checksum')
+    .eq('user_id', userId)
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) return null;
+  const r = data as ReportRow & { report_json: FundAnalyticsReport; manifest_checksum: string };
+  return { summary: toSummary(r), report: r.report_json, manifestChecksum: r.manifest_checksum };
+}

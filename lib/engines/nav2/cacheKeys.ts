@@ -14,11 +14,15 @@
 import { createHash } from 'crypto';
 import type { Nav2MetricId, ResultFamily } from '@/lib/config/nav2/metricPolicy';
 
+/** The per-scheme performance BUNDLE (every scheme-performance metric of one scheme and window) is cached as one entry. */
+export const SCHEME_PERFORMANCE_BUNDLE = 'scheme_performance_bundle' as const;
+export type CacheMetricId = Nav2MetricId | typeof SCHEME_PERFORMANCE_BUNDLE;
+
 export interface ResultCacheKeyParts {
   /** Household / user the result belongs to. null for scheme-performance results (public data, shared). */
   scopeId: string | null;
   instrumentId: string;
-  metricId: Nav2MetricId;
+  metricId: CacheMetricId;
   definitionVersion: string;
   policyVersion: string;
   requested: { start: string | null; end: string | null };
@@ -67,7 +71,7 @@ export interface CachedResultMeta {
   family: ResultFamily;
   scopeHash: string | null;
   instrumentId: string;
-  metricId: Nav2MetricId;
+  metricId: CacheMetricId;
   policyVersion: string;
   definitionVersion: string;
   /** Last NAV date the result depends on (its actual window end). */

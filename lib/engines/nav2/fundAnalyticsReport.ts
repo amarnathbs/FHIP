@@ -15,10 +15,11 @@ import { createHash } from 'crypto';
 import { NAV2_ENGINE_VERSION, NAV2_METRICS, type Nav2Policy } from '@/lib/config/nav2/metricPolicy';
 import type { IiOptionType, IiPlanType } from '@/lib/services/investment-intelligence/types';
 import type { AnalysisSpec, ReportPeriodChoice } from './analysisSpec';
-import { computeHeldSchemeAnalytics, type HeldSchemeAnalytics } from './analyticsContract';
+import { computeHeldSchemeAnalytics, type HeldSchemeAnalytics, type SchemePerformanceFamily } from './analyticsContract';
+import { buildResultCacheKey, SCHEME_PERFORMANCE_BUNDLE, type ResultCacheKeyParts } from './cacheKeys';
 import type { Nav2BenchmarkInput } from './benchmarkGate';
 import { rankHeldSchemes, type HeldRankingValue, type RankingCandidate } from './heldRanking';
-import type { InvestorExperienceInput } from './investorExperience';
+import { computeInvestorExperience, SCHEME_VS_INVESTOR_EXPLANATION, type InvestorExperienceInput } from './investorExperience';
 import type { RiskFreeSupply } from './riskFree';
 import { correlationBetweenHeldSchemes, type CorrelationValue } from './schemeRisk';
 import type { SeriesGap, PreparedSeries } from './series';
@@ -46,6 +47,8 @@ export interface HeldSchemeInput {
   investor: InvestorExperienceInput | null;
   /** Earliest date the scheme is held from (transaction / investment date / snapshot); null when unknown. */
   firstHeldDate: string | null;
+  /** A compact scheme-performance family from the shared result cache (same key = same inputs); computed here when absent. */
+  cachedScheme?: SchemePerformanceFamily | null;
 }
 
 export interface ReportScopeNotes {
@@ -143,6 +146,59 @@ function compactTrend(r: Nav2Result<TrendValue>): Nav2Result<TrendValue> {
   return { ...r, value: { ...r.value, points: [] } };
 }
 
+/** The stored form of a scheme family: per-date trend points dropped (latest value, count and first defined date are kept). Idempotent. */
+export function compactSchemeFamily(f: SchemePerformanceFamily): SchemePerformanceFamily {
+  return {
+    ...f,
+    movingAverages: f.movingAverages.map((m) => ({ ...m, result: compactTrend(m.result) })),
+    rateOfChange: f.rateOfChange.map((m) => ({ ...m, result: compactTrend(m.result) })),
+  };
+}
+
+/** The analysis spec a scheme is computed under (since_first_held narrows the window to that scheme's own first held date). */
+export function schemeSpecFor(input: Pick<FundAnalyticsInput, 'spec' | 'periodChoice'>, h: Pick<HeldSchemeInput, 'firstHeldDate'>): AnalysisSpec {
+  return { ...input.spec, analysisStart: input.periodChoice === 'since_first_held' ? h.firstHeldDate : input.spec.analysisStart };
+}
+
+/**
+ * The shared-cache key parts of one scheme's performance bundle. Every input that can change a number is in the key:
+ * the policy and engine versions, a digest of the spec, the NAV series checksum and window, the benchmark (id, dataset
+ * version and the gate facts that decide availability) and the risk-free dataset. No user scope: the bundle depends
+ * on public data only (spec 14), so one entry serves every household holding the scheme.
+ */
+export function schemeBundleCacheParts(input: Pick<FundAnalyticsInput, 'spec' | 'periodChoice' | 'policy' | 'riskFree' | 'displayCurrency'>, h: HeldSchemeInput): ResultCacheKeyParts {
+  const spec = schemeSpecFor(input, h);
+  const specDigest = createHash('sha256').update(JSON.stringify(spec)).digest('hex').slice(0, 12);
+  const segs = h.benchmarks;
+  const benchId = segs.length ? segs.map((x) => x.benchmarkId).sort().join('+') : null;
+  const benchVersion = segs.length
+    ? createHash('sha256')
+        .update(JSON.stringify(segs.map((x) => [x.benchmarkId, x.basis ?? 'declared', x.datasetVersion, x.entitled, x.catalogueVerified, x.returnType, x.series.length, x.series.length ? x.series[x.series.length - 1].value : null, x.effectiveFrom.toISOString(), x.effectiveTo ? x.effectiveTo.toISOString() : null])))
+        .digest('hex')
+        .slice(0, 16)
+    : null;
+  return {
+    scopeId: null,
+    instrumentId: h.instrumentId,
+    metricId: SCHEME_PERFORMANCE_BUNDLE,
+    definitionVersion: `${NAV2_ENGINE_VERSION}:${FUND_ANALYTICS_REPORT_VERSION}:${specDigest}`,
+    policyVersion: input.policy.version,
+    requested: { start: spec.analysisStart, end: spec.asOfDate },
+    actual: { start: h.series.firstDate, end: h.series.lastDate },
+    navSeriesChecksum: h.series.checksum,
+    benchmarkId: benchId,
+    benchmarkDatasetVersion: benchVersion,
+    riskFreeDatasetId: input.riskFree?.seriesId ?? null,
+    riskFreeDatasetVersion: input.riskFree ? `${input.riskFree.datasetVersion}|${input.riskFree.enabled}` : null,
+    transactionVersion: null,
+    currency: input.displayCurrency,
+  };
+}
+
+export function schemeBundleCacheKey(input: Parameters<typeof schemeBundleCacheParts>[0], h: HeldSchemeInput): string {
+  return buildResultCacheKey(schemeBundleCacheParts(input, h));
+}
+
 function downsample<T extends [string, number]>(points: T[]): { out: T[]; downsampled: boolean } {
   if (points.length <= CHART_MAX_POINTS) return { out: points, downsampled: false };
   const out: T[] = [];
@@ -189,17 +245,11 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
     // `since_first_held` narrows each scheme's metric window to ITS OWN first held date.
     const analysisStart = input.periodChoice === 'since_first_held' ? h.firstHeldDate : input.spec.analysisStart;
     const spec: AnalysisSpec = { ...input.spec, analysisStart };
-    const analytics = computeHeldSchemeAnalytics({ series: h.series, spec, ctx, benchmarks: h.benchmarks, riskFree: input.riskFree }, h.investor);
+    const analytics: HeldSchemeAnalytics = h.cachedScheme
+      ? { scheme: h.cachedScheme, investor: h.investor ? computeInvestorExperience(h.investor, ctx) : null, explanation: SCHEME_VS_INVESTOR_EXPLANATION }
+      : computeHeldSchemeAnalytics({ series: h.series, spec, ctx, benchmarks: h.benchmarks, riskFree: input.riskFree }, h.investor);
     const chart = chartFor(h.series, ctx);
-    const scheme = analytics.scheme;
-    const stored: HeldSchemeAnalytics = {
-      ...analytics,
-      scheme: {
-        ...scheme,
-        movingAverages: scheme.movingAverages.map((m) => ({ ...m, result: compactTrend(m.result) })),
-        rateOfChange: scheme.rateOfChange.map((m) => ({ ...m, result: compactTrend(m.result) })),
-      },
-    };
+    const stored: HeldSchemeAnalytics = { ...analytics, scheme: compactSchemeFamily(analytics.scheme) };
     return {
       instrumentId: h.instrumentId,
       schemeName: h.schemeName,

@@ -68,6 +68,12 @@ export function createInMemoryDb(): InMemoryDb {
       select: () => chain,
       update: (p: Row) => { patch = p; return chain; },
       insert: (r: Row | Row[]) => { inserted = (Array.isArray(r) ? r : [r]).map((x) => ({ id: `ins-${Math.random().toString(36).slice(2, 10)}`, ...x })); return chain; },
+      // .upsert(rows, { onConflict, ignoreDuplicates }) -- insert-if-absent on one key column (NAV2 result cache).
+      upsert: (r: Row | Row[], o?: { onConflict?: string; ignoreDuplicates?: boolean }) => {
+        const key = o?.onConflict;
+        inserted = (Array.isArray(r) ? r : [r]).filter((x) => !key || !(db.tables[table] ?? []).some((e) => e[key] === x[key])).map((x) => ({ id: `ins-${Math.random().toString(36).slice(2, 10)}`, ...x }));
+        return chain;
+      },
       delete: () => { deleting = true; return chain; },
       eq: (c: string, v: unknown) => { filters.push((r) => r[c] === v); return chain; },
       neq: (c: string, v: unknown) => { filters.push((r) => r[c] !== v); return chain; },
@@ -96,9 +102,11 @@ export function createInMemoryDb(): InMemoryDb {
       returns: () => chain,
       maybeSingle: async () => ({ data: run()[0] ?? null, error: null }),
       single: async () => ({ data: run()[0] ?? null, error: null }),
-      then: (resolve: (v: { data: Row[]; error: null }) => unknown, reject?: (e: unknown) => unknown) => {
+      then: (resolve: (v: { data: Row[]; error: null; count: number }) => unknown, reject?: (e: unknown) => unknown) => {
         try {
-          return Promise.resolve(resolve({ data: run(), error: null }));
+          const data = run();
+          // `count` mirrors { count: 'exact' } (rows returned) -- added for the NAV2 loader's head counts.
+          return Promise.resolve(resolve({ data, error: null, count: data.length }));
         } catch (e) {
           return reject ? reject(e) : Promise.reject(e);
         }
