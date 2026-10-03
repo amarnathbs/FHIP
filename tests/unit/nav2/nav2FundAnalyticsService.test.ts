@@ -83,6 +83,8 @@ describe('the feature switch (NC-S1)', () => {
     expect(await isNav2FlagOn(db.client as unknown as SupabaseClient, NAV2_JOB_KEYS.fundAnalytics)).toBe(false);
     db.reset({ ii_reference_job_control: [{ job_key: NAV2_JOB_KEYS.fundAnalytics, enabled: true }] });
     expect(await isNav2FlagOn(db.client as unknown as SupabaseClient, NAV2_JOB_KEYS.fundAnalytics)).toBe(true);
+    const errored = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { enabled: true }, error: { message: 'permission denied' } }) }) }) }) } as unknown as SupabaseClient;
+    expect(await isNav2FlagOn(errored, NAV2_JOB_KEYS.fundAnalytics)).toBe(false); // a read error is OFF even if data came back
     const broken = { from: () => { throw new Error('relation does not exist'); } } as unknown as SupabaseClient;
     expect(await isNav2FlagOn(broken, NAV2_JOB_KEYS.fundAnalytics)).toBe(false);
   });
