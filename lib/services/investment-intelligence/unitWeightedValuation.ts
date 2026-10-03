@@ -94,8 +94,31 @@ export function buildUnitWeightedValuationSeries(
     if (t < firstAcquisitionTime) continue;
     while (cpIndex + 1 < checkpoints.length && checkpoints[cpIndex + 1].time <= t) cpIndex++;
     const balance = cpIndex >= 0 ? checkpoints[cpIndex].balance : ZERO;
-    if (balance <= ZERO) continue; // fully redeemed as of this NAV date — no position to value
+    if (balance <= ZERO) continue; // fully redeemed as of this NAV date — no unit-weighted value to emit
     out.push({ date: nav.date, value: scaledToNumber(balance) * nav.value });
   }
-  return out;
+
+  // CLOSING ZERO POINTS (redeemed-fund fix, 2026-10-03). Skipping zero-balance
+  // dates is not enough on its own: every consumer reads this series with
+  // "latest point on or before the date" (valueOnOrBefore), so a fully
+  // redeemed position whose series simply stops would keep its last pre-exit
+  // value alive forever -- a phantom value in the portfolio total, the
+  // drawdown / growth-of-100 series and the benchmark blend weights. So at the
+  // date the unit balance actually reaches zero (the redemption transaction's
+  // own date, not the next NAV date), an explicit 0 is written. A later
+  // re-purchase simply resumes the positive points after it.
+  const zeroDates: number[] = [];
+  for (let i = 1; i < checkpoints.length; i++) {
+    if (checkpoints[i].balance <= ZERO && checkpoints[i - 1].balance > ZERO) zeroDates.push(checkpoints[i].time);
+  }
+  if (zeroDates.length === 0) return out;
+  const firstPositive = out.length ? out[0].date.getTime() : null;
+  if (firstPositive === null) return out;
+  const merged: SeriesPoint[] = [...out];
+  for (const time of zeroDates) {
+    // Only close a position the series actually valued before this date.
+    if (time <= firstPositive) continue;
+    merged.push({ date: new Date(time), value: 0 });
+  }
+  return merged.sort((a, b) => a.date.getTime() - b.date.getTime());
 }

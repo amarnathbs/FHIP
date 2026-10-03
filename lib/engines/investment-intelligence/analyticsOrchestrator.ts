@@ -342,6 +342,22 @@ function schemeRealFlows(s: SchemeDataset): CashFlow[] {
 }
 
 /**
+ * A scheme with nothing held now (currentValue 0) contributes 0 from the day
+ * after its last valued point (or its own zero-valuation date, if later) onward.
+ * A series that already ends on a zero, or a scheme still holding value, is
+ * returned unchanged. Pure; never mutates its input.
+ */
+export function closeRedeemedSeries(points: SeriesPoint[], s: Pick<SchemeDataset, 'currentValue' | 'currentValueDate'>): SeriesPoint[] {
+  if (points.length === 0 || s.currentValue > 0) return points;
+  const sorted = [...points].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const last = sorted[sorted.length - 1];
+  if (!(last.value > 0)) return points;
+  const dayAfterLast = last.date.getTime() + 86_400_000;
+  const closeAt = Math.max(s.currentValueDate.getTime(), dayAfterLast);
+  return [...sorted, { date: new Date(closeAt), value: 0 }];
+}
+
+/**
  * Document2 D-3 (PO decision 2026-10-03). A holdings-only scheme (a statement
  * holding with NO usable transaction) has a current value but no cost flow, so
  * counting its value in the portfolio terminal value inflates the portfolio
@@ -376,8 +392,19 @@ function analysePortfolioCurrency(
   // portfolio's benchmark-blend/drawdown genuinely need a valuation
   // TIME SERIES, which a single statement snapshot per position can never
   // provide regardless of how much NAV history exists for the instrument.
+  //
+  // Redeemed-fund fix (2026-10-03): every reader takes "the latest point on or
+  // before the date", so a scheme that is fully redeemed (nothing held now)
+  // must END on an explicit zero or its last pre-exit value is carried forward
+  // as a phantom position into the portfolio total, the drawdown and growth-of-100
+  // series and the benchmark blend weights. The unit-ledger reconstruction now
+  // writes that zero itself; closeRedeemedSeries() is the safety net for a
+  // series that does not (e.g. a lone statement snapshot taken before the exit).
   const schemeSeries = (s: SchemeDataset): SeriesPoint[] =>
-    s.reconstructedValuationSeries && s.reconstructedValuationSeries.length >= 2 ? s.reconstructedValuationSeries : s.valuationSeries;
+    closeRedeemedSeries(
+      s.reconstructedValuationSeries && s.reconstructedValuationSeries.length >= 2 ? s.reconstructedValuationSeries : s.valuationSeries,
+      s
+    );
 
   const allDates = new Set<number>();
   for (const s of group) for (const p of schemeSeries(s)) allDates.add(p.date.getTime());
