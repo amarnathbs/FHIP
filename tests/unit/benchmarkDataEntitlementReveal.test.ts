@@ -70,6 +70,6 @@ describe('source contract: the refs are attached and the effect scrolls and focu
     expect(tab).toContain('dec.canProposeEntitlement');
     expect(tab).toContain('apiPaths.entitlements()');
     expect(tab).toContain('Propose an entitlement');
-    expect(tab).toContain('validateEntitlementForm(form)');
+    expect(tab).toContain('validateEntitlementForm(form, row?.catalogue)');
   });
 });

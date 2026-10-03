@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import type { CatalogueRowView, OverviewResponse } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { usePost, type Say } from './api';
+import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
+import { CATALOGUE_DATE_KEYS, CATALOGUE_FIELD_LABELS, CATALOGUE_FIELD_MAP, CATALOGUE_FIELD_ORDER, NOTE_FIELD_LABELS, NOTE_FIELD_MAP, NOTE_FIELD_ORDER } from './benchmarkDataFormErrors';
 import {
   ASSET_CLASS_OPTIONS,
   HISTORY_CLASS_OPTIONS,
@@ -29,13 +31,18 @@ import {
 } from './benchmarkDataUiLogic';
 import { Btn, Chip, EmptyState, Notice, Panel, ScrollTable, SelectField, Td, DateField, TextAreaField, TextField, Th } from './ui';
 
+const CATALOGUE_SPEC: FormSpec = { order: CATALOGUE_FIELD_ORDER, labels: CATALOGUE_FIELD_LABELS, map: CATALOGUE_FIELD_MAP, dateKeys: CATALOGUE_DATE_KEYS };
+const NOTE_SPEC: FormSpec = { order: NOTE_FIELD_ORDER, labels: NOTE_FIELD_LABELS, map: NOTE_FIELD_MAP };
+
 export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewResponse; onChanged: () => void; say: Say }) {
   const caps = ov.capabilities;
   const dec = capabilityDecisions(caps);
   const { busy, post } = usePost(say);
   const [form, setForm] = useState<CatalogueFormState | null>(null);
   const [editing, setEditing] = useState<CatalogueRowView | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const fb = useFormFeedback(CATALOGUE_SPEC);
+  const fbVerify = useFormFeedback(NOTE_SPEC);
+  const errors = fb.errors;
   const [verifying, setVerifying] = useState<CatalogueRowView | null>(null);
   const [note, setNote] = useState('');
   const rows = ov.rows.map((r) => r.catalogue);
@@ -47,13 +54,16 @@ export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewRespo
   async function save() {
     if (!form) return;
     const e = validateCatalogueForm(form);
-    setErrors(e);
+    fb.showClientErrors(e);
     if (Object.keys(e).length > 0) return;
     const r = await post(apiPaths.catalogue(), buildCatalogueBody(form), `Saved ${form.benchmarkKey} as a draft. It must be verified before it is treated as verified.`, 'save this catalogue entry');
     if (r.ok) {
+      fb.clear();
       setForm(null);
       setEditing(null);
       onChanged();
+    } else {
+      fb.showServerFailure(r.body, r.message);
     }
   }
 
@@ -61,9 +71,12 @@ export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewRespo
     if (!verifying) return;
     const r = await post(apiPaths.catalogueVerify(verifying.id), { note: note.trim() }, `${verifying.label} is now verified.`, 'verify this catalogue entry');
     if (r.ok) {
+      fbVerify.clear();
       setVerifying(null);
       setNote('');
       onChanged();
+    } else {
+      fbVerify.showServerFailure(r.body, r.message);
     }
   }
 
@@ -74,7 +87,7 @@ export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewRespo
       <Panel
         title="Benchmark catalogue"
         description="The benchmarks FHIP knows about, with their exact return type and currency. Catalogue information can exist before any data is loaded."
-        actions={dec.canManageCatalogue ? <Btn onClick={() => { setEditing(null); setForm(emptyCatalogueForm()); setErrors({}); }}>Add a benchmark</Btn> : undefined}
+        actions={dec.canManageCatalogue ? <Btn onClick={() => { setEditing(null); setForm(emptyCatalogueForm()); fb.clear(); }}>Add a benchmark</Btn> : undefined}
       >
         {!dec.canManageCatalogue ? <Notice tone="info">{dec.why.catalogue}</Notice> : null}
         {rows.length === 0 ? (
@@ -99,8 +112,8 @@ export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewRespo
                     <Td>{c.evidenceRef ?? 'none'}{c.evidenceRetrievedAt ? `, retrieved ${formatDate(c.evidenceRetrievedAt)}` : ''}{link ? <> <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-trust underline">Source (opens in a new tab)</a></> : null}</Td>
                     <Td>
                       <div className="flex flex-wrap gap-1">
-                        {dec.canManageCatalogue ? <Btn kind="secondary" onClick={() => { setEditing(c); setForm(catalogueFormFromRow(c)); setErrors({}); }}>{`Edit ${c.benchmarkKey}`}</Btn> : null}
-                        {canVerifyCatalogue(c, caps) ? <Btn kind="secondary" onClick={() => { setVerifying(c); setNote(''); }}>{`Verify ${c.benchmarkKey}`}</Btn> : null}
+                        {dec.canManageCatalogue ? <Btn kind="secondary" onClick={() => { setEditing(c); setForm(catalogueFormFromRow(c)); fb.clear(); }}>{`Edit ${c.benchmarkKey}`}</Btn> : null}
+                        {canVerifyCatalogue(c, caps) ? <Btn kind="secondary" onClick={() => { setVerifying(c); setNote(''); fbVerify.clear(); }}>{`Verify ${c.benchmarkKey}`}</Btn> : null}
                       </div>
                     </Td>
                   </tr>
@@ -113,38 +126,44 @@ export default function CatalogueTab({ ov, onChanged, say }: { ov: OverviewRespo
 
       {verifying && dec.canManageCatalogue ? (
         <Panel title={`Verify ${verifying.label}`} description="Verifying says the facts in this entry were checked against the official source. Anything you change later returns it to draft.">
-          <TextAreaField label="Verification note" required value={note} onChange={setNote} hint="At least 10 characters: what you checked and where." error={note.length > 0 ? noteErr : null} />
-          <div className="mt-2 flex gap-2"><Btn disabled={noteErr !== null} busy={busy} onClick={() => void verify()}>Verify this benchmark</Btn><Btn kind="secondary" onClick={() => setVerifying(null)}>Cancel</Btn></div>
+          <div data-form={fbVerify.formId}>
+          <FormFeedback fb={fbVerify} />
+          <TextAreaField label="Verification note" required value={note} onChange={setNote} hint="At least 10 characters: what you checked and where." error={note.length > 0 ? noteErr : fbVerify.errors.note} fieldKey="note" />
+          <div className="mt-2 flex gap-2"><Btn disabled={noteErr !== null} busy={busy} onClick={() => void verify()}>Verify this benchmark</Btn><Btn kind="secondary" onClick={() => { fbVerify.clear(); setVerifying(null); }}>Cancel</Btn></div>
+          </div>
         </Panel>
       ) : null}
 
       {form && dec.canManageCatalogue ? (
         <Panel title={editing ? `Edit ${editing.label}` : 'Add a benchmark'}>
+          <div data-form={fb.formId}>
+          <FormFeedback fb={fb} />
           {editing?.catalogueStatus === 'verified' ? <Notice tone="warn" title="This entry is verified">Saving changes returns it to draft until it is verified again. Its key, return type, variant, currency and country cannot be changed; create a new key for a different variant.</Notice> : null}
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <TextField label="Key" required value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v.toUpperCase() })} disabled={isLocked('benchmarkKey') || editing !== null} hint="Capital letters, digits and underscores, 3 to 64 characters." error={errors.benchmarkKey} />
-            <TextField label="Display label (optional)" value={form.label} onChange={(v) => set({ label: v })} />
-            <TextField label="Official name" required value={form.officialName} onChange={(v) => set({ officialName: v })} error={errors.officialName} />
-            <TextField label="Owner" required value={form.ownerName} onChange={(v) => set({ ownerName: v })} error={errors.ownerName} />
-            <TextField label="Official identifier" value={form.officialIdentifier} onChange={(v) => set({ officialIdentifier: v })} error={errors.officialIdentifier} />
-            <SelectField label="Asset class" required value={form.assetClass} onChange={(v) => set({ assetClass: v })} options={ASSET_CLASS_OPTIONS} error={errors.assetClass} />
-            <TextField label="Country (two letters)" value={form.countryCode} onChange={(v) => set({ countryCode: v })} maxLength={2} disabled={isLocked('countryCode')} error={errors.countryCode} />
-            <TextField label="Currency (three letters)" required value={form.currencyCode} onChange={(v) => set({ currencyCode: v })} maxLength={3} disabled={isLocked('currencyCode')} error={errors.currencyCode} />
-            <SelectField label="Return type" required value={form.returnType} onChange={(v) => set({ returnType: v })} options={RETURN_TYPE_OPTIONS} disabled={isLocked('returnType')} error={errors.returnType} />
-            <SelectField label="Exact variant" required value={form.returnVariant} onChange={(v) => set({ returnVariant: v as CatalogueFormState['returnVariant'] })} options={VARIANT_OPTIONS} disabled={isLocked('returnVariant')} error={errors.returnVariant} />
-            <DateField label="Base date" value={form.baseDate} onChange={(v) => set({ baseDate: v })} error={errors.baseDate} />
-            <TextField label="Base value" value={form.baseValue} onChange={(v) => set({ baseValue: v })} error={errors.baseValue} />
-            <DateField label="Launch date" value={form.launchDate} onChange={(v) => set({ launchDate: v })} error={errors.launchDate} />
-            <DateField label="History start date" value={form.historyStartDate} onChange={(v) => set({ historyStartDate: v })} error={errors.historyStartDate} />
-            <SelectField label="History type" value={form.historyClass} onChange={(v) => set({ historyClass: v as CatalogueFormState['historyClass'] })} options={HISTORY_CLASS_OPTIONS} />
-            <DateField label="Backtested through" value={form.backtestedThrough} onChange={(v) => set({ backtestedThrough: v })} error={errors.backtestedThrough} hint="Needed for backtested or mixed history." />
-            <TextField label="Trading calendar" value={form.calendarCode} onChange={(v) => set({ calendarCode: v })} />
-            <TextField label="Methodology URL" type="url" value={form.methodologyUrl} onChange={(v) => set({ methodologyUrl: v })} error={errors.methodologyUrl} />
-            <TextField label="Source URL" type="url" value={form.sourceUrl} onChange={(v) => set({ sourceUrl: v })} error={errors.sourceUrl} />
-            <TextField label="Evidence reference" required value={form.evidenceRef} onChange={(v) => set({ evidenceRef: v })} error={errors.evidenceRef} hint="A document title or reference for the facts above." />
-            <DateField label="Evidence retrieved on" required value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
+            <TextField label="Key" required value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v.toUpperCase() })} disabled={isLocked('benchmarkKey') || editing !== null} hint="Capital letters, digits and underscores, 3 to 64 characters." error={errors.benchmarkKey} fieldKey="benchmarkKey" />
+            <TextField label="Display label (optional)" value={form.label} onChange={(v) => set({ label: v })} error={errors.label} fieldKey="label" />
+            <TextField label="Official name" required value={form.officialName} onChange={(v) => set({ officialName: v })} error={errors.officialName} fieldKey="officialName" />
+            <TextField label="Owner" required value={form.ownerName} onChange={(v) => set({ ownerName: v })} error={errors.ownerName} fieldKey="ownerName" />
+            <TextField label="Official identifier" value={form.officialIdentifier} onChange={(v) => set({ officialIdentifier: v })} error={errors.officialIdentifier} fieldKey="officialIdentifier" />
+            <SelectField label="Asset class" required value={form.assetClass} onChange={(v) => set({ assetClass: v })} options={ASSET_CLASS_OPTIONS} error={errors.assetClass} fieldKey="assetClass" />
+            <TextField label="Country (two letters)" value={form.countryCode} onChange={(v) => set({ countryCode: v })} maxLength={2} disabled={isLocked('countryCode')} error={errors.countryCode} fieldKey="countryCode" />
+            <TextField label="Currency (three letters)" required value={form.currencyCode} onChange={(v) => set({ currencyCode: v })} maxLength={3} disabled={isLocked('currencyCode')} error={errors.currencyCode} fieldKey="currencyCode" />
+            <SelectField label="Return type" required value={form.returnType} onChange={(v) => set({ returnType: v })} options={RETURN_TYPE_OPTIONS} disabled={isLocked('returnType')} error={errors.returnType} fieldKey="returnType" />
+            <SelectField label="Exact variant" required value={form.returnVariant} onChange={(v) => set({ returnVariant: v as CatalogueFormState['returnVariant'] })} options={VARIANT_OPTIONS} disabled={isLocked('returnVariant')} error={errors.returnVariant} fieldKey="returnVariant" />
+            <DateField label="Base date" value={form.baseDate} onChange={(v) => set({ baseDate: v })} error={errors.baseDate} fieldKey="baseDate" />
+            <TextField label="Base value" value={form.baseValue} onChange={(v) => set({ baseValue: v })} error={errors.baseValue} fieldKey="baseValue" />
+            <DateField label="Launch date" value={form.launchDate} onChange={(v) => set({ launchDate: v })} error={errors.launchDate} fieldKey="launchDate" />
+            <DateField label="History start date" value={form.historyStartDate} onChange={(v) => set({ historyStartDate: v })} error={errors.historyStartDate} fieldKey="historyStartDate" />
+            <SelectField label="History type" value={form.historyClass} onChange={(v) => set({ historyClass: v as CatalogueFormState['historyClass'] })} options={HISTORY_CLASS_OPTIONS} error={errors.historyClass} fieldKey="historyClass" />
+            <DateField label="Backtested through" value={form.backtestedThrough} onChange={(v) => set({ backtestedThrough: v })} error={errors.backtestedThrough} fieldKey="backtestedThrough" hint="Needed for backtested or mixed history." />
+            <TextField label="Trading calendar" value={form.calendarCode} onChange={(v) => set({ calendarCode: v })} error={errors.calendarCode} fieldKey="calendarCode" />
+            <TextField label="Methodology URL" type="url" value={form.methodologyUrl} onChange={(v) => set({ methodologyUrl: v })} error={errors.methodologyUrl} fieldKey="methodologyUrl" />
+            <TextField label="Source URL" type="url" value={form.sourceUrl} onChange={(v) => set({ sourceUrl: v })} error={errors.sourceUrl} fieldKey="sourceUrl" />
+            <TextField label="Evidence reference" required value={form.evidenceRef} onChange={(v) => set({ evidenceRef: v })} error={errors.evidenceRef} fieldKey="evidenceRef" hint="A document title or reference for the facts above." />
+            <DateField label="Evidence retrieved on" required value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} fieldKey="evidenceRetrievedAt" />
           </div>
-          <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void save()}>Save as draft</Btn><Btn kind="secondary" onClick={() => { setForm(null); setEditing(null); }}>Cancel</Btn></div>
+          <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void save()}>Save as draft</Btn><Btn kind="secondary" onClick={() => { fb.clear(); setForm(null); setEditing(null); }}>Cancel</Btn></div>
+          </div>
         </Panel>
       ) : null}
     </div>

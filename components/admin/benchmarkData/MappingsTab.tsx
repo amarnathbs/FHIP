@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import type { MappingProposalView, OverviewResponse } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { usePost, useLoad, type Say } from './api';
+import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
+import { MAPPING_DATE_KEYS, MAPPING_FIELD_LABELS, MAPPING_FIELD_MAP, MAPPING_FIELD_ORDER, NOTE_FIELD_LABELS, NOTE_FIELD_MAP, NOTE_FIELD_ORDER } from './benchmarkDataFormErrors';
 import {
   CONFIDENCE_OPTIONS,
   EVIDENCE_SOURCE_OPTIONS,
@@ -27,13 +29,18 @@ import {
 } from './benchmarkDataUiLogic';
 import { Btn, CheckField, Chip, EmptyState, ErrorPanel, LoadingPanel, Notice, Panel, ScrollTable, SelectField, Td, DateField, TextAreaField, TextField, Th } from './ui';
 
+const MAPPING_SPEC: FormSpec = { order: MAPPING_FIELD_ORDER, labels: MAPPING_FIELD_LABELS, map: MAPPING_FIELD_MAP, dateKeys: MAPPING_DATE_KEYS };
+const NOTE_SPEC: FormSpec = { order: NOTE_FIELD_ORDER, labels: NOTE_FIELD_LABELS, map: NOTE_FIELD_MAP };
+
 export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: OverviewResponse; refreshKey: number; onChanged: () => void; say: Say }) {
   const caps = ov.capabilities;
   const dec = capabilityDecisions(caps);
   const { state, reload } = useLoad<MappingProposalView[]>(`${apiPaths.mappings()}?r=${refreshKey}`, 'load the mapping proposals');
   const { busy, post } = usePost(say);
   const [form, setForm] = useState<MappingFormState | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const fb = useFormFeedback(MAPPING_SPEC);
+  const fbReview = useFormFeedback(NOTE_SPEC);
+  const errors = fb.errors;
   const [review, setReview] = useState<{ p: MappingProposalView; decision: 'approve' | 'reject' } | null>(null);
   const [note, setNote] = useState('');
   const [closePrev, setClosePrev] = useState(false);
@@ -46,14 +53,17 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
   async function propose() {
     if (!form) return;
     const e = validateMappingForm(form);
-    setErrors(e);
+    fb.showClientErrors(e);
     if (Object.keys(e).length > 0) return;
     const bm = ov.rows.find((r) => r.catalogue.benchmarkKey === form.benchmarkKey);
     const r = await post(apiPaths.mappings(), buildMappingBody(form, bm ? bm.catalogue.id : null), 'Proposed. It changes nothing until it is reviewed.', 'propose this mapping');
     if (r.ok) {
+      fb.clear();
       setForm(null);
       reload();
       onChanged();
+    } else {
+      fb.showServerFailure(r.body, r.message);
     }
   }
 
@@ -61,11 +71,14 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
     if (!review) return;
     const r = await post(apiPaths.mappingReview(review.p.id), { decision: review.decision, note: note.trim(), closePrevious: review.decision === 'approve' ? closePrev : undefined }, review.decision === 'approve' ? 'The mapping is approved and now in force.' : 'The proposal is rejected.', 'review this mapping');
     if (r.ok) {
+      fbReview.clear();
       setReview(null);
       setNote('');
       setClosePrev(false);
       reload();
       onChanged();
+    } else {
+      fbReview.showServerFailure(r.body, r.message);
     }
   }
 
@@ -73,7 +86,7 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
 
   return (
     <div className="space-y-4">
-      <Panel title="Scheme to benchmark mapping proposals" description="Each proposal carries the evidence it rests on. Only deterministic, high-confidence matches to a verified benchmark are ever published automatically; everything else waits here for a reviewer." actions={dec.canReviewMappings ? <Btn onClick={() => { setForm(emptyMappingForm()); setErrors({}); }}>Propose a mapping</Btn> : undefined}>
+      <Panel title="Scheme to benchmark mapping proposals" description="Each proposal carries the evidence it rests on. Only deterministic, high-confidence matches to a verified benchmark are ever published automatically; everything else waits here for a reviewer." actions={dec.canReviewMappings ? <Btn onClick={() => { setForm(emptyMappingForm()); fb.clear(); }}>Propose a mapping</Btn> : undefined}>
         {!dec.canReviewMappings ? <Notice tone="info">{dec.why.catalogue} You can read the proposals but not propose or review them.</Notice> : null}
         {proposals.length === 0 ? (
           <EmptyState title="No mapping has been proposed">Nothing is waiting for review.</EmptyState>
@@ -102,8 +115,8 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
                     <Td>
                       {canReviewMapping(p, caps) ? (
                         <div className="flex flex-wrap gap-1">
-                          <Btn kind="secondary" onClick={() => { setReview({ p, decision: 'approve' }); setNote(''); setClosePrev(false); }}>{`Approve ${p.instrumentId.slice(0, 6)}`}</Btn>
-                          <Btn kind="danger" onClick={() => { setReview({ p, decision: 'reject' }); setNote(''); }}>{`Reject ${p.instrumentId.slice(0, 6)}`}</Btn>
+                          <Btn kind="secondary" onClick={() => { setReview({ p, decision: 'approve' }); fbReview.clear(); setNote(''); setClosePrev(false); }}>{`Approve ${p.instrumentId.slice(0, 6)}`}</Btn>
+                          <Btn kind="danger" onClick={() => { setReview({ p, decision: 'reject' }); fbReview.clear(); setNote(''); }}>{`Reject ${p.instrumentId.slice(0, 6)}`}</Btn>
                         </div>
                       ) : null}
                     </Td>
@@ -117,34 +130,40 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
 
       {review && dec.canReviewMappings ? (
         <Panel title={`${review.decision === 'approve' ? 'Approve' : 'Reject'} the proposal for ${review.p.instrumentName ?? 'this scheme'}`}>
-          <TextAreaField label="Review note" required value={note} onChange={setNote} hint="At least 10 characters; recorded permanently." error={note.length > 0 ? rp : null} />
+          <div data-form={fbReview.formId}>
+          <FormFeedback fb={fbReview} />
+          <TextAreaField label="Review note" required value={note} onChange={setNote} hint="At least 10 characters; recorded permanently." error={note.length > 0 ? rp : fbReview.errors.note} fieldKey="note" />
           {review.decision === 'approve' ? <CheckField label="Close the previous primary mapping on the day before this one starts" hint="Needed when this replaces the scheme's current primary benchmark. Two primary mappings cannot overlap." checked={closePrev} onChange={setClosePrev} /> : null}
-          <div className="mt-2 flex gap-2"><Btn kind={review.decision === 'reject' ? 'danger' : 'primary'} busy={busy} disabled={rp !== null} onClick={() => void doReview()}>{review.decision === 'approve' ? 'Approve' : 'Reject'}</Btn><Btn kind="secondary" onClick={() => setReview(null)}>Cancel</Btn></div>
+          <div className="mt-2 flex gap-2"><Btn kind={review.decision === 'reject' ? 'danger' : 'primary'} busy={busy} disabled={rp !== null} onClick={() => void doReview()}>{review.decision === 'approve' ? 'Approve' : 'Reject'}</Btn><Btn kind="secondary" onClick={() => { fbReview.clear(); setReview(null); }}>Cancel</Btn></div>
+          </div>
         </Panel>
       ) : null}
 
       {form && dec.canReviewMappings ? (
         <Panel title="Propose a mapping" description="Use the scheme's own document (information document, factsheet or addendum). Category guidance is not evidence for one scheme.">
+          <div data-form={fb.formId}>
+          <FormFeedback fb={fb} />
           <div className="grid gap-3 sm:grid-cols-2">
-            <TextField label="Instrument id" required value={form.instrumentId} onChange={(v) => set({ instrumentId: v })} error={errors.instrumentId} hint="The scheme's instrument id (UUID)." />
-            <SelectField label="Catalogue benchmark (if it exists)" value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v })} options={ov.rows.map((r) => ({ value: r.catalogue.benchmarkKey, label: `${r.catalogue.label} (${r.catalogue.catalogueStatus})` }))} placeholder="Not in the catalogue yet" />
-            <TextField label="Benchmark name as the document states it" required value={form.proposedBenchmarkName} onChange={(v) => set({ proposedBenchmarkName: v })} error={errors.proposedBenchmarkName} />
-            <SelectField label="Relationship" value={form.relationshipType} onChange={(v) => set({ relationshipType: v as MappingFormState['relationshipType'] })} options={RELATIONSHIP_OPTIONS} placeholder="Primary benchmark" />
-            <DateField label="Effective from" required value={form.effectiveFrom} onChange={(v) => set({ effectiveFrom: v })} error={errors.effectiveFrom} />
-            <DateField label="Effective to (empty if still in force)" value={form.effectiveTo} onChange={(v) => set({ effectiveTo: v })} error={errors.effectiveTo} />
-            <SelectField label="Document type" required value={form.evidenceSource} onChange={(v) => set({ evidenceSource: v })} options={EVIDENCE_SOURCE_OPTIONS} error={errors.evidenceSource} />
-            <TextField label="Document web address" type="url" required value={form.evidenceUrl} onChange={(v) => set({ evidenceUrl: v })} error={errors.evidenceUrl} />
-            <TextField label="Document title (optional)" value={form.evidenceTitle} onChange={(v) => set({ evidenceTitle: v })} />
-            <DateField label="Document date" required value={form.evidenceDocumentDate} onChange={(v) => set({ evidenceDocumentDate: v })} error={errors.evidenceDocumentDate} />
-            <DateField label="Retrieved on" required value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} />
-            <SelectField label="How the benchmark was identified" required value={form.resolutionMethod} onChange={(v) => set({ resolutionMethod: v })} options={RESOLUTION_METHOD_OPTIONS} error={errors.resolutionMethod} />
-            <SelectField label="Confidence" required value={form.confidence} onChange={(v) => set({ confidence: v })} options={CONFIDENCE_OPTIONS} error={errors.confidence} />
+            <TextField label="Instrument id" required value={form.instrumentId} onChange={(v) => set({ instrumentId: v })} error={errors.instrumentId} fieldKey="instrumentId" hint="The scheme's instrument id (UUID)." />
+            <SelectField label="Catalogue benchmark (if it exists)" value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v })} options={ov.rows.map((r) => ({ value: r.catalogue.benchmarkKey, label: `${r.catalogue.label} (${r.catalogue.catalogueStatus})` }))} placeholder="Not in the catalogue yet" error={errors.benchmarkKey} fieldKey="benchmarkKey" />
+            <TextField label="Benchmark name as the document states it" required value={form.proposedBenchmarkName} onChange={(v) => set({ proposedBenchmarkName: v })} error={errors.proposedBenchmarkName} fieldKey="proposedBenchmarkName" />
+            <SelectField label="Relationship" value={form.relationshipType} onChange={(v) => set({ relationshipType: v as MappingFormState['relationshipType'] })} options={RELATIONSHIP_OPTIONS} placeholder="Primary benchmark" error={errors.relationshipType} fieldKey="relationshipType" />
+            <DateField label="Effective from" required value={form.effectiveFrom} onChange={(v) => set({ effectiveFrom: v })} error={errors.effectiveFrom} fieldKey="effectiveFrom" />
+            <DateField label="Effective to (empty if still in force)" value={form.effectiveTo} onChange={(v) => set({ effectiveTo: v })} error={errors.effectiveTo} fieldKey="effectiveTo" />
+            <SelectField label="Document type" required value={form.evidenceSource} onChange={(v) => set({ evidenceSource: v })} options={EVIDENCE_SOURCE_OPTIONS} error={errors.evidenceSource} fieldKey="evidenceSource" />
+            <TextField label="Document web address" type="url" required value={form.evidenceUrl} onChange={(v) => set({ evidenceUrl: v })} error={errors.evidenceUrl} fieldKey="evidenceUrl" />
+            <TextField label="Document title (optional)" value={form.evidenceTitle} onChange={(v) => set({ evidenceTitle: v })} error={errors.evidenceTitle} fieldKey="evidenceTitle" />
+            <DateField label="Document date" required value={form.evidenceDocumentDate} onChange={(v) => set({ evidenceDocumentDate: v })} error={errors.evidenceDocumentDate} fieldKey="evidenceDocumentDate" />
+            <DateField label="Retrieved on" required value={form.evidenceRetrievedAt} onChange={(v) => set({ evidenceRetrievedAt: v })} error={errors.evidenceRetrievedAt} fieldKey="evidenceRetrievedAt" />
+            <SelectField label="How the benchmark was identified" required value={form.resolutionMethod} onChange={(v) => set({ resolutionMethod: v })} options={RESOLUTION_METHOD_OPTIONS} error={errors.resolutionMethod} fieldKey="resolutionMethod" />
+            <SelectField label="Confidence" required value={form.confidence} onChange={(v) => set({ confidence: v })} options={CONFIDENCE_OPTIONS} error={errors.confidence} fieldKey="confidence" />
           </div>
           <div className="mt-3 grid gap-3">
-            <TextAreaField label="Excerpt from the document (optional, up to 400 characters)" value={form.evidenceExcerpt} onChange={(v) => set({ evidenceExcerpt: v })} maxLength={400} error={errors.evidenceExcerpt} />
-            <TextAreaField label="Anything ambiguous? (optional)" value={form.ambiguityReason} onChange={(v) => set({ ambiguityReason: v })} hint="Name variants, tiers or dates that need a human decision." />
+            <TextAreaField label="Excerpt from the document (optional, up to 400 characters)" value={form.evidenceExcerpt} onChange={(v) => set({ evidenceExcerpt: v })} maxLength={400} error={errors.evidenceExcerpt} fieldKey="evidenceExcerpt" />
+            <TextAreaField label="Anything ambiguous? (optional)" value={form.ambiguityReason} onChange={(v) => set({ ambiguityReason: v })} hint="Name variants, tiers or dates that need a human decision." error={errors.ambiguityReason} fieldKey="ambiguityReason" />
           </div>
-          <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void propose()}>Propose</Btn><Btn kind="secondary" onClick={() => setForm(null)}>Cancel</Btn></div>
+          <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void propose()}>Propose</Btn><Btn kind="secondary" onClick={() => { fb.clear(); setForm(null); }}>Cancel</Btn></div>
+          </div>
         </Panel>
       ) : null}
     </div>

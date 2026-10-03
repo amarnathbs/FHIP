@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import type { BenchmarkOverviewRow, OverviewResponse } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { usePost, type Say } from './api';
+import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
+import { INGESTION_FIELD_LABELS, INGESTION_FIELD_MAP, INGESTION_FIELD_ORDER } from './benchmarkDataFormErrors';
 import {
   AUTOMATION_CONDITIONS,
   INGESTION_MODE_OPTIONS,
@@ -21,39 +23,43 @@ import {
 } from './benchmarkDataUiLogic';
 import { Btn, CheckField, Chip, EmptyState, Notice, Panel, RadioGroup, TextAreaField, TextField } from './ui';
 
+const INGESTION_SPEC: FormSpec = { order: INGESTION_FIELD_ORDER, labels: INGESTION_FIELD_LABELS, map: INGESTION_FIELD_MAP };
+
 function Editor({ row, ov, onChanged, say }: { row: BenchmarkOverviewRow; ov: OverviewResponse; onChanged: () => void; say: Say }) {
   const [form, setForm] = useState<IngestionFormState>(() => ingestionFormFromRow(row));
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [refusal, setRefusal] = useState<string | null>(null);
+  const fb = useFormFeedback(INGESTION_SPEC);
+  const errors = fb.errors;
   const { busy, post } = usePost(say);
   const set = (p: Partial<IngestionFormState>) => setForm((f) => ({ ...f, ...p }));
   const label = ingestionModeLabel(row.ingestion, ov.switches.effectivelyEnabled);
 
   async function save() {
     const e = validateIngestionForm(form);
-    setErrors(e);
-    setRefusal(null);
+    fb.showClientErrors(e);
     if (Object.keys(e).length > 0) return;
     const r = await post(apiPaths.ingestionMode(row.catalogue.id), buildIngestionBody(form), `Ingestion mode for ${row.catalogue.label} saved.`, 'change the ingestion mode');
-    if (r.ok) onChanged();
-    else setRefusal(r.message);
+    if (r.ok) {
+      fb.clear();
+      onChanged();
+    } else {
+      fb.showServerFailure(r.body, r.message);
+    }
   }
 
   return (
     <Panel title={row.catalogue.label} actions={<Chip label={label.label} tone={label.tone} />} description={row.ingestion ? `Last manual import: ${formatDateTime(row.ingestion.lastManualImportAt)}. Last successful automated run: ${formatDateTime(row.ingestion.lastSuccessfulRunAt)}.` : 'No ingestion state has been recorded yet.'}>
-      <div className="space-y-3">
-        <RadioGroup legend="Mode" name={`mode-${row.catalogue.id}`} value={form.mode} onChange={(v) => set({ mode: v as IngestionFormState['mode'], automationEnabled: v === 'automated' ? form.automationEnabled : false })} options={INGESTION_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label, description: o.description }))} />
+      <div data-form={fb.formId} className="space-y-3">
+        <FormFeedback fb={fb} />
+        <RadioGroup error={errors.mode} fieldKey="mode" legend="Mode" name={`mode-${row.catalogue.id}`} value={form.mode} onChange={(v) => set({ mode: v as IngestionFormState['mode'], automationEnabled: v === 'automated' ? form.automationEnabled : false })} options={INGESTION_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label, description: o.description }))} />
         {form.mode === 'automated' ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <TextField label="Adapter id" required value={form.adapterId} onChange={(v) => set({ adapterId: v })} error={errors.adapterId} />
-            <TextField label="Source key (optional)" value={form.sourceKey} onChange={(v) => set({ sourceKey: v })} />
+            <TextField label="Adapter id" required value={form.adapterId} onChange={(v) => set({ adapterId: v })} error={errors.adapterId} fieldKey="adapterId" />
+            <TextField label="Source key (optional)" value={form.sourceKey} onChange={(v) => set({ sourceKey: v })} error={errors.sourceKey} fieldKey="sourceKey" />
           </div>
         ) : null}
-        <TextField label="Publication lag in days" type="number" value={form.publicationLagDays} onChange={(v) => set({ publicationLagDays: v })} error={errors.publicationLagDays} hint="How many days after a session the provider normally publishes its level." />
-        <CheckField label="Switch automation on for this benchmark" checked={form.automationEnabled} disabled={form.mode !== 'automated'} onChange={(v) => set({ automationEnabled: v })} hint={AUTOMATION_CONDITIONS} />
-        {errors.automationEnabled ? <p role="alert" className="text-xs font-medium text-risk">{errors.automationEnabled}</p> : null}
-        <TextAreaField label="Reason for this change" required value={form.reason} onChange={(v) => set({ reason: v })} hint="At least 10 characters; recorded permanently." error={errors.reason} />
-        {refusal ? <Notice tone="bad" title="The server refused this change" live="alert">{refusal}</Notice> : null}
+        <TextField label="Publication lag in days" type="number" value={form.publicationLagDays} onChange={(v) => set({ publicationLagDays: v })} error={errors.publicationLagDays} fieldKey="publicationLagDays" hint="How many days after a session the provider normally publishes its level." />
+        <CheckField label="Switch automation on for this benchmark" checked={form.automationEnabled} disabled={form.mode !== 'automated'} onChange={(v) => set({ automationEnabled: v })} hint={AUTOMATION_CONDITIONS} error={errors.automationEnabled} fieldKey="automationEnabled" />
+        <TextAreaField label="Reason for this change" required value={form.reason} onChange={(v) => set({ reason: v })} hint="At least 10 characters; recorded permanently." error={errors.reason} fieldKey="reason" />
         <Btn busy={busy} onClick={() => void save()}>Save ingestion mode</Btn>
       </div>
     </Panel>

@@ -1,4 +1,4 @@
-import type { ZodError } from 'zod';
+import type { ZodError, ZodIssue } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
@@ -30,6 +30,56 @@ function humanizeFieldName(name: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Plain-language message for ONE validation issue (never zod's own text, never a type name, an enum
+// list or a regex). Used for the per-field `fields` map below. Dates are described without a format
+// because this layer does not know which country's screen it feeds: the client names the format
+// (day-first) next to its own date fields.
+export function humanizeIssue(issue: ZodIssue): string {
+  switch (issue.code) {
+    case 'invalid_type':
+      if (issue.received === 'undefined' || issue.received === 'null') return 'This is required.';
+      if (issue.expected === 'number' || issue.expected === 'integer') return 'Enter a number.';
+      if (issue.expected === 'boolean') return 'Choose yes or no.';
+      return 'This is not in the expected form.';
+    case 'too_small':
+      if (issue.type === 'string') return Number(issue.minimum) <= 1 ? 'This is required.' : `Enter at least ${issue.minimum} characters.`;
+      if (issue.type === 'array') return 'Choose at least one option.';
+      return `Enter a number of at least ${issue.minimum}.`;
+    case 'too_big':
+      if (issue.type === 'string') return `Use at most ${issue.maximum} characters.`;
+      if (issue.type === 'array') return 'Too many options were chosen.';
+      return `Enter a number no larger than ${issue.maximum}.`;
+    case 'invalid_string':
+      if (issue.validation === 'date') return 'Enter a valid date.';
+      if (issue.validation === 'url') return 'Enter a full web address starting with https://';
+      if (issue.validation === 'uuid') return 'This identifier is not valid.';
+      return 'This is not in the expected form.';
+    case 'invalid_enum_value':
+    case 'invalid_literal':
+      return 'Choose one of the listed options.';
+    case 'custom':
+      return typeof issue.message === 'string' && issue.message.length > 0 && issue.message.length <= 200 ? issue.message : 'This value is not allowed.';
+    default:
+      return 'This is not in the expected form.';
+  }
+}
+
+/**
+ * Field-level validation messages for a 422: `{ "valid_from": "Enter a valid date." }`, keyed by the
+ * dotted API field path, first message per field. Safe to return to a client: plain sentences only,
+ * no schema internals. Issues with no path (a whole-object rule) are not in the map; they appear only
+ * in the summary sentence.
+ */
+export function validationFields(error: ZodError): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    if (issue.path.length === 0) continue;
+    const key = issue.path.map(String).join('.');
+    if (!(key in out)) out[key] = humanizeIssue(issue);
+  }
+  return out;
+}
+
 export const badValidation = (error: ZodError, code = 422, errorCode?: string) => {
   const fields = Array.from(
     new Set(
@@ -42,7 +92,9 @@ export const badValidation = (error: ZodError, code = 422, errorCode?: string) =
   const msg = fields.length
     ? `Please check: ${fields.join(', ')}. ${fields.length === 1 ? 'This field could not be saved — correct it' : 'These fields could not be saved — correct them'} and try again.`
     : 'Some of the details for this item could not be saved. Please check your entries and try again.';
-  return bad(msg, code, errorCode);
+  const body = errorCode ? { error: errorCode, message: msg } : { error: msg };
+  const fieldMap = validationFields(error);
+  return Response.json(Object.keys(fieldMap).length > 0 ? { ...body, fields: fieldMap } : body, { status: code });
 };
 
 export async function requireUser() {

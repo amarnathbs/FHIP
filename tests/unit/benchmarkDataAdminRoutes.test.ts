@@ -425,3 +425,108 @@ describe('page + nav + /me (s4 layers 3 and 4)', () => {
     expect(d).toMatchObject({ benchmarkDataPublish: false, benchmarkDataView: false });
   });
 });
+
+// ---------------------------------------------------------------------------------------------------
+// Field-level 422s: a rejected form says WHICH fields are wrong (PO, 2026-10-03: a blank/invalid
+// Propose form showed one generic banner with no field marked). Every validated route returns
+// `fields: { <api path>: <plain sentence> }` alongside `error`; a database CHECK violation is
+// translated to the same shape instead of leaking engine text that the client would hide.
+// ---------------------------------------------------------------------------------------------------
+describe('422 responses carry field-level messages (`fields`) and never leak schema internals', () => {
+  const INTERNALS = /invalid_type|expected|received|ZodError|violates|constraint|relation "|sqlstate|enum|regex/i;
+  const asCatalogue = () => {
+    adminRow = hasOnly('catalogue');
+  };
+
+  async function fieldsOf(res: Response): Promise<{ status: number; body: { error: string; fields?: Record<string, string> } }> {
+    return { status: res.status, body: (await res.json()) as { error: string; fields?: Record<string, string> } };
+  }
+
+  it('propose an entitlement with an empty body: every required field is named, in plain words', async () => {
+    asCatalogue();
+    const { status, body } = await fieldsOf(await entitlementsPOST(json({})));
+    expect(status).toBe(422);
+    expect(Object.keys(body.fields ?? {}).sort()).toEqual(['benchmark_id', 'currency_code', 'entitlement_kind', 'evidence_reference', 'return_variant', 'valid_from']);
+    for (const m of Object.values(body.fields ?? {})) {
+      expect(m).not.toMatch(INTERNALS);
+      expect(m.length).toBeGreaterThan(5);
+    }
+    expect(body.fields?.valid_from).toBe('This is required.');
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it('propose with a bad date, a too-short reference and an over-long URL: each is named with its own sentence', async () => {
+    asCatalogue();
+    const { status, body } = await fieldsOf(
+      await entitlementsPOST(
+        json({ benchmark_id: ID, entitlement_kind: 'commercial_licence', return_variant: 'total_return', currency_code: 'INR', valid_from: '31-02-2026', evidence_reference: 'abc', evidence_url: `https://x.test/${'a'.repeat(600)}` }),
+      ),
+    );
+    expect(status).toBe(422);
+    expect(body.fields).toEqual({ valid_from: 'Enter a valid date.', evidence_reference: 'Enter at least 5 characters.', evidence_url: 'Use at most 500 characters.' });
+    expect(body.error).toMatch(/Please check: Valid From, Evidence Reference, Evidence Url/);
+  });
+
+  it('a null currency/variant (a catalogue row with none declared) is named, not a generic failure', async () => {
+    asCatalogue();
+    const { body } = await fieldsOf(
+      await entitlementsPOST(json({ benchmark_id: ID, entitlement_kind: 'commercial_licence', return_variant: null, currency_code: null, valid_from: '2026-10-01', evidence_reference: 'Licence 42' })),
+    );
+    expect(Object.keys(body.fields ?? {}).sort()).toEqual(['currency_code', 'return_variant']);
+  });
+
+  it('catalogue, verify, approve, revoke, mapping review, ingestion mode and upload params all return `fields`', async () => {
+    asCatalogue();
+    expect((await fieldsOf(await cataloguePOST(json({ benchmark_key: 'ab', official_name: 'x' })))).body.fields).toMatchObject({ benchmark_key: expect.any(String), official_name: expect.any(String), owner_name: 'This is required.' });
+    expect((await fieldsOf(await verifyPOST(json({ note: 'short' }), params))).body.fields).toEqual({ note: 'Enter at least 10 characters.' });
+    adminRow = hasOnly('entitlementApprove');
+    expect((await fieldsOf(await approvePOST(json({ note: 'ok' }), params))).body.fields).toEqual({ note: 'Enter at least 5 characters.' });
+    expect((await fieldsOf(await revokePOST(json({ reason: 'short' }), params))).body.fields).toEqual({ reason: 'Enter at least 10 characters.' });
+    adminRow = hasOnly('catalogue');
+    expect((await fieldsOf(await reviewPOST(json({ decision: 'maybe', note: 'x' }), params))).body.fields).toEqual({ decision: 'Choose one of the listed options.', note: 'Enter at least 10 characters.' });
+    expect((await fieldsOf(await modePOST(json({ mode: 'sometimes', automationEnabled: 'yes', reason: 'x' }), params))).body.fields).toMatchObject({
+      mode: 'Choose one of the listed options.',
+      automationEnabled: 'Choose yes or no.',
+      reason: 'Enter at least 10 characters.',
+    });
+    adminRow = hasOnly('upload');
+    const up = await fieldsOf(
+      await uploadPOST(multipart({ shape: 'single', mode: 'correction', returnVariant: 'total_return', currencyCode: 'INR', historyClass: 'live', dateFormat: 'DD-MM-YYYY', numberLocale: 'plain', sourceOwner: 'N', sourceReference: 'abc' })),
+    );
+    expect(up.status).toBe(422);
+    expect(up.body.fields).toMatchObject({ sourceOwner: 'Enter at least 2 characters.', sourceReference: 'Enter at least 5 characters.', reason: 'A correction needs a reason of at least 20 characters.' });
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it('a database CHECK violation becomes a safe sentence plus the fields that cause it (never engine text)', async () => {
+    asCatalogue();
+    const valid = { benchmark_id: ID, entitlement_kind: 'commercial_licence', return_variant: 'total_return', currency_code: 'INR', allow_manual_ingest: true, valid_from: '2026-10-01', evidence_reference: 'Licence 42' };
+    mockRpc.mockResolvedValue({ data: null, error: { code: '23514', message: 'new row for relation "ii_benchmark_entitlements" violates check constraint "ii_benchmark_entitlements_rights_coherent"' } });
+    const a = await fieldsOf(await entitlementsPOST(json(valid)));
+    expect(a.status).toBe(422);
+    expect(a.body.error).not.toMatch(INTERNALS);
+    expect(Object.keys(a.body.fields ?? {})).toEqual(['rights']);
+    mockRpc.mockResolvedValue({ data: null, error: { code: '23514', message: 'new row for relation "ii_benchmark_entitlements" violates check constraint "ii_benchmark_entitlements_public_needs_evidence"' } });
+    const b = await fieldsOf(await entitlementsPOST(json({ ...valid, entitlement_kind: 'public_use_permission' })));
+    expect(Object.keys(b.body.fields ?? {}).sort()).toEqual(['evidence_document_date', 'evidence_retrieved_at', 'evidence_url']);
+    mockRpc.mockResolvedValue({ data: null, error: { code: '23514', message: 'new row for relation "ii_benchmark_entitlements" violates check constraint "ii_benchmark_entitlements_term"' } });
+    expect(Object.keys((await fieldsOf(await entitlementsPOST(json(valid)))).body.fields ?? {})).toEqual(['valid_to']);
+  });
+
+  it('an unrecognised constraint gets a generic safe sentence, not the engine text', async () => {
+    asCatalogue();
+    mockRpc.mockResolvedValue({ data: null, error: { code: '23514', message: 'new row for relation "x" violates check constraint "some_other_check"' } });
+    const r = await fieldsOf(await entitlementsPOST(json({ benchmark_id: ID, entitlement_kind: 'commercial_licence', return_variant: 'total_return', currency_code: 'INR', valid_from: '2026-10-01', evidence_reference: 'Licence 42' })));
+    expect(r.status).toBe(422);
+    expect(r.body.error).toBe('One of the values breaks a rule the database enforces. Check the dates and the options chosen, then try again. Nothing was changed.');
+    expect(r.body.fields).toBeUndefined();
+  });
+
+  it('the curated RPC sentence about the catalogue row is attached to the benchmark field', async () => {
+    asCatalogue();
+    mockRpc.mockResolvedValue({ data: null, error: { code: '22023', message: 'benchmark entitlement: the catalogue row has no declared variant/currency; complete the catalogue entry first' } });
+    const r = await fieldsOf(await entitlementsPOST(json({ benchmark_id: ID, entitlement_kind: 'commercial_licence', return_variant: 'total_return', currency_code: 'INR', valid_from: '2026-10-01', evidence_reference: 'Licence 42' })));
+    expect(r.status).toBe(422);
+    expect(Object.keys(r.body.fields ?? {})).toEqual(['benchmark_id']);
+  });
+});

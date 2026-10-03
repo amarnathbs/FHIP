@@ -87,22 +87,22 @@ export function useLoad<T>(url: string | null, action: string): { state: LoadSta
 export type Say = (kind: 'success' | 'failure', message: string) => void;
 
 /** POST JSON, announce the outcome, and report the plain-language message back (used for inline display too). */
-export function usePost(say: Say): { busy: boolean; post: (path: string, json: unknown, okMessage: string, action: string) => Promise<{ ok: boolean; message: string; body: Record<string, unknown> | null }> } {
+export function usePost(say: Say): { busy: boolean; post: (path: string, json: unknown, okMessage: string, action: string) => Promise<{ ok: boolean; message: string; body: Record<string, unknown> | null; status: number }> } {
   const signal = useUnmountSignal();
   const [busy, setBusy] = useState(false);
   const post = useCallback(
     async (path: string, json: unknown, okMessage: string, action: string) => {
       setBusy(true);
       const r = await apiCall(path, { method: 'POST', json, signal: signal() });
-      if (r.aborted) return { ok: false, message: '', body: null };
+      if (r.aborted) return { ok: false, message: '', body: null, status: 0 };
       setBusy(false);
       if (r.ok) {
         say('success', okMessage);
-        return { ok: true, message: okMessage, body: r.body };
+        return { ok: true, message: okMessage, body: r.body, status: r.status };
       }
       const message = failureOf(r, action).message;
       say('failure', message);
-      return { ok: false, message, body: r.body };
+      return { ok: false, message, body: r.body, status: r.status };
     },
     [say, signal]
   );

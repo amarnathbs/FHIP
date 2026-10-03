@@ -8,6 +8,8 @@
 import { useMemo, useState } from 'react';
 import type { OverviewResponse, StageUploadResponse, JobPreview } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { apiCall, failureOf, useLoad, useUnmountSignal } from './api';
+import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
+import { UPLOAD_DATE_KEYS, UPLOAD_FIELD_LABELS, UPLOAD_FIELD_MAP, UPLOAD_FIELD_ORDER, UPLOAD_FIELD_STEP } from './benchmarkDataFormErrors';
 import {
   DATE_FORMAT_OPTIONS,
   HISTORY_CLASS_OPTIONS,
@@ -92,6 +94,8 @@ function guessDelimiterHeader(text: string): string[] {
   return first.split(delim).map((h) => h.replace(/^"|"$/g, '').trim()).filter(Boolean);
 }
 
+const UPLOAD_SPEC: FormSpec = { order: UPLOAD_FIELD_ORDER, labels: UPLOAD_FIELD_LABELS, map: UPLOAD_FIELD_MAP, dateKeys: UPLOAD_DATE_KEYS };
+
 export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: OverviewResponse; preselect: string; goTab: (t: TabId) => void; onChanged: () => void }) {
   const caps = ov.capabilities;
   const decisions = capabilityDecisions(caps);
@@ -107,6 +111,7 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
   const [staged, setStaged] = useState<{ jobId: string; preview: JobPreview } | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
   const [stageError, setStageError] = useState<string | null>(null);
+  const fb = useFormFeedback(UPLOAD_SPEC);
 
   const set = (patch: Partial<UploadFormState>) => setForm((f) => ({ ...f, ...patch }));
   const ctx: UploadContext = { form, rows: ov.rows, caps, asOfDate: ov.asOfDate, file: file ? { name: file.name, size: file.size } : null, inspect, maxBytes: ov.limits.maxBytes };
@@ -169,9 +174,12 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
     if (r.aborted) return;
     setStaging(false);
     if (!r.ok) {
-      setStageError(failureOf(r, 'stage this file').message);
+      // Field-level when the server named fields (shown on the step that holds the field), otherwise a banner inside this panel.
+      const key = fb.showServerFailure(r.body, failureOf(r, 'stage this file').message);
+      if (key) setStep(UPLOAD_FIELD_STEP[key] ?? 3);
       return;
     }
+    fb.clear();
     const data = (r.body?.data ?? null) as StageUploadResponse | null;
     if (!data) {
       setStageError('The server answered in an unexpected shape. Nothing was staged.');
@@ -187,6 +195,12 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
     onChanged();
   }
 
+  /** A summary link: switch to the step that holds the field, then focus it (after that step has rendered). */
+  function goToField(key: string) {
+    setStep(UPLOAD_FIELD_STEP[key] ?? 3);
+    requestAnimationFrame(() => fb.focusField(key));
+  }
+
   function restart() {
     setStaged(null);
     setRejection(null);
@@ -198,7 +212,7 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
   const disclosure = sheetDisclosure(inspect, form.sheetName, form.includeHiddenRows);
 
   return (
-    <div className="space-y-4">
+    <div data-form={fb.formId} className="space-y-4">
       <HelpPanel />
       {!decisions.canStage ? <Notice tone="info" title="You can read this page but not upload">{decisions.why.stage}</Notice> : null}
 
@@ -220,20 +234,21 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
 
       {step === 1 ? (
         <Panel title="1. Choose the benchmark and the file shape">
+          <FormFeedback fb={fb} onNavigate={goToField} />
           <div className="space-y-4">
             <RadioGroup legend="File shape" name="shape" value={form.shape} onChange={(v) => set({ shape: v as UploadFormState['shape'] })} options={SHAPE_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} (${o.columns})`, description: o.description }))} />
             {form.shape === 'multi' ? (
               <Notice tone="info">Each row of the file names its own benchmark. Every key is checked against the catalogue; the return type and currency below apply to all of them.</Notice>
             ) : (
               <div>
-                <SelectField label="Benchmark" required value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v, entitlementId: '' })} options={benchmarkOptions} hint="Only benchmarks that already exist in the catalogue." />
+                <SelectField label="Benchmark" required value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v, entitlementId: '' })} options={benchmarkOptions} hint="Only benchmarks that already exist in the catalogue." error={fb.errors.benchmarkKey} fieldKey="benchmarkKey" />
                 <p className="mt-1 text-sm text-muted">Benchmark not listed? New benchmarks are created on the Catalogue tab, not here. <LinkBtn onClick={() => goTab('catalogue')}>Go to the Catalogue tab</LinkBtn></p>
               </div>
             )}
             {row ? <p className="text-sm text-ink">The catalogue records this benchmark as <strong>{variantLabel(row.catalogue.returnVariant)}</strong>, currency <strong>{row.catalogue.currencyCode ?? 'not declared'}</strong>.</p> : null}
             <div className="grid gap-3 sm:grid-cols-2">
-              <SelectField label="Return type of the levels in the file" required value={form.returnVariant} onChange={(v) => set({ returnVariant: v as UploadFormState['returnVariant'] })} options={VARIANT_OPTIONS} hint="Confirm what the file really contains. It must match the catalogue." error={mismatch && form.returnVariant ? mismatch : null} />
-              <TextField label="Currency of the levels in the file" required value={form.currencyCode} onChange={(v) => set({ currencyCode: v.toUpperCase() })} maxLength={3} placeholder="INR" hint="Three letters, for example INR." error={mismatch && !form.returnVariant ? mismatch : null} />
+              <SelectField label="Return type of the levels in the file" required value={form.returnVariant} onChange={(v) => set({ returnVariant: v as UploadFormState['returnVariant'] })} options={VARIANT_OPTIONS} hint="Confirm what the file really contains. It must match the catalogue." error={mismatch && form.returnVariant ? mismatch : fb.errors.returnVariant} fieldKey="returnVariant" />
+              <TextField label="Currency of the levels in the file" required value={form.currencyCode} onChange={(v) => set({ currencyCode: v.toUpperCase() })} maxLength={3} placeholder="INR" hint="Three letters, for example INR." error={mismatch && !form.returnVariant ? mismatch : fb.errors.currencyCode} fieldKey="currencyCode" />
             </div>
             {form.shape === 'provider_export' ? (
               <div className="rounded-compact border border-line p-3">
@@ -257,23 +272,24 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
 
       {step === 2 ? (
         <Panel title="2. Source and entitlement">
+          <FormFeedback fb={fb} onNavigate={goToField} />
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <TextField label="Source owner or provider" required value={form.sourceOwner} onChange={(v) => set({ sourceOwner: v })} />
-              <TextField label="Original source URL or delivery reference" required value={form.sourceReference} onChange={(v) => set({ sourceReference: v })} hint="Where the file came from, so it can be traced." />
-              <DateField label="Data as of (optional)" value={form.dataAsOf} onChange={(v) => set({ dataAsOf: v })} hint="The date the provider says the data runs to." />
-              <SelectField label="History type" required value={form.historyClass} onChange={(v) => set({ historyClass: v as UploadFormState['historyClass'] })} options={HISTORY_CLASS_OPTIONS} />
+              <TextField label="Source owner or provider" required value={form.sourceOwner} onChange={(v) => set({ sourceOwner: v })} error={fb.errors.sourceOwner} fieldKey="sourceOwner" />
+              <TextField label="Original source URL or delivery reference" required value={form.sourceReference} onChange={(v) => set({ sourceReference: v })} hint="Where the file came from, so it can be traced." error={fb.errors.sourceReference} fieldKey="sourceReference" />
+              <DateField label="Data as of (optional)" value={form.dataAsOf} onChange={(v) => set({ dataAsOf: v })} hint="The date the provider says the data runs to." error={fb.errors.dataAsOf} fieldKey="dataAsOf" />
+              <SelectField label="History type" required value={form.historyClass} onChange={(v) => set({ historyClass: v as UploadFormState['historyClass'] })} options={HISTORY_CLASS_OPTIONS} error={fb.errors.historyClass} fieldKey="historyClass" />
             </div>
-            <RadioGroup legend="Upload mode" name="mode" value={form.mode} onChange={(v) => set({ mode: v as UploadFormState['mode'] })} options={UPLOAD_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label, description: o.description, }))} disabled={false} />
+            <RadioGroup error={fb.errors.mode} fieldKey="mode" legend="Upload mode" name="mode" value={form.mode} onChange={(v) => set({ mode: v as UploadFormState['mode'] })} options={UPLOAD_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label, description: o.description, }))} disabled={false} />
             {form.mode === 'correction' ? (
               <>
                 {!caps.correct ? <Notice tone="warn" title="Corrections are not available to you">{decisions.why.correct} Choose New history, or ask for the correction permission.</Notice> : null}
-                <TextAreaField label="Reason for the correction" required value={form.reason} onChange={(v) => set({ reason: v })} hint="At least 20 characters. It is recorded permanently." error={form.reason.trim().length > 0 && form.reason.trim().length < 20 ? 'At least 20 characters are needed.' : null} />
+                <TextAreaField label="Reason for the correction" required value={form.reason} onChange={(v) => set({ reason: v })} hint="At least 20 characters. It is recorded permanently." error={form.reason.trim().length > 0 && form.reason.trim().length < 20 ? 'At least 20 characters are needed.' : fb.errors.reason} fieldKey="reason" />
               </>
             ) : null}
             {keys.length === 1 ? (
               gate.ok ? (
-                <SelectField label="Approved entitlement covering this upload" required value={form.entitlementId} onChange={(v) => set({ entitlementId: v })} options={eligible.map((e) => ({ value: e.entitlementId, label: `${e.kind === 'public_use_permission' ? 'Public-use permission' : 'Commercial licence'}: ${e.evidenceReference} (valid ${formatDate(e.validFrom)} to ${e.validTo ? formatDate(e.validTo) : 'open'}; data ${e.dataFrom ? formatDate(e.dataFrom) : 'any start'} to ${e.dataTo ? formatDate(e.dataTo) : 'any end'})` }))} hint="Only approved records that allow manual ingestion and storage are listed." />
+                <SelectField label="Approved entitlement covering this upload" required value={form.entitlementId} onChange={(v) => set({ entitlementId: v })} options={eligible.map((e) => ({ value: e.entitlementId, label: `${e.kind === 'public_use_permission' ? 'Public-use permission' : 'Commercial licence'}: ${e.evidenceReference} (valid ${formatDate(e.validFrom)} to ${e.validTo ? formatDate(e.validTo) : 'open'}; data ${e.dataFrom ? formatDate(e.dataFrom) : 'any start'} to ${e.dataTo ? formatDate(e.dataTo) : 'any end'})` }))} hint="Only approved records that allow manual ingestion and storage are listed." error={fb.errors.entitlementId} fieldKey="entitlementId" />
               ) : (
                 <Notice tone="bad" title="No approved entitlement" live="alert">
                   <p>{gate.message}</p>
@@ -294,10 +310,11 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
 
       {step === 3 ? (
         <Panel title="3. File and options" description={limitsText(ov.limits)}>
+          <FormFeedback fb={fb} onNavigate={goToField} />
           <div className="space-y-4">
             <div>
               <label htmlFor="bm-upload-file" className="block text-sm font-medium text-ink">File (.csv or .xlsx) <span className="text-risk">(required)</span></label>
-              <input id="bm-upload-file" type="file" accept=".csv,.xlsx" onChange={(e) => void onFile(e.target.files?.[0] ?? null)} className="mt-1 block min-h-11 w-full text-sm" />
+              <input id="bm-upload-file" data-field-key="file" type="file" accept=".csv,.xlsx" onChange={(e) => void onFile(e.target.files?.[0] ?? null)} className="mt-1 block min-h-11 w-full text-sm" />
               {inspectBusy ? <p role="status" className="mt-1 text-sm text-muted">Reading the file...</p> : null}
               {inspectError ? <p role="alert" className="mt-1 text-sm text-risk">{inspectError}</p> : null}
               {inspect && inspect.problems.length > 0 ? <IssueList issues={inspect.problems.map((p) => p.message)} /> : null}
@@ -305,7 +322,7 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
 
             {kind === 'xlsx' && inspect && inspect.sheets.length > 0 ? (
               <div className="space-y-2">
-                <RadioGroup legend="Sheet to process (you must choose one)" name="sheet" value={form.sheetName} onChange={(v) => set({ sheetName: v })} options={inspect.sheets.map((s) => ({ value: s.name, label: `${s.name} (${sheetStateLabel(s.state)}${s.rowCount !== null ? `, ${s.rowCount} rows` : ''})` }))} />
+                <RadioGroup error={fb.errors.sheetName} fieldKey="sheetName" legend="Sheet to process (you must choose one)" name="sheet" value={form.sheetName} onChange={(v) => set({ sheetName: v })} options={inspect.sheets.map((s) => ({ value: s.name, label: `${s.name} (${sheetStateLabel(s.state)}${s.rowCount !== null ? `, ${s.rowCount} rows` : ''})` }))} />
                 <CheckField label="Include rows that are hidden in the spreadsheet" checked={form.includeHiddenRows} onChange={(v) => set({ includeHiddenRows: v })} hint="Off by default. Hidden rows are always listed in the preview, never silently ignored." />
                 {disclosure ? (
                   <Notice tone="info" title="Exactly what will be processed">
@@ -318,22 +335,22 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
             ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <SelectField label="Date format used in the file" required value={form.dateFormat} onChange={(v) => set({ dateFormat: v as UploadFormState['dateFormat'] })} options={DATE_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} - ${o.example}` }))} placeholder="Choose the date format" hint="Never guessed: a date such as 03-04-2024 could be 3 April or 4 March, depending on the order the file uses." />
-              <SelectField label="How numbers are written" required value={form.numberLocale} onChange={(v) => set({ numberLocale: v as UploadFormState['numberLocale'] })} options={NUMBER_LOCALE_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} - ${o.example}` }))} placeholder="Choose the number format" />
-              <TextField label="Header row" type="number" value={form.headerRow} onChange={(v) => set({ headerRow: v })} hint="The row holding the column names (usually 1)." />
+              <SelectField label="Date format used in the file" required value={form.dateFormat} onChange={(v) => set({ dateFormat: v as UploadFormState['dateFormat'] })} options={DATE_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} - ${o.example}` }))} placeholder="Choose the date format" error={fb.errors.dateFormat} fieldKey="dateFormat" hint="Never guessed: a date such as 03-04-2024 could be 3 April or 4 March, depending on the order the file uses." />
+              <SelectField label="How numbers are written" required value={form.numberLocale} onChange={(v) => set({ numberLocale: v as UploadFormState['numberLocale'] })} options={NUMBER_LOCALE_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} - ${o.example}` }))} placeholder="Choose the number format" error={fb.errors.numberLocale} fieldKey="numberLocale" />
+              <TextField label="Header row" type="number" value={form.headerRow} onChange={(v) => set({ headerRow: v })} hint="The row holding the column names (usually 1)." error={fb.errors.headerRow} fieldKey="headerRow" />
             </div>
 
             {form.shape === 'provider_export' ? (
               <div className="space-y-3 rounded-compact border border-line p-3">
                 <RadioGroup legend="How are the columns identified?" name="colchoice" value={form.columnChoice} onChange={(v) => set({ columnChoice: v as UploadFormState['columnChoice'] })} options={[{ value: 'layout', label: 'A known provider layout' }, { value: 'explicit', label: 'I will name the date and value columns myself' }]} />
                 {form.columnChoice === 'layout' ? (
-                  <SelectField label="Provider layout" required value={form.providerLayoutId} onChange={(v) => set({ providerLayoutId: v })} options={PROVIDER_LAYOUT_OPTIONS.map((l) => ({ value: l.id, label: l.label }))} hint="These header sets come from public export conventions and have not been checked against a live download; a mismatch is reported, never guessed around." />
+                  <SelectField label="Provider layout" required value={form.providerLayoutId} onChange={(v) => set({ providerLayoutId: v })} options={PROVIDER_LAYOUT_OPTIONS.map((l) => ({ value: l.id, label: l.label }))} error={fb.errors.providerLayoutId} fieldKey="providerLayoutId" hint="These header sets come from public export conventions and have not been checked against a live download; a mismatch is reported, never guessed around." />
                 ) : null}
                 {form.columnChoice === 'explicit' ? (
                   headerChoices.length > 0 ? (
                     <div className="grid gap-3 sm:grid-cols-3">
-                      <SelectField label="Date column" required value={form.dateColumn} onChange={(v) => set({ dateColumn: v })} options={headerChoices} />
-                      <SelectField label="Value (index level) column" required value={form.valueColumn} onChange={(v) => set({ valueColumn: v })} options={headerChoices} />
+                      <SelectField label="Date column" required value={form.dateColumn} onChange={(v) => set({ dateColumn: v })} options={headerChoices} error={fb.errors.dateColumn} fieldKey="dateColumn" />
+                      <SelectField label="Value (index level) column" required value={form.valueColumn} onChange={(v) => set({ valueColumn: v })} options={headerChoices} error={fb.errors.valueColumn} fieldKey="valueColumn" />
                       <SelectField label="Index name column (optional)" value={form.indexNameColumn} onChange={(v) => set({ indexNameColumn: v })} options={headerChoices} />
                     </div>
                   ) : (
