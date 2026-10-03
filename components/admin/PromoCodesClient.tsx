@@ -33,7 +33,32 @@ interface PromoRow {
   state: 'active' | 'disabled' | 'expired' | 'exhausted';
   created_at: string;
   created_by_email: string | null;
+  bound?: boolean;
 }
+
+interface DispatchedCode {
+  id: string;
+  code_hint: string;
+  duration_days: number;
+  ends_if_redeemed_today: string | null;
+  bound: boolean;
+  /** Present only when an e-mail was not (fully) sent: the show-once fallback. */
+  code?: string;
+  recipients: { index: number; status: 'sent' | 'failed' | 'not_sent' }[];
+}
+
+interface DispatchResponse {
+  codes: DispatchedCode[];
+  email: { enabled: boolean; message: string | null };
+  partialError?: { message: string };
+}
+
+const newRequestKey = () => globalThis.crypto.randomUUID();
+const STATUS_TEXT: Record<'sent' | 'failed' | 'not_sent', string> = {
+  sent: 'e-mail sent',
+  failed: 'e-mail could not be sent',
+  not_sent: 'e-mail not sent',
+};
 
 interface EventRow {
   id: string;
@@ -71,6 +96,16 @@ export function PromoCodesClient() {
   const [expiresOn, setExpiresOn] = useState(formatDateInput(addDaysIso(today, 90)));
   const [noExpiry, setNoExpiry] = useState(false);
   const [note, setNote] = useState('');
+  // E-mailing a new code (all optional). One request key per submit attempt: a double-click or retry reuses it.
+  const [emailTo, setEmailTo] = useState('');
+  const [bindToRecipient, setBindToRecipient] = useState(false);
+  const [requestKey, setRequestKey] = useState(newRequestKey);
+  const [dispatchResult, setDispatchResult] = useState<DispatchResponse | null>(null);
+  // Replacing an existing code and e-mailing the NEW one.
+  const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [replaceTo, setReplaceTo] = useState('');
+  const [replaceBind, setReplaceBind] = useState(false);
+  const [replaceKey, setReplaceKey] = useState(newRequestKey);
 
   const [disablingId, setDisablingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
@@ -100,8 +135,10 @@ export function PromoCodesClient() {
     setBusy(true);
     setActionError(null);
     setNotice(null);
+    setDispatchResult(null);
     try {
-      const created = await fetchJson<{ code: string; duration_days?: number; ends_if_redeemed_today?: string }>('/api/admin/promo-codes', {
+      const wantsEmail = emailTo.trim() !== '';
+      const created = await fetchJson<{ code: string; duration_days?: number; ends_if_redeemed_today?: string } & Partial<DispatchResponse>>('/api/admin/promo-codes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -110,8 +147,20 @@ export function PromoCodesClient() {
           ...(unlimited ? { unlimited: true } : { maxRedemptions }),
           ...(noExpiry ? { noExpiry: true } : { expiresOn: expiresIso }),
           note: note.trim() === '' ? undefined : note,
+          ...(wantsEmail ? { emailTo, bindToRecipient, idempotencyKey: requestKey } : {}),
         }),
       });
+      if (created.codes) {
+        // E-mail dispatch response: the plaintext is present only for codes whose e-mail was not fully sent.
+        setDispatchResult(created as DispatchResponse);
+        setEmailTo('');
+        setBindToRecipient(false);
+        setRequestKey(newRequestKey());
+        setCode('');
+        setNote('');
+        setReload((k) => k + 1);
+        return;
+      }
       const days = created.duration_days ?? durationDays;
       const endsIfToday = created.ends_if_redeemed_today ?? addDaysIso(today, days);
       setNotice(
@@ -122,6 +171,30 @@ export function PromoCodesClient() {
       setReload((k) => k + 1);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'The code could not be created.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function replaceAndEmail(id: string) {
+    setBusy(true);
+    setActionError(null);
+    setNotice(null);
+    setDispatchResult(null);
+    try {
+      const out = await fetchJson<DispatchResponse>(`/api/admin/promo-codes/${id}/replace-and-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailTo: replaceTo, bindToRecipient: replaceBind, idempotencyKey: replaceKey }),
+      });
+      setDispatchResult(out);
+      setReplacingId(null);
+      setReplaceTo('');
+      setReplaceBind(false);
+      setReplaceKey(newRequestKey());
+      setReload((k) => k + 1);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'The replacement code could not be created.');
     } finally {
       setBusy(false);
     }
@@ -246,13 +319,65 @@ export function PromoCodesClient() {
             <input id="promo-note" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full rounded border px-3 py-2 text-sm" />
           </div>
           <div>
+            <label htmlFor="promo-email-to" className="block text-xs font-medium text-muted">
+              Email this code to (optional; up to 20 addresses, separated by commas or new lines)
+            </label>
+            <textarea
+              id="promo-email-to"
+              value={emailTo}
+              onChange={(e) => setEmailTo(e.target.value)}
+              rows={2}
+              autoComplete="off"
+              aria-describedby="promo-email-hint"
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            />
+            <p id="promo-email-hint" className="mt-1 text-xs text-muted">
+              The code is e-mailed once from this request and shown to you only if an e-mail could not be sent. Leave blank to just create the code.
+            </p>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={bindToRecipient} disabled={emailTo.trim() === ''} onChange={(e) => setBindToRecipient(e.target.checked)} />
+              Only this email address can redeem (one single-use code per address)
+            </label>
+          </div>
+          <div>
             <button type="submit" disabled={busy} className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-              {busy ? 'Working…' : 'Create code'}
+              {busy ? 'Working…' : emailTo.trim() === '' ? 'Create code' : 'Create code and email it'}
             </button>
           </div>
         </form>
         {notice && <p role="status" className="text-sm text-trust">{notice}</p>}
         {error && <p role="alert" className="text-sm text-risk">{error}</p>}
+        {dispatchResult && (
+          <div role="status" className="space-y-3 rounded border border-trust/30 bg-trust/5 p-3 text-sm">
+            {dispatchResult.email.message && <p className="font-medium text-ink">{dispatchResult.email.message}</p>}
+            {dispatchResult.partialError && <p role="alert" className="text-risk">{dispatchResult.partialError.message}</p>}
+            {dispatchResult.codes.map((c) => (
+              <div key={c.id}>
+                <p>
+                  Code {c.code_hint}: {c.duration_days} day(s) of Premium from redemption
+                  {c.bound ? ', only redeemable by the address it was sent to' : ''}.{' '}
+                  {c.ends_if_redeemed_today ? `Redeemed today it would end on ${formatDateShort(c.ends_if_redeemed_today, 'AUD')}.` : ''}
+                </p>
+                {c.recipients.length > 0 && (
+                  <ul className="list-disc pl-5 text-muted">
+                    {c.recipients.map((r) => (
+                      <li key={r.index}>
+                        Recipient {r.index + 1}: {STATUS_TEXT[r.status]}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {c.code ? (
+                  <p className="mt-1">
+                    Copy this code now, it is shown only this once: <span className="font-mono font-medium">{formatPromoCode(c.code)}</span>
+                  </p>
+                ) : (
+                  <p className="mt-1 text-muted">The code was e-mailed and is not shown here.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="list-heading" className="space-y-3">
@@ -272,6 +397,7 @@ export function PromoCodesClient() {
                   <th className="px-3 py-2">Redeemed</th>
                   <th className="px-3 py-2">Redeemable until</th>
                   <th className="px-3 py-2">Note</th>
+                  <th className="px-3 py-2">Address-bound</th>
                   <th className="px-3 py-2">Action</th>
                 </tr>
               </thead>
@@ -286,7 +412,53 @@ export function PromoCodesClient() {
                     </td>
                     <td className="px-3 py-2">{r.expires_on ? formatDateShort(r.expires_on, 'AUD') : 'no expiry'}</td>
                     <td className="px-3 py-2 text-muted">{r.note ?? '—'}</td>
+                    <td className="px-3 py-2 text-muted">{r.bound ? 'Yes' : 'No'}</td>
                     <td className="px-3 py-2">
+                      {r.state === 'active' && replacingId !== r.id && disablingId !== r.id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReplacingId(r.id);
+                            setReplaceTo('');
+                            setReplaceBind(false);
+                            setReplaceKey(newRequestKey());
+                          }}
+                          className="mb-2 block rounded border border-trust px-2 py-1 text-xs font-medium text-trust hover:bg-trust/5"
+                        >
+                          Generate a replacement code and email it
+                        </button>
+                      )}
+                      {replacingId === r.id ? (
+                        <div className="space-y-2">
+                          <label htmlFor={`replace-to-${r.id}`} className="block text-xs text-muted">
+                            Email the NEW code to (up to 20 addresses)
+                          </label>
+                          <textarea
+                            id={`replace-to-${r.id}`}
+                            value={replaceTo}
+                            onChange={(e) => setReplaceTo(e.target.value)}
+                            rows={2}
+                            className="w-64 rounded border px-2 py-1 text-sm"
+                          />
+                          <label className="flex items-center gap-2 text-xs">
+                            <input type="checkbox" checked={replaceBind} onChange={(e) => setReplaceBind(e.target.checked)} />
+                            Only this email address can redeem
+                          </label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={busy || replaceTo.trim() === ''}
+                              onClick={() => void replaceAndEmail(r.id)}
+                              className="rounded bg-primary px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
+                            >
+                              {busy ? 'Working…' : 'Generate and email'}
+                            </button>
+                            <button type="button" onClick={() => setReplacingId(null)} className="text-xs text-gray-500 hover:underline">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       {r.status === 'disabled' ? (
                         <span className="text-xs text-muted">Disabled</span>
                       ) : disablingId === r.id ? (

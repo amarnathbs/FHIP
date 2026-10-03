@@ -125,6 +125,10 @@ const ADMIN_RPC_ERRORS: Record<string, { status: number; message: string }> = {
   PROMO_NOTE_INVALID: { status: 422, message: `The note must be at most ${PROMO_NOTE_MAX_LENGTH} characters.` },
   PROMO_REASON_REQUIRED: { status: 422, message: `A reason of at least ${PROMO_DISABLE_REASON_MIN_LENGTH} characters is required.` },
   PROMO_NOT_FOUND: { status: 404, message: 'No such promo code.' },
+  PROMO_BINDING_INVALID: { status: 422, message: 'The address binding is not valid.' },
+  PROMO_RECIPIENTS_INVALID: { status: 422, message: 'You can e-mail between 1 and 20 valid addresses at a time.' },
+  PROMO_EMAIL_KEY_INVALID: { status: 422, message: 'A request key of 8 to 100 letters, digits, "-" or "_" is required when e-mailing a code.' },
+  PROMO_EMAIL_RATE_LIMITED: { status: 429, message: 'You have sent too many promo e-mails in the last hour. Please wait and try again, or copy the code and send it yourself.' },
   PROMO_CODE_ALREADY_DISABLED: { status: 409, message: 'This promo code is already disabled.' },
 };
 

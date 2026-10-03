@@ -54,6 +54,7 @@ const MESSAGE_FILES = [
   'lib/services/entitlementPlanStatus.ts',
   'lib/services/entitlementReminder.ts',
   'lib/services/premiumExpiryReminderEmail.ts',
+  'lib/services/promoCodeEmail.ts',
   'lib/engines/investment-intelligence/valuation/currentHoldingValuation.ts',
   'lib/engines/investment-intelligence/xray/xrayOrchestrator.ts',
   'lib/engines/investment-intelligence/xray/overlap.ts',

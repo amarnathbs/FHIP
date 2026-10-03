@@ -292,3 +292,105 @@ The CHECK-constraint trap does not apply to 0238: it adds new tables and replace
 3. **Sender address:** set `PREMIUM_REMINDER_FROM_EMAIL`, or accept the Contact sender (a "FHIP Contact Form" display name unless `CONTACT_FROM_EMAIL` is changed).
 4. **Unknown-outcome policy:** a reminder whose send outcome is unknown (worker died mid-send) is never re-sent — accept, or prefer a possible duplicate over a possible miss.
 5. A user with an unusual end date (window shorter than 30 days, e.g. the 30-day default promo) gets no 30-day e-mail by design; the 7-day option or the in-app banners cover them — confirm.
+
+
+## 17. E-mailing a promo code from the admin console (migration 0242, branch `feat/promo-code-email-20261003`)
+
+Built on a new branch from origin/main (4742d5c). Not pushed. **Migration 0242 is NEW; 0231, 0237 and 0238 (applied) are untouched.**
+
+### 17.1 A correction to the premise (read this first)
+
+The request describes the design as storing "only a hash/masked hint" and showing the code once. That is **not what 0237 built**: `promo_codes.code` stores the **plain normalised code**, `admin_list_promo_codes()` returns it, and the Promo Codes page's list renders it (so promo-code admins can always see and copy any code). Only the **audit trail** (`promo_code_events`) is hint-only. I did not change that. What the new feature guarantees is narrower and checkable: **the new e-mail subsystem never stores, logs, returns, or puts in a URL, audit row or error the plaintext code** — the send ledger holds a keyed hash of each recipient and a status; the create response omits the code when it was e-mailed. If the PO wants the plain code hidden from the list too, that is a separate design change (hash-only storage) with a real cost (an admin could no longer re-copy a code) — **decision needed (section 17.8)**.
+
+### 17.2 What was built
+
+- **Create form:** optional **"Email this code to"** (up to 20 addresses, commas or new lines) and the checkbox **"Only this email address can redeem"** (default OFF; ticking it with several addresses creates **one single-use code per address**). The server creates the code and sends the e-mail **from the same request**; the plaintext is returned to the admin **only if an e-mail was not (fully) sent** — the existing show-once copy flow, so a mailer failure never loses a code. A successfully e-mailed code is **not** returned.
+- **Existing codes:** **"Generate a replacement code and email it"** (per active code): a NEW generated code with the old code's access length, redemption limit, redeem-by date and note, e-mailed once; the old code is neither retrieved nor changed (the admin may disable it separately). A bound replacement is single-use.
+- **E-mail:** plain transactional text through the existing Resend path and the **injected** `Mailer` (same one the expiry reminders use; `RESEND_API_KEY`, sender `PREMIUM_REMINDER_FROM_EMAIL` -> `CONTACT_FROM_EMAIL` -> default address). Subject **"Your FHIP Premium access code"** (no code in the subject). Body: the code (`XXXXX-XXXXX`), what it grants ("complimentary Premium for N days from the day you redeem it"), the code's own redeem-by date via the canonical `formatDateShort` (AU `dd/mm/yyyy`; `dd-mm-yyyy` if the recipient's country is known to be India — admin-triggered mails do not look the recipient up, so they are AU), how to redeem (Profile > Plans > Promo code, real link from `APP_BASE_URL`), single-use / limited-use / unlimited, the binding sentence when bound, a "not marketing" line, attribution to FHIP. No PII beyond the recipient's own address.
+- **Route:** `POST /api/admin/promo-codes` accepts `emailTo`, `bindToRecipient`, `idempotencyKey` (without `emailTo` it behaves exactly as before); `POST /api/admin/promo-codes/[id]/replace-and-email`. Capability: **`can_manage_promo_codes` only — no new capability**; non-capability admins (including entitlement-only admins) get 403.
+
+### 17.3 Safety design
+
+| Requirement | How |
+|---|---|
+| Plaintext never stored/logged/returned after creation | the ledger/request tables have no address, body or code columns; no `console.*` in the path; audit = recipient **count** + a bound flag + masked hint; the response omits an e-mailed code; errors carry codes/messages only (asserted by dumping tables, scanning RPC arguments, and spying on console) |
+| Idempotent per request | `admin_promo_email_begin(request_key, count, bound)`: a unique `(admin, request key)` row; a duplicate returns "not new" and the server creates **nothing** and sends **nothing** (409 with a clear message). The UI mints a fresh key per submit attempt and keeps it across retries/double-clicks |
+| Bounded retries, recorded, no re-creation | up to 3 attempts per recipient (400 ms, 1200 ms back-off, injectable), the outcome (`sent`, or `abandoned` after 3) and attempt count recorded in `promo_email_sends` by keyed recipient hash; the code is created once, before the sends |
+| Per-admin rate limit | in the database: 10 requests and 100 recipients per rolling hour per admin (`PROMO_EMAIL_RATE_LIMITED`, HTTP 429) |
+| Kill switch, fail closed | `PREMIUM_PROMO_EMAIL_ENABLED`: only the exact text `true` enables sending; unset / `false` / `TRUE` / `1` / blank = OFF. OFF => the code is still created and shown once with **"Email sending is switched off. Copy the code and send it yourself."** Also "not configured" (no secret / no `RESEND_API_KEY`) and "not available on this database yet" messages |
+| Address binding | `promo_codes.bound_email_hash` = HMAC-SHA256 (server secret, domain-separated, normalised address) — **never the plain address**; CHECKs make a bound code single-use with a well-formed hash; redemption passes the session user's keyed hash and any other account (or no hash) gets the **same generic "This code cannot be used."** as a missing code (identical verdict, tested equal) and consumes nothing. Key: `PREMIUM_PROMO_EMAIL_BIND_SECRET`, else `PROMO_IP_HASH_SECRET`, else `CRON_SECRET`; **rotating it makes already-bound codes unusable (fail closed)** |
+| Fail soft without the migration | create falls back to the legacy argument shape, nothing is sent, the admin sees the message and the code once; a binding request is refused (503) and creates **nothing** (never a silently unbound code); redemption falls back to the legacy 3-argument call |
+| Date rule | e-mail dates go through `formatDateShort`; the day-first source-contract test now also scans `lib/services/promoCodeEmail.ts` and the admin component, and stays green |
+
+### 17.4 Migration 0242
+
+Adds `promo_codes.bound_email_hash` (+ two new CHECKs on that new column only), replaces `admin_create_promo_code` (new optional `p_bound_email_hash`, `p_recipient_count`), `redeem_promo_code_for_user` (new optional `p_email_hash`) and `admin_list_promo_codes` (extra `bound` flag) by **drop-and-recreate of objects 0237/0238 created** (the old call shapes still work because the new parameters default), and creates `promo_email_requests`, `promo_email_sends`, `admin_promo_email_begin`, `admin_promo_email_record`. **No CHECK constraint on any existing table is dropped or recreated** (the audit event-type list is untouched, so the known drop-and-recreate trap does not apply). Rollback is in the migration header (export the ledger first).
+
+### 17.5 Migration number and collision scan
+
+**0242**, above everything found. Scanned before writing and again before the commit: every local and remote ref (803 refs at the first scan) with `git ls-tree`, plus the working directory of the main checkout and every worktree under `D:\FHIP\.claude\worktrees` and the temp worktrees. Highest found anywhere: **0241** (BENCH-1 governance); 0240 (net-worth remark) and 0238 (this programme) also present; no 0239 exists on any ref or worktree. Final re-scan before the commit (807 refs after a fresh fetch, plus every worktree directory): **nothing at 0242 or above on any ref**; the only 0242 anywhere is this branch's file. One unrelated in-flight sibling worktree (`agent-aea66a359c09b98c7`, user-supplied investment dates) holds **0250**; 0243-0249 are unclaimed. 0242 is free and collides with nothing; whoever merges second renumbers (the tests locate the file by name suffix, not number).
+
+### 17.6 Tests (run one file at a time; grouped runs hit the vitest temp-dir flake)
+
+- `tests/unit/promoCodeEmailPglite.test.ts` — **18 tests**, real Postgres replay of the whole ledger.
+- `tests/unit/promoCodeEmailService.test.ts` — **34 tests**, injected mailer / sleeper / fake database.
+- `tests/unit/adminPromoCodesPglite.test.ts` (49) re-pointed so its mutation controls restore the CURRENT `admin_create_promo_code` / `redeem_promo_code_for_user` text (0242) — restoring the 0237/0238 text would silently revert the function under test.
+- Date contract (`dateFormatsDayFirstSourceContract` 13, `dateFormatsDayFirstBehaviour` 14) green with the new file added.
+- Also green, each run alone: `adminPromoCodesService` 45, `premiumFeaturesFailSoft` 14, `premiumExpiryReminderPglite` 24, `premiumExpiryReminderRunner` 17, `adminPremiumGrantPglite` 40, `adminPremiumGrantService` 49, `entitlementSync` 4, `adminAnalyticsPhaseA` 267, `appCapabilityManifest` 3, `appCapability` 34, `appNavCapability` 17, `migrationVersions` 5, `migrationVersionsCrossBranch` 7.
+- `tsc --noEmit`: the only error is `tests/unit/canonicalCertResidueAllSql.test.ts` (main's, untouched). `eslint`: 0 problems on every touched file.
+
+| Rule | Negative control — the NAMED assertion that goes red |
+|---|---|
+| Bound code only redeemable by the bound address; others get the generic verdict identical to a missing code | binding clause removed -> `a bound code must not be redeemable by any other account` |
+| Idempotent request key | duplicate handling removed -> `a repeated request key must be reported as NOT new` (the UNIQUE key then fires by name, `uq_promo_email_request`); service: database wrongly says "new" -> `a repeated request key must create no second code` |
+| Per-admin rate limit | limit removed -> `expected rejection with PROMO_EMAIL_RATE_LIMITED` |
+| A sent ledger row is never downgraded | guard removed -> `a sent row must never be downgraded` |
+| Kill switch fails closed (unset/false/TRUE/1/blank) | simulated broken variant that ignores the flag -> `a switched-off job must not send` |
+| Code never in logs | a variant that logs the code on failure -> `the code value must never appear in logs` (same scanner used across success / failure / refusal runs) |
+| Binding secret/keyed hash, domain separation, no plain address in arguments | positive (asserts on the exact arguments) |
+| Code not in audit rows; ledger has no address/body/code columns; RLS | positive (dumps and column checks); capability refusals for plain user, entitlement-only admin, anon, service_role |
+| Bounded retries (3), code created once, code returned only when not delivered | positive (asserts attempt count, sleeps 400/1200 ms, one create call) |
+| Old call shapes and migration-absent fallbacks | positive |
+
+### 17.7 What was and was not verified
+
+- **Code-complete; database rules verified on an isolated PGlite replay; application layer unit-tested.** **Not DEV-verified, not production-verified. No real e-mail was sent anywhere** (the mailer is injected; the Resend path was already exercised only with an injected fetch). The new admin form was not rendered in a browser. True concurrent double-submission was not raced (PGlite is single-connection): the guarantee is the database's UNIQUE `(admin, request key)` row, which the suite exercises by name.
+- Not done on purpose: no change to who can see plain codes in the list (17.1).
+
+### 17.8 PO apply list, environment, DEV rehearsal, decisions
+
+**Ordered apply list (0237 and 0238 are already applied):**
+1. Apply `supabase/migrations/0242_promo_code_email_send.sql` on **DEV** (SQL editor; idempotent).
+2. Verify (read-only):
+   ```sql
+   select column_name from information_schema.columns where table_name='promo_codes' and column_name='bound_email_hash';        -- 1 row
+   select count(*) from pg_proc where pronamespace='public'::regnamespace and proname in ('admin_promo_email_begin','admin_promo_email_record');  -- 2
+   select has_function_privilege('authenticated','public.redeem_promo_code_for_user(uuid,text,text,text)','execute');           -- false
+   select has_function_privilege('service_role','public.redeem_promo_code_for_user(uuid,text,text,text)','execute');            -- true
+   select count(*) from pg_proc where pronamespace='public'::regnamespace and proname='redeem_promo_code_for_user';             -- 1 (no stray old overload)
+   select count(*) from pg_proc where pronamespace='public'::regnamespace and proname='admin_create_promo_code';                -- 1
+   ```
+3. Deploy the application (the code is safe in either order: without 0242 it creates unbound codes with the old call shape, sends nothing, and refuses bound requests).
+4. **Production later:** the same, after the DEV rehearsal. **Rollback:** the SQL in the 0242 header (drops the send ledger; export `promo_email_sends` first), then redeploy.
+
+**Amplify environment (server-side; `amplify.yml` now forwards the `PREMIUM_PROMO_EMAIL_` prefix, so these reach the runtime):**
+- `PREMIUM_PROMO_EMAIL_ENABLED=true` — the switch; **leave unset (OFF) until the rehearsal passes.** Only the exact text `true` turns it on.
+- `PREMIUM_PROMO_EMAIL_BIND_SECRET` — any long random string; needed for "Only this email address can redeem". Without it the binding is unavailable (create refuses, 503). Rotating it later invalidates existing bound codes.
+- Already present and reused: `RESEND_API_KEY`, `CONTACT_FROM_EMAIL` (or `PREMIUM_REMINDER_FROM_EMAIL`), `APP_BASE_URL`, `CRON_SECRET`, `PROMO_IP_HASH_SECRET`.
+- The `can_manage_promo_codes` capability is unchanged; no new capability.
+
+**DEV rehearsal checklist** (DEV project, a test mailbox you control — do NOT use real users):
+1. With the switch OFF: create a code with "Email this code to" filled in -> the page shows "Email sending is switched off. Copy the code and send it yourself." plus the code once; nothing is e-mailed.
+2. Set `PREMIUM_PROMO_EMAIL_ENABLED=true` (+ the bind secret) on the DEV deployment. Create a code e-mailed to your test mailbox: the page says it was sent and does **not** show the code; the e-mail arrives with subject "Your FHIP Premium access code" and the code, the end date, the redeem-by date in dd/mm/yyyy, and the Profile link; redeem it on a test account.
+3. Double-click "Create code and email it" (or resubmit) -> only one code and one e-mail.
+4. Tick "Only this email address can redeem" with two addresses -> two codes, two e-mails; from an account with a different address enter one of the codes -> "This code cannot be used."; from the right account -> it works once.
+5. "Generate a replacement code and email it" on an existing code -> a new code arrives; the old one is unchanged.
+6. Break the mailer on purpose (blank `RESEND_API_KEY`) -> "not configured" message and the code is shown once. Send 11 requests in an hour -> the 11th is refused with the rate-limit message.
+7. Query `promo_email_sends` / `promo_email_requests` / `promo_code_events`: no address, no code anywhere.
+
+**Decisions still needed from the PO**
+1. **Plain codes are visible in the admin list** (17.1) — keep (admins can re-copy codes) or move to hash-only storage?
+2. **Binding forces single-use** (one recipient, one redemption) — confirm.
+3. **A mailer failure after 3 attempts is final for that request** (the code is shown to the admin; resending means "Generate a replacement code and email it") — confirm there is no background retry.
+4. Admin-triggered e-mails use AU date format because the recipient's country is not looked up — confirm, or ask for a lookup by e-mail.
+5. When to set `PREMIUM_PROMO_EMAIL_ENABLED=true` on production.

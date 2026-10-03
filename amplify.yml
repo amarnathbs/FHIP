@@ -145,7 +145,14 @@ frontend:
         # `PREMIUM_REMINDER_` prefix is forwarded as a whole so any future paired
         # variable for that job travels with it. (The reminder job's own kill
         # switch is a database row, not an environment variable, and ships OFF.)
-        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e PROMO_IP_HASH_SECRET -e PREMIUM_REMINDER_ -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ -e STRIPE_ -e RAZORPAY_ -e II_AI_FALLBACK_ >> .env.production
+        #
+        # E-mailing a promo code from the admin console (2026-10-03): the `PREMIUM_PROMO_EMAIL_` prefix carries
+        # `PREMIUM_PROMO_EMAIL_ENABLED` (the kill switch: ONLY the exact text "true" enables sending; unset or anything
+        # else = OFF, fail closed) and `PREMIUM_PROMO_EMAIL_BIND_SECRET` (the HMAC key for address-bound codes; falls
+        # back to PROMO_IP_HASH_SECRET, then CRON_SECRET, both forwarded above). Neither would reach the server runtime
+        # without being listed, so the switch could never be turned on from the console. Forwarded as a prefix so the
+        # switch and its secret stay inseparable. The sender reuses PREMIUM_REMINDER_FROM_EMAIL / CONTACT_FROM_EMAIL.
+        - env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND_API_KEY -e CONTACT_FROM_EMAIL -e PROMO_IP_HASH_SECRET -e PREMIUM_REMINDER_ -e PREMIUM_PROMO_EMAIL_ -e G4_APP_CAPABILITY_LAYER_ENABLED -e G5B_GENERIC_WRITE_ENABLED -e G2_LANDING_LOCALISATION_ENABLED -e G2_ALLOW_TEST_DETECTION_HEADER -e ROLLOUT_ -e AIE_ -e STRIPE_ -e RAZORPAY_ -e II_AI_FALLBACK_ >> .env.production
         - env | grep -e NEXT_PUBLIC_ >> .env.production
         # 2026-09-19: the last two deploys both failed here with
         # "FATAL ERROR: Ineffective mark-compacts near heap limit ...

@@ -10,6 +10,8 @@
 import { adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { requirePromoCodeAdmin } from '@/lib/services/promoCodeAdmin';
 import { mapPromoRpcError, parseCreatePromoRequest } from '@/lib/services/promoCodes';
+import { createAndEmailPromoCodes, parseEmailDispatch } from '@/lib/services/promoCodeEmail';
+import { createResendMailer } from '@/lib/services/premiumReminderMailer';
 import { utcToday } from '@/lib/services/entitlementWindow';
 import { createClient } from '@/lib/supabase/server';
 import { ok, bad } from '@/lib/api';
@@ -33,11 +35,28 @@ export const POST = adminRoute(async (req: Request) => {
   const { forbidden } = await requirePromoCodeAdmin();
   if (forbidden) return forbidden;
 
-  const parsed = parseCreatePromoRequest(await req.json().catch(() => null), utcToday());
+  const rawJson = req.json().catch(() => null);
+  const parsed = parseCreatePromoRequest(await rawJson, utcToday());
   if (!parsed.ok) return bad(parsed.message, parsed.status, parsed.code);
   const v = parsed.value;
 
   const supabase = await createClient();
+
+  // Optional e-mail dispatch (PO request): the plaintext code is e-mailed ONCE from this same request, and is
+  // returned to the admin only when the e-mail was not (fully) sent. See lib/services/promoCodeEmail.ts.
+  const rawBody = await rawJson;
+  const dispatch = parseEmailDispatch(rawBody);
+  if (dispatch.kind === 'invalid') return bad(dispatch.message, dispatch.status, dispatch.code);
+  if (dispatch.kind === 'dispatch') {
+    const baseUrl = (process.env.APP_BASE_URL || 'https://app.financialhealthplatform.com').replace(/\/+$/, '');
+    const result = await createAndEmailPromoCodes({ supabase, settings: v, request: dispatch.value, mailer: createResendMailer(), baseUrl });
+    if (!result.ok) {
+      if ('rpcError' in result) return safeDbError(result.rpcError, 'admin promo codes create+email');
+      return bad(result.message, result.status, result.code);
+    }
+    return ok(result);
+  }
+
   const { data, error } = await supabase.rpc('admin_create_promo_code', {
     p_code: v.code,
     p_duration_days: v.durationDays,
