@@ -50,6 +50,7 @@ export const NAV_HREF_MODULE_MAP: Record<string, ModuleKey> = {
   '/forecast/history': 'FORECASTING',
   '/recommendations': 'RECOMMENDATIONS',
   '/reports': 'REPORTS',
+  '/reports/fund-analytics': 'REPORTS',
   '/ai-insights': 'AI_INSIGHTS',
   '/profile': 'PROFILE',
 };

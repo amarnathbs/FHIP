@@ -65,6 +65,8 @@ const FORECASTING_ITEMS = [
 //     generated outputs rather than the 11 interactive forecast pages.
 const REPORTS_ITEMS = [
   { label: 'Monthly Report', href: '/reports' },
+  // NAV2 Stage 2: the Fund analytics report (Premium; a free user is told so on the page). A separate report from the Monthly Report.
+  { label: 'Fund Analytics', href: '/reports/fund-analytics' },
   { label: 'Financial Activity', href: '/financial-data-hub/activity' },
   { label: 'Consolidated Report', href: '/forecast/report' },
   { label: 'Forecast Variance', href: '/forecast/variance' },
