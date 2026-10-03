@@ -37,11 +37,11 @@ const SHIM = path.join(SUPABASE_ROOT, '..', 'scripts', 'db-rebuild-check', 'shim
 const LATEST_NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_admin_promo_codes_extension_cap_expiry_summary.sql'));
 if (!LATEST_NAME) throw new Error('promo / extension-cap migration not found');
 const MIGRATION = fs.readFileSync(path.join(MIG_DIR, LATEST_NAME), 'utf8');
-// admin_create_promo_code() is replaced in place by the reminders migration (30-day default access length), so
-// its negative controls mutate and restore THAT text, never the 0237 text (restoring 0237 would revert the default).
-const REMINDERS_NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_premium_expiry_email_reminders.sql'));
-if (!REMINDERS_NAME) throw new Error('premium expiry reminders migration not found');
-const MIGRATION_REMINDERS = fs.readFileSync(path.join(MIG_DIR, REMINDERS_NAME), 'utf8');
+// The e-mail-a-code migration replaces admin_create_promo_code() and redeem_promo_code_for_user() in place (address
+// binding), so their negative controls mutate and restore THAT (newest) text.
+const EMAIL_SEND_NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_promo_code_email_send.sql'));
+if (!EMAIL_SEND_NAME) throw new Error('promo code e-mail migration not found');
+const MIGRATION_EMAIL_SEND = fs.readFileSync(path.join(MIG_DIR, EMAIL_SEND_NAME), 'utf8');
 
 const ENT_ADMIN = 'aaaaaaaa-0000-0000-0000-00000000b001'; // can_manage_premium_entitlements only
 const PROMO_ADMIN = 'aaaaaaaa-0000-0000-0000-00000000b002'; // can_manage_promo_codes only
@@ -58,8 +58,8 @@ function extractFn(name: string, source: string = MIGRATION): string {
   return m[0];
 }
 const MANAGE_FN = extractFn('admin_manage_premium_entitlement');
-const REDEEM_FN = extractFn('redeem_promo_code_for_user');
-const CREATE_FN = extractFn('admin_create_promo_code', MIGRATION_REMINDERS);
+const REDEEM_FN = extractFn('redeem_promo_code_for_user', MIGRATION_EMAIL_SEND);
+const CREATE_FN = extractFn('admin_create_promo_code', MIGRATION_EMAIL_SEND);
 const WEBHOOK_FN = extractFn('apply_subscription_entitlement_event');
 const SUMMARY_FN = extractFn('admin_entitlement_expiry_summary');
 
@@ -792,7 +792,7 @@ describe('no code value in the audit trail (control)', () => {
     await assertNoCodeInAudit();
   });
   it('NEGATIVE CONTROL — a create function that copied the code into the audit details would be caught (assertion "the code value must not appear anywhere in the audit row" goes red)', async () => {
-    await withMutation(CREATE_FN, (s) => s.replace("'has_note', v_note is not null));", "'has_note', v_note is not null, 'code', v_code));"), async () => {
+    await withMutation(CREATE_FN, (s) => s.replace("    'bound', p_bound_email_hash is not null));", "    'bound', p_bound_email_hash is not null, 'code', v_code));"), async () => {
       await expectAssertionFails(assertNoCodeInAudit, 'the code value must not appear anywhere in the audit row');
     });
   });

@@ -22,6 +22,7 @@ import { requireCountryConfirmedUser as requireUser, bad } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { interpretRedeemVerdict, REDEEM_MESSAGES } from '@/lib/services/promoCodes';
 import { hashClientIp } from '@/lib/services/promoCodeIp';
+import { keyedAddressHash } from '@/lib/services/promoCodeEmail';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,11 +42,17 @@ export async function POST(req: Request) {
   let verdict: unknown = null;
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin.rpc('redeem_promo_code_for_user', {
-      p_user_id: user.id,
-      p_code: code,
-      p_ip_hash: hashClientIp(req.headers),
+    const args = { p_user_id: user.id, p_code: code, p_ip_hash: hashClientIp(req.headers) };
+    // Address-bound codes: the session user's KEYED e-mail hash (never the address) lets the database decide whether
+    // this account is the bound recipient. If the database predates that parameter (migration not applied) the
+    // legacy 3-argument call is used, and no bound code can exist yet.
+    let { data, error } = await admin.rpc('redeem_promo_code_for_user', {
+      ...args,
+      p_email_hash: user.email ? keyedAddressHash('bind', user.email) : null,
     });
+    if (error && (error.code === 'PGRST202' || error.code === '42883')) {
+      ({ data, error } = await admin.rpc('redeem_promo_code_for_user', args));
+    }
     if (error) {
       // Deliberately no detail and never the code. A missing function (migration not applied) or any
       // database fault is reported as unavailable; nothing is granted.
