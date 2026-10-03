@@ -7,6 +7,7 @@ import { formatMoneyCode } from '@/lib/engines/money';
 import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping';
 import { OwnerSelector } from '@/components/ownership/OwnerSelector';
 import { OwnerConflictPanel } from './OwnerConflictPanel';
+import { FullStatementHelp } from './FullStatementHelp';
 import { ownerSelectionToMeta, type OwnerSelection } from '@/lib/ownership/ownerSelection';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
@@ -856,6 +857,8 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
           <button type="submit" disabled={!file || !owner || uploading} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
             {uploading ? 'Uploading…' : 'Upload'}
           </button>
+          {/* (!) How to get a FULL since-inception statement from CAMS / KFintech (PO 2026-10-03). */}
+          <FullStatementHelp />
         </form>
         <p className="mt-2 text-xs text-gray-500">
           Supported today, as a digitally-generated <strong>PDF</strong>: a CAMS or KFintech consolidated account statement, or a supported CAMS-serviced

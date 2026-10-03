@@ -1,3 +1,8 @@
+// This file covers the LEGACY decision names (confirmed_duplicate / confirmed_distinct),
+// which the route still accepts. The 2026-10-03 probable-duplicate rules
+// (keep both / accept the statement / reject the statement entry / undo) are in
+// iiProbableDuplicateReview.test.ts.
+//
 // Document2 final non-benchmark closure #4 (2026-09-30) —
 // POST /api/investment-intelligence/reconciliation-cases/[id]/resolve-cross-source.
 //
@@ -20,6 +25,8 @@ const mockAdminFrom = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth: { getUser: mockGetUser }, from: mockUserFrom }) }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: mockAdminFrom }) }));
 vi.mock('@/lib/services/investment-intelligence/audit', () => ({ emitAuditEvent: vi.fn().mockResolvedValue(undefined) }));
+// The route re-evaluates the position through the existing recertifyPosition (best effort); that module pulls in the PDF stack, which a unit test must not load.
+vi.mock('@/lib/services/investment-intelligence/documentProcessing', () => ({ recertifyPosition: vi.fn().mockResolvedValue({ ok: true, error: null }) }));
 
 import { POST } from '@/app/api/investment-intelligence/reconciliation-cases/[id]/resolve-cross-source/route';
 

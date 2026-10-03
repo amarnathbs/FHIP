@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { InvestmentIntelligenceClient } from '@/components/investment-intelligence/InvestmentIntelligenceClient';
 import { ManualDirectPositionForm } from '@/components/investment-intelligence/ManualDirectPositionForm';
+import { InvestmentDatePanel } from '@/components/investment-intelligence/InvestmentDatePanel';
+import { ProbableDuplicateBanner } from '@/components/investment-intelligence/ProbableDuplicateBanner';
 
 // II-PC2 — Statements & data (spec sections 9, 14).
 //
@@ -49,6 +51,8 @@ export default async function InvestmentIntelligenceDataPage({
         </p>
       </header>
       <InvestmentIntelligenceSubNav />
+      <ProbableDuplicateBanner />
+      <InvestmentDatePanel />
       <InvestmentIntelligenceClient initialDocumentId={initialDocumentId} />
       <ManualDirectPositionForm />
     </div>
