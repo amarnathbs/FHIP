@@ -1,7 +1,13 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { listInvestmentDateItems, submitInvestmentDate } from '@/lib/services/investment-intelligence/investmentDateService';
+import { liveFetchNavForOneFund } from '@/lib/services/investment-intelligence/pc6/userNavHistoryLive';
 import { z } from 'zod';
+
+// Saving a date may fetch that ONE fund's missing price history right away
+// (bounded, rate limited, fail soft: see investmentDateService.ts), so allow the
+// request more time than the default. The fetch has its own 25s deadline.
+export const maxDuration = 60;
 
 // Investment date for a holdings-only position (Document2 D-3, PO decision
 // 2026-10-03). See lib/services/investment-intelligence/investmentDateService.ts
@@ -57,13 +63,14 @@ export async function POST(req: Request) {
     dateText: parsed.data.date,
     todayIso: new Date().toISOString().slice(0, 10),
     db: createAdminClient(),
+    fetchNav: liveFetchNavForOneFund,
   });
   if (!result.ok) return bad(result.message, result.status, result.code);
 
   // Treat it exactly as if the date had come from the statement: re-evaluate
   // the position with the existing "Re-evaluate" function. Best effort -- the
   // saved date stands even if this step fails.
-  if (result.state === 'applied' && !result.unchanged) {
+  if (result.appliedNow) {
     try {
       const { recertifyPosition } = await import('@/lib/services/investment-intelligence/documentProcessing');
       await recertifyPosition(user.id, parsed.data.accountId, parsed.data.instrumentId);
@@ -71,5 +78,5 @@ export async function POST(req: Request) {
       console.error('[investment-intelligence] re-evaluation after an investment date failed', err instanceof Error ? err.message : err);
     }
   }
-  return ok({ state: result.state, inputId: result.inputId, investmentDate: result.investmentDate, unchanged: result.unchanged });
+  return ok({ state: result.state, navStatus: result.navStatus, message: result.message, inputId: result.inputId, investmentDate: result.investmentDate, unchanged: result.unchanged });
 }

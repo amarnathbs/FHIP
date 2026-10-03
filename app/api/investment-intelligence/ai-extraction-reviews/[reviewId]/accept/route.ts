@@ -1,5 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { applyAiExtractionReview } from '@/lib/services/investment-intelligence/aiExtractionReviewApply';
+import { kickUserNavHistory } from '@/lib/services/investment-intelligence/pc6/userNavHistoryKick';
 
 // Investment Intelligence — AI-fallback document extraction: EXPLICIT
 // accept (2026-09-17 PO addendum). This is the ONLY route in the entire
@@ -20,5 +21,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ rev
     const status = result.code === 'already_decided' ? 409 : result.code === 'not_found' ? 404 : 400;
     return bad(result.error ?? 'Could not accept this AI extraction review.', status);
   }
+  // PO 2026-10-03: the user has confirmed the extraction; fetch the missing NAV
+  // history of their funds AFTER the response (never inside it). Best effort.
+  kickUserNavHistory(user.id);
   return ok(result.summary);
 }

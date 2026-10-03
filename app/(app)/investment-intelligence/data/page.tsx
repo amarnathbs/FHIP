@@ -4,6 +4,7 @@ import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligen
 import { InvestmentIntelligenceClient } from '@/components/investment-intelligence/InvestmentIntelligenceClient';
 import { ManualDirectPositionForm } from '@/components/investment-intelligence/ManualDirectPositionForm';
 import { InvestmentDatePanel } from '@/components/investment-intelligence/InvestmentDatePanel';
+import { NavHistoryStatusPanel } from '@/components/investment-intelligence/NavHistoryStatusPanel';
 import { ProbableDuplicateBanner } from '@/components/investment-intelligence/ProbableDuplicateBanner';
 
 // II-PC2 — Statements & data (spec sections 9, 14).
@@ -53,6 +54,7 @@ export default async function InvestmentIntelligenceDataPage({
       <InvestmentIntelligenceSubNav />
       <ProbableDuplicateBanner />
       <InvestmentDatePanel />
+      <NavHistoryStatusPanel />
       <InvestmentIntelligenceClient initialDocumentId={initialDocumentId} />
       <ManualDirectPositionForm />
     </div>

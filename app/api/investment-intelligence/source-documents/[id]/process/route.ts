@@ -1,5 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
+import { kickUserNavHistory } from '@/lib/services/investment-intelligence/pc6/userNavHistoryKick';
 import { z } from 'zod';
 import {
   ensureIiRealScanAdmissible,
@@ -78,5 +79,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // attempt. 429 matches the bank-PDF and AIE unlock routes exactly, so every
   // PDF password surface in the product refuses in the same way.
   if (!result.ok && result.status === 'password_rate_limited') return bad(result.error ?? 'Too many password attempts for this document.', 429, 'password_rate_limited');
+  // PO 2026-10-03: once a statement is processed, start fetching the missing NAV
+  // history of THIS user's funds -- AFTER the response, never inside it (a data
+  // source must not be able to slow or fail the upload). Best effort; the
+  // Investment page keeps asking while there is work, and the scheduled job is
+  // the fallback.
+  if (result.ok && result.summary) kickUserNavHistory(user.id);
   return ok(result);
 }

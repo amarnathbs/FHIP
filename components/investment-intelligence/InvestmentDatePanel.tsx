@@ -53,12 +53,15 @@ export function InvestmentDateRow({
   item,
   busy,
   serverError,
+  notice,
   onSave,
   initiallyEditing,
 }: {
   item: InvestmentDateItemView;
   busy: boolean;
   serverError: string | null;
+  /** The server's plain-words result of the last save or check (e.g. "We will keep trying."). */
+  notice?: string | null;
   onSave: (item: InvestmentDateItemView, dateText: string) => void;
   initiallyEditing?: boolean;
 }) {
@@ -148,9 +151,22 @@ export function InvestmentDateRow({
           )}
         </form>
       ) : (
-        <button type="button" onClick={() => setEditing(true)} className="mt-3 min-h-9 rounded border border-line px-3 py-1.5 text-sm text-primary">
-          Change date
-        </button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setEditing(true)} className="min-h-9 rounded border border-line px-3 py-1.5 text-sm text-primary">
+            Change date
+          </button>
+          {item.state === 'awaiting_nav' && item.investmentDate && (
+            // Saving the same date again is the "check again" action: it retries the fetch of this one fund's price history.
+            <button type="button" disabled={busy} onClick={() => onSave(item, formatDateInput(item.investmentDate))} className="min-h-9 rounded border border-line px-3 py-1.5 text-sm text-primary disabled:opacity-50">
+              {busy ? 'Checking…' : 'Check again'}
+            </button>
+          )}
+        </div>
+      )}
+      {notice && !error && (
+        <p role="status" className="mt-2 text-xs text-muted">
+          {notice}
+        </p>
       )}
     </li>
   );
@@ -160,6 +176,7 @@ export function InvestmentDatePanel() {
   const [items, setItems] = useState<InvestmentDateItemView[] | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [errorByKey, setErrorByKey] = useState<Record<string, string>>({});
+  const [noticeByKey, setNoticeByKey] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -191,6 +208,8 @@ export function InvestmentDatePanel() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not save the date.');
+      // The server's plain-words status (applied / waiting for price history / could not fetch, "we will keep trying").
+      setNoticeByKey((prev) => ({ ...prev, [key]: typeof json.data?.message === 'string' ? json.data.message : '' }));
       await load();
     } catch (e) {
       setErrorByKey((prev) => ({ ...prev, [key]: e instanceof Error ? e.message : 'Could not save the date.' }));
@@ -216,7 +235,7 @@ export function InvestmentDatePanel() {
         {items.map((item) => {
           const key = `${item.accountId}:${item.instrumentId}`;
           // The key carries the saved answer, so after a save the row remounts with fresh state (editor closed, new date shown).
-          return <InvestmentDateRow key={`${key}:${item.state}:${item.investmentDate ?? ''}`} item={item} busy={busyKey === key} serverError={errorByKey[key] || null} onSave={save} />;
+          return <InvestmentDateRow key={`${key}:${item.state}:${item.investmentDate ?? ''}`} item={item} busy={busyKey === key} serverError={errorByKey[key] || null} notice={noticeByKey[key] || null} onSave={save} />;
         })}
       </ul>
     </section>
