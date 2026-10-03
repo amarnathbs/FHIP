@@ -74,10 +74,10 @@ const BTN: Record<BtnKind, string> = {
   danger: 'border border-risk/40 bg-white text-risk hover:bg-risk/10',
 };
 
-export function Btn({ children, onClick, disabled, kind = 'primary', type = 'button', busy, describedBy }: { children: ReactNode; onClick?: () => void; disabled?: boolean; kind?: BtnKind; type?: 'button' | 'submit'; busy?: boolean; describedBy?: string }) {
+export function Btn({ children, onClick, disabled, kind = 'primary', type = 'button', busy, describedBy, ariaLabel, title, nowrap }: { children: ReactNode; onClick?: () => void; disabled?: boolean; kind?: BtnKind; type?: 'button' | 'submit'; busy?: boolean; describedBy?: string; ariaLabel?: string; title?: string; nowrap?: boolean }) {
   const off = disabled === true || busy === true;
   return (
-    <button type={type} onClick={onClick} disabled={off} aria-disabled={off} aria-busy={busy === true} aria-describedby={describedBy} className={`inline-flex min-h-11 items-center justify-center rounded px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${BTN[kind]} ${FOCUS}`}>
+    <button type={type} onClick={onClick} disabled={off} aria-disabled={off} aria-busy={busy === true} aria-describedby={describedBy} aria-label={ariaLabel} title={title} className={`inline-flex min-h-11 items-center justify-center rounded px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${nowrap ? 'whitespace-nowrap' : ''} ${BTN[kind]} ${FOCUS}`}>
       {busy ? 'Working...' : children}
     </button>
   );
@@ -103,9 +103,9 @@ export function ScrollTable({ label, children, minWidth = 'min-w-[720px]' }: { l
   );
 }
 
-export function Th({ children, num }: { children: ReactNode; num?: boolean }) {
+export function Th({ children, num, className = '' }: { children: ReactNode; num?: boolean; className?: string }) {
   return (
-    <th scope="col" className={`whitespace-nowrap bg-gray-50 px-3 py-2 text-xs font-semibold text-muted ${num ? NUM_HEADER_CLASS : ''}`}>
+    <th scope="col" className={`whitespace-nowrap bg-gray-50 px-3 py-2 text-xs font-semibold text-muted ${num ? NUM_HEADER_CLASS : ''} ${className}`}>
       {children}
     </th>
   );
