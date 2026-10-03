@@ -9,8 +9,11 @@
 --
 -- WHAT IT RETURNS (output-column allow-list; one row per instrument, never per user or per row):
 --   instrument_id, instrument_name, amc_name, amfi_scheme_code, sub_category, category_header_raw,
---   holder_count (distinct holders, a number only), first_held_date (earliest non-reversed
---   transaction date across all holders), mapped, proposal_waiting.
+--   holder_count (distinct holders, a number only) and first_held_date (earliest non-reversed
+--   transaction date across all holders) - BOTH NULL when fewer than 10 people hold the scheme
+--   (Admin Standard section 7.2 minimum distinct-person count; enforced here, inside the database),
+--   mapped, proposal_waiting. A scheme held by fewer than 10 people STILL APPEARS in the list (mapping
+--   needs no counts); only its count and date are withheld.
 -- NEVER returned: user_id, account, folio, units, amounts, any per-user value.
 --
 -- HELD means: at least one transaction whose status is neither 'reversed' nor 'review_required'
@@ -20,11 +23,10 @@
 -- INSIDE the function from auth.uid(); an unauthorised or anonymous caller gets an explicit 42501
 -- error, never an empty set. EXECUTE is revoked from PUBLIC/anon and granted to authenticated.
 --
--- ADMIN STANDARD NOTE (for the PO, see the engineering report): holder_count and first_held_date
--- are small-cohort behavioural aggregates (section 7.2 suggests a minimum of 10 distinct people).
--- The PO asked to see them for operational mapping work, so no suppression threshold is applied
--- here: that is a requested EXCEPTION to section 7 that needs the PO's recorded approval (16.1).
--- v_min_holders below is the single place to tighten it later (set it to 10 to suppress).
+-- ADMIN STANDARD NOTE: holder_count and first_held_date are behavioural aggregates, so the section 7.2
+-- minimum of 10 distinct people applies and is enforced below. NO exception to section 7 was requested or
+-- approved (section 16.1 not invoked). v_min_holders is the single constant. The result is not ordered by
+-- holder count, so the order itself cannot disclose a suppressed count.
 
 create or replace function public.benchmark_held_schemes()
 returns table (
@@ -41,7 +43,7 @@ returns table (
 )
 language plpgsql stable security definer set search_path = public as $$
 declare
-  v_min_holders constant integer := 1;
+  v_min_holders constant integer := 10;
 begin
   if auth.uid() is null or not public.is_benchmark_data_viewer() then
     raise exception 'benchmark held schemes: benchmark data view capability required' using errcode = '42501';
@@ -60,8 +62,8 @@ begin
          m.amfi_scheme_code::text,
          m.sub_category::text,
          m.category_header_raw::text,
-         h.holders,
-         h.first_date,
+         case when h.holders >= v_min_holders then h.holders else null end,
+         case when h.holders >= v_min_holders then h.first_date else null end,
          exists (select 1 from public.ii_instrument_benchmarks b
                   where b.instrument_id = h.iid and b.relationship_type = 'primary' and b.quality_status is distinct from 'superseded'),
          exists (select 1 from public.ii_benchmark_mapping_proposals p
@@ -75,12 +77,11 @@ begin
        order by sm.effective_from desc
        limit 1
     ) m on true
-   where h.holders >= v_min_holders
-   order by h.holders desc, i.instrument_name;
+   order by i.instrument_name, h.iid;
 end $$;
 
 revoke all on function public.benchmark_held_schemes() from public, anon;
 grant execute on function public.benchmark_held_schemes() to authenticated;
 
 comment on function public.benchmark_held_schemes() is
-  'BENCH-1 (0251): aggregate-only list of held instruments with holder count, first held date and mapping state, for the Mappings tab. View capability checked inside; no user id, account, unit or amount is ever returned.';
+  'BENCH-1 (0251): aggregate-only list of held instruments with mapping state, for the Mappings tab. Holder count and first held date are returned only where at least 10 people hold the scheme (else null). View capability checked inside; no user id, account, unit or amount is ever returned.';

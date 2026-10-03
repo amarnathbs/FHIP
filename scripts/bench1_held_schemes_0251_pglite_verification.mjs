@@ -9,7 +9,10 @@
 //   - an instrument with NO ii_scheme_master link (a statement-created one) IS returned;
 //   - an instrument whose only transactions are 'reversed' or only 'review_required' is NOT returned,
 //     and one that also has a counted transaction IS returned;
-//   - holder_count is a distinct-holder count and first_held_date the earliest counted date;
+//   - holder_count is a distinct-holder count and first_held_date the earliest counted date, BUT ONLY where at
+//     least 10 distinct people hold the scheme (Admin Standard 7.2): a 2-holder, a 3-holder and a 9-holder
+//     instrument still appear in the list with count and date NULL, a 10-holder one shows both; the
+//     result is not ordered by count; a copy of 0251 with the threshold removed must FAIL these checks;
 //   - mapped / proposal_waiting reflect approved primary mappings and open proposals only;
 //   - the result set has NO user_id / account / units / amount column, and no value of any returned
 //     row equals a seeded user id;
@@ -34,7 +37,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', 'supabase');
 const MIG = path.join(ROOT, 'migrations');
 const TARGET = '0251_bench1_held_schemes_for_benchmark_mapping.sql';
-const EXPECTED_CHECKS = 20;
+const EXPECTED_CHECKS = 23;
 const strip = (s) => s.replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, '');
 const files = fs.readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort();
 const target = strip(fs.readFileSync(process.env.II0251_FILE ?? path.join(MIG, TARGET), 'utf8'));
@@ -90,11 +93,13 @@ const I = {
   MAPPED: 'e0000000-0000-0000-0000-000000000006', // has an approved primary mapping
   WAITING: 'e0000000-0000-0000-0000-000000000007', // has an open proposal
   NEVER: 'e0000000-0000-0000-0000-000000000008', // in the universe, nobody holds it
+  BIG: 'e0000000-0000-0000-0000-000000000009', // held by exactly 10 people
+  NINE: 'e0000000-0000-0000-0000-00000000000a', // held by exactly 9 people (boundary)
 };
 const NAMES = {
   LINKED: '108MFGPG-UTI MNC Fund - Regular Plan (Non Demat)',
   UNLINKED: 'H44-HDFC Large Cap Fund - Regular Plan - Growth (formerly HDFC Top 100 Fund) (Non-Demat)',
-  REVERSED: 'Reversed Only Fund', REVIEW: 'Review Only Fund', MIXED: 'Mixed Fund', MAPPED: 'Mapped Fund', WAITING: 'Waiting Fund', NEVER: 'Nobody Holds This Fund',
+  REVERSED: 'Reversed Only Fund', REVIEW: 'Review Only Fund', MIXED: 'Mixed Fund', MAPPED: 'Mapped Fund', WAITING: 'Waiting Fund', NEVER: 'Nobody Holds This Fund', BIG: 'Widely Held Fund', NINE: 'Nine Holder Fund',
 };
 for (const [k, id] of Object.entries(I)) {
   await db.exec(`insert into ii_instruments (id, instrument_name, instrument_class, country_of_domicile, base_currency) values ('${id}', '${NAMES[k]}', 'mutual_fund', 'IN', 'INR')`);
@@ -123,6 +128,22 @@ await tx('A', 'A', 'MIXED', 'reversed', '2017-01-01');
 await tx('C', 'C', 'MIXED', 'parsed', '2023-06-15');
 await tx('A', 'A', 'MAPPED', 'parsed', '2020-02-02');
 await tx('A', 'A', 'WAITING', 'parsed', '2020-03-03');
+// ten further holders: all ten hold BIG, the first nine hold NINE
+const HOLDERS = [];
+for (let h = 1; h <= 10; h++) {
+  const uid = `70000000-0000-0000-0000-${String(h).padStart(12, '0')}`;
+  HOLDERS.push(uid);
+  await db.exec(`insert into auth.users(id, email) values ('${uid}', 'h${h}@t.test') on conflict do nothing`);
+  await db.exec(`update user_profiles set country_of_residence='IN', country_confirmed_at=now(), country_source='USER_CONFIRMED' where user_id='${uid}'`);
+  const acc = `b1000000-0000-0000-0000-${String(h).padStart(12, '0')}`;
+  await db.exec(`insert into ii_accounts (id, user_id, country_code, currency_code, account_type, institution_name) values ('${acc}', '${uid}', 'IN', 'INR', 'mf_folio', 'Alpha AMC')`);
+  const day = String(h).padStart(2, '0');
+  for (const inst of h <= 9 ? ['BIG', 'NINE'] : ['BIG']) {
+    n += 1;
+    await db.exec(`insert into ii_transactions (id, user_id, account_id, instrument_id, currency_code, status, transaction_type, transaction_date, units, gross_amount, source_reference)
+                   values ('f1000000-0000-0000-0000-${String(n).padStart(12, '0')}', '${uid}', '${acc}', '${I[inst]}', 'INR', 'parsed', 'purchase', '2016-04-${day}', 77.123, 1234.56, 'fixture:h${n}')`);
+  }
+}
 
 console.log('BEFORE 0251');
 check('the function does not exist before 0251 (anti-vacuity)', (await one(`select to_regprocedure('public.benchmark_held_schemes()') as f`)).f === null);
@@ -150,13 +171,16 @@ const fn = (uid) => asRole('authenticated', { sub: uid, role: 'authenticated' },
 const rows = (await fn(U.VIEWER)).rows;
 const byId = new Map(rows.map((r) => [r.instrument_id, r]));
 check('a statement-created instrument with NO scheme-master link IS returned', byId.has(I.UNLINKED), `${rows.length} rows`);
-check('its category columns are null (nothing invented) but its name and holder count are present', byId.get(I.UNLINKED)?.sub_category === null && byId.get(I.UNLINKED)?.amfi_scheme_code === null && byId.get(I.UNLINKED)?.holder_count === 1);
+check('its category columns are null (nothing invented), its name is present, and its count and date are withheld (1 holder)', byId.get(I.UNLINKED)?.sub_category === null && byId.get(I.UNLINKED)?.amfi_scheme_code === null && byId.get(I.UNLINKED)?.instrument_name === NAMES.UNLINKED && byId.get(I.UNLINKED)?.holder_count === null && byId.get(I.UNLINKED)?.first_held_date === null);
 check('the scheme-master-linked instrument is returned with its category', byId.get(I.LINKED)?.sub_category === 'Large Cap Fund');
 check('an instrument whose ONLY transactions are reversed is NOT returned', !byId.has(I.REVERSED));
 check('an instrument whose ONLY transactions are review_required is NOT returned', !byId.has(I.REVIEW));
-check('an instrument with a reversed AND a counted transaction IS returned, counting only the counted holder and date', byId.get(I.MIXED)?.holder_count === 1 && isoDay(byId.get(I.MIXED)?.first_held_date) === '2023-06-15', JSON.stringify(byId.get(I.MIXED)));
+check('an instrument with a reversed AND a counted transaction IS returned (its single counted holder is not disclosed: count and date null)', byId.has(I.MIXED) && byId.get(I.MIXED)?.holder_count === null && byId.get(I.MIXED)?.first_held_date === null, JSON.stringify(byId.get(I.MIXED)));
 check('an instrument nobody holds is NOT returned (universe members are not "held")', !byId.has(I.NEVER));
-check('holder_count is a DISTINCT holder count and first_held_date the earliest counted date', byId.get(I.LINKED)?.holder_count === 2 && isoDay(byId.get(I.LINKED)?.first_held_date) === '2018-03-01', JSON.stringify(byId.get(I.LINKED)));
+check('NEGATIVE CONTROL (cohort minimum): a 2-holder instrument is listed but exposes NEITHER a count NOR a date', byId.has(I.LINKED) && byId.get(I.LINKED)?.holder_count === null && byId.get(I.LINKED)?.first_held_date === null, JSON.stringify(byId.get(I.LINKED)));
+check('BOUNDARY: a 9-holder instrument exposes neither count nor date', byId.has(I.NINE) && byId.get(I.NINE)?.holder_count === null && byId.get(I.NINE)?.first_held_date === null, JSON.stringify(byId.get(I.NINE)));
+check('a 10-holder instrument exposes the DISTINCT holder count (10) and the earliest counted date', byId.get(I.BIG)?.holder_count === 10 && isoDay(byId.get(I.BIG)?.first_held_date) === '2016-04-01', JSON.stringify(byId.get(I.BIG)));
+check('the result is ordered by name, not by holder count (the order cannot disclose a withheld count)', rows.length > 3 && rows.every((r, i) => i === 0 || rows[i - 1].instrument_name <= r.instrument_name));
 check('mapped is true only for the approved primary mapping, proposal_waiting only for the open proposal', byId.get(I.MAPPED)?.mapped === true && byId.get(I.MAPPED)?.proposal_waiting === false && byId.get(I.WAITING)?.proposal_waiting === true && byId.get(I.WAITING)?.mapped === false && byId.get(I.UNLINKED)?.mapped === false);
 
 const colNames = Object.keys(rows[0] ?? {});

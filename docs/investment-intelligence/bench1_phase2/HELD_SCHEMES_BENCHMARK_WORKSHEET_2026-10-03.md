@@ -67,3 +67,14 @@ Categories that deliberately get **no** category benchmark: Gold / silver fund o
 * Whether copying a benchmark name and date from a public factsheet is acceptable under each fund house's site terms has not been checked; a question for counsel.
 * A third-party dataset the PO mentioned (`mutual_fund_data.csv`, with fields such as Scheme_Category, Launch_Date, Closure_Date, Scheme_Min_Amt, Average_AUM_Cr) has **no benchmark column**, so it cannot supply a benchmark. Nothing here depends on it; its Launch_Date could later help as a floor for how far back index history is needed.
 
+## Three funds whose own document declares a different benchmark (from the repository's 1 October 2026 evidence)
+
+The admin list flags these as "Declared benchmark differs from category benchmark - enter declared". Nothing has been entered; the evidence is in `scheme_benchmark_matrix.csv` and `mapping_evidence/`.
+
+| Fund | Category benchmark that applies meanwhile | Benchmark its own document declares (per that evidence) |
+|---|---|---|
+| Axis Large Cap Fund (AMFI 112277) | NIFTY 100 TRI | BSE 100 TRI |
+| SBI Large Cap Fund (AMFI 103504) | NIFTY 100 TRI | BSE 100 TRI |
+| SBI Contra Fund (AMFI 102414) | Nifty 500 TRI | BSE 500 TRI |
+
+Holder numbers in the admin list are shown only where at least 10 people hold a scheme (fewer: "Fewer than 10 holders", no date).

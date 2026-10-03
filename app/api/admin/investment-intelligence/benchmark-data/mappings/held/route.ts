@@ -16,7 +16,7 @@ export const GET = adminRoute(async () => {
   const { data, error } = await g.supabase.rpc('benchmark_held_schemes');
   if (error) {
     if (isMissingRelation(error)) {
-      return Response.json({ error: 'The held-schemes list is not available yet (migration 0251 is not applied).', code: 'unavailable' }, { status: 503 });
+      return Response.json({ error: 'This list needs a database update that has not been applied yet.', code: 'unavailable' }, { status: 503 });
     }
     return rpcFailureResponse(error);
   }

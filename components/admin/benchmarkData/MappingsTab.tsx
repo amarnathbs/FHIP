@@ -105,8 +105,8 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
 
   return (
     <div className="space-y-4">
-      <Panel title="Held schemes and the benchmark that applies" description="The schemes users actually hold, first. Holder numbers are counts only; no user, account or amount is shown. A fund with no declared benchmark is compared, automatically, with the usual benchmark for its category and is always labelled as such. Entering the fund's declared benchmark from its factsheet is optional; once approved it replaces the category benchmark. The category table is unverified (AMFI's own list could not be read), and a return figure appears only where the benchmark is verified, total return and entitled.">
-        {held.state.status === 'loading' ? <LoadingPanel what="the held schemes" /> : held.state.status === 'error' ? <ErrorPanel failure={held.state.failure} what="the held schemes" onRetry={held.reload} /> : held.state.data.rows.length === 0 ? (
+      <Panel title="Held schemes and the benchmark that applies" description="The schemes users actually hold, first. Holder numbers are counts only (shown only where at least 10 people hold the scheme); no user, account or amount is shown. A fund with no declared benchmark is compared, automatically, with the usual benchmark for its category and is always labelled as such. Entering the fund's declared benchmark from its factsheet is optional; once approved it replaces the category benchmark. The category table is unverified (AMFI's own list could not be read), and a return figure appears only where the benchmark is verified, total return and entitled.">
+        {held.state.status === 'loading' ? <LoadingPanel what="the held schemes" /> : held.state.status === 'error' ? (/database update/i.test(held.state.failure.message) ? <Notice tone="info">This list needs a database update that has not been applied yet. Everything else on this tab works; the list will appear once the update is applied.</Notice> : <ErrorPanel failure={held.state.failure} what="the held schemes" onRetry={held.reload} />) : held.state.data.rows.length === 0 ? (
           <EmptyState title="No held schemes found">No scheme has a counted transaction yet.</EmptyState>
         ) : (
           <>
@@ -119,13 +119,13 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
                     <Td><span title={h.originalName}>{h.displayName}</span><br /><span className="text-xs text-muted">{h.planType}; as printed: {h.originalName}</span></Td>
                     <Td>{h.amcName ?? 'Unknown'}</Td>
                     <Td>{h.category}{h.categorySource === 'name_hint' ? <><br /><span className="text-xs text-muted">Guessed from the name</span></> : null}</Td>
-                    <Td>{h.holderCount}</Td>
-                    <Td>{h.firstHeldDate ? formatDate(h.firstHeldDate) : 'Unknown'}</Td>
+                    <Td>{h.holderCount === null ? <span className="text-xs text-muted">Fewer than 10 holders</span> : h.holderCount}</Td>
+                    <Td>{h.firstHeldDate ? formatDate(h.firstHeldDate) : <span className="text-xs text-muted">Not shown</span>}</Td>
                     <Td>
                       {h.benchmark.kind === 'declared' ? (
                         <><Chip label="Declared (admin)" tone="ok" /><br /><span className="text-xs text-muted">{h.benchmark.label}</span></>
                       ) : h.benchmark.kind === 'category_reference' ? (
-                        <><Chip label={`Category benchmark: ${h.benchmark.benchmarkLabel}`} tone="info" /><br /><span className="text-xs text-muted">{h.benchmark.basisLabel}{h.benchmark.unsure ? '. Less certain choice for this category.' : ''}</span>{h.status === 'proposal_waiting' ? <><br /><span className="text-xs text-attention">A declared benchmark is waiting for review.</span></> : null}</>
+                        <><Chip label={`Category benchmark: ${h.benchmark.benchmarkLabel}`} tone="info" /><br /><span className="text-xs text-muted">{h.benchmark.basisLabel}{h.benchmark.unsure ? '. Less certain choice for this category.' : ''}</span>{h.status === 'proposal_waiting' ? <><br /><span className="text-xs text-attention">A declared benchmark is waiting for review.</span></> : null}{h.benchmark.declaredDiffers ? <><br /><span className="text-xs font-medium text-attention">Declared benchmark differs from category benchmark - enter declared.</span><br /><span className="text-xs text-muted">The fund&apos;s own document names {h.benchmark.declaredDiffers.declaredName} ({h.benchmark.declaredDiffers.evidenceRef}; evidence: {h.benchmark.declaredDiffers.evidenceStatus}).</span></> : null}</>
                       ) : (
                         <><Chip label="No benchmark for this category" tone="neutral" /><br /><span className="max-w-xs whitespace-normal text-xs text-muted">{h.benchmark.message}</span></>
                       )}

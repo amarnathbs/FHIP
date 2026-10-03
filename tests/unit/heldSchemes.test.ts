@@ -20,7 +20,8 @@ import {
   type VerifiedDeclaredBenchmark,
 } from '@/lib/services/investment-intelligence/benchmarkData/heldSchemes';
 import { summariseUnmappedSchemes } from '@/lib/services/investment-intelligence/benchmarkData/schemeMappingProposals';
-import { formatDate, mappingFormForFactsheet, validateMappingForm } from '@/components/admin/benchmarkData/benchmarkDataUiLogic';
+import { describeApiFailure, formatDate, mappingFormForFactsheet, validateMappingForm } from '@/components/admin/benchmarkData/benchmarkDataUiLogic';
+import { DECLARED_BENCHMARK_EVIDENCE_NOTES } from '@/lib/services/investment-intelligence/benchmarkData/declaredBenchmarkEvidenceNotes';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const raw = (over: Partial<HeldSchemeRaw> = {}): HeldSchemeRaw => ({
@@ -30,7 +31,7 @@ const raw = (over: Partial<HeldSchemeRaw> = {}): HeldSchemeRaw => ({
   amfiSchemeCode: '101762',
   subCategory: 'Flexi Cap Fund',
   categoryHeaderRaw: 'Open Ended Schemes(Equity Scheme - Flexi Cap Fund)',
-  holderCount: 3,
+  holderCount: 12,
   firstHeldDate: '2022-12-12',
   mapped: false,
   proposalWaiting: false,
@@ -113,15 +114,16 @@ describe('the held list', () => {
     expect(heldRawFromRpc([{ instrument_name: 'no id' }, { instrument_id: 7 }])).toEqual([]);
   });
 
-  it('ordering and counts: no declared benchmark first (most widely held first), then waiting, then declared', () => {
+  it('ordering and counts: no declared benchmark first, then waiting, then declared; by NAME within a group (never by holder count)', () => {
     const { rows, counts } = buildHeldSchemeRows([
-      raw({ instrumentId: 'a', instrumentName: 'Mapped Fund', mapped: true, holderCount: 9 }),
-      raw({ instrumentId: 'b', instrumentName: 'Waiting Fund', proposalWaiting: true, holderCount: 8 }),
-      raw({ instrumentId: 'c', instrumentName: 'Small Fund', holderCount: 1 }),
-      raw({ instrumentId: 'd', instrumentName: 'Big Fund', holderCount: 5 }),
+      raw({ instrumentId: 'a', instrumentName: 'Mapped Fund', mapped: true, holderCount: 90 }),
+      raw({ instrumentId: 'b', instrumentName: 'Waiting Fund', proposalWaiting: true, holderCount: 80 }),
+      raw({ instrumentId: 'c', instrumentName: 'Zed Small Fund', holderCount: null, firstHeldDate: null }),
+      raw({ instrumentId: 'd', instrumentName: 'Alpha Big Fund', holderCount: 50 }),
+      raw({ instrumentId: 'e', instrumentName: 'Mid Fund', holderCount: 11 }),
     ]);
-    expect(rows.map((r) => [r.instrumentId, r.status])).toEqual([['d', 'not_mapped'], ['c', 'not_mapped'], ['b', 'proposal_waiting'], ['a', 'mapped']]);
-    expect(counts).toEqual({ held: 4, declared: 1, categoryReference: 3, noBenchmark: 0, proposalWaiting: 1 });
+    expect(rows.map((r) => [r.instrumentId, r.status])).toEqual([['d', 'not_mapped'], ['e', 'not_mapped'], ['c', 'not_mapped'], ['b', 'proposal_waiting'], ['a', 'mapped']]);
+    expect(counts).toEqual({ held: 5, declared: 1, categoryReference: 4, noBenchmark: 0, proposalWaiting: 1 });
   });
 
   it('the first-held date is shown day-first (India format), never ISO', () => {
@@ -143,6 +145,76 @@ describe('which benchmark applies (informational; no admin step)', () => {
     const r = buildHeldSchemeRows([raw({ subCategory: 'FoF Domestic', categoryHeaderRaw: null, instrumentName: 'HGFOF-HDFC Gold ETF Fund of Fund - Regular Plan - Growth (Non-Demat)' })]).rows[0];
     expect(r.benchmark).toMatchObject({ kind: 'none' });
     expect((r.benchmark as { message: string }).message).toMatch(/Benchmark not available for this fund category/);
+  });
+});
+
+describe('RULE (Admin Standard 7.2): fewer than 10 holders => no count and no date', () => {
+  it('a scheme whose count the database withheld is still LISTED, with "suppressed" set and no count or date', () => {
+    const { rows } = buildHeldSchemeRows([raw({ holderCount: null, firstHeldDate: '2024-05-06' })]); // even if a date were supplied alongside a null count
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ holderCount: null, firstHeldDate: null, holdersSuppressed: true });
+  });
+  it('NEGATIVE CONTROL: a 3-holder instrument must not expose its count or date - the RPC coercion keeps a withheld count null (never 0) and drops the date with it', () => {
+    const out = heldRawFromRpc([{ instrument_id: '44444444-4444-4444-8444-444444444444', instrument_name: 'Three Holder Fund', holder_count: null, first_held_date: '2024-01-05', mapped: false, proposal_waiting: false }]);
+    expect(out[0].holderCount).toBeNull();
+    expect(out[0].firstHeldDate).toBeNull();
+    const built = buildHeldSchemeRows(out).rows[0];
+    expect(JSON.stringify(built)).not.toMatch(/2024-01-05/);
+    expect(built.holdersSuppressed).toBe(true);
+  });
+  it('CONTROL: a shown count (10 or more, as the database returns it) and its date pass through', () => {
+    const out = buildHeldSchemeRows(heldRawFromRpc([{ instrument_id: '44444444-4444-4444-8444-444444444444', instrument_name: 'Big Fund', holder_count: 10, first_held_date: '2016-04-01', mapped: false, proposal_waiting: false }])).rows[0];
+    expect(out).toMatchObject({ holderCount: 10, firstHeldDate: '2016-04-01', holdersSuppressed: false });
+  });
+  it('the screen says "Fewer than 10 holders" and shows no date', () => {
+    const tab = fs.readFileSync(path.join(ROOT, 'components/admin/benchmarkData/MappingsTab.tsx'), 'utf8');
+    expect(tab).toMatch(/Fewer than 10 holders/);
+    expect(tab).toMatch(/Not shown/);
+  });
+});
+
+describe('a held scheme whose declared benchmark (per the repository\'s own evidence) differs from the category benchmark is FLAGGED, not mapped', () => {
+  const flagged = (code: string, subCategory: string, name: string) =>
+    buildHeldSchemeRows([raw({ amfiSchemeCode: code, subCategory, instrumentName: name })]).rows[0].benchmark;
+  it.each([
+    ['112277', 'Large Cap Fund', '128EFGPG-Axis Large Cap Fund - Regular Growth (Non Demat)', 'BSE 100 TRI'],
+    ['103504', 'Large Cap Fund', 'SBI Large Cap Fund', 'BSE 100 TRI'],
+    ['102414', 'Contra Fund', 'L036G-SBI Contra Fund - Regular Plan - Growth (Non-Demat)', 'BSE 500 TRI'],
+  ])('%s is flagged with its declared benchmark and the evidence reference', (code, sub, name, declared) => {
+    const b = flagged(code, sub, name);
+    expect(b).toMatchObject({ kind: 'category_reference', declaredDiffers: { declaredName: expect.stringContaining(declared), evidenceRef: expect.stringContaining('scheme_benchmark_matrix.csv') } });
+  });
+  it('NEGATIVE CONTROL: schemes whose declared benchmark MATCHES the category one are not flagged (ABSL and HDFC Large Cap declare NIFTY 100 TRI; HDFC Mid Cap declares Nifty Midcap 150)', () => {
+    expect((flagged('103174', 'Large Cap Fund', 'ABSL Large Cap Fund') as { declaredDiffers: unknown }).declaredDiffers).toBeNull();
+    expect((flagged('102000', 'Large Cap Fund', 'HDFC Large Cap Fund') as { declaredDiffers: unknown }).declaredDiffers).toBeNull();
+    expect((flagged('105758', 'Mid Cap Fund', 'HDFC Mid Cap Fund') as { declaredDiffers: unknown }).declaredDiffers).toBeNull();
+  });
+  it('a scheme with no evidence note is never flagged (nothing is invented), and a flag creates no mapping or proposal', () => {
+    expect((flagged('999999', 'Large Cap Fund', 'Unknown Large Cap Fund') as { declaredDiffers: unknown }).declaredDiffers).toBeNull();
+    const src = fs.readFileSync(path.join(ROOT, 'lib/services/investment-intelligence/benchmarkData/declaredBenchmarkEvidenceNotes.ts'), 'utf8');
+    expect(src).not.toMatch(/fetch\(|\.rpc\(|\.insert\(/);
+  });
+  it('the evidence notes are exactly the rows of the repository\'s own matrix (generated, not typed): all three flagged funds are present', () => {
+    const codes = new Set(DECLARED_BENCHMARK_EVIDENCE_NOTES.map((n) => n.amfiSchemeCode));
+    for (const c of ['112277', '103504', '102414', '103174']) expect(codes.has(c)).toBe(true);
+    const csv = fs.readFileSync(path.join(ROOT, 'docs/investment-intelligence/bench1_phase2/scheme_benchmark_matrix.csv'), 'utf8');
+    for (const n of DECLARED_BENCHMARK_EVIDENCE_NOTES) expect(csv).toContain(n.amfiSchemeCode);
+  });
+  it('the panel says "Declared benchmark differs from category benchmark - enter declared."', () => {
+    expect(fs.readFileSync(path.join(ROOT, 'components/admin/benchmarkData/MappingsTab.tsx'), 'utf8')).toMatch(/Declared benchmark differs from category benchmark - enter declared\./);
+  });
+});
+
+describe('the missing-migration state is friendly, not a raw error', () => {
+  it('the 503 carries the plain sentence and the client recognises it', () => {
+    const f = describeApiFailure(503, { error: 'This list needs a database update that has not been applied yet.', code: 'unavailable' }, 'load the held schemes');
+    expect(f.kind).toBe('unavailable');
+    expect(f.message).toMatch(/database update/i);
+  });
+  it('the panel shows a plain notice for it (and an ordinary error panel otherwise)', () => {
+    const tab = fs.readFileSync(path.join(ROOT, 'components/admin/benchmarkData/MappingsTab.tsx'), 'utf8');
+    expect(tab).toMatch(/This list needs a database update that has not been applied yet\./);
+    expect(tab).toMatch(/\/database update\/i\.test\(held\.state\.failure\.message\)/);
   });
 });
 
@@ -188,6 +260,13 @@ describe('migration 0251 contract (source)', () => {
     expect(sql).toMatch(/create or replace function public\.benchmark_held_schemes\(\)/);
     expect(sql).not.toMatch(/\bdrop\s+(table|constraint|column|function|policy)\b|\bdelete\s+from\b|\balter\s+table\b|\binsert\s+into\b|\bupdate\s+public\./i);
   });
+  it('enforces the cohort minimum of 10 INSIDE the database, keeps below-threshold schemes in the list, and does not order by count', () => {
+    expect(sql).toMatch(/v_min_holders constant integer := 10;/);
+    expect(sql).toMatch(/case when h\.holders >= v_min_holders then h\.holders else null end/);
+    expect(sql).toMatch(/case when h\.holders >= v_min_holders then h\.first_date else null end/);
+    expect(sql).not.toMatch(/where h\.holders >= v_min_holders/); // schemes below the threshold are NOT filtered out
+    expect(sql).not.toMatch(/order by h\.holders/);
+  });
   it('counts only non-reversed, non-review_required transactions and is capability-gated inside the function', () => {
     expect(sql).toMatch(/coalesce\(t\.status, ''\) not in \('reversed', 'review_required'\)/);
     expect(sql).toMatch(/is_benchmark_data_viewer\(\)/);
@@ -225,7 +304,7 @@ describe('GET mappings/held', () => {
     const { GET } = await import('@/app/api/admin/investment-intelligence/benchmark-data/mappings/held/route');
     const res = await GET();
     expect(res.status).toBe(503);
-    expect(await res.json()).toMatchObject({ code: 'unavailable' });
+    expect(await res.json()).toMatchObject({ code: 'unavailable', error: 'This list needs a database update that has not been applied yet.' });
   });
   it('a database refusal (42501) is an explicit 403, never an empty list', async () => {
     rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'benchmark held schemes: benchmark data view capability required' } });

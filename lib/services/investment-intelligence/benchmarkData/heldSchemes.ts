@@ -13,6 +13,8 @@
 // a declared mapping then always wins.
 
 import type { DeclaredBenchmarkEvidence } from './schemeMappingProposals';
+import { matchBenchmarkName } from './benchmarkNameMatcher';
+import { DECLARED_BENCHMARK_EVIDENCE_NOTES, DECLARED_BENCHMARK_EVIDENCE_REF } from './declaredBenchmarkEvidenceNotes';
 import { categoryReferenceFor, CATEGORY_REFERENCE_KIND, DECLARED_BENCHMARK_LABEL, type FundCategorySource } from './categoryReference';
 
 export type HeldStatus = 'mapped' | 'proposal_waiting' | 'not_mapped';
@@ -25,8 +27,9 @@ export interface HeldSchemeRaw {
   amfiSchemeCode: string | null;
   subCategory: string | null;
   categoryHeaderRaw: string | null;
-  holderCount: number;
-  firstHeldDate: string | null; // ISO yyyy-mm-dd (data; formatted day-first at the screen)
+  /** null when fewer than 10 people hold the scheme (Admin Standard section 7.2; withheld inside the database). */
+  holderCount: number | null;
+  firstHeldDate: string | null; // ISO yyyy-mm-dd (data; formatted day-first at the screen); null with holderCount
   mapped: boolean;
   proposalWaiting: boolean;
 }
@@ -53,6 +56,11 @@ export type HeldBenchmarkState =
       /** "Compared with the usual benchmark for <category> funds (not this fund's own declared benchmark)". */
       basisLabel: string;
       unsure: boolean;
+      /**
+       * Set when the repository's own evidence says the fund's document declares a DIFFERENT benchmark from the
+       * category one. A flag only: nothing is created; the admin is asked to enter the declared benchmark.
+       */
+      declaredDiffers: { declaredName: string; evidenceStatus: string; evidenceRef: string } | null;
     }
   | { kind: 'none'; message: string };
 
@@ -67,8 +75,10 @@ export interface HeldSchemeRow {
   amfiSchemeCode: string | null;
   category: string;
   categorySource: 'scheme_master' | 'name_hint' | 'unknown';
-  holderCount: number;
+  /** null = "fewer than 10 holders" (count and date withheld). */
+  holderCount: number | null;
   firstHeldDate: string | null;
+  holdersSuppressed: boolean;
   status: HeldStatus;
   /** Which benchmark applies (informational; no admin step required). */
   benchmark: HeldBenchmarkState;
@@ -180,11 +190,18 @@ export function declaredBenchmarksFor(
 // ---------------------------------------------------------------------------
 
 /** Pure: the benchmark state for one held scheme. A declared (mapped) scheme is declared; the rest use the category reference or none. */
-export function heldBenchmarkState(r: Pick<HeldSchemeRaw, 'instrumentName' | 'subCategory' | 'categoryHeaderRaw' | 'mapped'>): HeldBenchmarkState {
+export function heldBenchmarkState(r: Pick<HeldSchemeRaw, 'instrumentName' | 'subCategory' | 'categoryHeaderRaw' | 'mapped'> & { amfiSchemeCode?: string | null }): HeldBenchmarkState {
   if (r.mapped) return { kind: 'declared', label: DECLARED_BENCHMARK_LABEL };
   const ref = categoryReferenceFor({ subCategory: r.subCategory, categoryHeaderRaw: r.categoryHeaderRaw, instrumentName: r.instrumentName });
   if (ref.state === 'none') return { kind: 'none', message: ref.message };
-  return { kind: CATEGORY_REFERENCE_KIND, categoryLabel: ref.categoryLabel, categorySource: ref.categorySource, benchmarkKey: ref.benchmarkKey, benchmarkLabel: ref.benchmarkLabel, basisLabel: ref.basisLabel, unsure: ref.unsure };
+  // Does the repository's own evidence say this fund declares a different benchmark from the category one?
+  const note = r.amfiSchemeCode ? DECLARED_BENCHMARK_EVIDENCE_NOTES.find((n) => n.amfiSchemeCode === r.amfiSchemeCode) : undefined;
+  let declaredDiffers: { declaredName: string; evidenceStatus: string; evidenceRef: string } | null = null;
+  if (note) {
+    const same = matchBenchmarkName(note.declaredName, [{ benchmarkId: null, benchmarkKey: ref.benchmarkKey, officialName: ref.benchmarkLabel, returnVariant: 'total_return', verified: true, active: true }], { declaredVariantHint: 'total_return' }).best !== null;
+    if (!same) declaredDiffers = { declaredName: note.declaredName, evidenceStatus: note.evidenceStatus, evidenceRef: DECLARED_BENCHMARK_EVIDENCE_REF };
+  }
+  return { kind: CATEGORY_REFERENCE_KIND, categoryLabel: ref.categoryLabel, categorySource: ref.categorySource, benchmarkKey: ref.benchmarkKey, benchmarkLabel: ref.benchmarkLabel, basisLabel: ref.basisLabel, unsure: ref.unsure, declaredDiffers };
 }
 
 // ---------------------------------------------------------------------------
@@ -212,17 +229,19 @@ export function buildHeldSchemeRows(raw: readonly HeldSchemeRaw[], opts: BuildHe
       amfiSchemeCode: r.amfiSchemeCode,
       category: sub || hint || 'Unknown',
       categorySource: sub ? 'scheme_master' : hint ? 'name_hint' : 'unknown',
-      holderCount: r.holderCount,
-      firstHeldDate: r.firstHeldDate,
+      holderCount: r.holderCount === null ? null : r.holderCount,
+      firstHeldDate: r.holderCount === null ? null : r.firstHeldDate,
+      holdersSuppressed: r.holderCount === null,
       status,
       benchmark: heldBenchmarkState(r),
       sourcePrefilled: prefilledDeclared.length > 0,
       prefilledDeclared,
     };
   });
-  // No declared benchmark first (the ones an admin might want to enter), then waiting, then declared; most held first.
+  // No declared benchmark first (the ones an admin might want to enter), then waiting, then declared; by name within a group
+  // (NOT by holder count, so the order cannot disclose a withheld count).
   const order: Record<HeldStatus, number> = { not_mapped: 0, proposal_waiting: 1, mapped: 2 };
-  rows.sort((a, b) => order[a.status] - order[b.status] || b.holderCount - a.holderCount || a.displayName.localeCompare(b.displayName));
+  rows.sort((a, b) => order[a.status] - order[b.status] || a.displayName.localeCompare(b.displayName));
   return {
     rows,
     verifiedSourceAvailable: enabled,
@@ -249,8 +268,9 @@ export function heldRawFromRpc(data: unknown): HeldSchemeRaw[] {
       amfiSchemeCode: typeof r.amfi_scheme_code === 'string' ? r.amfi_scheme_code : null,
       subCategory: typeof r.sub_category === 'string' ? r.sub_category : null,
       categoryHeaderRaw: typeof r.category_header_raw === 'string' ? r.category_header_raw : null,
-      holderCount: Number(r.holder_count) || 0,
-      firstHeldDate: typeof r.first_held_date === 'string' ? r.first_held_date.slice(0, 10) : null,
+      // null stays null: fewer than 10 holders (never turned into 0)
+      holderCount: r.holder_count === null || r.holder_count === undefined ? null : Number(r.holder_count) || 0,
+      firstHeldDate: r.holder_count === null || r.holder_count === undefined ? null : typeof r.first_held_date === 'string' ? r.first_held_date.slice(0, 10) : null,
       mapped: r.mapped === true,
       proposalWaiting: r.proposal_waiting === true,
     });
