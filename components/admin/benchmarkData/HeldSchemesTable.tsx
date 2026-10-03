@@ -27,8 +27,9 @@ export const HELD_TABLE_LAYOUT = {
   holdersMin: 'min-w-[6.5rem]',
   firstHeldMin: 'min-w-[6.5rem]',
   benchmarkMin: 'min-w-[17rem]',
+  factsheetCheckMin: 'min-w-[11rem]',
   actionSticky: 'sticky right-0 z-10 w-[11.5rem] min-w-[11.5rem] border-l border-line',
-  tableMin: 'min-w-[1000px]',
+  tableMin: 'min-w-[1150px]',
 } as const;
 
 const L = HELD_TABLE_LAYOUT;
@@ -59,6 +60,7 @@ export default function HeldSchemesTable({ rows, canPropose, onEnterDeclared }: 
           <Th className={L.holdersMin}>Holders</Th>
           <Th className={L.firstHeldMin}>First held</Th>
           <Th className={L.benchmarkMin}>Benchmark that applies</Th>
+          <Th className={L.factsheetCheckMin}>Last factsheet check</Th>
           <Th className={`bg-gray-50 ${L.actionSticky}`}>Action</Th>
         </tr>
       </thead>
@@ -69,7 +71,9 @@ export default function HeldSchemesTable({ rows, canPropose, onEnterDeclared }: 
           const benchmarkText =
             h.benchmark.kind === 'declared'
               ? h.benchmark.label
-              : h.benchmark.kind === 'category_reference'
+              : h.benchmark.kind === 'declared_unsupported'
+                ? `${h.benchmark.message}. No category benchmark and no comparison number are shown for this scheme.`
+                : h.benchmark.kind === 'category_reference'
                 ? `${h.benchmark.basisLabel}${h.benchmark.unsure ? '. Less certain choice for this category.' : ''}${h.status === 'proposal_waiting' ? ' A declared benchmark is waiting for review.' : ''}`
                 : h.benchmark.message;
           const differs = h.benchmark.kind === 'category_reference' ? h.benchmark.declaredDiffers : null;
@@ -107,6 +111,8 @@ export default function HeldSchemesTable({ rows, canPropose, onEnterDeclared }: 
                 <div className="flex flex-wrap items-center gap-1">
                   {h.benchmark.kind === 'declared' ? (
                     <Chip label="Declared (admin)" tone="ok" />
+                  ) : h.benchmark.kind === 'declared_unsupported' ? (
+                    <Chip label={h.benchmark.status === 'declared_unsupported' ? 'Declared, cannot be compared' : 'Declared, awaiting review'} tone="warn" title={h.benchmark.message} />
                   ) : h.benchmark.kind === 'category_reference' ? (
                     <Chip label={`Category: ${h.benchmark.benchmarkLabel}`} tone="info" title={h.benchmark.benchmarkLabel} />
                   ) : (
@@ -117,6 +123,19 @@ export default function HeldSchemesTable({ rows, canPropose, onEnterDeclared }: 
                 <p className={`${L.textClamp} mt-1 whitespace-normal text-xs text-muted`} title={differs ? `${benchmarkText} Declared benchmark differs from category benchmark - enter declared (${differs.declaredName}).` : benchmarkText}>
                   {differs ? `Declared benchmark differs from category benchmark - enter declared (its document names ${differs.declaredName}).` : benchmarkText}
                 </p>
+              </Td>
+              <Td className={L.factsheetCheckMin}>
+                {h.factsheetCheck ? (
+                  <>
+                    <span className="block">{formatDate(h.factsheetCheck.checkedAt)}</span>
+                    <p className={`${L.textClamp} whitespace-normal text-xs text-muted`} title={`${h.factsheetCheck.result}${h.factsheetCheck.documentDate ? `; document dated ${formatDate(h.factsheetCheck.documentDate)}` : ''}`}>
+                      {h.factsheetCheck.result}
+                      {h.factsheetCheck.documentDate ? `; document dated ${formatDate(h.factsheetCheck.documentDate)}` : ''}
+                    </p>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted">Never checked</span>
+                )}
               </Td>
               <Td className={`bg-white ${L.actionSticky}`}>
                 {canPropose && h.status === 'not_mapped' ? (

@@ -1,0 +1,17 @@
+SYNTHETIC TEST FIXTURE. Hand-written to mimic the layout of the benchmark sections of a scheme information document. It is NOT a real fund-house document and contains no real performance figures.
+
+HDFC Balanced Advantage Fund
+(An open-ended dynamic asset allocation fund)
+This Scheme Information Document is dated June 28, 2024
+
+Key Features of the Scheme
+Name of the Scheme                HDFC Balanced Advantage Fund
+Type of the Scheme                An open-ended dynamic asset allocation fund
+Benchmark (Total Return Index): NIFTY 50 Hybrid Composite Debt 50:50 Index (Total Returns Index)
+Additional Benchmark: NIFTY 50 Total Returns Index (TRI)
+Benchmark Riskometer
+Very High
+
+D. How will the scheme benchmark its performance?
+The performance of the Scheme will be benchmarked against the Tier I benchmark named above, as per AMFI Tier I Benchmark guidance.
+Performance of the scheme as at September 30, 2023 is shown in the performance table (figures omitted from this synthetic fixture).

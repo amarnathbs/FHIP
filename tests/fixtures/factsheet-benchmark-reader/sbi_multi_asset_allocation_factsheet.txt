@@ -1,0 +1,13 @@
+SYNTHETIC TEST FIXTURE. Hand-written to mimic the front page of a scheme factsheet. It is NOT a real fund-house document and contains no real performance figures.
+
+SBI Multi Asset Allocation Fund
+(Previously known as SBI Magnum Monthly Income Plan - Floater)
+Hybrid - Multi Asset Allocation Fund
+Report As On: 30/04/2026
+
+Fund Details
+Type of Scheme       An open-ended scheme investing in equity, debt and gold / silver instruments
+Fund Manager         (names omitted from this synthetic fixture)
+First Tier Benchmark: 45% BSE 500 TRI + 40% Crisil Composite Bond Fund Index + 10% Domestic prices of Gold + 5% Domestic
+prices of silver. (W.e.f. 31 October 2023)
+Exit Load            (omitted from this synthetic fixture)

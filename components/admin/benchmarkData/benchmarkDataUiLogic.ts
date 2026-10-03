@@ -56,6 +56,8 @@ export const apiPaths = {
   mappingReview: (id: string) => `${API_BASE}/mappings/${seg(id)}/review`,
   unmappedSchemes: () => `${API_BASE}/mappings/unmapped`,
   heldSchemes: () => `${API_BASE}/mappings/held`,
+  factsheetChanges: () => `${API_BASE}/factsheet/changes`,
+  factsheetChangeReview: (id: string) => `${API_BASE}/factsheet/changes/${seg(id)}/review`,
   ingestionMode: (benchmarkId: string) => `${API_BASE}/ingestion/${seg(benchmarkId)}/mode`,
 } as const;
 
@@ -1382,6 +1384,56 @@ export function mappingFormForHeldScheme(row: { instrumentId: string; prefilledD
 export function mappingFormForFactsheet(instrumentId: string): MappingFormState {
   return { ...emptyMappingForm(), instrumentId, evidenceSource: 'amc_factsheet' };
 }
+
+/**
+ * "Enter manually" from the factsheet-changes queue: the propose form pre-filled with what the reader recorded (the
+ * benchmark as the document states it, the document, its date and the effective date), so the reviewer corrects rather
+ * than retypes. Dates are typed day-first (DD-MM-YYYY). Nothing is guessed: the catalogue benchmark, the method and the
+ * confidence stay empty for the reviewer to choose.
+ */
+export function mappingFormFromFactsheetChange(c: {
+  instrumentId: string;
+  newBenchmark: string;
+  effectiveFrom: string;
+  documentType: string;
+  documentUrl: string;
+  documentTitle: string | null;
+  documentDate: string | null;
+  documentMonth: string;
+  retrievedAt: string;
+  evidenceExcerpt: string | null;
+  reviewReason: string | null;
+}): MappingFormState {
+  return {
+    ...emptyMappingForm(),
+    instrumentId: c.instrumentId,
+    proposedBenchmarkName: c.newBenchmark.slice(0, 200),
+    effectiveFrom: formatDateInput(c.effectiveFrom),
+    evidenceSource: EVIDENCE_SOURCE_OPTIONS.some((o) => o.value === c.documentType) ? c.documentType : 'amc_factsheet',
+    evidenceUrl: c.documentUrl,
+    evidenceTitle: c.documentTitle ?? '',
+    evidenceDocumentDate: formatDateInput(c.documentDate ?? c.documentMonth),
+    evidenceRetrievedAt: formatDateInput(c.retrievedAt.slice(0, 10)),
+    evidenceExcerpt: (c.evidenceExcerpt ?? '').slice(0, 400),
+    ambiguityReason: (c.reviewReason ?? '').slice(0, 400),
+  };
+}
+
+/** Plain words for a queue item's kind and what the reviewer can do with it. */
+export function factsheetChangeHeading(c: { kind: 'changed' | 'first_reading'; benchmarkKind: 'single_index' | 'composite' | 'commodity_price'; catalogueState: string }): string {
+  if (c.kind === 'changed') return 'The fund house now declares a different benchmark';
+  if (c.catalogueState === 'unsupported_composite') return 'Declared benchmark is a composite the catalogue cannot represent';
+  if (c.catalogueState === 'unsupported_commodity') return 'Declared benchmark is a commodity price, not an index';
+  if (c.catalogueState === 'no_catalogue_match') return 'Declared benchmark is an index that is not in the catalogue';
+  return 'First reading needs a reviewer';
+}
+
+export const FACTSHEET_TERMS_WORDS: Record<string, string> = {
+  not_reviewed: 'Terms not reviewed (not read)',
+  under_review: 'Terms under review (not read)',
+  approved: 'Terms approved',
+  declined: 'Terms declined (not read)',
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -9,6 +9,8 @@ import type { MappingProposalView, OverviewResponse } from '@/lib/services/inves
 import type { HeldSchemesResponse } from '@/lib/services/investment-intelligence/benchmarkData/heldSchemes';
 import type { UnmappedSummary } from '@/lib/services/investment-intelligence/benchmarkData/schemeMappingProposals';
 import { matchBenchmarkName, type CatalogueEntryLite } from '@/lib/services/investment-intelligence/benchmarkData/benchmarkNameMatcher';
+import type { FactsheetChangeView } from '@/lib/services/investment-intelligence/factsheetReader/adminView';
+import FactsheetChangesPanel from './FactsheetChangesPanel';
 import { usePost, useLoad, type Say } from './api';
 import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
 import { MAPPING_DATE_KEYS, MAPPING_FIELD_LABELS, MAPPING_FIELD_MAP, MAPPING_FIELD_ORDER, NOTE_FIELD_LABELS, NOTE_FIELD_MAP, NOTE_FIELD_ORDER } from './benchmarkDataFormErrors';
@@ -25,6 +27,7 @@ import {
   emptyMappingForm,
   mappingFormForHeldScheme,
   mappingFormForFactsheet,
+  mappingFormFromFactsheetChange,
   formatDate,
   mappingStatusChip,
   reviewProblem,
@@ -52,6 +55,8 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
   const [review, setReview] = useState<{ p: MappingProposalView; decision: 'approve' | 'reject' } | null>(null);
   const [note, setNote] = useState('');
   const [closePrev, setClosePrev] = useState(false);
+  // Set when the propose form was opened by "Enter manually" from the factsheet queue: the queue item is closed once the proposal is saved.
+  const [manualFor, setManualFor] = useState<string | null>(null);
   const set = (p: Partial<MappingFormState>) => setForm((f) => (f ? { ...f, ...p } : f));
 
   if (state.status === 'loading') return <LoadingPanel what="the mapping proposals" />;
@@ -66,6 +71,10 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
     const bm = ov.rows.find((r) => r.catalogue.benchmarkKey === form.benchmarkKey);
     const r = await post(apiPaths.mappings(), buildMappingBody(form, bm ? bm.catalogue.id : null), 'Proposed. It changes nothing until it is reviewed.', 'propose this mapping');
     if (r.ok) {
+      if (manualFor) {
+        await post(apiPaths.factsheetChangeReview(manualFor), { decision: 'manual', note: 'Entered manually from the factsheet changes queue.' }, 'The factsheet item is closed: it was entered manually.', 'close the factsheet item');
+        setManualFor(null);
+      }
       fb.clear();
       setForm(null);
       reload();
@@ -111,11 +120,13 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
           <EmptyState title="No held schemes found">No scheme has a counted transaction yet.</EmptyState>
         ) : (
           <>
-            <p className="mb-2 text-sm text-muted">{held.state.data.counts.held} held: {held.state.data.counts.declared} with a declared benchmark, {held.state.data.counts.categoryReference} using the category benchmark, {held.state.data.counts.noBenchmark} with no benchmark for their category; {held.state.data.counts.proposalWaiting} declared proposals waiting for review.</p>
+            <p className="mb-2 text-sm text-muted">{held.state.data.counts.held} held: {held.state.data.counts.declared} with a declared benchmark, {held.state.data.counts.declaredUnsupported} with a declared benchmark that cannot be compared with the data we hold, {held.state.data.counts.categoryReference} using the category benchmark, {held.state.data.counts.noBenchmark} with no benchmark for their category; {held.state.data.counts.proposalWaiting} declared proposals waiting for review.</p>
             <HeldSchemesTable rows={held.state.data.rows} canPropose={dec.canReviewMappings} onEnterDeclared={(h) => { setForm(h.sourcePrefilled ? mappingFormForHeldScheme(h) : mappingFormForFactsheet(h.instrumentId)); fb.clear(); }} />
           </>
         )}
       </Panel>
+
+      <FactsheetChangesPanel refreshKey={refreshKey} canReview={dec.canReviewMappings} onChanged={() => { reload(); onChanged(); }} onEnterManually={(c: FactsheetChangeView) => { setForm(mappingFormFromFactsheetChange(c)); setManualFor(c.versionId); fb.clear(); }} say={say} />
 
       <Panel title="Schemes with no benchmark mapping yet" description="Counts by AMFI category. Funds with no declared benchmark use the usual benchmark for their category at read time; it is never stored as a mapping.">
         {unmapped.state.status === 'loading' ? <LoadingPanel what="the schemes with no mapping" /> : unmapped.state.status === 'error' ? <ErrorPanel failure={unmapped.state.failure} what="the schemes with no mapping" onRetry={unmapped.reload} /> : (
@@ -215,7 +226,7 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
             <TextAreaField label="Excerpt from the document (optional, up to 400 characters)" value={form.evidenceExcerpt} onChange={(v) => set({ evidenceExcerpt: v })} maxLength={400} error={errors.evidenceExcerpt} fieldKey="evidenceExcerpt" />
             <TextAreaField label="Anything ambiguous? (optional)" value={form.ambiguityReason} onChange={(v) => set({ ambiguityReason: v })} hint="Name variants, tiers or dates that need a human decision." error={errors.ambiguityReason} fieldKey="ambiguityReason" />
           </div>
-          <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void propose()}>Propose</Btn><Btn kind="secondary" onClick={() => { fb.clear(); setForm(null); }}>Cancel</Btn></div>
+          <div className="mt-3 flex gap-2"><Btn busy={busy} onClick={() => void propose()}>Propose</Btn><Btn kind="secondary" onClick={() => { fb.clear(); setForm(null); setManualFor(null); }}>Cancel</Btn></div>
           </div>
         </Panel>
       ) : null}
