@@ -122,7 +122,7 @@ describe('tile arithmetic against a hand-checked fund', () => {
 
   it('unrealised + realised + dividend payouts equals the overall gain when history is complete and nothing is reinvested', () => {
     const t = buildIndiaMfReport(handChecked())!.sections[0].tiles;
-    expect(t.unrealisedGain + t.realisedGain + t.dividend).toBeCloseTo(t.overallGain, 6);
+    expect(t.unrealisedGain + t.realisedGain + t.dividend).toBeCloseTo(t.overallGain as number, 6);
   });
 
   it('XIRR is a real rate that zeroes the NPV of the recorded flows plus the terminal value', () => {
@@ -224,7 +224,9 @@ describe('partial history shows a labelled value, never a blanket n/a', () => {
     const report = buildIndiaMfReport(partial())!;
     const row = report.sections[0].rows[0];
     expect(row.basis.partial).toBe(true);
-    expect(row.basis.label).toBe('from 12-12-2022; earlier history not uploaded');
+    // The marker's date is the Start Dt column's date (first recorded acquisition, 2023-04-03), not the opening-balance date.
+    expect(row.startDate).toBe('2023-04-03');
+    expect(row.basis.label).toBe('from 03-04-2023; earlier history not uploaded');
     expect(row.basis.unitsWithoutRecordedCost).toBeCloseTo(300, 6);
     const note = report.footnotes.find((f) => f.code === 'PARTIAL_HISTORY')!;
     expect(note.text).toContain('MFCentral integration is available');

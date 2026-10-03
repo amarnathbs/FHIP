@@ -54,6 +54,18 @@ export interface SipCandidateTransaction {
   sourceDescription?: string | null;
 }
 
+/** Words a customer reads in a sentence (never the internal enum token such as OTHER_RECURRING). */
+export function sipCadenceLabel(cadence: SipCadence): string {
+  switch (cadence) {
+    case 'OTHER_RECURRING':
+      return 'regular but non-standard';
+    case 'FORTNIGHTLY':
+      return 'fortnightly';
+    default:
+      return cadence.toLowerCase().replace(/_/g, ' ');
+  }
+}
+
 export type SipCadence = 'MONTHLY' | 'QUARTERLY' | 'WEEKLY' | 'FORTNIGHTLY' | 'ANNUAL' | 'OTHER_RECURRING' | 'IRREGULAR' | 'UNKNOWN';
 
 export type SipConfidence = 'CONFIRMED_SOURCE' | 'HIGH_CONFIDENCE' | 'POSSIBLE' | 'AMBIGUOUS' | 'NOT_SIP';
@@ -257,11 +269,11 @@ function assessSeries(members: SipCandidateTransaction[]): Omit<SipSeries, 'seri
     if (amountsSimilar || monotonicStepUp) {
       confidence = 'HIGH_CONFIDENCE';
       rationale = amountsSimilar
-        ? `${sorted.length} purchases at a consistent ${cadence.toLowerCase()} interval and a stable amount. Identified as a recurring contribution series by pattern, not stated by the source statement.`
-        : `${sorted.length} purchases at a consistent ${cadence.toLowerCase()} interval with a steadily ${trend === 'INCREASING' ? 'rising' : 'falling'} amount. Identified by pattern, not stated by the source statement.`;
+        ? `${sorted.length} purchases at a consistent ${sipCadenceLabel(cadence)} interval and a stable amount. Identified as a recurring contribution series by pattern, not stated by the source statement.`
+        : `${sorted.length} purchases at a consistent ${sipCadenceLabel(cadence)} interval with a steadily ${trend === 'INCREASING' ? 'rising' : 'falling'} amount. Identified by pattern, not stated by the source statement.`;
     } else {
       confidence = 'POSSIBLE';
-      rationale = `${sorted.length} purchases occur at a consistent ${cadence.toLowerCase()} interval, but the amounts vary in a way that does not match a single mandate. Treated as a possible recurring series only.`;
+      rationale = `${sorted.length} purchases occur at a consistent ${sipCadenceLabel(cadence)} interval, but the amounts vary in a way that does not match a single mandate. Treated as a possible recurring series only.`;
     }
   }
 

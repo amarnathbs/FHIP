@@ -1,5 +1,5 @@
 import type { IndiaMfReport, OwnerRow, OwnerSection, OwnerTiles, XirrOutcome } from '@/lib/engines/investment-intelligence/indiaMfReport';
-import { formatIsoDateDMY } from '@/lib/engines/investment-intelligence/indiaMfReport';
+import { formatIsoDateDMY, UNIT_TOLERANCE } from '@/lib/engines/investment-intelligence/indiaMfReport';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 
 // India Mutual Fund Investment Report — presentational only. Every number is
@@ -35,6 +35,12 @@ function nav(n: number | null): string {
 }
 function xirrText(x: XirrOutcome): string {
   return x.status === 'ok' ? `${(x.rate * 100).toFixed(2)}%` : 'n/a';
+}
+/** Visible label under an XIRR that rests on units with a recorded cost only (never shown as if it were the whole holding's return). */
+export const PARTIAL_COST_LABEL = 'recorded cost only';
+function xirrHint(x: XirrOutcome): string | undefined {
+  if (x.status === 'na') return x.detail;
+  return x.partialCost ? PARTIAL_COST_LABEL : undefined;
 }
 
 const FOOTNOTE_MARK: Record<string, string> = {
@@ -92,10 +98,10 @@ function Tiles({ t }: { t: OwnerTiles }) {
       <Tile code="C" label="Switch Out" value={inr(t.switchOut)} />
       <Tile code="D" label="Red/SWP" value={inr(t.redemptionSwp)} />
       <Tile code="E" label="Div Payout" value={inr(t.dividend)} />
-      <Tile code="F" label="Net Investment" value={inr(t.netInvestment)} hint="A+B-C-D-E" />
+      <Tile code="F" label="Net Investment" value={inr(t.netInvestment)} hint={t.unvaluedPositions > 0 ? `A+B-C-D-E, excludes ${t.unvaluedPositions} unvalued` : 'A+B-C-D-E'} />
       <Tile code="G" label="Current Value" value={inr(t.currentValue)} hint={t.unvaluedPositions > 0 ? `excludes ${t.unvaluedPositions} unvalued` : undefined} />
-      <Tile code="H" label="Overall Gain" value={inr(t.overallGain)} hint="G-F" />
-      <Tile code="" label="XIRR%" value={xirrText(t.xirr)} hint={t.xirr.status === 'na' ? t.xirr.detail : undefined} />
+      <Tile code="H" label="Overall Gain" value={inr(t.overallGain)} hint={t.overallGain === null ? 'n/a - incomplete cost basis' : t.unvaluedPositions > 0 ? `G-F, excludes ${t.unvaluedPositions} unvalued` : 'G-F'} />
+      <Tile code="" label="XIRR%" value={xirrText(t.xirr)} hint={xirrHint(t.xirr)} />
     </div>
   );
 }
@@ -109,6 +115,9 @@ function OwnerTable({ section }: { section: OwnerSection }) {
   for (const r of section.rows) {
     if (r.xirr.status === 'na') naNotes.push(`${r.schemeName}${r.folio ? ` (folio ${r.folio})` : ''}: XIRR n/a - ${r.xirr.detail}.`);
     if (r.avgNav === null && !r.flags.noTransactions && !r.flags.redeemed) naNotes.push(`${r.schemeName}${r.folio ? ` (folio ${r.folio})` : ''}: average NAV n/a - no unit with a recorded purchase cost is held.`);
+    if (r.basis.unitsWithoutRecordedCost > UNIT_TOLERANCE) {
+      naNotes.push(`${r.schemeName}${r.folio ? ` (folio ${r.folio})` : ''}: overall gain n/a - incomplete cost basis (cost is recorded for ${units(Math.max(0, r.units - r.basis.unitsWithoutRecordedCost * (r.shareBasisPoints / 10000)))} of ${units(r.units)} units held); the other figures cover recorded cost only.`);
+    }
     if (r.realisedGain === null && r.flags.redeemed === false && r.basis.reasons.includes('disposal_of_units_before_uploaded_history')) {
       naNotes.push(`${r.schemeName}${r.folio ? ` (folio ${r.folio})` : ''}: realised gain n/a - the units sold were bought before the uploaded history.`);
     }
@@ -185,7 +194,10 @@ function OwnerTable({ section }: { section: OwnerSection }) {
                 <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.currentValue)}</td>
                 <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.unrealisedGain)}</td>
                 <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.realisedGain)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{xirrText(r.xirr)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS}`}>
+                  {xirrText(r.xirr)}
+                  {r.xirr.status === 'ok' && r.xirr.partialCost && <span className="block text-[8px] font-medium text-amber-700">{PARTIAL_COST_LABEL}</span>}
+                </td>
               </tr>
             );
           })}
@@ -194,6 +206,7 @@ function OwnerTable({ section }: { section: OwnerSection }) {
           <tr className="border-t-2 border-gray-300 font-semibold">
             <td className={TD} colSpan={2}>
               Fund Portfolio Total
+              {t.unvaluedPositions > 0 && <span className="block text-[8px] font-normal text-gray-500">excludes {t.unvaluedPositions} fund{t.unvaluedPositions === 1 ? '' : 's'} without a valuation</span>}
             </td>
             <td className={TD} />
             <td className={TD} />
@@ -208,7 +221,10 @@ function OwnerTable({ section }: { section: OwnerSection }) {
             <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.currentValue)}</td>
             <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.unrealisedGain)}</td>
             <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.realisedGain)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{xirrText(t.xirr)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS}`}>
+              {xirrText(t.xirr)}
+              {t.xirr.status === 'ok' && t.xirr.partialCost && <span className="block text-[8px] font-medium text-amber-700">{PARTIAL_COST_LABEL}</span>}
+            </td>
           </tr>
         </tfoot>
       </table>

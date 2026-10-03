@@ -135,6 +135,11 @@ export interface ReportTaxData {
   results: TaxSimulationOutput;
   asOfDate: string;
   taxProfileSource: 'persisted_profile' | 'none';
+  /**
+   * Real fund names for every instrument that has a disposal result (instrumentKey -> name), read from the SAME dataset
+   * the simulation used. The report table shows these names, never the internal key.
+   */
+  instrumentNames?: Record<string, string>;
   // NAV 1 R1 — earliest real acquisition (lot) date per instrument that
   // actually has a disposal in this report (i.e. the instruments
   // runTaxSimulation() actually produced capital-gains figures for), from
@@ -214,7 +219,12 @@ export async function loadTaxForReport(userId: string, supabase: SupabaseServerC
       const acquisitions = dataset.acquisitionsByInstrument.get(instrumentId);
       if (acquisitions && acquisitions.length > 0) earliestAcquisitionDateByInstrument[instrumentId] = acquisitions[0].acquisitionDate;
     }
-    return { results, asOfDate: dataset.asOfDate, taxProfileSource: persistedProfile ? 'persisted_profile' : 'none', earliestAcquisitionDateByInstrument };
+    const instrumentNames: Record<string, string> = {};
+    for (const instrumentId of dataset.disposalsByInstrument.keys()) {
+      const name = dataset.instrumentNames.get(instrumentId);
+      if (name) instrumentNames[instrumentId] = name;
+    }
+    return { results, asOfDate: dataset.asOfDate, taxProfileSource: persistedProfile ? 'persisted_profile' : 'none', instrumentNames, earliestAcquisitionDateByInstrument };
   } catch {
     return null;
   }

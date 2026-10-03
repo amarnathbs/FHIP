@@ -9,6 +9,7 @@ import { hasCrossBorderEligibility, type PremiumSectionCode } from './reportElig
 import type { BuiltSection } from './reportSections';
 import { formatMoneyWhole } from './money';
 import { formatDateInText } from './date';
+import { asOfRuleSentence, chapterDateStyle, dayFirstDatesInText, INDIA_DATE_STYLE, xirrReconciliationNote, type DateStyle } from './reportIndiaChapterConsistency';
 import { applyStressScenario, type StressScenarioType, type StressScenarioResult } from './resilienceStress';
 import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { entityExclusionNote, ownerBreakupNarrative } from './reportOwnerBreakup';
@@ -721,6 +722,15 @@ export function narrativeDate(iso: string, currency: string | null | undefined):
   return formatDateInText(iso, currency);
 }
 
+/**
+ * Date style for the SIP and X-Ray chapters: their engines carry no currency, so a household that holds Indian mutual
+ * funds (the India section is present and read) gets India's dd-mm-yyyy like the Mutual Fund section beside them;
+ * everyone else keeps the report's own style.
+ */
+function indiaAwareDateStyle(source: ReportSourceData, premium: PremiumSourceData): DateStyle {
+  return premium.indiaMf?.status === 'ok' ? INDIA_DATE_STYLE : chapterDateStyle(source.currency, null);
+}
+
 export function buildInvestmentPerformance(source: ReportSourceData, premium: PremiumSourceData): BuiltSection {
   const perf = premium.investmentPerformance;
   if (!perf) return empty('investment_performance', 27, 'Investment performance analytics are not yet available — this requires recorded investment transactions with enough history to calculate a return.');
@@ -729,6 +739,13 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
   const portfolioCount = results.portfolios.length;
   const currencies = results.portfolios.map((p) => p.currencyCode).join(', ');
   const calculable = results.portfolios.filter((p) => p.portfolioXirr.status === 'CALCULATED').length;
+  const style = chapterDateStyle(source.currency, results.portfolios.map((p) => p.currencyCode));
+  const reconciliation = xirrReconciliationNote(
+    results.portfolios.map((p) => ({ currencyCode: p.currencyCode, xirr: { status: p.portfolioXirr.status, rate: p.portfolioXirr.status === 'CALCULATED' ? p.portfolioXirr.value?.rate : undefined } })),
+    results.asOfDate,
+    premium.indiaMf?.status === 'ok' ? premium.indiaMf.report : null,
+    style
+  );
 
   return {
     sectionCode: 'investment_performance',
@@ -739,9 +756,9 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     sectionData: { results, ...(premium.ownerBreakup ? { ownerBreakup: premium.ownerBreakup } : {}) },
     narrativeText:
       portfolioCount > 1
-        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR) as of ${narrativeDate(results.asOfDate, source.currency)}.`
+        ? `Your investments span ${portfolioCount} currencies (${currencies}). Performance is reported separately for each — a single blended return is not shown, because converting values at today's exchange rate would misattribute currency movement as investment performance. ${calculable} of ${portfolioCount} currency portfolios have enough history to calculate a return (XIRR) as of ${narrativeDate(results.asOfDate, style)}.`
         : portfolioCount === 1
-          ? `Your investment portfolio's XIRR and benchmark return as of ${narrativeDate(results.asOfDate, source.currency)} are shown below, where enough history exists to calculate them.`
+          ? `Your investment portfolio's XIRR and benchmark return as of ${narrativeDate(results.asOfDate, style)} are shown below, where enough history exists to calculate them.`
           : null,
     // (owner-class breakup text is appended to the limitation text below so the existing narrative contract is unchanged)
     chartData: { portfolios: results.portfolios.map((p) => ({ currencyCode: p.currencyCode, performanceVsBenchmarkSeries: p.performanceVsBenchmarkSeries, drawdownSeries: p.drawdownSeries })) },
@@ -752,7 +769,7 @@ export function buildInvestmentPerformance(source: ReportSourceData, premium: Pr
     // single portfolio total (Investment Analysis / Net Worth) does not
     // include those until the user adds them -- disclosed so the two figures
     // reconcile.
-    limitationText: `Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period.${unpublishedDisclosure(source, premium) ? ` ${unpublishedDisclosure(source, premium)}` : ''}${ownerBreakupNarrative(premium.ownerBreakup) ? ` ${ownerBreakupNarrative(premium.ownerBreakup)}` : ''}`,
+    limitationText: `Where a benchmark comparison is not shown, the platform does not fabricate a 0% or estimated benchmark return — it is marked as not available for that period. ${asOfRuleSentence(results.asOfDate, source.asOfDate, style)}${reconciliation ? ` ${reconciliation}` : ''}${unpublishedDisclosure(source, premium) ? ` ${unpublishedDisclosure(source, premium)}` : ''}${ownerBreakupNarrative(premium.ownerBreakup) ? ` ${ownerBreakupNarrative(premium.ownerBreakup)}` : ''}`,
   };
 }
 
@@ -761,7 +778,9 @@ export function buildSipContribution(source: ReportSourceData, premium: PremiumS
   if (!sip) return empty('sip_contribution', 28, 'No recurring (SIP-style) investment contribution activity was detected — this requires at least one series of regular contributions into the same holding.');
 
   const { results } = sip;
-  const observations = results.analytics.flatMap((a) => a.observations);
+  const style = indiaAwareDateStyle(source, premium);
+  // Engine-generated sentences carry ISO dates; the report shows them day-first.
+  const observations = results.analytics.flatMap((a) => a.observations).map((o) => ({ ...o, text: dayFirstDatesInText(o.text, style) }));
 
   return {
     sectionCode: 'sip_contribution',
@@ -769,14 +788,14 @@ export function buildSipContribution(source: ReportSourceData, premium: PremiumS
     displayOrder: 28,
     sectionStatus: 'included',
     sectionData: { results },
-    narrativeText: `${results.presentableCount} of ${results.seriesCount} recurring contribution series detected as of ${narrativeDate(results.asOfDate, source.currency)} have enough history to present analytics. The observations below are generated directly by the platform's SIP engine from your recorded contribution history.`,
+    narrativeText: `${results.presentableCount} of ${results.seriesCount} recurring contribution series detected as of ${narrativeDate(results.asOfDate, style)} have enough history to present analytics. The observations below are generated directly by the platform's SIP engine from your recorded contribution history.`,
     chartData: {
       series: results.analytics.map((a) => ({ seriesKey: a.series.seriesKey, actualXirr: a.actualXirr, benchmarkSip: a.benchmarkSip })),
       observations,
     },
     sourceReferences: { module: 'ii-r5-sip', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
     confidenceLevel: null,
-    limitationText: `Contribution-consistency analysis is observational — it describes recorded activity and does not recommend changing your contribution amount, frequency or destination fund.${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
+    limitationText: `Contribution-consistency analysis is observational — it describes recorded activity and does not recommend changing your contribution amount, frequency or destination fund. ${asOfRuleSentence(results.asOfDate, source.asOfDate, style)}${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
   };
 }
 
@@ -787,6 +806,7 @@ export function buildPortfolioXray(source: ReportSourceData, premium: PremiumSou
   const { results } = xray;
   const sortedSectorBuckets = results.sectorExposure.status === 'ok' ? [...results.sectorExposure.buckets].sort((a, b) => b.effectiveWeight - a.effectiveWeight) : [];
   const topSector = sortedSectorBuckets[0] ?? null;
+  const style = indiaAwareDateStyle(source, premium);
 
   return {
     sectionCode: 'portfolio_xray',
@@ -795,12 +815,12 @@ export function buildPortfolioXray(source: ReportSourceData, premium: PremiumSou
     sectionStatus: 'included',
     sectionData: { results },
     narrativeText:
-      `This look-through analysis is an attribution view of holdings your funds already contain — it does not add to your recorded net worth. As of ${narrativeDate(results.asOfDate, source.currency)}` +
+      `This look-through analysis is an attribution view of holdings your funds already contain — it does not add to your recorded net worth. As of ${narrativeDate(results.asOfDate, style)}` +
       (topSector ? `, your largest sector exposure through look-through holdings is ${topSector.label} at approximately ${(topSector.effectiveWeight * 100).toFixed(0)}%.` : '.'),
     chartData: { sectorExposure: results.sectorExposure, securityConcentration: results.securityConcentration, schemeConcentration: results.schemeConcentration },
     sourceReferences: { module: 'ii-r5-xray', engineVersion: results.engineVersion, asOfDate: results.asOfDate },
     confidenceLevel: results.classificationVersion,
-    limitationText: `Look-through figures depend on the completeness of published fund factsheet/portfolio-disclosure data and may not reflect the most recent fund rebalancing.${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
+    limitationText: `Look-through figures depend on the completeness of published fund factsheet/portfolio-disclosure data and may not reflect the most recent fund rebalancing. ${asOfRuleSentence(results.asOfDate, source.asOfDate, style)}${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
   };
 }
 
@@ -817,12 +837,12 @@ export function buildTaxAndCost(source: ReportSourceData, premium: PremiumSource
     sectionTitle: PREMIUM_SECTION_TITLES.tax_and_cost,
     displayOrder: 30,
     sectionStatus: 'included',
-    sectionData: { results, taxProfileSource: tax.taxProfileSource },
-    narrativeText: `${disposalCount} disposal${disposalCount === 1 ? '' : 's'} produced a capital-gains result as of ${narrativeDate(tax.asOfDate, source.currency)}${exitLoadCount > 0 ? `, and ${exitLoadCount} redemption${exitLoadCount === 1 ? '' : 's'} carried an exit-load observation` : ''}. ${results.disclaimer}`,
+    sectionData: { results, taxProfileSource: tax.taxProfileSource, instrumentNames: tax.instrumentNames ?? {} },
+    narrativeText: `${disposalCount} disposal${disposalCount === 1 ? '' : 's'} produced a capital-gains result as of ${narrativeDate(tax.asOfDate, INDIA_DATE_STYLE)}${exitLoadCount > 0 ? `, and ${exitLoadCount} redemption${exitLoadCount === 1 ? '' : 's'} carried an exit-load observation` : ''}. ${results.disclaimer}`,
     chartData: { taxYearAggregation: results.taxYearAggregation },
     sourceReferences: { module: 'ii-r6-tax-cost', engineVersion: results.engineVersion, asOfDate: tax.asOfDate, taxProfileSource: tax.taxProfileSource },
     confidenceLevel: null,
-    limitationText: `${results.residencyNote ?? results.ruleVersionNote ?? 'This is a simulation based on recorded transaction data and the applicable rule version shown — it is not personal tax advice.'}${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
+    limitationText: `${results.residencyNote ?? results.ruleVersionNote ?? 'This is a simulation based on recorded transaction data and the applicable rule version shown — it is not personal tax advice.'} ${asOfRuleSentence(tax.asOfDate, source.asOfDate, INDIA_DATE_STYLE)}${entityExclusionNote(premium.ownerBreakup) ? ` ${entityExclusionNote(premium.ownerBreakup)}` : ''}`,
   };
 }
 
@@ -849,6 +869,7 @@ export function buildIndiaMfInvestmentReport(source: ReportSourceData, premium: 
   const ownerCount = report.sections.length;
   const positionCount = report.sections.reduce((n, s) => n + s.rows.length, 0);
   const partial = report.sections.reduce((n, s) => n + s.tiles.partialPositions, 0);
+  const unvalued = report.sections.reduce((n, s) => n + s.tiles.unvaluedPositions, 0);
   return {
     sectionCode: 'india_mf_investment_report',
     sectionTitle: PREMIUM_SECTION_TITLES.india_mf_investment_report,
@@ -858,7 +879,8 @@ export function buildIndiaMfInvestmentReport(source: ReportSourceData, premium: 
     narrativeText:
       `Your Indian mutual fund holdings are listed below as at ${narrativeDate(report.valuationDate, 'INR')}, one table for each owner (${ownerCount} owner section${ownerCount === 1 ? '' : 's'}, ${positionCount} holding${positionCount === 1 ? '' : 's'}). ` +
       `Each table shows what your uploaded statements record — purchases, switches, redemptions and dividends — against the latest published NAV.` +
-      (partial > 0 ? ` ${partial} holding${partial === 1 ? '' : 's'} rest${partial === 1 ? 's' : ''} on partial transaction history and carr${partial === 1 ? 'ies' : 'y'} a visible basis marker.` : ''),
+      (partial > 0 ? ` ${partial} holding${partial === 1 ? '' : 's'} rest${partial === 1 ? 's' : ''} on partial transaction history and carr${partial === 1 ? 'ies' : 'y'} a visible basis marker.` : '') +
+      (unvalued > 0 ? ` ${unvalued} holding${unvalued === 1 ? ' has' : 's have'} no NAV or statement value: ${unvalued === 1 ? 'it is' : 'they are'} listed but left out of the totals, so every total covers the same funds.` : ''),
     chartData: null,
     sourceReferences: {
       module: 'india-mf-investment-report',
@@ -870,6 +892,7 @@ export function buildIndiaMfInvestmentReport(source: ReportSourceData, premium: 
     confidenceLevel: null,
     limitationText:
       'Observation only: this is a record of your uploaded statements and published NAVs, not personal financial or tax advice. Amounts are in Indian rupees. ' +
+      `${asOfRuleSentence(report.valuationDate, report.reportDate, INDIA_DATE_STYLE)} ` +
       report.notSummedNote,
   };
 }
