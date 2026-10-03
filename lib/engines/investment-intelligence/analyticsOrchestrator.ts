@@ -25,6 +25,7 @@ import {
   type BenchmarkSegmentInput,
   type HoldingBenchmarkComparison,
 } from './holdingBenchmarkComparison';
+import { buildFlowAdjustedIndex, portfolioContributionFlows } from './flowAdjustedIndexSeries';
 import { computeRiskMetrics, periodicReturnsFromLevels, type RiskMetricsResult, type ReturnFrequency } from './riskMetricsService';
 import { computeRollingReturns, toMonthEndSeries, type RollingReturnServiceResult } from './rollingReturnService';
 import { fromXirr, insufficientHistory, toPersistedQualityStatus, markStale, type CalculationOutcome, type CalculationStatus } from './calculationStatus';
@@ -578,7 +579,16 @@ function analysePortfolioCurrency(
         };
 
   // ---- Risk metrics ---------------------------------------------------
-  const monthEnd = toMonthEndSeries(valuations);
+  // Every risk card, the drawdown series, the rolling windows and the
+  // growth-of-100 line read the FLOW-ADJUSTED INDEX of the portfolio (see
+  // flowAdjustedIndexSeries.ts), never the raw money value: a deposit must not
+  // look like a gain and a redemption must not look like a loss. The money value
+  // series (`valuations`) still drives the header total and the blend weights.
+  const flowIndex = buildFlowAdjustedIndex(
+    valuations,
+    portfolioContributionFlows(group.map((s) => ({ series: schemeSeries(s), realFlows: schemeRealFlows(s) })))
+  );
+  const monthEnd = toMonthEndSeries(flowIndex);
   const fundReturns = periodicReturnsFromLevels(monthEnd);
 
   // The benchmark level series may ONLY be built from a blend that actually
@@ -604,7 +614,7 @@ function analysePortfolioCurrency(
   const risk = computeRiskMetrics({
     fundReturns: aligned.fund,
     benchmarkReturns: aligned.benchmark.length ? aligned.benchmark : undefined,
-    valuationSeries: valuations,
+    valuationSeries: flowIndex,
     frequency,
     countryCode: group[0]?.countryOfDomicile ?? 'IN',
     asOfDate: ds.asOfDate,
@@ -621,8 +631,8 @@ function analysePortfolioCurrency(
   const rolling = computeRollingReturns(monthEnd, benchmarkLevels.length ? toMonthEndSeries(benchmarkLevels) : undefined);
 
   // ---- Chart series ---------------------------------------------------
-  const drawdownSeries = buildDrawdownSeries(valuations);
-  const performanceVsBenchmarkSeries = buildComparisonSeries(valuations, benchmarkLevels);
+  const drawdownSeries = buildDrawdownSeries(valuations, flowIndex);
+  const performanceVsBenchmarkSeries = buildComparisonSeries(flowIndex, benchmarkLevels);
 
   const inputFingerprint = fingerprintInputs([
     currencyCode,
@@ -670,15 +680,20 @@ function alignSeries(fund: number[], benchmark: number[]): { fund: number[]; ben
   return { fund: fund.slice(fund.length - n), benchmark: benchmark.slice(benchmark.length - n) };
 }
 
-function buildDrawdownSeries(valuations: ValuationPoint[]): Array<{ date: string; value: number; drawdown: number }> {
+/**
+ * `value` stays the portfolio's money value on the date; `drawdown` is the fall
+ * from the previous peak of the flow-adjusted index (same dates, one-to-one).
+ */
+function buildDrawdownSeries(valuations: ValuationPoint[], flowIndex: SeriesPoint[]): Array<{ date: string; value: number; drawdown: number }> {
   let peak = -Infinity;
-  return valuations.map((v) => {
-    peak = Math.max(peak, v.value);
-    return { date: iso(v.date), value: v.value, drawdown: peak > 0 ? v.value / peak - 1 : 0 };
+  return valuations.map((v, i) => {
+    const level = flowIndex[i]?.value ?? 100;
+    peak = Math.max(peak, level);
+    return { date: iso(v.date), value: v.value, drawdown: peak > 0 ? level / peak - 1 : 0 };
   });
 }
 
-/** Both sides rebased to 100 at the first common date, for a like-for-like chart. */
+/** Both sides rebased to 100 at the first common date, for a like-for-like chart. The portfolio side is the flow-adjusted index. */
 function buildComparisonSeries(
   valuations: ValuationPoint[],
   benchmarkLevels: SeriesPoint[]

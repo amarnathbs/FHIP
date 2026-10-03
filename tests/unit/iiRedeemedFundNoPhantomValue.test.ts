@@ -129,19 +129,14 @@ describe('probe shape: open fund + fund redeemed in full (series stops before ex
     expect(p.totalValue).toBeCloseTo(portfolioOracleAt(d('2022-12-31')), 6);
   });
 
-  it('every point of the drawdown series equals the oracle portfolio value, and drawdown matches the oracle peak-to-date', () => {
-    let peak = -Infinity;
-    for (const pt of p.drawdownSeries) {
-      const expected = portfolioOracleAt(d(pt.date));
-      expect(pt.value, pt.date).toBeCloseTo(expected, 6);
-      peak = Math.max(peak, expected);
-      expect(pt.drawdown, pt.date).toBeCloseTo(expected / peak - 1, 9);
-    }
+  it('every point of the drawdown series carries the oracle MONEY value (no phantom after exit)', () => {
+    // The drawdown / growth-of-100 figures themselves are flow-adjusted since 2026-10-03
+    // and are proven against an oracle in iiRiskCardsFlowAdjusted.test.ts.
+    for (const pt of p.drawdownSeries) expect(pt.value, pt.date).toBeCloseTo(portfolioOracleAt(d(pt.date)), 6);
   });
 
-  it('growth-of-100 (portfolio line) equals oracle value / first value x 100 at every date', () => {
-    const base = portfolioOracleAt(d(p.performanceVsBenchmarkSeries[0].date));
-    for (const pt of p.performanceVsBenchmarkSeries) expect(pt.portfolio, pt.date).toBeCloseTo((portfolioOracleAt(d(pt.date)) / base) * 100, 6);
+  it('the growth-of-100 line starts at 100', () => {
+    expect(p.performanceVsBenchmarkSeries[0].portfolio).toBe(100);
   });
 
   it('blended benchmark return equals an independent chain-linked monthly blend with the redeemed fund weighted 0 from its exit', () => {
