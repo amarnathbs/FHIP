@@ -199,7 +199,9 @@ describe('rendering and print contract', () => {
     expect(html).toContain('not added together');
   });
   it('shows the visible partial-history marker and the CAS guidance', () => {
-    expect(html).toContain('from 01-04-2023; earlier history not uploaded');
+    // The marker's date is the row's Start Dt (first recorded acquisition, 14-08-2023), not the opening-balance date.
+    expect(html).toContain('from 14-08-2023; earlier history not uploaded');
+    expect(html).not.toContain('from 01-04-2023');
     expect(html).toContain('MFCentral integration is available');
   });
   it('index slots say "not available" honestly when no close is loaded', () => {

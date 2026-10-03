@@ -205,7 +205,11 @@ export interface IndiaMfReportInput {
 // Output contract
 // ---------------------------------------------------------------------------
 export type XirrOutcome =
-  | { status: 'ok'; rate: number }
+  /**
+   * `partialCost` is true when the rate rests on units with a recorded cost only (cost is not recorded for every unit held):
+   * the figure is real for those units but is NOT the return of the whole holding, so it is always shown with a visible label.
+   */
+  | { status: 'ok'; rate: number; partialCost?: boolean }
   | { status: 'na'; reason: string; detail: string };
 
 export interface PositionBasis {
@@ -292,8 +296,17 @@ export interface OwnerTiles {
   dividend: number;
   netInvestment: number;
   currentValue: number;
-  overallGain: number;
-  /** Number of positions with no valuation (excluded from G). */
+  /**
+   * H = G - F, or NULL ('not available') when any fund in the tile set has units with no recorded cost: G would value all
+   * units while F carries the cost of only some of them, so the difference is not a gain.
+   */
+  overallGain: number | null;
+  /** Number of funds in the tile set with units but no recorded cost (why `overallGain` is null). */
+  incompleteCostPositions: number;
+  /**
+   * Number of funds with units but no NAV / statement value. They are LEFT OUT of every tile and of the Fund Portfolio
+   * Total row (A..H, XIRR, Avg Days) so all totals cover the same set of funds; their own amounts show in their rows only.
+   */
   unvaluedPositions: number;
   unrealisedGain: number;
   realisedGain: number;
@@ -383,6 +396,15 @@ function toXirrOutcome(flows: CashFlow[]): XirrOutcome {
   if (r.status === 'ok' && typeof r.rate === 'number') return { status: 'ok', rate: r.rate };
   const reason = (r.reason ?? 'NOT_BRACKETED') as XirrUnavailableReason | 'NO_VALUATION';
   return { status: 'na', reason, detail: XIRR_REASON_TEXT[reason] ?? r.detail ?? 'not calculable' };
+}
+
+/** Cost is not recorded for every unit held (or units disposed pre-date the uploaded history). */
+function hasIncompleteCost(unitsWithoutRecordedCost: number, preHistoryUnitsDisposed: number): boolean {
+  return unitsWithoutRecordedCost > UNIT_TOLERANCE || preHistoryUnitsDisposed > UNIT_TOLERANCE;
+}
+
+function rowHasIncompleteCost(r: Pick<OwnerRow, 'basis'>): boolean {
+  return hasIncompleteCost(r.basis.unitsWithoutRecordedCost, r.basis.preHistoryUnitsDisposed);
 }
 
 function isoToDate(iso: string): Date {
@@ -683,7 +705,9 @@ export function computePosition(input: PositionInputs): MfPositionMetrics {
   }
   if (flags.ledgerDiffersFromStatement) reasons.push('ledger_differs_from_statement');
   const partial = reasons.length > 0;
-  const startForLabel = openingDate ?? historyStartDate;
+  // The label's date is the SAME date the Start Dt column shows (first recorded acquisition); only when there is no
+  // acquisition does it fall back to the opening-balance / first-record date.
+  const startForLabel = startDate ?? openingDate ?? historyStartDate;
   let label: string | null = null;
   if (flags.noTransactions) {
     // D-3 (PO 2026-10-03): the holding has no purchase date; the user is asked for it.
@@ -711,12 +735,14 @@ export function computePosition(input: PositionInputs): MfPositionMetrics {
     const cfs: CashFlow[] = flowsRaw.map((f) => ({ date: isoToDate(f.date), amount: f.amount }));
     if (terminal) cfs.push({ date: isoToDate(terminal.date), amount: terminal.amount });
     xirrOutcome = toXirrOutcome(cfs);
+    if (xirrOutcome.status === 'ok' && hasIncompleteCost(unitsWithoutRecordedCost, preHistoryUnitsDisposed)) xirrOutcome = { ...xirrOutcome, partialCost: true };
   }
 
   const flows: PooledFlow[] = flowsRaw.map((f) => ({ date: f.date, amount: f.amount, internal: INTERNAL_TYPES.has(f.type) }));
 
   const netInvestment = purchase + switchIn - switchOut - redemptionSwp - dividend;
-  const overallGain = currentValue === null ? null : currentValue - netInvestment;
+  // Not a gain when cost is not recorded for every unit held (value of all units less the cost of some).
+  const overallGain = currentValue === null || unitsWithoutRecordedCost > UNIT_TOLERANCE ? null : currentValue - netInvestment;
 
   return {
     accountId: account.id,
@@ -868,10 +894,21 @@ function pooledXirr(rows: OwnerRow[]): XirrOutcome {
     return { status: 'na', reason: 'NO_VALUATION', detail: XIRR_REASON_TEXT.NO_VALUATION };
   }
   if (cfs.length === 0) return { status: 'na', reason: 'INSUFFICIENT_HISTORY', detail: XIRR_REASON_TEXT.INSUFFICIENT_HISTORY };
-  return toXirrOutcome(cfs);
+  const out = toXirrOutcome(cfs);
+  return out.status === 'ok' && rows.some(rowHasIncompleteCost) ? { ...out, partialCost: true } : out;
 }
 
-export function buildOwnerTiles(rows: OwnerRow[]): OwnerTiles {
+/**
+ * The funds the tiles and the Fund Portfolio Total row cover: every fund that has a valuation (a fully redeemed fund is
+ * valued at 0). A fund with units but no NAV / statement value is LEFT OUT of A..H, XIRR and Avg Days together, so
+ * Net Investment (F) and Current Value (G) always describe the same set and H = G - F is not understated.
+ */
+export function tileRows(rows: OwnerRow[]): OwnerRow[] {
+  return rows.filter((r) => r.currentValue !== null);
+}
+
+export function buildOwnerTiles(allRows: OwnerRow[]): OwnerTiles {
+  const rows = tileRows(allRows);
   const sum = (pick: (r: OwnerRow) => number) => rows.reduce((s, r) => s + pick(r), 0);
   const purchase = sum((r) => r.purchase);
   const switchIn = sum((r) => r.switchIn);
@@ -880,6 +917,7 @@ export function buildOwnerTiles(rows: OwnerRow[]): OwnerTiles {
   const dividend = sum((r) => r.dividend);
   const netInvestment = purchase + switchIn - switchOut - redemptionSwp - dividend;
   const currentValue = sum((r) => r.currentValue ?? 0);
+  const incompleteCostPositions = rows.filter(rowHasIncompleteCost).length;
   return {
     purchase,
     switchIn,
@@ -888,17 +926,19 @@ export function buildOwnerTiles(rows: OwnerRow[]): OwnerTiles {
     dividend,
     netInvestment,
     currentValue,
-    overallGain: currentValue - netInvestment,
-    unvaluedPositions: rows.filter((r) => r.currentValue === null).length,
+    overallGain: incompleteCostPositions > 0 ? null : currentValue - netInvestment,
+    incompleteCostPositions,
+    unvaluedPositions: allRows.length - rows.length,
     unrealisedGain: sum((r) => r.unrealisedGain ?? 0),
     realisedGain: sum((r) => r.realisedGain ?? 0),
     xirr: pooledXirr(rows),
-    partialPositions: rows.filter((r) => r.basis.partial).length,
-    positionCount: rows.length,
+    partialPositions: allRows.filter((r) => r.basis.partial).length,
+    positionCount: allRows.length,
   };
 }
 
-function totalAvgDays(rows: OwnerRow[]): number | null {
+function totalAvgDays(allRows: OwnerRow[]): number | null {
+  const rows = tileRows(allRows);
   const w = rows.reduce((s, r) => s + r.ageWeightSum, 0);
   if (w <= EPS) return null;
   return rows.reduce((s, r) => s + r.ageWeightedSum, 0) / w;
@@ -1101,7 +1141,7 @@ function buildFootnotes(positions: MfPositionMetrics[], sections: OwnerSection[]
   );
   add(
     'PARTIAL_HISTORY',
-    `Where a figure carries a "from ..." marker it is calculated from the transactions in your uploaded statements only. Average NAV, unrealised gain, XIRR and realised gain cover units whose purchase is recorded; units bought before the earliest uploaded transaction are included in current value but not in those figures. ${PARTIAL_HISTORY_GUIDANCE}`,
+    `Where a figure carries a "from ..." marker it is calculated from the transactions in your uploaded statements only. Average NAV, unrealised gain, XIRR and realised gain cover units whose purchase is recorded; units bought before the earliest uploaded transaction are included in current value but not in those figures. Because Overall Gain would compare the value of all units with the cost of only some of them, it is shown as n/a (incomplete cost basis) for a fund or owner total that includes such units, and an XIRR on recorded cost only carries the label "recorded cost only". ${PARTIAL_HISTORY_GUIDANCE}`,
     affected((p) => p.basis.partial && !p.flags.noTransactions)
   );
   add(
@@ -1131,7 +1171,7 @@ function buildFootnotes(positions: MfPositionMetrics[], sections: OwnerSection[]
   );
   add(
     'NO_VALUATION',
-    'No NAV or statement value is available for these funds, so their current value and gain are not shown and are left out of the tiles.',
+    'No NAV or statement value is available for these funds, so their current value and gain are not shown. They are left out of every tile and of the Fund Portfolio Total row (purchases, redemptions, current value, gain, XIRR and average days), so all totals cover the same funds; their own amounts appear in their rows only.',
     affected((p) => p.currentValue === null)
   );
   if (sections.some((s) => s.rows.some((r) => r.jointFolio))) {

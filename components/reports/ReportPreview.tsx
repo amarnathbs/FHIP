@@ -24,6 +24,8 @@ import type { ReportContent } from '@/lib/services/reportContentData';
 import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { isCanonicalAppendix } from '@/lib/engines/reportCanonicalAppendix';
+import { taxTableRows, type TaxDisposalLike } from '@/lib/engines/reportTaxTable';
+import { unavailableSentence, XRAY_NO_DATA_NOTE } from '@/lib/ui/reportNotes';
 import { IndiaMfInvestmentReportSection } from '@/components/reports/IndiaMfInvestmentReportSection';
 import type { IndiaMfReport } from '@/lib/engines/investment-intelligence/indiaMfReport';
 
@@ -98,7 +100,7 @@ function MetricExplainer({ label, value, meaning, review }: { label: string; val
 }
 
 function Unavailable({ text }: { text: string | null }) {
-  return <p className="text-justify text-sm text-gray-500">Not available{text ? ` — ${text}` : ''}.</p>;
+  return <p className="text-justify text-sm text-gray-500">{unavailableSentence(text)}</p>;
 }
 
 interface GoalForecastCell {
@@ -1442,7 +1444,9 @@ export function ReportPreview({
                 <p className="text-justify text-sm text-gray-600">{portfolioXray.narrativeText}</p>
                 {(() => {
                   const sectorExposure = (portfolioXray.sectionData.results as { sectorExposure?: { status: string; buckets: { key: string; label: string; effectiveWeight: number }[] } } | undefined)?.sectorExposure;
-                  if (!sectorExposure || sectorExposure.status !== 'ok' || sectorExposure.buckets.length === 0) return null;
+                  if (!sectorExposure || sectorExposure.status !== 'ok' || sectorExposure.buckets.length === 0) {
+                    return <p className="mt-4 text-sm text-gray-500" data-testid="xray-no-data">{XRAY_NO_DATA_NOTE}</p>;
+                  }
                   return (
                     <table className="mt-4 w-full text-sm">
                       <thead className="text-left text-xs uppercase text-gray-500">
@@ -1490,19 +1494,17 @@ export function ReportPreview({
                     </tr>
                   </thead>
                   <tbody>
-                    {(
-                      (taxAndCost.sectionData.results as { disposalResults: { instrumentName: string; disposalDate: string; classification: string; taxableGain: number }[] } | undefined
-                      )?.disposalResults ?? []
-                    )
-                      .slice(0, 20)
-                      .map((d, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="py-1">{d.instrumentName}</td>
-                          <td className="py-1">{d.disposalDate}</td>
-                          <td className="py-1 capitalize">{d.classification}</td>
-                          <td className="py-1 text-right">{fmt(d.taxableGain)}</td>
-                        </tr>
-                      ))}
+                    {taxTableRows(
+                      (taxAndCost.sectionData.results as { disposalResults: TaxDisposalLike[] } | undefined)?.disposalResults ?? [],
+                      taxAndCost.sectionData.instrumentNames as Record<string, string> | undefined
+                    ).map((d, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="py-1">{d.instrument}</td>
+                        <td className="py-1">{d.disposalDate}</td>
+                        <td className="py-1 capitalize">{d.classification}</td>
+                        <td className="py-1 text-right">{d.taxableGain}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
                 <p className="mt-3 text-justify text-xs text-gray-400">{taxAndCost.limitationText}</p>
