@@ -1,133 +1,168 @@
 # NAV2 - Test matrix (spec section 17), certification table (section 22) and Stage plan
 
-Branch `feat/nav2-stage1-engine-20261003`. Evidence label for every status below: **code-complete / unit-tested**. Nothing was run against DEV or production, no browser check was made, nothing was pushed or merged, no migration was applied or written.
+Branch `feat/nav2-stage2-20261004` (from `feat/nav2-stage1-engine-20261003`, with origin/main merged in). Evidence labels used below, and nothing stronger:
 
-Status words: COVERED = proven by the named Stage 1 test files at the level the row asks; PARTIAL = the pure or planner part is proven, the integrated part is not; DEFERRED = needs Stage 2 integration or Stage 3 DEV; DROPPED = removed by PO decision.
+- **unit-tested**: a vitest file in `tests/unit/nav2` (or an existing suite) proves it, one file at a time, against fakes and an in-memory database.
+- **PGlite-verified**: `scripts/nav2_0260_0262_pglite_verification.mjs` replays the migration chain in an in-process Postgres with a platform shim (76 checks, all pass). That is a Postgres engine, NOT the DEV database.
+- **NOT verified on DEV, on production, in a browser, or against the live RBI site.** Nothing was pushed or merged, no migration was applied, no database or DEV write was made, no request was sent to rbi.org.in.
 
-Independent oracle: `scripts/nav2_independent_oracle.py` (50-digit Decimal, imports no FHIP code) produced every expected number; closed forms are in the test comments. The spec's worked examples 1 (CAGR) and 3 (drawdown) are in the tests verbatim; examples 2 (value and correction) and 4 (joint 60 / 40) are in `nav2InvestorExperience.test.ts`.
+Status words: COVERED = proven at unit / PGlite level by the named files; PARTIAL = the part this repository can prove is proven, the integrated or live part is not; DEFERRED = needs DEV (Stage 3); DROPPED = removed by PO decision.
 
-## 1. The 50-row matrix
+Independent oracle: `scripts/nav2_independent_oracle.py` (50-digit Decimal, imports no FHIP code) produced every expected number of Stage 1. Stage 2 adds no financial formula; its numbers are counts, dates, digests and the existing engine's results.
+
+## 1. The 50-row matrix (spec section 17)
 
 | N | Row | Status | Evidence and what remains |
 |---|---|---|---|
-| 1 | First accepted statement for a new scheme triggers bounded hydration | PARTIAL | `nav2WindowPlanner.test.ts`: trigger -> planned window -> existing fetch path, bounded requests for that scheme only. Wiring `handleNav2Trigger` into the accept / process routes is Stage 2 |
-| 2 | Re-upload of the same statement is idempotent | PARTIAL | `nav2WindowPlanner.test.ts`: a repeat plan makes no provider request and adds no rows. Canonical-record idempotency is the existing suites; end to end is Stage 3 |
-| 3 | Second user holding the same scheme reuses public NAV history without exposing tenancy | COVERED | `nav2WindowPlanner.test.ts`: one consolidated window, no fetch for user 2, neither user id in any plan |
-| 4 | Rejected statement creates no lasting hydration requirement | PARTIAL | `nav2WindowPlanner.test.ts`: all six non-accepted states are `ignore`; review-required and reversed rows give no window. A real rejected document is Stage 3 |
-| 5 | Unresolved scheme produces reconciliation, not guessed mapping | PARTIAL | `nav2IdentityAndCache.test.ts`: the resolver returns unresolved / ambiguous, never a guess, and every metric answers `identity_unresolved`. Reconciliation-case creation is existing code; finding NAV2-F1 recorded |
-| 6 | Direct / regular and growth / IDCW never cross | COVERED | `nav2IdentityAndCache.test.ts` (resolver, series), `nav2TrendAndRanking.test.ts` (ranking groups), `nav2SeriesPreparation.test.ts` |
-| 7 | Future-dated NAV excluded | COVERED | `nav2SeriesPreparation.test.ts` (with a control that shows the future row would have been used) |
+| 1 | First accepted statement for a new scheme triggers bounded hydration | PARTIAL | `nav2WindowPlanner.test.ts`, `nav2TriggerRunner.test.ts`: the kick the accept / process routes already call now runs the NAV2 plan when the `nav2_trigger_planner` switch is on (existing path untouched when off). Live fetch and route-level journey are Stage 3 |
+| 2 | Re-upload of the same statement is idempotent | PARTIAL | `nav2WindowPlanner.test.ts`: a repeat plan makes no provider request and adds no rows. End to end is Stage 3 |
+| 3 | Second user holding the same scheme reuses public NAV history without exposing tenancy | COVERED | `nav2WindowPlanner.test.ts` |
+| 4 | Rejected statement creates no lasting hydration requirement | PARTIAL | `nav2WindowPlanner.test.ts`: all six non-accepted states are `ignore`. A real rejected document is Stage 3 |
+| 5 | Unresolved scheme produces reconciliation, not guessed mapping | COVERED | `nav2IdentityAndCache.test.ts`. **NAV2-F1 is fixed** (an ISIN and an AMFI code that point at different instruments are now refused as ambiguous, which both production callers turn into an `ambiguous_instrument` reconciliation case); controls NC-F1; 53 suites that import the resolver re-run, the one failure (`statementResumeListAndApplyOnce`) is proven pre-existing |
+| 6 | Direct / regular and growth / IDCW never cross | COVERED | `nav2IdentityAndCache.test.ts`, `nav2TrendAndRanking.test.ts`, `nav2SeriesPreparation.test.ts` |
+| 7 | Future-dated NAV excluded | COVERED | `nav2SeriesPreparation.test.ts` |
 | 8 | Wrong-currency NAV excluded | COVERED | `nav2SeriesPreparation.test.ts` |
-| 9 | Corrected NAV replaces effective value and invalidates only dependencies | PARTIAL | `nav2SeriesPreparation.test.ts` (one effective value, both lineage forms), `nav2IdentityAndCache.test.ts` (selection of affected keys). The `ii_reference_corrections` listener that raises the event is Stage 2 |
-| 10 | Weekend boundary chooses previous valid NAV and discloses actual date | COVERED | `nav2SchemeReturns.test.ts` (INR and AUD date formats) |
-| 11 | Long gap yields insufficient-history state | COVERED | `nav2SchemeReturns.test.ts` (boundary, periodic measure, hydrating variant) |
+| 9 | Corrected NAV replaces effective value and invalidates only dependencies | COVERED | `nav2SeriesPreparation.test.ts`, `nav2IdentityAndCache.test.ts`, `nav2CacheWorkerAndRiskFreeLoader.test.ts`, `nav2CorrectionWorkerRoute.test.ts` (the worker); the listener trigger on `ii_reference_corrections` is PGlite-verified (migration 0262) |
+| 10 | Weekend boundary chooses previous valid NAV and discloses actual date | COVERED | `nav2SchemeReturns.test.ts` |
+| 11 | Long gap yields insufficient-history state | COVERED | `nav2SchemeReturns.test.ts` |
 | 12 | Absolute return formula matches hand calculation | COVERED | `nav2SchemeReturns.test.ts` |
-| 13 | CAGR uses actual elapsed days | COVERED | `nav2SchemeReturns.test.ts` (731 days, 0.099926140350002860) |
-| 14 | Rolling return produces multiple windows and correct summary | COVERED | `nav2SchemeReturns.test.ts` (1M and 3M windows against the oracle; summary; 1Y single window withheld) |
+| 13 | CAGR uses actual elapsed days | COVERED | `nav2SchemeReturns.test.ts` |
+| 14 | Rolling return produces multiple windows and correct summary | COVERED | `nav2SchemeReturns.test.ts` |
 | 15 | Daily and log returns reconcile mathematically | COVERED | `nav2SchemeReturns.test.ts` |
 | 16 | Sample standard deviation uses n - 1 | COVERED | `nav2SchemeRisk.test.ts` |
-| 17 | Annualisation factor is correct and disclosed | COVERED | `nav2SchemeRisk.test.ts` (252 / 52 / 12; a mislabelled series is refused), `nav2ContractAndGuards.test.ts` (provenance) |
-| 18 | Sharpe uses matched risk-free periodic returns | COVERED | `nav2RiskFreeDataset.test.ts` (step-function, conversion, series switch) |
+| 17 | Annualisation factor is correct and disclosed | COVERED | `nav2SchemeRisk.test.ts`, `nav2ContractAndGuards.test.ts` |
+| 18 | Sharpe uses matched risk-free periodic returns | COVERED | `nav2RiskFreeDataset.test.ts` |
 | 19 | Sortino uses the declared downside convention | COVERED | `nav2RiskFreeDataset.test.ts` |
-| 20 | Maximum drawdown peak / trough / recovery dates are correct | COVERED | `nav2SchemeRisk.test.ts` (spec example 3; not recovered; no drawdown) |
+| 20 | Maximum drawdown peak / trough / recovery dates are correct | COVERED | `nav2SchemeRisk.test.ts` |
 | 21 | Beta / alpha use aligned common dates | COVERED | `nav2SchemeRisk.test.ts`, `nav2RiskFreeDataset.test.ts` |
-| 22 | Missing benchmark never produces zero beta / alpha | COVERED | `nav2SchemeRisk.test.ts` (ten blockers), `nav2ContractAndGuards.test.ts` |
+| 22 | Missing benchmark never produces zero beta / alpha | COVERED | `nav2SchemeRisk.test.ts`, `nav2ContractAndGuards.test.ts`. Beta and alpha are computed only on a DECLARED benchmark (PO decision: a category reference is refused unless the policy allows it, default off; control NC-K8) |
 | 23 | SMA / EMA warm-up rules hold | COVERED | `nav2TrendAndRanking.test.ts` |
-| 24 | ROC uses the intended observation / calendar convention | COVERED | `nav2TrendAndRanking.test.ts` (observations) |
-| 25 | Correlation uses returns, not NAV levels | COVERED | `nav2SchemeRisk.test.ts` (levels 0.9996, returns -1) |
-| 26 | Ranking includes only comparable held schemes | COVERED | `nav2TrendAndRanking.test.ts` |
+| 24 | ROC uses the intended observation / calendar convention | COVERED | `nav2TrendAndRanking.test.ts` |
+| 25 | Correlation uses returns, not NAV levels | COVERED | `nav2SchemeRisk.test.ts` |
+| 26 | Ranking includes only comparable held schemes | COVERED | `nav2TrendAndRanking.test.ts`, `nav2FundAnalyticsReport.test.ts` (the report's own rankings and pair list) |
 | 27 | High / low dates and median behaviour are deterministic | COVERED | `nav2TrendAndRanking.test.ts` |
-| 28 | XIRR cash-flow signs and terminal value are correct | COVERED | `nav2InvestorExperience.test.ts` (Fixture C against the oracle) |
+| 28 | XIRR cash-flow signs and terminal value are correct | COVERED | `nav2InvestorExperience.test.ts` |
 | 29 | XIRR failure / no-root state is honest | COVERED | `nav2InvestorExperience.test.ts` |
-| 30 | TWRR passes an independent hand calculation | DROPPED | PO decision 03-10-2026: no time-based return anywhere; XIRR is the only personal return. The repo guard `noTimeWeightedReturnUserFacing.test.ts` stays green |
-| 31 | Scheme CAGR and personal return remain separately labelled | COVERED | `nav2InvestorExperience.test.ts` (labels, keys, explanation) |
-| 32 | Current value uses canonical units and eligible NAV | COVERED | `nav2InvestorExperience.test.ts` (engine; screen agreement is row 37) |
+| 30 | TWRR passes an independent hand calculation | DROPPED | PO decision 03-10-2026: no time-based return anywhere. `noTimeWeightedReturnUserFacing.test.ts` stays green, and the rendered report is asserted free of those words (`nav2ReportPresentation.test.ts`) |
+| 31 | Scheme CAGR and personal return remain separately labelled | COVERED | `nav2InvestorExperience.test.ts`; the report view shows the two families in separate tables with the explanation sentence (`nav2ReportPresentation.test.ts`) |
+| 32 | Current value uses canonical units and eligible NAV | COVERED | `nav2InvestorExperience.test.ts`; the loader passes the certified `valueSchemeAcrossFolios` result through unchanged (`nav2FundAnalyticsLoader.test.ts`) |
 | 33 | Redeemed holding stays zero | COVERED | `nav2InvestorExperience.test.ts` |
-| 34 | Joint ownership does not double count | PARTIAL | `nav2InvestorExperience.test.ts`: pure attribution (60 / 40 = 100%). Integrated holdings flow is Stage 2 |
-| 35 | Entity-owned holding does not enter personal Net Worth | DEFERRED | Stage 2 (entity separation is applied where the holdings are loaded) |
-| 36 | Manual investment path is untouched | DEFERRED | Stage 2: Stage 1 changes no manual-investment code; asserted by test once the integration exists |
-| 37 | Dashboard, Holdings, Investments, Performance and Reports agree for the same as-of timestamp | DEFERRED | Stage 2 |
-| 38 | Historical point-in-time report remains unchanged after newer NAVs | PARTIAL | the engine is deterministic and never uses a NAV after the as-of date (`nav2SeriesPreparation.test.ts`, `nav2ContractAndGuards.test.ts`); report level is Stage 2 |
-| 39 | Finalised report remains immutable after correction | DEFERRED | Stage 2 (reports already store frozen output; NAV2 section must pin its provenance) |
-| 40 | Cache invalidation cannot serve a stale value after successful correction processing | PARTIAL | `nav2IdentityAndCache.test.ts`: a correction changes the key, so the old entry is unreachable even before invalidation runs. The cache store is Stage 2 |
-| 41 | Concurrent hydration creates no duplicate NAV rows | PARTIAL | planner deduplication (`nav2WindowPlanner.test.ts`); duplicate-proofing is the existing `unique (instrument_id, price_date)`, single-flight and ignore-duplicates writes. Live concurrency is Stage 3 |
-| 42 | Failed provider call resumes without restarting completed work | PARTIAL | `nav2WindowPlanner.test.ts` (failure, cooldown, gap-only re-plan) on the existing path; live resume is Stage 3 |
-| 43 | One failing instrument does not starve others | COVERED | `nav2WindowPlanner.test.ts` (fair order, cooldown, same-pass isolation) |
-| 44 | RLS / authorisation blocks cross-tenant analytics access | DEFERRED | Stage 3: Stage 1 adds no table, endpoint or RLS policy |
-| 45 | Logs contain no user holding lists or document PII | PARTIAL | `nav2ContractAndGuards.test.ts`, `nav2WindowPlanner.test.ts`: results, plans and keys carry no identifier. Log inspection is Stage 2 / 3 |
-| 46 | Non-held scheme history is not accidentally hydrated | COVERED | `nav2WindowPlanner.test.ts` (1,000 other instruments, an override naming one, static import guard) |
+| 34 | Joint ownership does not double count | PARTIAL | pure attribution (`nav2InvestorExperience.test.ts`) and the certified loader's own suites (`iiMultiFolioAggregation`, `iiOwnerClassBreakup`) which the loader reuses unchanged; not re-proved through the report. Integrated check is Stage 3 |
+| 35 | Entity-owned holding does not enter personal analysis | COVERED | `nav2FundAnalyticsLoader.test.ts` (NC-D1): the loader runs on the non-entity scoped client; a trust-only fund is counted as excluded and disclosed on the report; a fund held both ways is not excluded |
+| 36 | Manual investment path is untouched | COVERED | no manual-investment code is changed in this branch (`git diff` against origin/main touches none) and the loader writes nothing (`nav2FundAnalyticsLoader.test.ts` NC-D3) |
+| 37 | Dashboard, Holdings, Investments, Performance and Reports agree for the same as-of timestamp | PARTIAL | the report consumes the same certified valuation as the other screens (`loadAnalyticsDataset`, `valueSchemeAcrossFolios`, unchanged); no cross-screen comparison test exists. Stage 3 |
+| 38 | Historical point-in-time report remains unchanged after newer NAVs | COVERED | the loader reads NAV rows up to the as-of date only; the engine ignores later rows (`nav2SeriesPreparation.test.ts`); and the issued report is a pinned immutable row (S2-01) |
+| 39 | Finalised report remains immutable after correction | COVERED | PGlite: the update trigger on `nav2_fund_analytics_reports` refuses every update; the service only inserts a NEW version (`nav2FundAnalyticsService.test.ts` NC-S4: no update or delete is ever issued); a correction raises an event and invalidates cache, never edits a report |
+| 40 | Cache invalidation cannot serve a stale value after successful correction processing | COVERED | the key carries the series checksum (control S5 shows a stale hit appears when it is removed), the worker marks only affected entries (`nav2CacheWorkerAndRiskFreeLoader.test.ts`), an invalidated entry is never read |
+| 41 | Concurrent hydration creates no duplicate NAV rows | PARTIAL | planner deduplication and the existing `unique (instrument_id, price_date)`; live concurrency is Stage 3 |
+| 42 | Failed provider call resumes without restarting completed work | PARTIAL | `nav2WindowPlanner.test.ts`; the planner step in report generation holds only while a fetch could be started, and a failed attempt goes into the existing cooldown (`nav2FundAnalyticsService.test.ts` NC-S7); live resume is Stage 3 |
+| 43 | One failing instrument does not starve others | COVERED | `nav2WindowPlanner.test.ts` |
+| 44 | RLS / authorisation blocks cross-tenant analytics access | PARTIAL | PGlite: RLS on the pinned report (own rows only), no session write, token and cache tables unreadable by sessions; route tests prove every report route filters by the session user (S2-06). Live cross-tenant proof is Stage 3 |
+| 45 | Logs contain no user holding lists or document PII | PARTIAL | results, plans, cache keys and the refresh report carry no identifier; routes log generic messages only. Log inspection is Stage 3 |
+| 46 | Non-held scheme history is not accidentally hydrated | COVERED | `nav2WindowPlanner.test.ts` |
 | 47 | Daily current-NAV ingestion cannot reintroduce unlimited pre-policy history for non-held schemes | DEFERRED | the daily job is existing NAV1 code and untouched; Stage 3 storage evidence |
-| 48 | Storage-growth metrics classify held history separately from all-live current data | DEFERRED | Stage 2 monitoring |
-| 49 | Accessibility and mobile layout pass | DEFERRED | Stage 2 (UI) and Stage 3 (browser) |
-| 50 | Production feature switch and rollback path work without deleting NAV data | PARTIAL | the risk-free master switch, the per-dataset flag and the refresh kill switch turn things off without deleting data (`nav2RiskFreeDataset.test.ts`, `nav2RiskFreeRefreshGate.test.ts`); the NAV2 feature switch is Stage 2 |
+| 48 | Storage-growth metrics classify held history separately from all-live current data | COVERED | PGlite: `nav2_monitoring_snapshot()` reports rows of held funds, rows of non-held funds from before the policy changeover, and the total, with the held-derived cells suppressed below 5; UI and route are unit-tested (`nav2RiskFreeAdminRoutes.test.ts`) |
+| 49 | Accessibility and mobile layout pass | PARTIAL | the report renders real tables with captions and column scopes, a two-select pair picker (no matrix), `role="alert"` / `aria-live` states, touch-height controls, sideways-scrolling tables (asserted on server-rendered markup, `nav2ReportPresentation.test.ts`). No browser, screen reader or phone check was made: Stage 3 |
+| 50 | Production feature switch and rollback path work without deleting NAV data | COVERED | four switches (`nav2_fund_analytics`, `nav2_trigger_planner`, `nav2_correction_worker`, `nav2_risk_free_weekly_refresh`) all ship disabled and fail closed; each off path does nothing and deletes nothing (`nav2FundAnalyticsService.test.ts`, `nav2TriggerRunner.test.ts`, `nav2CorrectionWorkerRoute.test.ts`, `nav2RiskFreeAdminRoutes.test.ts`); per-series switch with audit; the migrations' rollback notes are in the migration files |
 
-Count: COVERED 29, PARTIAL 12, DEFERRED 8, DROPPED 1.
+Count: COVERED 38, PARTIAL 10, DEFERRED 1, DROPPED 1.
 
-## 1a. Negative controls demonstrably break something
+## 1a. Stage 2 supplementary rows (the new surfaces the spec's 50 rows do not name)
 
-A green control is indistinguishable from one that never applied, so `scripts/nav2_negative_control_mutations.py` removes one rule at a time and runs the owning test file. Result on this branch: **10 of 10 mutations were caught** (each reported at least one failing test, and the files were restored): future-dated NAV no longer excluded; risk-free staleness removed; parser / AI disagreement allowed to publish; EMA seeded with the first price; a rejected statement planning windows; CAGR on 365 instead of 365.2425; a missing benchmark no longer gating beta; the correlation deviation on a population denominator; invalidation reaching other schemes; the planner reaching back to the AMFI floor.
+| Row | Behaviour | Status | Evidence |
+|---|---|---|---|
+| S2-01 | The issued report is a pinned, versioned, manifest-bearing output; its NAV range is protected from retention | COVERED | `nav2FundAnalyticsReport.test.ts`, `nav2FundAnalyticsService.test.ts`; PGlite (immutability, `pc6_nav_row_is_candidate()` = the 0219 body plus the pin, with a negative control against the 0219 body) |
+| S2-02 | Rankings only among held comparable schemes; compact stored output; chart carries SMA 50 / 200 and keeps the true last NAV; deterministic | COVERED | `nav2FundAnalyticsReport.test.ts` |
+| S2-03 | Premium only, explicit 403 on every report route, never an empty 200 | COVERED | `nav2FundAnalyticsRoutes.test.ts`, `nav2FundAnalyticsService.test.ts` |
+| S2-04 | Switch off: nothing is loaded, written or deleted | COVERED | `nav2FundAnalyticsService.test.ts`, `nav2TriggerRunner.test.ts`, `nav2CorrectionWorkerRoute.test.ts` |
+| S2-05 | Shared scheme-performance cache: exact reuse, no user scope, a changed series is a different key | COVERED | `nav2FundAnalyticsService.test.ts` (byte-identical stored JSON hit versus computed) |
+| S2-06 | Another user's report is a 404 on list / read / export / print | COVERED | `nav2FundAnalyticsRoutes.test.ts`, `nav2FundAnalyticsService.test.ts` |
+| S2-07 | A corrected NAV / benchmark / risk-free value invalidates exactly the entries it can affect; the worker is idempotent and switch-gated | COVERED | `nav2CacheWorkerAndRiskFreeLoader.test.ts`, `nav2CorrectionWorkerRoute.test.ts`; PGlite (listener) |
+| S2-08 | The risk-free dataset version moves with any value, the verified-through date, the switch and the terms status | COVERED | `nav2CacheWorkerAndRiskFreeLoader.test.ts` |
+| S2-09 | Unapplied or unreadable risk-free storage is "no dataset" with a reason, never a zero rate | COVERED | `nav2CacheWorkerAndRiskFreeLoader.test.ts` |
+| S2-10 | The PO's two first-load CSV files load (quoted fields, both cadences, gap rows) | COVERED | `nav2RiskFreeCsvAndUpload.test.ts` (synthetic rows); **separately**, a temporary test parsed the PO's real files from `docs/nav2/risk_free_first_load/`: 1,060 of 1,060 and 61 of 61 rows accepted, 0 rejected, engine cleaning reported 0 issues (the test was deleted, no RBI data is committed) |
+| S2-11 | An upload never changes a published value | COVERED | `nav2RiskFreeCsvAndUpload.test.ts`; PGlite (the function refuses a different value; a correction is the only way) |
+| S2-12 | Commit is attested, hash-bound and runs on the caller's own session | COVERED | `nav2RiskFreeCsvAndUpload.test.ts`, `nav2RiskFreeAdminRoutes.test.ts` |
+| S2-13 | Re-submitting the same file is a no-op; a verified-through confirmation on a re-submitted file moves forward only, audited | COVERED | `nav2RiskFreeCsvAndUpload.test.ts`; PGlite |
+| S2-14 | Every typed unavailable state has its fixed headline ("History is being prepared", "Insufficient history", "Benchmark mapping missing", "Risk-free data unavailable", "Data under review", ...) | COVERED | `nav2ReportPresentation.test.ts` |
+| S2-15 | Statement value and stale NAV are labelled beside the figure | COVERED | `nav2ReportPresentation.test.ts` |
+| S2-16 | An unavailable result is never rendered as a number | COVERED | `nav2ReportPresentation.test.ts` |
+| S2-17 | The chart breaks at a material gap and never joins across it | COVERED | `nav2ReportPresentation.test.ts` (row builder); the drawn chart itself is not browser-checked |
+| S2-18 | No time-based-return wording and no ISO date in any rendered report text | COVERED | `nav2ReportPresentation.test.ts` |
+| S2-19 | PDF: Premium and ownership are checked before any render token exists | COVERED | `nav2FundAnalyticsRoutes.test.ts`; the PDF itself was not rendered (no browser run) |
+| S2-20 | Render token: single use, five minutes, one user, one report; unknown / malformed / expired refused | COVERED | `nav2FundAnalyticsRoutes.test.ts` |
+| S2-21 | With the planner switch on, report generation plans the chosen period's history for the caller's schemes and holds only while a fetch was started | COVERED | `nav2FundAnalyticsService.test.ts`, `nav2TriggerRunner.test.ts` |
+| S2-22 | A planning failure falls back to the existing fetch path and never blocks the report | COVERED | same |
+| S2-23 .. S2-27 | RBI HTML readers: auction release read by column label, gap, layout change is null, NSDP latest week, month listing | COVERED | `nav2RbiHtmlReaders.test.ts` (synthetic pages of the structure seen in saved copies; **not re-read against the live site**) |
+| S2-28, S2-29 | Polite fetcher (budget, spacing, UA, robots, HTML only, size cap, host lock) and a hard stop on a verification page | COVERED | `nav2RbiFetcher.test.ts` |
+| S2-30 | Weekly refresh job: kill switch, dry run, publish only through the gate, review with evidence, gap rows, late release, idempotence, repo rules, fetch problems | COVERED | `nav2RiskFreeRefreshJob.test.ts`, `nav2RbiAiReaderAndRefreshRoute.test.ts`; PGlite (the job's exact payload shape, accept-from-review, verified-through) |
+| S2-31 | The period choice sets the analysis window and bounds the history requested | COVERED | `nav2ReportAnalysisSpec.test.ts` |
+| S2-32 | Non-fund holdings are excluded and counted | COVERED | `nav2FundAnalyticsLoader.test.ts` |
+| S2-33 | Raw NAV lineage reaches the series; a fund still being fetched is `history_hydrating` | COVERED | `nav2FundAnalyticsLoader.test.ts` |
+| S2-34 | Admin surfaces: two separately named risk-free capabilities and the PC6 capability for monitoring; four layers; explicit 401 / 403; fail closed | COVERED | `nav2RiskFreeAdminRoutes.test.ts` (direct API on every verb of every route, direct page, nav, `/api/admin/me`); PGlite (database layer: wrong capability, anon, ordinary user refused) |
+
+## 1b. Negative controls demonstrably break something
+
+A green control is indistinguishable from one that never applied, so a mutation script removes one rule at a time and runs the owning test file.
+
+- Stage 1, `scripts/nav2_negative_control_mutations.py`: 10 of 10 caught.
+- Stage 2, `scripts/nav2_stage2_negative_control_mutations.py`: **18 of 18 caught** (each reported at least one failing test; files restored): RBI figure read from the left edge; fetcher budget; fetcher spacing; fetcher 403 hard stop; cache key without the series checksum; Premium check removed; upload conflict blocker removed; dry run writes; kill switch ignored; risk-free API guard widened; trigger runner ignores the planner switch; an unavailable result shown as `0%`; entity-only funds not counted as excluded; manifest checksum ignoring the manifest; a switch read error counted as ON; correction events never marked processed; dataset version ignoring observations; print route using another user than the token's.
+- Defects found BY the controls while they were being written (all fixed): a blank leading yield cell shifted the next column into the 91-day position, which would have published the 182-day yield (the right-aligned figure rule and a test now prevent it); a stored GAP with a value now on the release was not treated as a conflict by the Stage 1 gate (hardened and tested); the shared in-memory test double lacked `upsert` and `count` (added, additive).
 
 ## 2. Spec 16 fixtures
 
-| Fixture | Stage 1 | Notes |
+| Fixture | State | Notes |
 |---|---|---|
-| A simple growth scheme | PASS | A1 (spec example 1), A2 (12 NAVs: daily, log, high / low, mean, median, SMA, EMA, ROC), A3 (61 NAVs: volatility, drawdown), A4 (13 month-start NAVs: rolling) |
-| B benchmark and risk-free | PASS | closed-form design (beta exactly 1.5, alpha 0.00055, rf exactly 0.0001 daily) plus the 50-digit oracle; T-bill versus repo; stepped yield |
-| C user transactions | PASS (XIRR only) | three SIPs, a partial redemption, 205 units left; XIRR 0.2641093553074878 against scheme CAGR 0.1995; the time-based half is dropped |
-| D correction | PARTIAL | engine part: one effective value, recalculation of the corrected scheme, unrelated scheme unchanged, key and invalidation selection. Finalised-report immutability and the report warning path are Stage 2 |
-| E identity safety | PASS (plus finding NAV2-F1) | direct / regular, growth / IDCW, renamed, merged predecessor, unresolved and duplicate ISIN, no fuzzy matching |
-| F gaps and boundaries | PASS | weekend, a 46-day gap, previous-valid-NAV, no interpolation, known coverage-gap disclosure |
-| G ownership and valuation | PARTIAL | pure parts: spec example 2, redeemed = 0, statement vs market label, joint 60 / 40. Entity exclusion, manual investment and cross-screen agreement are Stage 2 |
+| A simple growth scheme | PASS | Stage 1 |
+| B benchmark and risk-free | PASS | Stage 1 (closed form plus the 50-digit oracle) |
+| C user transactions | PASS (XIRR only) | Stage 1 |
+| D correction | PASS at unit / PGlite level | engine part (Stage 1) plus the listener, the worker, the cache invalidation and the immutable pinned report (Stage 2) |
+| E identity safety | PASS | Stage 1 plus the NAV2-F1 fix |
+| F gaps and boundaries | PASS | Stage 1; the chart breaks at gaps (Stage 2) |
+| G ownership and valuation | PARTIAL | pure parts and entity exclusion proven; cross-screen agreement and joint through the report are Stage 3 |
 
-## 3. Section 22 certification table (state after Stage 1)
+## 3. Section 22 certification table (state after Stage 2)
+
+Evidence is unit-tested and PGlite-verified only. No item is a full PASS, because a full pass needs DEV and production evidence.
 
 | # | Item | Status | Note |
 |---|---|---|---|
-| 1 | Canonical scheme resolution | CONDITIONAL PASS | resolver behaviour tested; finding NAV2-F1 open; reconciliation flow E2E Stage 3 |
-| 2 | User-held-only hydration trigger | CONDITIONAL PASS | planner and trigger classification proven; route wiring Stage 2 |
-| 3 | Required-window precision | CONDITIONAL PASS | policy, buffers and hand-checked dates proven; precision against real fetches is Stage 3; NAV1 inception-policy conflict needs a PO decision |
-| 4 | Provider fidelity and correction handling | CONDITIONAL PASS | read-side handling and the in-place correction finding done; correction listener Stage 2 |
-| 5 | Absolute / CAGR returns | PASS (unit level) | CAGR convention differs from the Performance tab: PO decision |
+| 1 | Canonical scheme resolution | PASS (unit level) | NAV2-F1 fixed with named controls; reconciliation-case creation by both callers asserted; E2E Stage 3 |
+| 2 | User-held-only hydration trigger | CONDITIONAL PASS | planner, trigger classification and the switch-gated runner proven; live fetch Stage 3 |
+| 3 | Required-window precision | CONDITIONAL PASS | policy, buffers, hand-checked dates and the period-bounded request proven; real fetches Stage 3; NAV1 inception-policy conflict still needs a PO decision |
+| 4 | Provider fidelity and correction handling | CONDITIONAL PASS | read-side handling, the listener (PGlite) and the worker (unit) done; live correction Stage 3 |
+| 5 | Absolute / CAGR returns | PASS (unit level) | CAGR convention differs from the Performance tab: PO decision still open |
 | 6 | Rolling / point-to-point returns | PASS (unit level) | |
 | 7 | Daily / log returns | PASS (unit level) | |
 | 8 | Volatility | PASS (unit level) | |
-| 9 | Sharpe / Sortino | CONDITIONAL PASS | maths and contract proven; no risk-free data exists yet (storage and upload Stage 2); definitions differ from R4 |
+| 9 | Sharpe / Sortino | CONDITIONAL PASS | maths and contract proven; risk-free storage, upload and first-load format proven (the PO's real files parse); no data is loaded anywhere until the PO loads it on DEV |
 | 10 | Maximum drawdown | PASS (unit level) | |
-| 11 | Beta / alpha | CONDITIONAL PASS | maths and gates proven; BLOCKED for real numbers until a licensed or approved benchmark series exists |
+| 11 | Beta / alpha | CONDITIONAL PASS | maths and gates proven; computed only on a declared benchmark; BLOCKED for real numbers until an approved total-return series exists |
 | 12 | SMA / EMA / ROC | PASS (unit level) | |
-| 13 | User-held rankings / comparability | PASS (unit level) | category source for ranking is a Stage 2 loader |
-| 14 | User-held correlations | PASS (unit level) | |
+| 13 | User-held rankings / comparability | PASS (unit level) | category comes from the scheme master through the existing category reference |
+| 14 | User-held correlations | PASS (unit level) | focused two-fund picker on screen, full pair list on the PDF |
 | 15 | High / low / mean / median | PASS (unit level) | |
-| 16 | XIRR separation and correctness | PASS (unit level) | the time-based half is dropped by PO decision |
-| 17 | Current value / current NAV consistency | CONDITIONAL PASS | the certified rule is reused and tested; cross-screen agreement Stage 2 |
-| 18 | Joint / entity / manual / redeemed handling | CONDITIONAL PASS | joint and redeemed (pure) proven; entity and manual Stage 2 |
-| 19 | Historical and finalised-report immutability | NOT STARTED (Stage 2) | engine is deterministic and as-of bounded |
-| 20 | BENCH-1 / risk-free governance | CONDITIONAL PASS | contracts, gates, switch, step-function and staleness rules, freshness signal and the weekly-refresh publication gate done and tested; storage, upload, refresh job and data are Stage 2; RBI's missing reuse licence is a PO-accepted risk, not a confirmation |
-| 21 | Data-quality / unavailable states | PASS (unit level) | typed states, no value on unavailable |
-| 22 | Cache invalidation and idempotency | CONDITIONAL PASS | key and selection contract proven; store Stage 2 |
+| 16 | XIRR separation and correctness | PASS (unit level) | |
+| 17 | Current value / current NAV consistency | CONDITIONAL PASS | the certified rule is reused unchanged; cross-screen agreement Stage 3 |
+| 18 | Joint / entity / manual / redeemed handling | CONDITIONAL PASS | entity exclusion and manual untouched proven; joint through the report Stage 3 |
+| 19 | Historical and finalised-report immutability | PASS (PGlite and unit level) | pinned immutable rows, new versions, NAV range protected from retention |
+| 20 | BENCH-1 / risk-free governance | CONDITIONAL PASS | storage, two-capability admin surface, attested upload, correction ledger, review queue, series switch, weekly refresh job (default OFF, dry run) all built and tested; the job's parsers are NOT verified against the live RBI site; RBI's missing reuse licence is a PO-accepted risk, not a confirmation |
+| 21 | Data-quality / unavailable states | PASS (unit level) | fixed headlines for every state, rendered and asserted |
+| 22 | Cache invalidation and idempotency | PASS (unit level) | shared bundle cache, exact reuse, correction worker |
 | 23 | Concurrency / resumability / fairness | CONDITIONAL PASS | planner side proven; live Stage 3 |
-| 24 | RLS / privacy / audit | CONDITIONAL PASS | no identifiers in results / plans / keys; RLS and audit for new endpoints Stage 2 / 3 |
-| 25 | UI / accessibility / mobile | NOT STARTED | Stage 2 / 3 |
-| 26 | Storage and non-held-history controls | CONDITIONAL PASS | planner side proven; storage evidence Stage 3 |
+| 24 | RLS / privacy / audit | CONDITIONAL PASS | RLS PGlite-verified; routes filter by session user; no identifiers in plans, keys or refresh reports; live proof Stage 3 |
+| 25 | UI / accessibility / mobile | CONDITIONAL PASS | markup contract asserted on server-rendered output; no browser, no screen-reader, no phone check |
+| 26 | Storage and non-held-history controls | CONDITIONAL PASS | monitoring snapshot (PGlite) and the retention pin; storage evidence Stage 3 |
 | 27 | DEV end-to-end accepted-statement journey | NOT STARTED | Stage 3 |
-| 28 | Production deployment and scheduled-run evidence | NOT STARTED | Stage 4 / G |
-| 29 | Recovery / rollback readiness | NOT STARTED | Stage 2 designs the switch, Stage 3 proves it |
-| 30 | Remaining PO decisions | OPEN | listed in the Stage 1 report |
+| 28 | Production deployment and scheduled-run evidence | NOT STARTED | Stage 4 |
+| 29 | Recovery / rollback readiness | CONDITIONAL PASS | four fail-closed switches with tested off paths; migration rollback notes; the real rollback is Stage 3 |
+| 30 | Remaining PO decisions | OPEN | listed in the Stage 2 report |
 
-Overall: no section 22 item is a full PASS (as the spec requires: a full pass needs DEV and production evidence). The verdict `NAV2 USER-HELD ANALYTICS - FULL PASS` is NOT claimed.
+The verdict `NAV2 USER-HELD ANALYTICS - FULL PASS` is NOT claimed.
 
-## 4. Stage 2 plan (integration, Reports-menu report, UI)
+## 4. Stage 3 plan (DEV)
 
-1. **Premium gate and entitlement.** A Premium-only Reports-menu report ("Fund analytics for your held schemes"): server-side `canViewPremiumReport` on the page, the API and the report generation; free users get an explicit denial (401 / 403 style) and an upsell, never an empty page.
-2. **Loaders (read-only, user-scoped).** Held schemes with plan / option / category / ownership split; NAV rows by instrument id; known coverage gaps into `prepareSeries`; benchmark segments through `loadBenchmarkAccess` + `clampToScope` + the category reference; the selected risk-free dataset through `selectRiskFreeSupply`; the user's canonical flows and `valueHoldingAsOf` input. One service function per report section that calls `computeHeldSchemeAnalytics`.
-3. **Wire the triggers.** Replace the bare `kickUserNavHistory(userId)` in the accept / process routes and the report NAV gate with a planner-driven runner built on `handleNav2Trigger` (feature-flagged, default off); add the analysis-period-changed and report-period-requested triggers; add the `ii_reference_corrections` listener that raises `nav_correction` events.
-4. **Risk-free storage, admin upload and the weekly refresh job** (migrations 0260 or higher; hand over as files, apply nothing): tables and the SECURITY DEFINER commit RPC with a new named capability (the design in the dependency register, section 4), loading the PO's first-load CSVs; then the weekly refresh job (section 5 of that register): `CRON_SECRET`-protected cron route, kill-switch row `nav2_risk_free_weekly_refresh` in `ii_reference_job_control` shipped OFF, dry-run mode, a polite fetcher (descriptive User-Agent, at most 4 requests, 4 s apart, conditional requests, robots.txt, hard caps, no PDFs, no human-verification bypass), the deterministic parser first and the AI schema extraction as fallback and second opinion, publication through the Stage 1 gate (`decideTbillRefresh`, `decideRepoRefresh`), an admin review queue with the evidence, per-observation provenance, gap rows for no-accepted-bids weeks, the NSDP-driven repo check that advances the verified-through date, and the admin freshness signal. Parser tests use fake HTML SYNTHESISED from the real release structure (nothing from RBI committed).
-5. **Cache store** and its invalidation worker keyed by `buildResultCacheKey` / `selectInvalidated`; invalidation lag monitor.
-6. **Report pinning**: the finalised section stores the result provenance (series checksum, policy and definition versions, benchmark and risk-free dataset versions) and the dependency manifest; later corrections raise an alert or a new report version, never a silent change.
-7. **UI** (spec 13): period selectors, status tags for every typed state with the exact wording (`History is being prepared`, `Insufficient history`, `Statement value`, `Stale NAV`, `Benchmark mapping missing`, `Risk-free data unavailable`, `Data under review`, `Not comparable`), actual-dates and as-of disclosures, plain-language scheme-versus-your-return explanation, charts that break at material gaps, keyboard-accessible tables, mobile focused comparison (no large matrix). Dates `dd-mm-yyyy` (INR) / `dd/mm/yyyy`.
-8. **Entity and ownership**: joint attribution once, Trust / HUF / Company excluded from personal Net Worth (existing `ownerClassScope`), manual investments untouched; tests for matrix rows 34-37.
-9. **Monitoring** (spec 15): accepted-awaiting-hydration, age, provider errors, stale held schemes, calculation failures by typed reason, benchmark / risk-free coverage, cache lag, storage split (matrix 48).
-10. **Fix NAV2-F1** if the PO agrees; align or label the CAGR conventions (D1); decide D2.
-11. Feature switch with a tested off path that deletes no NAV data (matrix 50).
-
-Stage 2 stop-gate: PO review. Stage 3 (DEV): the 18-point-style journey with synthetic fixtures only, exact mutation ledger, RLS and cross-tenant proof, browser evidence for every state, load and storage evidence. Stage 4 (production): allowlisted pilot behind the switch.
+1. PO applies migrations 0260, 0261, 0262 to DEV in that order (`docs/nav2/po_apply_0260_0262/README.md`), grants the capabilities, and uploads the two first-load CSVs through the admin screen.
+2. A DEV dry run of the weekly refresh (switch on, `dryRun` left at its default) to compare the readers against the live pages, then the first live run only if the dry run's decisions are right.
+3. A synthetic-fixture accepted-statement journey with the exact mutation ledger, RLS and cross-tenant proof, browser evidence for every state on desktop and a phone, a PDF export, and load and storage evidence.
+4. Stage 4 (production): allowlisted pilot behind the switches.

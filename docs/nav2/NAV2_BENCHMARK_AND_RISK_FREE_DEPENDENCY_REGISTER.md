@@ -92,3 +92,26 @@ Stage 1 delivers the contracts and the publication gate (`lib/engines/nav2/riskF
 3. Whether the risk-free `enabled` flag and terms status should be admin-switchable in Stage 2 (recommended) or stay a config change.
 4. The plausible-band width (0.5 percentage points week on week) and the AI second-opinion cost / model for the weekly run (one short call a week).
 5. The two same-day instructions on ingestion ("admin upload only, no scraping" and "automate weekly") conflict; this branch follows the later one (automation, default off, admin upload retained). Please confirm.
+
+## 7. Stage 2 build status (what exists now)
+
+Evidence: unit-tested and PGlite-verified. **Nothing is applied, no data is loaded anywhere, and the readers have not been run against the live RBI site.**
+
+| Piece | State | Where |
+|---|---|---|
+| Storage (series registry, observations, batch ledger, review queue, corrections, state log), the two capabilities, the RPCs | built, PGlite-verified (76 checks) | migration 0260 |
+| Admin upload (preview, attested commit), review queue, correction, series switch; four-layer enforcement | built, unit-tested | `app/(app)/admin/investment-intelligence/risk-free-data`, `app/api/admin/investment-intelligence/risk-free-data/**`, `riskFreeAdmin.ts` |
+| First load of the PO's two CSV files | the files parse completely (1,060 and 61 rows, none rejected); loading is the PO's step | `docs/nav2/po_apply_0260_0262/README.md` |
+| Loader into the engine's dataset contract (deterministic dataset version) | built, unit-tested | `riskFreeDatasetLoader.ts` |
+| Weekly refresh job: polite fetcher, HTML readers, AI second opinion (behind the AIE gateway and its switch), gate-driven decisions, review items, gap rows, repo verified-through, cron route | built, unit-tested with synthetic pages; **default OFF and dry run by default** | `rbiFetcher.ts`, `rbiHtml.ts`, `rbiSource.ts`, `rbiAiReader.ts`, `riskFreeRefreshJob.ts`, `app/api/investment-intelligence/cron/nav2-risk-free-refresh` |
+| Monitoring of freshness | built: the admin screen and the monitoring snapshot show days since the last observation / verification against the window, per series | `RiskFreeDataClient.tsx`, migration 0262 |
+
+Design points that differ from the sketch in section 5, all deliberate:
+
+- The repo rate: a change seen on NSDP always becomes a review item with NO candidate row. The monetary-policy-statement reader was NOT built (changes are rare); the administrator confirms a change by uploading a row. `decideRepoRefresh` still accepts policy evidence, so a reader can be added without changing the gate.
+- Gate hardening: a GAP already stored for a date with a value now on the release is a review item (it was published automatically before).
+- robots.txt is read once per run outside the 4-page budget (so a run is at most 5 requests); an unreadable robots.txt stops the run before any page is requested.
+- Conditional requests (If-None-Match / If-Modified-Since) are supported by the fetcher but no validators are stored between runs (there is nowhere to store them without another table), so every run fetches in full.
+- The archive-form request for a listing of a month other than the one the page shows by default is inferred from a saved copy of the page; it is the least certain part and is what the DEV dry run must confirm first.
+
+Open decisions this adds, for the PO: (1) the three weekly gaps in the first-load T-bill file against the 21-day staleness rule (first-load README, section 6); (2) whether the weekly job should read the Monetary Policy Statement itself; (3) whether to persist conditional-request validators.

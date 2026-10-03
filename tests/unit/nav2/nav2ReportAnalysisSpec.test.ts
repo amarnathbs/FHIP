@@ -1,6 +1,6 @@
 // NAV2 Stage 2 -- the report's period choice and the analysis spec it produces (which also decides how much history is requested).
 //
-// Matrix rows: 80 (period choice -> analysis window), 81 (a short choice never forces a long history request).
+// Matrix: Stage 2 row S2-31 (the period choice sets the analysis window; a short choice never forces a long history request).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-Q1  an unknown period is not a choice (no silent default inside the engine);

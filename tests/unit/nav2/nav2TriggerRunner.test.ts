@@ -1,7 +1,8 @@
 // NAV2 Stage 2 -- the trigger runner: what the post-response kick runs, switch OFF versus ON.
 //
-// Matrix rows: 43 (switch off = the existing behaviour, nothing new runs), 62 (switch on plans the caller's own schemes
-// and executes through the existing path), 63 (a planning failure falls back to the existing path, never leaves history unfetched).
+// Matrix: spec row 50 and Stage 2 rows S2-04 (switch off = the existing behaviour, nothing new runs), S2-21 (switch on plans the
+// caller's own schemes and executes through the existing path), S2-22 (a planning failure falls back to the existing path, never
+// leaves history unfetched).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-T1  switch OFF (or its row missing, or unreadable): ONLY the legacy runner is called; the planner is not touched;

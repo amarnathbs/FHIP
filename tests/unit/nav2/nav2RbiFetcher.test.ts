@@ -1,6 +1,7 @@
 // NAV2 Stage 2 -- the polite RBI fetcher: every politeness rule is a test.
 //
-// Matrix rows: 69 (request budget, spacing, UA, robots, HTML only, size cap, host lock), 70 (a verification page is a hard stop).
+// Matrix: Stage 2 rows S2-28 (request budget, spacing, User-Agent, robots, HTML only, size cap, host lock) and S2-29 (a verification
+// page is a hard stop).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-R1  the (budget+1)th page request is refused BEFORE any network call; robots.txt does not use the page budget;

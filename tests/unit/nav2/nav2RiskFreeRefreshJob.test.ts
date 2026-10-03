@@ -1,9 +1,9 @@
 // NAV2 Stage 2 -- the weekly risk-free refresh job, end to end over fake pages and an in-memory database.
 //
-// Matrix rows: 71 (kill switch off = no request, no write), 72 (dry run decides and writes nothing), 73 (publish only on the gate's
-// say-so, with provenance), 74 (disagreement / single read / no NSDP / conflict -> review with evidence, nothing published),
-// 75 (gap row for no accepted bids), 76 (late release: nothing written, retried), 77 (idempotent), 78 (repo: unchanged advances the
-// verified-through date; a change is only a review item), 79 (a fetch problem stops the run and writes nothing).
+// Matrix: Stage 2 row S2-30, in nine parts: kill switch off = no request, no write; dry run decides and writes nothing; publish only
+// on the gate's say-so, with provenance; disagreement / single read / no NSDP / conflict -> review with evidence, nothing published;
+// a gap row for no accepted bids; a late release writes nothing and is retried; idempotent; repo: unchanged advances the verified-
+// through date and a change is only a review item; a fetch problem stops the run and writes nothing.
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-J1  with the switch off the source is never called and the database function is never called;

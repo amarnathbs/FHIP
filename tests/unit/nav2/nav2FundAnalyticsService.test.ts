@@ -1,8 +1,8 @@
 // NAV2 Stage 2 -- generate / list / read the Fund analytics report (service level, in-memory database).
 //
-// Matrix rows: 38 (a report is a pinned, versioned output with a dependency manifest), 42 (Premium only, explicit
-// refusal, fails closed), 43 (feature switch off = nothing happens, nothing is deleted), 44 (shared cache reuse is
-// exact), 46 (another user's report is never returned).
+// Matrix: Stage 2 rows S2-01 (a report is a pinned, versioned output with a dependency manifest), S2-03 (Premium only, explicit
+// refusal, fails closed), S2-04 (switch off = nothing happens, nothing is deleted), S2-05 (shared cache reuse is exact), S2-06
+// (another user's report is never returned), S2-21 / S2-22 (the planner step, only with its switch on).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-S1  the switch is OFF unless the job-control row exists AND is enabled (missing row, read error = OFF);

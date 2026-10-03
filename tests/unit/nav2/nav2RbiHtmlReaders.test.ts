@@ -1,7 +1,7 @@
 // NAV2 Stage 2 -- the deterministic RBI HTML readers (synthetic pages of the live structure).
 //
-// Matrix rows: 64 (the auction release is read by column LABEL, date and release number included), 65 (gap / no accepted bids),
-// 66 (a layout change is a null, never a wrong number), 67 (NSDP latest week), 68 (the month listing).
+// Matrix: Stage 2 rows S2-23 (the auction release is read by column LABEL, date and release number included), S2-24 (gap / no
+// accepted bids), S2-25 (a layout change is a null, never a wrong number), S2-26 (NSDP latest week), S2-27 (the month listing).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-H1  a different title, a missing "91-Day" header, a missing price row, a non-numeric price or a missing yield is null;

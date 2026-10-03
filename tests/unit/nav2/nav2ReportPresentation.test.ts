@@ -2,8 +2,8 @@
 // stale NAV, day-first dates, no number for an unavailable result, chart rows that break at gaps, and the whole report
 // rendered (server-side) from real engine output.
 //
-// Matrix rows: 55 (every typed state has its fixed headline), 56 (statement value / stale NAV are labelled), 57 (no
-// unavailable result renders as a number), 58 (chart breaks at a gap), 59 (no time-based-return wording, no ISO date).
+// Matrix: Stage 2 rows S2-14 (every typed state has its fixed headline), S2-15 (statement value / stale NAV are labelled), S2-16 (no
+// unavailable result renders as a number), S2-17 (the chart breaks at a gap), S2-18 (no time-based-return wording, no ISO date).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-P1  an unavailable result's text is its headline and never contains a digit-like placeholder (0, 0%, 0.00, n/a-as-number);

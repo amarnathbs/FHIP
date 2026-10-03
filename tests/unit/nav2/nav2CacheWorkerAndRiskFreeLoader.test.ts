@@ -1,8 +1,8 @@
 // NAV2 Stage 2 -- the correction worker (cache invalidation) and the risk-free dataset loader.
 //
-// Matrix rows: 47 (a corrected NAV / benchmark / risk-free value invalidates exactly the entries it can affect),
-// 48 (the risk-free dataset version moves when a value is corrected), 49 (unapplied / unreadable risk-free storage is
-// "no dataset", never a zero rate).
+// Matrix: Stage 2 rows S2-07 (a corrected NAV / benchmark / risk-free value invalidates exactly the entries it can affect; also spec
+// row 9 and 40), S2-08 (the risk-free dataset version moves when a value is corrected), S2-09 (unapplied / unreadable risk-free
+// storage is "no dataset", never a zero rate).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-W1  a correction dated AFTER an entry's last NAV date does not invalidate it; another scheme's entry is untouched;

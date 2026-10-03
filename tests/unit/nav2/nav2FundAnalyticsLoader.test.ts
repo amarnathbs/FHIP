@@ -1,10 +1,10 @@
 // NAV2 Stage 2 -- the Fund analytics loader's COMPOSITION (the certified loaders are mocked at their module boundary;
 // everything this loader adds on top runs for real against an in-memory database).
 //
-// Matrix rows: 34 (entity-held funds are excluded from the personal report and the exclusion is disclosed), 36 (non-fund
-// holdings are not analysed and are counted), 37 (manual path untouched: the loader only reads), 50 (raw NAV lineage
-// reaches the series; hydrating is respected). Row 35 (a joint holding appears once) is inherited from the certified
-// loader (iiMultiFolioAggregation / iiOwnerClassBreakup); it is not re-proved here.
+// Matrix: spec rows 35 (an entity-held holding stays out of the personal analysis; the exclusion is disclosed) and 36 (the manual
+// path is untouched: the loader only reads); Stage 2 rows S2-32 (non-fund holdings are excluded and counted) and S2-33 (raw NAV
+// lineage reaches the series; a fund still being fetched is history_hydrating). Spec row 34 (a joint holding appears once) is
+// inherited from the certified loader (iiMultiFolioAggregation / iiOwnerClassBreakup); it is not re-proved here.
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-D1  a trust-held fund that is NOT also held personally is counted as excluded; a fund held both ways is NOT;

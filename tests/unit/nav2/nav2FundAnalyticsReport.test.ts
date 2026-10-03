@@ -1,7 +1,7 @@
 // NAV2 Stage 2 -- the pure Fund analytics REPORT assembler.
 //
-// Matrix rows: 38 (report is a pinned, manifest-bearing output), 39 (rankings only among held schemes), 40 (compact stored
-// output), 41 (chart breaks at gaps and carries the SMAs), 45 (determinism).
+// Matrix: Stage 2 rows S2-01 (the report is a pinned, manifest-bearing output) and S2-02 (rankings only among held schemes; compact
+// stored output; the chart carries the SMAs and keeps the true last NAV; the output is deterministic).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-R1  the stored trend results carry no per-date points (the compact form), but keep their latest value;

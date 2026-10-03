@@ -1,5 +1,7 @@
 // NAV2 Stage 2 -- the correction worker's cron route: secret, kill switch, and an end-to-end pass over an in-memory database.
 //
+// Matrix: Stage 2 row S2-07 (the worker's secret, kill switch and idempotence).
+//
 // NAMED NEGATIVE CONTROLS
 //   NC-K1  no secret / a wrong secret is a 401 and nothing is read;
 //   NC-K2  switch OFF (row disabled or missing): nothing is read or written, the answer says it was skipped;

@@ -3,8 +3,8 @@
 // All fixture rows are SYNTHETIC (their source_document says so); no RBI-published value is copied into the repository.
 // The Product Owner's real first-load files were parsed separately (see the Stage 2 report) and are not committed.
 //
-// Matrix rows: 51 (the PO's CSV format loads: both series, quoted fields, gap rows), 52 (an upload never changes a
-// published value), 53 (commit is attested, hash-bound and goes through the caller's own session), 54 (idempotent).
+// Matrix: Stage 2 rows S2-10 (the PO's CSV format loads: both series, quoted fields, gap rows), S2-11 (an upload never changes a
+// published value), S2-12 (commit is attested, hash-bound and goes through the caller's own session), S2-13 (idempotent).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-C1  a wrong series_id / frequency, a future date, an unreal date, a value with more than 4 decimals, a value

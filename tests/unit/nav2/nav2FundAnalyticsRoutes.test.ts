@@ -1,8 +1,8 @@
 // NAV2 Stage 2 -- the Fund analytics report's customer routes, print route and render tokens.
 //
-// Matrix rows: 42 (Premium only, explicit 403, never an empty 200), 43 (switch off answers 404 and does nothing),
-// 46 (another user's report is a 404 on every route), 60 (PDF: Premium + own report checked BEFORE any token or render),
-// 61 (single-use render token: unknown / malformed / expired is refused).
+// Matrix: Stage 2 rows S2-03 (Premium only, explicit 403, never an empty 200), S2-04 (switch off answers 404 and does nothing),
+// S2-06 (another user's report is a 404 on every route), S2-19 (PDF: Premium and ownership are checked BEFORE any token or render),
+// S2-20 (single-use render token: unknown / malformed / expired is refused).
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-F1  a free user is refused with the Premium sentence on list, generate, read and export (never an empty list);
