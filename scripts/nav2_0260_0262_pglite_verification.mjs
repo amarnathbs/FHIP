@@ -170,6 +170,23 @@ check('a rejected item publishes NOTHING', v2.ok && (await one(`select count(*):
 check('review items are readable only with the upload capability (RLS)', (await asRole('authenticated', U.up, `select count(*)::int v from ii_risk_free_review_items`)).v >= 1 && (await asRole('authenticated', U.none, `select count(*)::int v from ii_risk_free_review_items`)).v === 0);
 check('the observations are world-readable reference data (RLS using true)', (await asRole('authenticated', U.user, `select count(*)::int v from ii_risk_free_observations`)).v >= 4);
 
+// --- the weekly job's REAL payload shape (lib/services/investment-intelligence/nav2/riskFreeRefreshJob.ts) ------------------
+// A published row with extraction provenance, a gap row, a review item whose candidate an admin can accept, and a repo
+// verified-through confirmation, exactly as the job builds them.
+const jobExtraction = { pressReleaseNumber: '2026-2027/1300', method: 'parser+ai', version: 'nav2-risk-free-refresh-job-v1', checksPassed: ['parser_ai_agreement', 'price_recompute', 'nsdp_cross_check', 'auction_date'] };
+const jobPublish = { date: '2026-10-01', kind: 'value', value_percent: 5.3, gap_reason: null, source_document: "RBI press release 2026-2027/1300 'Treasury Bills: Full Auction Result' dated 01-10-2026; row III Cut-off price/Yield (91-Day), YTM", source_url: 'https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid=1', retrieved_on: '2026-10-03', notes: 'cut-off price 98.7', extraction: jobExtraction };
+const jobGap = { date: '2026-08-12', kind: 'gap', value_percent: null, gap_reason: 'no_accepted_bids', source_document: "RBI press release 2026-2027/900 'Treasury Bills: Full Auction Result' dated 12-08-2026; row III Cut-off price/Yield (91-Day), YTM", source_url: null, retrieved_on: '2026-10-03', notes: null, extraction: { ...jobExtraction, checksPassed: ['gap_row_no_value'] } };
+const jobCandidate = { ...jobPublish, date: '2026-09-09', value_percent: 5.21, extraction: { ...jobExtraction, method: 'parser', checksPassed: [] } };
+const jobReview = { observation_date: '2026-09-09', reasons: ['parser_ai_disagree'], candidate: jobCandidate, evidence: { parser: { cutoffYieldPercent: 5.21 }, ai: { cutoffYieldPercent: 5.22 }, nsdp: { state: 'unavailable' }, lastStored: null } };
+const jr = await asRole('service_role', null, `select record_risk_free_refresh_results('RBI_91D_TBILL_CUTOFF_YIELD', '${JSON.stringify([jobPublish, jobGap]).replace(/'/g, "''")}'::jsonb, '${JSON.stringify([jobReview]).replace(/'/g, "''")}'::jsonb, null) v`);
+check('the job payload: a published row, a gap row and a review item are recorded in ONE call', jr.ok && jr.v.inserted === 2 && jr.v.queued === 1, JSON.stringify(jr));
+check('the gap row is stored with no value and its reason; the published row keeps its extraction provenance', (await one(`select (value_percent is null) g, gap_reason from ii_risk_free_observations where observation_date='2026-08-12'`)).g === true && (await one(`select extraction->'checksPassed' ? 'nsdp_cross_check' ok from ii_risk_free_observations where observation_date='2026-10-01'`)).ok === true);
+const jobItem = (await one(`select id from ii_risk_free_review_items where observation_date = '2026-09-09'`)).id;
+const acc = await asRole('authenticated', U.up, `select resolve_risk_free_review_item('${jobItem}', 'accept', 'Checked against the RBI release by hand: value confirmed') v`);
+check('an admin ACCEPTING the job\'s review candidate publishes exactly that row, with the candidate\'s extraction, as an admin entry', acc.ok && acc.v.observation_inserted === true && Number((await one(`select value_percent v from ii_risk_free_observations where observation_date='2026-09-09'`)).v) === 5.21 && (await one(`select entry_kind k from ii_risk_free_observations where observation_date='2026-09-09'`)).k === 'admin_upload', JSON.stringify(acc));
+const rvRepo = await asRole('service_role', null, `select record_risk_free_refresh_results('RBI_POLICY_REPO_RATE', '[]'::jsonb, '[]'::jsonb, '2026-10-02'::date) v`);
+check('a repo "unchanged" confirmation advances verified-through with NO observation written', rvRepo.ok && rvRepo.v.inserted === 0 && String((await one(`select to_char(verified_through_date, 'YYYY-MM-DD') d from ii_risk_free_series where series_id='RBI_POLICY_REPO_RATE'`)).d) === '2026-10-02');
+
 // --- 0261 -----------------------------------------------------------------------------------------------
 console.log('\nBefore 0261 (control against the 0219 definition):');
 await db.exec(`insert into ii_prices_nav (instrument_id, currency_code, price_date, price) values ('${INST}','INR','2020-06-15', 10), ('${INST2}','INR','2020-06-15', 10);`);

@@ -166,6 +166,10 @@ describe('NC-A4: no accepted bids records a gap row and never a value', () => {
     const single = decideTbillRefresh(input({ parser: none, ai: null }));
     expect(single.outcome).toBe('record_gap');
   });
+  it('Stage 2 hardening: a GAP stored for the date with a VALUE now on the release is a conflict (review), never an automatic replacement', () => {
+    const r = decideTbillRefresh(input({ storedOnDate: { kind: 'gap' } }));
+    expect(r).toMatchObject({ outcome: 'review', reasons: ['conflicts_with_stored_value'] });
+  });
 });
 
 describe('plausibility, NSDP cross-check and the date rules', () => {

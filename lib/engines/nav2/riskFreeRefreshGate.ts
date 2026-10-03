@@ -218,6 +218,8 @@ export function decideTbillRefresh(input: TbillRefreshInput): TbillRefreshOutcom
   // ---- idempotence -------------------------------------------------------------------
   if (read.cutoffYieldPercent === null) return review('yield_missing');
   const y = read.cutoffYieldPercent;
+  // A GAP is already stored for that date but this release shows a value: never replace one with the other automatically.
+  if (input.storedOnDate?.kind === 'gap') return review('conflicts_with_stored_value');
   if (input.storedOnDate?.kind === 'value') {
     return Math.abs(input.storedOnDate.yieldPercent - y) < 1e-9 ? { outcome: 'noop_duplicate', auctionDate: date } : review('conflicts_with_stored_value');
   }
