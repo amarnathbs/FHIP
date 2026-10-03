@@ -31,7 +31,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveBenchmarkForDate, type BenchmarkMapping } from '@/lib/engines/investment-intelligence/benchmarkEngine';
 import { benchmarkWindowReturn, type SeriesPoint } from '@/lib/engines/investment-intelligence/benchmarkService';
 import { missingReferenceData, type CalculationOutcome } from '@/lib/engines/investment-intelligence/calculationStatus';
+import {
+  compareHoldingToBenchmark,
+  type BenchmarkSegmentInput,
+  type HoldingBenchmarkComparison,
+} from '@/lib/engines/investment-intelligence/holdingBenchmarkComparison';
+import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { accessAllows, blockedReason, clampToScope, loadBenchmarkAccess, type BenchmarkAccess, type BenchmarkAccessMap } from './benchmarkAccess';
+import { fetchAllRows } from './pagination';
 
 export interface BenchmarkComparable {
   benchmarkKey: string;
@@ -51,6 +58,8 @@ interface BenchmarkMeta {
   returnType: string;
   licenceStatus: string | null;
   lifecycleStatus: string | null;
+  /** ii_benchmarks.catalogue_status; anything other than 'verified' (including unknown) is NOT usable for a comparison. */
+  catalogueStatus: string | null;
 }
 
 export interface InstrumentBenchmarkContext {
@@ -68,12 +77,14 @@ interface RawMappingRow {
   relationship_type: string;
   effective_from: string;
   effective_to: string | null;
+  quality_status?: string | null;
   ii_benchmarks: {
     benchmark_key: string;
     benchmark_label: string;
     return_type: string | null;
     licence_status: string | null;
     lifecycle_status: string | null;
+    catalogue_status?: string | null;
   } | null;
 }
 
@@ -91,18 +102,24 @@ export async function loadInstrumentBenchmarkContext(
   const metaByBenchmarkId = new Map<string, BenchmarkMeta>();
   if (instrumentIds.length === 0) return { mappingsByInstrument, metaByBenchmarkId, accessByBenchmarkId: new Map(), accessError: null };
 
-  const { data, error } = await supabase
-    .from('ii_instrument_benchmarks')
-    .select(
+  const query = (cols: string) =>
+    supabase.from('ii_instrument_benchmarks').select(cols).in('instrument_id', instrumentIds).eq('relationship_type', 'primary');
+  let { data, error } = await query(
+    'instrument_id, benchmark_id, relationship_type, effective_from, effective_to, quality_status, ii_benchmarks(benchmark_key, benchmark_label, return_type, licence_status, lifecycle_status, catalogue_status)'
+  );
+  // Fail CLOSED on an older schema: without catalogue_status every benchmark reads as "not verified" below.
+  if (error && /catalogue_status|quality_status/i.test(error.message)) {
+    ({ data, error } = await query(
       'instrument_id, benchmark_id, relationship_type, effective_from, effective_to, ii_benchmarks(benchmark_key, benchmark_label, return_type, licence_status, lifecycle_status)'
-    )
-    .in('instrument_id', instrumentIds)
-    .eq('relationship_type', 'primary');
+    ));
+  }
   if (error) throw new Error(`ii_instrument_benchmarks: ${error.message}`);
 
   for (const row of (data ?? []) as unknown as RawMappingRow[]) {
     const meta = row.ii_benchmarks;
     if (!meta) continue; // an orphaned mapping row is never used to fabricate an identity
+    // The same exclusions the analytics loader applies: a superseded or ambiguous mapping never drives a comparison.
+    if (row.quality_status === 'superseded' || row.quality_status === 'ambiguous') continue;
     const mapping: BenchmarkMapping = {
       instrumentId: row.instrument_id,
       benchmarkId: row.benchmark_id,
@@ -121,6 +138,7 @@ export async function loadInstrumentBenchmarkContext(
         returnType: meta.return_type ?? 'OTHER',
         licenceStatus: meta.licence_status,
         lifecycleStatus: meta.lifecycle_status,
+        catalogueStatus: meta.catalogue_status ?? null,
       });
     }
   }
@@ -140,13 +158,25 @@ export async function loadBenchmarkSeriesById(
 ): Promise<Map<string, SeriesPoint[]>> {
   const out = new Map<string, SeriesPoint[]>();
   if (benchmarkIds.length === 0) return out;
-  const { data, error } = await supabase
-    .from('ii_benchmark_series')
-    .select('benchmark_id, series_date, value')
-    .in('benchmark_id', benchmarkIds)
-    .order('series_date', { ascending: true });
-  if (error) throw new Error(`ii_benchmark_series: ${error.message}`);
-  for (const row of (data ?? []) as Array<{ benchmark_id: string; series_date: string; value: number | string }>) {
+  // PAGED: PostgREST silently caps a plain select at 1000 rows, and a daily index
+  // series is several thousand rows. A truncated series would end years before the
+  // as-of date and (read with last-observation-on-or-before) yield a wrong, stale
+  // end level with no error. Order by date then id so the paging is deterministic.
+  let rows: Array<{ benchmark_id: string; series_date: string; value: number | string; quality_status?: string | null }>;
+  try {
+    rows = await fetchAllRows(() =>
+      supabase
+        .from('ii_benchmark_series')
+        .select('benchmark_id, series_date, value, quality_status')
+        .in('benchmark_id', benchmarkIds)
+        .order('series_date', { ascending: true })
+        .order('id', { ascending: true })
+    );
+  } catch (e) {
+    throw new Error(`ii_benchmark_series: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  for (const row of rows) {
+    if (row.quality_status && row.quality_status !== 'ok') continue; // same filter the analytics loader applies
     const list = out.get(row.benchmark_id) ?? [];
     list.push({ date: new Date(row.series_date), value: Number(row.value) });
     out.set(row.benchmark_id, list);
@@ -252,4 +282,47 @@ export function resolveHoldingBenchmarkComparable(
       cagr: windowResult.cagr,
     },
   };
+}
+
+/**
+ * The holding-period, money-weighted comparison for ONE holding (see
+ * lib/engines/investment-intelligence/holdingBenchmarkComparison.ts for the
+ * method and every refusal rule). This function only assembles that engine's
+ * inputs from the loaded context; it adds no arithmetic and no gate of its own:
+ *   - entitlement comes from the same central gate (accessAllows) the rest of
+ *     this module uses, and an un-entitled benchmark reaches the engine as
+ *     `entitled: false` so no number can be produced;
+ *   - `benchmarkSeriesById` is the already-gated, scope-clamped series map.
+ * `flows` are the investor's REAL flows (purchases negative, redemptions
+ * positive) without the terminal valuation; `terminalValue` is dated `asOfDate`.
+ */
+export function resolveHoldingBenchmarkComparison(
+  ctx: InstrumentBenchmarkContext,
+  instrumentId: string,
+  flows: CashFlow[],
+  terminalValue: number,
+  asOfDate: Date,
+  currencyCode: string,
+  benchmarkSeriesById: Map<string, SeriesPoint[]>
+): HoldingBenchmarkComparison {
+  const mappings = ctx.mappingsByInstrument.get(instrumentId) ?? [];
+  const segments: BenchmarkSegmentInput[] = mappings.map((m) => {
+    const meta = ctx.metaByBenchmarkId.get(m.benchmarkId);
+    const grant = ctx.accessByBenchmarkId.get(m.benchmarkId);
+    const label = meta?.label ?? m.benchmarkKey;
+    const entitled = accessAllows(grant, 'display_comparison');
+    return {
+      benchmarkId: m.benchmarkId,
+      benchmarkKey: m.benchmarkKey,
+      label,
+      returnType: m.returnType,
+      effectiveFrom: m.effectiveFrom,
+      effectiveTo: m.effectiveTo,
+      catalogueVerified: meta?.catalogueStatus === 'verified',
+      entitled,
+      ...(entitled ? {} : { entitlementDetail: blockedReason(label, grant, 'display_comparison', ctx.accessError) }),
+      series: entitled ? (benchmarkSeriesById.get(m.benchmarkId) ?? []) : [],
+    };
+  });
+  return compareHoldingToBenchmark({ flows, terminalValue, asOfDate, currencyCode, segments });
 }

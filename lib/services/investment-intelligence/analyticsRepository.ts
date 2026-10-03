@@ -26,7 +26,7 @@ import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmar
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
-import { accessAllows, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
+import { accessAllows, blockedReason, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
 import { selectLatestEligibleNav, type NavObservationRow, type StatementPositionInput, type UnitMovementInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import { valueSchemeAcrossFolios, aggregateFolioValuationPoints, UNKNOWN_FOLIO_KEY, type FolioValuationInput } from '@/lib/engines/investment-intelligence/valuation/schemeValuation';
@@ -248,8 +248,10 @@ export async function loadAnalyticsDataset(
   }
 
   // ---- Effective-dated benchmark mapping (spec sections 30-31) ---------
-  const { mappings, benchmarkIds, mappingVersion, mappingWarnings } = await loadBenchmarkMappings(supabase, instrumentIds);
+  const { mappings, benchmarkIds, mappingVersion, mappingWarnings, benchmarkFacts } = await loadBenchmarkMappings(supabase, instrumentIds);
   warnings.push(...mappingWarnings);
+  // Per-benchmark facts for the holding-period comparison (catalogue label, verified?, entitled?).
+  const benchmarkMeta: NonNullable<AnalyticsDataset['benchmarkMeta']> = {};
 
   const benchmarkSeriesById: Record<string, SeriesPoint[]> = {};
   let benchmarkDataVersion: string | null = null;
@@ -278,6 +280,17 @@ export async function loadAnalyticsDataset(
     // certified engines already report honestly (never a fabricated 0%).
     const { access: benchmarkAccess, error: accessError } = await loadBenchmarkAccess(supabase, benchmarkIds);
     const accessNeed: AccessNeed = opts.benchmarkAccessNeed ?? 'display_comparison';
+    for (const id of benchmarkIds) {
+      const facts = benchmarkFacts.get(id);
+      const grant = benchmarkAccess.get(id);
+      const entitled = accessAllows(grant, accessNeed);
+      benchmarkMeta[id] = {
+        label: facts?.label ?? id,
+        catalogueVerified: facts?.catalogueVerified === true,
+        entitled,
+        ...(entitled ? {} : { entitlementDetail: blockedReason(facts?.label ?? 'This benchmark', grant, accessNeed, accessError) }),
+      };
+    }
     const blockedBenchmarks = benchmarkIds.filter((id) => !accessAllows(benchmarkAccess.get(id), accessNeed));
     if (blockedBenchmarks.length > 0) {
       warnings.push({
@@ -655,6 +668,7 @@ export async function loadAnalyticsDataset(
       navDataVersion,
       benchmarkDataVersion,
       benchmarkMappingVersion: mappingVersion,
+      benchmarkMeta,
       frequency: 'monthly',
     },
     warnings,
@@ -677,13 +691,26 @@ function weakestCompleteness(a: string | null, b: string | null): string | null 
 async function loadBenchmarkMappings(
   supabase: SupabaseClient,
   instrumentIds: string[]
-): Promise<{ mappings: BenchmarkMapping[]; benchmarkIds: string[]; mappingVersion: string | null; mappingWarnings: LoadWarning[] }> {
+): Promise<{
+  mappings: BenchmarkMapping[];
+  benchmarkIds: string[];
+  mappingVersion: string | null;
+  mappingWarnings: LoadWarning[];
+  benchmarkFacts: Map<string, { label: string; catalogueVerified: boolean }>;
+}> {
   const mappingWarnings: LoadWarning[] = [];
-  const { data, error } = await supabase
-    .from('ii_instrument_benchmarks')
-    .select('instrument_id, benchmark_id, relationship_type, effective_from, effective_to, mapping_version, quality_status, ii_benchmarks(benchmark_key, return_type)')
-    .in('instrument_id', instrumentIds)
-    .eq('relationship_type', 'primary');
+  const benchmarkFacts = new Map<string, { label: string; catalogueVerified: boolean }>();
+  const mappingQuery = (cols: string) =>
+    supabase.from('ii_instrument_benchmarks').select(cols).in('instrument_id', instrumentIds).eq('relationship_type', 'primary');
+  let { data, error } = await mappingQuery(
+    'instrument_id, benchmark_id, relationship_type, effective_from, effective_to, mapping_version, quality_status, ii_benchmarks(benchmark_key, return_type, benchmark_label, catalogue_status)'
+  );
+  // Older schema (no catalogue_status): fail CLOSED - every benchmark then reads as not verified.
+  if (error && /catalogue_status|benchmark_label/i.test(error.message)) {
+    ({ data, error } = await mappingQuery(
+      'instrument_id, benchmark_id, relationship_type, effective_from, effective_to, mapping_version, quality_status, ii_benchmarks(benchmark_key, return_type)'
+    ));
+  }
 
   if (error) {
     // Clean error handling (spec section 105): a reference-data schema gap
@@ -693,23 +720,26 @@ async function loadBenchmarkMappings(
       scope: 'benchmark_mapping',
       detail: `Benchmark mapping reference data is unavailable (${error.message}). Benchmark-relative figures are withheld.`,
     });
-    return { mappings: [], benchmarkIds: [], mappingVersion: null, mappingWarnings };
+    return { mappings: [], benchmarkIds: [], mappingVersion: null, mappingWarnings, benchmarkFacts };
   }
 
   const mappings: BenchmarkMapping[] = [];
   let mappingVersion: string | null = null;
   let sawAmbiguous = false;
 
-  for (const r of data ?? []) {
+  for (const r of (data ?? []) as unknown as Array<Record<string, unknown>>) {
     if (r.quality_status === 'ambiguous') {
       sawAmbiguous = true;
       continue; // an ambiguous mapping must not silently drive a comparison
     }
     if (r.quality_status === 'superseded') continue;
     const bench = (Array.isArray(r.ii_benchmarks) ? r.ii_benchmarks[0] : r.ii_benchmarks) as
-      | { benchmark_key: string; return_type: string | null }
+      | { benchmark_key: string; return_type: string | null; benchmark_label?: string | null; catalogue_status?: string | null }
       | undefined;
     if (!bench) continue;
+    if (!benchmarkFacts.has(r.benchmark_id as string)) {
+      benchmarkFacts.set(r.benchmark_id as string, { label: bench.benchmark_label ?? bench.benchmark_key, catalogueVerified: bench.catalogue_status === 'verified' });
+    }
     mappings.push({
       instrumentId: r.instrument_id as string,
       benchmarkId: r.benchmark_id as string,
@@ -728,7 +758,7 @@ async function loadBenchmarkMappings(
     });
   }
 
-  return { mappings, benchmarkIds: [...new Set(mappings.map((m) => m.benchmarkId))], mappingVersion, mappingWarnings };
+  return { mappings, benchmarkIds: [...new Set(mappings.map((m) => m.benchmarkId))], mappingVersion, mappingWarnings, benchmarkFacts };
 }
 
 async function loadRiskFreeRates(

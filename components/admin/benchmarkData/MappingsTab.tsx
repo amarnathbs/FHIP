@@ -6,6 +6,8 @@
 // scheme uses a benchmark: the evidence must be the scheme's own document.
 import { useState } from 'react';
 import type { MappingProposalView, OverviewResponse } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
+import type { UnmappedSummary } from '@/lib/services/investment-intelligence/benchmarkData/schemeMappingProposals';
+import { matchBenchmarkName, type CatalogueEntryLite } from '@/lib/services/investment-intelligence/benchmarkData/benchmarkNameMatcher';
 import { usePost, useLoad, type Say } from './api';
 import {
   CONFIDENCE_OPTIONS,
@@ -31,6 +33,7 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
   const caps = ov.capabilities;
   const dec = capabilityDecisions(caps);
   const { state, reload } = useLoad<MappingProposalView[]>(`${apiPaths.mappings()}?r=${refreshKey}`, 'load the mapping proposals');
+  const unmapped = useLoad<UnmappedSummary>(`${apiPaths.unmappedSchemes()}?r=${refreshKey}`, 'load the schemes with no mapping');
   const { busy, post } = usePost(say);
   const [form, setForm] = useState<MappingFormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -71,8 +74,39 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
 
   const rp = reviewProblem(note);
 
+  // The pure matcher, run in the browser on what the reviewer typed: it only SUGGESTS a catalogue entry.
+  // A price index is never suggested for a total-return benchmark; nothing is chosen for the reviewer.
+  const catalogueForMatch: CatalogueEntryLite[] = ov.rows.map((r) => ({
+    benchmarkId: r.catalogue.id,
+    benchmarkKey: r.catalogue.benchmarkKey,
+    officialName: r.catalogue.officialName ?? r.catalogue.label,
+    returnVariant: r.catalogue.returnVariant,
+    verified: r.catalogue.catalogueStatus === 'verified',
+    active: r.catalogue.lifecycleStatus === 'active',
+  }));
+  const nameHint = form && form.proposedBenchmarkName.trim().length >= 3 ? matchBenchmarkName(form.proposedBenchmarkName, catalogueForMatch) : null;
+
   return (
     <div className="space-y-4">
+      <Panel title="Schemes with no benchmark mapping yet" description="Counts by AMFI category. A category default is only ever a low-confidence suggestion that a reviewer must approve; it is never applied by itself, and it is never evidence for one scheme.">
+        {unmapped.state.status === 'loading' ? <LoadingPanel what="the schemes with no mapping" /> : unmapped.state.status === 'error' ? <ErrorPanel failure={unmapped.state.failure} what="the schemes with no mapping" onRetry={unmapped.reload} /> : (
+          <ScrollTable label="Schemes with no mapping, by category" minWidth="min-w-[760px]">
+            <thead><tr><Th>Category</Th><Th>Schemes (plans and options)</Th><Th>No mapping yet</Th><Th>Waiting for review</Th><Th>Category default (review only)</Th></tr></thead>
+            <tbody>
+              {unmapped.state.data.byCategory.map((c) => (
+                <tr key={c.category}>
+                  <Td>{c.category}</Td>
+                  <Td>{c.schemeRows}</Td>
+                  <Td>{c.unmappedRows}</Td>
+                  <Td>{c.openProposalRows}</Td>
+                  <Td>{c.hasCategoryDefault ? <>{c.categoryDefaultCandidates.join(' or ')}<br /><span className="text-xs text-muted">Unverified list: the scheme&apos;s own document decides.</span></> : <span className="text-xs text-muted">None available</span>}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </ScrollTable>
+        )}
+      </Panel>
+
       <Panel title="Scheme to benchmark mapping proposals" description="Each proposal carries the evidence it rests on. Only deterministic, high-confidence matches to a verified benchmark are ever published automatically; everything else waits here for a reviewer." actions={dec.canReviewMappings ? <Btn onClick={() => { setForm(emptyMappingForm()); setErrors({}); }}>Propose a mapping</Btn> : undefined}>
         {!dec.canReviewMappings ? <Notice tone="info">{dec.why.catalogue} You can read the proposals but not propose or review them.</Notice> : null}
         {proposals.length === 0 ? (
@@ -128,7 +162,7 @@ export default function MappingsTab({ ov, refreshKey, onChanged, say }: { ov: Ov
           <div className="grid gap-3 sm:grid-cols-2">
             <TextField label="Instrument id" required value={form.instrumentId} onChange={(v) => set({ instrumentId: v })} error={errors.instrumentId} hint="The scheme's instrument id (UUID)." />
             <SelectField label="Catalogue benchmark (if it exists)" value={form.benchmarkKey} onChange={(v) => set({ benchmarkKey: v })} options={ov.rows.map((r) => ({ value: r.catalogue.benchmarkKey, label: `${r.catalogue.label} (${r.catalogue.catalogueStatus})` }))} placeholder="Not in the catalogue yet" />
-            <TextField label="Benchmark name as the document states it" required value={form.proposedBenchmarkName} onChange={(v) => set({ proposedBenchmarkName: v })} error={errors.proposedBenchmarkName} />
+            <TextField label="Benchmark name as the document states it" required value={form.proposedBenchmarkName} onChange={(v) => set({ proposedBenchmarkName: v })} error={errors.proposedBenchmarkName} hint={nameHint ? (nameHint.unsupported ? 'This looks like a composite or a commodity price: one catalogue series cannot represent it.' : nameHint.best ? `Closest catalogue entry: ${nameHint.best.entry.benchmarkKey} (${nameHint.best.confidence} confidence${nameHint.best.entryVerified ? '' : ', not yet verified'}). A price index is never suggested for a total-return benchmark.` : 'No catalogue entry matches this name safely.') : undefined} />
             <SelectField label="Relationship" value={form.relationshipType} onChange={(v) => set({ relationshipType: v as MappingFormState['relationshipType'] })} options={RELATIONSHIP_OPTIONS} placeholder="Primary benchmark" />
             <DateField label="Effective from" required value={form.effectiveFrom} onChange={(v) => set({ effectiveFrom: v })} error={errors.effectiveFrom} />
             <DateField label="Effective to (empty if still in force)" value={form.effectiveTo} onChange={(v) => set({ effectiveTo: v })} error={errors.effectiveTo} />

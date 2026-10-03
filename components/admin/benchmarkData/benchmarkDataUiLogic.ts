@@ -54,6 +54,7 @@ export const apiPaths = {
   entitlementRevoke: (id: string) => `${API_BASE}/entitlements/${seg(id)}/revoke`,
   mappings: () => `${API_BASE}/mappings`,
   mappingReview: (id: string) => `${API_BASE}/mappings/${seg(id)}/review`,
+  unmappedSchemes: () => `${API_BASE}/mappings/unmapped`,
   ingestionMode: (benchmarkId: string) => `${API_BASE}/ingestion/${seg(benchmarkId)}/mode`,
 } as const;
 
