@@ -101,11 +101,10 @@ export function isReportPeriodChoice(x: unknown): x is ReportPeriodChoice {
  */
 export function reportAnalysisSpec(asOfDate: string, policy: Nav2Policy, choice: ReportPeriodChoice): AnalysisSpec {
   const base = standardAnalysisSpec(asOfDate, policy);
-  const trailing: PointToPointRequest[] = [
-    { id: '1Y', start: subtractMonthsIso(asOfDate, 12), end: asOfDate },
-    { id: '3Y', start: subtractMonthsIso(asOfDate, 36), end: asOfDate },
-    { id: '5Y', start: subtractMonthsIso(asOfDate, 60), end: asOfDate },
-  ];
+  // The trailing periods shown are bounded by the choice, so a short choice never forces a long history fetch: "Last 1 year" asks
+  // for 1Y only, "Last 3 years" for 1Y and 3Y; every other choice (since first held, 5 years, all history) shows 1Y, 3Y and 5Y.
+  const months = choice === '1y' ? [12] : choice === '3y' ? [12, 36] : [12, 36, 60];
+  const trailing: PointToPointRequest[] = months.map((m) => ({ id: `${m / 12}Y`, start: subtractMonthsIso(asOfDate, m), end: asOfDate }));
   const fixedStart = choice === '1y' ? subtractMonthsIso(asOfDate, 12) : choice === '3y' ? subtractMonthsIso(asOfDate, 36) : choice === '5y' ? subtractMonthsIso(asOfDate, 60) : null;
   return { ...base, pointToPoint: trailing, analysisStart: fixedStart };
 }
