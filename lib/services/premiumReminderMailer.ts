@@ -2,12 +2,14 @@
 //
 // REUSES THE REPO'S EXISTING PRODUCTION MAIL PATH: Resend over its HTTPS API with
 // RESEND_API_KEY, exactly as the Contact form does (app/api/contact/route.ts),
-// with the sender taken from PREMIUM_REMINDER_FROM_EMAIL, falling back to
+// with the sender ADDRESS taken from PREMIUM_REMINDER_FROM_EMAIL, falling back to
 // CONTACT_FROM_EMAIL, falling back to the same default address the Contact route
-// uses. No new provider, no new dependency.
+// uses, and a SEPARATE display name (PREMIUM_PROMO_EMAIL_FROM_NAME, default "FHIP"). No new provider, no new dependency.
 //
 // INJECTABLE. The runner takes a `Mailer`; tests pass a fake, so no test can send
 // real mail. Nothing here logs the recipient or the body.
+
+import { buildFromHeader, DEFAULT_FROM_ADDRESS } from '@/lib/services/mailFromHeader';
 
 export interface OutgoingMail {
   to: string;
@@ -32,13 +34,16 @@ export interface Mailer {
   send(mail: OutgoingMail): Promise<MailResult>;
 }
 
-const DEFAULT_FROM = 'FHIP <no-reply@auth.financialhealthplatform.com>';
+const DEFAULT_FROM = `FHIP <${DEFAULT_FROM_ADDRESS}>`;
 
 export function createResendMailer(env: Record<string, string | undefined> = process.env, fetchImpl: typeof fetch = fetch): Mailer {
   const apiKey = env.RESEND_API_KEY;
   return {
     configured: () => Boolean(apiKey),
-    from: () => env.PREMIUM_REMINDER_FROM_EMAIL || env.CONTACT_FROM_EMAIL || DEFAULT_FROM,
+    // The ADDRESS is unchanged (PREMIUM_REMINDER_FROM_EMAIL, else CONTACT_FROM_EMAIL, else the default); only the
+    // display name is replaced, so these e-mails read "FHIP" rather than the Contact form's display name.
+    // Name: PREMIUM_PROMO_EMAIL_FROM_NAME (default "FHIP"), sanitised against header injection.
+    from: () => buildFromHeader(env.PREMIUM_REMINDER_FROM_EMAIL || env.CONTACT_FROM_EMAIL || DEFAULT_FROM, env.PREMIUM_PROMO_EMAIL_FROM_NAME),
     async send(mail) {
       if (!apiKey) return { ok: false, error: 'mailer_not_configured' };
       try {
