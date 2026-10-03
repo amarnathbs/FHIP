@@ -201,3 +201,46 @@ describe('own reports only (NC-S6, matrix 46)', () => {
     expect((await listFundAnalyticsReports(db.client as never, USER)).map((r) => r.versionNumber)).toEqual([1]);
   });
 });
+
+describe('the NAV2 planner step (only with nav2_trigger_planner ON) (NC-S7)', () => {
+  const plan = (toFetch: string[], over: Record<string, unknown> = {}) => ({ windows: [{ instrumentId: ID_A }, { instrumentId: ID_B }], fetch: { toFetch: toFetch.map((instrumentId) => ({ instrumentId, fromDate: '2020-01-01', toDate: AS_OF, chunkCount: 3 })), alreadyCovered: [], inCooldown: [], deferred: [], ...over }, requiredFromOverrides: new Map(), policyVersion: NAV2_POLICY.version }) as never;
+
+  it('switch OFF: the planner is never consulted and generation proceeds exactly as before', async () => {
+    const planPeriod = vi.fn(async () => plan([ID_A]));
+    const kickPeriod = vi.fn(() => true);
+    const { call, load } = setup({ plannerOn: async () => false, planPeriod, kickPeriod });
+    expect((await call()).status).toBe('ready');
+    expect(planPeriod).not.toHaveBeenCalled();
+    expect(kickPeriod).not.toHaveBeenCalled();
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('switch ON with missing history that could be fetched: kicks the fetch, answers preparing, and loads and writes nothing', async () => {
+    const kickPeriod = vi.fn(() => true);
+    const { db, call, load } = setup({ plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod });
+    db.tables.ii_instruments = [{ id: ID_A, instrument_name: 'Alpha Fund' }];
+    const r = await call('5y');
+    expect(r.status).toBe('preparing');
+    if (r.status === 'preparing') {
+      expect(r.waiting).toMatchObject({ waiting: true, total: 2, waitingFunds: ['Alpha Fund'] });
+      expect(r.message).toMatch(/period you chose/);
+    }
+    expect(kickPeriod).toHaveBeenCalledWith(USER, '5y');
+    expect(load).not.toHaveBeenCalled();
+    expect(db.writes.filter((w) => w.table === 'nav2_fund_analytics_reports')).toEqual([]);
+  });
+
+  it('switch ON but nothing to fetch (covered, in cooldown or deferred-only): generation proceeds', async () => {
+    const kickPeriod = vi.fn(() => true);
+    const { call } = setup({ plannerOn: async () => true, planPeriod: async () => plan([], { inCooldown: [ID_A] }), kickPeriod });
+    expect((await call()).status).toBe('ready');
+    expect(kickPeriod).not.toHaveBeenCalled();
+  });
+
+  it('NC-S7: a fetch that could NOT be scheduled never holds the report (it proceeds, honestly labelled), and a planner failure never blocks it', async () => {
+    const a = setup({ plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod: () => false });
+    expect((await a.call()).status).toBe('ready');
+    const b = setup({ plannerOn: async () => true, planPeriod: async () => { throw new Error('planner exploded'); }, kickPeriod: () => true });
+    expect((await b.call()).status).toBe('ready');
+  });
+});

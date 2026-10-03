@@ -4,6 +4,10 @@
 //   1. the feature switch (job-control row nav2_fund_analytics; OFF unless the row exists and is enabled)  -> 'disabled'
 //   2. Premium (getPlanTier on the service client, honouring the entitlement validity window)             -> 'forbidden'
 //   3. the report NAV gate (price history still being prepared; starts the bounded retry + the user fetch) -> 'preparing'
+//   3b. ONLY when the nav2_trigger_planner switch is ON: the history the CHOSEN PERIOD needs (the NAV2 required window per
+//      held scheme) is planned read-only; if some of it is missing and its fetch could be started, the answer is 'preparing'
+//      (a failed attempt goes into the existing cooldown, so this cannot hold forever; a fetch that could not be scheduled
+//      never holds). Switch OFF: this step does not exist and generation behaves exactly as before.
 //   4. the household holds at least one Indian mutual fund this report covers                              -> 'no_funds'
 //   5. build the report (pure), reuse the shared scheme-performance cache, persist the pinned row.
 //
@@ -17,11 +21,13 @@ import { isReportPeriodChoice, type ReportPeriodChoice } from '@/lib/engines/nav
 import { buildFundAnalyticsReport, compactSchemeFamily, manifestChecksum, schemeBundleCacheKey, schemeBundleCacheParts, type FundAnalyticsInput, type FundAnalyticsManifest, type FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { getPlanTier } from '@/lib/services/entitlements';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
-import { checkReportNavHistoryGate, waitingBody, type ReportNavGate } from '../pc6/reportNavHistoryGate';
+import { checkReportNavHistoryGate, REPORT_NAV_RETRY_WINDOW_MINUTES, waitingBody, type ReportNavGate } from '../pc6/reportNavHistoryGate';
 import { kickUserNavHistory } from '../pc6/userNavHistoryKick';
 import { loadFundAnalyticsInput, type FundAnalyticsLoadResult } from './fundAnalyticsLoader';
 import { isNav2FlagOn, NAV2_JOB_KEYS } from './nav2Flags';
 import { readCachedBundles, writeCachedBundles, type CacheWrite } from './nav2ResultCacheStore';
+import { kickNav2ReportPeriod, planForReportPeriod } from './nav2TriggerRunner';
+import type { Nav2WindowPlan } from './windowPlannerService';
 
 export const FUND_ANALYTICS_DISABLED_MESSAGE = 'The Fund analytics report is not available yet.';
 export const FUND_ANALYTICS_PREMIUM_MESSAGE = 'The Fund analytics report is part of the Premium plan.';
@@ -49,6 +55,12 @@ export interface FundAnalyticsDeps {
   gate: (args: { admin: SupabaseClient; userId: string; today: string }) => Promise<ReportNavGate>;
   load: (args: Parameters<typeof loadFundAnalyticsInput>[0]) => Promise<FundAnalyticsLoadResult>;
   nowIso: () => string;
+  /** The nav2_trigger_planner switch (OFF unless its row exists and is enabled). */
+  plannerOn: (admin: SupabaseClient) => Promise<boolean>;
+  /** Read-only: the NAV2 window plan the chosen period needs for this user. */
+  planPeriod: (args: { admin: SupabaseClient; userId: string; period: ReportPeriodChoice; today: string }) => Promise<Nav2WindowPlan>;
+  /** Start the planned fetch after the response; false when it could not be scheduled. */
+  kickPeriod: (userId: string, period: ReportPeriodChoice) => boolean;
 }
 
 const defaultDeps: FundAnalyticsDeps = {
@@ -57,6 +69,9 @@ const defaultDeps: FundAnalyticsDeps = {
   gate: ({ admin, userId, today }) => checkReportNavHistoryGate({ db: admin as never, userId, today, createAnchor: true, kick: kickUserNavHistory }),
   load: loadFundAnalyticsInput,
   nowIso: () => new Date().toISOString(),
+  plannerOn: (admin) => isNav2FlagOn(admin, NAV2_JOB_KEYS.triggerPlanner),
+  planPeriod: ({ admin, userId, period, today }) => planForReportPeriod(admin, userId, period, today),
+  kickPeriod: (userId, period) => kickNav2ReportPeriod(userId, period),
 };
 
 /** Parses the requested period; anything unrecognised is the default (never an error that leaks internals). */
@@ -102,6 +117,28 @@ export async function generateFundAnalyticsReport(args: {
 
   const gate = await deps.gate({ admin, userId: args.userId, today: asOfDate });
   if (gate.hold) return { status: 'preparing', message: gate.headline ?? 'Price history is being prepared.', waiting: waitingBody(gate) };
+
+  if (await deps.plannerOn(admin)) {
+    let plan: Nav2WindowPlan | null = null;
+    try {
+      plan = await deps.planPeriod({ admin, userId: args.userId, period: periodChoice, today: asOfDate });
+    } catch {
+      plan = null; // a planning problem never blocks the report: it proceeds and says honestly what history it has
+    }
+    if (plan && plan.fetch.toFetch.length > 0 && deps.kickPeriod(args.userId, periodChoice)) {
+      const ids = plan.fetch.toFetch.map((f) => f.instrumentId);
+      const { data: named } = await admin.from('ii_instruments').select('id, instrument_name').in('id', ids);
+      const names = new Map(((named ?? []) as Array<{ id: string; instrument_name: string }>).map((r) => [r.id, r.instrument_name]));
+      const total = plan.windows.length;
+      const loadedCount = total - plan.fetch.toFetch.length - plan.fetch.deferred.length - plan.fetch.inCooldown.length;
+      const headline = `Price history for the period you chose is being prepared (${Math.max(0, loadedCount)} of ${total} ${total === 1 ? 'fund' : 'funds'} ready)`;
+      return {
+        status: 'preparing',
+        message: headline,
+        waiting: { waiting: true, headline, loaded: Math.max(0, loadedCount), total, waitingFunds: ids.map((id) => names.get(id) ?? 'A fund you hold'), unavailableFunds: [], retryWindowMinutes: REPORT_NAV_RETRY_WINDOW_MINUTES },
+      };
+    }
+  }
 
   const loaded = await deps.load({ userId: args.userId, sessionClient: args.sessionClient, adminClient: admin, asOfDate, displayCurrency: 'INR', periodChoice, gate });
   if (!loaded.input || loaded.input.schemes.length === 0) return { status: 'no_funds', message: FUND_ANALYTICS_NO_FUNDS_MESSAGE };
