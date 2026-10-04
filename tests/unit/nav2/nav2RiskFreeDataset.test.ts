@@ -10,8 +10,9 @@
 //   NC-RF1  no future-dated rate is ever used (an observation dated after the lookup date is invisible),
 //           and a future-dated observation in the dataset is rejected outright;
 //   NC-RF2  no interpolation between auctions: a mid-week date carries the earlier auction's yield exactly;
-//   NC-RF3  a gap larger than the staleness constant (21 days weekly T-bill) is risk_free_missing for those
-//           dates, and the WHOLE ratio is withheld, not part-filled;
+//   NC-RF3  a gap larger than the staleness constant (21 days weekly T-bill) leaves those dates without a rate; since
+//           04-10-2026 the ratio is computed over the dates that HAVE one only while at least 95% of the window's return
+//           observations do, otherwise it is risk_free_missing (the rule that replaced "one date fails, the whole ratio fails");
 //   NC-RF4  switching the series (T-bill -> repo) changes Sharpe / Sortino / alpha to the other hand-computed values;
 //   NC-RF5  an empty / disabled / terms-declined series gives risk_free_missing, never a ratio with rf = 0
 //           (and the rf = 0 figure is shown to differ, so the control is not vacuous).
@@ -158,7 +159,7 @@ describe('matched risk-free returns for a return series (the engine side)', () =
   const ctx = ctxInr();
   const extras = { instrumentId: 'x' };
 
-  it('NC-RF3: a gap beyond the staleness constant makes those dates risk_free_missing (risk_free_stale) and the WHOLE match fails', () => {
+  it('NC-RF3: a gap beyond the staleness constant leaves those dates without a rate; below 95% coverage the match is risk_free_missing (risk_free_stale)', () => {
     // observations 2025-01-06 and then nothing until 2025-02-03: intervals starting after 2025-01-27 have no rate in force
     const gappy = dataset({ observations: [obs('2025-01-06', 6.5), obs('2025-02-03', 6.5)] });
     const long = buildReturns(weekdays('2025-01-06', 25).map((date, i) => ({ date, value: 100 + i })));
@@ -167,7 +168,8 @@ describe('matched risk-free returns for a return series (the engine side)', () =
     if (m.ok) throw new Error('unreachable');
     expect(m.result.state).toBe('risk_free_missing');
     expect(m.result.reason).toBe('risk_free_stale');
-    expect(m.result.detail).toContain('21 days');
+    expect(m.result.detail).toContain('Only 20 of 24 return periods (83.3%)');
+    expect(m.result.detail).toContain('at least 95%');
     expect(m.result.detail).not.toMatch(ISO_DATE_IN_TEXT);
     // control: the SAME series is fully covered when the gap is closed
     const covered = dataset({ observations: [obs('2025-01-06', 6.5), obs('2025-01-20', 6.5), obs('2025-02-03', 6.5)] });
@@ -396,7 +398,7 @@ describe('policy_change series (the repo rate): changes only, freshness is the v
     const lapsed = sharpeRatio(scheme, ctxInr(), repoDataset(6.0, { verifiedThroughDate: '2024-12-10' })); // 90 days later is 10-03-2025; the window runs to 28-03-2025
     expect(lapsed.state).toBe('risk_free_missing');
     expect(lapsed.state === 'risk_free_missing' && lapsed.reason).toBe('risk_free_stale');
-    expect(lapsed.state !== 'available' && lapsed.detail).toContain('10-12-2024');
+    expect(lapsed.state !== 'available' && lapsed.detail).toContain('Only 46 of 60 return periods');
     expect(sharpeRatio(scheme, ctxInr(), repoDataset(6.0, { verifiedThroughDate: null })).state).toBe('risk_free_missing');
   });
 });

@@ -207,3 +207,29 @@ describe('commit (NC-C5, NC-C6)', () => {
     await expect(commitRiskFreeUpload(failing, base)).rejects.toMatchObject({ code: '42501' });
   });
 });
+
+describe('a separate file of documented gap rows (the first-load gaps CSV)', () => {
+  const GH = `${HEAD},kind,gap_reason`;
+  const gline = (date: string, reason: string) => `${T},${date},,weekly_auction,"SYNTHETIC gap row",,2026-10-03,,gap,${reason}`;
+  it('loads gap rows of all three reasons, sorted; a gap-only file raises no weekly-spacing warning', () => {
+    const a = parseRiskFreeCsv([GH, gline('2025-12-31', 'no_row_in_source'), gline('2023-03-29', 'no_accepted_bids'), gline('2024-09-18', 'no_auction_held')].join('\n'), T, 'weekly_auction', TODAY);
+    expect(a.rejected).toEqual([]);
+    expect(a.accepted.map((r) => [r.date, r.kind, r.value_percent, r.gap_reason])).toEqual([
+      ['2023-03-29', 'gap', null, 'no_accepted_bids'],
+      ['2024-09-18', 'gap', null, 'no_auction_held'],
+      ['2025-12-31', 'gap', null, 'no_row_in_source'],
+    ]);
+    expect(a.warnings).toEqual([]);
+  });
+  it('an unknown reason is refused and names the three valid ones', () => {
+    const a = parseRiskFreeCsv([GH, gline('2025-12-31', 'because')].join('\n'), T, 'weekly_auction', TODAY);
+    expect(a.rejected[0]).toMatchObject({ code: 'bad_gap_reason' });
+    expect(a.rejected[0].message).toMatch(/no_row_in_source/);
+  });
+  it('a gap on a date that already holds a value is a conflict that blocks the upload (a gap never replaces a value)', async () => {
+    const db = world([stored('2025-12-31', 5.3)]);
+    const plan = await planRiskFreeUpload(db.client as unknown as SupabaseClient, { seriesId: T, csvText: [GH, gline('2025-12-31', 'no_row_in_source')].join('\n'), todayIso: TODAY });
+    expect(plan.conflicts).toHaveLength(1);
+    expect(plan.blockers.join(' ')).toMatch(/already hold a different published value/);
+  });
+});

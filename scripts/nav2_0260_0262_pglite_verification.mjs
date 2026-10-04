@@ -115,6 +115,10 @@ const r7 = await asRole('authenticated', U.up, call('3'.repeat(64), [row('2026-0
 check('NEGATIVE CONTROL: no attestation is refused', !r7.ok && /attestation/.test(r7.msg), JSON.stringify(r7));
 const r8 = await asRole('authenticated', U.up, call('4'.repeat(64), [{ ...row('2026-09-05', null), kind: 'gap', gap_reason: 'no_accepted_bids' }]));
 check('a GAP row (no accepted bids) is stored with no value', r8.ok && (await one(`select (value_percent is null)::boolean v from ii_risk_free_observations where observation_date='2026-09-05'`)).v === true, JSON.stringify(r8));
+const rg1 = await asRole('authenticated', U.up, call('7'.repeat(64), [{ ...row('2026-08-26', null), kind: 'gap', gap_reason: 'no_row_in_source' }, { ...row('2026-08-19', null), kind: 'gap', gap_reason: 'no_auction_held' }]));
+check('documented gap rows with the reasons no_row_in_source and no_auction_held are stored with no value (a documented gap carries a rate forward in the engine; it is never a value)', rg1.ok && rg1.v.inserted === 2 && (await one(`select count(*)::int v from ii_risk_free_observations where kind = 'gap' and value_percent is null and gap_reason in ('no_row_in_source','no_auction_held')`)).v === 2, JSON.stringify(rg1));
+const rg2 = await asRole('authenticated', U.up, call('8'.repeat(64), [{ ...row('2026-08-12', null), kind: 'gap', gap_reason: 'because_i_say_so' }]));
+check('NEGATIVE CONTROL: an unknown gap reason is refused', !rg2.ok && /fail validation/.test(rg2.msg), JSON.stringify(rg2));
 const r9 = await asRole('authenticated', U.up, call('5'.repeat(64), [{ ...row('2026-09-06', 5.1), kind: 'gap', gap_reason: 'no_accepted_bids' }]));
 check('NEGATIVE CONTROL: a gap row carrying a value is refused', !r9.ok, JSON.stringify(r9));
 const r10 = await asRole('authenticated', U.up, call('6'.repeat(64), [row('2026-09-07', 5.1), row('2026-09-07', 5.2)]));

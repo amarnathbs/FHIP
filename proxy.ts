@@ -108,7 +108,11 @@ export async function proxy(request: NextRequest) {
   // waives the blanket session redirect for that one exact route shape;
   // the token itself is verified against report_exports inside
   // app/(app)/reports/[id]/print/page.tsx (getReportByRenderToken), not here.
-  const isTokenAuthorizedPrintRoute = /^\/reports\/[^/]+\/print$/.test(pathname) && request.nextUrl.searchParams.has('token');
+  // Exactly three shapes, each with a token query parameter that its own page verifies: /reports/<id>/print (Monthly / Premium report),
+  // /reports/fund-analytics/print (NAV2 Fund analytics, matched by the first shape) and /forecast/report/print (the Consolidated
+  // Forecasting Report's PDF renderer, whose headless browser also has no session; its page checks the token against
+  // forecast_report_render_tokens and sends a request without a valid token to /login).
+  const isTokenAuthorizedPrintRoute = /^\/(reports\/[^/]+|forecast\/report)\/print$/.test(pathname) && request.nextUrl.searchParams.has('token');
 
   if (isAppRoute && !user && !isTokenAuthorizedPrintRoute) {
     return NextResponse.redirect(new URL('/login', request.url));

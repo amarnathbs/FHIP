@@ -115,6 +115,21 @@ export interface Nav2Policy {
   riskFreeMaxStalenessDays: Record<string, number>;
 
   /**
+   * How a weekly risk-free series is read across DOCUMENTED RBI gaps, and how a ratio treats the dates that have no rate (PO decision
+   * 04-10-2026). A gap row means "no cut-off exists for that date" (no accepted bids, or the publication lists no row).
+   *   * A rate carries forward across documented gap rows, for at most `maxCarryAcrossDocumentedGapDays` calendar days from the last
+   *     VALUE observation, and only while the records (values and gap rows) from that observation to the date are no further than
+   *     `documentedGapMaxRecordSpacingDays` apart. An undocumented hole never carries; beyond the limit the date has no rate.
+   *   * A ratio is computed over the return observations that have a rate, provided at least `minWindowCoverageShare` of the window's
+   *     return observations have one; otherwise it is `risk_free_missing`. The count of excluded observations is always disclosed.
+   */
+  riskFreeGaps: {
+    maxCarryAcrossDocumentedGapDays: number;
+    documentedGapMaxRecordSpacingDays: number;
+    minWindowCoverageShare: number;
+  };
+
+  /**
    * Beta and alpha benchmark rules (PO decision 04-10-2026). The read-time CATEGORY REFERENCE table is UNVERIFIED and no
    * licensed series exists, so beta and alpha are shown ONLY for a DECLARED benchmark (admin / factsheet published) that is
    * verified, total-return, entitled and has a series; otherwise `benchmark_missing`. Flip only when the category table is
@@ -178,6 +193,7 @@ export const NAV2_POLICY: Nav2Policy = {
     reconstructionBufferDays: 10,
   },
   riskFreeMaxStalenessDays: { ...RISK_FREE_MAX_STALENESS_DAYS },
+  riskFreeGaps: { maxCarryAcrossDocumentedGapDays: 35, documentedGapMaxRecordSpacingDays: 14, minWindowCoverageShare: 0.95 },
   benchmark: { allowCategoryReference: false },
   conventions: {
     riskFreeConversion: 'compound_per_period_1_over_n',

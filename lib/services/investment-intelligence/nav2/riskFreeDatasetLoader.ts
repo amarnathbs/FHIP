@@ -31,7 +31,7 @@ export interface RiskFreeObservationRow {
   observation_date: string;
   kind: 'value' | 'gap';
   value_percent: number | string | null;
-  gap_reason: 'no_accepted_bids' | 'no_auction_held' | null;
+  gap_reason: 'no_accepted_bids' | 'no_auction_held' | 'no_row_in_source' | null;
   source_document: string;
   source_url: string | null;
   retrieved_on: string;

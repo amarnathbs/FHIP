@@ -34,6 +34,10 @@ MUTATIONS = [
     ('S15 a switch read error counts as ON', N + 'nav2Flags.ts', "if (error) return false;", "if (error) return true;", T + 'nav2FundAnalyticsService.test.ts'),
     ('S16 correction worker: no event is ever marked processed', N + 'nav2ResultCacheStore.ts', ".update({ processed_at: nowIso, entries_invalidated: invalidated })", ".update({ entries_invalidated: invalidated })", T + 'nav2CacheWorkerAndRiskFreeLoader.test.ts'),
     ('S17 risk-free dataset version ignores the observations', N + 'riskFreeDatasetLoader.ts', "obs: obs.map((o) => [o.observationDate, o.kind, o.yieldPercent, o.gapReason])", "obs: 0", T + 'nav2CacheWorkerAndRiskFreeLoader.test.ts'),
+    ('S19 a rate carries across an UNDOCUMENTED hole', 'lib/engines/nav2/riskFree.ts', "if (fullyDocumented) return", "if (true) return", T + 'nav2RiskFreeGapCarry.test.ts'),
+    ('S20 the 35-day carry limit is not enforced', 'lib/engines/nav2/riskFree.ts', "age <= rule.gapCarry.maxCarryDays", "age <= 99999", T + 'nav2RiskFreeGapCarry.test.ts'),
+    ('S21 the 95% window-coverage rule is not enforced', 'lib/engines/nav2/riskFree.ts', "share < gaps.minWindowCoverageShare", "share < 0", T + 'nav2RiskFreeGapCarry.test.ts'),
+    ('S22 one date without a rate drops the whole window again (old rule)', 'lib/engines/nav2/riskFree.ts', "periodic.length === 0 || share < gaps.minWindowCoverageShare", "periodic.length === 0 || excluded.length > 0", T + 'nav2RiskFreeGapCarry.test.ts'),
     ('S18 print route opens the report for the session user, not the token user', 'app/(print)/reports/fund-analytics/print/page.tsx', "getFundAnalyticsReport(admin as never, resolved.userId, resolved.reportId)", "getFundAnalyticsReport(admin as never, 'someone-else', resolved.reportId)", T + 'nav2FundAnalyticsRoutes.test.ts'),
 ]
 

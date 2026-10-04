@@ -147,7 +147,7 @@ create table if not exists ii_risk_free_observations (
   observation_date date not null,
   kind text not null default 'value' check (kind in ('value', 'gap')),
   value_percent numeric(9, 4),
-  gap_reason text check (gap_reason is null or gap_reason in ('no_accepted_bids', 'no_auction_held')),
+  gap_reason text check (gap_reason is null or gap_reason in ('no_accepted_bids', 'no_auction_held', 'no_row_in_source')),
   source_document text not null check (length(trim(source_document)) > 0),
   source_url text,
   retrieved_on date not null,
@@ -260,7 +260,7 @@ create trigger trg_ii_risk_free_state_log_no_change before update or delete on i
 -- ---------------------------------------------------------------------------
 -- 6. commit_risk_free_upload -- the admin CSV write path
 --    p_rows: [{ "date": "yyyy-mm-dd", "value_percent": 5.5199 | null, "kind": "value"|"gap",
---               "gap_reason": null|"no_accepted_bids"|"no_auction_held", "source_document": "...",
+--               "gap_reason": null|"no_accepted_bids"|"no_auction_held"|"no_row_in_source", "source_document": "...",
 --               "source_url": "..."|null, "retrieved_on": "yyyy-mm-dd", "notes": "..."|null }]
 --    A row for an existing (series, date) with the SAME value is an identical skip; with a DIFFERENT
 --    value the whole upload is refused (a published value is changed only by correct_risk_free_observation()).
@@ -350,7 +350,7 @@ begin
       or doc is null or length(trim(doc)) = 0
       or kind not in ('value', 'gap')
       or (kind = 'value' and (v is null or v < 0 or v > 100 or gap_reason is not null))
-      or (kind = 'gap' and (v is not null or gap_reason not in ('no_accepted_bids', 'no_auction_held')));
+      or (kind = 'gap' and (v is not null or gap_reason not in ('no_accepted_bids', 'no_auction_held', 'no_row_in_source')));
   if v_bad > 0 then
     raise exception 'risk-free upload: % row(s) fail validation (date, value range, future date, source document or gap rules)', v_bad using errcode = '22023';
   end if;

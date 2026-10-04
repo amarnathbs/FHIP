@@ -104,6 +104,8 @@ export type Nav2DisclosureCode =
   | 'benchmark_basis'
   | 'risk_free_series_used'
   | 'risk_free_terms_pending'
+  | 'risk_free_carried_across_documented_gap'
+  | 'risk_free_periods_excluded'
   | 'unrecoverable_history_period'
   | 'cagr_not_shown_under_one_year'
   | 'rolling_summary_withheld'
@@ -173,6 +175,18 @@ export interface RiskFreeProvenance {
   maxYieldPercent: number | null;
   /** One printable sentence naming the rate, the dates, the source and the conversion. */
   disclosureText: string;
+  /** Return observations of the window that had NO rate and were left out of the ratio (0 when every one had a rate). */
+  periodsExcluded: number;
+  /** Up to ten of the excluded observation start dates, ascending. */
+  excludedDates: string[];
+  /** Return observations of the window in total, and the share that had a rate (the policy requires at least minWindowCoverageShare). */
+  windowReturnCount: number;
+  windowCoverageShare: number;
+  /** Return observations that used a rate CARRIED across a documented RBI gap (a gap row means no cut-off exists for that date); 0 if none. */
+  periodsCarriedAcrossDocumentedGap: number;
+  /** The documented gap dates the carried rates crossed (up to twenty, ascending) and the policy limit in calendar days. */
+  documentedGapDatesCrossed: string[];
+  maxCarryAcrossDocumentedGapDays: number;
 }
 
 export interface Nav2Provenance {

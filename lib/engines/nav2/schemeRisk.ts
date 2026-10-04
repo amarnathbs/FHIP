@@ -163,7 +163,8 @@ export function sharpeRatio(
   if (!p.ok) return p.result;
   const rf = matchRiskFree(p.returns, riskFree, ctx, 'sharpe_ratio', p.extras, frequency);
   if (!rf.ok) return rf.result;
-  const excess = p.returns.map((r, i) => r.simple - rf.periodic[i]);
+  // Only the return observations that have a rate enter the ratio (rf.select keeps the same observations as rf.periodic).
+  const excess = rf.select(p.returns).map((r, i) => r.simple - rf.periodic[i]);
   const sd = sampleStdDev(excess);
   const prov = makeProvenance(ctx, 'sharpe_ratio', { ...p.extras, riskFree: rf.provenance });
   if (!(sd > ctx.policy.zeroVarianceEpsilon)) {
@@ -200,7 +201,7 @@ export function sortinoRatio(
   if (!p.ok) return p.result;
   const rf = matchRiskFree(p.returns, riskFree, ctx, 'sortino_ratio', p.extras, frequency);
   if (!rf.ok) return rf.result;
-  const excess = p.returns.map((r, i) => r.simple - rf.periodic[i]); // MAR = the matched risk-free return
+  const excess = rf.select(p.returns).map((r, i) => r.simple - rf.periodic[i]); // MAR = the matched risk-free return, over the observations that have one
   const downside = excess.map((x) => Math.min(0, x) ** 2);
   const dd = Math.sqrt(downside.reduce((s, x) => s + x, 0) / excess.length);
   const prov = makeProvenance(ctx, 'sortino_ratio', { ...p.extras, riskFree: rf.provenance });
@@ -413,20 +414,23 @@ export function jensenAlpha(
   const rf = matchRiskFree(a.schemeReturns, riskFree, ctx, 'jensen_alpha', a.extras, frequency);
   if (!rf.ok) return rf.result;
   const prov = makeProvenance(ctx, 'jensen_alpha', { ...a.extras, riskFree: rf.provenance, convention: { ...a.extras.convention, alpha: 'jensen_single_factor', alphaAnnualisation: ctx.policy.conventions.alphaAnnualisation, riskFreeConversion: ctx.policy.conventions.riskFreeConversion } });
+  // The means are over the SAME observations that have a rate; beta stays the one computed on every common return.
+  const fKept = rf.select(f);
+  const bKept = rf.select(b);
   const rfBar = mean(rf.periodic);
-  const alphaPeriodic = mean(f) - (rfBar + betaResult.value.beta * (mean(b) - rfBar));
+  const alphaPeriodic = mean(fKept) - (rfBar + betaResult.value.beta * (mean(bKept) - rfBar));
   const ppy = ctx.policy.periodsPerYear[frequency];
   const bench = a.extras.benchmark!;
   const disclosures = [...a.disclosures, ...rf.disclosures];
-  const bp = belowPreferred(f.length, ctx.policy.minimums.betaAlphaPreferredReturns);
+  const bp = belowPreferred(fKept.length, ctx.policy.minimums.betaAlphaPreferredReturns);
   if (bp) disclosures.push(bp);
   return available(
     {
       beta: betaResult.value.beta,
-      commonReturnCount: f.length,
+      commonReturnCount: fKept.length,
       frequency,
-      meanSchemeReturn: mean(f),
-      meanBenchmarkReturn: mean(b),
+      meanSchemeReturn: mean(fKept),
+      meanBenchmarkReturn: mean(bKept),
       meanRiskFreeReturn: rfBar,
       alphaPeriodic,
       alphaAnnualised: alphaPeriodic * ppy,

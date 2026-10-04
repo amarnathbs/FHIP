@@ -37,7 +37,7 @@
 
 import { RISK_FREE_MAX_STALENESS_DAYS } from './metricPolicy';
 
-export const NAV2_RISK_FREE_CONFIG_VERSION = 'nav2-risk-free-config-v2';
+export const NAV2_RISK_FREE_CONFIG_VERSION = 'nav2-risk-free-config-v3';
 
 export type RiskFreeSeriesId = keyof typeof RISK_FREE_MAX_STALENESS_DAYS;
 

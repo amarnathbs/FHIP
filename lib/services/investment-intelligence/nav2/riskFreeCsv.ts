@@ -7,7 +7,7 @@
 //   One file = ONE series (the series chosen on the screen). `series_id` in every row must match it, and
 //   `frequency`, when present, must match the series cadence (weekly_auction / policy_change).
 //   A GAP row (an auction with no accepted bids, or none held) has an empty value_percent and a gap_reason
-//   (no_accepted_bids | no_auction_held); it explains a missing week and is never a rate.
+//   (no_accepted_bids | no_auction_held | no_row_in_source); it explains a missing week and is never a rate.
 //
 // DATES. yyyy-mm-dd, or day-first dd-mm-yyyy / dd/mm/yyyy (month-first is NOT supported). Every date must be a
 // real calendar date. An observation may not be dated after its own retrieved_on (a future-dated rate) nor after today.
@@ -49,7 +49,7 @@ export interface RiskFreeCsvRow {
   date: string;
   kind: 'value' | 'gap';
   value_percent: number | null;
-  gap_reason: 'no_accepted_bids' | 'no_auction_held' | null;
+  gap_reason: 'no_accepted_bids' | 'no_auction_held' | 'no_row_in_source' | null;
   source_document: string;
   source_url: string | null;
   retrieved_on: string;
@@ -149,8 +149,8 @@ export function parseRiskFreeCsv(csvText: string, seriesId: string, cadence: 'we
     if (isGap) {
       kind = 'gap';
       if (rawValue !== '') return reject('gap_with_value', 'A gap row (no accepted bids / no auction) must not carry a rate.', date);
-      if (gapReason === '') return reject('gap_without_reason', 'A gap row needs a gap_reason (no_accepted_bids or no_auction_held).', date);
-      if (gapReason !== 'no_accepted_bids' && gapReason !== 'no_auction_held') return reject('bad_gap_reason', `gap_reason "${gapReason}" is not one of no_accepted_bids, no_auction_held.`, date);
+      if (gapReason === '') return reject('gap_without_reason', 'A gap row needs a gap_reason (no_accepted_bids, no_auction_held or no_row_in_source).', date);
+      if (gapReason !== 'no_accepted_bids' && gapReason !== 'no_auction_held' && gapReason !== 'no_row_in_source') return reject('bad_gap_reason', `gap_reason "${gapReason}" is not one of no_accepted_bids, no_auction_held, no_row_in_source.`, date);
       reason = gapReason;
     } else {
       if (!VALUE_RE.test(rawValue)) return reject('bad_value', `"${rawValue}" is not a plain percent number.`, date);
@@ -181,7 +181,8 @@ export function parseRiskFreeCsv(csvText: string, seriesId: string, cadence: 'we
 
   const warnings: string[] = [];
   const values = accepted.filter((r) => r.kind === 'value');
-  if (cadence === 'weekly_auction') {
+  if (cadence === 'weekly_auction' && values.length > 0) {
+    // (A file of gap rows only has no values to compare or space, so it gets neither warning.)
     const bigMoves = values.filter((r, i) => i > 0 && Math.abs((r.value_percent as number) - (values[i - 1].value_percent as number)) > RISK_FREE_LARGE_MOVE_PERCENT_POINTS);
     if (bigMoves.length > 0) warnings.push(`${bigMoves.length} week-on-week move(s) above ${RISK_FREE_LARGE_MOVE_PERCENT_POINTS} percentage points are included (first: ${dmy(bigMoves[0].date)}); please check them against the source.`);
     let holes = 0;

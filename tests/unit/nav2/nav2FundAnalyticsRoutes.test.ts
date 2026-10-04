@@ -254,6 +254,20 @@ describe('render tokens (NC-F4, matrix 61)', () => {
   });
 });
 
+describe('the proxy lets the headless PDF browser reach exactly the token print routes', () => {
+  const rule = (): RegExp => {
+    const src = fs.readFileSync(path.join(ROOT, 'proxy.ts'), 'utf8');
+    const m = /const isTokenAuthorizedPrintRoute = (\/\^.*?\$\/)\.test\(pathname\)/.exec(src);
+    if (!m) throw new Error('rule not found');
+    return new Function(`return ${m[1]}`)() as RegExp;
+  };
+  it('matches the Fund analytics, Monthly report and forecast print routes and nothing broader', () => {
+    const r = rule();
+    for (const p of ['/reports/fund-analytics/print', '/reports/0b6a0c5e-1111-4111-8111-111111111111/print', '/forecast/report/print']) expect(r.test(p), p).toBe(true);
+    for (const p of ['/forecast/report', '/forecast/report/print/x', '/forecast/print', '/reports/print', '/reports/a/b/print', '/admin/reports/x/print', '/forecast/report/print2']) expect(r.test(p), p).toBe(false);
+  });
+});
+
 describe('static contract', () => {
   it('no route reads a user id from the request (NC-F5) and none uses an unscoped read of another user\'s report', () => {
     for (const f of ['app/api/reports/fund-analytics/route.ts', 'app/api/reports/fund-analytics/[id]/route.ts', 'app/api/reports/fund-analytics/[id]/export/route.ts']) {

@@ -80,7 +80,7 @@ export interface RiskFreeObservation {
   yieldPercent: number | null;
   /** 'gap' = an auction with no accepted bids / none held: recorded so the week is explained, never a value. Default 'value'. */
   kind?: 'value' | 'gap';
-  gapReason?: 'no_accepted_bids' | 'no_auction_held' | null;
+  gapReason?: 'no_accepted_bids' | 'no_auction_held' | 'no_row_in_source' | null;
   /** The publication the value was read from, e.g. an RBI press release number and title. Required. */
   sourceDocument: string;
   /** URL of that publication, when it has one. */
@@ -213,15 +213,25 @@ export interface RiskFreeLookupRule {
   cadence: RiskFreeCadence;
   maxStalenessDays: number;
   verifiedThroughDate: string | null;
+  /**
+   * Weekly series only. Documented GAP row dates (a gap row means no cut-off exists for that date) and the policy limits for carrying
+   * the last value across them. Absent = no carrying: the plain staleness rule applies.
+   */
+  gapCarry?: { gapDates: readonly string[]; maxCarryDays: number; maxRecordSpacingDays: number };
 }
 
 export type RiskFreeLookup =
-  | { ok: true; observation: RiskFreeObservation; ageDays: number }
+  | { ok: true; observation: RiskFreeObservation; ageDays: number; carriedAcrossGapDates?: string[] }
   | { ok: false; reason: 'none_on_or_before' | 'stale' };
 
 /**
  * The rate in force on `date`. Reuses the R5 on-or-before rule (resolveObservationAsOf), so there is one
  * implementation of "latest NAV / level / rate on or before a date, never a future one, never interpolated".
+ *
+ * A weekly rate older than the staleness constant may still be used, flagged `carriedAcrossGapDates`, when ALL of these hold: it is no
+ * more than `maxCarryDays` old; at least one documented gap row lies after it (up to the date); and the records from the observation to
+ * the date (the observation, each gap row, the date) are never further apart than `maxRecordSpacingDays`, i.e. there is no UNDOCUMENTED
+ * hole inside the stretch. Anything else is `stale`.
  */
 export function riskFreeObservationOn(observations: readonly RiskFreeObservation[], date: string, rule: RiskFreeLookupRule): RiskFreeLookup {
   const series = observations.map((o) => ({ date: o.observationDate, value: o.yieldPercent as number }));
@@ -237,6 +247,18 @@ export function riskFreeObservationOn(observations: readonly RiskFreeObservation
   const hit = resolveObservationAsOf(series, date, rule.maxStalenessDays);
   if (hit.status === 'ok' && hit.observation) {
     return { ok: true, observation: observations.find((o) => o.observationDate === hit.observation!.date)!, ageDays: hit.offsetDays ?? 0 };
+  }
+  if (anyBefore && rule.gapCarry) {
+    const last = observations.filter((o) => o.observationDate <= date).reduce((m, o) => (o.observationDate > m.observationDate ? o : m));
+    const age = daysBetweenIso(last.observationDate, date);
+    if (age > rule.maxStalenessDays && age <= rule.gapCarry.maxCarryDays) {
+      const gaps = [...new Set(rule.gapCarry.gapDates.filter((g) => g > last.observationDate && g <= date))].sort();
+      if (gaps.length > 0) {
+        const records = [last.observationDate, ...gaps, date];
+        const fullyDocumented = records.every((r, i) => i === 0 || daysBetweenIso(records[i - 1], r) <= rule.gapCarry!.maxRecordSpacingDays);
+        if (fullyDocumented) return { ok: true, observation: last, ageDays: age, carriedAcrossGapDates: gaps };
+      }
+    }
   }
   return { ok: false, reason: anyBefore ? 'stale' : 'none_on_or_before' };
 }
@@ -290,11 +312,31 @@ export function riskFreeFreshness(ds: RiskFreeDataset, todayIso: string): RiskFr
 // ---------------------------------------------------------------------------
 
 export type RiskFreeMatch =
-  | { ok: true; periodic: number[]; provenance: RiskFreeProvenance; disclosures: Disclosure[] }
+  | {
+      ok: true;
+      /** One periodic risk-free return per KEPT return observation, in order. */
+      periodic: number[];
+      /** The positions (in the `returns` passed in) of the observations that had a rate. */
+      keptIndexes: number[];
+      /** Keeps only the entries of a series aligned with `returns` that had a rate (so a ratio is computed over the SAME observations). */
+      select: <T>(aligned: readonly T[]) => T[];
+      provenance: RiskFreeProvenance;
+      disclosures: Disclosure[];
+    }
   | { ok: false; result: Nav2Unavailable };
 
 const trimPct = (n: number): string => n.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+const pctOf = (share: number): string => `${(share * 100).toFixed(1).replace(/\.0$/, '')}%`;
 
+/**
+ * Matches each return observation to the risk-free rate in force on its start date.
+ *
+ * WINDOW-LEVEL RULE (PO decision 04-10-2026; before it, ONE date without a rate made the whole ratio `risk_free_missing`):
+ * the ratio is computed over the return observations that HAVE a rate, provided at least policy.riskFreeGaps.minWindowCoverageShare
+ * (95%) of the window's return observations have one. Below that, or with none, it is `risk_free_missing` (reason of the first date
+ * without a rate). The count of left-out observations is always disclosed and stored in the provenance. A weekly rate may be carried
+ * across DOCUMENTED RBI gaps within the policy limit (see riskFreeObservationOn) and is then labelled as such.
+ */
 export function matchRiskFree(
   returns: readonly ReturnPoint[],
   supply: RiskFreeSupply,
@@ -312,35 +354,71 @@ export function matchRiskFree(
   if (!cleaned.usable) return miss('risk_free_dataset_not_configured', 'Risk-free rate data is unavailable (the dataset is incomplete), so this ratio is not shown. No rate has been assumed.');
   if (!supply.enabled) return miss('risk_free_series_disabled', 'Risk-free rate data is switched off, so this ratio is not shown. No rate has been assumed.');
 
-  const rule: RiskFreeLookupRule = { cadence: supply.cadence, maxStalenessDays: supply.maxStalenessDays, verifiedThroughDate: supply.verifiedThroughDate };
+  const gaps = ctx.policy.riskFreeGaps;
+  const rule: RiskFreeLookupRule = {
+    cadence: supply.cadence,
+    maxStalenessDays: supply.maxStalenessDays,
+    verifiedThroughDate: supply.verifiedThroughDate,
+    ...(supply.cadence === 'weekly_auction' ? { gapCarry: { gapDates: cleaned.gaps.map((g) => g.observationDate), maxCarryDays: gaps.maxCarryAcrossDocumentedGapDays, maxRecordSpacingDays: gaps.documentedGapMaxRecordSpacingDays } } : {}),
+  };
   const ppy = ctx.policy.periodsPerYear[frequency];
   const periodic: number[] = [];
+  const keptIndexes: number[] = [];
+  const excluded: string[] = [];
+  let firstFailure: { reason: 'none_on_or_before' | 'stale'; date: string } | null = null;
   const used = new Map<string, RiskFreeObservation>();
+  const carriedGapDates = new Set<string>();
+  let carriedPeriods = 0;
   let first: RiskFreeObservation | null = null;
   let last: RiskFreeObservation | null = null;
-  for (const r of returns) {
+  returns.forEach((r, i) => {
     const hit = riskFreeObservationOn(cleaned.observations, r.startDate, rule);
     if (!hit.ok) {
-      return hit.reason === 'stale'
-        ? miss('risk_free_stale', supply.cadence === 'policy_change'
-            ? `The rate series was last confirmed up to ${showDate(ctx, supply.verifiedThroughDate)}, more than ${supply.maxStalenessDays} days before ${showDate(ctx, r.startDate)}, so this ratio is not shown. No rate has been carried forward or estimated.`
-            : `The latest risk-free rate on file is more than ${supply.maxStalenessDays} days older than ${showDate(ctx, r.startDate)}, so this ratio is not shown. No rate has been carried forward or estimated.`)
-        : miss('risk_free_coverage_incomplete', `Risk-free rate data does not reach back to ${showDate(ctx, r.startDate)}, so this ratio is not shown. No rate has been assumed for the missing part.`);
+      excluded.push(r.startDate);
+      if (firstFailure === null) firstFailure = { reason: hit.reason, date: r.startDate };
+      return;
     }
     if (first === null) first = hit.observation;
     last = hit.observation;
     used.set(hit.observation.observationDate, hit.observation);
+    keptIndexes.push(i);
     periodic.push(periodicRiskFreeReturn(hit.observation.yieldPercent as number, ppy));
+    if (hit.carriedAcrossGapDates) {
+      carriedPeriods += 1;
+      for (const g of hit.carriedAcrossGapDates) carriedGapDates.add(g);
+    }
+  });
+
+  const total = returns.length;
+  const share = total === 0 ? 0 : periodic.length / total;
+  if (periodic.length === 0 || share < gaps.minWindowCoverageShare) {
+    const f = firstFailure as { reason: 'none_on_or_before' | 'stale'; date: string } | null;
+    const reason = f?.reason === 'stale' ? 'risk_free_stale' : 'risk_free_coverage_incomplete';
+    if (periodic.length === 0 && f) {
+      return f.reason === 'stale'
+        ? miss(reason, supply.cadence === 'policy_change'
+            ? `The rate series was last confirmed up to ${showDate(ctx, supply.verifiedThroughDate)}, more than ${supply.maxStalenessDays} days before ${showDate(ctx, f.date)}, so this ratio is not shown. No rate has been carried forward or estimated.`
+            : `The latest risk-free rate on file is more than ${supply.maxStalenessDays} days older than ${showDate(ctx, f.date)}, so this ratio is not shown. No rate has been carried forward or estimated.`)
+        : miss(reason, `Risk-free rate data does not reach back to ${showDate(ctx, f.date)}, so this ratio is not shown. No rate has been assumed for the missing part.`);
+    }
+    return miss(
+      reason,
+      `Only ${periodic.length} of ${total} return periods (${pctOf(share)}) have a risk-free rate on file; at least ${pctOf(gaps.minWindowCoverageShare)} are needed, so this ratio is not shown. The first period without a rate starts ${showDate(ctx, f?.date ?? null)}. No rate has been assumed for the missing periods.`
+    );
   }
+
   const usedList = [...used.values()].sort((a, b) => (a.observationDate < b.observationDate ? -1 : 1));
   const yields = usedList.map((o) => o.yieldPercent as number);
-  const windowStart = returns.length ? returns[0].startDate : null;
-  const windowEnd = returns.length ? returns[returns.length - 1].date : null;
+  const keptReturns = keptIndexes.map((i) => returns[i]);
+  const windowStart = keptReturns[0].startDate;
+  const windowEnd = keptReturns[keptReturns.length - 1].date;
   const what = supply.cadence === 'policy_change' ? 'decision' : 'auction';
+  const carriedGapList = [...carriedGapDates].sort();
   const disclosureText =
-    `Risk-free rate: ${supply.seriesName}. ${trimPct(first!.yieldPercent as number)}% a year was in force at the start of the period (${what} of ${showDate(ctx, first!.observationDate)})` +
-    `${used.size > 1 ? ` and ${trimPct(last!.yieldPercent as number)}% at its end (${what} of ${showDate(ctx, last!.observationDate)})` : ''}, ` +
-    `taken as the latest published rate on or before each date, never interpolated, and converted to a ${frequency} rate as (1 + yield) ^ (1 / ${ppy}) - 1. ${supply.attributionText}.`;
+    `Risk-free rate: ${supply.seriesName}. ${trimPct((first as unknown as RiskFreeObservation).yieldPercent as number)}% a year was in force at the start of the period (${what} of ${showDate(ctx, (first as unknown as RiskFreeObservation).observationDate)})` +
+    `${used.size > 1 ? ` and ${trimPct((last as unknown as RiskFreeObservation).yieldPercent as number)}% at its end (${what} of ${showDate(ctx, (last as unknown as RiskFreeObservation).observationDate)})` : ''}, ` +
+    `taken as the latest published rate on or before each date, never interpolated, and converted to a ${frequency} rate as (1 + yield) ^ (1 / ${ppy}) - 1. ${supply.attributionText}.` +
+    (carriedPeriods > 0 ? ' Where the Reserve Bank of India published no cut-off for a date, the last published rate was carried across a documented RBI gap.' : '');
   const provenance: RiskFreeProvenance = {
     seriesId: supply.seriesId,
     seriesName: supply.seriesName,
@@ -360,15 +438,35 @@ export function matchRiskFree(
     observationFirstDate: usedList[0].observationDate,
     observationLastDate: usedList[usedList.length - 1].observationDate,
     distinctObservationCount: usedList.length,
-    yieldPercentAtWindowStart: first!.yieldPercent,
-    yieldPercentAtWindowEnd: last!.yieldPercent,
+    yieldPercentAtWindowStart: (first as unknown as RiskFreeObservation).yieldPercent,
+    yieldPercentAtWindowEnd: (last as unknown as RiskFreeObservation).yieldPercent,
     minYieldPercent: Math.min(...yields),
     maxYieldPercent: Math.max(...yields),
     disclosureText,
+    periodsExcluded: excluded.length,
+    excludedDates: excluded.slice(0, 10),
+    windowReturnCount: total,
+    windowCoverageShare: share,
+    periodsCarriedAcrossDocumentedGap: carriedPeriods,
+    documentedGapDatesCrossed: carriedGapList.slice(0, 20),
+    maxCarryAcrossDocumentedGapDays: gaps.maxCarryAcrossDocumentedGapDays,
   };
   const disclosures: Disclosure[] = [{ code: 'risk_free_series_used', detail: disclosureText }];
+  if (carriedPeriods > 0) {
+    disclosures.push({
+      code: 'risk_free_carried_across_documented_gap',
+      detail: `For ${carriedPeriods} of ${total} return periods the last published rate was carried across a documented RBI gap (no cut-off was published for ${carriedGapList.slice(0, 5).map((d) => showDate(ctx, d)).join(', ')}${carriedGapList.length > 5 ? ' and others' : ''}), for at most ${gaps.maxCarryAcrossDocumentedGapDays} days.`,
+    });
+  }
+  if (excluded.length > 0) {
+    disclosures.push({
+      code: 'risk_free_periods_excluded',
+      detail: `${excluded.length} of ${total} return periods (${pctOf(1 - share)}) had no risk-free rate on file and are left out of this ratio, which uses the other ${periodic.length} (${pctOf(share)}); the first left out starts ${showDate(ctx, excluded[0])}.`,
+    });
+  }
   if (supply.termsReviewStatus === 'pending_confirmation') {
     disclosures.push({ code: 'risk_free_terms_pending', detail: `${supply.attributionText}. The publisher's reuse terms are still being confirmed.` });
   }
-  return { ok: true, periodic, provenance, disclosures };
+  const keep = new Set(keptIndexes);
+  return { ok: true, periodic, keptIndexes, select: <T,>(aligned: readonly T[]): T[] => aligned.filter((_, i) => keep.has(i)), provenance, disclosures };
 }
