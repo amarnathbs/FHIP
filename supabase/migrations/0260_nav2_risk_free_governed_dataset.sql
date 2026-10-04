@@ -1,33 +1,37 @@
--- 0260 -- NAV2 Stage 2: the governed RISK-FREE dataset (RBI 91-day T-bill cut-off yield,
--- RBI policy repo rate): series registry, observations, append-only batch ledger,
--- review queue, correction ledger, state-change log, the two named admin capabilities,
--- their database predicates, the upload / refresh / review / state / correction RPCs, and
--- the job-control kill-switch rows (all SHIPPED DISABLED).
+-- 0260 -- Stage 2 of the fund analytics work: the governed RISK-FREE dataset (RBI 91-day T-bill cut-off yield,
+-- RBI policy repo rate): series registry, observations, append-only batch ledger, review queue, correction ledger,
+-- state-change log, the two named admin capabilities, their predicates, the upload / refresh / review / state /
+-- correction functions, and the job-control kill-switch rows (all shipped DISABLED).
 --
--- Forward-only, additive, idempotent. No existing CHECK constraint is dropped or
--- recreated. HAND-OVER ARTEFACT: NOT APPLIED anywhere (DEV or production). Apply order:
--- 0260, then 0261, then 0262 (see docs/nav2/po_apply_0260_0262/README.md).
+-- Forward-only, additive, idempotent: every statement can be run again. No existing CHECK constraint is dropped or
+-- recreated. HAND-OVER ARTEFACT: not applied anywhere. Apply order: this file (or its parts a to e in order),
+-- then 0261, then 0262. See docs/nav2/po_apply_0260_0262/README.md.
 --
--- MIGRATION NUMBER FRESHNESS. Scanned 2026-10-04 across every worktree and remote branch:
--- the highest taken number is 0252 (feat/factsheet-benchmark-reader-20261003); 0260 is free.
+-- HOW TO RUN IT. This whole file is the migration (supabase CLI). The same text is also shipped as five parts under
+-- docs/nav2/po_apply_0260_0262/parts/ (0260a to 0260e), each an exact slice of this file, each safe to run on its own and
+-- again, to be run in order a, b, c, d, e in the Supabase SQL editor. A test proves that the parts joined equal this file.
+--   part a: admin_users columns, the two predicate functions, the series table (with its two seed rows), the batches table
+--   part b: the append-only function, the batch triggers, the observations table with its guard
+--   part c: the review queue, correction ledger and state log tables
+--   part d: commit_risk_free_upload and record_risk_free_refresh_results
+--   part e: resolve_risk_free_review_item, correct_risk_free_observation, set_risk_free_series_state, the job-control rows
+--
+-- Migration number freshness: scanned 04-10-2026 across every worktree and remote branch, the highest number taken
+-- by anyone else is 0252, so 0260 is free.
 --
 -- ADMIN ARCHITECTURE STANDARD (docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md), applied:
---   section 2  two SEPARATELY NAMED capabilities, each its own column and predicate:
+--   section 2  two separately named capabilities, each its own column and predicate:
 --                can_upload_risk_free_data     upload, review-queue decisions, corrections
---                can_switch_risk_free_series   turn a series on / off, set its terms status
---              Neither is implied by admin_users membership, by each other, or by any
---              benchmark / reference-data capability.
---   section 4  database layer: every write is a SECURITY DEFINER function that checks
---              auth.uid() and the predicate INSIDE; no table grants INSERT / UPDATE / DELETE
---              to authenticated or anon.
---   section 6  fixed search_path, schema-qualified references, explicit return type (jsonb
---              with a documented shape), EXECUTE revoked from PUBLIC and anon.
+--                can_switch_risk_free_series   turn a series on or off, set its terms status
+--              Neither is implied by admin_users membership, by each other, or by any benchmark or reference-data capability.
+--   section 4  database layer: every write is a SECURITY DEFINER function that checks auth.uid() and the predicate INSIDE.
+--              No table grants INSERT, UPDATE or DELETE to authenticated or anon.
+--   section 6  fixed search_path, schema-qualified references, explicit return type, EXECUTE revoked from PUBLIC and anon.
 --   section 8  an unauthorised caller gets an exception (42501), never an empty result.
 --   section 9  the series and observations are GLOBAL reference data with no tenancy column.
 --
--- TERMS (PO decision 2026-10-03): RBI publishes no explicit reuse licence ("All Rights
--- Reserved"). The PO accepted that risk; it is recorded per series as terms_review_status
--- 'po_accepted_2026-10-03', never as a granted licence.
+-- TERMS (PO decision 2026-10-03): RBI publishes no explicit reuse licence (its pages say All Rights Reserved).
+-- The PO accepted that risk. It is recorded per series as terms_review_status po_accepted_2026-10-03, never as a granted licence.
 
 -- ---------------------------------------------------------------------------
 -- 1. Capabilities and predicates
@@ -40,22 +44,22 @@ comment on column admin_users.can_switch_risk_free_series is
   'Separately-named capability (Admin Architecture Standard section 2): switch a risk-free series on or off and set its terms status. NOT implied by can_upload_risk_free_data, nor the reverse.';
 
 create or replace function is_risk_free_data_admin() returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public as $fn$
   select exists (
     select 1 from public.admin_users
     where admin_users.user_id = auth.uid() and admin_users.can_upload_risk_free_data = true
   );
-$$;
+$fn$;
 revoke all on function is_risk_free_data_admin() from public, anon;
 grant execute on function is_risk_free_data_admin() to authenticated, service_role;
 
 create or replace function is_risk_free_series_switch_admin() returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public as $fn$
   select exists (
     select 1 from public.admin_users
     where admin_users.user_id = auth.uid() and admin_users.can_switch_risk_free_series = true
   );
-$$;
+$fn$;
 revoke all on function is_risk_free_series_switch_admin() from public, anon;
 grant execute on function is_risk_free_series_switch_admin() to authenticated, service_role;
 
@@ -78,10 +82,10 @@ create table if not exists ii_risk_free_series (
   updated_at timestamptz not null default now()
 );
 comment on table ii_risk_free_series is
-  'NAV2 risk-free series registry. One row per governed series; enabled and terms_review_status change ONLY through set_risk_free_series_state() (audited). Global reference data: readable by authenticated, never writable by a session.';
+  'Risk-free series registry. One row per governed series, enabled and terms_review_status change ONLY through set_risk_free_series_state() (audited). Global reference data: readable by authenticated, never writable by a session.';
 alter table ii_risk_free_series enable row level security;
-drop policy if exists "read ii_risk_free_series" on ii_risk_free_series;
-create policy "read ii_risk_free_series" on ii_risk_free_series for select using (true);
+drop policy if exists read_ii_risk_free_series on ii_risk_free_series;
+create policy read_ii_risk_free_series on ii_risk_free_series for select using (true);
 revoke insert, update, delete, truncate on ii_risk_free_series from anon, authenticated;
 
 insert into ii_risk_free_series (series_id, series_name, role, source, attribution_text, cadence, max_staleness_days)
@@ -121,16 +125,19 @@ create unique index if not exists uidx_ii_risk_free_batches_csv_file
   on ii_risk_free_batches (series_id, file_sha256) where source_kind = 'admin_csv';
 create index if not exists idx_ii_risk_free_batches_recent on ii_risk_free_batches (series_id, created_at desc);
 alter table ii_risk_free_batches enable row level security;
-drop policy if exists "capability read ii_risk_free_batches" on ii_risk_free_batches;
-create policy "capability read ii_risk_free_batches" on ii_risk_free_batches
+drop policy if exists capability_read_ii_risk_free_batches on ii_risk_free_batches;
+create policy capability_read_ii_risk_free_batches on ii_risk_free_batches
   for select using (is_risk_free_data_admin() or is_risk_free_series_switch_admin());
 revoke insert, update, delete, truncate on ii_risk_free_batches from anon, authenticated;
 
+-- ---------------------------------------------------------------------------
+-- PART B starts here: the append-only function and the batch triggers
+-- ---------------------------------------------------------------------------
 create or replace function ii_risk_free_append_only() returns trigger
-language plpgsql as $$
+language plpgsql as $fn$
 begin
-  raise exception '% is append-only (% blocked)', tg_table_name, tg_op using errcode = '42501';
-end $$;
+  raise exception using message = tg_table_name || ' is append-only (' || tg_op || ' blocked)', errcode = '42501';
+end $fn$;
 drop trigger if exists trg_ii_risk_free_batches_no_change on ii_risk_free_batches;
 create trigger trg_ii_risk_free_batches_no_change before update or delete on ii_risk_free_batches
   for each row execute function ii_risk_free_append_only();
@@ -139,7 +146,7 @@ create trigger trg_ii_risk_free_batches_no_truncate before truncate on ii_risk_f
   for each statement execute function ii_risk_free_append_only();
 
 -- ---------------------------------------------------------------------------
--- 4. Observations (one value or gap per series and date; changed only through the correction RPC)
+-- 4. Observations (one value or gap per series and date, changed only through the correction RPC)
 -- ---------------------------------------------------------------------------
 create table if not exists ii_risk_free_observations (
   id uuid primary key default gen_random_uuid(),
@@ -158,7 +165,7 @@ create table if not exists ii_risk_free_observations (
   created_at timestamptz not null default now(),
   constraint ii_risk_free_obs_unique unique (series_id, observation_date),
   constraint ii_risk_free_obs_value_range check (value_percent is null or (value_percent >= 0 and value_percent <= 100)),
-  -- A gap row never carries a value; a value row always does.
+  -- A gap row never carries a value, a value row always does.
   constraint ii_risk_free_obs_kind_consistent check (
     (kind = 'value' and value_percent is not null and gap_reason is null)
     or (kind = 'gap' and value_percent is null and gap_reason is not null)
@@ -168,23 +175,23 @@ create table if not exists ii_risk_free_observations (
 );
 create index if not exists idx_ii_risk_free_obs_series_date on ii_risk_free_observations (series_id, observation_date desc);
 alter table ii_risk_free_observations enable row level security;
-drop policy if exists "read ii_risk_free_observations" on ii_risk_free_observations;
-create policy "read ii_risk_free_observations" on ii_risk_free_observations for select using (true);
+drop policy if exists read_ii_risk_free_observations on ii_risk_free_observations;
+create policy read_ii_risk_free_observations on ii_risk_free_observations for select using (true);
 revoke insert, update, delete, truncate on ii_risk_free_observations from anon, authenticated;
 
--- Updates are allowed ONLY inside correct_risk_free_observation(), which sets this transaction-local flag;
+-- Updates are allowed ONLY inside correct_risk_free_observation(), which sets this transaction-local flag,
 -- deletes and truncates are never allowed.
 create or replace function ii_risk_free_obs_guard() returns trigger
-language plpgsql as $$
+language plpgsql as $fn$
 begin
   if tg_op = 'DELETE' then
     raise exception 'ii_risk_free_observations rows are never deleted' using errcode = '42501';
   end if;
-  if coalesce(current_setting('nav2.risk_free_correction', true), '') <> 'on' then
+  if coalesce(current_setting('fhip.risk_free_correction', true), '') <> 'on' then
     raise exception 'ii_risk_free_observations is append-only: use correct_risk_free_observation()' using errcode = '42501';
   end if;
   return new;
-end $$;
+end $fn$;
 drop trigger if exists trg_ii_risk_free_obs_guard on ii_risk_free_observations;
 create trigger trg_ii_risk_free_obs_guard before update or delete on ii_risk_free_observations
   for each row execute function ii_risk_free_obs_guard();
@@ -192,6 +199,8 @@ drop trigger if exists trg_ii_risk_free_obs_no_truncate on ii_risk_free_observat
 create trigger trg_ii_risk_free_obs_no_truncate before truncate on ii_risk_free_observations
   for each statement execute function ii_risk_free_append_only();
 
+-- ---------------------------------------------------------------------------
+-- PART C starts here: the review queue, correction ledger and state log tables
 -- ---------------------------------------------------------------------------
 -- 5. Review queue, correction ledger, state log
 -- ---------------------------------------------------------------------------
@@ -214,8 +223,8 @@ create table if not exists ii_risk_free_review_items (
 create unique index if not exists uidx_ii_risk_free_review_open
   on ii_risk_free_review_items (series_id, coalesce(observation_date, date '0001-01-01')) where status = 'open';
 alter table ii_risk_free_review_items enable row level security;
-drop policy if exists "capability read ii_risk_free_review_items" on ii_risk_free_review_items;
-create policy "capability read ii_risk_free_review_items" on ii_risk_free_review_items for select using (is_risk_free_data_admin());
+drop policy if exists capability_read_ii_risk_free_review_items on ii_risk_free_review_items;
+create policy capability_read_ii_risk_free_review_items on ii_risk_free_review_items for select using (is_risk_free_data_admin());
 revoke insert, update, delete, truncate on ii_risk_free_review_items from anon, authenticated;
 
 create table if not exists ii_risk_free_corrections (
@@ -230,8 +239,8 @@ create table if not exists ii_risk_free_corrections (
   created_at timestamptz not null default now()
 );
 alter table ii_risk_free_corrections enable row level security;
-drop policy if exists "capability read ii_risk_free_corrections" on ii_risk_free_corrections;
-create policy "capability read ii_risk_free_corrections" on ii_risk_free_corrections for select using (is_risk_free_data_admin());
+drop policy if exists capability_read_ii_risk_free_corrections on ii_risk_free_corrections;
+create policy capability_read_ii_risk_free_corrections on ii_risk_free_corrections for select using (is_risk_free_data_admin());
 revoke insert, update, delete, truncate on ii_risk_free_corrections from anon, authenticated;
 drop trigger if exists trg_ii_risk_free_corrections_no_change on ii_risk_free_corrections;
 create trigger trg_ii_risk_free_corrections_no_change before update or delete on ii_risk_free_corrections
@@ -249,8 +258,8 @@ create table if not exists ii_risk_free_series_state_log (
   created_at timestamptz not null default now()
 );
 alter table ii_risk_free_series_state_log enable row level security;
-drop policy if exists "capability read ii_risk_free_series_state_log" on ii_risk_free_series_state_log;
-create policy "capability read ii_risk_free_series_state_log" on ii_risk_free_series_state_log
+drop policy if exists capability_read_ii_risk_free_series_state_log on ii_risk_free_series_state_log;
+create policy capability_read_ii_risk_free_series_state_log on ii_risk_free_series_state_log
   for select using (is_risk_free_data_admin() or is_risk_free_series_switch_admin());
 revoke insert, update, delete, truncate on ii_risk_free_series_state_log from anon, authenticated;
 drop trigger if exists trg_ii_risk_free_state_log_no_change on ii_risk_free_series_state_log;
@@ -258,11 +267,13 @@ create trigger trg_ii_risk_free_state_log_no_change before update or delete on i
   for each row execute function ii_risk_free_append_only();
 
 -- ---------------------------------------------------------------------------
+-- PART D starts here: commit_risk_free_upload and record_risk_free_refresh_results
+-- ---------------------------------------------------------------------------
 -- 6. commit_risk_free_upload -- the admin CSV write path
---    p_rows: [{ "date": "yyyy-mm-dd", "value_percent": 5.5199 | null, "kind": "value"|"gap",
---               "gap_reason": null|"no_accepted_bids"|"no_auction_held"|"no_row_in_source", "source_document": "...",
---               "source_url": "..."|null, "retrieved_on": "yyyy-mm-dd", "notes": "..."|null }]
---    A row for an existing (series, date) with the SAME value is an identical skip; with a DIFFERENT
+--    p_rows: [{ date: yyyy-mm-dd, value_percent: 5.5199 | null, kind: value|gap,
+--               gap_reason: null|no_accepted_bids|no_auction_held|no_row_in_source, source_document: ...,
+--               source_url: ...|null, retrieved_on: yyyy-mm-dd, notes: ...|null }]
+--    A row for an existing (series, date) with the SAME value is an identical skip, with a DIFFERENT
 --    value the whole upload is refused (a published value is changed only by correct_risk_free_observation()).
 -- ---------------------------------------------------------------------------
 create or replace function commit_risk_free_upload(
@@ -275,10 +286,10 @@ create or replace function commit_risk_free_upload(
   p_entry_kind text default 'admin_upload',
   p_verified_through date default null
 ) returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_existing public.ii_risk_free_batches%rowtype;
+  v_existing record;
   v_batch uuid := gen_random_uuid();
   v_count integer;
   v_distinct integer;
@@ -314,11 +325,11 @@ begin
   select * into v_existing from public.ii_risk_free_batches
    where series_id = p_series_id and file_sha256 = p_file_sha256 and source_kind = 'admin_csv';
   if found then
-    -- The same file again. Its rows are already in; only a NEW "verified through" confirmation (the day a policy-change
+    -- The same file again. Its rows are already in, only a NEW verified_through confirmation (the day a policy-change
     -- series was last confirmed complete) is applied, and it is recorded in the append-only state log (who, when, to what).
     if p_verified_through is not null
        and exists (select 1 from public.ii_risk_free_series x where x.series_id = p_series_id and (x.verified_through_date is null or x.verified_through_date < p_verified_through)) then
-      -- Only a date that moves the confirmation FORWARD is applied and logged; an earlier or equal date is a no-op.
+      -- Only a date that moves the confirmation FORWARD is applied and logged, an earlier or equal date is a no-op.
       update public.ii_risk_free_series
          set verified_through_date = p_verified_through, updated_at = now()
        where series_id = p_series_id;
@@ -352,14 +363,14 @@ begin
       or (kind = 'value' and (v is null or v < 0 or v > 100 or gap_reason is not null))
       or (kind = 'gap' and (v is not null or gap_reason not in ('no_accepted_bids', 'no_auction_held', 'no_row_in_source')));
   if v_bad > 0 then
-    raise exception 'risk-free upload: % row(s) fail validation (date, value range, future date, source document or gap rules)', v_bad using errcode = '22023';
+    raise exception using message = 'risk-free upload: ' || v_bad::text || ' row(s) fail validation (date, value range, future date, source document or gap rules)', errcode = '22023';
   end if;
 
   select count(*) into v_conflicts
     from tmp_rf_in t join public.ii_risk_free_observations o on o.series_id = p_series_id and o.observation_date = t.d
    where o.kind is distinct from t.kind or o.value_percent is distinct from t.v;
   if v_conflicts > 0 then
-    raise exception 'risk-free upload: % date(s) already hold a different published value; a published value is changed only by an explicit correction', v_conflicts using errcode = '22023';
+    raise exception using message = 'risk-free upload: ' || v_conflicts::text || ' date(s) already hold a different published value, a published value is changed only by an explicit correction', errcode = '22023';
   end if;
 
   select count(*) into v_identical
@@ -381,15 +392,15 @@ begin
      where series_id = p_series_id;
   end if;
   return jsonb_build_object('already_committed', false, 'batch_id', v_batch, 'inserted', v_inserted, 'identical', v_identical);
-end $$;
+end $fn$;
 revoke all on function commit_risk_free_upload(text, text, text, jsonb, boolean, text, text, date) from public, anon;
 grant execute on function commit_risk_free_upload(text, text, text, jsonb, boolean, text, text, date) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
--- 7. record_risk_free_refresh_results -- the weekly job's write path (service role only)
---    p_rows: same shape as above plus "extraction" (jsonb). A value row for an existing date with a
+-- 7. record_risk_free_refresh_results -- the weekly jobs write path (service role only)
+--    p_rows: same shape as above plus extraction (jsonb). A value row for an existing date with a
 --    DIFFERENT value is never written: it becomes a review item. Same value = identical skip.
---    p_review_items: [{ "observation_date": "...", "reasons": ["..."], "candidate": {...}, "evidence": {...} }]
+--    p_review_items: [{ observation_date: ..., reasons: [...], candidate: {...}, evidence: {...} }]
 -- ---------------------------------------------------------------------------
 create or replace function record_risk_free_refresh_results(
   p_series_id text,
@@ -397,7 +408,7 @@ create or replace function record_risk_free_refresh_results(
   p_review_items jsonb,
   p_verified_through date
 ) returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 declare
   v_batch uuid := gen_random_uuid();
   v_inserted integer := 0;
@@ -405,7 +416,7 @@ declare
   v_queued integer := 0;
   v_row jsonb;
   v_rev jsonb;
-  v_existing public.ii_risk_free_observations%rowtype;
+  v_existing record;
   v_date date;
   v_kind text;
   v_val numeric(9,4);
@@ -458,19 +469,21 @@ begin
      where series_id = p_series_id;
   end if;
   return jsonb_build_object('batch_id', v_batch, 'inserted', v_inserted, 'identical', v_identical, 'queued', v_queued);
-end $$;
+end $fn$;
 revoke all on function record_risk_free_refresh_results(text, jsonb, jsonb, date) from public, anon, authenticated;
 grant execute on function record_risk_free_refresh_results(text, jsonb, jsonb, date) to service_role;
 
+-- ---------------------------------------------------------------------------
+-- PART E starts here: resolve, correct and set-state functions and the job-control rows
 -- ---------------------------------------------------------------------------
 -- 8. resolve_risk_free_review_item
 -- ---------------------------------------------------------------------------
 create or replace function resolve_risk_free_review_item(p_item_id uuid, p_decision text, p_note text)
 returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_item public.ii_risk_free_review_items%rowtype;
+  v_item record;
   v_c jsonb;
   v_inserted boolean := false;
 begin
@@ -490,10 +503,10 @@ begin
   if p_decision = 'accept' then
     v_c := v_item.candidate;
     if v_c is null or v_c->>'date' is null then
-      raise exception 'risk-free review: this item has no publishable candidate; reject it and upload the value' using errcode = '22023';
+      raise exception 'risk-free review: this item has no publishable candidate, reject it and upload the value' using errcode = '22023';
     end if;
     if exists (select 1 from public.ii_risk_free_observations where series_id = v_item.series_id and observation_date = (v_c->>'date')::date) then
-      raise exception 'risk-free review: a value already exists for that date; use a correction' using errcode = '22023';
+      raise exception 'risk-free review: a value already exists for that date, use a correction' using errcode = '22023';
     end if;
     insert into public.ii_risk_free_observations (series_id, observation_date, kind, value_percent, gap_reason, source_document, source_url, retrieved_on, notes, entry_kind, extraction)
     values (v_item.series_id, (v_c->>'date')::date, coalesce(v_c->>'kind', 'value'),
@@ -507,7 +520,7 @@ begin
          resolved_at = now(), resolved_by = v_uid, resolution_note = left(p_note, 500)
    where id = p_item_id;
   return jsonb_build_object('item_id', p_item_id, 'decision', p_decision, 'observation_inserted', v_inserted);
-end $$;
+end $fn$;
 revoke all on function resolve_risk_free_review_item(uuid, text, text) from public, anon;
 grant execute on function resolve_risk_free_review_item(uuid, text, text) to authenticated, service_role;
 
@@ -516,10 +529,10 @@ grant execute on function resolve_risk_free_review_item(uuid, text, text) to aut
 -- ---------------------------------------------------------------------------
 create or replace function correct_risk_free_observation(p_series_id text, p_date date, p_new_value numeric, p_reason text)
 returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_obs public.ii_risk_free_observations%rowtype;
+  v_obs record;
 begin
   if v_uid is null or not public.is_risk_free_data_admin() then
     raise exception 'risk-free correction: not authorised' using errcode = '42501';
@@ -536,11 +549,11 @@ begin
   end if;
   insert into public.ii_risk_free_corrections (observation_id, series_id, observation_date, previous_value_percent, new_value_percent, reason, actor_user_id)
   values (v_obs.id, p_series_id, p_date, v_obs.value_percent, round(p_new_value, 4), p_reason, v_uid);
-  perform set_config('nav2.risk_free_correction', 'on', true);
+  perform set_config('fhip.risk_free_correction', 'on', true);
   update public.ii_risk_free_observations set value_percent = round(p_new_value, 4) where id = v_obs.id;
-  perform set_config('nav2.risk_free_correction', 'off', true);
+  perform set_config('fhip.risk_free_correction', 'off', true);
   return jsonb_build_object('observation_id', v_obs.id, 'previous', v_obs.value_percent, 'new', round(p_new_value, 4));
-end $$;
+end $fn$;
 revoke all on function correct_risk_free_observation(text, date, numeric, text) from public, anon;
 grant execute on function correct_risk_free_observation(text, date, numeric, text) to authenticated, service_role;
 
@@ -549,10 +562,10 @@ grant execute on function correct_risk_free_observation(text, date, numeric, tex
 -- ---------------------------------------------------------------------------
 create or replace function set_risk_free_series_state(p_series_id text, p_enabled boolean, p_terms_status text, p_reason text)
 returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_s public.ii_risk_free_series%rowtype;
+  v_s record;
 begin
   if v_uid is null or not public.is_risk_free_series_switch_admin() then
     raise exception 'risk-free series state: not authorised' using errcode = '42501';
@@ -571,7 +584,7 @@ begin
   values (p_series_id, v_s.enabled, p_enabled, v_s.terms_review_status, p_terms_status, p_reason, v_uid);
   update public.ii_risk_free_series set enabled = p_enabled, terms_review_status = p_terms_status, updated_at = now() where series_id = p_series_id;
   return jsonb_build_object('series_id', p_series_id, 'enabled', p_enabled, 'terms_review_status', p_terms_status);
-end $$;
+end $fn$;
 revoke all on function set_risk_free_series_state(text, boolean, text, text) from public, anon;
 grant execute on function set_risk_free_series_state(text, boolean, text, text) to authenticated, service_role;
 
@@ -582,13 +595,13 @@ insert into ii_reference_job_control (job_key, enabled, disabled_reason)
 select 'nav2_risk_free_weekly_refresh', false, 'Ships DISABLED (PO decision 2026-10-03: automated weekly RBI read, default OFF with dry run). Enabling is a deliberate human step after a DEV dry run.'
 where not exists (select 1 from ii_reference_job_control where job_key = 'nav2_risk_free_weekly_refresh');
 insert into ii_reference_job_control (job_key, enabled, disabled_reason)
-select 'nav2_fund_analytics', false, 'Ships DISABLED: the NAV2 Fund analytics report feature switch. Enabling is a deliberate human step after Stage 3 DEV certification.'
+select 'nav2_fund_analytics', false, 'Ships DISABLED: the Fund analytics report feature switch. Enabling is a deliberate human step after Stage 3 DEV certification.'
 where not exists (select 1 from ii_reference_job_control where job_key = 'nav2_fund_analytics');
 insert into ii_reference_job_control (job_key, enabled, disabled_reason)
-select 'nav2_trigger_planner', false, 'Ships DISABLED: when off the existing user-scoped NAV fetch runs exactly as before; when on the NAV2 required-window planner sizes the fetch.'
+select 'nav2_trigger_planner', false, 'Ships DISABLED: when off the existing user-scoped NAV fetch runs exactly as before, when on the required-window planner sizes the fetch.'
 where not exists (select 1 from ii_reference_job_control where job_key = 'nav2_trigger_planner');
 insert into ii_reference_job_control (job_key, enabled, disabled_reason)
-select 'nav2_correction_worker', false, 'Ships DISABLED: processes ii_reference_corrections events into NAV2 cache invalidation. Enabling is a deliberate human step.'
+select 'nav2_correction_worker', false, 'Ships DISABLED: processes ii_reference_corrections events into fund analytics cache invalidation. Enabling is a deliberate human step.'
 where not exists (select 1 from ii_reference_job_control where job_key = 'nav2_correction_worker');
 
 -- ROLLBACK: drop the functions, tables (in reverse dependency order), the two admin_users columns and the four

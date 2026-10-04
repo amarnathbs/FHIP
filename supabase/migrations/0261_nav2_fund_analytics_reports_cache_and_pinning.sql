@@ -1,13 +1,13 @@
--- 0261 -- NAV2 Stage 2: the pinned Fund analytics report, its NAV dependency manifest, the shared
+-- 0261 -- Stage 2 of the fund analytics work: the pinned Fund analytics report, its NAV dependency manifest, the shared
 -- result cache store, the PDF render tokens, and the retention predicate that protects a
--- finalised NAV2 report's NAV range.
+-- finalised fund analytics reports NAV range.
 --
 -- Forward-only, additive, idempotent. HAND-OVER ARTEFACT: NOT APPLIED anywhere. Apply AFTER 0260.
 --
 -- THE ONE FUNCTION REDEFINITION. pc6_nav_row_is_candidate() is redefined to add ONE more
--- protected case (a NAV2 report's pinned NAV range, directly and through the merge family).
+-- protected case (a fund analytics reports pinned NAV range, directly and through the merge family).
 -- Its body is the 0219 definition VERBATIM (0219 is the latest definition of it: 0220+ do not
--- redefine it; checked by grep over supabase/migrations on 2026-10-04) with exactly two added
+-- redefine it, checked by grep over supabase/migrations on 2026-10-04) with exactly two added
 -- `or exists (...)` branches, so no predecessor protection is lost. The verification script
 -- scripts/nav2_0260_0262_pglite_verification.mjs replays the chain, proves every 0219 behaviour
 -- is unchanged and proves the new protection, with a negative control against the 0219 body.
@@ -16,7 +16,7 @@
 -- IMMUTABILITY. nav2_fund_analytics_reports rows are pinned output: the update trigger refuses
 -- EVERY update, so an issued report can never be silently changed (a later correction raises an
 -- alert / a new version, never an edit). Deletion is allowed (account deletion cascades from
--- auth.users; retention is a separate policy).
+-- auth.users, retention is a separate policy).
 
 -- ---------------------------------------------------------------------------
 -- 1. The pinned report
@@ -25,7 +25,7 @@ create table if not exists nav2_fund_analytics_reports (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   version_number integer not null check (version_number >= 1),
-  -- The id of the version this one replaces; informational (no FK: pinned rows are never updated).
+  -- The id of the version this one replaces, informational (no FK: pinned rows are never updated).
   supersedes_report_id uuid,
   as_of_date date not null,
   reporting_currency text not null,
@@ -46,22 +46,22 @@ create table if not exists nav2_fund_analytics_reports (
 );
 create index if not exists idx_nav2_reports_user_created on nav2_fund_analytics_reports (user_id, created_at desc);
 alter table nav2_fund_analytics_reports enable row level security;
-drop policy if exists "own read nav2_fund_analytics_reports" on nav2_fund_analytics_reports;
-create policy "own read nav2_fund_analytics_reports" on nav2_fund_analytics_reports for select using (auth.uid() = user_id);
--- Rows are written only by the server (service role) after the Premium check; no session can write.
+drop policy if exists own_read_nav2_fund_analytics_reports on nav2_fund_analytics_reports;
+create policy own_read_nav2_fund_analytics_reports on nav2_fund_analytics_reports for select using (auth.uid() = user_id);
+-- Rows are written only by the server (service role) after the Premium check, no session can write.
 revoke insert, update, delete, truncate on nav2_fund_analytics_reports from anon, authenticated;
 
 create or replace function nav2_reports_immutable() returns trigger
-language plpgsql as $$
+language plpgsql as $fn$
 begin
   raise exception 'nav2_fund_analytics_reports rows are pinned and immutable (update blocked)' using errcode = '42501';
-end $$;
+end $fn$;
 drop trigger if exists trg_nav2_reports_immutable on nav2_fund_analytics_reports;
 create trigger trg_nav2_reports_immutable before update on nav2_fund_analytics_reports
   for each row execute function nav2_reports_immutable();
 
 -- ---------------------------------------------------------------------------
--- 2. The report's NAV dependency manifest (range per instrument), the NAV2 counterpart of
+-- 2. The reports NAV dependency manifest (range per instrument), the fund analytics counterpart of
 --    ii_report_nav_dependencies (whose report_id is constrained to the Module 9 `reports` table)
 -- ---------------------------------------------------------------------------
 create table if not exists nav2_report_nav_dependencies (
@@ -77,12 +77,12 @@ create table if not exists nav2_report_nav_dependencies (
 );
 create index if not exists idx_nav2_report_nav_dep_instrument on nav2_report_nav_dependencies (instrument_id, nav_date_to);
 alter table nav2_report_nav_dependencies enable row level security;
-drop policy if exists "admin read nav2_report_nav_dependencies" on nav2_report_nav_dependencies;
-create policy "admin read nav2_report_nav_dependencies" on nav2_report_nav_dependencies for select using (is_pc6_reference_data_admin());
+drop policy if exists admin_read_nav2_report_nav_dependencies on nav2_report_nav_dependencies;
+create policy admin_read_nav2_report_nav_dependencies on nav2_report_nav_dependencies for select using (is_pc6_reference_data_admin());
 revoke insert, update, delete, truncate on nav2_report_nav_dependencies from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- 3. The shared result cache store (service role only; no policies)
+-- 3. The shared result cache store (service role only, no policies)
 -- ---------------------------------------------------------------------------
 create table if not exists nav2_result_cache (
   cache_key text primary key,
@@ -106,7 +106,7 @@ alter table nav2_result_cache enable row level security;
 revoke all on nav2_result_cache from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- 4. PDF render tokens (single use, short lived; service role only)
+-- 4. PDF render tokens (single use, short lived, service role only)
 -- ---------------------------------------------------------------------------
 create table if not exists nav2_report_render_tokens (
   token text primary key,
@@ -120,11 +120,11 @@ alter table nav2_report_render_tokens enable row level security;
 revoke all on nav2_report_render_tokens from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- 5. pc6_nav_row_is_candidate(): the 0219 body verbatim + the NAV2 report pin
+-- 5. pc6_nav_row_is_candidate(): the 0219 body verbatim + the fund analytics report pin
 -- ---------------------------------------------------------------------------
 create or replace function pc6_nav_row_is_candidate(p_instrument_id uuid, p_price_date date, p_changeover_date date)
 returns boolean
-language sql stable as $$
+language sql stable as $fn$
   with recursive merge_family(instrument_id, depth) as (
     select p_instrument_id, 0
     union
@@ -156,7 +156,7 @@ language sql stable as $$
         and p_price_date <= d.nav_date_to
         and (d.nav_date_from is null or p_price_date >= d.nav_date_from)
     )
-    -- NAV2 (0261): a finalised Fund analytics report's pinned NAV range.
+    -- Fund analytics (0261): a finalised Fund analytics reports pinned NAV range.
     or exists (
       select 1 from nav2_report_nav_dependencies d2
       where d2.instrument_id = p_instrument_id
@@ -193,12 +193,12 @@ language sql stable as $$
         )
     )
   ), false);
-$$;
+$fn$;
 
 comment on function pc6_nav_row_is_candidate(uuid, date, date) is
-  'NAV 1 (0189, hardened 0200, 0219; NAV2 0261 adds nav2_report_nav_dependencies). True only if a NAV row may be deleted: before the '
+  'NAV 1 (0189, hardened 0200, 0219, and 0261 adds nav2_report_nav_dependencies). True only if a NAV row may be deleted: before the '
   'changeover date AND neither its instrument nor any instrument in its merge family is user-held (any '
-  'status), benchmark-mapped, report-pinned (Module 9 or NAV2 report), under an open hold, or inside an unresolved '
+  'status), benchmark-mapped, report-pinned (Module 9 or fund analytics report), under an open hold, or inside an unresolved '
   'ii_nav_source_coverage_gaps range. Never returns NULL (NULL input = keep). EXECUTE is service_role only: under RLS any '
   'other caller would see no holdings and get TRUE.';
 

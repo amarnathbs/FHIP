@@ -3,7 +3,7 @@
 Branch `feat/nav2-stage2-20261004` (from `feat/nav2-stage1-engine-20261003`, with origin/main merged in). Evidence labels used below, and nothing stronger:
 
 - **unit-tested**: a vitest file in `tests/unit/nav2` (or an existing suite) proves it, one file at a time, against fakes and an in-memory database.
-- **PGlite-verified**: `scripts/nav2_0260_0262_pglite_verification.mjs` replays the migration chain in an in-process Postgres with a platform shim (76 checks, all pass). That is a Postgres engine, NOT the DEV database.
+- **PGlite-verified**: `scripts/nav2_0260_0262_pglite_verification.mjs` replays the migration chain in an in-process Postgres with a platform shim (80 checks (whole file, parts, and half-applied state), all pass). That is a Postgres engine, NOT the DEV database.
 - **NOT verified on DEV, on production, in a browser, or against the live RBI site.** Nothing was pushed or merged, no migration was applied, no database or DEV write was made, no request was sent to rbi.org.in.
 
 Status words: COVERED = proven at unit / PGlite level by the named files; PARTIAL = the part this repository can prove is proven, the integrated or live part is not; DEFERRED = needs DEV (Stage 3); DROPPED = removed by PO decision.

@@ -1,4 +1,4 @@
--- 0262 -- NAV2 Stage 2: the correction listener (events raised when a NAV, benchmark or risk-free
+-- 0262 -- Stage 2 of the fund analytics work: the correction listener (events raised when a NAV, benchmark or risk-free
 -- value is corrected) and the aggregate-only monitoring snapshot (spec 15).
 --
 -- Forward-only, additive, idempotent. HAND-OVER ARTEFACT: NOT APPLIED anywhere. Apply AFTER 0260 and 0261.
@@ -6,15 +6,15 @@
 -- THE LISTENER. A NAV correction is an in-place UPDATE of ii_prices_nav plus an append-only row in
 -- ii_reference_corrections (the unique (instrument_id, price_date) key forbids a second row). This migration
 -- adds an AFTER INSERT trigger on that ledger (and on ii_risk_free_corrections) which records ONE
--- event per correction in nav2_correction_events. The NAV2 correction worker (a service-role cron route, shipped
+-- event per correction in nav2_correction_events. The fund analytics correction worker (a service-role cron route, shipped
 -- OFF behind the job-control row nav2_correction_worker) reads the unprocessed events and invalidates exactly the
 -- cache entries a change can affect. The trigger never touches the correction ledger rows themselves.
 --
 -- MONITORING (Admin Architecture Standard sections 7, 8, 9, 12). nav2_monitoring_snapshot() is an aggregate-only
 -- SECURITY DEFINER function authorised INSIDE by the existing named capability behind the PC6 reference-data
 -- quality surface (is_pc6_reference_data_admin(): this is a read-only health view of that same surface, so no
--- new capability is created). Every figure derived from user holdings is suppressed below 5 (state 'suppressed',
--- label "Insufficient data to display safely.") and an absent source is 'unavailable', never a bare 0.
+-- new capability is created). Every figure derived from user holdings is suppressed below 5 (state suppressed,
+-- label Insufficient data to display safely.) and an absent source is unavailable, never a bare 0.
 
 -- ---------------------------------------------------------------------------
 -- 1. Correction events
@@ -37,7 +37,7 @@ alter table nav2_correction_events enable row level security;
 revoke all on nav2_correction_events from anon, authenticated;
 
 create or replace function nav2_capture_reference_correction() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 declare
   v_inst uuid;
   v_bench uuid;
@@ -57,18 +57,18 @@ begin
     end if;
   end if;
   return new;
-end $$;
+end $fn$;
 drop trigger if exists trg_nav2_capture_reference_correction on ii_reference_corrections;
 create trigger trg_nav2_capture_reference_correction after insert on ii_reference_corrections
   for each row execute function nav2_capture_reference_correction();
 
 create or replace function nav2_capture_risk_free_correction() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 begin
   insert into public.nav2_correction_events (kind, source_correction_id, series_id, event_date)
   values ('risk_free_correction', new.id, new.series_id, new.observation_date) on conflict do nothing;
   return new;
-end $$;
+end $fn$;
 drop trigger if exists trg_nav2_capture_risk_free_correction on ii_risk_free_corrections;
 create trigger trg_nav2_capture_risk_free_correction after insert on ii_risk_free_corrections
   for each row execute function nav2_capture_risk_free_correction();
@@ -77,16 +77,16 @@ create trigger trg_nav2_capture_risk_free_correction after insert on ii_risk_fre
 -- 2. Monitoring snapshot
 -- ---------------------------------------------------------------------------
 create or replace function nav2_monitor_cell(p_value bigint, p_user_derived boolean) returns jsonb
-language sql immutable as $$
+language sql immutable as $fn$
   select case
     when p_value is null then jsonb_build_object('state', 'unavailable', 'value', null, 'label', 'Not available.')
     when p_user_derived and p_value < 5 then jsonb_build_object('state', 'suppressed', 'value', null, 'label', 'Insufficient data to display safely.')
     else jsonb_build_object('state', 'ok', 'value', p_value)
   end;
-$$;
+$fn$;
 
 create or replace function nav2_monitoring_snapshot() returns jsonb
-language plpgsql stable security definer set search_path = public as $$
+language plpgsql stable security definer set search_path = public as $fn$
 declare
   v_held bigint;
   v_held_no_nav bigint;
@@ -179,7 +179,7 @@ begin
       'nav_rows_non_held_before_policy_changeover', case when v_held < 5 then jsonb_build_object('state', 'suppressed', 'value', null, 'label', 'Insufficient data to display safely.') else public.nav2_monitor_cell(v_nav_rows_nonheld_prepolicy, false) end
     )
   );
-end $$;
+end $fn$;
 revoke all on function nav2_monitoring_snapshot() from public, anon;
 grant execute on function nav2_monitoring_snapshot() to authenticated, service_role;
 revoke all on function nav2_monitor_cell(bigint, boolean) from public, anon;

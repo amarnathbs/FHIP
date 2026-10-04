@@ -99,7 +99,7 @@ Evidence: unit-tested and PGlite-verified. **Nothing is applied, no data is load
 
 | Piece | State | Where |
 |---|---|---|
-| Storage (series registry, observations, batch ledger, review queue, corrections, state log), the two capabilities, the RPCs | built, PGlite-verified (76 checks) | migration 0260 |
+| Storage (series registry, observations, batch ledger, review queue, corrections, state log), the two capabilities, the RPCs | built, PGlite-verified (80 checks) | migration 0260 |
 | Admin upload (preview, attested commit), review queue, correction, series switch; four-layer enforcement | built, unit-tested | `app/(app)/admin/investment-intelligence/risk-free-data`, `app/api/admin/investment-intelligence/risk-free-data/**`, `riskFreeAdmin.ts` |
 | First load of the PO's two CSV files | the files parse completely (1,060 and 61 rows, none rejected); loading is the PO's step | `docs/nav2/po_apply_0260_0262/README.md` |
 | Loader into the engine's dataset contract (deterministic dataset version) | built, unit-tested | `riskFreeDatasetLoader.ts` |

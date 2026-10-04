@@ -66,9 +66,28 @@ await db.exec(`insert into ii_instruments (id, instrument_name, instrument_class
 const cand = async (id, date) => (await one(`select pc6_nav_row_is_candidate('${id}', '${date}', '2026-09-21') v`)).v;
 
 // --- apply 0260 -----------------------------------------------------------------------
-await db.exec(strip(fs.readFileSync(path.join(MIG, F260), 'utf8')));
+// NAV2_APPLY_MODE: whole (default, the migration file as the supabase CLI runs it), parts (the five hand-run parts in order, each as
+// its own call, the way the Supabase SQL editor is used), partial (ONLY part a first, as a half-applied database would look, then
+// all five parts in order, then again). Every mode must end in the same state and pass the same checks.
+const MODE = process.env.NAV2_APPLY_MODE || 'whole';
+const PARTS_DIR = path.resolve(HERE, '..', 'docs', 'nav2', 'po_apply_0260_0262', 'parts');
+const partFiles = ['a', 'b', 'c', 'd', 'e'].map((l) => path.join(PARTS_DIR, `0260${l}.sql`));
+const applyParts = async (list) => { for (const f of list) await db.exec(strip(fs.readFileSync(f, 'utf8'))); };
+const riskFreeTables = async () => (await db.query(`select count(*)::int c from information_schema.tables where table_schema = 'public' and table_name in ('ii_risk_free_series','ii_risk_free_batches','ii_risk_free_observations','ii_risk_free_review_items','ii_risk_free_corrections','ii_risk_free_series_state_log')`)).rows[0].c;
+console.log(`apply mode: ${MODE}`);
 let again = null;
-try { await db.exec(strip(fs.readFileSync(path.join(MIG, F260), 'utf8'))); } catch (e) { again = e.message; }
+if (MODE === 'whole') {
+  await db.exec(strip(fs.readFileSync(path.join(MIG, F260), 'utf8')));
+  try { await db.exec(strip(fs.readFileSync(path.join(MIG, F260), 'utf8'))); } catch (e) { again = e.message; }
+} else {
+  if (MODE === 'partial') {
+    await applyParts(partFiles.slice(0, 1));
+    check('partial state: part a alone creates exactly the series and batches tables (the half-applied shape)', (await riskFreeTables()) === 2);
+  }
+  await applyParts(partFiles);
+  check('after parts a to e the six tables exist', (await riskFreeTables()) === 6);
+  try { await applyParts(partFiles); } catch (e) { again = e.message; }
+}
 check('0260 is idempotent (a second apply does not error)', again === null, again ?? '');
 await db.exec(`update admin_users set can_upload_risk_free_data = true where user_id = '${U.up}'; update admin_users set can_switch_risk_free_series = true where user_id = '${U.sw}'; update admin_users set can_view_reference_data_quality = true where user_id = '${U.pc6}';`);
 

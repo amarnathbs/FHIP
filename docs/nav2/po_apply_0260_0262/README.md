@@ -2,19 +2,27 @@
 
 Status: **hand-over artefact. Nothing here has been applied to any database.** The SQL is in the migration files, which are the single source; this page only says in what order to apply them, what to check afterwards, how to grant access, how to do the first load of the RBI files, how to turn the pieces on and how to turn them off.
 
-Evidence for the SQL: replayed in an in-process Postgres (PGlite) by `scripts/nav2_0260_0262_pglite_verification.mjs`, **76 checks, all pass** (capability boundaries, append-only ledgers, idempotence, retention predicate unchanged plus the new pin with a negative control, immutability, RLS, the correction listener, suppression). That is not DEV evidence.
+Evidence for the SQL: replayed in an in-process Postgres (PGlite) by `scripts/nav2_0260_0262_pglite_verification.mjs`, **80 checks, all pass** (the same checks from empty with the whole file, from empty with the five parts, and from a half-applied state: part a alone, then all parts) (capability boundaries, append-only ledgers, idempotence, retention predicate unchanged plus the new pin with a negative control, immutability, RLS, the correction listener, suppression). That is not DEV evidence.
 
 Migration numbers: scanned 04-10-2026 across 825 local and remote refs and every worktree. The highest number taken by anyone else is 0252 (`feat/factsheet-benchmark-reader-20261003`); 0260 to 0262 are free. Re-scan before applying if time has passed.
 
 ## 1. Apply order (all idempotent, forward-only, additive)
 
-| Order | File | What it adds |
-|---|---|---|
-| 1 | `supabase/migrations/0260_nav2_risk_free_governed_dataset.sql` | two admin capability columns and predicates; `ii_risk_free_series` (two seeded rows), `ii_risk_free_observations`, `ii_risk_free_batches`, `ii_risk_free_review_items`, `ii_risk_free_corrections`, `ii_risk_free_series_state_log`; functions `commit_risk_free_upload`, `record_risk_free_refresh_results` (service role only), `resolve_risk_free_review_item`, `correct_risk_free_observation`, `set_risk_free_series_state`; four job-control rows, all DISABLED |
-| 2 | `supabase/migrations/0261_nav2_fund_analytics_reports_cache_and_pinning.sql` | `nav2_fund_analytics_reports` (immutable), `nav2_report_nav_dependencies`, `nav2_result_cache`, `nav2_report_render_tokens`; **redefines** `pc6_nav_row_is_candidate()` (the 0219 body verbatim plus the NAV2 report pin) |
-| 3 | `supabase/migrations/0262_nav2_correction_events_and_monitoring.sql` | `nav2_correction_events`, two correction triggers, `nav2_monitoring_snapshot()` |
+**In the Supabase SQL editor, run 0260 as five parts, one at a time, in order a, b, c, d, e, then 0261, then 0262.** The parts are in `docs/nav2/po_apply_0260_0262/parts/` (`0260a.sql` to `0260e.sql`). Open one, paste the whole text, press Run, check the result, go to the next. A test proves that the five parts joined are byte-for-byte the migration file `supabase/migrations/0260_nav2_risk_free_governed_dataset.sql`, which is the single logical migration 0260 for the supabase CLI. Every statement can be run again, so a part that stopped halfway, or a database that already holds some of it, is simply run again from that part (see section 8 for why the parts exist).
 
-0261 must run after 0260 (it does not depend on it for tables, but the monitoring function in 0262 reads both). 0262 must run after 0261. No CHECK constraint is dropped or recreated by any of them (the drop-and-recreate trap does not apply). The one function redefinition (`pc6_nav_row_is_candidate`) keeps every 0219 protection and keeps EXECUTE for the service role only.
+| Order | File | What it adds | Expect afterwards (read-only query) |
+|---|---|---|---|
+| 1 | `parts/0260a.sql` | the two `admin_users` capability columns, the two predicate functions, `ii_risk_free_series` with its two seed rows, `ii_risk_free_batches` | `select count(*) from ii_risk_free_series;` gives 2, and `select to_regclass('public.ii_risk_free_batches');` is not null |
+| 2 | `parts/0260b.sql` | the append-only function, the batch triggers, `ii_risk_free_observations` and its guard function and triggers | `select to_regclass('public.ii_risk_free_observations');` is not null, and `select count(*) from pg_trigger where tgrelid = 'ii_risk_free_observations'::regclass and not tgisinternal;` gives 2 or more |
+| 3 | `parts/0260c.sql` | `ii_risk_free_review_items`, `ii_risk_free_corrections`, `ii_risk_free_series_state_log` and their triggers and policies | `select count(*) from information_schema.tables where table_name like 'ii_risk_free%';` gives 8 (your 2 existing PC6 tables, `ii_risk_free_rates` and `ii_risk_free_methodology`, plus the 6 new ones) |
+| 4 | `parts/0260d.sql` | `commit_risk_free_upload` and `record_risk_free_refresh_results` | `select count(*) from pg_proc where proname in ('commit_risk_free_upload', 'record_risk_free_refresh_results');` gives 2 |
+| 5 | `parts/0260e.sql` | `resolve_risk_free_review_item`, `correct_risk_free_observation`, `set_risk_free_series_state` and the four job-control rows (all disabled) | `select count(*) from ii_reference_job_control where job_key in ('nav2_risk_free_weekly_refresh', 'nav2_fund_analytics', 'nav2_trigger_planner', 'nav2_correction_worker') and enabled = false;` gives 4 |
+| 6 | `supabase/migrations/0261_nav2_fund_analytics_reports_cache_and_pinning.sql` | `nav2_fund_analytics_reports` (immutable), `nav2_report_nav_dependencies`, `nav2_result_cache`, `nav2_report_render_tokens`, and a **redefinition** of `pc6_nav_row_is_candidate()` (the 0219 body plus the report pin) | section 2 checks |
+| 7 | `supabase/migrations/0262_nav2_correction_events_and_monitoring.sql` | `nav2_correction_events`, two correction triggers, `nav2_monitoring_snapshot()` | section 2 checks |
+
+0261 and 0262 are single pastes (each is one file, not split). 0262 must run after 0260 and 0261 (its monitoring function reads tables of both). No CHECK constraint is dropped or recreated by any of them. The one function redefinition (`pc6_nav_row_is_candidate`) keeps every 0219 protection and keeps EXECUTE for the service role only.
+
+Note on what DEV already has: `ii_risk_free_rates` and `ii_risk_free_methodology` are older PC6 tables that match `%risk_free%`. A count of 2 such tables therefore means NONE of the new tables exist yet (it does not mean part of 0260 was applied).
 
 ## 2. Checks to run after applying (read-only)
 
@@ -114,3 +122,20 @@ update ii_reference_job_control set enabled = false, disabled_reason = 'NAV2 swi
 A risk-free series is switched off from the admin screen by the admin with the switch capability (reason recorded permanently); every Sharpe, Sortino and alpha then reports the risk-free rate as unavailable, nothing is deleted.
 
 Rolling the migrations back (only if nothing depends on them): re-run the 0219 definition of `pc6_nav_row_is_candidate()` first, then drop in this order 0262's triggers, functions and `nav2_correction_events`; 0261's four tables and `nav2_reports_immutable()`; 0260's functions, tables (reverse dependency order), the two `admin_users` columns and the four job-control rows. Each migration's last lines carry the same note. Dropping the report tables discards issued reports; dropping the risk-free tables discards the loaded rates and their audit ledger. Do not do either without the PO.
+
+## 8. The failed paste of 0260 on DEV (error 42P01, relation NAV2 does not exist) and what was changed
+
+What is known. The Supabase SQL editor answered `relation "NAV2" does not exist` with no position. Nothing in the old 0260 refers to a relation called NAV2: the word appeared only in comments and in four text strings. The old file also ran cleanly through the migration chain in an in-process Postgres and in the same checks now run three ways, so the SQL itself is valid. DEV is also reported to hold exactly 2 tables matching `%risk_free%`, but two such tables exist anyway from older work (`ii_risk_free_rates`, `ii_risk_free_methodology`), so that count says the whole paste most likely rolled back (the editor sends a multi-statement paste as one request, and a failure in one rolls the rest back), not that it stopped halfway. If you query and find any of the six new tables, run the parts from the first one that is missing, everything is safe to repeat.
+
+The cause is NOT established. I could not reproduce the editor error here (no access to it). The best guess is that the editor, or the layer in front of it, mis-reads the text around a comment or a string: the old file had semicolons and apostrophes inside comments, semicolons inside text strings (one of them in the string that opens with the word NAV2), double quotes inside comments, percent signs in messages, and an uppercase NAV2 in comments and strings. A statement splitter that does not honour comments and strings the way PostgreSQL does would cut the text at those points and could start a fragment with the word NAV2. This is a guess, not a finding. Two things that looked suspicious were checked against migrations already applied on DEV and are NOT the difference: a dotted custom setting name (an earlier migration, 0090, uses `fhip.smsf_balance_write`) and dollar-quoted function bodies, `%` in a raise message and `%rowtype` (0252, applied on DEV, uses all three). The one construct in 0260 with no applied precedent that I found is the uppercase NAV2 inside text together with semicolons and apostrophes in comments, which is why those are what was removed.
+
+What was changed (all three of 0260, 0261, 0262, same hazards):
+- every comment and every text string: no semicolon, no apostrophe in a comment, no double quote, no percent sign, ASCII only, and the uppercase word NAV2 is gone (lowercase nav2 remains only in object names and job keys);
+- dollar-quoted bodies use the named tag `$fn$` instead of bare `$$`;
+- messages that used `%` placeholders are built with `||` and `::text`;
+- `%rowtype` declarations became plain `record` variables, so no function needs a table to exist when it is created;
+- policy names are plain identifiers (for example `read_ii_risk_free_series`) instead of quoted names with spaces;
+- the custom setting name is now `fhip.risk_free_correction` (same pattern as the applied 0090);
+- 0260 is split into five idempotent parts at safe boundaries, with the append-only function moved to the start of part b, and the parts are exact slices of the migration file (tested).
+
+A test (`tests/unit/nav2/nav2MigrationPartsAndEditorSafety.test.ts`) now fails if any of those hazards come back in 0260, 0261 or 0262, and if the parts stop reassembling to the migration. If the editor still fails on a part, the error will name that part and its statement range, and the part is small enough to run statement by statement; please paste the exact message back.
