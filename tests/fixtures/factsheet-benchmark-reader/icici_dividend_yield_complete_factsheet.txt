@@ -1,0 +1,17 @@
+SYNTHETIC TEST FIXTURE. Hand-written to mimic a complete (multi-scheme) factsheet after a scheme RENAME. It is NOT a real fund-house document and contains no real performance figures.
+
+Complete Factsheet
+Report As On: 30/09/2026
+
+Some Other Fund
+First Tier Benchmark: Nifty 100 TRI
+Additional Benchmark: Nifty 50 TRI
+
+(many pages of other schemes omitted from this synthetic fixture)
+
+ICICI Prudential Dividend Yield Fund
+(renamed from ICICI Prudential Dividend Yield Equity Fund w.e.f. 26-08-2026)
+Type of scheme   An open ended equity scheme predominantly investing in dividend yielding stocks
+Benchmark: Nifty 500 TRI (w.e.f. 01-01-2022)
+Additional benchmark: Nifty 50 TRI
+Previous benchmark: Nifty Dividend Opportunities 50 TRI (until 31-12-2021)

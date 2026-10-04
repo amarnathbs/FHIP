@@ -1,0 +1,9 @@
+SYNTHETIC TEST FIXTURE. Hand-written to mimic the benchmark lines of a fund presentation slide. It is NOT a real fund-house document and contains no real performance figures.
+
+Nippon India Power & Infra Fund
+Sectoral / thematic equity scheme
+Data as on 30 July 2021
+
+Scheme benchmark
+B: Nifty Infrastructure TRI
+AB: S&P BSE Sensex TRI

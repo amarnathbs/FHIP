@@ -1,0 +1,12 @@
+SYNTHETIC TEST FIXTURE. Hand-written to mimic the front page of a scheme factsheet and the key-information row of its SID. It is NOT a real fund-house document and contains no real performance figures.
+
+SBI Contra Fund
+Equity - Contra Fund
+Report As On: 31/08/2025
+
+Fund Details
+Type of Scheme       An open-ended equity scheme following contrarian investment strategy
+First Tier Benchmark: BSE 500 TRI
+
+Key information (SID extract)
+As per AMFI Tier I benchmark - BSE 500 TRI Index

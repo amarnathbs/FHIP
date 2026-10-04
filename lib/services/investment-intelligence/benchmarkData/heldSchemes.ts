@@ -16,6 +16,8 @@ import type { DeclaredBenchmarkEvidence } from './schemeMappingProposals';
 import { matchBenchmarkName } from './benchmarkNameMatcher';
 import { DECLARED_BENCHMARK_EVIDENCE_NOTES, DECLARED_BENCHMARK_EVIDENCE_REF } from './declaredBenchmarkEvidenceNotes';
 import { categoryReferenceFor, CATEGORY_REFERENCE_KIND, DECLARED_BENCHMARK_LABEL, type FundCategorySource } from './categoryReference';
+import { declaredRecordMessage, type DeclaredRecord, type DeclaredRecordStatus } from './declaredRecordStatus';
+import type { FactsheetCheckView } from '../factsheetReader/adminView';
 
 export type HeldStatus = 'mapped' | 'proposal_waiting' | 'not_mapped';
 
@@ -34,6 +36,11 @@ export interface HeldSchemeRaw {
   schemeMasterName?: string | null;
   mapped: boolean;
   proposalWaiting: boolean;
+  /**
+   * A declared record the catalogue cannot represent (composite, commodity price, index not held), or one awaiting review.
+   * When present, the scheme is NEVER compared with its category benchmark (see declaredRecordStatus.ts).
+   */
+  declaredRecord?: DeclaredRecord | null;
 }
 
 export type PlanType = 'Direct' | 'Regular' | 'Not stated in the name';
@@ -64,6 +71,14 @@ export type HeldBenchmarkState =
        */
       declaredDiffers: { declaredName: string; evidenceStatus: string; evidenceRef: string } | null;
     }
+  | {
+      /** The fund's own documents declare a benchmark the data we hold cannot represent: no category benchmark, no comparison number. */
+      kind: 'declared_unsupported';
+      declaredName: string;
+      status: DeclaredRecordStatus;
+      /** "Declared benchmark: <name as stated> (cannot be compared with the data we hold)". */
+      message: string;
+    }
   | { kind: 'none'; message: string };
 
 export interface HeldSchemeRow {
@@ -87,6 +102,8 @@ export interface HeldSchemeRow {
   status: HeldStatus;
   /** Which benchmark applies (informational; no admin step required). */
   benchmark: HeldBenchmarkState;
+  /** The last factsheet check of this scheme (date and result), or null when the reader has never checked it. */
+  factsheetCheck: FactsheetCheckView | null;
   /** A verified declared-benchmark source holds a benchmark for this scheme (always false today). */
   sourcePrefilled: boolean;
   /** Declared evidence from the verified source, ready to pre-fill an OPTIONAL declared-benchmark proposal. Empty today. */
@@ -97,7 +114,7 @@ export interface HeldSchemesResponse {
   rows: HeldSchemeRow[];
   /** Whether any verified declared-benchmark source is switched on (false today). */
   verifiedSourceAvailable: boolean;
-  counts: { held: number; declared: number; categoryReference: number; noBenchmark: number; proposalWaiting: number };
+  counts: { held: number; declared: number; declaredUnsupported: number; categoryReference: number; noBenchmark: number; proposalWaiting: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,8 +230,12 @@ export function declaredBenchmarksFor(
 // ---------------------------------------------------------------------------
 
 /** Pure: the benchmark state for one held scheme. A declared (mapped) scheme is declared; the rest use the category reference or none. */
-export function heldBenchmarkState(r: Pick<HeldSchemeRaw, 'instrumentName' | 'subCategory' | 'categoryHeaderRaw' | 'mapped'> & { amfiSchemeCode?: string | null }): HeldBenchmarkState {
+export function heldBenchmarkState(r: Pick<HeldSchemeRaw, 'instrumentName' | 'subCategory' | 'categoryHeaderRaw' | 'mapped'> & { amfiSchemeCode?: string | null; declaredRecord?: DeclaredRecord | null }): HeldBenchmarkState {
+  // 1. A declared (approved or auto-published) mapping always wins; the label switches to "Fund's declared benchmark" on the next load.
   if (r.mapped) return { kind: 'declared', label: DECLARED_BENCHMARK_LABEL };
+  // 2. A declared record the data we hold cannot represent is NEVER replaced by a category benchmark.
+  if (r.declaredRecord) return { kind: 'declared_unsupported', declaredName: r.declaredRecord.declaredName, status: r.declaredRecord.status, message: declaredRecordMessage(r.declaredRecord) };
+  // 3. Only a scheme with NO declared record at all falls back to the category reference.
   const ref = categoryReferenceFor({ subCategory: r.subCategory, categoryHeaderRaw: r.categoryHeaderRaw, instrumentName: r.instrumentName });
   if (ref.state === 'none') return { kind: 'none', message: ref.message };
   // Does the repository's own evidence say this fund declares a different benchmark from the category one?
@@ -232,6 +253,8 @@ export function heldBenchmarkState(r: Pick<HeldSchemeRaw, 'instrumentName' | 'su
 // ---------------------------------------------------------------------------
 
 export interface BuildHeldOptions {
+  /** Latest factsheet-reader attempt per instrument (the last check date and result). */
+  factsheetChecks?: ReadonlyMap<string, FactsheetCheckView>;
   verifiedSourceEnabled?: boolean;
   verifiedSources?: readonly VerifiedDeclaredBenchmark[];
 }
@@ -259,6 +282,7 @@ export function buildHeldSchemeRows(raw: readonly HeldSchemeRaw[], opts: BuildHe
       holdersSuppressed: r.holderCount === null,
       status,
       benchmark: heldBenchmarkState(r),
+      factsheetCheck: opts.factsheetChecks?.get(r.instrumentId) ?? null,
       sourcePrefilled: prefilledDeclared.length > 0,
       prefilledDeclared,
     };
@@ -273,6 +297,7 @@ export function buildHeldSchemeRows(raw: readonly HeldSchemeRaw[], opts: BuildHe
     counts: {
       held: rows.length,
       declared: rows.filter((r) => r.benchmark.kind === 'declared').length,
+      declaredUnsupported: rows.filter((r) => r.benchmark.kind === 'declared_unsupported').length,
       categoryReference: rows.filter((r) => r.benchmark.kind === CATEGORY_REFERENCE_KIND).length,
       noBenchmark: rows.filter((r) => r.benchmark.kind === 'none').length,
       proposalWaiting: rows.filter((r) => r.status === 'proposal_waiting').length,
