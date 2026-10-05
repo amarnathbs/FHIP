@@ -219,7 +219,7 @@ describe('the NAV2 planner step (only with nav2_trigger_planner ON) (NC-S7)', ()
 
   it('switch ON with missing history that could be fetched: kicks the fetch, answers preparing, and loads and writes nothing', async () => {
     const kickPeriod = vi.fn(() => true);
-    const { db, call, load } = setup({ plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod });
+    const { db, call, load } = setup({ plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod, fetchingEnabled: async () => true });
     db.tables.ii_instruments = [{ id: ID_A, instrument_name: 'Alpha Fund' }];
     const r = await call('5y');
     expect(r.status).toBe('preparing');
@@ -230,6 +230,23 @@ describe('the NAV2 planner step (only with nav2_trigger_planner ON) (NC-S7)', ()
     expect(kickPeriod).toHaveBeenCalledWith(USER, '5y');
     expect(load).not.toHaveBeenCalled();
     expect(db.writes.filter((w) => w.table === 'nav2_fund_analytics_reports')).toEqual([]);
+  });
+
+  it('NC-S8 (Stage 3 finding): planner ON but the NAV fetch kill switch is OFF: the report is NOT held (the fetch can never run and leaves no attempt for a cooldown), it proceeds and nothing is kicked', async () => {
+    const kickPeriod = vi.fn(() => true);
+    const { db, call } = setup({ plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod });
+    db.tables.ii_reference_job_control = [{ job_key: 'pc6_selective_historical_hydration', enabled: false }];
+    expect((await call()).status).toBe('ready');
+    expect(kickPeriod).not.toHaveBeenCalled();
+    // control: the same situation with the switch ON holds and kicks, so the test can tell the two apart
+    const on = setup({ plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod });
+    on.db.tables.ii_reference_job_control = [{ job_key: 'pc6_selective_historical_hydration', enabled: true }];
+    on.db.tables.ii_instruments = [{ id: ID_A, instrument_name: 'Alpha Fund' }];
+    expect((await on.call()).status).toBe('preparing');
+    expect(kickPeriod).toHaveBeenCalledTimes(1);
+    // a missing row or an unreadable switch is OFF as well
+    const missing = setup({ plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod });
+    expect((await missing.call()).status).toBe('ready');
   });
 
   it('switch ON but nothing to fetch (covered, in cooldown or deferred-only): generation proceeds', async () => {

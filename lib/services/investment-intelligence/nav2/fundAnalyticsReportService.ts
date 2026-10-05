@@ -7,7 +7,7 @@
 //   3b. ONLY when the nav2_trigger_planner switch is ON: the history the CHOSEN PERIOD needs (the NAV2 required window per
 //      held scheme) is planned read-only; if some of it is missing and its fetch could be started, the answer is 'preparing'
 //      (a failed attempt goes into the existing cooldown, so this cannot hold forever; a fetch that could not be scheduled
-//      never holds). Switch OFF: this step does not exist and generation behaves exactly as before.
+//      never holds, and neither does one the NAV fetch kill switch would refuse to run). Switch OFF: this step does not exist and generation behaves exactly as before.
 //   4. the household holds at least one Indian mutual fund this report covers                              -> 'no_funds'
 //   5. build the report (pure), reuse the shared scheme-performance cache, persist the pinned row.
 //
@@ -21,7 +21,7 @@ import { isReportPeriodChoice, type ReportPeriodChoice } from '@/lib/engines/nav
 import { buildFundAnalyticsReport, compactSchemeFamily, manifestChecksum, schemeBundleCacheKey, schemeBundleCacheParts, type FundAnalyticsInput, type FundAnalyticsManifest, type FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { getPlanTier } from '@/lib/services/entitlements';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
-import { checkReportNavHistoryGate, REPORT_NAV_RETRY_WINDOW_MINUTES, waitingBody, type ReportNavGate } from '../pc6/reportNavHistoryGate';
+import { checkReportNavHistoryGate, NAV_FETCH_KILL_SWITCH_JOB_KEY, REPORT_NAV_RETRY_WINDOW_MINUTES, waitingBody, type ReportNavGate } from '../pc6/reportNavHistoryGate';
 import { kickUserNavHistory } from '../pc6/userNavHistoryKick';
 import { loadFundAnalyticsInput, type FundAnalyticsLoadResult } from './fundAnalyticsLoader';
 import { isNav2FlagOn, NAV2_JOB_KEYS } from './nav2Flags';
@@ -61,6 +61,11 @@ export interface FundAnalyticsDeps {
   planPeriod: (args: { admin: SupabaseClient; userId: string; period: ReportPeriodChoice; today: string }) => Promise<Nav2WindowPlan>;
   /** Start the planned fetch after the response; false when it could not be scheduled. */
   kickPeriod: (userId: string, period: ReportPeriodChoice) => boolean;
+  /**
+   * Whether the NAV fetch kill switch (pc6_selective_historical_hydration) is ON. With it OFF the planned fetch can never run and leaves no attempt
+   * record, so no cooldown would ever release the report: holding for it would hold FOREVER (found on DEV, Stage 3). Anything but a clean "ON" is OFF.
+   */
+  fetchingEnabled: (admin: SupabaseClient) => Promise<boolean>;
 }
 
 const defaultDeps: FundAnalyticsDeps = {
@@ -72,6 +77,14 @@ const defaultDeps: FundAnalyticsDeps = {
   plannerOn: (admin) => isNav2FlagOn(admin, NAV2_JOB_KEYS.triggerPlanner),
   planPeriod: ({ admin, userId, period, today }) => planForReportPeriod(admin, userId, period, today),
   kickPeriod: (userId, period) => kickNav2ReportPeriod(userId, period),
+  fetchingEnabled: async (admin) => {
+    try {
+      const { data, error } = await admin.from('ii_reference_job_control').select('enabled').eq('job_key', NAV_FETCH_KILL_SWITCH_JOB_KEY).maybeSingle();
+      return !error && (data as { enabled?: boolean } | null)?.enabled === true;
+    } catch {
+      return false;
+    }
+  },
 };
 
 /** Parses the requested period; anything unrecognised is the default (never an error that leaks internals). */
@@ -125,7 +138,7 @@ export async function generateFundAnalyticsReport(args: {
     } catch {
       plan = null; // a planning problem never blocks the report: it proceeds and says honestly what history it has
     }
-    if (plan && plan.fetch.toFetch.length > 0 && deps.kickPeriod(args.userId, periodChoice)) {
+    if (plan && plan.fetch.toFetch.length > 0 && (await deps.fetchingEnabled(admin)) && deps.kickPeriod(args.userId, periodChoice)) {
       const ids = plan.fetch.toFetch.map((f) => f.instrumentId);
       const { data: named } = await admin.from('ii_instruments').select('id, instrument_name').in('id', ids);
       const names = new Map(((named ?? []) as Array<{ id: string; instrument_name: string }>).map((r) => [r.id, r.instrument_name]));
