@@ -34,7 +34,7 @@ function Cell({ c }: { c: ShownCell }) {
   }
   return (
     <>
-      <span className="font-medium text-caution">{c.headline}</span>
+      <span className="font-medium text-[#8A5A12]">{c.headline}</span>
       {c.detail && <span className="block text-xs font-normal text-muted">{c.detail}</span>}
     </>
   );
@@ -44,7 +44,7 @@ function Cell({ c }: { c: ShownCell }) {
 function ShortCell({ c }: { c: ShownCell }) {
   if (c.available) return <Cell c={c} />;
   return (
-    <span className="font-medium text-caution">
+    <span className="font-medium text-[#8A5A12]">
       {c.headline}
       {c.detail ? <sup>*</sup> : null}
     </span>
@@ -60,7 +60,7 @@ function rfLabel(r: Nav2Result<unknown> | null | undefined): string {
 
 function Table({ caption, head, children }: { caption: string; head: Array<{ label: string; num?: boolean }>; children: React.ReactNode }) {
   return (
-    <div className="mt-3 overflow-x-auto">
+    <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label={caption}>
       <table className="w-full min-w-[32rem] text-sm">
         <caption className="mb-1 text-left text-xs text-muted">{caption}</caption>
         <thead>
