@@ -39,6 +39,37 @@ export interface ResultCacheKeyParts {
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex');
 
+// ---------------------------------------------------------------------------
+// The bundle DEFINITION version (spec 12.2: a policy or definition change must invalidate).
+//
+// A cached bundle holds the results of EVERY scheme-performance metric, so its key must change when ANY metric's definition changes.
+// Stage 3 found a bundle key built from the engine version, the report version and the spec only: bumping the CAGR definition left
+// the stored bundles valid, and a fresh report served the old computation. The definition component is therefore
+//     <engine>:<report>:<spec digest>:<metric registry digest>:<policy digest>
+// where the registry digest covers EVERY entry (id, family, version) of the metric register and the policy digest covers every
+// policy value. Pure.
+// ---------------------------------------------------------------------------
+export function metricRegistryDigest(metrics: Readonly<Record<string, { id: string; family: string; version: string }>>): string {
+  const ordered = Object.values(metrics)
+    .map((m) => [m.id, m.family, m.version])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return sha(JSON.stringify(ordered)).slice(0, 12);
+}
+
+export function policyDigest(policy: unknown): string {
+  return sha(JSON.stringify(policy)).slice(0, 12);
+}
+
+export function bundleDefinitionVersion(p: { engineVersion: string; reportVersion: string; specDigest: string; registryDigest: string; policyDigest: string }): string {
+  return `${p.engineVersion}:${p.reportVersion}:${p.specDigest}:${p.registryDigest}:${p.policyDigest}`;
+}
+
+/** The metric-registry part of a stored bundle definition version, or null for an older format (which is therefore stale). */
+export function registryDigestOf(definitionVersion: string): string | null {
+  const parts = definitionVersion.split(':');
+  return parts.length === 5 ? parts[3] : null;
+}
+
 export function scopeHash(scopeId: string | null): string | null {
   return scopeId === null ? null : sha(`nav2-scope:${scopeId}`).slice(0, 32);
 }
@@ -90,7 +121,9 @@ export type InvalidationEvent =
   /** The user's transactions / ownership for a scheme changed. */
   | { kind: 'transaction_change'; scopeHash: string; instrumentId: string }
   /** The NAV2 policy version changed: everything computed under another version is stale. */
-  | { kind: 'policy_change'; currentPolicyVersion: string };
+  | { kind: 'policy_change'; currentPolicyVersion: string }
+  /** A metric definition (or the engine / report version) changed: every bundle whose registry digest differs, or is in the old format, is stale. */
+  | { kind: 'definition_change'; currentRegistryDigest: string };
 
 /**
  * The cache keys an event invalidates. Deliberately narrow: a correction to scheme A never touches scheme B, a
@@ -111,6 +144,8 @@ export function selectInvalidated(entries: readonly CachedResultMeta[], event: I
         return e.family === 'investor_experience' && e.scopeHash === event.scopeHash && e.instrumentId === event.instrumentId;
       case 'policy_change':
         return e.policyVersion !== event.currentPolicyVersion;
+      case 'definition_change':
+        return registryDigestOf(e.definitionVersion) !== event.currentRegistryDigest;
     }
   };
   return entries.filter(hit).map((e) => e.key).sort();

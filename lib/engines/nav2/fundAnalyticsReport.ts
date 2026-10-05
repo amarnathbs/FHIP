@@ -16,7 +16,7 @@ import { NAV2_ENGINE_VERSION, NAV2_METRICS, type Nav2Policy } from '@/lib/config
 import type { IiOptionType, IiPlanType } from '@/lib/services/investment-intelligence/types';
 import type { AnalysisSpec, ReportPeriodChoice } from './analysisSpec';
 import { computeHeldSchemeAnalytics, type HeldSchemeAnalytics, type SchemePerformanceFamily } from './analyticsContract';
-import { buildResultCacheKey, SCHEME_PERFORMANCE_BUNDLE, type ResultCacheKeyParts } from './cacheKeys';
+import { buildResultCacheKey, bundleDefinitionVersion, metricRegistryDigest, policyDigest, SCHEME_PERFORMANCE_BUNDLE, type ResultCacheKeyParts } from './cacheKeys';
 import type { Nav2BenchmarkInput } from './benchmarkGate';
 import { rankHeldSchemes, type HeldRankingValue, type RankingCandidate } from './heldRanking';
 import { computeInvestorExperience, SCHEME_VS_INVESTOR_EXPLANATION, type InvestorExperienceInput } from './investorExperience';
@@ -128,6 +128,10 @@ export interface FundAnalyticsManifest {
   policyVersion: string;
   engineVersion: string;
   metricDefinitionVersions: Record<string, string>;
+  /** The ordered list behind the cache key: every metric definition (id, family, version) in the register, sorted by id. */
+  metricDefinitions: Array<{ id: string; family: string; version: string }>;
+  /** Digest of that list: the part of every cached bundle's definition version that changes when ANY metric definition changes. */
+  metricRegistryDigest: string;
   periodChoice: ReportPeriodChoice;
   riskFree: { seriesId: string; datasetVersion: string; retrievedOn: string; termsReviewStatus: string; verifiedThroughDate: string | null; enabled: boolean } | null;
   schemes: Array<{
@@ -181,7 +185,8 @@ export function schemeBundleCacheParts(input: Pick<FundAnalyticsInput, 'spec' | 
     scopeId: null,
     instrumentId: h.instrumentId,
     metricId: SCHEME_PERFORMANCE_BUNDLE,
-    definitionVersion: `${NAV2_ENGINE_VERSION}:${FUND_ANALYTICS_REPORT_VERSION}:${specDigest}`,
+    // Engine, report, spec, EVERY metric definition and EVERY policy value: bumping any one is a different key (spec 12.2).
+    definitionVersion: bundleDefinitionVersion({ engineVersion: NAV2_ENGINE_VERSION, reportVersion: FUND_ANALYTICS_REPORT_VERSION, specDigest, registryDigest: metricRegistryDigest(NAV2_METRICS), policyDigest: policyDigest(input.policy) }),
     policyVersion: input.policy.version,
     requested: { start: spec.analysisStart, end: spec.asOfDate },
     actual: { start: h.series.firstDate, end: h.series.lastDate },
@@ -339,6 +344,8 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
     policyVersion: input.policy.version,
     engineVersion: NAV2_ENGINE_VERSION,
     metricDefinitionVersions: sortedObject(Object.fromEntries(Object.values(NAV2_METRICS).map((m) => [m.id, m.version]))),
+    metricDefinitions: Object.values(NAV2_METRICS).map((m) => ({ id: m.id, family: m.family, version: m.version })).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    metricRegistryDigest: metricRegistryDigest(NAV2_METRICS),
     periodChoice: input.periodChoice,
     riskFree: supply ? { seriesId: supply.seriesId, datasetVersion: rfProv?.datasetVersion ?? supply.datasetVersion, retrievedOn: supply.retrievedOn, termsReviewStatus: supply.termsReviewStatus, verifiedThroughDate: supply.verifiedThroughDate, enabled: supply.enabled } : null,
     schemes: schemes.map((h) => {

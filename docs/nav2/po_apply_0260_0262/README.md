@@ -147,3 +147,16 @@ Status: **hand-over artefact, not applied.** One paste of `supabase/migrations/0
 The decision it supports (PO, Stage 3): RBI answers the robots.txt address with an HTML "Unauthorised Access" page. A robots.txt that is not a real robots file, or that answers 401, 403 or 404, means no rules are published, so the weekly refresh continues and records `robots_unavailable_continued`. A 5xx, a 429, a timeout, a network failure or a redirect on robots.txt still stops the run. A real robots file that disallows the page is honoured. A refusal of a content page (403, 429, a verification page or an "Unauthorised Access" page) stops the whole run as `blocked_by_source`, queues one review item (reason blocked_by_source, no candidate) and the freshness figures keep ageing. Nothing is retried or worked around.
 
 Check afterwards: `select count(*) from ii_risk_free_refresh_attempts;` gives 0, and `select has_function_privilege('authenticated', 'nav2_refresh_attempt_summary()', 'execute');` gives true. Until it is applied the monitoring page says "Not available" for this panel (never a zero) and the cron route logs that it could not record the attempt. Rollback: the last line of the migration.
+
+## 10. Clearing the shared bundle cache (only if ever needed)
+
+Stage 3 found that a metric definition bump did not reach already-stored bundles (the bundle key did not include the metric definition versions). That is fixed: the key now includes a digest of EVERY metric definition (id, family, version), the engine and report versions, the spec digest and a digest of every policy value, so any bump is a different key and a stored bundle computed under another definition is never read. The first report generated after deploying that code therefore recomputes every fund by itself; **no clearing is needed**. The correction worker (when switched on) also marks bundles of another registry as invalidated each run.
+
+If an operator still wants the table emptied of reachable entries (for example to read monitoring figures from a clean slate), this marks them invalidated. It is safe: the table holds derived results only (never user data), an invalidated entry is never read, nothing is deleted, and the next report recomputes what it needs.
+
+```sql
+select count(*) filter (where invalidated_at is null) as live, count(*) as total from nav2_result_cache;
+update nav2_result_cache set invalidated_at = now() where invalidated_at is null;
+```
+
+Saved reports are never touched by this: a stored report version is immutable and keeps the figures it was made with.

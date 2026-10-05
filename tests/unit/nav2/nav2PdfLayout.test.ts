@@ -67,6 +67,19 @@ describe('the print document markup', () => {
     }
   });
 
+  it('the heading "Your own money in this fund" always has its table (amount put in, amount taken out, value now, gain, XIRR) under it', () => {
+    const withInvestor = report.schemes.filter((b: { analytics: { investor: unknown } }) => b.analytics.investor).length;
+    expect(count(html, 'Your own money in this fund')).toBe(withInvestor);
+    expect(count(html, 'Amount you took out')).toBe(withInvestor);
+    for (const sheet of html.split('fa-sheet fa-sheet-b').slice(1)) {
+      const at = sheet.indexOf('Your own money in this fund');
+      if (at < 0) continue;
+      const after = sheet.slice(at, at + 4000);
+      expect(after).toContain('<table');
+      expect(after.indexOf('<table')).toBeLessThan(after.indexOf('class="fa-text"') < 0 ? Infinity : after.indexOf('class="fa-text"'));
+    }
+  });
+
   it('tables use fixed column widths (colgroup) and a repeating header row; dates are day-first, never ISO', () => {
     expect(count(html, '<colgroup>')).toBeGreaterThan(report.schemes.length * 5);
     expect(count(html, '<thead>')).toBe(count(html, '<colgroup>'));

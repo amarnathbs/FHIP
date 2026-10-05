@@ -15,13 +15,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { eventToInvalidation, isCacheable, processNav2CorrectionEvents } from '@/lib/services/investment-intelligence/nav2/nav2ResultCacheStore';
 import { loadRiskFreeSupply, rowsToRiskFreeDatasets, type RiskFreeObservationRow, type RiskFreeSeriesRow } from '@/lib/services/investment-intelligence/nav2/riskFreeDatasetLoader';
 import { createInMemoryDb, type Row } from '../support/inMemorySupabase';
+import { bundleDefinitionVersion, metricRegistryDigest } from '@/lib/engines/nav2/cacheKeys';
+import { NAV2_METRICS } from '@/lib/config/nav2/metricPolicy';
+// A cached bundle written by the CURRENT code (the sweep for a changed definition must leave it alone).
+const CURRENT_DEF = bundleDefinitionVersion({ engineVersion: 'e', reportVersion: 'r', specDigest: 's', registryDigest: metricRegistryDigest(NAV2_METRICS), policyDigest: 'p' });
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const BM = '33333333-3333-4333-8333-333333333333';
 const BM2 = '44444444-4444-4444-8444-444444444444';
 
-const entry = (key: string, over: Row): Row => ({ cache_key: key, instrument_id: A, metric_id: 'scheme_performance_bundle', policy_version: 'nav2-policy-v1', definition_version: 'd', actual_end: '2026-10-02', benchmark_id: null, risk_free_dataset_id: null, invalidated_at: null, ...over });
+const entry = (key: string, over: Row): Row => ({ cache_key: key, instrument_id: A, metric_id: 'scheme_performance_bundle', policy_version: 'nav2-policy-v1', definition_version: CURRENT_DEF, actual_end: '2026-10-02', benchmark_id: null, risk_free_dataset_id: null, invalidated_at: null, ...over });
 
 function world(events: Row[], cache: Row[], deps: Row[] = []) {
   const db = createInMemoryDb({ strictSchema: true });

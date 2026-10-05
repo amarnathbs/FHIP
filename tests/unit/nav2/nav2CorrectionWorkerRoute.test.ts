@@ -8,6 +8,9 @@
 //   NC-K3  switch ON: an unprocessed correction invalidates exactly the affected entry and is marked processed; a second call does nothing.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryDb, type InMemoryDb } from '../support/inMemorySupabase';
+import { bundleDefinitionVersion, metricRegistryDigest } from '@/lib/engines/nav2/cacheKeys';
+import { NAV2_METRICS } from '@/lib/config/nav2/metricPolicy';
+const CURRENT_DEF = bundleDefinitionVersion({ engineVersion: 'e', reportVersion: 'r', specDigest: 's', registryDigest: metricRegistryDigest(NAV2_METRICS), policyDigest: 'p' });
 
 let db: InMemoryDb;
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => db.client }));
@@ -24,8 +27,8 @@ function world(switchRow: Record<string, unknown> | null) {
     ii_reference_job_control: switchRow ? [switchRow] : [],
     nav2_correction_events: [{ id: 1, kind: 'nav_correction', instrument_id: A, benchmark_id: null, series_id: null, event_date: '2026-09-01', processed_at: null }],
     nav2_result_cache: [
-      { cache_key: 'a', instrument_id: A, metric_id: 'scheme_performance_bundle', policy_version: 'p', definition_version: 'd', actual_end: '2026-10-02', benchmark_id: null, risk_free_dataset_id: null, invalidated_at: null },
-      { cache_key: 'b', instrument_id: B, metric_id: 'scheme_performance_bundle', policy_version: 'p', definition_version: 'd', actual_end: '2026-10-02', benchmark_id: null, risk_free_dataset_id: null, invalidated_at: null },
+      { cache_key: 'a', instrument_id: A, metric_id: 'scheme_performance_bundle', policy_version: 'p', definition_version: CURRENT_DEF, actual_end: '2026-10-02', benchmark_id: null, risk_free_dataset_id: null, invalidated_at: null },
+      { cache_key: 'b', instrument_id: B, metric_id: 'scheme_performance_bundle', policy_version: 'p', definition_version: CURRENT_DEF, actual_end: '2026-10-02', benchmark_id: null, risk_free_dataset_id: null, invalidated_at: null },
     ],
     nav2_report_nav_dependencies: [],
   });

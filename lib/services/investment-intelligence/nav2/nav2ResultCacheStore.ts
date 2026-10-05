@@ -13,7 +13,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SchemePerformanceFamily } from '@/lib/engines/nav2/analyticsContract';
-import { selectInvalidated, type CachedResultMeta, type InvalidationEvent, type ResultCacheKeyParts } from '@/lib/engines/nav2/cacheKeys';
+import { metricRegistryDigest, selectInvalidated, type CachedResultMeta, type InvalidationEvent, type ResultCacheKeyParts } from '@/lib/engines/nav2/cacheKeys';
+import { NAV2_METRICS } from '@/lib/config/nav2/metricPolicy';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -100,17 +101,49 @@ export function eventToInvalidation(e: EventRow): InvalidationEvent | null {
   return null;
 }
 
+/**
+ * Marks every still-valid bundle computed under another metric-definition registry (or an older key format) as invalidated. A correct
+ * key already means such an entry is never READ (a changed definition is a different key); this is hygiene so the table does not carry
+ * entries nothing can reach, and so the monitoring figure for invalidated entries says so. Idempotent. Never throws.
+ */
+export async function invalidateStaleDefinitionEntries(admin: SupabaseClient, currentRegistryDigest: string, nowIso = new Date().toISOString()): Promise<number> {
+  try {
+    const { data, error } = await admin.from('nav2_result_cache').select('cache_key, instrument_id, metric_id, policy_version, definition_version, actual_end, benchmark_id, risk_free_dataset_id').is('invalidated_at', null).limit(5000);
+    if (error) return 0;
+    const metas: CachedResultMeta[] = ((data ?? []) as CacheRow[]).map((r) => ({
+      key: r.cache_key,
+      family: 'scheme_performance',
+      scopeHash: null,
+      instrumentId: r.instrument_id ?? '',
+      metricId: r.metric_id as CachedResultMeta['metricId'],
+      policyVersion: r.policy_version,
+      definitionVersion: r.definition_version,
+      actualEnd: r.actual_end ? String(r.actual_end).slice(0, 10) : null,
+      benchmarkId: r.benchmark_id,
+      riskFreeDatasetId: r.risk_free_dataset_id,
+    }));
+    const keys = selectInvalidated(metas, { kind: 'definition_change', currentRegistryDigest });
+    if (keys.length === 0) return 0;
+    const { error: uerr } = await admin.from('nav2_result_cache').update({ invalidated_at: nowIso }).in('cache_key', keys).is('invalidated_at', null);
+    return uerr ? 0 : keys.length;
+  } catch {
+    return 0;
+  }
+}
+
 export interface CorrectionWorkerResult {
   eventsProcessed: number;
   entriesInvalidated: number;
   /** Pinned reports whose NAV range reaches the corrected date: never edited; counted so an operator can decide on a new version. */
   pinnedReportsAffected: number;
+  /** Bundles invalidated because a metric definition changed since they were computed (spec 12.2). */
+  staleDefinitionInvalidated: number;
   failed: number;
 }
 
 /** Processes up to `limit` unprocessed correction events, oldest first. Idempotent: a processed event is never reprocessed. */
 export async function processNav2CorrectionEvents(admin: SupabaseClient, limit = 200, nowIso = new Date().toISOString()): Promise<CorrectionWorkerResult> {
-  const result: CorrectionWorkerResult = { eventsProcessed: 0, entriesInvalidated: 0, pinnedReportsAffected: 0, failed: 0 };
+  const result: CorrectionWorkerResult = { eventsProcessed: 0, entriesInvalidated: 0, pinnedReportsAffected: 0, staleDefinitionInvalidated: 0, failed: 0 };
   const { data, error } = await admin
     .from('nav2_correction_events')
     .select('id, kind, instrument_id, benchmark_id, series_id, event_date')
@@ -160,5 +193,7 @@ export async function processNav2CorrectionEvents(admin: SupabaseClient, limit =
       result.failed += 1;
     }
   }
+  // A changed metric definition invalidates every bundle computed under the old registry, not only corrected dates.
+  result.staleDefinitionInvalidated = await invalidateStaleDefinitionEntries(admin, metricRegistryDigest(NAV2_METRICS), nowIso);
   return result;
 }

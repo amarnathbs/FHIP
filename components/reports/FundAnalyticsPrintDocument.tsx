@@ -192,6 +192,17 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
     { key: 'avg', cells: ['Average NAV (mean / median)', figure(showResult(s.average, (v) => `${navPrice(v.meanNav)} / ${navPrice(v.medianNav)}`), fnB).node, 'describes prices, not a return'] },
   ];
 
+  // The compact money table repeats under its own heading on sheet B (the heading never stands over a lone sentence).
+  const ownRows: Row[] = inv
+    ? [
+        { key: 'xirr', cells: ['Your return (XIRR, a year)', figure(showResult(inv.xirr, (v) => pct(v.rate)), fnB).node, inv.xirr.state === 'available' ? `${showDate(ctx, inv.xirr.value.periodStart)} to ${showDate(ctx, inv.xirr.value.periodEnd)}` : ''] },
+        { key: 'cur', cells: ['Value now', figure(showResult(inv.currentValue, (v) => rupees(v.value)), fnB).node, inv.currentValue.state === 'available' ? `${inv.currentValue.value.basis === 'statement' ? 'statement value' : inv.currentValue.value.basis === 'redeemed' ? 'fully redeemed' : 'units x latest NAV'}${inv.currentValue.value.navDate ? `, NAV of ${showDate(ctx, inv.currentValue.value.navDate)}` : ''}` : ''] },
+        { key: 'put', cells: ['Amount you put in', figure(showResult(inv.investedAmount, (v) => rupees(v.invested)), fnB).node, inv.investedAmount.state === 'available' && inv.investedAmount.value.firstInvestmentDate ? `first on ${showDate(ctx, inv.investedAmount.value.firstInvestmentDate)}` : ''] },
+        { key: 'out', cells: ['Amount you took out', figure(showResult(inv.investedAmount, (v) => rupees(v.received)), fnB).node, ''] },
+        { key: 'gain', cells: ['Gain or loss', figure(showResult(inv.gainLoss, (v) => rupees(v.gainLoss)), fnB).node, ''] },
+      ]
+    : [];
+
   return (
     <>
       <section className="fa-sheet fa-fund">
@@ -224,6 +235,7 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
         {inv ? (
           <>
             <p className="fa-sub">{INVESTOR_XIRR_LABEL}</p>
+            <FaTable head={['Measure', 'Value', 'Detail']} widths={[34, 24, 42]} num={[false, true, false]} rows={ownRows} />
             <p className="fa-text">{a.explanation}</p>
           </>
         ) : (
