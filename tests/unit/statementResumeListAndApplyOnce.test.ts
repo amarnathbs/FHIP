@@ -162,7 +162,20 @@ describe('C. a re-upload leads to the original, never a dead end', () => {
       document: { id: 'copy', processing_status: 'queued' }, statementId: 'rs-orig', pipelineStatus: 'duplicate_statement',
       duplicateOfDocumentId: 'orig', activitiesExtracted: 0, activitiesDeduplicated: 0, positionsExtracted: 0,
     });
-    const res = await retirementUploadPOST(new Request('http://x/api/financial-data-hub/retirement-statement/upload?jurisdiction=AU&currency_code=AUD', { method: 'POST', body: new Uint8Array([1, 2, 3]) }));
+    // Owner-before-upload (0236): the route demands the owner BEFORE it reads the file, so the request names the user's own Self member.
+    // (This test predates that rule and posted no owner, which is now a 422 owner_required.)
+    const SELF_MEMBER = 'a1111111-1111-4111-8111-111111111111';
+    h.db.reset({
+      user_profiles: [{ user_id: U, country_of_residence: 'AU' }],
+      household_members: [{ id: SELF_MEMBER, user_id: U, full_name: 'Anil', relationship: 'self', is_active: true }],
+      fdh_statement_uploads: [{ id: 'copy', user_id: U }],
+    });
+    // CONTROL: the same request with no owner is refused before the processing service is reached (so the 200 below is the owner's doing).
+    const refused = await retirementUploadPOST(new Request('http://x/api/financial-data-hub/retirement-statement/upload?jurisdiction=AU&currency_code=AUD', { method: 'POST', body: new Uint8Array([1, 2, 3]) }));
+    expect(refused.status).toBe(422);
+    expect(uploadRetirement).not.toHaveBeenCalled();
+    const owner = encodeURIComponent(JSON.stringify({ kind: 'member', memberId: SELF_MEMBER }));
+    const res = await retirementUploadPOST(new Request(`http://x/api/financial-data-hub/retirement-statement/upload?jurisdiction=AU&currency_code=AUD&owner=${owner}`, { method: 'POST', body: new Uint8Array([1, 2, 3]) }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toMatchObject({ document_id: 'orig', duplicate_of_document_id: 'orig', pipeline_status: 'duplicate_statement' });
