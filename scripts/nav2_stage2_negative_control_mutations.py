@@ -38,6 +38,7 @@ MUTATIONS = [
     ('S20 the 35-day carry limit is not enforced', 'lib/engines/nav2/riskFree.ts', "age <= rule.gapCarry.maxCarryDays", "age <= 99999", T + 'nav2RiskFreeGapCarry.test.ts'),
     ('S21 the 95% window-coverage rule is not enforced', 'lib/engines/nav2/riskFree.ts', "share < gaps.minWindowCoverageShare", "share < 0", T + 'nav2RiskFreeGapCarry.test.ts'),
     ('S22 one date without a rate drops the whole window again (old rule)', 'lib/engines/nav2/riskFree.ts', "periodic.length === 0 || share < gaps.minWindowCoverageShare", "periodic.length === 0 || excluded.length > 0", T + 'nav2RiskFreeGapCarry.test.ts'),
+    ('S23 the confirmed editor-breaking string is put back into 0260 (events into fund analytics)', 'supabase/migrations/0260_nav2_risk_free_governed_dataset.sql', "processes ii_reference_corrections events for fund analytics cache invalidation", "processes ii_reference_corrections events into fund analytics cache invalidation", T + 'nav2MigrationPartsAndEditorSafety.test.ts'),
     ('S18 print route opens the report for the session user, not the token user', 'app/(print)/reports/fund-analytics/print/page.tsx', "getFundAnalyticsReport(admin as never, resolved.userId, resolved.reportId)", "getFundAnalyticsReport(admin as never, 'someone-else', resolved.reportId)", T + 'nav2FundAnalyticsRoutes.test.ts'),
 ]
 

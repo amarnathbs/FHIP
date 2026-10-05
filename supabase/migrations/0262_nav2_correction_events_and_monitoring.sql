@@ -3,9 +3,9 @@
 --
 -- Forward-only, additive, idempotent. HAND-OVER ARTEFACT: NOT APPLIED anywhere. Apply AFTER 0260 and 0261.
 --
--- THE LISTENER. A NAV correction is an in-place UPDATE of ii_prices_nav plus an append-only row in
+-- THE LISTENER. A NAV correction is an in-place edit of ii_prices_nav plus an append-only row in
 -- ii_reference_corrections (the unique (instrument_id, price_date) key forbids a second row). This migration
--- adds an AFTER INSERT trigger on that ledger (and on ii_risk_free_corrections) which records ONE
+-- adds a hook that fires after each new row on that ledger (and on ii_risk_free_corrections) which records ONE
 -- event per correction in nav2_correction_events. The fund analytics correction worker (a service-role cron route, shipped
 -- OFF behind the job-control row nav2_correction_worker) reads the unprocessed events and invalidates exactly the
 -- cache entries a change can affect. The trigger never touches the correction ledger rows themselves.
@@ -13,7 +13,7 @@
 -- MONITORING (Admin Architecture Standard sections 7, 8, 9, 12). nav2_monitoring_snapshot() is an aggregate-only
 -- SECURITY DEFINER function authorised INSIDE by the existing named capability behind the PC6 reference-data
 -- quality surface (is_pc6_reference_data_admin(): this is a read-only health view of that same surface, so no
--- new capability is created). Every figure derived from user holdings is suppressed below 5 (state suppressed,
+-- new capability is created). Every figure based on user holdings is suppressed below 5 (state suppressed,
 -- label Insufficient data to display safely.) and an absent source is unavailable, never a bare 0.
 
 -- ---------------------------------------------------------------------------

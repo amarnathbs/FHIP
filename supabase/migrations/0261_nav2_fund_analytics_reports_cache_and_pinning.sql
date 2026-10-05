@@ -13,7 +13,7 @@
 -- is unchanged and proves the new protection, with a negative control against the 0219 body.
 -- EXECUTE stays service_role only, exactly as in 0219.
 --
--- IMMUTABILITY. nav2_fund_analytics_reports rows are pinned output: the update trigger refuses
+-- IMMUTABILITY. nav2_fund_analytics_reports rows are pinned output: the change guard refuses
 -- EVERY update, so an issued report can never be silently changed (a later correction raises an
 -- alert / a new version, never an edit). Deletion is allowed (account deletion cascades from
 -- auth.users, retention is a separate policy).
@@ -54,7 +54,7 @@ revoke insert, update, delete, truncate on nav2_fund_analytics_reports from anon
 create or replace function nav2_reports_immutable() returns trigger
 language plpgsql as $fn$
 begin
-  raise exception 'nav2_fund_analytics_reports rows are pinned and immutable (update blocked)' using errcode = '42501';
+  raise exception 'nav2_fund_analytics_reports rows are pinned and immutable (change blocked)' using errcode = '42501';
 end $fn$;
 drop trigger if exists trg_nav2_reports_immutable on nav2_fund_analytics_reports;
 create trigger trg_nav2_reports_immutable before update on nav2_fund_analytics_reports

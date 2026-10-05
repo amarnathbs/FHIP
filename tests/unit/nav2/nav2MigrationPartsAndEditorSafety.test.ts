@@ -22,6 +22,24 @@ const LETTERS = ['a', 'b', 'c', 'd', 'e'] as const;
 const part = (l: string) => fs.readFileSync(path.join(PARTS, `0260${l}.sql`));
 const whole = fs.readFileSync(path.join(MIG, FILES['0260']));
 
+/**
+ * CONFIRMED CAUSE of both failed pastes on DEV (error 42P01): the Supabase SQL editor pre-parser treats the word after `into` INSIDE A
+ * STRING as an INSERT target. Part e had a text string saying events into fund analytics, and the first failure was the same string
+ * with the word NAV2 (relation NAV2 does not exist, then relation fund does not exist). So no comment and no string may contain
+ * into, from or join followed by a word. (from and join are precautionary: only into is confirmed.)
+ * The single allowed exception is the comment text `from PUBLIC` in the header of part a: it was applied on DEV without error, and
+ * parts a to d are frozen because they are already applied there. Strings never get an exception.
+ */
+const COMMENT_ALLOWED = new Set(['from public']);
+export function statementWords(text: string, kind: 'comment' | 'string'): string[] {
+  const found: string[] = [];
+  for (const m of text.matchAll(/\b(into|from|join)\s+([A-Za-z_][A-Za-z0-9_.]*)/gi)) {
+    if (kind === 'comment' && COMMENT_ALLOWED.has(m[0].toLowerCase().replace(/\s+/g, ' '))) continue;
+    found.push(`${kind} has "${m[0]}" (the editor may read it as a statement): ${text.slice(0, 50)}`);
+  }
+  return found;
+}
+
 /** The rule set (one function so the control can run it against bad text). */
 export function hazards(sql: string): string[] {
   const out: string[] = [];
@@ -37,6 +55,7 @@ export function hazards(sql: string): string[] {
       if (j < 0) j = n;
       const t = sql.slice(i, j);
       if (/[;"']/.test(t)) out.push(`comment has ; or a quote: ${t.slice(0, 50)}`);
+      out.push(...statementWords(t, 'comment'));
       i = j;
       continue;
     }
@@ -52,6 +71,7 @@ export function hazards(sql: string): string[] {
       }
       const lit = sql.slice(i, j + 1);
       if (/[;"]/.test(lit)) out.push(`string has ; or a double quote: ${lit.slice(0, 50)}`);
+      out.push(...statementWords(lit, 'string'));
       i = j + 1;
       continue;
     }
@@ -119,6 +139,27 @@ describe('editor safety (NC-M4, NC-M5)', () => {
   }
   it('NC-M4: every part passes too (they are slices, but the check is cheap and explicit)', () => {
     for (const l of LETTERS) expect(hazards(part(l).toString('utf8')), `part ${l}`).toEqual([]);
+  });
+  it('NC-M4: every migration numbered 0260 or higher in this repository (anything hand-applied from now on) passes as well', () => {
+    const later = fs.readdirSync(MIG).filter((f) => /^0(2[6-9]|[3-9]\d)\d_.*\.sql$/.test(f));
+    expect(later.length).toBeGreaterThanOrEqual(3);
+    for (const f of later) expect(hazards(fs.readFileSync(path.join(MIG, f), 'utf8')), f).toEqual([]);
+  });
+  it('NC-M5: the confirmed cause is flagged (into, from or join followed by a word inside a string or comment) and ordinary applied text is not', () => {
+    // the exact strings that broke the paste on DEV
+    expect(hazards("select 'x', false, 'processes ii_reference_corrections events into fund analytics cache invalidation.';\n").join(' ')).toMatch(/string has "into fund"/);
+    expect(hazards("select 'x', false, 'processes ii_reference_corrections events into NAV2 cache invalidation.';\n").join(' ')).toMatch(/into NAV2/);
+    expect(hazards("select left('Accepted from the review queue: ' || p_note, 500);\n").join(' ')).toMatch(/string has "from the"/);
+    expect(hazards("select 'rows are joined with join tables';\n").join(' ')).toMatch(/join tables/);
+    expect(hazards('-- the value goes into the ledger\n').join(' ')).toMatch(/comment has "into the"/);
+    expect(hazards('-- rows come from the batch\n').join(' ')).toMatch(/comment has "from the"/);
+    // the one allowed comment (applied on DEV in part a) and a string with the same words is still refused
+    expect(hazards('-- EXECUTE revoked from PUBLIC and anon.\n')).toEqual([]);
+    expect(hazards("select 'revoked from PUBLIC';\n").join(' ')).toMatch(/string has "from PUBLIC"/);
+    // text in the style of 0252 (applied on DEV without error) is fine: facts, no into / from / join before a word
+    expect(hazards("comment on table ii_factsheet_sources is 'BENCH-1 (0252): fund-house documents the factsheet benchmark reader may read. The job refuses to fetch unless it is approved.';\n")).toEqual([]);
+    // words that merely START with the keyword do not match
+    expect(hazards("-- fromage intolerance, introduction, joined data\n")).toEqual([]);
   });
   it('NC-M5: the lint bites: each rule flags a bad snippet', () => {
     expect(hazards('-- NAV2 note\n')).toContain('uppercase NAV2');

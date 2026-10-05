@@ -512,7 +512,7 @@ begin
     values (v_item.series_id, (v_c->>'date')::date, coalesce(v_c->>'kind', 'value'),
             case when v_c->>'value_percent' is null then null else (v_c->>'value_percent')::numeric(9,4) end,
             nullif(v_c->>'gap_reason', ''), v_c->>'source_document', nullif(v_c->>'source_url', ''), (v_c->>'retrieved_on')::date,
-            left('Accepted from the review queue: ' || p_note, 500), 'admin_upload', v_c->'extraction');
+            left('Accepted via the review queue: ' || p_note, 500), 'admin_upload', v_c->'extraction');
     v_inserted := true;
   end if;
   update public.ii_risk_free_review_items
@@ -601,7 +601,7 @@ insert into ii_reference_job_control (job_key, enabled, disabled_reason)
 select 'nav2_trigger_planner', false, 'Ships DISABLED: when off the existing user-scoped NAV fetch runs exactly as before, when on the required-window planner sizes the fetch.'
 where not exists (select 1 from ii_reference_job_control where job_key = 'nav2_trigger_planner');
 insert into ii_reference_job_control (job_key, enabled, disabled_reason)
-select 'nav2_correction_worker', false, 'Ships DISABLED: processes ii_reference_corrections events into fund analytics cache invalidation. Enabling is a deliberate human step.'
+select 'nav2_correction_worker', false, 'Ships DISABLED: processes ii_reference_corrections events for fund analytics cache invalidation. Enabling is a deliberate human step.'
 where not exists (select 1 from ii_reference_job_control where job_key = 'nav2_correction_worker');
 
 -- ROLLBACK: drop the functions, tables (in reverse dependency order), the two admin_users columns and the four
