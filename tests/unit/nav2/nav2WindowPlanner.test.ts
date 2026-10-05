@@ -209,7 +209,7 @@ const U3 = 'user-3';
 const txn = (id: string, user: string, ins: string, date: string, extra: Row = {}): Row => ({ id, user_id: user, account_id: `acc-${user}`, instrument_id: ins, transaction_date: date, status: 'parsed', source_reference: 'CAMS', ...extra });
 
 function seed(over: Record<string, Row[]> = {}): InMemoryDb {
-  currentDb = createInMemoryDb();
+  currentDb = createInMemoryDb({ strictSchema: true });
   currentDb.reset({
     ii_holding_snapshots: [
       { id: 's1', user_id: U1, instrument_id: 'f3', as_of_date: '2026-09-04' },

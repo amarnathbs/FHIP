@@ -19,7 +19,7 @@ const B = '22222222-2222-4222-8222-222222222222';
 const req = (secret: string | null, body: unknown = {}) => new Request('http://t/cron', { method: 'POST', headers: secret ? { 'x-cron-secret': secret } : {}, body: JSON.stringify(body) });
 
 function world(switchRow: Record<string, unknown> | null) {
-  db = createInMemoryDb();
+  db = createInMemoryDb({ strictSchema: true });
   db.reset({
     ii_reference_job_control: switchRow ? [switchRow] : [],
     nav2_correction_events: [{ id: 1, kind: 'nav_correction', instrument_id: A, benchmark_id: null, series_id: null, event_date: '2026-09-01', processed_at: null }],

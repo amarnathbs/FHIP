@@ -63,7 +63,7 @@ import { POST } from '@/app/api/investment-intelligence/cron/nav2-risk-free-refr
 const req = (secret: string | null, body: unknown = undefined) => new Request('http://t/cron', { method: 'POST', headers: secret ? { 'x-cron-secret': secret } : {}, body: body === undefined ? undefined : JSON.stringify(body) });
 
 function world(switchOn: boolean) {
-  db = createInMemoryDb();
+  db = createInMemoryDb({ strictSchema: true });
   db.reset({
     ii_reference_job_control: switchOn ? [{ job_key: 'nav2_risk_free_weekly_refresh', enabled: true, consecutive_failures: 0 }] : [{ job_key: 'nav2_risk_free_weekly_refresh', enabled: false }],
     ii_risk_free_observations: [

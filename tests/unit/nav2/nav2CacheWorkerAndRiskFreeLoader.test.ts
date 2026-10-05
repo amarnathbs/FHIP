@@ -24,7 +24,7 @@ const BM2 = '44444444-4444-4444-8444-444444444444';
 const entry = (key: string, over: Row): Row => ({ cache_key: key, instrument_id: A, metric_id: 'scheme_performance_bundle', policy_version: 'nav2-policy-v1', definition_version: 'd', actual_end: '2026-10-02', benchmark_id: null, risk_free_dataset_id: null, invalidated_at: null, ...over });
 
 function world(events: Row[], cache: Row[], deps: Row[] = []) {
-  const db = createInMemoryDb();
+  const db = createInMemoryDb({ strictSchema: true });
   db.reset({ nav2_correction_events: events, nav2_result_cache: cache, nav2_report_nav_dependencies: deps });
   return { db, admin: db.client as unknown as SupabaseClient };
 }
@@ -154,7 +154,7 @@ describe('risk-free dataset loader', () => {
   });
 
   it('loads the selected (primary) series from storage', async () => {
-    const db = createInMemoryDb();
+    const db = createInMemoryDb({ strictSchema: true });
     db.reset({
       ii_risk_free_series: [seriesRow(), seriesRow({ series_id: 'RBI_POLICY_REPO_RATE', cadence: 'policy_change', max_staleness_days: 90, verified_through_date: '2026-09-30' })] as unknown as Row[],
       ii_risk_free_observations: [...rows, obsRow('2026-06-06', 5.5, { series_id: 'RBI_POLICY_REPO_RATE' })] as unknown as Row[],
@@ -167,7 +167,7 @@ describe('risk-free dataset loader', () => {
   });
 
   it('a disabled series is still supplied (so the engine can say it is switched off), flagged enabled=false', async () => {
-    const db = createInMemoryDb();
+    const db = createInMemoryDb({ strictSchema: true });
     db.reset({ ii_risk_free_series: [seriesRow({ enabled: false })] as unknown as Row[], ii_risk_free_observations: rows as unknown as Row[] });
     const r = await loadRiskFreeSupply(db.client as unknown as SupabaseClient);
     expect(r.supply?.enabled).toBe(false);
@@ -175,7 +175,7 @@ describe('risk-free dataset loader', () => {
   });
 
   it('NC-L2: an empty registry, a failed read and a missing table are all "no supply" with a plain reason', async () => {
-    const empty = createInMemoryDb();
+    const empty = createInMemoryDb({ strictSchema: true });
     empty.reset({ ii_risk_free_series: [], ii_risk_free_observations: [] });
     const a = await loadRiskFreeSupply(empty.client as unknown as SupabaseClient);
     expect(a.supply).toBeNull();

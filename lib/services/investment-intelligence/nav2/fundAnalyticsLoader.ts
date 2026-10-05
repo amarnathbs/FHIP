@@ -71,7 +71,7 @@ interface NavRowDb {
   superseded_by_id: string | null;
   correction_of_id: string | null;
   record_checksum: string | null;
-  provider: string | null;
+  source_id: string | null;
   data_version: string | null;
 }
 
@@ -116,7 +116,10 @@ export function benchmarkSegmentsFor(instrumentId: string, ds: NonNullable<Await
   });
 }
 
-const toRaw = (r: NavRowDb): RawNavRow => ({
+/** The label recorded when a row's source cannot be resolved (no source_id, or a source_id with no ii_sources row). Never guessed. */
+export const UNKNOWN_NAV_SOURCE = 'unknown_source';
+
+const toRaw = (r: NavRowDb, providerById: ReadonlyMap<string, string>): RawNavRow => ({
   id: r.id,
   instrumentId: r.instrument_id,
   priceDate: String(r.price_date).slice(0, 10),
@@ -126,7 +129,8 @@ const toRaw = (r: NavRowDb): RawNavRow => ({
   supersededById: r.superseded_by_id,
   correctionOfId: r.correction_of_id,
   recordChecksum: r.record_checksum,
-  provider: r.provider,
+  // ii_prices_nav has no provider column: the provider identity is the ii_sources.source_key behind source_id.
+  provider: (r.source_id ? providerById.get(r.source_id) : null) ?? UNKNOWN_NAV_SOURCE,
   dataVersion: r.data_version,
 });
 
@@ -189,16 +193,23 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
   const navRows = await fetchAllRows<NavRowDb>(() =>
     admin
       .from('ii_prices_nav')
-      .select('id, instrument_id, price_date, price, currency_code, quality_status, superseded_by_id, correction_of_id, record_checksum, provider, data_version')
+      .select('id, instrument_id, price_date, price, currency_code, quality_status, superseded_by_id, correction_of_id, record_checksum, source_id, data_version')
       .in('instrument_id', fundIds)
       .lte('price_date', args.asOfDate)
       .order('price_date', { ascending: true })
       .order('id', { ascending: true })
   );
+  const sourceIds = [...new Set(navRows.map((r) => r.source_id).filter((x): x is string => !!x))];
+  const providerById = new Map<string, string>();
+  if (sourceIds.length > 0) {
+    const { data: srcData, error: srcErr } = await admin.from('ii_sources').select('id, source_key').in('id', sourceIds);
+    if (srcErr) throw new Error(`fund analytics: could not read the NAV sources (${srcErr.message})`);
+    for (const x of (srcData ?? []) as Array<{ id: string; source_key: string | null }>) if (x.source_key) providerById.set(x.id, x.source_key);
+  }
   const navBy = new Map<string, RawNavRow[]>();
   for (const r of navRows) {
     const list = navBy.get(r.instrument_id) ?? [];
-    list.push(toRaw(r));
+    list.push(toRaw(r, providerById));
     navBy.set(r.instrument_id, list);
   }
   const { data: gapData } = await admin.from('ii_nav_source_coverage_gaps').select('instrument_id, gap_from, gap_to, reason_code').in('instrument_id', fundIds).is('resolved_at', null);

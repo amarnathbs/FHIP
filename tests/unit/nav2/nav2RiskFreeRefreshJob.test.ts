@@ -29,7 +29,7 @@ const URL = 'https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid=636
 const stored = (date: string, v: number, series = TBILL_SERIES): Row => ({ series_id: series, observation_date: date, kind: 'value', value_percent: v });
 
 function world(over: { observations?: Row[]; release?: 'found' | 'missing' | 'throws'; releaseHtml?: string; releaseDate?: string; nsdp?: string | null; nsdpThrows?: boolean } = {}) {
-  const db = createInMemoryDb();
+  const db = createInMemoryDb({ strictSchema: true });
   db.reset({ ii_risk_free_observations: over.observations ?? [stored('2026-09-23', 5.19), stored('2025-12-05', 5.25, REPO_SERIES)] });
   const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => ({ data: { batch_id: 'b', inserted: (args.p_rows as unknown[]).length, identical: 0, queued: (args.p_review_items as unknown[]).length, name }, error: null }));
   const admin = Object.assign(Object.create(null), { from: (db.client as { from: (t: string) => unknown }).from, rpc }) as unknown as SupabaseClient;

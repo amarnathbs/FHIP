@@ -104,7 +104,7 @@ describe('CSV reader', () => {
 
 // ---------------------------------------------------------------------------
 function world(existing: Row[] = [], seriesRows: Row[] = [{ series_id: T, cadence: 'weekly_auction' }, { series_id: R, cadence: 'policy_change' }]) {
-  const db = createInMemoryDb();
+  const db = createInMemoryDb({ strictSchema: true });
   db.reset({ ii_risk_free_series: seriesRows, ii_risk_free_observations: existing });
   return db;
 }

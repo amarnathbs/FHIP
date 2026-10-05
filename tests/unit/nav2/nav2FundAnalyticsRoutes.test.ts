@@ -223,7 +223,7 @@ describe('print route (NC-F3)', () => {
 
 describe('render tokens (NC-F4, matrix 61)', () => {
   const tokens = (rows: Array<Record<string, unknown>> = []) => {
-    const db = createInMemoryDb();
+    const db = createInMemoryDb({ strictSchema: true });
     db.reset({ nav2_report_render_tokens: rows });
     return { db, admin: db.client as unknown as SupabaseClient };
   };

@@ -65,7 +65,7 @@ const openGate: ReportNavGate = { hold: false, funds: [], total: 2, loaded: 2, w
 const heldGate: ReportNavGate = { ...openGate, hold: true, loaded: 1, headline: 'Your report will be ready once price history is loaded (1 of 2 funds loaded)' };
 
 function setup(over: Partial<FundAnalyticsDeps> = {}, schemes: HeldSchemeInput[] = [scheme(ID_A, 'Alpha Fund', 1), scheme(ID_B, 'Beta Fund', 2)]) {
-  const db = createInMemoryDb();
+  const db = createInMemoryDb({ strictSchema: true });
   db.reset({ nav2_fund_analytics_reports: [], nav2_report_nav_dependencies: [], nav2_result_cache: [], ii_reference_job_control: [] });
   const load = vi.fn(async () => ({ input: input(schemes), warnings: [], riskFreeUnavailableReason: null }));
   const deps: Partial<FundAnalyticsDeps> = { isFlagOn: async () => true, isPremium: async () => true, gate: async () => openGate, load, nowIso: () => '2026-10-02T06:00:00.000Z', ...over };
@@ -76,7 +76,7 @@ function setup(over: Partial<FundAnalyticsDeps> = {}, schemes: HeldSchemeInput[]
 
 describe('the feature switch (NC-S1)', () => {
   it('is OFF when the row is missing, disabled, or unreadable; ON only when the row is enabled', async () => {
-    const db = createInMemoryDb();
+    const db = createInMemoryDb({ strictSchema: true });
     db.reset({ ii_reference_job_control: [] });
     expect(await isNav2FlagOn(db.client as unknown as SupabaseClient, NAV2_JOB_KEYS.fundAnalytics)).toBe(false);
     db.reset({ ii_reference_job_control: [{ job_key: NAV2_JOB_KEYS.fundAnalytics, enabled: false }] });

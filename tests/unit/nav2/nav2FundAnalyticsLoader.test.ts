@@ -73,15 +73,15 @@ vi.mock('@/lib/services/investment-intelligence/analyticsRepository', () => ({
   loadAnalyticsDataset: vi.fn(async () => ({ dataset, warnings: [{ scope: 'x', detail: 'a warning from the certified loader' }], empty: false })),
 }));
 
-const scoped = createInMemoryDb();
+const scoped = createInMemoryDb({ strictSchema: true });
 vi.mock('@/lib/services/investment-intelligence/ownerClassReportScope', () => ({
   loadOwnerClassScopeForReport: vi.fn(async () => ({ client: scoped.client, breakup: null })),
 }));
 
-import { benchmarkSegmentsFor, firstHeldDateFor, investorInputFor, loadFundAnalyticsInput } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsLoader';
+import { benchmarkSegmentsFor, firstHeldDateFor, investorInputFor, loadFundAnalyticsInput, UNKNOWN_NAV_SOURCE } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsLoader';
 
 function world() {
-  const session = createInMemoryDb();
+  const session = createInMemoryDb({ strictSchema: true });
   // The session sees the whole household (including the trust fund); the scoped client sees the personal subset only.
   session.reset({
     ii_portfolio_truth_status: [
@@ -103,9 +103,9 @@ function world() {
       { id: 't4', user_id: USER, instrument_id: H },
     ],
   });
-  const admin = createInMemoryDb();
+  const admin = createInMemoryDb({ strictSchema: true });
   const dates = weekdays('2025-01-01', 40);
-  const navRows: Row[] = dates.map((priceDate, i) => ({ id: `n-${i}`, instrument_id: A, price_date: priceDate, price: 100 + i, currency_code: 'INR', quality_status: 'ok', superseded_by_id: null, correction_of_id: null, record_checksum: `ck-${i}`, provider: 'amfi', data_version: 'v1' }));
+  const navRows: Row[] = dates.map((priceDate, i) => ({ id: `n-${i}`, instrument_id: A, price_date: priceDate, price: 100 + i, currency_code: 'INR', quality_status: 'ok', superseded_by_id: null, correction_of_id: null, record_checksum: `ck-${i}`, source_id: 'src-amfi', data_version: 'v1' }));
   admin.reset({
     ii_instruments: [
       { id: A, instrument_name: 'Alpha Flexi Cap Fund - Direct - Growth', instrument_class: 'mutual_fund', base_currency: 'INR', plan_type: 'direct', option_type: 'growth' },
@@ -114,6 +114,7 @@ function world() {
     ],
     ii_scheme_master: [{ instrument_id: A, sub_category: 'Flexi Cap Fund', category_header_raw: null, effective_to: null }],
     ii_prices_nav: navRows,
+    ii_sources: [{ id: 'src-amfi', source_key: 'amfi_navall' }],
     ii_nav_source_coverage_gaps: [{ instrument_id: A, gap_from: '2025-01-10', gap_to: '2025-01-20', reason_code: 'fund_house_transition', resolved_at: null }, { instrument_id: A, gap_from: '2024-01-10', gap_to: '2024-01-20', reason_code: 'other', resolved_at: '2025-01-01' }],
     ii_risk_free_series: [],
     ii_risk_free_observations: [],
@@ -157,6 +158,26 @@ describe('loader composition', () => {
     expect(a.optionType).toBe('growth');
     expect(a.categoryLabel).toBeTruthy();
     expect(a.firstHeldDate).toBe('2025-03-03');
+  });
+
+  it('the NAV provider is resolved through ii_prices_nav.source_id -> ii_sources (ii_prices_nav has no provider column; Stage 3 defect)', async () => {
+    const { res, admin } = await run();
+    expect(admin.reads).toContain('ii_sources');
+    expect(res.input!.schemes.find((s) => s.instrumentId === A)!.series.count).toBe(40);
+  });
+
+  it('a NAV row whose source cannot be resolved is labelled unknown_source, never guessed, and the report still loads', async () => {
+    const { session, admin } = world();
+    admin.tables.ii_sources = [];
+    const res = await loadFundAnalyticsInput({ userId: USER, sessionClient: session.client as never, adminClient: admin.client as unknown as SupabaseClient, asOfDate: AS_OF, displayCurrency: 'INR', periodChoice: 'since_first_held', gate });
+    expect(res.input!.schemes.find((s) => s.instrumentId === A)!.series.count).toBe(40);
+    expect(UNKNOWN_NAV_SOURCE).toBe('unknown_source');
+  });
+
+  it('STRICT fake: selecting the old provider column on ii_prices_nav throws, as the real database does', () => {
+    const { admin } = world();
+    expect(() => (admin.client.from('ii_prices_nav') as { select: (s: string) => unknown }).select('id, provider')).toThrow(/ii_prices_nav\.provider does not exist/);
+    expect(() => (admin.client.from('no_such_table') as unknown)).toThrow(/not created by any migration/);
   });
 
   it('NC-D4: a fund still being fetched is history_hydrating, never insufficient_history', async () => {
