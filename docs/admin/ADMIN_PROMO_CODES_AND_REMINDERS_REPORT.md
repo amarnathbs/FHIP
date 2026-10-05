@@ -30,7 +30,7 @@ Migration: `supabase/migrations/0237_admin_promo_codes_extension_cap_expiry_summ
 - **One named constant on each side:** SQL `public.premium_grant_max_extensions()` (returns 5) and TypeScript `MAX_EXTENSIONS_PER_GRANT` in `lib/services/premiumGrantAdmin.ts`. A test asserts they agree.
 - **Enforced twice:** authoritative in `admin_manage_premium_entitlement()` (under the row lock; error `ENTITLEMENT_EXTENSION_LIMIT_REACHED`), and in the route (`POST /api/admin/entitlements/grants`, `extend`): the route reads the user's extension count first and refuses with a 409 and a clear message before the write path. If that lookup fails the request proceeds and the database enforces the cap (a failed lookup is never read as "under the limit").
 - **What counts as "a grant":** one allocation — an admin **Grant**, or a **promo redemption**. It starts at `extension_count = 0`.
-- **What counts as "an extension":** one **successful** admin **Extend** on that grant, including re-activating a lapsed grant. Rejected attempts (not later, over 365 days, missing reason, at the limit, paid-protected) do not count.
+- **What counts as "an extension":** one **successful** admin **Extend** on that grant, including re-activating a lapsed grant. Rejected attempts (not later, over 365 days, missing reason, at the limit, paid-protected) do not count. **[Extended by section 18, item 3: a revoke and re-grant no longer resets the lifetime ceiling.]**
 - **When the counter resets:** when a **new grant starts** — an admin Grant after a Revoke (or after the previous grant lapsed), or a promo redemption. **Revoke** also clears it. **Revoke + re-Grant by an admin is allowed and is the sanctioned way past the cap; both actions are audited** (each audit row now carries `extension_count_after`).
 - A paying subscription **keeps** the counter (the grant is held in reserve and restored with its count if the subscription lapses first).
 - An admin extending a **promo-sourced** entitlement converts it to `admin_grant` (an admin now decides its length) and counts as extension 1.
@@ -39,7 +39,7 @@ Migration: `supabase/migrations/0237_admin_promo_codes_extension_cap_expiry_summ
 
 ## 3. Promo codes — design
 
-**Data (all RLS-enabled; users can read none of it):** `promo_codes` (code stored normalised, masked `code_hint`, `duration_days` 1..365 default **30** (changed by migration 0238; 0237 originally defaulted to 365), `max_redemptions` nullable, `redemption_count`, `expires_on`, note, status), `promo_code_redemptions` (unique per user per code), append-only `promo_code_events` (create / disable / redeem), `promo_redemption_attempts` (rate-limit ledger). `promo_codes` rows can never be deleted (trigger); events are append-only (trigger, also TRUNCATE).
+**Data (all RLS-enabled; users can read none of it):** `promo_codes` (code stored normalised, masked `code_hint`, `duration_days` 1..365 default **30** (changed by migration 0238; 0237 originally defaulted to 365), `max_redemptions` nullable, `redemption_count`, `expires_on`, note, status), `promo_code_redemptions` (unique per user per code), append-only `promo_code_events` (create / disable / redeem), `promo_redemption_attempts` (rate-limit ledger). `promo_codes` rows can never be deleted (trigger); events are append-only (trigger, also TRUNCATE). **[SUPERSEDED by section 18, item 1: since migration 0264 to 0268 no new code is stored in plain text, and after the backfill none is.]**
 
 **Capability:** `admin_users.can_manage_promo_codes` + `is_promo_code_admin()`, **separate from `can_manage_premium_entitlements`** (Standard §3): holding either never confers the other, not implied by Super Admin; nobody holds it by default. Nav: separate group "Promo Codes" (`promoCodeManagement`) at `/admin/entitlements/promo-codes`. Layers: DB (functions + RLS), API (`requirePromoCodeAdmin`), page (`requirePromoCodeAdminPage`), nav.
 
@@ -51,7 +51,7 @@ Migration: `supabase/migrations/0237_admin_promo_codes_extension_cap_expiry_summ
 - Only reachable through the authenticated route. The SQL function `redeem_promo_code_for_user(user, code, ip_hash)` is granted to **`service_role` only**; the user id is the session user, never the request body.
 - **Atomic:** locks the user's entitlement row then the promo row (`FOR UPDATE`, always that order), so `max_redemptions` cannot be exceeded under concurrency; an independent `CHECK (redemption_count <= max_redemptions)` is a second guard.
 - **One redemption per user per code** (unique constraint + explicit verdict "You have already used this code.").
-- **Duration:** a redemption on date R ends on R + `duration_days` (inclusive) — the same convention as the 365-day admin cap; never more than 365 days.
+- **Duration:** a redemption on date R ends on R + `duration_days` (inclusive) — the same convention as the 365-day admin cap; never more than 365 days. **[SUPERSEDED by section 18, item 2: both ends are inclusive, so a redemption on R ends on R + `duration_days` - 1.]**
 - **Paid Premium: REFUSED** (`PROMO_PAID_ACTIVE`), independent of the code, never clobbered or stacked.
 - **Existing admin grant / promo:** the later end date wins and an entitlement is **never shortened**. If the code would not extend it, the response is the same generic "This code cannot be used." and **no redemption is consumed**; a longer code extends it (keeping the start date). A lapsed grant does not block: the promo restarts from today.
 - **Result:** the same kind of entitlement as an admin grant but `entitlement_source = 'promo_code'` and the code **id** on the row (`promo_code_id`); the honest plan text is **"Premium (promo code, ends <date>)"**; it expires back to Free through `effective_to` like a grant; audited as a `redeem` event.
@@ -158,7 +158,7 @@ Prerequisite: 0231 applied first (it is the base of this migration).
    update admin_users set can_manage_promo_codes = true
     where user_id = (select id from auth.users where email = '<admin email>');
    ```
-4. Optional but recommended: set an environment variable `PROMO_IP_HASH_SECRET` (any long random string, server-side only) so the per-IP rate limit is active; without it (and without `CRON_SECRET`) only the per-user limit applies.
+4. Optional but recommended: set an environment variable `PROMO_IP_HASH_SECRET` (any long random string, server-side only) so the per-IP rate limit is active; without it (and without `CRON_SECRET`) only the per-user limit applies. **[SUPERSEDED by section 18, items 4 and 6: mandatory, at least 32 characters, different from CRON_SECRET; the address is taken from the right of X-Forwarded-For.]**
 5. Run `node scripts/admin_premium_grant_dev_proof.mjs` against DEV (part 1 = grant lifecycle, part 2 = extension cap + promo incl. 8-way parallel redemption). Never against production (it refuses).
 6. Smoke by hand on DEV: create a code, redeem it as a test user on the Profile page, confirm "Premium (promo code, ends ...)", then set the user's `effective_to` to a date 5 days ahead and confirm the banner.
 7. **Production later:** apply 0231, then 0237, then deploy (code is safe in either order for end users: the redeem route reports "unavailable" and grants nothing if the function is absent; the status route and the banner tolerate missing columns).
@@ -166,7 +166,7 @@ Prerequisite: 0231 applied first (it is the base of this migration).
 
 ## 10. Known limitations / decisions still needed
 
-1. **Per-IP limit needs a secret** (`PROMO_IP_HASH_SECRET` or `CRON_SECRET` already set in production); confirm which to use.
+1. **Per-IP limit needs a secret** (`PROMO_IP_HASH_SECRET` or `CRON_SECRET` already set in production); confirm which to use. **[SUPERSEDED by section 18, item 4: no fallback to CRON_SECRET; PROMO_IP_HASH_SECRET must be its own value.]**
 2. (Answered by the PO: e-mail reminders are in scope; built disabled by default, see section 12.)
 3. A user who has an active admin grant and enters a code that would not extend it gets the generic "cannot be used" (deliberate: a distinct message would be an enumeration oracle); the form's static helper text explains the rule.
 4. Redemption by a user holding a not-yet-lapsed **manually SQL-set** Premium is refused as "paid" (indistinguishable from paid).
@@ -300,7 +300,7 @@ Built on a new branch from origin/main (4742d5c). Not pushed. **Migration 0242 i
 
 ### 17.1 A correction to the premise (read this first)
 
-The request describes the design as storing "only a hash/masked hint" and showing the code once. That is **not what 0237 built**: `promo_codes.code` stores the **plain normalised code**, `admin_list_promo_codes()` returns it, and the Promo Codes page's list renders it (so promo-code admins can always see and copy any code). Only the **audit trail** (`promo_code_events`) is hint-only. I did not change that. What the new feature guarantees is narrower and checkable: **the new e-mail subsystem never stores, logs, returns, or puts in a URL, audit row or error the plaintext code** — the send ledger holds a keyed hash of each recipient and a status; the create response omits the code when it was e-mailed. If the PO wants the plain code hidden from the list too, that is a separate design change (hash-only storage) with a real cost (an admin could no longer re-copy a code) — **decision needed (section 17.8)**.
+The request describes the design as storing "only a hash/masked hint" and showing the code once. That is **not what 0237 built**: `promo_codes.code` stores the **plain normalised code**, `admin_list_promo_codes()` returns it, and the Promo Codes page's list renders it (so promo-code admins can always see and copy any code). Only the **audit trail** (`promo_code_events`) is hint-only. I did not change that. What the new feature guarantees is narrower and checkable: **the new e-mail subsystem never stores, logs, returns, or puts in a URL, audit row or error the plaintext code** — the send ledger holds a keyed hash of each recipient and a status; the create response omits the code when it was e-mailed. If the PO wants the plain code hidden from the list too, that is a separate design change (hash-only storage) with a real cost (an admin could no longer re-copy a code) — **decision needed (section 17.8)**. **[SUPERSEDED by section 18, item 1: the premise is now true, because of migrations 0264 and 0265 plus the backfill.]**
 
 ### 17.2 What was built
 
@@ -319,7 +319,7 @@ The request describes the design as storing "only a hash/masked hint" and showin
 | Per-admin rate limit | in the database: 10 requests and 100 recipients per rolling hour per admin (`PROMO_EMAIL_RATE_LIMITED`, HTTP 429) |
 | Kill switch, fail closed | `PREMIUM_PROMO_EMAIL_ENABLED`: only the exact text `true` enables sending; unset / `false` / `TRUE` / `1` / blank = OFF. OFF => the code is still created and shown once with **"Email sending is switched off. Copy the code and send it yourself."** Also "not configured" (no secret / no `RESEND_API_KEY`) and "not available on this database yet" messages |
 | Address binding | `promo_codes.bound_email_hash` = HMAC-SHA256 (server secret, domain-separated, normalised address) — **never the plain address**; CHECKs make a bound code single-use with a well-formed hash; redemption passes the session user's keyed hash and any other account (or no hash) gets the **same generic "This code cannot be used."** as a missing code (identical verdict, tested equal) and consumes nothing. Key: `PREMIUM_PROMO_EMAIL_BIND_SECRET`, else `PROMO_IP_HASH_SECRET`, else `CRON_SECRET`; **rotating it makes already-bound codes unusable (fail closed)** |
-| Fail soft without the migration | create falls back to the legacy argument shape, nothing is sent, the admin sees the message and the code once; a binding request is refused (503) and creates **nothing** (never a silently unbound code); redemption falls back to the legacy 3-argument call |
+| Fail soft without the migration | create falls back to the legacy argument shape, nothing is sent, the admin sees the message and the code once; a binding request is refused (503) and creates **nothing** (never a silently unbound code); redemption falls back to the legacy 3-argument call | **[SUPERSEDED by section 18, item 1: the legacy create shape no longer exists; without the migration create refuses with a 503.]**
 | Date rule | e-mail dates go through `formatDateShort`; the day-first source-contract test now also scans `lib/services/promoCodeEmail.ts` and the admin component, and stays green |
 
 ### 17.4 Migration 0242
@@ -355,7 +355,7 @@ Adds `promo_codes.bound_email_hash` (+ two new CHECKs on that new column only), 
 ### 17.7 What was and was not verified
 
 - **Code-complete; database rules verified on an isolated PGlite replay; application layer unit-tested.** **Not DEV-verified, not production-verified. No real e-mail was sent anywhere** (the mailer is injected; the Resend path was already exercised only with an injected fetch). The new admin form was not rendered in a browser. True concurrent double-submission was not raced (PGlite is single-connection): the guarantee is the database's UNIQUE `(admin, request key)` row, which the suite exercises by name.
-- Not done on purpose: no change to who can see plain codes in the list (17.1).
+- Not done on purpose: no change to who can see plain codes in the list (17.1). **[SUPERSEDED by section 18, item 1.]**
 
 ### 17.8 PO apply list, environment, DEV rehearsal, decisions
 
@@ -390,7 +390,7 @@ Adds `promo_codes.bound_email_hash` (+ two new CHECKs on that new column only), 
 7. Query `promo_email_sends` / `promo_email_requests` / `promo_code_events`: no address, no code anywhere.
 
 **Decisions still needed from the PO**
-1. **Plain codes are visible in the admin list** (17.1) — keep (admins can re-copy codes) or move to hash-only storage?
+1. **Plain codes are visible in the admin list** (17.1) — keep (admins can re-copy codes) or move to hash-only storage? **[SUPERSEDED by section 18, item 1: the PO ruled hash only; the list shows only a masked hint.]**
 2. **Binding forces single-use** (one recipient, one redemption) — confirm.
 3. **A mailer failure after 3 attempts is final for that request** (the code is shown to the admin; resending means "Generate a replacement code and email it") — confirm there is no background retry.
 4. Admin-triggered e-mails use AU date format because the recipient's country is not looked up — confirm, or ask for a lookup by e-mail.
@@ -406,3 +406,175 @@ After the production test the promo e-mail arrived from "FHIP Contact Form <no-r
 - **Scope:** the promo-code e-mails and the Premium expiry-reminder e-mails both use the same `createResendMailer().from()`, so both are fixed by the one change (the shared path is natural, so they are not split). **The Contact form route is untouched** and still sends exactly "FHIP Contact Form <...>" (source-guarded and tested).
 - **Tests** (`tests/unit/mailFromHeader.test.ts`, 12, plus the adjusted `premiumExpiryReminderRunner` expectations): default name is `FHIP` (control: the old pass-through fails "the default name must be FHIP"); the address part is unchanged (control: a rebuilt address fails "the address part must be unchanged"); header-injection attempts (CR/LF, quotes, brackets, NUL, Unicode separators, commas) are neutralised (control: naive concatenation fails "header injection must be neutralised"); the Contact form's From is unchanged by the setting (control: routing it through the new builder fails "contact-form From is unchanged"); the header actually sent to Resend is the built header.
 - **PO action:** none required (the default reads "FHIP"). To use a different name set `PREMIUM_PROMO_EMAIL_FROM_NAME` on Amplify (e.g. `FHIP Premium`). No database change, no migration.
+
+## 18. Hardening mission (2026-10-05): independent review, 14 items
+
+Branch `feat/promo-premium-hardening-20261005`, cut from `origin/main` b105cf4. Migrations **0264 to 0268** (NAV2 owns 0260 to 0263; the highest number found on every ref and every worktree was 0263). Nothing is pushed, merged or applied. Nothing is switched on. The PO hand-over (apply order, verify queries, secrets, decisions, reversal) is `docs/admin/po_apply_hardening/README.md`.
+
+Evidence labels used below: **PGlite** = proven on an isolated real-Postgres replay of the whole ledger with named negative controls; **unit** = hermetic application tests with injected mailer, clock and random source; **source contract** = tests that read the source; **DEV** = needs a run against the DEV project (not done, listed in item 14); **UNVERIFIED** = cannot be proven from this repository.
+
+Where an earlier section of this report says something that this section contradicts, the earlier text is marked SUPERSEDED.
+
+### 18.1 Item 1 PLAIN CODES (hash only storage)
+
+**Finding.** `promo_codes.code` stored the plain normalised code, `admin_list_promo_codes()` returned it, the admin list rendered it, and a promo admin could also `select code from promo_codes` through the table grant. The PO ruled hash only.
+
+**Change.** A code is identified by a keyed digest `HMAC-SHA256(PROMO_CODE_DIGEST_SECRET, "promo-code:v<version>:" + normalised code)`. The application (not the database) generates the code with a CSPRNG, computes the digest and a masked hint, and sends the database only those. The database never sees a new plain code. `admin_create_promo_code` now takes the digest, the hint and the key version (the old 9 argument form is dropped). `admin_list_promo_codes()` has no code column. API roles lose column access to `code`, `code_digest`, `code_digest_version` and `bound_email_hash` (column grants). The plain code is returned once in the create response and once in the e-mail, and in the show-once fallback after a failed send; never from a list, history or status route. A replacement is always a new code. **Key rotation:** the digest carries its key version; lookup accepts the current and the previous key; `docs/admin/PROMO_CODE_DIGEST_KEY_ROTATION_RUNBOOK.md` has the procedure, the dual verify window and what to do after a leak. **Migration of existing codes:** `scripts/promo_code_digest_backfill.mjs` (dry run by default) reads the pending rows, stores each digest and has the database verify the copy; the plain value is blanked only by `promo_codes_finalise_hash_only(false)`, which refuses while any plain row is unverified (all or nothing) and needs `--i-have-a-backup`. Until then redemption falls back to the legacy plain lookup for rows that have no digest, so every existing code keeps working at every step. Reversal is in the README section 6.
+
+**Evidence.** PGlite: a created code stores no plain value, only digest, version and hint; the audit row has neither; API roles get `permission denied` on the four columns; the list has no code column; normalised redemption; wrong, empty and over-long digest lists give the generic refusal; duplicate digest refused; key rotation finds a version 1 code through the previous key candidate and NOT without it; legacy row redeemable before the backfill; backfill functions are service role only; apply, verify and finalise end to end; finalise refuses while one row is unverified. Named controls NC-H1 (finalise without the verified predicate blanks an unverified row) and NC-H2 (verify without the digest comparison marks any digest verified). Unit: the database receives only the digest and hint (`promoCodeEmailService.test.ts`), the code is not in any ledger argument, log, subject, sender or idempotency key. Source contract: the list never renders `r.code`.
+
+**Residual risk.** (a) The backfill and finalise are not run (PO step, DEV first). (b) The hint format: the mission example `ABCD...WXYZ` would reveal 8 of the 10 generated characters, so the existing two plus two (4 of 10) was kept. **PO decision.** (c) A short admin-typed code is weak against an offline attack if the digest key leaks. The runbook has the query to find them. (d) The legacy plain lookup is left in place until the PO has finalised, then it is inert (no row has a plain value). Removing the parameter is a follow-up release. **Status: DONE-with-residual.**
+
+### 18.2 Item 2 DURATION (one inclusive definition)
+
+**Finding.** `effective_to` is inclusive (migration 0115) and `effective_from` is inclusive, but a promo of D days ended on R + D, giving D + 1 calendar days; the admin cap (end date at most today + 365) allowed 366.
+
+**Change.** One definition: a window of N days that starts on R ends on R + N - 1; its length is end minus start plus 1. SQL: `access_end_date()` and `access_window_days()` (0264). TypeScript: `accessEndDate()` and `accessWindowDays()` in `lib/services/entitlementWindow.ts`. Used by promo create (`ends_if_redeemed_today`), promo redeem, the admin grant ceiling (a 365 day grant ends at most today + 364, so the latest end date is one day earlier than before), the list and summary functions (they already used `effective_to` inclusively), the reminder claim (a threshold of t days applies to a window longer than t days, measured with `access_window_days`) and the e-mail wording ("counting the day you redeem it"). Banners count days to the last day (`days = end - today`, 0 on the last day) and are unchanged.
+
+**Evidence.** Unit (`accessWindowDuration.test.ts`): 1, 30, 365 day grants walked day by day give exactly that many days of Premium; leap year (redeemed 28 February 2024: 30 days end 28 March 2024, 365 days end 26 February 2025); named control NC-D1 reproduces the old off by one (end = R + N) and goes red on "day grant gives exactly". PGlite: SQL agrees with TypeScript for the same vectors; a 30 day promo redeemed today ends today + 29 (control NC-D2 with the old rule); the grant ceiling today + 364 allowed and today + 365 refused (control NC-D3); the reminder claim treats a 30 day window as not longer than 30 and a 31 day window as longer (control with the old measure). The existing admin grant, promo and reminder suites were updated for the new semantics and pass.
+
+**Residual risk.** Entitlements already redeemed under the old rule keep their old end dates (one day longer). They are not rewritten. The grant ceiling is one day shorter than before. **PO decision (acknowledge).** **Status: DONE-with-residual.**
+
+### 18.3 Item 3 EXTENSION CAP (lifetime ceiling and the override path)
+
+**Finding.** The cap of 5 extensions reset on revoke and re-grant, so a loop of revoke and grant was unbounded.
+
+**Change.** `user_entitlements.admin_lifetime_grant_units` counts every successful admin grant and extend per user and is never reset by a revoke (backfilled from the append-only audit trail). The ceiling is `premium_grant_lifetime_ceiling()` = 10 (mirrored by `PREMIUM_GRANT_LIFETIME_CEILING`; a test asserts they agree). An ordinary grant or extend after exhaustion is refused with `ENTITLEMENT_LIFETIME_LIMIT_REACHED`. The exceptional override is a **separate capability** `admin_users.can_override_entitlement_limits` (`is_entitlement_override_admin()`), granted to nobody, never implied by Super Admin, by the two ordinary capabilities or by membership, and used only together with `can_manage_premium_entitlements`. It needs `override: true`, a reason of at least 20 characters, and a limit that was really reached (otherwise `ENTITLEMENT_OVERRIDE_NOT_NEEDED`). Each override writes the ordinary audit event, an append-only `premium_entitlement_overrides` row and a high severity `admin_monitoring_events` alert. The second person approval alternative was not built: the mission allowed either, and a separate capability is simpler to audit.
+
+**Evidence.** PGlite: counter backfill never lowers; ten grants and revokes exhaust it and the eleventh grant is refused and changes nothing; extensions count (five hit the per grant cap first); override refused for an entitlement admin, for an admin holding promo plus entitlement, for the override capability alone, with a short reason, on a revoke and when not needed; success writes the three records, none changeable; predicates are separate in both directions. Controls NC-L1 (no lifetime check) and NC-L2 (no capability check). Source contract: the guard order (ordinary first), `/api/admin/me` independent reads, nav shows no entry for the override alone. UI: the override panel renders only when `/api/admin/me` reports the capability (fail closed).
+
+**Residual risk.** Promo redemptions are not counted toward the ceiling (each code is bounded and a user can use a code once; an admin able to create unlimited codes is a separate control). **PO decision.** The ceiling of 10 is a proposal. **Status: DONE-with-residual.**
+
+### 18.4 Item 4 SECRETS (dedicated, mandatory, no fallbacks)
+
+**Finding.** `PREMIUM_PROMO_EMAIL_BIND_SECRET` fell back to `PROMO_IP_HASH_SECRET` then `CRON_SECRET`, and the IP hash to `CRON_SECRET`. One leaked value opened several doors and a missing one silently weakened a control.
+
+**Change.** `lib/services/promoSecrets.ts` is the only reader. Four dedicated secrets, each with one purpose: `PROMO_CODE_DIGEST_SECRET` (new), `PREMIUM_PROMO_EMAIL_BIND_SECRET`, `PROMO_IP_HASH_SECRET`, `CRON_SECRET`. A feature refuses (explicit 503, or the e-mail "not configured" message) if a secret it needs is missing, shorter than 32 characters or equal to another dedicated secret: create needs the digest secret, e-mail and binding also the bind secret, redemption all three, the cron route the cron secret (compared in constant time). Names only are ever logged. `amplify.yml` forwards `PROMO_CODE_DIGEST_`, `PROMO_TRUSTED_PROXY_HOPS` and the existing names; `ENVIRONMENT_VARIABLES.md` documents every name (the mission named `docs/ENVIRONMENT_VARIABLES.md`; the file in this repository is the root `ENVIRONMENT_VARIABLES.md`). **The PO must generate:** `PROMO_CODE_DIGEST_SECRET` (new); `PREMIUM_PROMO_EMAIL_BIND_SECRET` and `PROMO_IP_HASH_SECRET` if production relied on the fallbacks; and rotate `CRON_SECRET` only if it is under 32 characters or equals another (then update the Vault secret too). All different, at least 32 characters.
+
+**Evidence.** Unit: each feature refuses without each of its secrets and names only the variable; a missing bind secret is not rescued by another secret (control NC-S1 reproduces the old chain); reuse detection; digest key set rules; routes refuse before touching the database (create 503, redeem 503 with no database call, cron 503); source contract: no promo source ORs two secrets, only the secrets module and the cron authenticator read them, the libraries never log, amplify forwards and the document describes every name the code reads.
+
+**Residual risk.** Whether the Amplify console values are forwarded at runtime is checked only by the text of `amplify.yml` (DEV). The 32 character minimum would make a shorter existing `CRON_SECRET` refuse the reminder route until rotated (that job is disabled). **Status: DONE-with-residual.**
+
+### 18.5 Item 5 BOUND REDEMPTION
+
+**Finding.** Binding used the session address but did not require it to be verified; the normalisation lived only in TypeScript.
+
+**Change.** Redemption uses the authenticated session user only and passes an address hash only when the account's `email_confirmed_at` is set; the database also requires `auth.users.email_confirmed_at` for a bound code. A browser supplied address or hash is never read. One normalisation contract: trim space, tab, CR and LF, lower case ASCII A to Z only; no Gmail dot or plus rewriting, no unicode folding. TypeScript `normaliseEmailAddress` and SQL `promo_normalise_email` are both checked against `tests/fixtures/email-normalisation-vectors.json`. Behaviour on an address change between issue and redemption: the new address hashes differently, so the bound code stays unusable (the same generic message) until an admin issues a new one. There is no silent rebind, and no way to rebind.
+
+**Evidence.** Unit: hash is the keyed hash of the normalised verified address; unverified, absent and browser claimed addresses give a null hash; address change gives a different hash; Gmail variants differ. PGlite: SQL normaliser equals the vectors; matching verified address redeems while an unverified account, another address, no hash and a changed address all get the identical generic refusal (control NC-B1 without the verified clause). Validation of typed recipients (header injection, control characters, reserved domains) is in item 9.
+
+**Residual risk.** The database never sees an address, so the SQL normaliser is for operators, tests and parity; the runtime path hashes in the application. That Supabase sets `email_confirmed_at` only after the user confirms is the authentication provider's behaviour (assumed). **Status: DONE.**
+
+### 18.6 Item 6 X-FORWARDED-FOR
+
+**Finding.** The per-network limit keyed on the first X-Forwarded-For hop, which the client chooses: a forged header gave a fresh bucket per request.
+
+**Change.** `lib/services/promoCodeIp.ts` takes the address from the **right** of the list with a configurable trusted hop count (`PROMO_TRUSTED_PROXY_HOPS`, default 1). It never reads `X-Real-IP` or any other client settable header. It returns "no trustworthy address" (so only the authoritative per-user limit applies) when the header is absent, shorter than the hop count, malformed, a private, loopback, link local, CGNAT or multicast address (so a wrong hop count cannot put everyone in one bucket) or the setting is invalid. The address is hashed with the dedicated IP secret.
+
+**Evidence.** Unit: a forged left entry cannot change the hash (control NC-I1 with the old first hop reader), two hop counts, every downgrade case, ports and IPv6. The route test sends `9.9.9.9, 203.0.113.9` and checks that neither the forged nor the real address reaches the database.
+
+**What can be proven from the repository.** AWS Amplify Hosting serves through CloudFront, and CloudFront appends the connecting address to the X-Forwarded-For it receives, so the right end is trustworthy and the left end is not. The repository contains evidence only for the `CloudFront-Viewer-Country` header (`lib/services/landingCountryContext.ts`), not for X-Forwarded-For. **UNVERIFIED:** whether Amplify adds a second internal hop (hop count 2), and whether the value reaches the Next.js route unmodified. **DEV proof:** send redemption requests with and without a forged `X-Forwarded-For` and compare the stored `promo_redemption_attempts.ip_hash` values: the hash must not change with the forgery and must equal the hash of your real address; if it equals an internal address the hop count is wrong. **Residual risk:** until the probe is run the per-network limit may be inactive (downgraded) in production; the per-user limit (10 attempts per 15 minutes) is unaffected. **Status: DONE-with-residual.**
+
+### 18.7 Item 7 RETENTION AND CLEANUP
+
+**Finding.** Only the attempts table was pruned (inline, 2 days). The send ledger, request table, reminder ledger, disabled codes and audit events grew without bound, with no legal hold and no run evidence.
+
+**Change.** Migration 0267: `promo_retention_policy` (one named period per data set, a row not a migration), `promo_retention_holds` (a hold on a data set or on one user), `promo_retention_runs` (append-only evidence of every run, dry runs included), and `promo_retention_run(dry_run)` (service role only). The job control row `promo_retention` ships **disabled**; a real run refuses while it is off and leaves a `skipped_disabled` evidence row; a dry run only counts. The pg_cron job `promo-retention-cleanup` is registered only where the production marker row exists and pg_cron is installed; it calls the SQL function directly (no web call, no secret). Anonymise instead of delete where an audit needs the row. The audit table stays append-only for everyone; the only exception is a narrow, transaction local update that marks a row anonymised and leaves its identity columns unchanged.
+
+| Data set | Class | Proposed period | Action |
+|---|---|---|---|
+| `promo_redemption_attempts` | security telemetry: user id and keyed network hash | 30 days (the redeem function prunes with the same named constant) | delete |
+| `promo_email_requests` | operational audit: admin, purpose, counts | 180 days | delete |
+| `promo_email_sends` | pseudonymous: keyed recipient hash | 180 days | anonymise (hash replaced, provider id and error cleared) |
+| `premium_expiry_email_ledger` | user id, no address | 400 days, settled rows only | delete |
+| `promo_codes` | possible free text note | 365 days after disable or after the redeem by date | anonymise (note, digest cleared) |
+| `promo_code_events` | audit; the actor of a redeem is an end user | 7 years | anonymise (actor replaced by a zero id) |
+| `admin_monitoring_events`, `premium_entitlement_overrides`, `admin_entitlement_events` | append-only audit | not purged | none (small; PO to decide) |
+
+Account deletion: redemption rows and reminder ledger rows follow the user by cascade; rows with no foreign key (attempts, event actors, e-mail request admins) are cleaned on every pass by the orphan step without waiting for the age limit, unless an open hold on everything exists.
+
+**Evidence.** PGlite: ships disabled and the policy rows equal the table above; a real run while off changes nothing and records evidence; enabled run deletes and anonymises exactly the proposed sets, leaves an active code and pending ledger rows alone, and a second run does nothing; the audit trail stays append-only (update, delete and truncate refused even for the service role, even with the switch set but the row not marked anonymised); a user hold and a data set hold pause cleanup and releasing resumes it; orphan step after deleting an account; the job is registered only with the marker, idempotently, with no URL or secret in it. Controls NC-R1 (cleanup that ignores holds).
+
+**Residual risk.** The periods are proposals for PO approval. The job and the account deletion flow were not run together end to end (DEV). `admin_monitoring_events` is not purged. **Status: DONE-with-residual.**
+
+### 18.8 Item 8 MULTI-RECIPIENT PARTIAL FAILURE
+
+**Finding.** With up to 20 recipients, partial failure, a retried request, a browser refresh and a lost response had no documented behaviour and no tests, and a repeated key returned only an error with no way to see who had been reached.
+
+**Change.** A repeated request key now returns the per recipient STATUS from the ledger (new function `admin_promo_email_request_status` and route `POST /api/admin/promo-codes/email-requests/status`, both readable only by the initiating admin and returning no code, address or hash). The plaintext code is returned only for a code that at least one recipient did not receive, once, to the initiating admin; a bound code has one recipient so a failed recipient's code is shown only for that recipient. Every recipient who is not reached gets a ledger row with the reason (`email_switched_off`, `not_configured`, `circuit_open`, or the provider failure). The only way to re-send is an explicit replacement (a new code).
+
+**Evidence.** Cases tested (unit, in `promoCodeEmailService.test.ts` "item 8"), each with the assertion that a delivered recipient's code never appears:
+- shared code, some failed: the one shared code is returned once with a status per recipient; exactly one occurrence in the response;
+- bound codes, middle one failed: only the failed recipient's code is returned; the other two are absent from the response; each mailer call carried only its own recipient's code;
+- the ledger records only keyed hashes, one record per recipient with its own status, no address or code in any argument;
+- retry with the same key: no new code, nothing re-sent (not even to the failed one), the response is the per recipient status from the ledger (HTTP 409, no code);
+- browser refresh after partial delivery: the status route (new, `POST /api/admin/promo-codes/email-requests/status`) reads the ledger from the key and the addresses typed again and never returns a code; another admin or another key reads "unknown";
+- lost response: the ledger still says which recipients were reached; a recipient with no row is "unknown", never assumed delivered;
+- recovery is an explicit replacement: a NEW code (different digest), sent only to the recipients supplied, the old code untouched, kind `replace` and the replaced id recorded.
+PGlite: the status function returns sent, failed and unknown per hashed recipient, only for the admin who started the request, and a late failure never downgrades a sent row. Named controls: an orchestrator that returned every code is caught ("a delivered recipient's code is not returned").
+
+**Residual risk.** A recipient reconcilable "without storing the address or the code" means unknown when the outcome was never recorded (the process died between sending and recording): the ledger has no pending row before the send. At most once beats a duplicate, so such a recipient is shown as unknown and recovered by replacement. **Status: DONE-with-residual.**
+
+### 18.9 Item 9 E-MAIL ABUSE CONTROLS
+
+**Finding.** The only control was 10 requests and 100 recipients per admin per hour. There was no purpose, no daily or platform wide limit, no alert for unusual volume, no circuit breaker for a failing provider, no limit on repeatedly replacing one code, a loose address pattern, and no timeout on the provider call.
+
+**Change (migration 0266 and `lib/services/promoEmailAbuse.ts`).** A purpose of 10 to 200 characters without control characters is mandatory and recorded with the initiating admin, the kind (create or replace), the replaced code and the recipient count. Limits in one SQL function `promo_email_limits()` mirrored in TypeScript (a test asserts they agree): 100 recipients per admin per rolling day, 300 across all admins per day, 3 replacements per code per day, a volume alert at 80 percent, circuit breaker after 5 consecutive provider failures for 15 minutes; the existing hourly limit (10 requests, 100 recipients) stays. The begin step takes an advisory lock so two simultaneous requests cannot both slip under a limit. A refusal is **returned** (not raised) so its alert row is committed with the call. Alert rows (`admin_monitoring_events`) hold counts, ids and flags only, one per admin per day, never an address or a code. A provider circuit breaker (service role only) counts only provider level failures (network, timeout, 5xx, 429, 401, 403), not a refusal of one address; while open nothing is sent and each new code is shown once. Recipient validation (`lib/services/emailAddressContract.ts`): control characters refused before any trimming, angle brackets, commas, quotes, brackets, backslash, colon and spaces refused, internationalised addresses refused, a real domain with a real top level label, reserved top level labels (test, example, invalid, localhost, local, internal) refused; the message names the position, never the address. The mailer now aborts a provider call after 10 seconds (`resend_timeout`).
+
+**Evidence.** PGlite: purpose required (all bad shapes), duplicate key counts nothing again, no old overload, daily limit per admin and platform wide, alert rows survive the refusal, one volume alert per admin per day, replacement limit, status function, circuit breaker open, close and pause end, service role only (control NC-A1 without the daily check). Unit: injection and malformed addresses refused; breaker open sends nothing; five failing recipients open it and the rest are not attempted with `circuit_open` recorded; a 422 is not a provider failure; mailer timeout and payload keys (`from`, `to`, `subject`, `text` only, no code in the subject, sender or idempotency key).
+
+**Residual risk.** True concurrency of the advisory lock is not provable in PGlite (DEV probe P3). There is no screen that lists the alert rows: they are read with `admin_list_monitoring_events()` (promo or entitlement capability) or SQL. **Status: DONE-with-residual.**
+
+### 18.10 Item 10 PRODUCTION MARKER AND CRON
+
+**Finding.** The authoritative definition of `platform_deployment_environment` is migration 0228. 0229 reads it and 0238 repeats an idempotent create. Production is the row with `environment = 'production'`, inserted by the operator. Four problems: (1) the table had no row level security and no revoke, so on a Supabase project API roles could read it and, with the default table grants, write to it: anyone able to add a `production` row to DEV would make a later replay register production jobs there; (2) the value was free text; (3) two marker rows were possible; (4) there was no single report that shows the marker, the registered jobs, the Vault secret and the kill switches together.
+
+**Change.** Migration 0268. RLS on and every API role privilege revoked. A check constraint (production, development, staging), added NOT VALID so an unexpected existing value is reported rather than hidden (validate it after reading the pre-check output). A unique index on a constant expression allows at most one row, and the migration stops with `MARKER_MORE_THAN_ONE_ROW` if two exist now. Job creation is idempotent (unschedule then schedule) in 0238 and in the new retention job; every kill switch ships off. `premium_cron_verify(sha256)` (service role) reports: single marker row, allowed value, the reminder job registered only in production, no production URL job outside production, the exact production route, the Vault secret present, whether its SHA-256 equals the digest of the application `CRON_SECRET` (the operator passes the digest, the secret never leaves their machine), and that every kill switch is off during a deployment.
+
+**Evidence.** PGlite: API roles denied (select and insert), a second row and a bad value refused, part A refuses over two rows, the verify report in the DEV shape (a production URL job on a database without the marker is a failure), the production shape (job, exact route, Vault secret, digest match and mismatch), a kill switch left on is flagged, the report never returns the secret; the retention job is registered only with the marker, idempotently; every job control switch ships off (source contract and PGlite).
+
+**Residual risk (what cannot be proven).** That the single marker row is truthful for the project it sits in (the operator inserts it). That a disaster recovery replay targets the right origin: the registered URL is the production origin hard coded in 0228 and 0238, correct only if recovery serves the same origin. That the Vault secret and `CRON_SECRET` agree is checked by `premium_cron_verify` on the real database, not here. **Status: DONE-with-residual.**
+
+### 18.11 Item 11 REAL RESEND (DEV certification, plan only)
+
+**Finding.** The e-mail path was tested only with fakes. Sender authentication, placement, the real provider's idempotency behaviour and a hung provider call were unproven, and the mailer had no timeout.
+
+**Change.** `docs/admin/PROMO_EMAIL_RESEND_DEV_CERTIFICATION_RUNBOOK.md` and `scripts/promo_email_resend_dev_certification.mjs` (a skeleton that prints the plan by default, does read only SPF, DKIM and DMARC lookups, and sends only with `--send --confirm-owned-mailboxes`, only against the DEV project, with a sample code that cannot be redeemed). Nothing was sent. The sample body is a file that a test keeps equal to the real message. The mailer now aborts a provider call after 10 seconds (`resend_timeout`, a provider failure for the breaker). **Evidence.** Unit: payload keys (`from`, `to`, `subject`, `text`; headers `Authorization`, `Content-Type`, `Idempotency-Key`; no code outside the body), timeout and abort mapping, the sample equals the real message. Covered in the runbook: SPF, DKIM, DMARC, sender name, delivery placement, links, date wording, no code in the subject, logs or provider metadata beyond the body, Resend idempotency behaviour (UNVERIFIED: the runbook defines the test), failure and timeout handling (a unit test injects a timeout). **Residual risk.** Nothing was sent: the certification itself, the provider idempotency result and the placement are DEV steps. **Status: DONE (plan and skeleton; the certification itself is a DEV step).**
+
+### 18.12 Item 12 BROWSER TESTING (plan and readiness)
+
+**Finding.** No certified list of Admin and Profile states, the two Admin pages used their own paragraphs for outcomes instead of the shared Admin component, and some user visible text named ISO date forms.
+
+**Change.** `docs/admin/PROMO_HARDENING_BROWSER_TEST_PLAN.md` lists every Admin and Profile state with operators for the positive and negative capability cases. The two Admin screens now use the shared `AdminActionStatus` live region, day-first dates through the shared formatters, and the new states (masked list, purpose, status check, override panel). **Evidence.** A source contract test pins labels, the shared component, no native date picker, the masked hint and the responsive wrappers; the existing date format contract tests still pass. The `AdminTaskHelp` registry was not extended: it is a closed set of 18 entries whose manual coverage tests assert the count. **Residual risk.** No browser run was done (no operator session tokens, credentials are never minted); every row of the plan that needs eyes is a DEV step. **Status: DONE-with-residual.**
+
+### 18.13 Item 13 LINEAGE AND MIGRATION CORRECTNESS
+
+**Finding.** The new migrations drop and recreate functions, which can silently lose an owner, a grant, a comment, a security mode or leave an old overload callable; and an edit to an applied migration would go unnoticed.
+
+**Change.** The checks below were added as tests, and the one defect they found (a lost function comment) was fixed.
+
+**Evidence.**
+- Applied ancestors 0231, 0237, 0238, 0242 (and 0250 to 0252) are pinned by SHA-256 (line endings ignored); a test fails on any edit; they sort before the new files in the order they were applied.
+- Numbers 0264 to 0268 are unique and above every number found on every ref and worktree (0263). No collision with NAV2 (0260 to 0263) or PC7 (0253).
+- Every function dropped is recreated, was created by an earlier migration, and no overload remains (PGlite overload counts, the check 0261 added for `pc6_nav_row_is_candidate`).
+- Owner, security mode, volatility, language, search_path and the set of roles that may execute are the same before and after for all seven replaced functions (a snapshot before and after on the real replay); redeem is not executable by users; a comment survives (the manage function's comment was lost by the drop and is restored with updated text); the audit triggers are still attached; thirteen sibling functions are byte for byte unchanged; re-applying all five migrations is harmless.
+- Every table altered exists earlier; every grant is preceded by a revoke from public; every new function sets a search_path.
+- DEV apply order and verify queries after each part: README sections 1 and 2.
+- Controls NC-P1 (a flipped security mode is detected), NC-P2 (an extra overload is detected), NC-L1 (an edited applied migration is detected), NC-L2 (numbering).
+
+**Residual risk.** The state of hand applied migrations on databases other than the replay is read from the PO apply lists, not from the databases (the verify queries in the README do that on DEV). **Status: DONE.**
+
+### 18.14 Item 14 CLEAN VERIFICATION PLAN AND TESTS
+
+**Finding.** The earlier suites used the migration text of the original files for their negative controls, which would restore an OLD function after a mutation, and none raced anything.
+
+**Change.** Every negative control now mutates and restores the newest live definition (`latestFunctionSql`); a DEV script covers true concurrency.
+
+**Evidence.** **Replay from empty:** every PGlite suite replays the whole ledger from the shim. **True concurrency** (what PGlite cannot prove): the row lock and CHECK backstop for maximum redemptions, the advisory lock around the e-mail begin step, simultaneous e-mail requests with one key, the real pg_cron, pg_net and Vault. The exact DEV script is `scripts/promo_hardening_dev_proof.mjs` (refuses unless `--confirm-dev` and the DEV project; probes P1 eight users racing for a one use code, P2 ten simultaneous begins with one key, P3 twelve simultaneous begins against the hourly limit, P4 retention dry run, P5 `premium_cron_verify`; cleans up after itself; mints no credentials).
+
+**Tests added or updated** (run one file at a time):
+`tests/unit/promoHardeningMigrations.test.ts`, `promoHardeningLineagePglite.test.ts`, `promoHardeningPglite.test.ts`, `premiumExpiryReminderSevenDayPglite.test.ts`, `promoHardeningSourceContract.test.ts`, `promoHardening/emailAddressContract.test.ts`, `promoHardening/promoSecretsDigestAndIp.test.ts`, `promoHardening/accessWindowDuration.test.ts`, `promoHardening/mailerTimeoutAndSample.test.ts`, `promoHardening/operatorScripts.test.ts`; updated for the new semantics: `adminPromoCodesPglite`, `promoCodeEmailPglite`, `adminPremiumGrantPglite`, `premiumExpiryReminderPglite`, `adminPromoCodesService`, `promoCodeEmailService`, `adminPremiumGrantService`, `premiumExpiryReminderRunner`, `premiumFeaturesFailSoft`, `adminAnalyticsPhaseA`. **Results (final state of the branch):** 22 test files run one at a time, 797 tests, all passing (the new and updated promo and Premium suites above, plus the neighbours that read the changed code: the date format contract tests, the mail sender header test and the admin analytics capability tests). `tsc --noEmit` with 8 GB of heap: clean, no errors. ESLint on all 54 new and changed TypeScript and script files: no errors and no warnings. The PGlite replays took about 45 seconds each on the loaded workstation; the grouped vitest runs hit the known temp directory flake, so every file was run alone.
+
+**The seven day reminder** is built OFF (`PREMIUM_REMINDER_SEVEN_DAY_ENABLED`, exact text `true`). Its deduplication against the thirty day reminder is proven before it can be enabled: one ledger row per window and threshold; a long window gets exactly two e-mails (30 days and 7 days) with every rerun between claiming nothing; enabling late sends only the most urgent threshold (control NC-7A); an extension opens a new window; a failed or abandoned thirty day row does not block the seven day one. **This proof found a real gap:** after a seven day e-mail, turning the switch back off would have let the shipped list send a late thirty day e-mail about the same expiry. The claim function now never claims a less urgent threshold once a more urgent one exists for the window (control NC-7C).
+
+**Residual risk. What remains for the DEV proof script and the PO:** apply 0264 to 0268 in order with the verify queries; set the secrets; the digest backfill and finalise; the probes P1 to P5; the X-Forwarded-For probe (item 6); a key rotation rehearsal (runbook); the real Resend certification (item 11); the browser pass (item 12). **Status: DONE-with-residual.**
