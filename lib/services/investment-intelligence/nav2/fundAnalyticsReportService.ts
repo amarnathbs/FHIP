@@ -175,10 +175,13 @@ export async function generateFundAnalyticsReport(args: {
   return { status: 'ready', report: summary, cache: { hits: cached.size, computed: writes.length, stored } };
 }
 
-/** Persists the next version of the pinned report and its NAV dependency manifest. Retries once on a version race. */
+/** How many times a generation tries to take the next version number when other generations for the same user take it first. */
+export const PERSIST_VERSION_ATTEMPTS = 10;
+
+/** Persists the next version of the pinned report and its NAV dependency manifest. Retries on a version race (several simultaneous generations). */
 export async function persistReport(args: { admin: SupabaseClient; userId: string; report: FundAnalyticsReport; manifest: FundAnalyticsManifest; nowIso: string }): Promise<StoredReportSummary> {
   const { admin, userId, report, manifest } = args;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < PERSIST_VERSION_ATTEMPTS; attempt++) {
     const { data: prev, error: perr } = await admin
       .from('nav2_fund_analytics_reports')
       .select('id, version_number')
@@ -206,7 +209,10 @@ export async function persistReport(args: { admin: SupabaseClient; userId: strin
     const { data: ins, error: ierr } = await admin.from('nav2_fund_analytics_reports').insert(row).select('id, version_number, as_of_date, scheme_count, created_at').single();
     if (ierr) {
       // 23505 = another generation took this version number first: read again and take the next one.
-      if ((ierr as { code?: string }).code === '23505' && attempt === 0) continue;
+      if ((ierr as { code?: string }).code === '23505' && attempt < PERSIST_VERSION_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, 15 + Math.floor(Math.random() * 60))); // a little jitter so the racers do not collide again in step
+        continue;
+      }
       throw new Error('The report could not be saved.');
     }
     const saved = ins as ReportRow;

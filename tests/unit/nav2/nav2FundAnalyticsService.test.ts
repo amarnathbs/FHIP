@@ -263,3 +263,45 @@ describe('the NAV2 planner step (only with nav2_trigger_planner ON) (NC-S7)', ()
     expect((await b.call()).status).toBe('ready');
   });
 });
+
+describe('simultaneous generations for one user (NC-S9, Stage 3 finding: 4 of 6 concurrent requests answered 500)', () => {
+  // Several generations read "latest version" at the same moment and all insert the same next number: the unique key refuses all but one.
+  // The loser must read again and take the following number; a single retry only rescued the second racer.
+  function racing(failures: number) {
+    const { db, load } = setup();
+    let inserts = 0;
+    const wrapped = {
+      from: (table: string) => {
+        const real = (db.client as unknown as { from: (t: string) => Record<string, unknown> }).from(table);
+        if (table !== 'nav2_fund_analytics_reports') return real;
+        return new Proxy(real, {
+          get: (target, prop) => {
+            if (prop !== 'insert') return target[prop as string];
+            return (row: unknown) => {
+              inserts++;
+              if (inserts <= failures) return { select: () => ({ single: async () => ({ data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } }) }) };
+              return (target.insert as (r: unknown) => unknown)(row);
+            };
+          },
+        });
+      },
+    } as unknown as SupabaseClient;
+    const deps: Partial<FundAnalyticsDeps> = { isFlagOn: async () => true, isPremium: async () => true, gate: async () => openGate, load, nowIso: () => '2026-10-02T06:00:00.000Z' };
+    const call = () => generateFundAnalyticsReport({ userId: USER, sessionClient: db.client as never, adminClient: wrapped, asOfDate: AS_OF, deps });
+    return { db, call, attempts: () => inserts };
+  }
+
+  it('a generation that loses the version race three times in a row still stores a report (it took the next free number)', async () => {
+    const { db, call, attempts } = racing(3);
+    const r = await call();
+    expect(r.status).toBe('ready');
+    expect(attempts()).toBe(4);
+    expect(db.tables.nav2_fund_analytics_reports).toHaveLength(1);
+  });
+
+  it('a generation that can never get a version stops after a bounded number of attempts with the typed failure, never loops', async () => {
+    const { call, attempts } = racing(1000);
+    await expect(call()).rejects.toThrow(/could not be saved/);
+    expect(attempts()).toBeLessThan(20);
+  });
+});
