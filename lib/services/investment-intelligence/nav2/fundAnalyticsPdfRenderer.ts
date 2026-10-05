@@ -58,29 +58,32 @@ export function pdfFooterTemplate(): string {
   return `<div style="${TEMPLATE_STYLE}"><span>FHIP - Premium report. ${esc(FUND_ANALYTICS_SAVED_REPORT_SENTENCE)}</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`;
 }
 
-/** The same chart-readiness wait as the other report renderers: a run of consecutive ready (or chart-free) polls. */
-export async function waitForChartsReady(page: Page): Promise<void> {
-  await page
-    .waitForFunction(
-      () => {
-        const svgs = document.querySelectorAll('.recharts-wrapper svg');
-        const ready = svgs.length > 0 && Array.from(svgs).every((svg) => {
-          const box = (svg as SVGSVGElement).getBBox();
-          return box.width > 0 && box.height > 0;
-        });
-        const w = window as unknown as { __fhipChartWaitStreak?: number };
-        w.__fhipChartWaitStreak = ready || svgs.length === 0 ? (w.__fhipChartWaitStreak ?? 0) + 1 : 0;
-        return w.__fhipChartWaitStreak >= 15;
-      },
-      { timeout: 20000, polling: 100 }
-    )
-    .catch(() => {});
+/**
+ * The print document is server-rendered, so it carries its own READY marker (data-fa-print-ready) and says how many price charts it holds
+ * (data-fa-expected-charts). Printing waits for the marker, for the fonts, and for every expected chart to be in the page; a chart that
+ * is not there makes the render FAIL (the export answers an error) instead of printing a blank rectangle. Stage 3 saw exactly that with a
+ * client-side chart that had not mounted when the old "no charts yet counts as ready" wait gave up.
+ */
+export async function waitForPrintReady(page: Page): Promise<void> {
+  await page.waitForSelector('[data-fa-print-ready="true"]', { timeout: 30_000 });
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  await page.waitForFunction(
+    () => {
+      const root = document.querySelector('[data-fa-print-ready="true"]');
+      const expected = Number(root?.getAttribute('data-fa-expected-charts') ?? '0');
+      return document.querySelectorAll('svg[data-fa-chart="true"]').length >= expected;
+    },
+    undefined,
+    { timeout: 15_000 }
+  );
 }
 
 /** Prints the open page exactly as the export route does (the layout check uses this same function). */
 export async function printPageToPdf(page: Page, meta?: PdfReportMeta): Promise<Buffer> {
   await page.emulateMedia({ media: 'print' });
-  await waitForChartsReady(page);
+  await waitForPrintReady(page);
   return await page.pdf({
     format: 'A4',
     printBackground: true,

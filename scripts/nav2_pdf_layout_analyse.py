@@ -10,6 +10,8 @@ import json
 import os
 import sys
 
+import collections
+
 import pymupdf
 
 MM = 72.0 / 25.4
@@ -28,6 +30,7 @@ def main() -> None:
         area_top, area_bottom = TOP, H - BOTTOM
         area_h = area_bottom - area_top
         lines = []
+        sizes = collections.Counter()
         for b in page.get_text('dict')['blocks']:
             if b.get('type') != 0:
                 continue
@@ -41,6 +44,8 @@ def main() -> None:
                     continue
                 size = max(s['size'] for s in ln['spans'])
                 bold = any((s['flags'] & 16) or 'bold' in s['font'].lower() for s in ln['spans'])
+                for sp in ln['spans']:
+                    sizes[round(sp['size'], 1)] += len(sp['text'].strip())
                 lines.append({'y0': y0, 'y1': y1, 'x0': x0, 'x1': x1, 'text': txt, 'size': round(size, 1), 'bold': bool(bold)})
         lowest = max([l['y1'] for l in lines], default=area_top)
         for d in page.get_drawings():
@@ -73,6 +78,7 @@ def main() -> None:
             'first_line': first_line and {'text': first_line['text'][:90], 'size': first_line['size'], 'bold': first_line['bold']},
             'funds_named': named,
             'overflow_right': overflow,
+            'body_size': sizes.most_common(1)[0][0] if sizes else None,
             'png': png,
         })
     print(json.dumps({'page_count': len(pages), 'pages': pages}))

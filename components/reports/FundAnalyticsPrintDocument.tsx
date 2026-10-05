@@ -1,6 +1,4 @@
-'use client';
-
-import { NavChart } from '@/components/reports/FundAnalyticsReportView';
+import StaticNavChart from '@/components/reports/StaticNavChart';
 import { REPORT_PERIOD_LABELS } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport, FundAnalyticsSchemeBlock } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/investorExperience';
@@ -210,7 +208,7 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
         {meta && <p className="fa-meta">{meta}</p>}
         <FaTable head={['At a glance', 'Value', 'Detail']} widths={[27, 22, 51]} num={[false, true, false]} rows={factRows} />
         <div className="fa-chart">
-          <NavChart block={block} ctx={ctx} height={290} />
+          <StaticNavChart block={block} ctx={ctx} />
         </div>
         <h3>The fund’s own growth</h3>
         <p className="fa-sub">{SCHEME_CAGR_LABEL}</p>
@@ -227,7 +225,7 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
         </h2>
         <h3>Risk and risk-adjusted measures</h3>
         <p className="fa-sub">Over the report period, from daily prices.</p>
-        <FaTable head={['Measure', 'Value', 'Basis']} widths={[30, 25, 45]} num={[false, true, false]} rows={riskRows} />
+        <FaTable head={['Measure', 'Value', 'Basis']} widths={[29, 29, 42]} num={[false, true, false]} rows={riskRows} />
         <h3>Trend</h3>
         <p className="fa-sub">Latest value of each average, counted in price observations (not calendar days).</p>
         <FaTable head={['Measure', 'Latest', 'As at']} widths={[34, 24, 42]} num={[false, true, false]} rows={trendRows} />
@@ -282,8 +280,11 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
     };
   });
 
+  const expectedCharts = report.schemes.filter((b) => b.chart.navPoints.length >= 2).length;
   return (
-    <div className="fa-doc">
+    // Everything below is server-rendered HTML (no client-only chart): the print renderer waits for this marker and then checks that every
+    // expected chart is in the page, so a missing chart can never be printed as a blank rectangle.
+    <div className="fa-doc" data-fa-print-ready="true" data-fa-expected-charts={expectedCharts}>
       <section className="fa-cover">
         <h1>Fund analytics report</h1>
         <p className="fa-lead">

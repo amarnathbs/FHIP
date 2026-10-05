@@ -19,6 +19,7 @@ import { describe, expect, it } from 'vitest';
 import FundAnalyticsPrintDocument from '@/components/reports/FundAnalyticsPrintDocument';
 import { pdfFooterTemplate, pdfHeaderTemplate } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer';
 import { FUND_ANALYTICS_SAVED_REPORT_SENTENCE } from '@/lib/engines/nav2/reportWording';
+import { buildStaticChart, niceTicks } from '@/lib/engines/nav2/staticChart';
 import { judgeLayout, type LayoutAnalysis, type PageReport } from '../../../scripts/nav2_pdf_layout_check';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -88,6 +89,69 @@ describe('the print document markup', () => {
   });
 });
 
+describe('the price chart cannot be missing from the printed page (Stage 3: a client-side chart was blank in the live export)', () => {
+  it('every fund with a price history has an inline SVG chart IN the server-rendered markup, and the page says how many to expect', () => {
+    const expected = report.schemes.filter((b: { chart: { navPoints: unknown[] } }) => b.chart.navPoints.length >= 2).length;
+    expect(expected).toBe(report.schemes.length);
+    expect(count(html, 'data-fa-chart="true"')).toBe(expected);
+    expect(html).toContain(`data-fa-expected-charts="${expected}"`);
+    expect(html).toContain('data-fa-print-ready="true"');
+    expect(count(html, '<path ')).toBeGreaterThanOrEqual(expected * 2);
+    expect(html).not.toContain('recharts');
+  });
+
+  it('NC-C1: the print document has no client-only rendering: no use-client directive, no chart library, no hook', () => {
+    const doc = read('components/reports/FundAnalyticsPrintDocument.tsx');
+    const chart = read('components/reports/StaticNavChart.tsx');
+    for (const src of [doc, chart]) {
+      expect(src).not.toMatch(/^'use client'/m);
+      expect(src).not.toMatch(/from 'recharts'|ResponsiveContainer|useEffect|useState|useMemo/);
+    }
+    expect(doc).not.toMatch(/(?<!Static)NavChart/);
+    expect(doc).toContain('StaticNavChart');
+  });
+
+  it('NC-C2: the renderer waits for the ready marker and every expected chart, and a missing chart FAILS the render (no swallowed timeout)', () => {
+    const src = read('lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer.ts');
+    const fn = src.slice(src.indexOf('export async function waitForPrintReady'), src.indexOf('/** Prints the open page exactly'));
+    expect(fn).toContain('data-fa-print-ready');
+    expect(fn).toContain('data-fa-expected-charts');
+    expect(fn).toContain('svg[data-fa-chart="true"]');
+    expect(fn).toContain('document.fonts.ready');
+    expect(fn).not.toMatch(/\.catch\(/);
+    expect(src).toContain('await waitForPrintReady(page);');
+    expect(src).not.toContain('recharts-wrapper');
+  });
+});
+
+describe('static chart geometry (pure)', () => {
+  const rows = [
+    { date: '2026-01-01', nav: 100, sma50: null, sma200: null },
+    { date: '2026-01-02', nav: 110, sma50: 105, sma200: null },
+    { date: '2026-01-02', nav: null, sma50: null, sma200: null }, // a material gap: the line breaks here
+    { date: '2026-03-01', nav: 120, sma50: 108, sma200: null },
+    { date: '2026-03-02', nav: 130, sma50: 112, sma200: null },
+  ];
+  const g = buildStaticChart(rows, (d) => `${d.slice(8, 10)}-${d.slice(5, 7)}-${d.slice(0, 4)}`, (v) => String(v));
+  it('draws one stretch per unbroken run: the gap row starts a new subpath, never a connecting line', () => {
+    expect(g).not.toBeNull();
+    expect((g!.paths.nav.match(/M/g) ?? []).length).toBe(2);
+    expect(g!.paths.sma50.match(/M/g)?.length).toBe(2);
+    expect(g!.paths.sma200).toBe(''); // fewer than two points: no path
+  });
+  it('axis labels are day-first, never ISO; ticks lie inside the plot', () => {
+    for (const t of g!.xTicks) expect(t.date).toMatch(/^\d{2}-\d{2}-\d{4}$/);
+    for (const t of g!.yTicks) expect(t.y).toBeGreaterThanOrEqual(g!.plot.top - 1);
+    for (const t of g!.xTicks) expect(t.x).toBeGreaterThanOrEqual(g!.plot.left - 1);
+  });
+  it('fewer than two prices: no chart (the document says so in words)', () => {
+    expect(buildStaticChart([{ date: '2026-01-01', nav: 1, sma50: null, sma200: null }], (d) => d, String)).toBeNull();
+  });
+  it('niceTicks covers the range with round steps', () => {
+    expect(niceTicks(12, 36, 5)).toEqual([10, 20, 30, 40].slice(0, 4));
+  });
+});
+
 describe('print stylesheet and renderer settings (source contract)', () => {
   const css = read('app/globals.css');
   const block = css.slice(css.indexOf('.fa-doc {'));
@@ -144,6 +208,11 @@ describe('the layout judge (NAMED NEGATIVE CONTROLS: each rule fails on a bad la
     const v = judgeLayout(doc([page(1, { funds_named: [], first_line: { text: 'Fund analytics report', size: 24, bold: true } }), page(2, { funds_named: [], first_line: { text: 'Risk and risk-adjusted measures', size: 12, bold: true } }), page(3)]));
     expect(v.some((x) => x.includes('page 2') && x.includes('does not name a fund'))).toBe(true);
     expect(v.some((x) => x.includes('page 1'))).toBe(false);
+  });
+  it('NC-L6: a page printed at a shrunk or grown scale fails (the offline render once shrank to fit while the live export did not)', () => {
+    expect(judgeLayout(doc([page(1, { body_size: 6.7 }), page(2)])).some((x) => x.includes('6.7 pt') && x.includes('scaled'))).toBe(true);
+    expect(judgeLayout(doc([page(1, { body_size: 13.4 }), page(2)])).some((x) => x.includes('scaled'))).toBe(true);
+    expect(judgeLayout(doc([page(1, { body_size: 9 }), page(2)]))).toEqual([]);
   });
   it('NC-L4: text past the right margin fails', () => {
     expect(judgeLayout(doc([page(1, { overflow_right: ['a very long unbroken line'] }), page(2)])).some((x) => x.includes('past the margin'))).toBe(true);
