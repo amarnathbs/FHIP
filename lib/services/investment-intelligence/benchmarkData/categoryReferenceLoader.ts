@@ -11,6 +11,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BenchmarkMapping } from '@/lib/engines/investment-intelligence/benchmarkEngine';
 import { categoryReferenceBasisLabel, categoryReferenceBenchmarkKeys, categoryReferenceFor, NO_CATEGORY_BENCHMARK_MESSAGE } from './categoryReference';
+import { loadDeclaredRecords } from './declaredRecordLoader';
+import { declaredRecordMessage } from './declaredRecordStatus';
 
 export interface CategoryReferenceFacts {
   label: string;
@@ -53,7 +55,21 @@ export async function loadCategoryReferenceMappings(supabase: SupabaseClient, in
 
 async function loadInner(supabase: SupabaseClient, instrumentIds: readonly string[], declaredInstrumentIds: ReadonlySet<string>): Promise<CategoryReferenceSet> {
   const out = EMPTY_CATEGORY_REFERENCE_SET();
-  const candidates = [...new Set(instrumentIds)].filter((id) => !declaredInstrumentIds.has(id)); // a declared mapping ALWAYS wins
+  const allCandidates = [...new Set(instrumentIds)].filter((id) => !declaredInstrumentIds.has(id)); // a declared mapping ALWAYS wins
+  if (allCandidates.length === 0) return out;
+
+  // A scheme whose OWN documents declare a benchmark the data we hold cannot represent (composite, gold/silver price, an index
+  // we do not hold) is NEVER compared with its category benchmark: that would set the fund against an index its documents say
+  // it does not follow. It gets the explicit "Declared benchmark: <name> (cannot be compared with the data we hold)" sentence
+  // and no number. Only a scheme with NO declared record at all continues to the category reference below.
+  const declared = await loadDeclaredRecords(supabase, allCandidates);
+  if (!declared.ok) {
+    // Fail closed: if we cannot tell whether a declared record exists, no category comparison is guessed.
+    for (const id of allCandidates) out.noBenchmark.set(id, `${NO_CATEGORY_BENCHMARK_MESSAGE} (the fund's declared-benchmark record could not be read).`);
+    return out;
+  }
+  for (const [id, rec] of declared.records) out.noBenchmark.set(id, declaredRecordMessage(rec));
+  const candidates = allCandidates.filter((id) => !declared.records.has(id));
   if (candidates.length === 0) return out;
 
   const failAll = (why: string) => {

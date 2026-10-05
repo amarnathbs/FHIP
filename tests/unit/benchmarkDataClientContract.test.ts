@@ -19,7 +19,7 @@ const LOGIC = 'components/admin/benchmarkData/benchmarkDataUiLogic.ts';
 const CONTRACT_PATHS = new Set([
   'overview', 'upload/inspect', 'upload', 'jobs', 'jobs/:id', 'jobs/:id/errors', 'jobs/:id/publish', 'jobs/:id/cancel', 'jobs/:id/rollback',
   'templates/:name', 'help', 'catalogue', 'catalogue/:id/verify', 'entitlements', 'entitlements/:id/approve', 'entitlements/:id/revoke',
-  'mappings', 'mappings/:id/review', 'mappings/unmapped', 'mappings/held', 'ingestion/:id/mode',
+  'mappings', 'mappings/:id/review', 'mappings/unmapped', 'mappings/held', 'factsheet/changes', 'factsheet/changes/:id/review', 'factsheet/sources', 'factsheet/sources/:id/terms', 'ingestion/:id/mode',
 ]);
 
 describe('Market Index Data client: static render contract', () => {

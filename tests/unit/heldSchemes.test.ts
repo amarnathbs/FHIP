@@ -123,7 +123,7 @@ describe('the held list', () => {
       raw({ instrumentId: 'e', instrumentName: 'Mid Fund', holderCount: 11 }),
     ]);
     expect(rows.map((r) => [r.instrumentId, r.status])).toEqual([['d', 'not_mapped'], ['e', 'not_mapped'], ['c', 'not_mapped'], ['b', 'proposal_waiting'], ['a', 'mapped']]);
-    expect(counts).toEqual({ held: 5, declared: 1, categoryReference: 4, noBenchmark: 0, proposalWaiting: 1 });
+    expect(counts).toEqual({ held: 5, declared: 1, declaredUnsupported: 0, categoryReference: 4, noBenchmark: 0, proposalWaiting: 1 });
   });
 
   it('the first-held date is shown day-first (India format), never ISO', () => {
@@ -284,15 +284,15 @@ const rpc = vi.fn();
 let masterRows: unknown[] = [];
 let masterError: { message: string } | null = null;
 const fromSpy = vi.fn();
-const masterChain = () => {
+const masterChain = (rowsOverride?: unknown[]) => {
   const b: Record<string, unknown> = {};
-  for (const m of ['select', 'in', 'is']) b[m] = () => b;
-  b.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: masterError ? null : masterRows, error: masterError }).then(res);
+  for (const m of ['select', 'in', 'is', 'order', 'limit']) b[m] = () => b;
+  b.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: rowsOverride ?? (masterError ? null : masterRows), error: rowsOverride ? null : masterError }).then(res);
   return b;
 };
 vi.mock('@/lib/services/investment-intelligence/benchmarkData/routeSupport', async (orig) => {
   const real = await orig<typeof import('@/lib/services/investment-intelligence/benchmarkData/routeSupport')>();
-  return { ...real, guarded: async () => ({ ok: true as const, user: { id: 'admin' }, flags: {}, supabase: { rpc, from: (t: string) => { fromSpy(t); return masterChain(); } } }) };
+  return { ...real, guarded: async () => ({ ok: true as const, user: { id: 'admin' }, flags: {}, supabase: { rpc, from: (t: string) => { fromSpy(t); return t === 'ii_factsheet_attempts' ? masterChain([]) : masterChain(); } } }) };
 });
 
 describe('GET mappings/held', () => {

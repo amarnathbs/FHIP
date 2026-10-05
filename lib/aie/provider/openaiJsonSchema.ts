@@ -65,6 +65,7 @@ import { AIE_LIABILITY_FACTS_SCHEMA_NAME, AIE_LIABILITY_FACTS_SCHEMA_VERSION } f
 import { LIABILITY_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/liability/openaiSchema';
 import { AIE_RETIREMENT_FACTS_SCHEMA_NAME, AIE_RETIREMENT_FACTS_SCHEMA_VERSION } from '../adapters/retirement/schema';
 import { RETIREMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/retirement/openaiSchema';
+import { FACTSHEET_AI_OPENAI_JSON_SCHEMA, FACTSHEET_AI_SCHEMA_NAME, FACTSHEET_AI_SCHEMA_VERSION } from '@/lib/services/investment-intelligence/factsheetReader/aiExtractor';
 
 const NULL_REASON_ENUM = ['not_present_on_document', 'illegible', 'ambiguous'] as const;
 
@@ -190,6 +191,10 @@ const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec | RawKnownSchemaSpec>([
   // documents into `ii_*`, this one reads AU broker/fund statement exports
   // into FDH-11's own evidence tables.
   [`${AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME}@${AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION}`, { rawSchema: AU_INVESTMENT_FACTS_OPENAI_JSON_SCHEMA }],
+  // BENCH-1 factsheet benchmark reader (2026-10-03): the declared-benchmark extraction of a PUBLIC fund document.
+  // No user data is ever sent with it; the answer is re-validated against the document text before any use
+  // (lib/services/investment-intelligence/factsheetReader/aiExtractor.ts).
+  [`${FACTSHEET_AI_SCHEMA_NAME}@${FACTSHEET_AI_SCHEMA_VERSION}`, { rawSchema: FACTSHEET_AI_OPENAI_JSON_SCHEMA }],
 ]);
 
 function isRawSpec(spec: KnownSchemaSpec | RawKnownSchemaSpec): spec is RawKnownSchemaSpec {
