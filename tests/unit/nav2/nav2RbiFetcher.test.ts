@@ -127,13 +127,26 @@ describe('what may be requested (NC-R3)', () => {
     expect(robotsAllows('User-agent: googlebot\nDisallow: /\n', '/x')).toBe(true);
   });
 
-  it('NC-R5: a 404 robots.txt means no rules; any other robots failure stops the run with NO page request', async () => {
-    const a = setup((u) => (u.endsWith('/robots.txt') ? new Response('nope', { status: 404, headers: { 'content-type': 'text/plain' } }) : html()));
-    expect((await a.fetcher.get(RBI_LISTING_URL)).status).toBe(200);
-    for (const bad of [new Response('err', { status: 500, headers: { 'content-type': 'text/plain' } }), new Response('<html>x</html>', { status: 200, headers: { 'content-type': 'application/pdf' } })]) {
-      const b = setup((u) => (u.endsWith('/robots.txt') ? bad : html()));
+  it('NC-R5: robots.txt UNREACHABLE (5xx, 429, redirect, timeout, network) stops the run with NO page request', async () => {
+    const bads: Array<() => Response> = [
+      () => new Response('err', { status: 500, headers: { 'content-type': 'text/plain' } }),
+      () => new Response('err', { status: 503, headers: { 'content-type': 'text/html' } }),
+      () => new Response('slow down', { status: 429, headers: { 'content-type': 'text/plain' } }),
+      () => new Response(null, { status: 302, headers: { location: 'https://evil.example/robots.txt' } }),
+      () => {
+        const err = new Error('aborted');
+        err.name = 'AbortError';
+        throw err;
+      },
+      () => {
+        throw new TypeError('connect ECONNREFUSED');
+      },
+    ];
+    for (const bad of bads) {
+      const b = setup((u) => (u.endsWith('/robots.txt') ? bad() : html()));
       await expect(b.fetcher.get(RBI_LISTING_URL)).rejects.toMatchObject({ code: 'robots_unavailable' });
       expect(b.calls.filter((c) => !c.url.endsWith('/robots.txt'))).toEqual([]);
+      expect(b.fetcher.robotsOutcome).toBe('robots_unreachable');
     }
   });
 

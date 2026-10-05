@@ -44,6 +44,19 @@ export async function POST(req: Request) {
     if (report.mode === 'live') {
       const nowIso = new Date().toISOString();
       const failed = report.fetchProblem !== null;
+      // One row per LIVE attempt (migration 0263): what robots.txt did and whether RBI blocked a content page. Best effort: the run's own
+      // result never depends on it, and an unapplied migration only means the monitoring page shows "not available".
+      const attempt = await admin.from('ii_risk_free_refresh_attempts').insert({
+        job_version: report.version,
+        robots_outcome: report.robots,
+        source_status: report.sourceStatus,
+        fetch_problem_code: report.fetchProblem?.code ?? null,
+        tbill_outcome: report.tbill?.outcome ?? null,
+        repo_outcome: report.repo?.outcome ?? null,
+        pages_requested: report.requests.pages,
+        robots_requests: report.requests.robots,
+      });
+      if (attempt.error) console.error('[nav2] refresh attempt record failed', attempt.error.message);
       if (failed) {
         const { data } = await admin.from('ii_reference_job_control').select('consecutive_failures').eq('job_key', NAV2_JOB_KEYS.riskFreeWeeklyRefresh).maybeSingle();
         await admin.from('ii_reference_job_control').update({ last_failure_at: nowIso, consecutive_failures: ((data as { consecutive_failures?: number } | null)?.consecutive_failures ?? 0) + 1, updated_at: nowIso }).eq('job_key', NAV2_JOB_KEYS.riskFreeWeeklyRefresh);

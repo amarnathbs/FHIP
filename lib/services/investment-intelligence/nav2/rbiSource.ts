@@ -10,7 +10,7 @@
 // copy of the page and has NOT been exercised against the live site by this code. The first DEV dry run is the check (Stage 3).
 
 import { AUCTION_RESULT_TITLE, parseHiddenFields, parseMonthListing } from './rbiHtml';
-import { PoliteRbiFetcher, RBI_ORIGIN } from './rbiFetcher';
+import { PoliteRbiFetcher, RBI_ORIGIN, RbiFetchError, type RobotsOutcome } from './rbiFetcher';
 
 export const RBI_LISTING_URL = `${RBI_ORIGIN}/Scripts/BS_PressReleaseDisplay.aspx`;
 export const RBI_NSDP_URL = `${RBI_ORIGIN}/Scripts/BS_NSDPDisplay.aspx?param=4`;
@@ -26,7 +26,12 @@ export interface RbiSource {
   /** The weekly NSDP page HTML, or null when it could not be obtained. */
   readNsdp(): Promise<string | null>;
   requestsMade(): { pages: number; robots: number };
+  /** What the run learned about robots.txt (optional so a test double need not implement it). */
+  robotsOutcome?(): RobotsOutcome;
 }
+
+/** A fetch problem that must stop the WHOLE run: the NSDP cross-check may not swallow it. */
+const HARD_STOP_CODES = new Set(['human_verification', 'robots_unavailable', 'robots_disallowed', 'blocked_host', 'blocked_file_type', 'budget_exhausted', 'deadline']);
 
 const addDays = (iso: string, n: number): string => {
   const d = new Date(`${iso}T00:00:00.000Z`);
@@ -58,10 +63,15 @@ export function createLiveRbiSource(fetcher: PoliteRbiFetcher = new PoliteRbiFet
       try {
         const page = await fetcher.get(RBI_NSDP_URL);
         return page.html;
-      } catch {
-        return null; // the cross-check is simply unavailable; the gate decides what that means
+      } catch (e) {
+        // A block (403 / 429 / verification or "Unauthorised Access" page), an unreachable robots.txt, a robots disallow, a budget or a
+        // deadline stops the whole run and is REPORTED; it is never turned into a quiet "no reading". Anything else (a missing page, a
+        // timeout, an odd content type) only makes the cross-check unavailable, and the gate decides what that means.
+        if (e instanceof RbiFetchError && HARD_STOP_CODES.has(e.code)) throw e;
+        return null;
       }
     },
     requestsMade: () => ({ pages: fetcher.pageRequestsMade, robots: fetcher.robotsRequestsMade }),
+    robotsOutcome: () => fetcher.robotsOutcome,
   };
 }

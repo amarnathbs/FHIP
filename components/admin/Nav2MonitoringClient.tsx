@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActionMessage, Btn, Notice, Panel, ScrollTable, Td, Th } from '@/components/admin/benchmarkData/ui';
 import { describeFailure } from '@/components/admin/riskFreeFormLogic';
+import { formatDateTimeShort } from '@/lib/engines/date';
 
 // Fund analytics health (NAV2 monitoring). Aggregate-only: every figure comes from nav2_monitoring_snapshot(), which
 // suppresses any figure derived from user holdings below 5 (state `suppressed`, the fixed label shown verbatim) and reports
@@ -36,6 +37,20 @@ const STORAGE: Array<[string, string]> = [
   ['nav_rows_non_held_before_policy_changeover', 'Price rows of funds nobody holds, from before the retention policy'],
 ];
 
+interface RefreshAttempts {
+  state: 'ok' | 'unavailable';
+  value?: {
+    runs_last_90_days: number | null;
+    robots_unavailable_continued_last_90_days: number | null;
+    blocked_by_source_last_90_days: number | null;
+    last_blocked_at: string | null;
+    last_attempt_at: string | null;
+    last_robots_outcome: string | null;
+    last_source_status: string | null;
+  };
+  reason?: string;
+}
+
 function show(c: Cell | undefined): string {
   if (!c) return 'Not available.';
   if (c.state === 'ok') return typeof c.value === 'number' ? c.value.toLocaleString('en-IN') : String(c.value ?? '');
@@ -46,6 +61,7 @@ export default function Nav2MonitoringClient() {
   const [snap, setSnap] = useState<Record<string, unknown> | null>(null);
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [refresh, setRefresh] = useState<RefreshAttempts | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async (isRefresh: boolean) => {
@@ -62,6 +78,7 @@ export default function Nav2MonitoringClient() {
       } else {
         setUnavailable(null);
         setSnap(j.data.snapshot);
+        setRefresh((j.data.refreshAttempts as RefreshAttempts | undefined) ?? null);
         setMessage(isRefresh ? { kind: 'ok', text: 'The figures were refreshed.' } : null);
       }
     } catch {
@@ -132,6 +149,53 @@ export default function Nav2MonitoringClient() {
                 </tr>
               </tbody>
             </ScrollTable>
+          </Panel>
+          <Panel title="Weekly RBI refresh" description="What the weekly Reserve Bank of India read has run into, from the live runs recorded in the last 90 days.">
+            {!refresh || refresh.state === 'unavailable' || !refresh.value ? (
+              <Notice tone="warn" title="Not available">
+                {refresh?.reason ?? 'The refresh attempt summary could not be read.'}
+              </Notice>
+            ) : (
+              <>
+                {refresh.value.last_source_status === 'blocked_by_source' && (
+                  <div className="mb-3">
+                    <Notice tone="bad" live="alert" title="RBI is blocking the weekly read">
+                      The latest live run was refused by RBI on a content page and stopped without trying to get round it. The rates will go stale (see the series below) until an administrator loads them by upload, and an item is waiting in the Risk-free Rate Data review queue.
+                    </Notice>
+                  </div>
+                )}
+                <ScrollTable label="Weekly RBI refresh attempts" minWidth="min-w-[480px]">
+                  <thead>
+                    <tr>
+                      <Th>Measure</Th>
+                      <Th num>Value</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <Td>Live runs recorded</Td>
+                      <Td num>{refresh.value.runs_last_90_days ?? 0}</Td>
+                    </tr>
+                    <tr>
+                      <Td>Runs where RBI published no usable robots file (the run went on, as the standard allows)</Td>
+                      <Td num>{refresh.value.robots_unavailable_continued_last_90_days ?? 0}</Td>
+                    </tr>
+                    <tr>
+                      <Td>Runs stopped because RBI refused a content page</Td>
+                      <Td num>{refresh.value.blocked_by_source_last_90_days ?? 0}</Td>
+                    </tr>
+                    <tr>
+                      <Td>Last run</Td>
+                      <Td num>{refresh.value.last_attempt_at ? formatDateTimeShort(refresh.value.last_attempt_at, 'INR') : 'none yet'}</Td>
+                    </tr>
+                    <tr>
+                      <Td>Last time RBI refused a content page</Td>
+                      <Td num>{refresh.value.last_blocked_at ? formatDateTimeShort(refresh.value.last_blocked_at, 'INR') : 'never'}</Td>
+                    </tr>
+                  </tbody>
+                </ScrollTable>
+              </>
+            )}
           </Panel>
           <Panel title="Risk-free rate series">
             {series.length === 0 ? (

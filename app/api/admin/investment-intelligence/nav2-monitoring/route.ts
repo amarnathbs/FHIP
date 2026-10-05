@@ -23,6 +23,8 @@ export const dynamic = 'force-dynamic';
 
 const UNAVAILABLE_0262 = 'Migration 0262 has not been applied to this database, so the monitoring snapshot does not exist yet. This is reported as unavailable rather than as a healthy empty state.';
 
+const UNAVAILABLE_0263 = 'Migration 0263 has not been applied to this database, so the weekly refresh attempt summary does not exist yet. This is reported as unavailable rather than as zero.';
+
 export const GET = adminRoute(async () => {
   const { user, forbidden } = await requireReferenceDataAdmin();
   if (forbidden || !user) return forbidden ?? bad('unauthenticated', 401);
@@ -35,5 +37,14 @@ export const GET = adminRoute(async () => {
     console.error('nav2 monitoring snapshot error:', error);
     return bad('The monitoring snapshot could not be read.', 500);
   }
-  return ok({ state: 'ok', snapshot: data });
+  // The weekly RBI refresh's attempt summary (migration 0263): robots.txt unavailable count, blocked-by-source count, last attempt.
+  // A missing function (0263 not applied) is `unavailable`, never an error and never a healthy zero.
+  const attempts = await supabase.rpc('nav2_refresh_attempt_summary');
+  let refreshAttempts: { state: 'ok'; value: unknown } | { state: 'unavailable'; reason: string };
+  if (attempts.error) {
+    const code = (attempts.error as { code?: string }).code ?? '';
+    if (code === '42501') return bad('Reference-data admin access required', 403);
+    refreshAttempts = { state: 'unavailable', reason: UNAVAILABLE_0263 };
+  } else refreshAttempts = { state: 'ok', value: attempts.data };
+  return ok({ state: 'ok', snapshot: data, refreshAttempts });
 });

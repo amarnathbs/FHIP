@@ -27,7 +27,7 @@ import {
   type StoredTbill,
   type TbillRefreshOutcome,
 } from '@/lib/engines/nav2/riskFreeRefreshGate';
-import { RbiFetchError } from './rbiFetcher';
+import { RbiFetchError, type RobotsOutcome } from './rbiFetcher';
 import { auctionTextForAi, parseAuctionResultHtml, parseNsdpHtml, RBI_HTML_READER_VERSION } from './rbiHtml';
 import type { AiAuctionReader } from './rbiAiReader';
 import type { RbiSource } from './rbiSource';
@@ -49,10 +49,14 @@ export interface RefreshRunReport {
   asOfDate: string;
   expectedAuctionDate: string;
   requests: { pages: number; robots: number };
+  /** What the run learned about robots.txt: robots_unavailable_continued = RBI published no usable robots file (RFC 9309: no rules) and the run went on. */
+  robots: RobotsOutcome;
+  /** blocked_by_source = RBI refused a CONTENT page (403, 429, verification or "Unauthorised Access" page): the whole run stopped and nothing was bypassed. */
+  sourceStatus: 'ok' | 'blocked_by_source' | 'fetch_problem';
   fetchProblem: { code: string; message: string } | null;
   tbill: { outcome: TbillRefreshOutcome['outcome'] | 'up_to_date' | 'not_attempted'; detail: string; reasons?: string[]; auctionDate?: string; yieldPercent?: number } | null;
   repo: { outcome: RepoRefreshOutcome['outcome'] | 'not_attempted'; detail: string } | null;
-  wrote: { tbill: { inserted: number; identical: number; queued: number } | null; repo: { inserted: number; identical: number; queued: number } | null };
+  wrote: { tbill: { inserted: number; identical: number; queued: number } | null; repo: { inserted: number; identical: number; queued: number } | null; alert?: boolean };
 }
 
 interface RpcRow {
@@ -121,6 +125,8 @@ export async function runRiskFreeRefresh(input: RefreshJobInput): Promise<Refres
     asOfDate: input.todayIso,
     expectedAuctionDate: expected,
     requests: { pages: 0, robots: 0 },
+    robots: 'not_read',
+    sourceStatus: 'ok',
     fetchProblem: null,
     tbill: null,
     repo: null,
@@ -143,12 +149,26 @@ export async function runRiskFreeRefresh(input: RefreshJobInput): Promise<Refres
   } catch (e) {
     // The first fetch problem stops the run: the report names it, nothing is guessed, nothing is written from partial evidence.
     report.requests = input.source.requestsMade();
+    report.robots = input.source.robotsOutcome?.() ?? 'not_read';
     report.fetchProblem = e instanceof RbiFetchError ? { code: e.code, message: e.message } : { code: 'unexpected', message: 'The read failed.' };
+    report.sourceStatus = report.fetchProblem.code === 'human_verification' ? 'blocked_by_source' : 'fetch_problem';
     report.tbill = tbillDue ? { outcome: 'not_attempted', detail: 'The read stopped before a decision could be made.' } : null;
     report.repo = { outcome: 'not_attempted', detail: 'The read stopped before a decision could be made.' };
+    // LOUD, never quiet: a block queues ONE open review item (the same case is never queued twice) so it shows in the review queue, and the
+    // freshness figures keep ageing until someone loads the rates by upload. Nothing is bypassed or retried. A dry run writes nothing.
+    if (plan.mayWrite && report.sourceStatus === 'blocked_by_source') {
+      try {
+        const alert: RpcReview = { observation_date: null, reasons: ['blocked_by_source'], candidate: null, evidence: { code: report.fetchProblem.code, message: report.fetchProblem.message, expectedAuctionDate: expected, detectedOn: input.todayIso, action: 'RBI refused a content page. The weekly refresh stopped and made no further request. Load the rates by upload until RBI allows the read again.' } };
+        const { error } = await input.admin.rpc('record_risk_free_refresh_results', { p_series_id: TBILL_SERIES, p_rows: [], p_review_items: [alert], p_verified_through: null });
+        report.wrote.alert = !error;
+      } catch {
+        report.wrote.alert = false;
+      }
+    }
     return report;
   }
   report.requests = input.source.requestsMade();
+  report.robots = input.source.robotsOutcome?.() ?? 'not_read';
 
   const tbillRows: RpcRow[] = [];
   const tbillReviews: RpcReview[] = [];

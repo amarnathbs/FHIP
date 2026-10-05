@@ -206,10 +206,15 @@ describe('gap, late release, fetch problems (matrix 75, 76, 79)', () => {
     const r = await run(w);
     expect(r.fetchProblem).toEqual({ code: 'human_verification', message: expect.stringMatching(/verification/) });
     expect(r.tbill?.outcome).toBe('not_attempted');
-    expect(w.rpc).not.toHaveBeenCalled();
+    // A block is LOUD: no rate row is written, but exactly one alert review item is queued (blocked_by_source), with no candidate.
+    expect(r.sourceStatus).toBe('blocked_by_source');
+    expect(w.rpc).toHaveBeenCalledTimes(1);
+    expect(w.rpc.mock.calls[0][1]).toMatchObject({ p_series_id: TBILL_SERIES, p_rows: [], p_verified_through: null, p_review_items: [{ observation_date: null, reasons: ['blocked_by_source'], candidate: null }] });
+    expect(r.wrote.alert).toBe(true);
     const w2 = world({ nsdpThrows: true });
     const r2 = await run(w2);
     expect(r2.fetchProblem?.code).toBe('timeout');
+    expect(r2.sourceStatus).toBe('fetch_problem'); // an ordinary fetch problem is reported but is not a block: no alert item
     expect(w2.rpc).not.toHaveBeenCalled();
   });
 });

@@ -7,11 +7,15 @@
 //   * ONE host (www.rbi.org.in, https only); a redirect is not followed (it is an error), a different host is refused;
 //   * a descriptive User-Agent on every request; Accept: text/html;
 //   * AT MOST `maxRequestsPerRun` page requests per run (plus one robots.txt request), and at least `minSpacingMs` between any two;
-//   * robots.txt is read first and honoured (a disallowed path is never requested; an unreadable robots.txt stops the run);
+//   * robots.txt is read first and honoured when it is a real robots file (a disallowed path is never requested). RFC 9309: a robots.txt
+//     that is UNAVAILABLE (a 4xx other than 429, or a 200 that is not a robots file, e.g. the HTML "Unauthorised Access" page RBI's
+//     firewall serves) means no rules are published: the run CONTINUES and records `robots_unavailable_continued`. One that is
+//     UNREACHABLE (5xx, 429, timeout, network failure, a redirect) stops the run with no page request;
 //   * HTML only: a PDF, an Excel file or any other content type is refused, and so is any URL that names one;
 //   * a response larger than `maxResponseBytes` is refused (streamed and cut, never buffered whole);
 //   * a per-request timeout and a whole-run deadline;
-//   * a human-verification / CAPTCHA page is a hard stop with its own error: it is NEVER solved, retried or worked around;
+//   * a 403 / 429, a CAPTCHA page or an "Unauthorised Access" page from a CONTENT page is a hard stop of the WHOLE run with its own error
+//     (code human_verification, reported as blocked_by_source): it is NEVER solved, retried or worked around;
 //   * conditional requests (If-None-Match / If-Modified-Since) are supported when the caller supplies validators.
 //
 // Nothing here parses a page (rbiHtml.ts does) and nothing here writes to a database.
@@ -51,7 +55,7 @@ export const liveFetcherDeps: FetcherDeps = {
   nowMs: () => Date.now(),
 };
 
-const HUMAN_VERIFICATION = /g-recaptcha|h-captcha|hcaptcha|cf-challenge|captcha|verify (?:that )?you are (?:a )?human|human verification|are you a robot|access denied/i;
+const HUMAN_VERIFICATION = /g-recaptcha|h-captcha|hcaptcha|cf-challenge|captcha|verify (?:that )?you are (?:a )?human|human verification|are you a robot|access denied|unauthori[sz]ed access/i;
 const FORBIDDEN_FILE = /\.(pdf|xlsx?|docx?|zip)(\?|#|$)/i;
 
 /** The robots.txt rule: for the `User-agent: *` group (and any group naming our token), the longest matching Allow / Disallow wins; Allow wins a tie. */
@@ -94,12 +98,33 @@ export function robotsAllows(robotsTxt: string, path: string, agentToken = 'fhip
   return best ? best.allow : true;
 }
 
+/**
+ * What the run learned about robots.txt:
+ *   not_read                       nothing was requested yet;
+ *   robots_ok                      a real robots file was read and is honoured;
+ *   robots_unavailable_continued   unavailable (4xx other than 429, or a 200 that is not a robots file): no rules published, run continued;
+ *   robots_unreachable             5xx / 429 / timeout / network failure / redirect: the run stopped.
+ */
+export type RobotsOutcome = 'not_read' | 'robots_ok' | 'robots_unavailable_continued' | 'robots_unreachable';
+
+const ROBOTS_DIRECTIVE = /^\s*(?:user-agent|allow|disallow|sitemap|crawl-delay|host)\s*:/im;
+const HTML_LIKE = /<\s*(?:!doctype|html|head|body|script|title|meta|form|div|table|p)\b/i;
+
+/** A real robots file: empty (no rules) or plain directive lines; never an HTML page, whatever its status or content type. Pure. */
+export function isValidRobotsText(text: string | null | undefined): boolean {
+  const t = (text ?? '').replace(/^\uFEFF/, '').trim();
+  if (t === '') return true;
+  if (HTML_LIKE.test(t)) return false;
+  return ROBOTS_DIRECTIVE.test(t);
+}
+
 export class PoliteRbiFetcher {
   private pageRequests = 0;
   private robotsRequests = 0;
   private lastRequestAt: number | null = null;
   private startedAt: number | null = null;
   private robotsTxt: string | null = null;
+  private robotsOutcomeValue: RobotsOutcome = 'not_read';
 
   constructor(private readonly deps: FetcherDeps = liveFetcherDeps, private readonly policy = POLICY) {}
 
@@ -108,6 +133,9 @@ export class PoliteRbiFetcher {
   }
   get robotsRequestsMade(): number {
     return this.robotsRequests;
+  }
+  get robotsOutcome(): RobotsOutcome {
+    return this.robotsOutcomeValue;
   }
 
   private checkUrl(url: string): URL {
@@ -187,7 +215,13 @@ export class PoliteRbiFetcher {
     return Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8');
   }
 
-  /** Reads robots.txt once per run (one request, outside the page budget). A 404 means "no rules"; any other failure stops the run. */
+  /**
+   * Reads robots.txt once per run (one request, outside the page budget), per RFC 9309:
+   *   a real robots file (or an empty one)              -> honoured;
+   *   unavailable: 4xx other than 429, or a 200 that is not a robots file (the HTML "Unauthorised Access" page)
+   *                                                      -> no rules are published: continue, outcome robots_unavailable_continued;
+   *   unreachable: 5xx, 429, timeout, network, redirect  -> robots_unavailable error, the run stops with NO page request.
+   */
   async ensureRobots(): Promise<void> {
     if (this.robotsTxt !== null) return;
     if (this.robotsRequests >= 1) throw new RbiFetchError('robots_unavailable', 'robots.txt could not be read.');
@@ -195,13 +229,22 @@ export class PoliteRbiFetcher {
     await this.pace();
     try {
       const r = await this.request(this.checkUrl(`${RBI_ORIGIN}/robots.txt`), { method: 'GET' }, true);
-      this.robotsTxt = r.text ?? '';
-    } catch (e) {
-      if (e instanceof RbiFetchError && e.status === 404) {
+      if (isValidRobotsText(r.text)) {
+        this.robotsTxt = r.text ?? '';
+        this.robotsOutcomeValue = 'robots_ok';
+      } else {
         this.robotsTxt = '';
+        this.robotsOutcomeValue = 'robots_unavailable_continued';
+      }
+    } catch (e) {
+      const unavailable = e instanceof RbiFetchError && (e.code === 'not_html' || (e.status !== undefined && e.status >= 400 && e.status < 500 && e.status !== 429));
+      if (unavailable) {
+        this.robotsTxt = '';
+        this.robotsOutcomeValue = 'robots_unavailable_continued';
         return;
       }
-      throw new RbiFetchError('robots_unavailable', 'robots.txt could not be read, so nothing is requested.');
+      this.robotsOutcomeValue = 'robots_unreachable';
+      throw new RbiFetchError('robots_unavailable', 'robots.txt could not be reached (a server error, rate limit, timeout or redirect), so nothing is requested.');
     }
   }
 

@@ -126,10 +126,15 @@ describe('refresh route (NC-RT1, NC-RT2)', () => {
     const res = await POST(req('right-secret', { dryRun: false }));
     const data = (await res.json()).data;
     expect(data.fetchProblem.code).toBe('human_verification');
-    expect(rpc).not.toHaveBeenCalled();
+    expect(data.sourceStatus).toBe('blocked_by_source');
+    // No rate is written; the only database call is the single alert review item.
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_rows: [], p_review_items: [{ reasons: ['blocked_by_source'], candidate: null }] });
     const control = db.tables.ii_reference_job_control[0];
     expect(control.consecutive_failures).toBe(1);
     expect(control.last_failure_at).toBeTruthy();
+    // The live attempt is recorded for the monitoring page.
+    expect(db.tables.ii_risk_free_refresh_attempts).toEqual([expect.objectContaining({ source_status: 'blocked_by_source', fetch_problem_code: 'human_verification' })]);
   });
 
   it('the answer is sanitised: no page body, no URL query, no secret', async () => {
