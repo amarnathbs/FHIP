@@ -110,6 +110,22 @@ describe('401 / 403 on every verb (NC-F1)', () => {
   });
 });
 
+describe('authorisation comes BEFORE body validation on generate (Stage 3 fix 4)', () => {
+  it('NC-F6: a FREE user posting a bad body, an unknown field or broken JSON gets 403, never 422 / 400; the service never runs', async () => {
+    mockCanView.mockResolvedValue(false);
+    for (const body of [{ period: 'forever' }, { userId: 'someone-else' }, '{not json']) {
+      const res = await generatePOST(post(body));
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(await res.json())).toMatch(/Premium|premium/);
+    }
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+  it('a Premium user with a bad body still gets the 422 / 400 (validation is not removed)', async () => {
+    expect((await generatePOST(post({ period: 'forever' }))).status).toBe(422);
+    expect((await generatePOST(post('{not json'))).status).toBe(400);
+  });
+});
+
 describe('list and generate', () => {
   it('a Premium user lists their own versions', async () => {
     const res = await listGET();
@@ -180,7 +196,16 @@ describe('read one and export (NC-F2, matrix 46)', () => {
     expect(res.headers.get('Content-Type')).toBe('application/pdf');
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
     expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="fund-analytics-report-02-10-2026-v3.pdf"');
-    expect(mockRender.mock.calls[0].slice(1)).toEqual([ME, ID]);
+    expect(mockRender.mock.calls[0].slice(1)).toEqual([ME, ID, { versionNumber: 3, createdAt: '2026-10-02T06:00:00Z' }]); // the running header carries the version and the made-on time
+    expect(res.headers.get('Content-Disposition')).toMatch(/^attachment;/);
+  });
+
+  it('?disposition=inline serves the same PDF for View PDF (opens in a tab); anything else stays an attachment', async () => {
+    const inline = await exportGET(new Request('http://t/x?disposition=inline'), ctx());
+    expect(inline.headers.get('Content-Disposition')).toBe('inline; filename="fund-analytics-report-02-10-2026-v3.pdf"');
+    expect(inline.headers.get('Cache-Control')).toBe('private, no-store');
+    const other = await exportGET(new Request('http://t/x?disposition=whatever'), ctx());
+    expect(other.headers.get('Content-Disposition')).toMatch(/^attachment;/);
   });
 
   it('a render failure is a 500 with a plain sentence, not the internal error', async () => {

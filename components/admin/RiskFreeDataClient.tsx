@@ -95,6 +95,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 export default function RiskFreeDataClient() {
   const [status, setStatus] = useState<Status | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [seriesId, setSeriesId] = useState<(typeof SERIES_IDS)[number]>(SERIES_IDS[0]);
   const [fileName, setFileName] = useState('');
   const [csvText, setCsvText] = useState('');
@@ -118,6 +119,7 @@ export default function RiskFreeDataClient() {
   };
 
   async function loadStatus() {
+    setRefreshing(true);
     try {
       const r = await fetch('/api/admin/investment-intelligence/risk-free-data');
       const j = await r.json().catch(() => null);
@@ -128,6 +130,8 @@ export default function RiskFreeDataClient() {
       }
     } catch {
       setStatusError('Could not load the page. Check your connection and reload.');
+    } finally {
+      setRefreshing(false);
     }
   }
   useEffect(() => {
@@ -235,6 +239,11 @@ export default function RiskFreeDataClient() {
         </p>
       </header>
 
+      {refreshing && status !== null && (
+        <p role="status" className="text-sm text-muted">
+          Refreshing the page...
+        </p>
+      )}
       {statusError && <Notice tone="bad" live="alert" title="Could not load this page">{statusError}</Notice>}
       {topMsg && (
         <div data-testid="page-top-banner">
@@ -330,7 +339,7 @@ export default function RiskFreeDataClient() {
             <Step n={2} title="Check the file">
               <p className="text-sm text-muted">This reads the file and shows what would happen. It writes nothing.</p>
               <div>
-                <Btn kind="secondary" busy={busyArea === 'check'} disabled={busy} onClick={() => void postUpload('preview')}>
+                <Btn kind="secondary" busy={busyArea === 'check'} busyLabel="Checking the file..." disabled={busy} onClick={() => void postUpload('preview')}>
                   Check file (writes nothing)
                 </Btn>
               </div>
@@ -385,7 +394,7 @@ export default function RiskFreeDataClient() {
               {!preview && <p className="text-sm text-muted">Check the file first (step 2). The upload button is switched on once the check passes and you have ticked the box.</p>}
               <CheckField label={status.attestationText} checked={attested} disabled={!preview || !preview.canCommit} onChange={setAttested} />
               <div>
-                <Btn kind="primary" busy={busyArea === 'upload'} disabled={busy || !preview || !preview.canCommit || !attested} onClick={() => void postUpload('commit')}>
+                <Btn kind="primary" busy={busyArea === 'upload'} busyLabel="Uploading..." disabled={busy || !preview || !preview.canCommit || !attested} onClick={() => void postUpload('commit')}>
                   {preview ? `Upload ${preview.willInsert} rows` : 'Upload rows'}
                 </Btn>
               </div>
@@ -426,6 +435,7 @@ export default function RiskFreeDataClient() {
                             key={decision}
                             kind={decision === 'accept' ? 'primary' : 'danger'}
                             busy={busyArea === area}
+                            busyLabel="Saving..."
                             disabled={busy || note.trim().length < MIN_REASON_CHARS}
                             onClick={() => void send(area, `/api/admin/investment-intelligence/risk-free-data/review/${id}`, { decision, note }, () => (decision === 'accept' ? 'Accepted: the value is now published.' : 'Rejected: nothing was published.'))}
                           >
@@ -456,6 +466,7 @@ export default function RiskFreeDataClient() {
             <Btn
               kind="primary"
               busy={busyArea === 'correction'}
+              busyLabel="Saving..."
               disabled={busy}
               onClick={() => {
                 setCorrTried(true);
@@ -503,6 +514,7 @@ export default function RiskFreeDataClient() {
                         <Btn
                           kind="primary"
                           busy={busyArea === area}
+                          busyLabel="Saving..."
                           disabled={busy || f.reason.trim().length < MIN_REASON_CHARS || unchanged}
                           onClick={() => void send(area, '/api/admin/investment-intelligence/risk-free-data/series-state', { seriesId: x.seriesId, enabled: f.enabled, termsStatus: f.termsStatus, reason: f.reason }, () => 'Series state saved.', () => setStateForm({ ...stateForm, [x.seriesId]: { ...f, reason: '' } }))}
                         >

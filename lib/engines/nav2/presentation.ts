@@ -44,6 +44,8 @@ export interface ShownCell {
   detail: string | null;
   /** Labels and disclosures that travel with an available figure ("Statement value", "Stale NAV", short period, ...). */
   notes: string[];
+  /** The disclosure code of each entry of `notes` (same order), so a printed layout can group a repeated explanation into one footnote. */
+  noteCodes: Array<Disclosure['code']>;
 }
 
 const LABELLED: Partial<Record<Disclosure['code'], string>> = { statement_value: 'Statement value', stale_nav: 'Stale NAV' };
@@ -54,13 +56,13 @@ export function disclosureNote(d: Disclosure): string {
 }
 
 /** A metric the spec did not request for this report: stated plainly, not shown as a figure. */
-export const NOT_CALCULATED: ShownCell = { available: false, text: 'Not calculated', headline: 'Not calculated', detail: null, notes: [] };
+export const NOT_CALCULATED: ShownCell = { available: false, text: 'Not calculated', headline: 'Not calculated', detail: null, notes: [], noteCodes: [] };
 
 export function showResult<T>(r: Nav2Result<T> | null | undefined, format: (v: T) => string): ShownCell {
   if (!r) return NOT_CALCULATED;
-  if (r.state === 'available') return { available: true, text: format(r.value), headline: null, detail: null, notes: r.disclosures.map(disclosureNote) };
+  if (r.state === 'available') return { available: true, text: format(r.value), headline: null, detail: null, notes: r.disclosures.map(disclosureNote), noteCodes: r.disclosures.map((d) => d.code) };
   const headline = unavailableHeadline(r.state, r.reason);
-  return { available: false, text: headline, headline, detail: r.detail, notes: r.disclosures.map(disclosureNote) };
+  return { available: false, text: headline, headline, detail: r.detail, notes: r.disclosures.map(disclosureNote), noteCodes: r.disclosures.map((d) => d.code) };
 }
 
 // ---------------------------------------------------------------------------

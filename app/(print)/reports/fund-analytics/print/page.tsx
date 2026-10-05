@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { canViewPremiumReport } from '@/lib/services/entitlements';
 import { getFundAnalyticsReport } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService';
 import { resolveNav2RenderToken } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer';
-import FundAnalyticsReportView from '@/components/reports/FundAnalyticsReportView';
+import FundAnalyticsPrintDocument from '@/components/reports/FundAnalyticsPrintDocument';
 
 // Bare print view -- no AppShell chrome. Opened two ways: (1) a logged-in Premium user visiting directly to print or preview
 // (?id=<report>), or (2) the headless PDF renderer, which has no session and presents a short-lived single-use ?token= tied to
@@ -20,9 +20,7 @@ export default async function FundAnalyticsPrintPage({ searchParams }: { searchP
     const found = await getFundAnalyticsReport(admin as never, resolved.userId, resolved.reportId);
     if (!found) notFound();
     return (
-      <div className="mx-auto max-w-3xl p-6">
-        <FundAnalyticsReportView report={found.report} printMode />
-      </div>
+      <FundAnalyticsPrintDocument report={found.report} version={{ versionNumber: found.summary.versionNumber, createdAt: found.summary.createdAt }} />
     );
   }
 
@@ -35,8 +33,6 @@ export default async function FundAnalyticsPrintPage({ searchParams }: { searchP
   const found = await getFundAnalyticsReport(supabase, user.id, id);
   if (!found) notFound();
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <FundAnalyticsReportView report={found.report} printMode />
-    </div>
+    <FundAnalyticsPrintDocument report={found.report} version={{ versionNumber: found.summary.versionNumber, createdAt: found.summary.createdAt }} />
   );
 }

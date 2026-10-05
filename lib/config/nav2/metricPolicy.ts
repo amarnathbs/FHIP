@@ -246,8 +246,8 @@ export interface MetricDefinition {
 
 export const NAV2_METRICS = {
   absolute_return: { id: 'absolute_return', family: 'scheme_performance', version: 'nav2-absolute-return-v1', formula: 'P1 / P0 - 1' },
-  cagr: { id: 'cagr', family: 'scheme_performance', version: 'nav2-cagr-actual-days-v1', formula: '(P1 / P0) ^ (365.2425 / actualDays) - 1' },
-  point_to_point: { id: 'point_to_point', family: 'scheme_performance', version: 'nav2-point-to-point-v1', formula: 'previous-valid NAV on or before each requested boundary; absolute return and CAGR from those NAVs' },
+  cagr: { id: 'cagr', family: 'scheme_performance', version: 'nav2-cagr-actual-days-v2', formula: '(P1 / P0) ^ (365.2425 / actualDays) - 1' },
+  point_to_point: { id: 'point_to_point', family: 'scheme_performance', version: 'nav2-point-to-point-v2', formula: 'previous-valid NAV on or before each requested boundary; absolute return and CAGR from those NAVs' },
   daily_simple_return: { id: 'daily_simple_return', family: 'scheme_performance', version: 'nav2-daily-simple-return-v1', formula: 'P_t / P_(t-1) - 1 over consecutive valid observations' },
   daily_log_return: { id: 'daily_log_return', family: 'scheme_performance', version: 'nav2-daily-log-return-v1', formula: 'ln(P_t / P_(t-1)); cumulative simple = exp(sum) - 1' },
   rolling_return: { id: 'rolling_return', family: 'scheme_performance', version: 'nav2-rolling-return-v1', formula: 'for each end date t: return from the latest NAV on or before (t - horizon); absolute under 12 months, CAGR from 12 months' },

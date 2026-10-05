@@ -31,6 +31,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // AUTHORISATION BEFORE VALIDATION: a free user gets the plain 403 for any body, never a 422 that confirms what the endpoint accepts.
+  const supabase = await createClient();
+  if (!(await canViewPremiumReport(user.id, supabase))) return bad(FUND_ANALYTICS_PREMIUM_MESSAGE, 403);
   let json: unknown = {};
   try {
     const text = await req.text();
@@ -42,7 +45,6 @@ export async function POST(req: Request) {
   if (!parsed.success) return badValidation(parsed.error);
 
   try {
-    const supabase = await createClient();
     const result = await generateFundAnalyticsReport({ userId: user.id, sessionClient: supabase, adminClient: createAdminClient(), periodChoice: parsed.data.period });
     switch (result.status) {
       case 'disabled':

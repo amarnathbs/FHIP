@@ -39,6 +39,17 @@ function Cell({ c }: { c: ShownCell }) {
   );
 }
 
+/** A figure, or (when it cannot be worked out) its short headline with a marker; the explanation is printed once under the table. */
+function ShortCell({ c }: { c: ShownCell }) {
+  if (c.available) return <Cell c={c} />;
+  return (
+    <span className="font-medium text-caution">
+      {c.headline}
+      {c.detail ? <sup>*</sup> : null}
+    </span>
+  );
+}
+
 function Table({ caption, head, children }: { caption: string; head: Array<{ label: string; num?: boolean }>; children: React.ReactNode }) {
   return (
     <div className="mt-3 overflow-x-auto">
@@ -61,14 +72,14 @@ function Table({ caption, head, children }: { caption: string; head: Array<{ lab
 
 const rowCls = 'border-t border-line';
 
-function NavChart({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: Nav2Context }) {
+export function NavChart({ block, ctx, height = 220 }: { block: FundAnalyticsSchemeBlock; ctx: Nav2Context; height?: number }) {
   const rows = useMemo(() => chartRowsWithGaps(block.chart).map((r) => ({ ...r, label: showDate(ctx, r.date) })), [block.chart, ctx]);
   if (block.chart.navPoints.length < 2) {
     return <p className="mt-3 rounded-card border border-dashed p-4 text-sm text-muted">Not enough price history to draw a chart.</p>;
   }
   return (
     <div className="mt-3" role="img" aria-label={`Price (NAV) history of ${block.schemeName} with the 50 and 200 observation simple moving averages. The line is broken wherever price history is missing.`}>
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" height={height}>
         <LineChart data={rows}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={48} />
@@ -108,20 +119,29 @@ function SchemeSection({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: N
           return (
             <tr key={p.id} className={rowCls}>
               <th scope="row" className="py-2 pr-3 text-left font-medium">{p.id.replace('Y', ' year')}</th>
-              <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}><Cell c={abs} /></td>
-              <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}><Cell c={cg} /></td>
+              <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}><ShortCell c={abs} /></td>
+              <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}><ShortCell c={cg} /></td>
               <td className="py-2 pr-3 text-xs text-muted">{p.result.state === 'available' ? period(ctx, p.result.value.startDate, p.result.value.endDate) : ''}</td>
             </tr>
           );
         })}
       </Table>
+      {/* The full sentence ONCE per fund, not repeated in every cell. */}
+      {(() => {
+        const first = s.pointToPoint.map((p) => showResult(p.result, (v) => pct(v.absoluteReturn))).find((c) => !c.available && c.detail);
+        return first ? (
+          <p className="mt-1 text-xs text-muted">
+            <sup>*</sup> {first.detail} The same applies to every figure marked * in this table; each uses its own date.
+          </p>
+        ) : null;
+      })()}
 
       <Table caption="Rolling returns: every available window, not a single start date" head={[{ label: 'Window' }, { label: 'Median', num: true }, { label: 'Lowest', num: true }, { label: 'Highest', num: true }, { label: 'Windows above zero', num: true }]}>
         {s.rolling.map((r) => {
           const v = r.result.state === 'available' ? r.result.value : null;
           const withheld = v !== null && v.summary === null;
           const cellFor = (f: (x: NonNullable<typeof v>['summary'] & object) => string): ShownCell =>
-            withheld ? { available: false, text: 'Summary withheld', headline: 'Summary withheld', detail: `Only ${v!.windowCount} window(s): too few to summarise.`, notes: [] } : showResult(r.result, (x) => (x.summary ? f(x.summary) : ''));
+            withheld ? { available: false, text: 'Summary withheld', headline: 'Summary withheld', detail: `Only ${v!.windowCount} window(s): too few to summarise.`, notes: [], noteCodes: [] } : showResult(r.result, (x) => (x.summary ? f(x.summary) : ''));
           return (
             <tr key={r.horizonId} className={rowCls}>
               <th scope="row" className="py-2 pr-3 text-left font-medium">{r.horizonId}</th>
@@ -212,7 +232,7 @@ function SchemeSection({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: N
 
 function pairCell(report: FundAnalyticsReport, aId: string, bId: string, ctx: Nav2Context): ShownCell {
   const p = report.comparison.correlations.find((x) => (x.aInstrumentId === aId && x.bInstrumentId === bId) || (x.aInstrumentId === bId && x.bInstrumentId === aId));
-  if (!p) return { available: false, text: 'Not calculated', headline: 'Not calculated', detail: null, notes: [] };
+  if (!p) return { available: false, text: 'Not calculated', headline: 'Not calculated', detail: null, notes: [], noteCodes: [] };
   return showResult(p.result as Nav2Result<CorrelationValue>, (v) => `${ratio(v.correlation)} (${v.commonReturnCount.toLocaleString('en-IN')} common returns, ${period(ctx, v.windowStart, v.windowEnd)})`);
 }
 

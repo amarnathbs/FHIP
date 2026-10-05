@@ -74,11 +74,11 @@ const BTN: Record<BtnKind, string> = {
   danger: 'border border-risk/40 bg-white text-risk hover:bg-risk/10',
 };
 
-export function Btn({ children, onClick, disabled, kind = 'primary', type = 'button', busy, describedBy, ariaLabel, title, nowrap }: { children: ReactNode; onClick?: () => void; disabled?: boolean; kind?: BtnKind; type?: 'button' | 'submit'; busy?: boolean; describedBy?: string; ariaLabel?: string; title?: string; nowrap?: boolean }) {
+export function Btn({ children, onClick, disabled, kind = 'primary', type = 'button', busy, busyLabel, describedBy, ariaLabel, title, nowrap }: { children: ReactNode; onClick?: () => void; disabled?: boolean; kind?: BtnKind; type?: 'button' | 'submit'; busy?: boolean; /** What the button says while it works (default "Working..."): say what is happening, for example "Saving...". */ busyLabel?: string; describedBy?: string; ariaLabel?: string; title?: string; nowrap?: boolean }) {
   const off = disabled === true || busy === true;
   return (
     <button type={type} onClick={onClick} disabled={off} aria-disabled={off} aria-busy={busy === true} aria-describedby={describedBy} aria-label={ariaLabel} title={title} className={`inline-flex min-h-11 items-center justify-center rounded px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${nowrap ? 'whitespace-nowrap' : ''} ${BTN[kind]} ${FOCUS}`}>
-      {busy ? 'Working...' : children}
+      {busy ? (busyLabel ?? 'Working...') : children}
     </button>
   );
 }

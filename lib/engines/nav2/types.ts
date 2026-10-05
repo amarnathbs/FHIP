@@ -108,6 +108,7 @@ export type Nav2DisclosureCode =
   | 'risk_free_periods_excluded'
   | 'unrecoverable_history_period'
   | 'cagr_not_shown_under_one_year'
+  | 'cagr_on_actual_days'
   | 'rolling_summary_withheld'
   | 'statement_value'
   | 'stale_nav'

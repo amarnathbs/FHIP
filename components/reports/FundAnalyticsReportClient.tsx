@@ -6,6 +6,7 @@ import { ActionMessage, Btn, Notice, SelectField } from '@/components/admin/benc
 import { REPORT_PERIOD_CHOICES, REPORT_PERIOD_LABELS, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
+import { FUND_ANALYTICS_SAVED_REPORT_SENTENCE, versionMadeLine } from '@/lib/engines/nav2/reportWording';
 
 // Interactive shell of the Fund analytics report: choose a period, generate the next version, switch between earlier
 // versions, download the PDF. Everything shown comes from the Premium-gated API; a 403 / 404 / 5xx is shown as such, never as
@@ -37,7 +38,8 @@ export default function FundAnalyticsReportClient() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<'download' | 'view' | null>(null);
+  const [pdfStatus, setPdfStatus] = useState<string | null>(null);
   const polls = useRef(0);
 
   const loadReport = useCallback(async (id: string) => {
@@ -122,30 +124,48 @@ export default function FundAnalyticsReportClient() {
     return () => clearTimeout(t);
   }, [waiting, generate]);
 
-  async function exportPdf() {
+  // Download PDF saves the file; View PDF opens the same PDF in a new tab. Either way the person is told what happened: preparing,
+  // then "Your PDF is ready", never left wondering where the file went. The blob address is revoked once the tab / download has it.
+  async function getPdf(mode: 'download' | 'view') {
     if (!selectedId) return;
-    setExporting(true);
+    setExporting(mode);
     setError(null);
+    setPdfStatus('Preparing your PDF. This takes a few seconds.');
+    // A new tab must be opened by the click itself (browsers block a tab opened after the wait): open it blank now, point it at the PDF later.
+    const tab = mode === 'view' ? window.open('', '_blank') : null;
     try {
-      const res = await fetch(`/api/reports/fund-analytics/${selectedId}/export`);
+      const res = await fetch(`/api/reports/fund-analytics/${selectedId}/export${mode === 'view' ? '?disposition=inline' : ''}`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error ?? `Export failed (${res.status})`);
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const cd = res.headers.get('Content-Disposition') ?? '';
-      a.download = /filename="([^"]+)"/.exec(cd)?.[1] ?? 'fund-analytics-report.pdf';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      if (mode === 'view') {
+        if (tab) {
+          tab.location.href = url;
+          setPdfStatus('Your PDF is ready. It opened in a new tab.');
+        } else {
+          setPdfStatus('Your PDF is ready, but your browser blocked the new tab. Allow pop-ups for this site, or use Download PDF.');
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        const cd = res.headers.get('Content-Disposition') ?? '';
+        a.download = /filename="([^"]+)"/.exec(cd)?.[1] ?? 'fund-analytics-report.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setPdfStatus('Your PDF is ready. It was saved to your Downloads folder.');
+      }
     } catch (e) {
+      tab?.close();
+      setPdfStatus(null);
       setError(e instanceof Error ? e.message : 'The PDF could not be generated.');
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
@@ -169,8 +189,11 @@ export default function FundAnalyticsReportClient() {
           )}
           {report && (
             <>
-              <Btn kind="secondary" busy={exporting} onClick={() => void exportPdf()}>
-                Export PDF
+              <Btn kind="secondary" busy={exporting === 'view'} busyLabel="Preparing PDF..." disabled={exporting !== null} onClick={() => void getPdf('view')}>
+                View PDF
+              </Btn>
+              <Btn kind="secondary" busy={exporting === 'download'} busyLabel="Preparing PDF..." disabled={exporting !== null} onClick={() => void getPdf('download')}>
+                Download PDF
               </Btn>
               <Btn kind="secondary" onClick={() => window.print()}>
                 Print
@@ -178,6 +201,11 @@ export default function FundAnalyticsReportClient() {
             </>
           )}
         </div>
+        {pdfStatus && (
+          <p role="status" className="mt-2 text-sm text-ink" data-testid="pdf-status">
+            {pdfStatus}
+          </p>
+        )}
         {/* The result of the button just pressed sits right under the buttons, scrolled into view and focused. */}
         <ActionMessage message={error ? { kind: 'error', text: error } : null} />
       </div>
@@ -194,7 +222,11 @@ export default function FundAnalyticsReportClient() {
           <p className="mt-1 text-muted">This screen checks again by itself; you can also come back later.</p>
         </div>
       )}
-      {sel && <p className="no-print text-xs text-muted">This is a saved report: it does not change when prices are later corrected. Generate a new version to include them.</p>}
+      {sel && (
+        <p className="no-print text-xs text-muted" data-testid="saved-report-line">
+          {versionMadeLine(sel.versionNumber, sel.createdAt)}. {FUND_ANALYTICS_SAVED_REPORT_SENTENCE}
+        </p>
+      )}
       {versions && versions.length === 0 && !waiting && !notice && !error && <p className="text-sm text-muted">No report has been generated yet. Choose a period and generate your first one.</p>}
       {report && <FundAnalyticsReportView report={report} />}
     </div>

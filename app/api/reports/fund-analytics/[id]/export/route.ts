@@ -14,7 +14,7 @@ export const maxDuration = 60;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const { id } = await ctx.params;
@@ -24,13 +24,15 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const found = await getFundAnalyticsReport(supabase, user.id, id);
   if (!found) return bad('The report was not found.', 404);
   try {
-    const buffer = await renderFundAnalyticsReportToPdf(createAdminClient(), user.id, id);
+    const buffer = await renderFundAnalyticsReportToPdf(createAdminClient(), user.id, id, { versionNumber: found.summary.versionNumber, createdAt: found.summary.createdAt });
     const asOf = found.summary.asOfDate.slice(8, 10) + '-' + found.summary.asOfDate.slice(5, 7) + '-' + found.summary.asOfDate.slice(0, 4);
+    // ?disposition=inline lets the page open the same PDF in a new tab (View PDF); the default is a download.
+    const disposition = new URL(req.url).searchParams.get('disposition') === 'inline' ? 'inline' : 'attachment';
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="fund-analytics-report-${asOf}-v${found.summary.versionNumber}.pdf"`,
+        'Content-Disposition': `${disposition}; filename="fund-analytics-report-${asOf}-v${found.summary.versionNumber}.pdf"`,
         'Cache-Control': 'private, no-store',
       },
     });

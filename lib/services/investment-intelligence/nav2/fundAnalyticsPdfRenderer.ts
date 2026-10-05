@@ -7,7 +7,9 @@
 // the caller's own BEFORE a token is created; the print route checks the token again and loads the report with an explicit
 // user filter, so a token for one user's report can never open another's.
 
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
+import { formatDateTimeMinutes } from '@/lib/engines/date';
+import { FUND_ANALYTICS_SAVED_REPORT_SENTENCE } from '@/lib/engines/nav2/reportWording';
 import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -31,7 +33,65 @@ export async function resolveNav2RenderToken(admin: SupabaseClient, token: strin
   return { userId: row.user_id, reportId: row.report_id };
 }
 
-export async function renderFundAnalyticsReportToPdf(admin: SupabaseClient, userId: string, reportId: string): Promise<Buffer> {
+/** What the running header and footer say about the stored report. */
+export interface PdfReportMeta {
+  versionNumber: number;
+  /** ISO timestamp the version was made. */
+  createdAt: string;
+}
+
+// PAGE SETUP (one place, shared by the export route and the layout check): A4 portrait, equal side margins, room at the top for the running
+// header and at the bottom for the running footer. The print stylesheet (.fa-doc in app/globals.css) is written for exactly this text area.
+export const FUND_ANALYTICS_PDF_MARGIN = { top: '22mm', bottom: '20mm', left: '16mm', right: '16mm' } as const;
+
+const esc = (t: string): string => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const TEMPLATE_STYLE = 'width:100%;box-sizing:border-box;padding:0 16mm;font-size:8px;color:#6B7280;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:center;';
+
+/** Running header: "FHIP - Fund analytics report" left, "Version N, made 05-10-2026, 9:30 am" right (day-first, minutes). */
+export function pdfHeaderTemplate(meta?: PdfReportMeta): string {
+  const right = meta ? `Version ${meta.versionNumber}, made ${formatDateTimeMinutes(meta.createdAt, 'INR')}` : '';
+  return `<div style="${TEMPLATE_STYLE}"><span>FHIP - Fund analytics report</span><span>${esc(right)}</span></div>`;
+}
+
+/** Running footer: "FHIP - Premium report" and the saved-report sentence left, "Page n of N" right. */
+export function pdfFooterTemplate(): string {
+  return `<div style="${TEMPLATE_STYLE}"><span>FHIP - Premium report. ${esc(FUND_ANALYTICS_SAVED_REPORT_SENTENCE)}</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`;
+}
+
+/** The same chart-readiness wait as the other report renderers: a run of consecutive ready (or chart-free) polls. */
+export async function waitForChartsReady(page: Page): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const svgs = document.querySelectorAll('.recharts-wrapper svg');
+        const ready = svgs.length > 0 && Array.from(svgs).every((svg) => {
+          const box = (svg as SVGSVGElement).getBBox();
+          return box.width > 0 && box.height > 0;
+        });
+        const w = window as unknown as { __fhipChartWaitStreak?: number };
+        w.__fhipChartWaitStreak = ready || svgs.length === 0 ? (w.__fhipChartWaitStreak ?? 0) + 1 : 0;
+        return w.__fhipChartWaitStreak >= 15;
+      },
+      { timeout: 20000, polling: 100 }
+    )
+    .catch(() => {});
+}
+
+/** Prints the open page exactly as the export route does (the layout check uses this same function). */
+export async function printPageToPdf(page: Page, meta?: PdfReportMeta): Promise<Buffer> {
+  await page.emulateMedia({ media: 'print' });
+  await waitForChartsReady(page);
+  return await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    margin: FUND_ANALYTICS_PDF_MARGIN,
+    displayHeaderFooter: true,
+    headerTemplate: pdfHeaderTemplate(meta),
+    footerTemplate: pdfFooterTemplate(),
+  });
+}
+
+export async function renderFundAnalyticsReportToPdf(admin: SupabaseClient, userId: string, reportId: string, meta?: PdfReportMeta): Promise<Buffer> {
   const token = await createNav2RenderToken(admin, userId, reportId);
   const browser = await chromium.launch();
   try {
@@ -39,31 +99,7 @@ export async function renderFundAnalyticsReportToPdf(admin: SupabaseClient, user
     const url = `${BASE_URL}/reports/fund-analytics/print?${new URLSearchParams({ token }).toString()}`;
     const response = await page.goto(url, { waitUntil: 'networkidle' });
     if (!response || !response.ok()) throw new Error(`Print route returned ${response?.status() ?? 'no response'}`);
-    await page.emulateMedia({ media: 'print' });
-    // Same chart-readiness wait as the other report renderers: a run of consecutive ready (or chart-free) polls.
-    await page
-      .waitForFunction(
-        () => {
-          const svgs = document.querySelectorAll('.recharts-wrapper svg');
-          const ready = svgs.length > 0 && Array.from(svgs).every((svg) => {
-            const box = (svg as SVGSVGElement).getBBox();
-            return box.width > 0 && box.height > 0;
-          });
-          const w = window as unknown as { __fhipChartWaitStreak?: number };
-          w.__fhipChartWaitStreak = ready || svgs.length === 0 ? (w.__fhipChartWaitStreak ?? 0) + 1 : 0;
-          return w.__fhipChartWaitStreak >= 15;
-        },
-        { timeout: 20000, polling: 100 }
-      )
-      .catch(() => {});
-    return await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '18mm', bottom: '20mm', left: '14mm', right: '14mm' },
-      displayHeaderFooter: true,
-      headerTemplate: '<span></span>',
-      footerTemplate: '<div style="width:100%;font-size:9px;color:#9CA3AF;text-align:center;font-family:Arial,sans-serif;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>',
-    });
+    return await printPageToPdf(page, meta);
   } finally {
     await browser.close();
     await admin.from('nav2_report_render_tokens').delete().eq('token', token);

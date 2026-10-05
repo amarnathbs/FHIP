@@ -110,8 +110,14 @@ function resolvePointToPoint(
   }
   if (isDistributionOption(series.identity)) disclosures.push(distributionOptionDisclosure());
   disclosures.push(...coverageGapDisclosures(series, ctx, startHit.obs.date, endHit.obs.date));
-  const cagrShown = actualDays >= ctx.policy.cagrMinDays;
+  // WHICH PERIOD IS "A YEAR OR MORE": the one the investor REQUESTED. A requested year (for example 05-10-2025 to 05-10-2026, 365 days) can
+  // resolve, through the previous-valid-NAV boundary rule, to prices 363 days apart; that is still a one-year period and is annualised on the
+  // days actually elapsed, with the substitution disclosed. Only a genuinely shorter REQUESTED span (a six-month holding) shows the absolute
+  // return alone. The actual span is never more than boundaryLookupDays shorter than the requested one.
+  const requestedDays = daysBetweenIso(requestedStart, requestedEnd);
+  const cagrShown = requestedDays >= ctx.policy.cagrMinDays || actualDays >= ctx.policy.cagrMinDays;
   if (!cagrShown) disclosures.push({ code: 'cagr_not_shown_under_one_year', detail: 'The period is under a year, so the absolute return is shown and no annualised figure is given.' });
+  else if (actualDays < ctx.policy.cagrMinDays) disclosures.push({ code: 'cagr_on_actual_days', detail: `The period asked for is a year or more, but the prices used are ${actualDays} days apart, so the annualised figure is worked out over those ${actualDays} days.` });
   const value: PointToPointValue = {
     requestedStart,
     requestedEnd,
@@ -153,7 +159,7 @@ export function absoluteReturn(series: PreparedSeries, ctx: Nav2Context, request
   return available(
     { startDate: v.startDate, endDate: v.endDate, startNav: v.startNav, endNav: v.endNav, absoluteReturn: v.absoluteReturn, boundarySubstituted: v.boundarySubstituted },
     makeProvenance(ctx, 'absolute_return', r.extras),
-    r.disclosures.filter((d) => d.code !== 'cagr_not_shown_under_one_year')
+    r.disclosures.filter((d) => d.code !== 'cagr_not_shown_under_one_year' && d.code !== 'cagr_on_actual_days')
   );
 }
 

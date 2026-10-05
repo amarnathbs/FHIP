@@ -109,7 +109,8 @@ describe('NAV2 admin screens: real controls, results shown where they happened',
     const s = code(read(REPORT_CLIENT));
     expect(s.indexOf('<ActionMessage')).toBeGreaterThan(s.indexOf('Generate a new version'));
     expect(s.indexOf('<ActionMessage')).toBeLessThan(s.indexOf('<FundAnalyticsReportView'));
-    expect(s).toContain('Export PDF');
+    expect(s).toContain('Download PDF');
+    expect(s).toContain('View PDF');
   });
 
   it('the monitoring page has a Refresh button whose result is shown next to it', () => {
