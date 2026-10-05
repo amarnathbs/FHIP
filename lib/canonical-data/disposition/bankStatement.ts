@@ -120,6 +120,16 @@ const UPLOAD_TABLE: Row[] = [
     'id', 'user_id', 'household_id', 'financial_account_id', 'institution_id', 'source_type', 'document_type', 'country_code',
     'currency_code',
   ], 'fdh_statement_uploads'),
+  // Owner-before-upload (0236): the owner the user CHOSE for this document before sending it. Provenance of that choice only: the
+  // economic owner that read models use lives on the canonical account (fdh_financial_accounts.owner_role, 0207) and is written there
+  // through the one account-owner writer, so these document columns are metadata (they survive the raw-file purge by design).
+  ...[
+    ['owner_member_id', 'the household member the user chose as owner'],
+    ['owner_business_entity_id', 'the entity the user chose as owner (refused for bank statements today)'],
+    ['owner_role', 'the owner role the user chose (self, spouse, joint, smsf ...)'],
+    ['owner_selection_source', 'how the owner was recorded (user_selected, backfill_from_account, backfill_from_document, legacy_unset)'],
+    ['owner_allocation', 'the joint split the user chose (basis points, total 10000); AU investment statements only'],
+  ].map(([f, what]) => [f, D, `fdh_statement_uploads.${f} (${what}; the economic owner is fdh_financial_accounts.owner_role)`] as Row),
   ['original_filename_sanitised', C, 'evidence:fdh_statement_uploads.original_filename_sanitised', 'Financial Data Hub > documents'],
   ...technical(['file_hash', 'mime_type', 'file_size_bytes'], 'fdh_statement_uploads'),
   ['statement_period_start', C, 'fdh_statement_uploads.statement_period_start (coverage input)', 'Category review header'],

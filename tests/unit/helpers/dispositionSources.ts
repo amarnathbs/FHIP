@@ -276,7 +276,7 @@ export const SOURCES: readonly DispositionSource[] = [
   zodSource('bank_ai_draft', 'aie:bankStatement/schema.ts#bankStatementDocumentFactsSchema', bankStatementDocumentFactsSchema, 10),
   zodSource('bank_ai_draft', 'aie:bankStatement/schema.ts#bankStatementTransactionSchema', bankStatementTransactionSchema, 5),
   dbSource('bank_ledger', 'fdh_transactions', 48),
-  dbSource('bank_ledger', 'fdh_statement_uploads', 67),
+  dbSource('bank_ledger', 'fdh_statement_uploads', 72), // 67 + the five owner-before-upload columns (0236)
   enumSource('economic_type', 'enum:FDH_ECONOMIC_TRANSACTION_TYPES', FDH_ECONOMIC_TRANSACTION_TYPES, 13),
   // Payslip.
   tsSource('payslip_native', 'fdh:payslip/types.ts#PayrollExtraction', 36),
