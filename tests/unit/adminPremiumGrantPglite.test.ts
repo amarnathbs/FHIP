@@ -22,6 +22,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
+import { latestFunctionSql } from './support/promoTestHelpers';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,7 +54,8 @@ function extractFn(sql: string, name: string): string {
   if (!m) throw new Error(`could not extract ${name}`);
   return m[0];
 }
-const MANAGE_FN = extractFn(MIGRATION_LATEST, 'admin_manage_premium_entitlement');
+// The hardening migration (0265) replaces admin_manage_premium_entitlement(), so the negative controls mutate and restore the NEWEST definition.
+const MANAGE_FN = latestFunctionSql('admin_manage_premium_entitlement');
 const WEBHOOK_FN = extractFn(MIGRATION_LATEST, 'apply_subscription_entitlement_event');
 const AI_STATE_FN = extractFn(MIGRATION_0115, 'ai_entitlement_state');
 
@@ -259,16 +261,16 @@ describe('authorisation (Standard §2/§4) — capability enforced in the DATABA
   });
 });
 
-describe('the 1-year (365-day) cap — enforced by the database, not the UI', () => {
+describe('the 1-year (365 days counting the first day) cap — enforced by the database, not the UI', () => {
   async function assertCap(): Promise<void> {
     const t = await newUser();
-    await expectCode(manage(ADMIN, 'grant', t, await addDays(366)), 'ENTITLEMENT_END_DATE_EXCEEDS_MAX');
-    expect((await ent(t)).plan_tier, 'a rejected 366-day grant must not change the row').toBe('free');
-    const ok = await manage(ADMIN, 'grant', t, await addDays(365));
-    expect(ok.effective_to).toBe(await addDays(365));
+    await expectCode(manage(ADMIN, 'grant', t, await addDays(365)), 'ENTITLEMENT_END_DATE_EXCEEDS_MAX');
+    expect((await ent(t)).plan_tier, 'a rejected 366-day grant (end date today plus 365) must not change the row').toBe('free');
+    const ok = await manage(ADMIN, 'grant', t, await addDays(364));
+    expect(ok.effective_to).toBe(await addDays(364));
   }
 
-  it('366 days is rejected, exactly 365 days is accepted', async () => {
+  it('a 366 day grant (end today plus 365) is rejected, a 365 day grant (end today plus 364) is accepted', async () => {
     await assertCap();
   });
 
@@ -282,7 +284,7 @@ describe('the 1-year (365-day) cap — enforced by the database, not the UI', ()
   it('NEGATIVE CONTROL — with the cap removed a 400-day grant succeeds (assertion "366 days rejected" goes red)', async () => {
     await withMutation(
       MANAGE_FN,
-      (s) => s.replace(/if p_ends_on > v_today \+ v_max_days then/, 'if false then'),
+      (s) => s.replace(/if p_ends_on > v_max_end then/, 'if false then'),
       async () => {
         await expectAssertionFails(assertCap, 'expected rejection with ENTITLEMENT_END_DATE_EXCEEDS_MAX');
       }
@@ -293,23 +295,23 @@ describe('the 1-year (365-day) cap — enforced by the database, not the UI', ()
     const t = await newUser();
     await manage(ADMIN, 'grant', t, await addDays(300));
     // Backdate the allocation by 200 days (grant started 200 days ago, ends in 300): an extension is
-    // measured from today, so today+365 is allowed even though it is 565 days after the allocation.
+    // measured from today, so today+364 is allowed even though it is 564 days after the allocation.
     await db.exec(`update user_entitlements set effective_from = current_date - 200 where user_id='${t}'`);
-    const v = await manage(ADMIN, 'extend', t, await addDays(365));
-    expect(v.effective_to).toBe(await addDays(365));
-    await expectCode(manage(ADMIN, 'extend', t, await addDays(366)), 'ENTITLEMENT_END_DATE_EXCEEDS_MAX');
-    expect((await ent(t)).effective_to).toBe(await addDays(365)); // unchanged by the rejected extension
+    const v = await manage(ADMIN, 'extend', t, await addDays(364));
+    expect(v.effective_to).toBe(await addDays(364));
+    await expectCode(manage(ADMIN, 'extend', t, await addDays(365)), 'ENTITLEMENT_END_DATE_EXCEEDS_MAX');
+    expect((await ent(t)).effective_to).toBe(await addDays(364)); // unchanged by the rejected extension
   });
 
   it('NEGATIVE CONTROL — with the cap removed an over-long EXTENSION succeeds (assertion "extension 366 rejected" goes red)', async () => {
     await withMutation(
       MANAGE_FN,
-      (s) => s.replace(/if p_ends_on > v_today \+ v_max_days then/, 'if false then'),
+      (s) => s.replace(/if p_ends_on > v_max_end then/, 'if false then'),
       async () => {
         await expectAssertionFails(async () => {
           const t = await newUser();
           await manage(ADMIN, 'grant', t, await addDays(30));
-          await expectCode(manage(ADMIN, 'extend', t, await addDays(366)), 'ENTITLEMENT_END_DATE_EXCEEDS_MAX');
+          await expectCode(manage(ADMIN, 'extend', t, await addDays(365)), 'ENTITLEMENT_END_DATE_EXCEEDS_MAX');
         }, 'expected rejection with ENTITLEMENT_END_DATE_EXCEEDS_MAX');
       }
     );

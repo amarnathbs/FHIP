@@ -24,6 +24,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
+import { digestsFor, latestFunctionSql, makeCode, replayAll } from './support/promoTestHelpers';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,15 +34,9 @@ import { normalisePromoCode, PROMO_ALPHABET } from '@/lib/services/promoCodes';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SUPABASE_ROOT = path.resolve(HERE, '..', '..', 'supabase');
 const MIG_DIR = path.join(SUPABASE_ROOT, 'migrations');
-const SHIM = path.join(SUPABASE_ROOT, '..', 'scripts', 'db-rebuild-check', 'shim.sql');
 const LATEST_NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_admin_promo_codes_extension_cap_expiry_summary.sql'));
 if (!LATEST_NAME) throw new Error('promo / extension-cap migration not found');
 const MIGRATION = fs.readFileSync(path.join(MIG_DIR, LATEST_NAME), 'utf8');
-// The e-mail-a-code migration replaces admin_create_promo_code() and redeem_promo_code_for_user() in place (address
-// binding), so their negative controls mutate and restore THAT (newest) text.
-const EMAIL_SEND_NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_promo_code_email_send.sql'));
-if (!EMAIL_SEND_NAME) throw new Error('promo code e-mail migration not found');
-const MIGRATION_EMAIL_SEND = fs.readFileSync(path.join(MIG_DIR, EMAIL_SEND_NAME), 'utf8');
 
 const ENT_ADMIN = 'aaaaaaaa-0000-0000-0000-00000000b001'; // can_manage_premium_entitlements only
 const PROMO_ADMIN = 'aaaaaaaa-0000-0000-0000-00000000b002'; // can_manage_promo_codes only
@@ -57,9 +52,10 @@ function extractFn(name: string, source: string = MIGRATION): string {
   if (!m) throw new Error(`could not extract ${name}`);
   return m[0];
 }
-const MANAGE_FN = extractFn('admin_manage_premium_entitlement');
-const REDEEM_FN = extractFn('redeem_promo_code_for_user', MIGRATION_EMAIL_SEND);
-const CREATE_FN = extractFn('admin_create_promo_code', MIGRATION_EMAIL_SEND);
+// The hardening migrations (0264 to 0268) replace these functions, so the negative controls mutate and restore the NEWEST definition.
+const MANAGE_FN = latestFunctionSql('admin_manage_premium_entitlement');
+const REDEEM_FN = latestFunctionSql('redeem_promo_code_for_user');
+const CREATE_FN = latestFunctionSql('admin_create_promo_code');
 const WEBHOOK_FN = extractFn('apply_subscription_entitlement_event');
 const SUMMARY_FN = extractFn('admin_entitlement_expiry_summary');
 
@@ -124,10 +120,13 @@ interface CreateOpts {
 }
 async function createPromo(actor: string, o: CreateOpts = {}): Promise<Json> {
   const exp = o.expires === undefined && !o.noExpiry ? await addDays(60) : (o.expires ?? null);
-  return as(actor, 'authenticated', async () => {
-    const { rows } = await db.query(`select public.admin_create_promo_code($1,$2,$3,$4,$5,$6,$7) v`, [
-      o.code ?? null,
-      o.duration === undefined ? null : o.duration,
+  const made = makeCode(o.code ?? undefined);
+  const v = await as(actor, 'authenticated', async () => {
+    const { rows } = await db.query(`select public.admin_create_promo_code($1,$2,$3,$4,$5,$6,$7,$8,$9) v`, [
+      made.digest,
+      made.hint,
+      made.version,
+      o.duration === undefined || o.duration === null ? 30 : o.duration,
       o.unlimited ? null : o.max === undefined ? 100 : o.max,
       o.unlimited ?? false,
       exp,
@@ -136,11 +135,13 @@ async function createPromo(actor: string, o: CreateOpts = {}): Promise<Json> {
     ]);
     return (rows[0] as { v: Json }).v;
   });
+  // The plain code exists only here, in the test, exactly as it exists only in the create response in production.
+  return { ...v, code: made.plain };
 }
 
 async function redeem(user: string, code: string, ip: string | null = null): Promise<Json> {
   return as(null, 'service_role', async () => {
-    const { rows } = await db.query(`select public.redeem_promo_code_for_user($1,$2,$3) v`, [user, code, ip]);
+    const { rows } = await db.query(`select public.redeem_promo_code_for_user($1,$2::text[],$3) v`, [user, digestsFor(code), ip]);
     return (rows[0] as { v: Json }).v;
   });
 }
@@ -181,13 +182,7 @@ const UNUSABLE = { ok: false, code: 'PROMO_CODE_UNUSABLE' };
 
 beforeAll(async () => {
   db = await PGlite.create();
-  await db.exec(fs.readFileSync(SHIM, 'utf8'));
-  const seed = fs.readFileSync(path.join(SUPABASE_ROOT, 'seed.sql'), 'utf8');
-  const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
-  for (const f of files) {
-    await db.exec(fs.readFileSync(path.join(MIG_DIR, f), 'utf8').replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, ''));
-    if (f.startsWith('0001')) await db.exec(seed);
-  }
+  await replayAll(db);
   await db.exec(
     `insert into auth.users(id,email) values ('${ENT_ADMIN}','ent-admin@pg.test'),('${PROMO_ADMIN}','promo-admin@pg.test'),('${NO_CAP_ADMIN}','nocap@pg.test'),('${PLAIN}','plain@pg.test');`
   );
@@ -250,7 +245,7 @@ describe('extension cap — at most 5 admin extensions per grant', () => {
   it('NEGATIVE CONTROL — with the cap removed a 6th extension succeeds (assertion "expected rejection with ENTITLEMENT_EXTENSION_LIMIT_REACHED" goes red)', async () => {
     await withMutation(
       MANAGE_FN,
-      (s) => s.replace("if v_row.admin_grant_extension_count >= v_max_ext then raise exception 'ENTITLEMENT_EXTENSION_LIMIT_REACHED' using errcode = 'P0001'; end if;", ''),
+      (s) => s.replace('v_cap_hit := v_row.admin_grant_extension_count >= v_max_ext;', 'v_cap_hit := false;'),
       async () => {
         await expectAssertionFails(assertCap, 'expected rejection with ENTITLEMENT_EXTENSION_LIMIT_REACHED');
       }
@@ -359,7 +354,7 @@ describe('creating codes', () => {
     await assertDuration();
     const dflt = await createPromo(PROMO_ADMIN, { duration: null });
     expect(dflt.duration_days, 'access length defaults to one month').toBe(30);
-    expect(dflt.ends_if_redeemed_today).toBe(await addDays(30));
+    expect(dflt.ends_if_redeemed_today, 'a 30 day code redeemed today ends on today plus 29').toBe(await addDays(29));
   });
   it('NEGATIVE CONTROL — with the duration check removed the function no longer reports it (assertion "expected rejection with PROMO_DURATION_INVALID" goes red; the table CHECK is the only backstop)', async () => {
     await withMutation(
@@ -380,12 +375,11 @@ describe('creating codes', () => {
     expect(u).toMatchObject({ max_redemptions: null, expires_on: null });
   });
 
-  it('codes use the unambiguous alphabet; admin-chosen codes are normalised case-insensitively; duplicates (any case/spacing) are refused', async () => {
-    for (const bad of ['ABC0EF', 'ABCOEF', 'ABC1EF', 'ABCIEF', 'ABCLEF', 'SHORT', 'abc!def']) {
-      await expectCode(createPromo(PROMO_ADMIN, { code: bad }), 'PROMO_CODE_INVALID');
-    }
+  it('typed codes: the database stores only a digest of the NORMALISED code, so a duplicate (any case, spacing or hyphens) is refused; the shape rules live in the application', async () => {
     const a = await createPromo(PROMO_ADMIN, { code: ' summer-2k26 pass ' });
-    expect(a.code).toBe('SUMMER2K26PASS');
+    const row = (await db.query(`select code, code_digest from promo_codes where id=$1`, [a.id])).rows[0] as Json;
+    expect(row.code, 'no plain value is stored').toBeNull();
+    expect(row.code_digest).toBe(digestsFor('SUMMER2K26PASS')[0]);
     await expectCode(createPromo(PROMO_ADMIN, { code: 'SUMMER-2K26-PASS' }), 'PROMO_CODE_EXISTS');
     await expectCode(createPromo(PROMO_ADMIN, { code: 'summer2k26pass' }), 'PROMO_CODE_EXISTS');
   });
@@ -441,7 +435,7 @@ describe('redeeming a code (service_role only; identity from the authenticated r
     const u = await newUser('direct');
     const p = await createPromo(PROMO_ADMIN, {});
     for (const [who, role] of [[u, 'authenticated'], [null, 'anon']] as const) {
-      await expect(as(who, role, () => db.query(`select public.redeem_promo_code_for_user($1,$2,null)`, [u, p.code]))).rejects.toThrow(/permission denied/i);
+      await expect(as(who, role, () => db.query(`select public.redeem_promo_code_for_user($1,$2::text[],null,null,null)`, [u, digestsFor(String(p.code))]))).rejects.toThrow(/permission denied/i);
     }
     expect((await redeem(u, p.code as string)).ok).toBe(true);
   });
@@ -450,9 +444,9 @@ describe('redeeming a code (service_role only; identity from the authenticated r
     const u = await newUser('ok');
     const p = await createPromo(PROMO_ADMIN, { duration: 365 });
     const v = await redeem(u, p.code as string);
-    expect(v).toMatchObject({ ok: true, ends_on: await addDays(365), started_on: await today() });
+    expect(v).toMatchObject({ ok: true, ends_on: await addDays(364), started_on: await today() });
     const r = await ent(u);
-    expect(r).toMatchObject({ plan_tier: 'premium', entitlement_source: 'promo_code', effective_to: await addDays(365), admin_grant_ends_on: await addDays(365), promo_code_id: p.id, admin_grant_extension_count: 0 });
+    expect(r).toMatchObject({ plan_tier: 'premium', entitlement_source: 'promo_code', effective_to: await addDays(364), admin_grant_ends_on: await addDays(364), promo_code_id: p.id, admin_grant_extension_count: 0 });
     expect(r.effective_from).toBe(await today());
     expect((await db.query(`select redemption_count from promo_codes where id=$1`, [p.id])).rows[0]).toMatchObject({ redemption_count: 1 });
     const ev = (await db.query(`select event_type, actor_user_id, details from promo_code_events where promo_code_id=$1 and event_type='redeem'`, [p.id])).rows[0] as Json;
@@ -462,7 +456,7 @@ describe('redeeming a code (service_role only; identity from the authenticated r
   it('a shorter code gives exactly its own duration (never more than 365)', async () => {
     const u = await newUser('short');
     const p = await createPromo(PROMO_ADMIN, { duration: 30 });
-    expect((await redeem(u, p.code as string)).ends_on).toBe(await addDays(30));
+    expect((await redeem(u, p.code as string)).ends_on, 'a 30 day code gives exactly 30 days, counting the day of redemption').toBe(await addDays(29));
   });
 
   it('is case-insensitive and ignores whitespace / hyphens / underscores', async () => {
@@ -585,9 +579,9 @@ describe('redeeming a code (service_role only; identity from the authenticated r
     await manage(ENT_ADMIN, 'grant', u2, await addDays(100));
     const longCode = await createPromo(PROMO_ADMIN, { duration: 365 });
     const v = await redeem(u2, longCode.code as string);
-    expect(v.ends_on).toBe(await addDays(365));
+    expect(v.ends_on).toBe(await addDays(364));
     const r = await ent(u2);
-    expect(r).toMatchObject({ entitlement_source: 'promo_code', effective_to: await addDays(365), admin_grant_extension_count: 0 });
+    expect(r).toMatchObject({ entitlement_source: 'promo_code', effective_to: await addDays(364), admin_grant_extension_count: 0 });
     expect(r.effective_from).toBe(await today());
   });
 
@@ -597,7 +591,7 @@ describe('redeeming a code (service_role only; identity from the authenticated r
     await db.exec(`update user_entitlements set effective_from=current_date-30, effective_to=current_date-2, admin_grant_ends_on=current_date-2 where user_id='${u}'`);
     const p = await createPromo(PROMO_ADMIN, { duration: 30 });
     const v = await redeem(u, p.code as string);
-    expect(v).toMatchObject({ ok: true, started_on: await today(), ends_on: await addDays(30) });
+    expect(v).toMatchObject({ ok: true, started_on: await today(), ends_on: await addDays(29) });
   });
 
   it('abuse control: rate limit per user (10 attempts / 15 min) — attempts COMMIT even when they fail, so the 11th is refused even with a valid code', async () => {
@@ -665,7 +659,7 @@ describe('Stripe/Razorpay interaction with a PROMO entitlement (same rules as an
     const u = await newUser('pm');
     const p = await createPromo(PROMO_ADMIN, { duration: 200 });
     await redeem(u, p.code as string);
-    const end = await addDays(200);
+    const end = await addDays(199);
     await webhook(u, false, 'incomplete');
     expect(await ent(u), 'abandoned checkout must not drop the promo').toMatchObject({ plan_tier: 'premium', entitlement_source: 'promo_code', effective_to: end });
     await webhook(u, true, 'active');
@@ -774,7 +768,7 @@ describe('the extension counter resets when a NEW grant starts after a lapse (no
   it('NEGATIVE CONTROL — if the grant did not reset the counter the old count would carry over (assertion "a new grant starts with a fresh extension allowance" goes red)', async () => {
     await withMutation(
       MANAGE_FN,
-      (s) => s.replace("admin_grant_extension_count = 0, promo_code_id = null,\n           updated_at = now()\n     where user_id = p_target_user_id;\n\n  elsif p_action = 'extend'", "promo_code_id = null,\n           updated_at = now()\n     where user_id = p_target_user_id;\n\n  elsif p_action = 'extend'"),
+      (s) => s.replace("admin_grant_extension_count = 0, promo_code_id = null,\n           admin_lifetime_grant_units", "promo_code_id = null,\n           admin_lifetime_grant_units"),
       async () => {
         await expectAssertionFails(assertResetOnRegrant, 'a new grant starts with a fresh extension allowance');
       }
@@ -786,14 +780,16 @@ describe('no code value in the audit trail (control)', () => {
   async function assertNoCodeInAudit(): Promise<void> {
     const c = await createPromo(PROMO_ADMIN, {}); // generated, so every call has a fresh code
     const e = (await db.query(`select * from promo_code_events where promo_code_id=$1 and event_type='create'`, [c.id])).rows[0] as Json;
-    expect(JSON.stringify(e).toUpperCase().includes(String(c.code)), 'the code value must not appear anywhere in the audit row').toBe(false);
+    const blob = JSON.stringify(e).toUpperCase();
+    expect(blob.includes(String(c.code)), 'the code value or its digest must not appear anywhere in the audit row').toBe(false);
+    expect(blob.includes(digestsFor(String(c.code))[0].toUpperCase()), 'the code value or its digest must not appear anywhere in the audit row').toBe(false);
   }
   it('create writes no code value to the audit row', async () => {
     await assertNoCodeInAudit();
   });
-  it('NEGATIVE CONTROL — a create function that copied the code into the audit details would be caught (assertion "the code value must not appear anywhere in the audit row" goes red)', async () => {
-    await withMutation(CREATE_FN, (s) => s.replace("    'bound', p_bound_email_hash is not null));", "    'bound', p_bound_email_hash is not null, 'code', v_code));"), async () => {
-      await expectAssertionFails(assertNoCodeInAudit, 'the code value must not appear anywhere in the audit row');
+  it('NEGATIVE CONTROL — a create function that copied the code digest into the audit details would be caught (assertion "the code value or its digest must not appear anywhere in the audit row" goes red)', async () => {
+    await withMutation(CREATE_FN, (s) => s.replace("'digest_version', p_digest_version));", "'digest_version', p_digest_version, 'digest', p_code_digest));"), async () => {
+      await expectAssertionFails(assertNoCodeInAudit, 'the code value or its digest must not appear anywhere in the audit row');
     });
   });
 });

@@ -240,9 +240,9 @@ describe('the reminder cron route with 0238 missing', () => {
     vi.doMock('@/lib/services/premiumReminderMailer', () => ({
       createResendMailer: () => ({ configured: () => true, from: () => 'f', send: async (m: { to: string }) => (sent.push(m.to), { ok: true }) }),
     }));
-    process.env.CRON_SECRET = 'cron-secret-for-tests';
+    process.env.CRON_SECRET = 'cron-secret-for-tests-0123456789abcdef0123456789';
     const { POST } = await import('@/app/api/premium/cron/expiry-reminders/route');
-    const res = await POST(new Request('http://x', { method: 'POST', headers: { 'x-cron-secret': 'cron-secret-for-tests' } }));
+    const res = await POST(new Request('http://x', { method: 'POST', headers: { 'x-cron-secret': 'cron-secret-for-tests-0123456789abcdef0123456789' } }));
     expect(res.status).toBe(200);
     expect((await res.json()).data).toEqual({ status: 'disabled', claimed: 0, sent: 0, failed: 0 });
     expect(sent).toHaveLength(0);

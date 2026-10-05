@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TEST_ENV } from './support/promoTestHelpers';
 
 vi.mock('@/lib/services/countryGate', () => ({ countryConfirmationBlockResponse: async () => null }));
 vi.setConfig({ testTimeout: 30_000 });
@@ -48,11 +49,14 @@ function makeSupabase(opts: FakeOpts = {}) {
 }
 
 beforeEach(() => {
+  // The dedicated secrets are mandatory (hardening 0264), so every test starts with all four set.
+  for (const [k, v] of Object.entries(TEST_ENV)) process.env[k] = v;
   vi.resetModules();
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(FAKE_NOW));
 });
 afterEach(() => {
+  for (const k of Object.keys(TEST_ENV)) delete process.env[k];
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.doUnmock('@/lib/supabase/server');
@@ -294,17 +298,45 @@ describe('authorisation — promo admin routes (separate capability) and entitle
   });
 
   it('create passes explicit values to the RPC; a 366-day request never reaches the database', async () => {
-    const fake = makeSupabase({ adminRow: { can_manage_promo_codes: true }, rpc: () => ({ data: { id: 'x', code: 'GENERATED22' } }) });
+    const fake = makeSupabase({ adminRow: { can_manage_promo_codes: true }, rpc: () => ({ data: { id: 'x', code_hint: 'AB******CD', duration_days: 30 } }) });
     const h = await load<{ POST: (r: Request) => Promise<Response> }>('@/app/api/admin/promo-codes/route', fake);
     const bad = await h.POST(post('', { durationDays: 366, maxRedemptions: 5, expiresOn: day(30) }));
     expect(bad.status).toBe(422);
     expect(fake.rpcCalls).toHaveLength(0);
     const ok = await h.POST(post('', { durationDays: 30, unlimited: true, noExpiry: true, note: ' hello ' }));
     expect(ok.status).toBe(200);
+    // Hash only (hardening 0264): the route generates the code, the database receives only the keyed digest and the masked hint.
+    const plain = (await ok.json()).data.code as string;
+    expect(plain).toMatch(/^[A-HJ-KM-NP-Z2-9]{10}$/);
+    const { computePromoDigest } = await import('@/lib/services/promoCodeDigest');
+    const { promoCodeHint } = await import('@/lib/services/promoCodeDigest');
     expect(fake.rpcCalls[0]).toEqual({
       name: 'admin_create_promo_code',
-      args: { p_code: null, p_duration_days: 30, p_max_redemptions: null, p_unlimited: true, p_expires_on: null, p_no_expiry: true, p_note: 'hello' },
+      args: {
+        p_code_digest: computePromoDigest(plain, { version: 1, secret: TEST_ENV.PROMO_CODE_DIGEST_SECRET }),
+        p_code_hint: promoCodeHint(plain),
+        p_digest_version: 1,
+        p_duration_days: 30,
+        p_max_redemptions: null,
+        p_unlimited: true,
+        p_expires_on: null,
+        p_no_expiry: true,
+        p_note: 'hello',
+        p_bound_email_hash: null,
+        p_recipient_count: 0,
+      },
     });
+    expect(JSON.stringify(fake.rpcCalls[0].args), 'the plain code never reaches the database').not.toContain(plain);
+  });
+
+  it('creating a code refuses explicitly (503, nothing created) when the dedicated digest secret is missing, and CRON_SECRET or the IP secret are NOT used instead', async () => {
+    delete process.env.PROMO_CODE_DIGEST_SECRET;
+    const fake = makeSupabase({ adminRow: { can_manage_promo_codes: true }, rpc: () => ({ data: { id: 'x' } }) });
+    const h = await load<{ POST: (r: Request) => Promise<Response> }>('@/app/api/admin/promo-codes/route', fake);
+    const res = await h.POST(post('', { durationDays: 30, maxRedemptions: 5, expiresOn: day(30) }));
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toBe('PROMO_SECRETS_NOT_CONFIGURED');
+    expect(fake.rpcCalls, 'nothing is created without the secret').toHaveLength(0);
   });
 
   it('disable needs a reason of at least 10 characters before it reaches the database; database errors map to explicit statuses without leaking internals', async () => {
@@ -330,7 +362,8 @@ describe('user redemption route — abuse controls and honest messages', () => {
   async function loadRedeem(rpc: FakeOpts['rpc'], env: Record<string, string | undefined> = {}, sessionUser: { id: string } | null = { id: TARGET_ID }) {
     const fake = makeSupabase({ rpc });
     vi.resetModules();
-    for (const [k, v] of Object.entries(env)) {
+    // The dedicated secrets are mandatory (hardening 0264): every redemption test runs with all four set unless it overrides one.
+    for (const [k, v] of Object.entries({ ...TEST_ENV, ...env })) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
@@ -354,23 +387,30 @@ describe('user redemption route — abuse controls and honest messages', () => {
   });
 
   it('acts on the SESSION user, never a user id from the body; passes the raw code to the database only', async () => {
-    const { fake, POST } = await loadRedeem(() => ({ data: { ok: true, ends_on: day(365) } }), { CRON_SECRET: 'x'.repeat(16), PROMO_IP_HASH_SECRET: undefined });
-    const res = await POST(new Request('http://x', { method: 'POST', headers: { 'x-forwarded-for': '203.0.113.9, 10.0.0.1' }, body: JSON.stringify({ code: CODE, userId: 'attacker-id', user_id: 'attacker-id' }) }));
+    const { fake, POST } = await loadRedeem(() => ({ data: { ok: true, ends_on: day(365) } }));
+    const res = await POST(new Request('http://x', { method: 'POST', headers: { 'x-forwarded-for': '9.9.9.9, 203.0.113.9' }, body: JSON.stringify({ code: CODE, userId: 'attacker-id', user_id: 'attacker-id' }) }));
     expect(res.status).toBe(200);
     expect((await res.json()).data).toEqual({ endsOn: day(365) });
     expect(fake.rpcCalls[0].name).toBe('redeem_promo_code_for_user');
     expect(fake.rpcCalls[0].args.p_user_id).toBe(TARGET_ID);
     expect(String(fake.rpcCalls[0].args.p_ip_hash)).toMatch(/^[0-9a-f]{64}$/); // HMAC, not the raw address
     expect(JSON.stringify(fake.rpcCalls[0].args)).not.toContain('203.0.113.9');
+    expect(JSON.stringify(fake.rpcCalls[0].args), 'the forged left hand entry is not used either').not.toContain('9.9.9.9');
+    // the code reaches the database as KEYED DIGESTS (one key version here) plus the normalised value for the legacy lookup only
+    expect(fake.rpcCalls[0].args.p_digests).toHaveLength(1);
+    expect(String((fake.rpcCalls[0].args.p_digests as string[])[0])).toMatch(/^[0-9a-f]{64}$/);
+    expect(fake.rpcCalls[0].args.p_legacy_code).toBe(CODE);
+    expect(fake.rpcCalls[0].args.p_email_hash, 'this session user has no address').toBeNull();
   });
 
-  it('IP-equivalent: no secret configured -> no IP limiting (null), never the raw address', async () => {
+  it('IP-equivalent: no dedicated secret -> no IP limiting (null) and NO fallback to CRON_SECRET; never the raw address', async () => {
     const { hashClientIp } = await import('@/lib/services/promoCodeIp');
     const h = new Headers({ 'x-forwarded-for': '203.0.113.9' });
     expect(hashClientIp(h, {})).toBeNull();
-    expect(hashClientIp(h, { CRON_SECRET: 'secretsecretsecret' })).toMatch(/^[0-9a-f]{64}$/);
-    expect(hashClientIp(new Headers(), { CRON_SECRET: 'secretsecretsecret' })).toBeNull();
-    expect(hashClientIp(h, { PROMO_IP_HASH_SECRET: 'a'.repeat(20) })).not.toBe(hashClientIp(h, { PROMO_IP_HASH_SECRET: 'b'.repeat(20) }));
+    expect(hashClientIp(h, { CRON_SECRET: 'secretsecretsecretsecretsecretsecret' }), 'CRON_SECRET is not a fallback any more').toBeNull();
+    expect(hashClientIp(h, { PROMO_IP_HASH_SECRET: 'a'.repeat(40) })).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashClientIp(new Headers(), { PROMO_IP_HASH_SECRET: 'a'.repeat(40) })).toBeNull();
+    expect(hashClientIp(h, { PROMO_IP_HASH_SECRET: 'a'.repeat(40) })).not.toBe(hashClientIp(h, { PROMO_IP_HASH_SECRET: 'b'.repeat(40) }));
   });
 
   async function verdictResponse(verdict: unknown) {
@@ -459,7 +499,8 @@ describe('extension cap — route layer', () => {
     await assertRouteCap();
     const { body } = await extend({ user_id: TARGET_ID, entitlement_source: 'promo_code', extension_count: 5 });
     expect(body.message).toMatch(/extended 5 times/);
-    expect(body.message).toMatch(/Revoke it and then Grant again/);
+    expect(body.message).toMatch(/do not reset the lifetime limit/);
+    expect(body.message).toMatch(/override capability/);
   });
 
   it('a failed lookup is NOT treated as "under the limit"-bypass: the request proceeds and the database enforces the cap itself', async () => {
@@ -471,7 +512,7 @@ describe('extension cap — route layer', () => {
     // Simulate the broken route: skip the guard and call straight through.
     const fake = makeSupabase({ ...caller, rpc: () => ({ data: { plan_tier: 'premium' } }) });
     const { callManageEntitlement } = await import('@/lib/services/premiumGrantAdmin');
-    await callManageEntitlement(fake.client as never, { action: 'extend', userId: TARGET_ID, endsOn: day(60), reason: 'Customer asked for more time' });
+    await callManageEntitlement(fake.client as never, { action: 'extend', userId: TARGET_ID, endsOn: day(60), reason: 'Customer asked for more time', override: false });
     expect(() => expect(fake.rpcCalls.some((c) => c.name === 'admin_manage_premium_entitlement'), 'a refused extension never reaches the write path').toBe(false)).toThrow(
       /never reaches the write path/
     );

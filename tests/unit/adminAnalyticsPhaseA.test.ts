@@ -316,7 +316,7 @@ function capsFor(current: CurrentResourceRoles): AdminCapabilities {
     // PC6/N.11. This capability lives on admin_users, not on
     // resource_user_roles, so a Resources role snapshot can never grant it —
     // which is exactly the point of Standard §2. Always false here.
-    referenceDataQuality: false, lookthroughDataQuality: false, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+    referenceDataQuality: false, lookthroughDataQuality: false, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
   };
 }
 
@@ -373,7 +373,7 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+      referenceDataQuality: true, lookthroughDataQuality: true, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
     };
     expect(buildAdminNavGroups(true, all).map((g) => g.label)).not.toContain('Analytics');
   });
@@ -405,7 +405,7 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+      referenceDataQuality: true, lookthroughDataQuality: true, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
     };
     // PC6/N.11 added a fifth capability-driven group, 'Reference Data'; PC7/O.9
     // added a sixth, 'Fund Look-Through'. The probe covers both, and the
@@ -742,7 +742,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+      referenceDataQuality: true, lookthroughDataQuality: true, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
     };
     expect(buildAdminNavGroups(false, allResources).map((g) => g.label)).not.toContain('General');
   });
@@ -786,7 +786,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+      referenceDataQuality: true, lookthroughDataQuality: true, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
     };
     const groups = buildAdminNavGroups(true, all);
     // The pre-existing five are unchanged in both order and match mode —
