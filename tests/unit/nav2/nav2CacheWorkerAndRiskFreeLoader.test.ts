@@ -68,6 +68,23 @@ describe('correction worker', () => {
     expect(second).toMatchObject({ eventsProcessed: 0, entriesInvalidated: 0 });
   });
 
+  it('NC-W4 (Stage 3 finding): overlapping runs over one event count it once: the totals reported add up to what the database records', async () => {
+    // five simultaneous runs each read the same unprocessed event before any marks it; only one may claim it and report its work
+    const { db, admin } = world(
+      [{ id: 1, kind: 'nav_correction', instrument_id: A, benchmark_id: null, series_id: null, event_date: '2026-09-01', processed_at: null }],
+      [entry('a-1', { actual_end: '2026-10-02' }), entry('a-2', { actual_end: '2026-10-03' })]
+    );
+    const runs = await Promise.all(Array.from({ length: 5 }, () => processNav2CorrectionEvents(admin, 50, '2026-10-04T00:00:00.000Z')));
+    const reportedEvents = runs.reduce((n, r) => n + r.eventsProcessed, 0);
+    const reportedEntries = runs.reduce((n, r) => n + r.entriesInvalidated, 0);
+    const recorded = db.tables.nav2_correction_events[0].entries_invalidated as number;
+    expect(db.tables.nav2_result_cache.filter((c) => c.invalidated_at).length).toBe(2);
+    expect(reportedEvents).toBe(1);
+    expect(reportedEntries).toBe(2);
+    expect(recorded).toBe(2);
+    expect(runs.reduce((n, r) => n + r.failed, 0)).toBe(0);
+  });
+
   it('NC-W3: benchmark and risk-free corrections touch only their own dependants', async () => {
     const { db, admin } = world(
       [

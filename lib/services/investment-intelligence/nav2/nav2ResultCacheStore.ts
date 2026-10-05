@@ -191,17 +191,20 @@ export async function processNav2CorrectionEvents(admin: SupabaseClient, limit =
         }));
         const keys = selectInvalidated(metas, inv);
         if (keys.length) {
-          const { error: uerr } = await admin.from('nav2_result_cache').update({ invalidated_at: nowIso }).in('cache_key', keys).is('invalidated_at', null);
+          // The count is what THIS run actually changed: a run that raced another one over the same event changes (and so reports) nothing twice.
+          const { data: changed, error: uerr } = await admin.from('nav2_result_cache').update({ invalidated_at: nowIso }).in('cache_key', keys).is('invalidated_at', null).select('cache_key');
           if (uerr) throw new Error(uerr.message);
+          invalidated = (changed ?? []).length;
         }
-        invalidated = keys.length;
         if (inv.kind === 'nav_correction') {
           const { data: pinned } = await admin.from('nav2_report_nav_dependencies').select('id').eq('instrument_id', inv.instrumentId).gte('nav_date_to', inv.date);
           result.pinnedReportsAffected += (pinned ?? []).length;
         }
       }
-      const { error: perr } = await admin.from('nav2_correction_events').update({ processed_at: nowIso, entries_invalidated: invalidated }).eq('id', ev.id).is('processed_at', null);
+      const { data: claimed, error: perr } = await admin.from('nav2_correction_events').update({ processed_at: nowIso, entries_invalidated: invalidated }).eq('id', ev.id).is('processed_at', null).select('id');
       if (perr) throw new Error(perr.message);
+      // Another run (a retry, or two overlapping schedules) already marked this event processed: it is that run's event, not ours.
+      if ((claimed ?? []).length === 0) continue;
       result.eventsProcessed += 1;
       result.entriesInvalidated += invalidated;
     } catch {
