@@ -17,6 +17,7 @@
  * Client-safe: pure.
  */
 import { fdhPages } from '@/lib/import-bridge/fdhRoutes';
+import { formatDateShort } from '@/lib/engines/date';
 
 export type ImportSourceType =
   | 'payslip_import'
@@ -72,7 +73,7 @@ function formatImportedAt(value: unknown): string | null {
   if (typeof value !== 'string' || !value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatDateShort(d, 'AUD');
 }
 
 /**

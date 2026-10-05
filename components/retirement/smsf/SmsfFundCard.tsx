@@ -6,6 +6,7 @@ import { SmsfMembers } from './SmsfMembers';
 import { SmsfDetailedWorkspace } from './SmsfDetailedWorkspace';
 import { SmsfReportsPanel } from './SmsfReportsPanel';
 import type { SmsfFundRow } from './types';
+import { DateInput } from '@/components/ui/DateInput';
 
 // One SMSF fund's card (spec s.4-9, s.32-33). Summary Mode is rendered as a
 // complete, valid, permanent state here — nothing about this card implies
@@ -117,9 +118,8 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
               <label htmlFor={`fund-date-${fund.id}`} className="block text-xs text-muted">
                 Valuation Date
               </label>
-              <input
+              <DateInput
                 id={`fund-date-${fund.id}`}
-                type="date"
                 value={dateDraft}
                 onChange={(e) => setDateDraft(e.target.value)}
                 className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"

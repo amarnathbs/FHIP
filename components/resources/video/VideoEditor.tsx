@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
-import { TextField, TextAreaField, CheckboxField } from '@/components/resources/editor/FormField';
+import { TextField, TextAreaField, CheckboxField, DateTextField } from '@/components/resources/editor/FormField';
 import { MetadataSidebar, type MetadataFormState } from '@/components/resources/editor/MetadataSidebar';
 import { WorkflowPanel, type WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 import { RevisionHistoryPanel } from '@/components/resources/editor/RevisionHistoryPanel';
@@ -419,7 +419,7 @@ export function VideoEditor({
             <h2 className="mb-3 text-sm font-semibold text-ink">Video Details</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <TextField label="Duration (seconds)" value={durationSeconds} onChange={(v) => { setDurationSeconds(v.replace(/[^0-9]/g, '')); markDirty(); }} placeholder="e.g. 425" />
-              <TextField label="YouTube Publish Date" value={youtubePublishedAt} onChange={(v) => { setYoutubePublishedAt(v); markDirty(); }} placeholder="YYYY-MM-DD" />
+              <DateTextField label="YouTube Publish Date" value={youtubePublishedAt} onChange={(v) => { setYoutubePublishedAt(v); markDirty(); }} />
               <TextField label="Thumbnail URL" value={thumbnailUrl} onChange={(v) => { setThumbnailUrl(v); markDirty(); }} hint="Defaults to the YouTube-derived thumbnail; override if needed." />
               <TextField label="@GKTC Channel Handle" value={channelHandle} onChange={(v) => { setChannelHandle(v); markDirty(); }} />
               <TextField label="@GKTC Channel URL" value={channelUrl} onChange={(v) => { setChannelUrl(v); markDirty(); }} placeholder="https://www.youtube.com/@GKTC" />

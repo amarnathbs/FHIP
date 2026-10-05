@@ -5,6 +5,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import type { GoalContributionRow } from '@/lib/services/goalsData';
+import { DateInput } from '@/components/ui/DateInput';
 
 const TYPE_OPTIONS = [
   { value: 'regular', label: 'Regular saving' },
@@ -95,8 +96,7 @@ export function ContributionHistory({
       </div>
 
       <form onSubmit={addContribution} className="mt-4 grid grid-cols-1 gap-2 border-t pt-4 sm:grid-cols-4">
-        <input
-          type="date"
+        <DateInput
           value={form.contribution_date}
           onChange={(e) => setForm({ ...form, contribution_date: e.target.value })}
           className="rounded border px-2 py-1.5 text-sm"

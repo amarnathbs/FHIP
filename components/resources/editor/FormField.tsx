@@ -5,7 +5,9 @@
 // association via aria-invalid + aria-describedby. No placeholder-only
 // inputs anywhere in the editor use this without a real <label>.
 
-import { useId } from 'react';
+import { useId, useState } from 'react';
+import { DateInput } from '@/components/ui/DateInput';
+import { DATE_INPUT_HINT } from '@/lib/engines/dateInput';
 
 export function FieldWrap({
   label,
@@ -102,6 +104,48 @@ export function TextField({
         aria-invalid={!!error}
         aria-describedby={[hint ? `${fieldId}-hint` : null, error ? `${fieldId}-error` : null].filter(Boolean).join(' ') || undefined}
         className={error ? errorInputClass : inputClass}
+      />
+    </FieldWrap>
+  );
+}
+
+/**
+ * A date field for the resources editors: TYPED day-first (DD-MM-YYYY, the PO date rule) and shown with the standard placeholder and
+ * hint. The value in and out is the ISO date the API stores. While the text is not a real date the field says so and reports the typed
+ * text, so a save is refused by the server's date check instead of silently clearing the date.
+ */
+export function DateTextField({
+  label,
+  value,
+  onChange,
+  hint,
+  error,
+  required,
+  id,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  id?: string;
+}) {
+  const autoId = useId();
+  const fieldId = id ?? autoId;
+  const [invalid, setInvalid] = useState(false);
+  const shownError = error ?? (invalid ? `This is not a real date. ${DATE_INPUT_HINT}` : undefined);
+  const fullHint = hint ? `${hint} ${DATE_INPUT_HINT}` : DATE_INPUT_HINT;
+  return (
+    <FieldWrap label={label} htmlFor={fieldId} hint={fullHint} error={shownError} required={required}>
+      <DateInput
+        id={fieldId}
+        value={value}
+        invalidAs="raw"
+        onChange={(e) => onChange(e.target.value)}
+        onInvalidChange={setInvalid}
+        aria-describedby={[`${fieldId}-hint`, shownError ? `${fieldId}-error` : null].filter(Boolean).join(' ')}
+        className={shownError ? errorInputClass : inputClass}
       />
     </FieldWrap>
   );

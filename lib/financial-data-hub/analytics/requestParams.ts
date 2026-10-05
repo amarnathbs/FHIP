@@ -36,7 +36,7 @@ export function parseActivityParams(url: URL): ParsedActivityParams {
 
   if (preset === 'custom') {
     if (!from || !to || !ISO_DATE_RE.test(from) || !ISO_DATE_RE.test(to)) {
-      return { period: { from: todayIsoDate(), to: todayIsoDate() }, accountId, error: 'period=custom requires valid from= and to= (YYYY-MM-DD)' };
+      return { period: { from: todayIsoDate(), to: todayIsoDate() }, accountId, error: 'period=custom requires a valid start date (from=) and end date (to=)' };
     }
     if (from > to) {
       return { period: { from, to }, accountId, error: '"from" must not be after "to"' };

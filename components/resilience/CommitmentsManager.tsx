@@ -6,6 +6,7 @@ import { formatMoney } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
+import { DateInput } from '@/components/ui/DateInput';
 
 export interface Commitment {
   id: string;
@@ -147,8 +148,7 @@ export function CommitmentsManager({ initial, currency }: { initial: Commitment[
           onChange={(e) => setForm({ ...form, amount: e.target.value })}
           className="rounded border px-2 py-1.5 text-sm"
         />
-        <input
-          type="date"
+        <DateInput
           value={form.due_date}
           onChange={(e) => setForm({ ...form, due_date: e.target.value })}
           className="rounded border px-2 py-1.5 text-sm"

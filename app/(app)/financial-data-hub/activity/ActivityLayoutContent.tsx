@@ -19,9 +19,11 @@
 // real DEV credentials (the prior session's build failed earlier, at an
 // unrelated page, before ever reaching this one).
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { PERIOD_PRESETS, type PeriodPreset } from '@/lib/financial-data-hub/analytics/period';
+import { DateInput } from '@/components/ui/DateInput';
 
 const ACTIVITY_ROOT = '/financial-data-hub/activity';
 
@@ -57,6 +59,16 @@ export function ActivityLayoutContent({ children }: { children: React.ReactNode 
   const isCustom = currentPeriod === 'custom';
   const fromValue = searchParams.get('from') ?? '';
   const toValue = searchParams.get('to') ?? '';
+  // The boxes are typed day-first (DateInput); the address keeps the ISO date. The draft is committed to the address when a box loses focus.
+  const [fromDraft, setFromDraft] = useState(fromValue);
+  const [toDraft, setToDraft] = useState(toValue);
+  const [seen, setSeen] = useState({ fromValue, toValue });
+  if (seen.fromValue !== fromValue || seen.toValue !== toValue) {
+    // The address changed (a preset, back/forward): restart the boxes from it.
+    setSeen({ fromValue, toValue });
+    setFromDraft(fromValue);
+    setToDraft(toValue);
+  }
 
   function withQuery(href: string): string {
     const qs = searchParams.toString();
@@ -133,11 +145,11 @@ export function ActivityLayoutContent({ children }: { children: React.ReactNode 
               <label htmlFor="activity-from" className="sr-only">
                 Custom range start date
               </label>
-              <input
+              <DateInput
                 id="activity-from"
-                type="date"
-                defaultValue={fromValue}
-                onBlur={(e) => setCustomRange(e.target.value, toValue)}
+                value={fromDraft}
+                onChange={(e) => setFromDraft(e.target.value)}
+                onBlur={() => setCustomRange(fromDraft, toValue)}
                 className="rounded-compact border border-line bg-white px-2 py-1.5 text-sm text-ink"
               />
               <span className="text-sm text-muted" aria-hidden="true">
@@ -146,11 +158,11 @@ export function ActivityLayoutContent({ children }: { children: React.ReactNode 
               <label htmlFor="activity-to" className="sr-only">
                 Custom range end date
               </label>
-              <input
+              <DateInput
                 id="activity-to"
-                type="date"
-                defaultValue={toValue}
-                onBlur={(e) => setCustomRange(fromValue, e.target.value)}
+                value={toDraft}
+                onChange={(e) => setToDraft(e.target.value)}
+                onBlur={() => setCustomRange(fromValue, toDraft)}
                 className="rounded-compact border border-line bg-white px-2 py-1.5 text-sm text-ink"
               />
             </>

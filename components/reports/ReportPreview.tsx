@@ -129,7 +129,7 @@ function formatReportMonth(monthStr: string, currency: 'AUD' | 'INR'): string {
   return new Date(monthStr).toLocaleDateString(localeForReportingCurrency(currency), { month: 'long', year: 'numeric' });
 }
 function formatSnapshotDate(dateStr: string, currency: 'AUD' | 'INR'): string {
-  return new Date(dateStr).toLocaleDateString(localeForReportingCurrency(currency), { day: 'numeric', month: 'long', year: 'numeric' });
+  return formatDateShort(dateStr, currency);
 }
 
 export function ReportPreview({
@@ -867,7 +867,7 @@ export function ReportPreview({
                 <tbody>
                   {(commitmentsTimeline.sectionData.commitments as { amount: number; due_date: string; is_mandatory: boolean }[]).map((c, i) => (
                     <tr key={i} className="border-t">
-                      <td className="py-1">{new Date(c.due_date).toLocaleDateString(localeForReportingCurrency(currency), { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                      <td className="py-1">{formatDateShort(c.due_date, currency)}</td>
                       <td className={`py-1 ${NUM_CELL_CLASS}`}>{fmt(c.amount)}</td>
                       <td className="py-1">{c.is_mandatory ? 'Mandatory' : 'Discretionary'}</td>
                     </tr>

@@ -8,7 +8,7 @@
 // "Never trust client-side only").
 
 import { useState } from 'react';
-import { TextField, SelectField, CheckboxField } from '@/components/resources/editor/FormField';
+import { TextField, SelectField, CheckboxField, DateTextField } from '@/components/resources/editor/FormField';
 import { isSafeSourceUrl } from '@/lib/resources/sources/validation';
 import type { SourceOption } from '@/lib/resources/sources/types';
 
@@ -117,7 +117,7 @@ export function SourcePicker({
           <TextField label="Document Title (optional)" value={docTitle} onChange={setDocTitle} />
           <TextField label="URL" value={url} onChange={setUrl} placeholder="https://…" error={urlError} />
           <SelectField label="Source Type" value={sourceType} onChange={setSourceType} options={SOURCE_TYPE_OPTIONS} />
-          <TextField label="Publication Date (optional)" value={publicationDate} onChange={setPublicationDate} placeholder="YYYY-MM-DD" />
+          <DateTextField label="Publication Date (optional)" value={publicationDate} onChange={setPublicationDate} />
           <CheckboxField label="Publicly citable" checked={isPublic} onChange={setIsPublic} />
           <div className="flex gap-2">
             <button type="button" disabled={saving} onClick={submitNewSource} className="rounded-full bg-trust px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">

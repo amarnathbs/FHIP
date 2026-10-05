@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { DateInput } from '@/components/ui/DateInput';
 
 const STEPS = ['Goal Type', 'Define', 'Target', 'Contribution Plan', 'Review'] as const;
 
@@ -201,8 +202,7 @@ export function GoalCreationWizard() {
             </div>
             <div>
               <label className="block text-sm text-gray-600">Target date (optional)</label>
-              <input
-                type="date"
+              <DateInput showHint
                 value={form.target_date}
                 onChange={(e) => update({ target_date: e.target.value })}
                 className="mt-1 w-full rounded border px-3 py-2 text-sm"

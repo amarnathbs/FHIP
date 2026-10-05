@@ -18,6 +18,7 @@
 // Rejections carry a stable code and a plain message; nothing is guessed or repaired. WARNINGS never block but are
 // always shown: a weekly move above 1.5 percentage points, a weekly series with a hole of more than 14 days.
 
+import { DATE_INPUT_HINT } from '@/lib/engines/dateInput';
 import { parseIndexDate, readCsv } from '../marketIndex/indexCsvParser';
 
 export const RISK_FREE_CSV_PARSER_VERSION = 'risk-free-csv-v1';
@@ -132,7 +133,7 @@ export function parseRiskFreeCsv(csvText: string, seriesId: string, cadence: 'we
     if (col.frequency >= 0 && freq !== '' && freq !== cadence) return reject('wrong_frequency', `The frequency is "${freq}" but ${seriesId} is ${cadence}.`);
 
     const date = parseIndexDate(rawDate);
-    if (!date || date < EARLIEST_DATE) return reject('bad_date', 'The date on this line is not a real calendar date (use yyyy-mm-dd or day-first dd-mm-yyyy).');
+    if (!date || date < EARLIEST_DATE) return reject('bad_date', `The date on this line is not a real calendar date. ${DATE_INPUT_HINT}`);
     const retrieved = parseIndexDate(get(col.retrieved));
     if (!retrieved) return reject('bad_retrieved_on', `The retrieved_on value "${get(col.retrieved)}" is not a real date.`, date);
     if (date > retrieved || date > todayIso || retrieved > todayIso) return reject('future_date', `${dmy(date)} is dated after it was retrieved (${dmy(retrieved)}) or after today: a future-dated rate is never accepted.`, date);

@@ -4,6 +4,7 @@
 import type { Metadata } from 'next';
 import type { ResourcePost } from '@/lib/resources/types';
 import { CONTENT_TYPE_LABELS } from '@/lib/resources/admin/labels';
+import { formatDateShort } from '@/lib/engines/date';
 
 // Same convention already used by the report/forecast PDF renderers
 // (lib/services/reportPdfRenderer.ts) — a server-only env var, not
@@ -131,7 +132,7 @@ export function formatPublicDate(value: string | null): string | null {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDateShort(d, 'AUD');
 }
 
 export function buildFaqJsonLd(faqs: { question: string; shortAnswer: string }[]) {

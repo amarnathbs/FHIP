@@ -1,5 +1,6 @@
 import { formatMoney } from '@/lib/engines/money';
 import type { CurrencyCode } from './types';
+import { formatDateShort } from '@/lib/engines/date';
 
 export { fetchJson } from './types';
 
@@ -14,7 +15,7 @@ export function formatMoneySafe(amount: number | null | undefined, currency: Cur
 export function formatDateSafe(date: string | null | undefined): string {
   if (!date) return '—';
   try {
-    return new Date(date).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' });
+    return formatDateShort(date, 'AUD');
   } catch {
     return date;
   }

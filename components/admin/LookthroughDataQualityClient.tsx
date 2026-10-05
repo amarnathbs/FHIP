@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 
 // PC7/O.9 — read-only operator view of Underlying Fund Holdings data quality.
 //
@@ -106,8 +107,8 @@ export default function LookthroughDataQualityClient() {
         The constituent securities held <em>inside</em> mutual-fund schemes — the data Portfolio X-Ray
         decomposes a fund position into. This is external reference data about a scheme, identical for
         every user who holds it. It is never a user&apos;s own position, and it never contributes to any
-        household&apos;s net worth. As at {payload.asOfDate}, generated{' '}
-        {new Date(payload.generatedAt).toLocaleString()} ({payload.qualityVersion}).
+        household&apos;s net worth. As at {formatDateShort(payload.asOfDate, 'INR')}, generated{' '}
+        {formatDateTimeShort(payload.generatedAt, 'INR')} ({payload.qualityVersion}).
       </p>
 
       {!payload.ingestionActive && (

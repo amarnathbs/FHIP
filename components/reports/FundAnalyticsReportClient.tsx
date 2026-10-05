@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import FundAnalyticsReportView from '@/components/reports/FundAnalyticsReportView';
+import { ActionMessage, Btn, Notice, SelectField } from '@/components/admin/benchmarkData/ui';
 import { REPORT_PERIOD_CHOICES, REPORT_PERIOD_LABELS, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
@@ -149,55 +150,42 @@ export default function FundAnalyticsReportClient() {
   }
 
   const sel = versions?.find((v) => v.id === selectedId) ?? null;
+  const periodOptions = REPORT_PERIOD_CHOICES.map((c) => ({ value: c, label: REPORT_PERIOD_LABELS[c] }));
+  const versionOptions = (versions ?? []).map((v) => ({ value: v.id, label: `Version ${v.versionNumber} - as at ${formatDateShort(v.asOfDate, 'INR')} (made ${formatDateTimeShort(v.createdAt, 'INR')})` }));
   return (
     <div className="space-y-6">
-      <div className="no-print flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          <span className="block text-xs text-muted">Period</span>
-          <select className="min-h-[40px] rounded-card border border-line bg-white px-2" value={period} onChange={(e) => setPeriod(e.target.value as ReportPeriodChoice)}>
-            {REPORT_PERIOD_CHOICES.map((c) => (
-              <option key={c} value={c}>
-                {REPORT_PERIOD_LABELS[c]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" onClick={() => void generate()} disabled={busy} className="min-h-[40px] rounded border px-3 text-sm text-trust hover:border-trust disabled:opacity-50">
-          {busy ? 'Working…' : versions && versions.length > 0 ? 'Generate a new version' : 'Generate report'}
-        </button>
-        {versions && versions.length > 0 && (
-          <label className="text-sm">
-            <span className="block text-xs text-muted">Version</span>
-            <select className="min-h-[40px] rounded-card border border-line bg-white px-2" value={selectedId ?? ''} onChange={(e) => void loadReport(e.target.value)}>
-              {versions.map((v) => (
-                <option key={v.id} value={v.id}>
-                  Version {v.versionNumber} - as at {formatDateShort(v.asOfDate, 'INR')} (made {formatDateTimeShort(v.createdAt, 'INR')})
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {report && (
-          <>
-            <button type="button" onClick={() => void exportPdf()} disabled={exporting} className="min-h-[40px] rounded border px-3 text-sm text-gray-700 hover:border-trust disabled:opacity-50">
-              {exporting ? 'Preparing PDF…' : 'Export PDF'}
-            </button>
-            <button type="button" onClick={() => window.print()} className="min-h-[40px] rounded border px-3 text-sm text-gray-700 hover:border-trust">
-              Print
-            </button>
-          </>
-        )}
+      <div className="no-print">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[12rem]">
+            <SelectField label="Period" value={period} hidePlaceholder options={periodOptions} onChange={(v) => setPeriod(v as ReportPeriodChoice)} />
+          </div>
+          <Btn kind="primary" busy={busy} onClick={() => void generate()}>
+            {versions && versions.length > 0 ? 'Generate a new version' : 'Generate report'}
+          </Btn>
+          {versions && versions.length > 0 && (
+            <div className="min-w-[14rem] max-w-full flex-1">
+              <SelectField label="Version" value={selectedId ?? ''} hidePlaceholder options={versionOptions} onChange={(v) => void loadReport(v)} />
+            </div>
+          )}
+          {report && (
+            <>
+              <Btn kind="secondary" busy={exporting} onClick={() => void exportPdf()}>
+                Export PDF
+              </Btn>
+              <Btn kind="secondary" onClick={() => window.print()}>
+                Print
+              </Btn>
+            </>
+          )}
+        </div>
+        {/* The result of the button just pressed sits right under the buttons, scrolled into view and focused. */}
+        <ActionMessage message={error ? { kind: 'error', text: error } : null} />
       </div>
 
-      {error && (
-        <p role="alert" className="rounded-card border border-risk/30 bg-risk/5 p-3 text-sm text-risk">
-          {error}
-        </p>
-      )}
       {notice && (
-        <p role="status" className="rounded-card border border-line p-3 text-sm text-ink">
+        <Notice tone="info" live="status">
           {notice}
-        </p>
+        </Notice>
       )}
       {waiting && (
         <div role="status" aria-live="polite" className="rounded-card border border-line p-4 text-sm text-ink">

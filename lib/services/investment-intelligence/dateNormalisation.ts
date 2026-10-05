@@ -59,12 +59,12 @@ export interface InvalidIsoDate {
 // sees the value, so an impossible or malformed date never surfaces a raw
 // database error to the client (spec section 16/17).
 export function validateIsoDateStrict(raw: unknown): ValidatedIsoDate | InvalidIsoDate {
-  if (typeof raw !== 'string') return { ok: false, error: 'Date must be a string in YYYY-MM-DD format.' };
+  if (typeof raw !== 'string') return { ok: false, error: 'Date must be text, typed as day-month-year, like 01-10-2026.' };
   const s = raw.trim();
   if (s.length === 0) return { ok: false, error: 'Date is required.' };
   if (s.length > 32) return { ok: false, error: 'Date value is too long.' };
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (!m) return { ok: false, error: 'Date must be in YYYY-MM-DD format.' };
+  if (!m) return { ok: false, error: 'Date must be typed as day-month-year, like 01-10-2026.' };
   const [, y, mo, d] = m;
   const year = Number(y);
   const month = Number(mo);

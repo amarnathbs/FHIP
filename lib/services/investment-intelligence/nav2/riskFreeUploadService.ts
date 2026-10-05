@@ -14,6 +14,7 @@
 
 import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { DATE_INPUT_HINT } from '@/lib/engines/dateInput';
 import { fetchAllRows } from '../pagination';
 import { dmy, parseRiskFreeCsv, RISK_FREE_CSV_MAX_BYTES, type RiskFreeCsvAnalysis, type RiskFreeCsvRow } from './riskFreeCsv';
 
@@ -110,7 +111,7 @@ export async function planRiskFreeUpload(reader: SupabaseClient, input: RiskFree
   warnings.push(...analysis.warnings);
 
   if (verifiedThrough !== null) {
-    if (!ISO.test(verifiedThrough) || Number.isNaN(Date.parse(`${verifiedThrough}T00:00:00.000Z`))) blockers.push('The "verified through" date is not a real date (use yyyy-mm-dd).');
+    if (!ISO.test(verifiedThrough) || Number.isNaN(Date.parse(`${verifiedThrough}T00:00:00.000Z`))) blockers.push(`The "verified through" date is not a real date. ${DATE_INPUT_HINT}`);
     else if (verifiedThrough > input.todayIso) blockers.push('The "verified through" date cannot be in the future.');
     else if (analysis.dateTo && verifiedThrough < analysis.dateTo) blockers.push(`The "verified through" date (${dmy(verifiedThrough)}) cannot be earlier than the last observation in the file (${dmy(analysis.dateTo)}).`);
     else if (series.cadence === 'weekly_auction') warnings.push('"Verified through" is only used for a policy-change series; it has no effect on a weekly series.');

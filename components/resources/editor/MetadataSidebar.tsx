@@ -8,7 +8,7 @@
 // section-specific responsive code.
 
 import Link from 'next/link';
-import { SelectField, CheckboxField, TextField } from './FormField';
+import { SelectField, CheckboxField, TextField, DateTextField } from './FormField';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES } from '@/lib/resources/admin/labels';
 import type { RelatedOption } from '@/lib/resources/editor/types';
 import type { ResourceDifficulty, ResourceFreshness, ResourceVisibility, ComplianceClassification } from '@/lib/resources/types';
@@ -180,8 +180,8 @@ export function MetadataSidebar({
           </fieldset>
           {form.freshnessType === 'time_sensitive' && (
             <div className="mt-2 grid grid-cols-1 gap-3">
-              <TextField label="Next Review Date" value={form.nextReviewAt} onChange={(v) => onChange({ nextReviewAt: v })} placeholder="YYYY-MM-DD" hint="When this content should next be checked for accuracy." />
-              <TextField label="Expires At (optional)" value={form.expiresAt} onChange={(v) => onChange({ expiresAt: v })} placeholder="YYYY-MM-DD" />
+              <DateTextField label="Next Review Date" value={form.nextReviewAt} onChange={(v) => onChange({ nextReviewAt: v })} hint="When this content should next be checked for accuracy." />
+              <DateTextField label="Expires At (optional)" value={form.expiresAt} onChange={(v) => onChange({ expiresAt: v })} />
             </div>
           )}
         </div>

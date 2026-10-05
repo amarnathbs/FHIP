@@ -5,6 +5,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import type { GoalMilestoneRow } from '@/lib/services/goalsData';
+import { DateInput } from '@/components/ui/DateInput';
 
 const emptyForm = { milestone_name: '', target_amount: '', target_date: '' };
 
@@ -95,8 +96,7 @@ export function MilestoneTracker({ goalId, initial, currency }: { goalId: string
           onChange={(e) => setForm({ ...form, target_amount: e.target.value })}
           className="rounded border px-2 py-1.5 text-sm"
         />
-        <input
-          type="date"
+        <DateInput
           value={form.target_date}
           onChange={(e) => setForm({ ...form, target_date: e.target.value })}
           className="rounded border px-2 py-1.5 text-sm"

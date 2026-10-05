@@ -31,6 +31,8 @@ import { PayslipDetails } from '@/components/income/PayslipDetails';
 import { OwnerSelector } from '@/components/ownership/OwnerSelector';
 import type { OwnerSelection } from '@/lib/ownership/ownerSelection';
 import { fieldReasonText, reviewReasonText } from '@/lib/income/payslipProposalText';
+import { DateInput } from '@/components/ui/DateInput';
+import { DATE_INPUT_HINT } from '@/lib/engines/dateInput';
 import {
   waitForDocumentToLeaveValidating,
   SCANNING_MESSAGE,
@@ -102,8 +104,8 @@ interface AiFallbackDraft {
 
 const AI_DRAFT_FIELD_LABELS: Record<string, string> = {
   employerName: 'Employer',
-  payPeriodStart: 'Pay period start (YYYY-MM-DD)',
-  payPeriodEnd: 'Pay period end (YYYY-MM-DD)',
+  payPeriodStart: 'Pay period start',
+  payPeriodEnd: 'Pay period end',
   grossPay: 'Gross pay',
   netPay: 'Net pay',
   taxWithheld: 'Tax withheld',
@@ -188,9 +190,9 @@ type CorrectableField = (typeof CORRECTABLE_FIELDS)[number];
 
 const CORRECTION_LABELS: Record<CorrectableField, string> = {
   employer_name: 'Employer',
-  pay_period_start: 'Pay period start (YYYY-MM-DD)',
-  pay_period_end: 'Pay period end (YYYY-MM-DD)',
-  payment_date: 'Payment date (YYYY-MM-DD)',
+  pay_period_start: 'Pay period start',
+  pay_period_end: 'Pay period end',
+  payment_date: 'Payment date',
   pay_frequency: 'How often you are paid',
   gross_pay: 'Gross pay for this pay period',
   base_pay: 'Ordinary earnings for this pay period',
@@ -210,6 +212,9 @@ const CORRECTION_LABELS: Record<CorrectableField, string> = {
   employee_nps_contribution: 'Your NPS contribution',
   net_pay: 'Net pay for this pay period',
 };
+
+/** The corrections typed as a day-first date (DD-MM-YYYY); the value kept and sent is the ISO date. */
+const DATE_CORRECTION_FIELDS: readonly CorrectableField[] = ['pay_period_start', 'pay_period_end', 'payment_date'];
 
 const MONEY_CORRECTION_FIELDS: readonly CorrectableField[] = [
   'gross_pay', 'base_pay', 'overtime_pay', 'bonus_pay', 'commission_pay', 'allowances_total',
@@ -334,6 +339,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   // `user_corrected_fields` records what the user really touched rather than
   // every field they looked at.
   const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [badDateFields, setBadDateFields] = useState<string[]>([]);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const [correctionNotice, setCorrectionNotice] = useState<string | null>(null);
   // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
@@ -433,6 +439,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       seeded[field] = MONEY_CORRECTION_FIELDS.includes(field) ? String(Number(value)) : String(value);
     }
     setCorrections(seeded);
+    setBadDateFields([]);
     setCorrectionError(null);
     setCorrectionNotice(null);
     setPhase('correcting');
@@ -466,6 +473,10 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
     if (!documentId || !event) return;
     setCorrectionError(null);
     setCorrectionNotice(null);
+    if (badDateFields.length > 0) {
+      setCorrectionError(`${badDateFields.map((f) => CORRECTION_LABELS[f as CorrectableField] ?? f).join(', ')}: this is not a real date. ${DATE_INPUT_HINT} Nothing was saved.`);
+      return;
+    }
     let body: Record<string, string | number | null>;
     try {
       body = changedCorrections(event);
@@ -973,17 +984,27 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
                 <label className="mb-1 block text-muted" htmlFor={`ai-draft-${key}`}>
                   {AI_DRAFT_FIELD_LABELS[key] ?? key}
                 </label>
-                <input
-                  id={`ai-draft-${key}`}
-                  type={key.includes('Pay') || key === 'grossPay' || key === 'netPay' || key === 'taxWithheld' ? 'number' : 'text'}
-                  className="w-full max-w-xs rounded border border-gray-300 px-3 py-2"
-                  value={aiDraft[key] ?? ''}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const isMoney = key === 'grossPay' || key === 'netPay' || key === 'taxWithheld';
-                    updateAiDraftField(key, (isMoney ? (raw === '' ? null : Number(raw)) : raw === '' ? null : raw) as AiFallbackDraft[typeof key]);
-                  }}
-                />
+                {key === 'payPeriodStart' || key === 'payPeriodEnd' ? (
+                  // Typed day-first (DD-MM-YYYY); the draft keeps the ISO value the save expects.
+                  <DateInput
+                    id={`ai-draft-${key}`}
+                    className="w-full max-w-xs rounded border border-gray-300 px-3 py-2"
+                    value={aiDraft[key] ?? ''}
+                    onChange={(e) => updateAiDraftField(key, (e.target.value === '' ? null : e.target.value) as AiFallbackDraft[typeof key])}
+                  />
+                ) : (
+                  <input
+                    id={`ai-draft-${key}`}
+                    type={key.includes('Pay') || key === 'grossPay' || key === 'netPay' || key === 'taxWithheld' ? 'number' : 'text'}
+                    className="w-full max-w-xs rounded border border-gray-300 px-3 py-2"
+                    value={aiDraft[key] ?? ''}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const isMoney = key === 'grossPay' || key === 'netPay' || key === 'taxWithheld';
+                      updateAiDraftField(key, (isMoney ? (raw === '' ? null : Number(raw)) : raw === '' ? null : raw) as AiFallbackDraft[typeof key]);
+                    }}
+                  />
+                )}
               </div>
             ))}
           </dl>
@@ -1224,6 +1245,20 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
+                  ) : DATE_CORRECTION_FIELDS.includes(field) ? (
+                  // Typed day-first (DD-MM-YYYY); the correction keeps the ISO value the API expects. A half-typed date is
+                  // caught on Save (badDateFields) instead of silently clearing the stored date.
+                  <DateInput
+                    id={`payslip-correct-${field}`}
+                    className="w-full rounded border border-gray-300 px-3 py-2"
+                    value={corrections[field] ?? ''}
+                    aria-describedby={wasCorrected ? `payslip-correct-${field}-note` : undefined}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setCorrections((prev) => ({ ...prev, [field]: next }));
+                    }}
+                    onInvalidChange={(bad) => setBadDateFields((prev) => (bad ? Array.from(new Set([...prev, field])) : prev.filter((f) => f !== field)))}
+                  />
                   ) : (
                   <input
                     id={`payslip-correct-${field}`}

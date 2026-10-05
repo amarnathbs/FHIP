@@ -8,6 +8,7 @@
 // is even submitted, on top of the request/review/execute split itself.
 
 import { useEffect, useState } from 'react';
+import { formatDateShort } from '@/lib/engines/date';
 
 interface DeletionRequest {
   id: string;
@@ -95,7 +96,7 @@ export function CloseAccountPanel() {
     return (
       <div>
         <p className="text-sm text-ink">
-          {`Account closure requested ${new Date(active.requested_at).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' })} — ${STATUS_LABEL[active.status]}.`}
+          {`Account closure requested ${formatDateShort(active.requested_at, 'AUD')} — ${STATUS_LABEL[active.status]}.`}
         </p>
         <p className="mt-1 text-xs text-muted">
           Your account and data have not been deleted yet. An authorised reviewer processes closure requests; you can

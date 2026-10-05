@@ -29,6 +29,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { DateInput } from '@/components/ui/DateInput';
 
 export interface GoalEditableFields {
   goalName: string;
@@ -194,8 +195,7 @@ export function GoalEditPanel({
           </div>
           <div>
             <label className="block text-sm text-gray-600">Target date</label>
-            <input
-              type="date"
+            <DateInput
               value={form.targetDate ?? ''}
               onChange={(e) => update({ targetDate: e.target.value })}
               className="mt-1 w-full rounded border px-3 py-2 text-sm"

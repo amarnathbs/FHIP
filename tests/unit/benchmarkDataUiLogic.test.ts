@@ -562,9 +562,11 @@ describe('dates: day-first on screen, ISO only on the wire (PO rule, Document2 f
     const r = { jobId: 'j', batchId: 'b1', inserted: 1, revived: 0, corrected: 0, identicalSkipped: 0, dateFrom: '2020-01-31', dateTo: '2020-02-29' };
     expect(describePublishSuccess({ alreadyPublished: false, result: r }).lines.join(' ')).toContain('Date range: 31-01-2020 to 29-02-2020.');
   });
-  it('the file date-format dropdown still names the machine formats (the only place YYYY-MM-DD appears)', () => {
+  it('the file date-format dropdown never shows the words YYYY-MM-DD (the year-first option is named in plain words; its VALUE stays the machine id)', () => {
     const labels = DATE_FORMAT_OPTIONS.map((o) => o.label);
-    expect(labels.filter((l) => l.includes('YYYY-MM-DD'))).toHaveLength(1);
+    expect(labels.filter((l) => /yyyy-mm-dd/i.test(l))).toHaveLength(0);
+    expect(labels).toContain('Year first (year, month, day)');
+    expect(DATE_FORMAT_OPTIONS.some((o) => o.value === 'YYYY-MM-DD')).toBe(true);
     expect(labels.some((l) => l.includes('DD-MM-YYYY'))).toBe(true);
   });
 });

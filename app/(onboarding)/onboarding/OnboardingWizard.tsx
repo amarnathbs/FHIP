@@ -7,6 +7,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { SelectWithOther, type SelectOption } from '@/components/ui/SelectWithOther';
 import { REGISTRATION_COUNTRY_OPTIONS } from '@/lib/services/countryGate';
 import type { CountryCode } from '@/lib/services/jurisdiction';
+import { DateInput } from '@/components/ui/DateInput';
 
 // Goals (2026-09-19, PO instruction): removed from this wizard entirely —
 // goals are now the LAST stop of the guided setup tour that runs after
@@ -221,9 +222,8 @@ export function OnboardingWizard() {
             </div>
             <div>
               <label htmlFor="date_of_birth" className="block text-sm text-gray-600">Date of birth</label>
-              <input
+              <DateInput showHint
                 id="date_of_birth"
-                type="date"
                 value={form.date_of_birth}
                 onChange={(e) => update({ date_of_birth: e.target.value })}
                 min={DOB_MIN_DATE}

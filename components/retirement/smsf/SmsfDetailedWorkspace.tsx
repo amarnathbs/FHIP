@@ -12,6 +12,7 @@ import {
   type SmsfFundRow,
   type SmsfHoldingRow,
 } from './types';
+import { DateInput } from '@/components/ui/DateInput';
 
 interface PropertyLoanLink {
   id: string;
@@ -365,8 +366,7 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
               className="rounded border border-line px-2 py-1.5 text-sm"
               aria-label="New Summary value"
             />
-            <input
-              type="date"
+            <DateInput
               value={switchBackDate}
               onChange={(e) => setSwitchBackDate(e.target.value)}
               className="rounded border border-line px-2 py-1.5 text-sm"

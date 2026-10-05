@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SectionCard } from '@/components/dashboard/SectionCard';
+import { SelectField } from '@/components/admin/benchmarkData/ui';
 import { REPORT_PERIOD_LABELS } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport, FundAnalyticsSchemeBlock } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/investorExperience';
@@ -270,22 +271,12 @@ function Comparison({ report, ctx, printMode }: { report: FundAnalyticsReport; c
       ) : (
         <div className="mt-2">
           <div className="flex flex-wrap gap-3">
-            <label className="text-sm">
-              <span className="block text-xs text-muted">First fund</span>
-              <select className="min-h-[40px] max-w-full rounded-card border border-line bg-white px-2" value={a} onChange={(e) => setA(e.target.value)}>
-                {ids.map((id) => (
-                  <option key={id} value={id}>{nm(id)}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="block text-xs text-muted">Second fund</span>
-              <select className="min-h-[40px] max-w-full rounded-card border border-line bg-white px-2" value={b} onChange={(e) => setB(e.target.value)}>
-                {ids.map((id) => (
-                  <option key={id} value={id}>{nm(id)}</option>
-                ))}
-              </select>
-            </label>
+            <div className="min-w-[14rem] max-w-full flex-1">
+              <SelectField label="First fund" value={a} hidePlaceholder options={ids.map((id) => ({ value: id, label: nm(id) }))} onChange={setA} />
+            </div>
+            <div className="min-w-[14rem] max-w-full flex-1">
+              <SelectField label="Second fund" value={b} hidePlaceholder options={ids.map((id) => ({ value: id, label: nm(id) }))} onChange={setB} />
+            </div>
           </div>
           <p className="mt-3 text-sm" aria-live="polite">
             {a === b ? 'Pick two different funds.' : <Cell c={pairCell(report, a, b, ctx)} />}

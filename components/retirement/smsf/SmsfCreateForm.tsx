@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { fetchJson, type CurrencyCode } from './types';
 import type { SmsfFundRow } from './types';
+import { DateInput } from '@/components/ui/DateInput';
 
 // New SMSF creation (spec s.4-7, s.10). Client-side AU gating is only ever
 // a convenience — this form is not rendered at all unless SmsfSection has
@@ -99,9 +100,8 @@ export function SmsfCreateForm({ onCreated, onCancel }: { onCreated: (fund: Smsf
           <label htmlFor="smsf-balance-date" className="block text-xs text-muted">
             Valuation Date
           </label>
-          <input
+          <DateInput
             id="smsf-balance-date"
-            type="date"
             value={balanceDate}
             onChange={(e) => setBalanceDate(e.target.value)}
             className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"

@@ -5,6 +5,7 @@
 // Explainer".
 
 import type { ResourceContentType, ResourceStatus, ComplianceClassification, ResourceJurisdiction } from '@/lib/resources/types';
+import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 
 export const CONTENT_TYPE_LABELS: Record<ResourceContentType, string> = {
   article: 'Article',
@@ -59,12 +60,12 @@ export function formatAdminDate(value: string | null): string {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDateShort(d, 'INR');
 }
 
 export function formatAdminDateTime(value: string | null): string {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return `${d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}`;
+  return formatDateTimeShort(d, 'INR');
 }

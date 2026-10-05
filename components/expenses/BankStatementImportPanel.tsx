@@ -73,6 +73,7 @@ import {
   type WaitingImport,
 } from '@/components/financial-data-hub/WaitingImports';
 import { StatementDetailsDrawer } from '@/components/financial-data-hub/StatementDetailsDrawer';
+import { DateInput } from '@/components/ui/DateInput';
 
 type Phase =
   | 'form'
@@ -713,8 +714,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
             <legend className="mb-1 text-sm text-muted">Statement period (as printed on the statement, recommended)</legend>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">From</span>
-              <input
-                type="date"
+              <DateInput
                 className="w-full rounded border border-gray-300 px-3 py-2"
                 value={periodStart}
                 onChange={(e) => setPeriodStart(e.target.value)}
@@ -722,8 +722,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">To</span>
-              <input
-                type="date"
+              <DateInput
                 className="w-full rounded border border-gray-300 px-3 py-2"
                 value={periodEnd}
                 onChange={(e) => setPeriodEnd(e.target.value)}

@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
-import { TextField, TextAreaField } from '@/components/resources/editor/FormField';
+import { TextField, TextAreaField, DateTextField } from '@/components/resources/editor/FormField';
 import { BlockEditor } from '@/components/resources/editor/BlockEditor';
 import { MetadataSidebar, type MetadataFormState } from '@/components/resources/editor/MetadataSidebar';
 import { WorkflowPanel, type WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
@@ -376,7 +376,7 @@ export function MoneyUpdateEditor({
             </div>
             {!isTemplate && (
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <TextField label="Event Date" value={eventDate} onChange={(v) => { setEventDate(v); markDirty(); }} placeholder="YYYY-MM-DD" required error={reviewCheck.errors.event_date} hint="The real-world date this development occurred." />
+                <DateTextField label="Event Date" value={eventDate} onChange={(v) => { setEventDate(v); markDirty(); }} required error={reviewCheck.errors.event_date} hint="The real-world date this development occurred." />
                 <TextField label="Affected Audience" value={affectedAudience} onChange={(v) => { setAffectedAudience(v); markDirty(); }} placeholder="e.g. First-home buyers, retirees" />
               </div>
             )}

@@ -1,15 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
-import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { FileField } from '@/components/admin/FileField';
+import { ActionMessage, Btn, CheckField, DateField, Notice, Panel, ScrollTable, SelectField, Td, TextField, Th } from '@/components/admin/benchmarkData/ui';
+import { checkCorrection, checkVerifiedThrough, describeFailure, MIN_REASON_CHARS } from '@/components/admin/riskFreeFormLogic';
 
 // Risk-free Rate Data admin screen (NAV2). Everything shown comes from the capability-gated API; nothing here decides
 // authorisation. A panel the caller's capabilities do not cover arrives as `not_permitted` and is described as such,
-// never rendered as an empty list. Dates are day-first (dd-mm-yyyy). A 401/403/5xx is shown as an error, never as empty.
+// never rendered as an empty list. Dates are day-first: shown dd-mm-yyyy and TYPED as DD-MM-YYYY, and turned into the ISO value the
+// API expects only when a request is sent (riskFreeFormLogic.ts). A 401/403/5xx is shown as an error, never as empty.
+//
+// Look and behaviour come from the shared admin kit (benchmarkData/ui.tsx): real buttons (Btn), bordered fields, visible focus
+// rings, 44px touch targets, phone-width layout. The result of every button is shown directly under that button (ActionMessage:
+// role alert / status, scrolled into view and focused), and also repeated in the banner at the top of the page.
 
-type Panel<T> = { state: 'ok'; data: T } | { state: 'unavailable'; reason: string } | { state: 'not_permitted' };
+type Panelled<T> = { state: 'ok'; data: T } | { state: 'unavailable'; reason: string } | { state: 'not_permitted' };
 type Row = Record<string, unknown>;
+type Msg = { kind: 'ok' | 'error'; text: string };
 
 interface SeriesStatus {
   seriesId: string;
@@ -32,10 +40,10 @@ interface Status {
   attestationText: string;
   series?: SeriesStatus[];
   weeklyRefresh?: { jobEnabled: boolean; disabledReason: string | null; lastSuccessAt: string | null; lastFailureAt: string | null; consecutiveFailures: number };
-  recentBatches: Panel<Row[]>;
-  openReviewItems: Panel<Row[]>;
-  recentCorrections: Panel<Row[]>;
-  stateLog: Panel<Row[]>;
+  recentBatches: Panelled<Row[]>;
+  openReviewItems: Panelled<Row[]>;
+  recentCorrections: Panelled<Row[]>;
+  stateLog: Panelled<Row[]>;
 }
 
 interface Preview {
@@ -60,9 +68,29 @@ interface Preview {
 
 const TERMS = ['po_accepted_2026-10-03', 'confirmed_in_writing', 'pending_confirmation', 'declined'] as const;
 const SERIES_IDS = ['RBI_91D_TBILL_CUTOFF_YIELD', 'RBI_POLICY_REPO_RATE'] as const;
+const SERIES_OPTIONS = SERIES_IDS.map((k) => ({ value: k, label: k }));
+const TERMS_OPTIONS = TERMS.map((t) => ({ value: t, label: t }));
 const d = (iso: unknown): string => (typeof iso === 'string' && iso ? formatDateShort(iso.slice(0, 10), 'INR') : 'never');
 const dt = (iso: unknown): string => (typeof iso === 'string' && iso ? formatDateTimeShort(iso, 'INR') : 'never');
 const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+
+/** One numbered step of the upload card. */
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <li className="rounded-compact border border-line p-3 sm:p-4">
+      <div className="flex items-center gap-2">
+        <span aria-hidden="true" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-trust text-sm font-semibold text-white">
+          {n}
+        </span>
+        <h3 className="text-sm font-semibold text-ink">
+          <span className="sr-only">Step {n}: </span>
+          {title}
+        </h3>
+      </div>
+      <div className="mt-3 space-y-3">{children}</div>
+    </li>
+  );
+}
 
 export default function RiskFreeDataClient() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -74,23 +102,32 @@ export default function RiskFreeDataClient() {
   const [firstLoad, setFirstLoad] = useState(false);
   const [attested, setAttested] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [busyArea, setBusyArea] = useState<string | null>(null);
+  // The result of a press lives next to the button that caused it (keyed by area) and the latest one is repeated at the top.
+  const [msgs, setMsgs] = useState<Record<string, Msg | null>>({});
+  const [topMsg, setTopMsg] = useState<Msg | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [corr, setCorr] = useState({ seriesId: SERIES_IDS[0] as string, date: '', newValue: '', reason: '' });
+  const [corrTried, setCorrTried] = useState(false);
   const [stateForm, setStateForm] = useState<Record<string, { enabled: boolean; termsStatus: string; reason: string }>>({});
+
+  const busy = busyArea !== null;
+  const setMsg = (area: string, m: Msg | null) => {
+    setMsgs((prev) => ({ ...prev, [area]: m }));
+    if (m) setTopMsg(m);
+  };
 
   async function loadStatus() {
     try {
       const r = await fetch('/api/admin/investment-intelligence/risk-free-data');
-      const j = await r.json();
-      if (!r.ok) setStatusError(`${r.status}: ${j.error ?? 'Could not load status'}`);
+      const j = await r.json().catch(() => null);
+      if (!r.ok) setStatusError(describeFailure(r.status, j, 'Could not load the page.'));
       else {
         setStatus(j.data);
         setStatusError(null);
       }
     } catch {
-      setStatusError('Could not load status.');
+      setStatusError('Could not load the page. Check your connection and reload.');
     }
   }
   useEffect(() => {
@@ -103,422 +140,464 @@ export default function RiskFreeDataClient() {
     };
   }, []);
 
-  async function send(url: string, body: unknown, okText: (data: Record<string, unknown>) => string, after?: () => void) {
-    setBusy(true);
-    setMessage(null);
+  async function send(area: string, url: string, body: unknown, okText: (data: Record<string, unknown>) => string, after?: () => void) {
+    setBusyArea(area);
+    setMsg(area, null);
     try {
       const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const j = await r.json();
+      const j = await r.json().catch(() => null);
       if (!r.ok) {
-        setMessage({ kind: 'error', text: `${r.status}: ${j.error ?? j.message ?? 'Request failed'}` });
+        setMsg(area, { kind: 'error', text: describeFailure(r.status, j, 'This could not be saved.') });
         return null;
       }
-      setMessage({ kind: 'ok', text: okText(j.data ?? {}) });
+      setMsg(area, { kind: 'ok', text: okText(j?.data ?? {}) });
       after?.();
       void loadStatus();
-      return j.data as Record<string, unknown>;
+      return (j?.data ?? {}) as Record<string, unknown>;
     } catch {
-      setMessage({ kind: 'error', text: 'Request failed.' });
+      setMsg(area, { kind: 'error', text: 'The request did not reach the server. Check your connection and try again.' });
       return null;
     } finally {
-      setBusy(false);
+      setBusyArea(null);
     }
   }
 
+  const vt = checkVerifiedThrough(verifiedThrough);
+
   async function postUpload(action: 'preview' | 'commit') {
-    setBusy(true);
-    setMessage(null);
+    const area = action === 'preview' ? 'check' : 'upload';
+    setMsg(area, null);
+    if (!csvText) {
+      setMsg(area, { kind: 'error', text: 'Choose the CSV file first (step 1).' });
+      return;
+    }
+    if (!vt.ok) {
+      setMsg(area, { kind: 'error', text: vt.error });
+      return;
+    }
+    setBusyArea(area);
     try {
       const r = await fetch('/api/admin/investment-intelligence/risk-free-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, seriesId, fileName: fileName || 'upload.csv', csvText, verifiedThrough: verifiedThrough || null, firstLoad, attested, attestationText: status?.attestationText, expectedSha256: preview?.fileSha256 }),
+        // The typed day-first date becomes ISO only here, at the API boundary.
+        body: JSON.stringify({ action, seriesId, fileName: fileName || 'upload.csv', csvText, verifiedThrough: vt.iso, firstLoad, attested, attestationText: status?.attestationText, expectedSha256: preview?.fileSha256 }),
       });
-      const j = await r.json();
+      const j = await r.json().catch(() => null);
       if (!r.ok) {
-        setMessage({ kind: 'error', text: `${r.status}: ${j.error ?? 'Request failed'}` });
+        setMsg(area, { kind: 'error', text: describeFailure(r.status, j, action === 'preview' ? 'The file could not be checked.' : 'The rows could not be uploaded.') });
         return;
       }
-      if (action === 'preview') setPreview(j.data as Preview);
-      else {
+      if (action === 'preview') {
+        const p = j.data as Preview;
+        setPreview(p);
+        setAttested(false);
+        setMsg('check', p.canCommit ? { kind: 'ok', text: `The file was checked and nothing was written. ${p.willInsert} new row(s) are ready: go to step 3.` } : { kind: 'error', text: 'The file was checked and nothing was written, but it cannot be uploaded yet. The reasons are listed below.' });
+      } else {
         const o = j.data as { status: string; inserted?: number; identical?: number };
-        setMessage({ kind: 'ok', text: o.status === 'noop' ? `Nothing to write: every row is already published (${o.identical} identical).` : `${o.status === 'already_committed' ? 'This file was already committed. ' : ''}Committed: ${o.inserted ?? 0} row(s) written, ${o.identical ?? 0} identical row(s) skipped.` });
+        setMsg('upload', { kind: 'ok', text: o.status === 'noop' ? `Nothing to write: every row is already published (${o.identical} identical).` : `${o.status === 'already_committed' ? 'This file was already uploaded. ' : ''}Uploaded: ${o.inserted ?? 0} row(s) written, ${o.identical ?? 0} identical row(s) skipped.` });
         setPreview(null);
         setAttested(false);
         void loadStatus();
       }
     } catch {
-      setMessage({ kind: 'error', text: 'Request failed.' });
+      setMsg(area, { kind: 'error', text: 'The request did not reach the server. Check your connection and try again.' });
     } finally {
-      setBusy(false);
+      setBusyArea(null);
     }
   }
 
   async function onFile(file: File | null) {
     setPreview(null);
-    setMessage(null);
+    setAttested(false);
+    setMsg('check', null);
+    setMsg('upload', null);
     if (!file) return;
     setFileName(file.name);
     setCsvText(await file.text());
   }
 
   const caps = status?.capabilities;
-  const permNote = (p: Panel<Row[]>, what: string) => (p.state === 'not_permitted' ? <p>{what} needs the risk-free data upload permission, which your account does not have.</p> : p.state === 'unavailable' ? <p><strong>Unavailable.</strong> {p.reason}</p> : null);
+  const permNote = (p: Panelled<Row[]>, what: string) => (p.state === 'not_permitted' ? <Notice tone="neutral">{what} needs the risk-free data upload permission, which your account does not have.</Notice> : p.state === 'unavailable' ? <Notice tone="warn" title="Unavailable">{p.reason}</Notice> : null);
+  const corrCheck = checkCorrection(corr);
+  const showCorrErr = (k: 'date' | 'newValue' | 'reason'): string | null => {
+    const e = corrCheck.errors[k];
+    if (!e) return null;
+    return corrTried || corr[k].trim() !== '' ? e : null;
+  };
 
   return (
-    <div style={{ maxWidth: 1040, margin: '0 auto', padding: '1.5rem' }}>
-      <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Risk-free Rate Data</h1>
-      <p style={{ opacity: 0.8, marginTop: '0.25rem' }}>
-        The Reserve Bank of India rates behind the Sharpe ratio, Sortino ratio and Jensen&apos;s alpha in the Fund analytics report: the 91-day Treasury bill auction cut-off yield (primary) and the policy repo rate (secondary). Source: Reserve Bank of India. A published value is never edited by an upload; it is changed only by a recorded correction.
-      </p>
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+      <header>
+        <h1 className="text-xl font-semibold text-ink">Risk-free Rate Data</h1>
+        <p className="mt-1 text-sm text-muted">
+          The Reserve Bank of India rates behind the Sharpe ratio, Sortino ratio and Jensen&apos;s alpha in the Fund analytics report: the 91-day Treasury bill auction cut-off yield (primary) and the policy repo rate (secondary). Source: Reserve Bank of India. A published value is never edited by an upload; it is changed only by a recorded correction.
+        </p>
+      </header>
 
-      {statusError && (
-        <p role="alert" style={{ color: '#b91c1c' }}>
-          {statusError}
-        </p>
-      )}
-      {message && (
-        <p role={message.kind === 'error' ? 'alert' : 'status'} style={{ color: message.kind === 'error' ? '#b91c1c' : '#166534' }}>
-          {message.text}
-        </p>
+      {statusError && <Notice tone="bad" live="alert" title="Could not load this page">{statusError}</Notice>}
+      {topMsg && (
+        <div data-testid="page-top-banner">
+          <Notice tone={topMsg.kind === 'error' ? 'bad' : 'ok'} title={topMsg.kind === 'error' ? 'Last action: it did not work' : 'Last action: done'}>
+            {topMsg.text}
+          </Notice>
+        </div>
       )}
       {status?.state === 'unavailable' && (
-        <p>
-          <strong>Unavailable.</strong> {status.reason}
-        </p>
+        <Notice tone="warn" live="alert" title="Unavailable">
+          {status.reason}
+        </Notice>
       )}
 
       {status?.state === 'ok' && status.series && (
-        <section style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Series</h2>
-          <table style={{ width: '100%', marginTop: '0.5rem' }}>
-            <caption style={{ textAlign: 'left', opacity: 0.7 }}>Each series, its switch, terms status and freshness</caption>
+        <Panel title="Series" description="Each series, its switch, terms status and freshness">
+          <ScrollTable label="Risk-free series" minWidth="min-w-[860px]">
             <thead>
-              <tr style={{ textAlign: 'left' }}>
-                <th scope="col">Series</th>
-                <th scope="col">Role</th>
-                <th scope="col">Switch</th>
-                <th scope="col">Terms</th>
-                <th scope="col" className={NUM_HEADER_CLASS}>Observations</th>
-                <th scope="col">From</th>
-                <th scope="col">Freshness</th>
+              <tr>
+                <Th>Series</Th>
+                <Th>Role</Th>
+                <Th>Switch</Th>
+                <Th>Terms</Th>
+                <Th num>Observations</Th>
+                <Th>From</Th>
+                <Th>Freshness</Th>
               </tr>
             </thead>
             <tbody>
               {status.series.map((x) => (
                 <tr key={x.seriesId}>
-                  <td>{x.name}</td>
-                  <td>{x.role}</td>
-                  <td>{x.enabled ? 'ON' : 'OFF (ratios report the rate as unavailable)'}</td>
-                  <td>{x.termsReviewStatus}</td>
-                  <td className={NUM_CELL_CLASS}>
+                  <Td>{x.name}</Td>
+                  <Td>{x.role}</Td>
+                  <Td>{x.enabled ? 'ON' : 'OFF (ratios report the rate as unavailable)'}</Td>
+                  <Td>{x.termsReviewStatus}</Td>
+                  <Td num>
                     {x.observationCount}
                     {x.gapRowCount ? ` (+${x.gapRowCount} gap)` : ''}
-                  </td>
-                  <td>{d(x.firstObservationDate)}</td>
-                  <td>
+                  </Td>
+                  <Td>{d(x.firstObservationDate)}</Td>
+                  <Td>
                     {x.freshness.state === 'no_data'
                       ? 'No data loaded'
                       : `${x.freshness.state === 'stale' ? 'STALE' : 'Fresh'}: ${x.freshness.daysSince} day(s) since ${x.freshness.basis === 'verification' ? 'last confirmed complete' : 'the last auction'} (${d(x.freshness.basis === 'verification' ? x.freshness.verifiedThroughDate : x.freshness.lastObservationDate)}); stale after ${x.freshness.staleAfterDays}`}
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ScrollTable>
           {status.weeklyRefresh && (
-            <p style={{ marginTop: '0.75rem' }}>
+            <p className="mt-3 text-sm text-ink">
               <strong>Weekly RBI refresh: {status.weeklyRefresh.jobEnabled ? 'ON' : 'OFF'}.</strong> It ships off and runs as a dry run first.
               {status.weeklyRefresh.consecutiveFailures > 0 ? ` ${status.weeklyRefresh.consecutiveFailures} consecutive failure(s).` : ''} Last success: {dt(status.weeklyRefresh.lastSuccessAt)}.
               {status.weeklyRefresh.disabledReason ? ` ${status.weeklyRefresh.disabledReason}` : ''}
             </p>
           )}
-        </section>
+        </Panel>
       )}
 
       {status?.state === 'ok' && caps?.upload && (
-        <section style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Upload rates (CSV)</h2>
-          <p style={{ opacity: 0.8 }}>
-            Columns: series_id, observation_date, value_percent, frequency, source_document, source_url, retrieved_on, notes (optional kind and gap_reason for an auction with no accepted bids). One series per file. You always preview before anything is written, and an upload never changes a value that is already published.
-          </p>
-          <label style={{ display: 'block', marginTop: '0.5rem' }}>
-            Series{' '}
-            <select
-              value={seriesId}
-              onChange={(e) => {
-                setSeriesId(e.target.value as (typeof SERIES_IDS)[number]);
-                setPreview(null);
-              }}
-            >
-              {SERIES_IDS.map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: 'block', marginTop: '0.5rem' }}>
-            CSV file <input type="file" accept=".csv,text/csv" onChange={(e) => void onFile(e.target.files?.[0] ?? null)} />
-          </label>
-          <label style={{ display: 'block', marginTop: '0.5rem' }}>
-            Verified through (yyyy-mm-dd, for the repo rate: the day it was last confirmed complete){' '}
-            <input
-              value={verifiedThrough}
-              placeholder="yyyy-mm-dd"
-              onChange={(e) => {
-                setVerifiedThrough(e.target.value);
-                setPreview(null);
-              }}
-            />
-          </label>
-          <label style={{ display: 'block' }}>
-            <input type="checkbox" checked={firstLoad} onChange={(e) => setFirstLoad(e.target.checked)} /> This is the first load of the historical file
-          </label>
-          <button type="button" disabled={busy || !csvText} onClick={() => void postUpload('preview')} style={{ marginTop: '0.75rem' }}>
-            Preview (writes nothing)
-          </button>
+        <Panel
+          title="Upload rates (CSV)"
+          description="Columns: series_id, observation_date, value_percent, frequency, source_document, source_url, retrieved_on, notes (optional kind and gap_reason for an auction with no accepted bids). One series per file. You always check the file before anything is written, and an upload never changes a value that is already published."
+        >
+          <ol className="space-y-4">
+            <Step n={1} title="Choose the file">
+              <SelectField
+                label="Series"
+                value={seriesId}
+                hidePlaceholder
+                options={SERIES_OPTIONS}
+                onChange={(v) => {
+                  setSeriesId(v as (typeof SERIES_IDS)[number]);
+                  setPreview(null);
+                  setAttested(false);
+                }}
+              />
+              <FileField label="CSV file" accept=".csv,text/csv" fileName={fileName} onFile={(f) => void onFile(f)} hint="Choose the rates file from your computer. It is read in your browser first; nothing is sent until you press a button below." />
+              <DateField
+                label="Verified through (optional)"
+                hint="For the repo rate: the day it was last confirmed complete."
+                value={verifiedThrough}
+                error={verifiedThrough.trim() !== '' && !vt.ok ? vt.error : null}
+                onChange={(v) => {
+                  setVerifiedThrough(v);
+                  setPreview(null);
+                  setAttested(false);
+                }}
+              />
+              <CheckField label="This is the first load of the historical file" checked={firstLoad} onChange={setFirstLoad} />
+            </Step>
 
-          {preview && (
-            <div style={{ marginTop: '1rem' }} data-testid="risk-free-preview">
-              <p>
-                <strong>{preview.acceptedRows}</strong> usable row(s) of {preview.totalDataRows}, from {d(preview.dateFrom)} to {d(preview.dateTo)}
-                {preview.gapRows ? ` (${preview.gapRows} gap row(s))` : ''}. Will write <strong>{preview.willInsert}</strong> new row(s); {preview.identicalToPublished} already published with the same value; {preview.conflictCount} conflict(s); {preview.rejectedRows} rejected.
-              </p>
-              <p>First rows: {preview.firstRows.map((r) => `${d(r.date)} ${r.value_percent ?? 'gap'}`).join(' | ')}</p>
-              <p>Last rows: {preview.lastRows.map((r) => `${d(r.date)} ${r.value_percent ?? 'gap'}`).join(' | ')}</p>
-              {preview.blockers.map((b, i) => (
-                <p key={i} role="alert" style={{ color: '#b91c1c' }}>
-                  Cannot commit: {b}
-                </p>
-              ))}
-              {preview.warnings.map((w, i) => (
-                <p key={i} style={{ color: '#92400e' }}>
-                  {w}
-                </p>
-              ))}
-              {preview.rejectedSample.length > 0 && (
-                <details>
-                  <summary>Rejected rows ({preview.rejectedRows})</summary>
-                  <ul>
-                    {preview.rejectedSample.map((r, i) => (
-                      <li key={i}>
-                        Line {r.line} [{r.code}]: {r.message}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
+            <Step n={2} title="Check the file">
+              <p className="text-sm text-muted">This reads the file and shows what would happen. It writes nothing.</p>
+              <div>
+                <Btn kind="secondary" busy={busyArea === 'check'} disabled={busy} onClick={() => void postUpload('preview')}>
+                  Check file (writes nothing)
+                </Btn>
+              </div>
+              <ActionMessage message={msgs.check ?? null} />
+              {preview && (
+                <div className="space-y-2 text-sm text-ink" data-testid="risk-free-preview">
+                  <p>
+                    <strong>{preview.acceptedRows}</strong> usable row(s) of {preview.totalDataRows}, from {d(preview.dateFrom)} to {d(preview.dateTo)}
+                    {preview.gapRows ? ` (${preview.gapRows} gap row(s))` : ''}. Will write <strong>{preview.willInsert}</strong> new row(s); {preview.identicalToPublished} already published with the same value; {preview.conflictCount} conflict(s); {preview.rejectedRows} rejected.
+                  </p>
+                  <p>First rows: {preview.firstRows.map((r) => `${d(r.date)} ${r.value_percent ?? 'gap'}`).join(' | ')}</p>
+                  <p>Last rows: {preview.lastRows.map((r) => `${d(r.date)} ${r.value_percent ?? 'gap'}`).join(' | ')}</p>
+                  {preview.blockers.map((b, i) => (
+                    <Notice key={i} tone="bad" live="alert">
+                      Cannot upload: {b}
+                    </Notice>
+                  ))}
+                  {preview.warnings.map((w, i) => (
+                    <Notice key={i} tone="warn">
+                      {w}
+                    </Notice>
+                  ))}
+                  {preview.rejectedSample.length > 0 && (
+                    <details>
+                      <summary className="cursor-pointer font-medium">Rejected rows ({preview.rejectedRows})</summary>
+                      <ul className="mt-1 list-disc pl-6">
+                        {preview.rejectedSample.map((r, i) => (
+                          <li key={i}>
+                            Line {r.line} [{r.code}]: {r.message}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  {preview.conflicts.length > 0 && (
+                    <details>
+                      <summary className="cursor-pointer font-medium">Conflicts with published values ({preview.conflictCount})</summary>
+                      <ul className="mt-1 list-disc pl-6">
+                        {preview.conflicts.map((c, i) => (
+                          <li key={i}>
+                            {d(c.date)}: published {c.existing}, file {c.incoming}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
               )}
-              {preview.conflicts.length > 0 && (
-                <details>
-                  <summary>Conflicts with published values ({preview.conflictCount})</summary>
-                  <ul>
-                    {preview.conflicts.map((c, i) => (
-                      <li key={i}>
-                        {d(c.date)}: published {c.existing}, file {c.incoming}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-              <label style={{ display: 'block', marginTop: '0.75rem' }}>
-                <input type="checkbox" checked={attested} onChange={(e) => setAttested(e.target.checked)} /> {status.attestationText}
-              </label>
-              <button type="button" disabled={busy || !preview.canCommit || !attested} onClick={() => void postUpload('commit')} style={{ marginTop: '0.5rem' }}>
-                Commit {preview.willInsert} row(s)
-              </button>
-              <p style={{ opacity: 0.7, fontSize: '0.85rem' }}>Your account, the file hash, the row count and this attestation are recorded permanently and cannot be edited.</p>
-            </div>
-          )}
-        </section>
+            </Step>
+
+            <Step n={3} title={preview ? `Upload ${preview.willInsert} rows` : 'Upload the rows'}>
+              {!preview && <p className="text-sm text-muted">Check the file first (step 2). The upload button is switched on once the check passes and you have ticked the box.</p>}
+              <CheckField label={status.attestationText} checked={attested} disabled={!preview || !preview.canCommit} onChange={setAttested} />
+              <div>
+                <Btn kind="primary" busy={busyArea === 'upload'} disabled={busy || !preview || !preview.canCommit || !attested} onClick={() => void postUpload('commit')}>
+                  {preview ? `Upload ${preview.willInsert} rows` : 'Upload rows'}
+                </Btn>
+              </div>
+              <p className="text-xs text-muted">Your account, the file hash, the row count and this attestation are recorded permanently and cannot be edited.</p>
+              <ActionMessage message={msgs.upload ?? null} />
+            </Step>
+          </ol>
+        </Panel>
       )}
 
       {status?.state === 'ok' && (
-        <section style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Review queue</h2>
+        <Panel title="Review queue">
           {permNote(status.openReviewItems, 'The review queue')}
           {status.openReviewItems.state === 'ok' &&
             (status.openReviewItems.data.length === 0 ? (
-              <p>Nothing is waiting for review.</p>
+              <p className="text-sm text-muted">Nothing is waiting for review.</p>
             ) : (
-              <ul>
+              <ul className="space-y-4">
                 {status.openReviewItems.data.map((it) => {
                   const id = s(it.id);
+                  const area = `review:${id}`;
+                  const note = notes[id] ?? '';
                   return (
-                    <li key={id} style={{ marginBottom: '0.75rem' }}>
-                      {s(it.series_id)} {it.observation_date ? d(it.observation_date) : ''}: {Array.isArray(it.reasons) ? (it.reasons as string[]).join(', ') : ''}
-                      <details>
-                        <summary>Evidence</summary>
-                        <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>{JSON.stringify({ candidate: it.candidate, evidence: it.evidence }, null, 2)}</pre>
+                    <li key={id} className="rounded-compact border border-line p-3">
+                      <p className="text-sm font-medium text-ink">
+                        {s(it.series_id)} {it.observation_date ? d(it.observation_date) : ''}: {Array.isArray(it.reasons) ? (it.reasons as string[]).join(', ') : ''}
+                      </p>
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-sm text-trust">Evidence</summary>
+                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-xs">{JSON.stringify({ candidate: it.candidate, evidence: it.evidence }, null, 2)}</pre>
                       </details>
-                      <label>
-                        Note (at least 20 characters){' '}
-                        <input value={notes[id] ?? ''} onChange={(e) => setNotes({ ...notes, [id]: e.target.value })} style={{ width: '24rem' }} />
-                      </label>{' '}
-                      {(['accept', 'reject'] as const).map((decision) => (
-                        <button key={decision} type="button" disabled={busy || (notes[id] ?? '').trim().length < 20} onClick={() => void send(`/api/admin/investment-intelligence/risk-free-data/review/${id}`, { decision, note: notes[id] }, () => (decision === 'accept' ? 'Accepted: the value is now published.' : 'Rejected: nothing was published.'))}>
-                          {decision === 'accept' ? 'Accept' : 'Reject'}
-                        </button>
-                      ))}
+                      <div className="mt-3 max-w-xl">
+                        <TextField label={`Note (at least ${MIN_REASON_CHARS} characters)`} value={note} onChange={(v) => setNotes({ ...notes, [id]: v })} hint={note.trim().length < MIN_REASON_CHARS ? `${note.trim().length} of ${MIN_REASON_CHARS} characters so far.` : undefined} />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(['accept', 'reject'] as const).map((decision) => (
+                          <Btn
+                            key={decision}
+                            kind={decision === 'accept' ? 'primary' : 'danger'}
+                            busy={busyArea === area}
+                            disabled={busy || note.trim().length < MIN_REASON_CHARS}
+                            onClick={() => void send(area, `/api/admin/investment-intelligence/risk-free-data/review/${id}`, { decision, note }, () => (decision === 'accept' ? 'Accepted: the value is now published.' : 'Rejected: nothing was published.'))}
+                          >
+                            {decision === 'accept' ? 'Accept' : 'Reject'}
+                          </Btn>
+                        ))}
+                      </div>
+                      <ActionMessage message={msgs[area] ?? null} />
                     </li>
                   );
                 })}
               </ul>
             ))}
-        </section>
+        </Panel>
       )}
 
       {status?.state === 'ok' && caps?.upload && (
-        <section style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Correct one published value</h2>
-          <p style={{ opacity: 0.8 }}>The only way a published value changes. The old value, the new value, your account and the reason are recorded permanently, and the affected cached results are invalidated.</p>
-          <label>
-            Series{' '}
-            <select value={corr.seriesId} onChange={(e) => setCorr({ ...corr, seriesId: e.target.value })}>
-              {SERIES_IDS.map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
-          </label>{' '}
-          <label>
-            Date (yyyy-mm-dd) <input value={corr.date} onChange={(e) => setCorr({ ...corr, date: e.target.value })} placeholder="yyyy-mm-dd" />
-          </label>{' '}
-          <label>
-            New value (percent) <input value={corr.newValue} onChange={(e) => setCorr({ ...corr, newValue: e.target.value })} inputMode="decimal" />
-          </label>
-          <label style={{ display: 'block', marginTop: '0.5rem' }}>
-            Reason (at least 20 characters) <input value={corr.reason} onChange={(e) => setCorr({ ...corr, reason: e.target.value })} style={{ width: '32rem' }} />
-          </label>
-          <button
-            type="button"
-            style={{ marginTop: '0.5rem' }}
-            disabled={busy || !/^\d{4}-\d{2}-\d{2}$/.test(corr.date) || !(Number(corr.newValue) >= 0) || corr.newValue.trim() === '' || corr.reason.trim().length < 20}
-            onClick={() => void send('/api/admin/investment-intelligence/risk-free-data/correct', { seriesId: corr.seriesId, date: corr.date, newValue: Number(corr.newValue), reason: corr.reason }, (o) => `Corrected: ${s(o.previous)} to ${s(o.new)}.`, () => setCorr({ ...corr, date: '', newValue: '', reason: '' }))}
-          >
-            Record correction
-          </button>
-        </section>
+        <Panel title="Correct one published value" description="The only way a published value changes. The old value, the new value, your account and the reason are recorded permanently, and the affected cached results are invalidated.">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SelectField label="Series" value={corr.seriesId} hidePlaceholder options={SERIES_OPTIONS} onChange={(v) => setCorr({ ...corr, seriesId: v })} />
+            <DateField label="Date" value={corr.date} error={showCorrErr('date')} onChange={(v) => setCorr({ ...corr, date: v })} />
+            <TextField label="New value (percent)" value={corr.newValue} error={showCorrErr('newValue')} onChange={(v) => setCorr({ ...corr, newValue: v })} />
+          </div>
+          <div className="mt-3 max-w-2xl">
+            <TextField label={`Reason (at least ${MIN_REASON_CHARS} characters)`} value={corr.reason} error={showCorrErr('reason')} onChange={(v) => setCorr({ ...corr, reason: v })} />
+          </div>
+          <div className="mt-3">
+            <Btn
+              kind="primary"
+              busy={busyArea === 'correction'}
+              disabled={busy}
+              onClick={() => {
+                setCorrTried(true);
+                if (!corrCheck.ok) {
+                  setMsg('correction', { kind: 'error', text: `The correction was not recorded. ${Object.values(corrCheck.errors).join(' ')}` });
+                  return;
+                }
+                // The typed day-first date becomes ISO only here, at the API boundary.
+                void send('correction', '/api/admin/investment-intelligence/risk-free-data/correct', { seriesId: corr.seriesId, date: corrCheck.iso, newValue: corrCheck.value, reason: corr.reason }, (o) => `Corrected: ${s(o.previous)} to ${s(o.new)}.`, () => {
+                  setCorr({ ...corr, date: '', newValue: '', reason: '' });
+                  setCorrTried(false);
+                });
+              }}
+            >
+              Record correction
+            </Btn>
+          </div>
+          <ActionMessage message={msgs.correction ?? null} />
+        </Panel>
       )}
 
       {status?.state === 'ok' && (
-        <section style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Switch a series on or off</h2>
+        <Panel title="Switch a series on or off">
           {!caps?.switch ? (
-            <p>Switching a series needs the risk-free series switch permission, which your account does not have.</p>
+            <Notice tone="neutral">Switching a series needs the risk-free series switch permission, which your account does not have.</Notice>
           ) : (
             <>
-              <p style={{ opacity: 0.8 }}>Switching a series off makes every Sharpe, Sortino and alpha figure report the risk-free rate as unavailable for every customer. No data is deleted. A reason is recorded permanently.</p>
-              {status.series?.map((x) => {
-                const f = stateForm[x.seriesId] ?? { enabled: x.enabled, termsStatus: x.termsReviewStatus, reason: '' };
-                return (
-                  <div key={x.seriesId} style={{ marginTop: '0.75rem' }}>
-                    <strong>{x.name}</strong>{' '}
-                    <label>
-                      <input type="checkbox" checked={f.enabled} onChange={(e) => setStateForm({ ...stateForm, [x.seriesId]: { ...f, enabled: e.target.checked } })} /> Enabled
-                    </label>{' '}
-                    <label>
-                      Terms status{' '}
-                      <select value={f.termsStatus} onChange={(e) => setStateForm({ ...stateForm, [x.seriesId]: { ...f, termsStatus: e.target.value } })}>
-                        {TERMS.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label style={{ display: 'block', marginTop: '0.25rem' }}>
-                      Reason (at least 20 characters) <input value={f.reason} onChange={(e) => setStateForm({ ...stateForm, [x.seriesId]: { ...f, reason: e.target.value } })} style={{ width: '32rem' }} />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={busy || f.reason.trim().length < 20 || (f.enabled === x.enabled && f.termsStatus === x.termsReviewStatus)}
-                      onClick={() => void send('/api/admin/investment-intelligence/risk-free-data/series-state', { seriesId: x.seriesId, enabled: f.enabled, termsStatus: f.termsStatus, reason: f.reason }, () => 'Series state saved.', () => setStateForm({ ...stateForm, [x.seriesId]: { ...f, reason: '' } }))}
-                    >
-                      Save
-                    </button>
-                  </div>
-                );
-              })}
+              <p className="text-sm text-muted">Switching a series off makes every Sharpe, Sortino and alpha figure report the risk-free rate as unavailable for every customer. No data is deleted. A reason is recorded permanently.</p>
+              <div className="mt-3 space-y-4">
+                {status.series?.map((x) => {
+                  const f = stateForm[x.seriesId] ?? { enabled: x.enabled, termsStatus: x.termsReviewStatus, reason: '' };
+                  const area = `series:${x.seriesId}`;
+                  const unchanged = f.enabled === x.enabled && f.termsStatus === x.termsReviewStatus;
+                  return (
+                    <div key={x.seriesId} className="rounded-compact border border-line p-3">
+                      <h3 className="text-sm font-semibold text-ink">{x.name}</h3>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        <CheckField label="Enabled" checked={f.enabled} onChange={(v) => setStateForm({ ...stateForm, [x.seriesId]: { ...f, enabled: v } })} />
+                        <SelectField label="Terms status" value={f.termsStatus} hidePlaceholder options={TERMS_OPTIONS} onChange={(v) => setStateForm({ ...stateForm, [x.seriesId]: { ...f, termsStatus: v } })} />
+                      </div>
+                      <div className="mt-3 max-w-2xl">
+                        <TextField label={`Reason (at least ${MIN_REASON_CHARS} characters)`} value={f.reason} onChange={(v) => setStateForm({ ...stateForm, [x.seriesId]: { ...f, reason: v } })} hint={unchanged ? 'Change the switch or the terms status to enable Save.' : f.reason.trim().length < MIN_REASON_CHARS ? `${f.reason.trim().length} of ${MIN_REASON_CHARS} characters so far.` : undefined} />
+                      </div>
+                      <div className="mt-3">
+                        <Btn
+                          kind="primary"
+                          busy={busyArea === area}
+                          disabled={busy || f.reason.trim().length < MIN_REASON_CHARS || unchanged}
+                          onClick={() => void send(area, '/api/admin/investment-intelligence/risk-free-data/series-state', { seriesId: x.seriesId, enabled: f.enabled, termsStatus: f.termsStatus, reason: f.reason }, () => 'Series state saved.', () => setStateForm({ ...stateForm, [x.seriesId]: { ...f, reason: '' } }))}
+                        >
+                          Save
+                        </Btn>
+                      </div>
+                      <ActionMessage message={msgs[area] ?? null} />
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
-        </section>
+        </Panel>
       )}
 
       {status?.state === 'ok' && (
-        <section style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>History</h2>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600 }}>Uploads and refresh runs</h3>
-          {permNote(status.recentBatches, 'The upload history')}
-          {status.recentBatches.state === 'ok' &&
-            (status.recentBatches.data.length === 0 ? (
-              <p>No upload or refresh run has been recorded yet.</p>
-            ) : (
-              <table style={{ width: '100%' }}>
-                <thead>
-                  <tr style={{ textAlign: 'left' }}>
-                    <th scope="col">When</th>
-                    <th scope="col">Series</th>
-                    <th scope="col">Source</th>
-                    <th scope="col">File</th>
-                    <th scope="col" className={NUM_HEADER_CLASS}>Written</th>
-                    <th scope="col" className={NUM_HEADER_CLASS}>Identical</th>
-                    <th scope="col">Range</th>
-                    <th scope="col">By</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {status.recentBatches.data.map((b) => (
-                    <tr key={s(b.id)}>
-                      <td>{dt(b.created_at)}</td>
-                      <td>{s(b.series_id)}</td>
-                      <td>{s(b.source_kind)}</td>
-                      <td>{s(b.file_name)}</td>
-                      <td className={NUM_CELL_CLASS}>{s(b.rows_inserted)}</td>
-                      <td className={NUM_CELL_CLASS}>{s(b.rows_identical_skipped)}</td>
-                      <td>
-                        {d(b.date_from)} to {d(b.date_to)}
-                      </td>
-                      <td>{b.source_kind === 'weekly_refresh' ? 'weekly job' : b.uploadedByMe ? 'you' : 'another admin'}</td>
+        <Panel title="History">
+          <h3 className="text-sm font-semibold text-ink">Uploads and refresh runs</h3>
+          <div className="mt-2">
+            {permNote(status.recentBatches, 'The upload history')}
+            {status.recentBatches.state === 'ok' &&
+              (status.recentBatches.data.length === 0 ? (
+                <p className="text-sm text-muted">No upload or refresh run has been recorded yet.</p>
+              ) : (
+                <ScrollTable label="Uploads and refresh runs" minWidth="min-w-[820px]">
+                  <thead>
+                    <tr>
+                      <Th>When</Th>
+                      <Th>Series</Th>
+                      <Th>Source</Th>
+                      <Th>File</Th>
+                      <Th num>Written</Th>
+                      <Th num>Identical</Th>
+                      <Th>Range</Th>
+                      <Th>By</Th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    {status.recentBatches.data.map((b) => (
+                      <tr key={s(b.id)}>
+                        <Td>{dt(b.created_at)}</Td>
+                        <Td>{s(b.series_id)}</Td>
+                        <Td>{s(b.source_kind)}</Td>
+                        <Td>{s(b.file_name)}</Td>
+                        <Td num>{s(b.rows_inserted)}</Td>
+                        <Td num>{s(b.rows_identical_skipped)}</Td>
+                        <Td>
+                          {d(b.date_from)} to {d(b.date_to)}
+                        </Td>
+                        <Td>{b.source_kind === 'weekly_refresh' ? 'weekly job' : b.uploadedByMe ? 'you' : 'another admin'}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </ScrollTable>
+              ))}
+          </div>
+          <h3 className="mt-5 text-sm font-semibold text-ink">Corrections</h3>
+          <div className="mt-2">
+            {permNote(status.recentCorrections, 'The correction history')}
+            {status.recentCorrections.state === 'ok' &&
+              (status.recentCorrections.data.length === 0 ? (
+                <p className="text-sm text-muted">No value has been corrected.</p>
+              ) : (
+                <ul className="list-disc space-y-1 pl-6 text-sm text-ink">
+                  {status.recentCorrections.data.map((c) => (
+                    <li key={s(c.id)}>
+                      {dt(c.created_at)}: {s(c.series_id)} {d(c.observation_date)} changed from {s(c.previous_value_percent)} to {s(c.new_value_percent)} by {c.actedByMe ? 'you' : 'another admin'}: {s(c.reason)}
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            ))}
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginTop: '1rem' }}>Corrections</h3>
-          {permNote(status.recentCorrections, 'The correction history')}
-          {status.recentCorrections.state === 'ok' &&
-            (status.recentCorrections.data.length === 0 ? (
-              <p>No value has been corrected.</p>
-            ) : (
-              <ul>
-                {status.recentCorrections.data.map((c) => (
-                  <li key={s(c.id)}>
-                    {dt(c.created_at)}: {s(c.series_id)} {d(c.observation_date)} changed from {s(c.previous_value_percent)} to {s(c.new_value_percent)} by {c.actedByMe ? 'you' : 'another admin'}: {s(c.reason)}
-                  </li>
-                ))}
-              </ul>
-            ))}
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginTop: '1rem' }}>Switch and terms changes</h3>
-          {status.stateLog.state === 'ok' &&
-            (status.stateLog.data.length === 0 ? (
-              <p>No switch or terms change has been recorded.</p>
-            ) : (
-              <ul>
-                {status.stateLog.data.map((c) => (
-                  <li key={s(c.id)}>
-                    {dt(c.created_at)}: {s(c.series_id)} {c.previous_enabled === c.new_enabled ? '' : `${c.previous_enabled ? 'on' : 'off'} to ${c.new_enabled ? 'on' : 'off'}; `}
-                    {c.previous_terms_status === c.new_terms_status ? '' : `terms ${s(c.previous_terms_status)} to ${s(c.new_terms_status)}; `}by {c.actedByMe ? 'you' : 'another admin'}: {s(c.reason)}
-                  </li>
-                ))}
-              </ul>
-            ))}
-          {status.stateLog.state === 'unavailable' && (
-            <p>
-              <strong>Unavailable.</strong> {status.stateLog.reason}
-            </p>
-          )}
-        </section>
+                </ul>
+              ))}
+          </div>
+          <h3 className="mt-5 text-sm font-semibold text-ink">Switch and terms changes</h3>
+          <div className="mt-2">
+            {status.stateLog.state === 'ok' &&
+              (status.stateLog.data.length === 0 ? (
+                <p className="text-sm text-muted">No switch or terms change has been recorded.</p>
+              ) : (
+                <ul className="list-disc space-y-1 pl-6 text-sm text-ink">
+                  {status.stateLog.data.map((c) => (
+                    <li key={s(c.id)}>
+                      {dt(c.created_at)}: {s(c.series_id)} {c.previous_enabled === c.new_enabled ? '' : `${c.previous_enabled ? 'on' : 'off'} to ${c.new_enabled ? 'on' : 'off'}; `}
+                      {c.previous_terms_status === c.new_terms_status ? '' : `terms ${s(c.previous_terms_status)} to ${s(c.new_terms_status)}; `}by {c.actedByMe ? 'you' : 'another admin'}: {s(c.reason)}
+                    </li>
+                  ))}
+                </ul>
+              ))}
+            {status.stateLog.state === 'unavailable' && (
+              <Notice tone="warn" title="Unavailable">
+                {status.stateLog.reason}
+              </Notice>
+            )}
+          </div>
+        </Panel>
       )}
     </div>
   );

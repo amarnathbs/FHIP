@@ -9,6 +9,7 @@ import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 import { CrossBorderRelationshipsPanel } from '@/components/profile/CrossBorderRelationshipsPanel';
 import { CloseAccountPanel } from '@/components/profile/CloseAccountPanel';
 import { BillingPanel } from '@/components/profile/BillingPanel';
+import { DateInput } from '@/components/ui/DateInput';
 
 // App Review tier-2 fix pass (2026-08-28 branch reconciliation), Fix 1 —
 // Profile Page. Ported from app/(app)/profile/page.tsx on
@@ -214,8 +215,7 @@ export default function ProfilePage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-muted">Date of birth</label>
-            <input
-              type="date"
+            <DateInput showHint
               min={DOB_MIN_DATE}
               max={DOB_MAX_DATE}
               value={profile.date_of_birth ?? ''}

@@ -57,7 +57,7 @@ describe('a badge for every import source_type the registers stamp', () => {
 
   it('the tooltip carries last_imported_at when recorded', () => {
     const b = provenanceBadgeFor({ source_type: 'retirement_statement_import', last_imported_at: '2026-09-20T03:00:00Z' });
-    expect(b?.title).toMatch(/^Imported from retirement statement — last imported \d{1,2} Sept? 2026$/);
+    expect(b?.title).toMatch(/^Imported from retirement statement — last imported \d{2}\/09\/2026$/);
     expect(provenanceBadgeFor({ source_type: 'retirement_statement_import', last_imported_at: 'not-a-date' })?.title).toBe('Imported from retirement statement');
   });
 });

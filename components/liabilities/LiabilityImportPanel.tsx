@@ -37,6 +37,8 @@ import {
   DUPLICATE_UPLOAD_MESSAGE,
   type WaitingImport,
 } from '@/components/financial-data-hub/WaitingImports';
+import { DateInput } from '@/components/ui/DateInput';
+import { DATE_INPUT_HINT } from '@/lib/engines/dateInput';
 
 type StatementType = 'credit_card' | 'loan';
 type Phase =
@@ -246,10 +248,10 @@ type CorrectableField =
 
 const CORRECTION_LABELS: Record<CorrectableField, string> = {
   institution_name: 'Institution',
-  statement_period_start: 'Statement period start (YYYY-MM-DD)',
-  statement_period_end: 'Statement period end (YYYY-MM-DD)',
-  statement_date: 'Statement date (YYYY-MM-DD)',
-  due_date: 'Payment due date (YYYY-MM-DD)',
+  statement_period_start: 'Statement period start',
+  statement_period_end: 'Statement period end',
+  statement_date: 'Statement date',
+  due_date: 'Payment due date',
   opening_balance: 'Opening balance',
   closing_balance: 'Closing balance',
   purchases_total: 'Purchases this statement period',
@@ -271,6 +273,9 @@ const CORRECTION_LABELS: Record<CorrectableField, string> = {
 
 /** Rendered as money, in the statement's own currency. `interest_rate` is a
  * percentage and the dates are text, so neither belongs here. */
+/** The corrections typed as a day-first date (DD-MM-YYYY); the value kept and sent is the ISO date. */
+const DATE_CORRECTION_FIELDS: readonly CorrectableField[] = ['statement_period_start', 'statement_period_end', 'statement_date', 'due_date'];
+
 const MONEY_CORRECTION_FIELDS: readonly CorrectableField[] = [
   'opening_balance', 'closing_balance', 'purchases_total', 'cash_advances_total', 'refunds_total',
   'opening_principal', 'closing_principal', 'drawdowns_total', 'principal_repayments_total',
@@ -448,6 +453,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   // `user_corrected_fields` records what the user really touched rather than
   // every field they looked at.
   const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [badDateFields, setBadDateFields] = useState<string[]>([]);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const [correctionNotice, setCorrectionNotice] = useState<string | null>(null);
   // App Review 2026-09-14, item 2: same gap as BankStatementImportPanel.tsx
@@ -534,6 +540,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       seeded[field] = NUMERIC_CORRECTION_FIELDS.includes(field) ? String(Number(value)) : String(value);
     }
     setCorrections(seeded);
+    setBadDateFields([]);
     setCorrectionError(null);
     setCorrectionNotice(null);
     setPhase('correcting');
@@ -570,6 +577,10 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     if (!documentId || !statement) return;
     setCorrectionError(null);
     setCorrectionNotice(null);
+    if (badDateFields.length > 0) {
+      setCorrectionError(`${badDateFields.map((f) => CORRECTION_LABELS[f as CorrectableField] ?? f).join(', ')}: this is not a real date. ${DATE_INPUT_HINT} Nothing was saved.`);
+      return;
+    }
     let body: Record<string, string | number | null>;
     try {
       body = changedCorrections(statement);
@@ -1151,11 +1162,11 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             )}
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Statement period from (recommended)</span>
-              <input type="date" className="w-full rounded border border-gray-300 px-3 py-2" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+              <DateInput className="w-full rounded border border-gray-300 px-3 py-2" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Statement period to (recommended)</span>
-              <input type="date" className="w-full rounded border border-gray-300 px-3 py-2" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+              <DateInput className="w-full rounded border border-gray-300 px-3 py-2" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
             </label>
           </div>
           <p className="text-xs text-muted">A month counts in your averages only when a statement covers the whole month.</p>
@@ -1528,20 +1539,36 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
                     {CORRECTION_LABELS[field]}
                     {isMoney && <span className="text-xs"> ({statement.currency_code})</span>}
                   </label>
-                  <input
-                    id={`liability-correct-${field}`}
-                    type={isNumeric ? 'number' : 'text'}
-                    inputMode={isNumeric ? 'decimal' : undefined}
-                    step={isNumeric ? '0.01' : undefined}
-                    min={isNumeric && !isSigned ? '0' : undefined}
-                    className="w-full rounded border border-gray-300 px-3 py-2"
-                    value={corrections[field] ?? ''}
-                    aria-describedby={wasCorrected ? `liability-correct-${field}-note` : undefined}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      setCorrections((prev) => ({ ...prev, [field]: next }));
-                    }}
-                  />
+                  {DATE_CORRECTION_FIELDS.includes(field) ? (
+                    // Typed day-first (DD-MM-YYYY); the correction keeps the ISO value the API expects. A half-typed date
+                    // is caught on Save (badDateFields) instead of silently clearing the stored date.
+                    <DateInput
+                      id={`liability-correct-${field}`}
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      value={corrections[field] ?? ''}
+                      aria-describedby={wasCorrected ? `liability-correct-${field}-note` : undefined}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCorrections((prev) => ({ ...prev, [field]: next }));
+                      }}
+                      onInvalidChange={(bad) => setBadDateFields((prev) => (bad ? Array.from(new Set([...prev, field])) : prev.filter((f) => f !== field)))}
+                    />
+                  ) : (
+                    <input
+                      id={`liability-correct-${field}`}
+                      type={isNumeric ? 'number' : 'text'}
+                      inputMode={isNumeric ? 'decimal' : undefined}
+                      step={isNumeric ? '0.01' : undefined}
+                      min={isNumeric && !isSigned ? '0' : undefined}
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      value={corrections[field] ?? ''}
+                      aria-describedby={wasCorrected ? `liability-correct-${field}-note` : undefined}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCorrections((prev) => ({ ...prev, [field]: next }));
+                      }}
+                    />
+                  )}
                   {wasCorrected && (
                     <span id={`liability-correct-${field}-note`} className="mt-0.5 block text-xs text-muted">
                       You corrected this earlier.
