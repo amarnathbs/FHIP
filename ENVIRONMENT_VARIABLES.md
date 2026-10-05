@@ -16,6 +16,25 @@ No real values are recorded in this file. Copy `.env.example` to `.env.local` fo
 | `FDH_DOCUMENT_UPLOAD_ENABLED` | No | Server only (`lib/financial-data-hub/constants/featureFlags.ts`) | Ordinary env-var convenience flag for FDH-3 document uploads — defaults ON (only an explicit `'false'` disables it). This is NOT the real production gate: `isKnownNonProductionSupabaseProject()` in the same file is a hard, code-level check this flag cannot override, refusing real uploads unless the configured Supabase project is the one DEV project FDH-3 was certified against. |
 | `ROLLOUT_<KEY>_ENABLED` / `_VERSION` / `_PERCENTAGE` / `_ALLOWLIST` / `_DENYLIST` | No | Server only (`lib/services/rolloutCohort.ts`) | G8 closure's canonical controlled-rollout primitive. `<KEY>` is a per-feature name a future caller chooses (e.g. `ROLLOUT_G8_EXAMPLE_ENABLED`); **no `<KEY>` is currently wired into any route**, so these variables have zero effect on anything in production today. See `rolloutCohort.ts`'s own header for the full design and `docs/country-programme/` for the G8.055 closure writeup. |
 
+## Promo codes, Premium grants and reminder e-mails (hardening 2026-10-05)
+
+Names only, no value anywhere in this file. **There are no fallbacks between these secrets.** Each has one purpose and one variable. A feature whose secret is missing, shorter than 32 characters, or equal to another dedicated secret **refuses with an explicit 503** (or stays disabled). It never uses another secret instead. All four secrets must be different values. Generate each one separately (for example 32 random bytes written as 64 hex characters) and never reuse an old value.
+
+| Variable | Secret? | Where used | Purpose |
+|---|---|---|---|
+| `PROMO_CODE_DIGEST_SECRET` | **Yes** (new, mandatory) | Server only (`lib/services/promoSecrets.ts`, `promoCodeDigest.ts`) | Key of the HMAC digest that identifies a promo code. The database stores only the digest and a masked hint, never the plain code. Needed to create and to redeem a code. Rotation: see `docs/admin/PROMO_CODE_DIGEST_KEY_ROTATION_RUNBOOK.md`. |
+| `PROMO_CODE_DIGEST_VERSION` | No (optional) | Server only | Integer 1 or more, default 1. The key version stamped on newly created codes. Raise it (and keep the old key in `PROMO_CODE_DIGEST_SECRET_PREVIOUS`) when rotating. |
+| `PROMO_CODE_DIGEST_SECRET_PREVIOUS` | **Yes** (optional, rotation window only) | Server only | The previous digest key (version = current minus 1). Accepted for LOOKUP only, while codes made under it are still valid. Remove it when none remain. |
+| `PREMIUM_PROMO_EMAIL_BIND_SECRET` | **Yes** (mandatory for e-mailed or address-bound codes, and for redemption) | Server only | Key of the keyed hash of an e-mail address: the address binding of a code and the dispatch ledger. **No longer falls back to `PROMO_IP_HASH_SECRET` or `CRON_SECRET`.** Changing it makes already bound codes unusable. |
+| `PROMO_IP_HASH_SECRET` | **Yes** (mandatory for redemption) | Server only (`lib/services/promoCodeIp.ts`) | Key of the keyed hash of the client network address used for the redemption rate limit. **No longer falls back to `CRON_SECRET`.** |
+| `CRON_SECRET` | **Yes** (mandatory for the scheduled routes) | Server only (`app/api/premium/cron/expiry-reminders`, `lib/services/premiumCronAuth.ts`) | Shared secret in the `x-cron-secret` header. Compared in constant time. Must equal the Vault secret `premium_reminder_cron_secret` that the database job sends (check with `premium_cron_verify`, migration 0268). |
+| `PROMO_TRUSTED_PROXY_HOPS` | No (optional) | Server only | How many trusted proxy hops append to X-Forwarded-For. Default 1 (CloudFront). The client address is taken from the right end of the list. **UNVERIFIED for Amplify** (see the report, item 6). An invalid value means no network address is trusted, so only the per-user limit applies. |
+| `PREMIUM_PROMO_EMAIL_ENABLED` | No | Server only | Kill switch for e-mailing a promo code. Only the exact text `true` enables sending. **Default and recommended state: unset (OFF).** |
+| `PREMIUM_PROMO_EMAIL_FROM_NAME`, `PREMIUM_REMINDER_FROM_EMAIL` | No | Server only | Sender display name (default FHIP) and sender address for the promo and reminder e-mails. |
+| `PREMIUM_REMINDER_SEVEN_DAY_ENABLED` | No | Server only | Optional seven day expiry reminder. Only the exact text `true` enables it. **Default: unset (OFF).** Do not enable before the deduplication proof in `tests/unit/premiumExpiryReminderSevenDayPglite.test.ts` is reviewed and the PO approves. |
+
+The thirty day expiry reminder job itself is controlled by a database row (`premium_reminder_job_control`, key `expiry_email`), which ships and stays disabled. The retention job is controlled by the row `promo_retention`, which also ships disabled.
+
 ## AI Extraction Engine (AIE-1)
 
 Added by M12C §13 (`M2-OPEN-4`). Until then not one `AIE_*` variable was documented anywhere in this repository, even though two of them are genuine secrets. **Names only — no value for any of these appears in this file, in `.env.example`, or in any committed file.**

@@ -21,6 +21,20 @@ import { dateFormatKeyForCountry, formatDateShort } from '@/lib/engines/date';
  */
 export const PREMIUM_EXPIRY_EMAIL_THRESHOLD_DAYS: readonly number[] = [30];
 
+/**
+ * The OPTIONAL seven day reminder (hardening mission, approved in principle, ships OFF). It is enabled only by the exact text
+ * "true" in PREMIUM_REMINDER_SEVEN_DAY_ENABLED (the PREMIUM_REMINDER_ prefix is already forwarded to the runtime). Off, the
+ * list is exactly PREMIUM_EXPIRY_EMAIL_THRESHOLD_DAYS ([30]). Deduplication against the 30 day reminder is a property of the
+ * database claim (one ledger row per user, source, end date AND threshold; only the most urgent applicable threshold per run)
+ * and is proved in tests/unit/premiumExpiryReminderSevenDayPglite.test.ts BEFORE anyone may switch it on.
+ */
+export const PREMIUM_EXPIRY_EMAIL_SEVEN_DAY_THRESHOLD = 7;
+
+export function premiumExpiryEmailThresholds(env: Record<string, string | undefined> = process.env): readonly number[] {
+  const on = (env.PREMIUM_REMINDER_SEVEN_DAY_ENABLED ?? '').trim() === 'true';
+  return on ? [...PREMIUM_EXPIRY_EMAIL_THRESHOLD_DAYS, PREMIUM_EXPIRY_EMAIL_SEVEN_DAY_THRESHOLD] : PREMIUM_EXPIRY_EMAIL_THRESHOLD_DAYS;
+}
+
 /** Bounded retry budget for a failed send (attempts include the first). */
 export const PREMIUM_EXPIRY_EMAIL_MAX_ATTEMPTS = 3;
 /** Base delay between attempts; attempt n waits n x this. */

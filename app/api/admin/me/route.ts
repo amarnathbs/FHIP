@@ -14,6 +14,7 @@ import { MARKET_INDEX_ADMIN_CAPABILITY } from '@/lib/services/investment-intelli
 import { BENCHMARK_CAPABILITY_COLUMNS, BENCHMARK_VIEW_COLUMN, flagsFromAdminRow, NO_BENCHMARK_CAPABILITIES, type BenchmarkCapabilityFlags } from '@/lib/services/investment-intelligence/benchmarkData/guards';
 import { PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY } from '@/lib/services/premiumEntitlementAdmin';
 import { PROMO_CODE_ADMIN_CAPABILITY } from '@/lib/services/promoCodeAdmin';
+import { ENTITLEMENT_OVERRIDE_CAPABILITY } from '@/lib/services/entitlementOverrideAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -139,6 +140,26 @@ async function canManagePromoCodes(): Promise<boolean> {
 }
 
 /**
+ * Hardening 0264 item 3 - the override capability. Its own independent read of its own column, NOT derived from
+ * any other capability or from Super Admin (Standard §2/§3). Fails closed (error, no row, missing column = false).
+ */
+async function canOverrideEntitlementLimits(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(ENTITLEMENT_OVERRIDE_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return data?.[ENTITLEMENT_OVERRIDE_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * BENCH-1 Phase 2 (migration 0241) - the benchmark-data capabilities. ONE admin_users read, but each
  * output field is its own === true evaluation of its own column (flagsFromAdminRow): no flag is derived
  * from another except `view`, which is the union of READ access only.
@@ -222,6 +243,7 @@ export async function GET() {
       benchmarkEntitlementApprove: benchmark.entitlementApprove,
       entitlementManagement: await canManagePremiumEntitlements(),
       promoCodeManagement: await canManagePromoCodes(),
+      entitlementOverride: await canOverrideEntitlementLimits(),
     },
   });
 }

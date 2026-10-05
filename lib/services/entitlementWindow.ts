@@ -15,7 +15,11 @@
 //             AND (effective_from IS NULL OR effective_from <= today)
 //             AND (effective_to   IS NULL OR effective_to   >= today)
 //
-// effective_to is INCLUSIVE (a grant ending on D works through the whole of D).
+// effective_to is INCLUSIVE (a grant ending on D works through the whole of D). effective_from is inclusive
+// too, so BOTH ends count: a window of N days that starts on R ends on R + N - 1 (accessEndDate), and the
+// length of a window is to - from + 1 (accessWindowDays). This is the ONE definition used by admin grants,
+// promo redemption, banners, the expiry summary, reminders and e-mails. The database mirror is
+// public.access_end_date() / public.access_window_days() (migration 0264).
 //
 // `today` is the UTC calendar date: the database evaluates current_date in
 // UTC on Supabase, and the two must not disagree about which day it is.
@@ -24,7 +28,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type EntitlementTier = 'free' | 'premium';
 
-/** A grant's end date may be at most this many days after the date of allocation/extension. */
+/** A grant may give at most this many calendar days, counting the day it is allocated or extended (inclusive window). */
 export const ENTITLEMENT_GRANT_MAX_DAYS = 365;
 
 export interface EntitlementWindowRow {
@@ -45,9 +49,22 @@ export function addDaysIso(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** The latest end date an admin may set when allocating/extending on `today`. */
+/**
+ * The last day of an access window that starts on `start` and lasts `days` calendar days when both ends are
+ * inclusive: start + days - 1. 30 days from 2024-02-28 end on 2024-03-28 (not the 29th). Mirrors SQL access_end_date().
+ */
+export function accessEndDate(start: string, days: number): string {
+  return addDaysIso(start, days - 1);
+}
+
+/** Length in calendar days of an inclusive window. Mirrors SQL access_window_days(). */
+export function accessWindowDays(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
+}
+
+/** The latest end date an admin may set when allocating/extending on `today` (365 inclusive days). */
 export function maxGrantEndDate(today: string = utcToday()): string {
-  return addDaysIso(today, ENTITLEMENT_GRANT_MAX_DAYS);
+  return accessEndDate(today, ENTITLEMENT_GRANT_MAX_DAYS);
 }
 
 /** True when `isoDate` is a real calendar date written as YYYY-MM-DD. */
