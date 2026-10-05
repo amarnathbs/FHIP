@@ -45,7 +45,14 @@ export function isCacheable(parts: ResultCacheKeyParts): boolean {
   return true;
 }
 
-/** Stores new entries (an existing key is left as it is: same key = same inputs = same payload). Never throws. */
+/**
+ * Stores new entries (an existing VALID key is left as it is: same key = same inputs = same payload). Never throws.
+ *
+ * An INVALIDATED row with the same key is refreshed and made valid again. The key is content-addressed (it carries the NAV series checksum,
+ * the policy and the definition digests), so a payload computed now for that key is correct for exactly those inputs. Without this, a
+ * correction followed by its revert (or the worker invalidating an entry that was computed after the correction) left the row invalidated
+ * and the unique key blocked the new entry, so that scheme was recomputed on every report until its inputs changed (Stage 3 finding).
+ */
 export async function writeCachedBundles(admin: SupabaseClient, writes: readonly CacheWrite[]): Promise<number> {
   const rows = writes.filter((w) => isCacheable(w.parts)).map((w) => ({
     cache_key: w.key,
@@ -63,7 +70,15 @@ export async function writeCachedBundles(admin: SupabaseClient, writes: readonly
   if (rows.length === 0) return 0;
   try {
     const { error } = await admin.from('nav2_result_cache').upsert(rows, { onConflict: 'cache_key', ignoreDuplicates: true });
-    return error ? 0 : rows.length;
+    if (error) return 0;
+    // refresh the rows a worker had invalidated (a valid row is not touched: the filter matches invalidated rows only)
+    const { data: stale } = await admin.from('nav2_result_cache').select('cache_key').in('cache_key', rows.map((r) => r.cache_key)).not('invalidated_at', 'is', null);
+    const staleKeys = new Set(((stale ?? []) as Array<{ cache_key: string }>).map((r) => r.cache_key));
+    for (const r of rows) {
+      if (!staleKeys.has(r.cache_key)) continue;
+      await admin.from('nav2_result_cache').update({ payload: r.payload, invalidated_at: null }).eq('cache_key', r.cache_key).not('invalidated_at', 'is', null);
+    }
+    return rows.length;
   } catch {
     return 0;
   }

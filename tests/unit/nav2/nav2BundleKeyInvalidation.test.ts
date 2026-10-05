@@ -99,6 +99,37 @@ describe('a bundle computed under definition v1 is not returned after a bump, ev
   });
 });
 
+describe('an invalidated key can be cached again once its inputs are current (NC-K6, Stage 3 finding)', () => {
+  it('correction then revert: the entry the worker invalidated is refreshed and valid again, never blocked by its own stale row', async () => {
+    const db = createInMemoryDb({ strictSchema: true });
+    db.reset({ nav2_result_cache: [] });
+    const admin = db.client as unknown as SupabaseClient;
+    const parts = schemeBundleCacheParts(input, held);
+    const key = schemeBundleCacheKey(input, held);
+    expect(await writeCachedBundles(admin, [{ key, parts, payload: { sentinel: 'first computation' } as never }])).toBe(1);
+    // the correction worker invalidates it (a NAV correction touched its inputs after it was computed)
+    for (const r of db.tables.nav2_result_cache) r.invalidated_at = '2026-10-05T12:00:00.000Z';
+    expect((await readCachedBundles(admin, [key])).size).toBe(0);
+    // the same key is computed again (same inputs, e.g. after the correction was reverted) and stored
+    await writeCachedBundles(admin, [{ key, parts, payload: { sentinel: 'recomputed' } as never }]);
+    const back = await readCachedBundles(admin, [key]);
+    expect(back.size).toBe(1);
+    expect((back.get(key) as unknown as { sentinel: string }).sentinel).toBe('recomputed');
+    expect(db.tables.nav2_result_cache).toHaveLength(1); // still ONE row per key
+  });
+
+  it('a VALID entry is left exactly as it is (same key = same inputs = same payload; nothing is rewritten)', async () => {
+    const db = createInMemoryDb({ strictSchema: true });
+    db.reset({ nav2_result_cache: [] });
+    const admin = db.client as unknown as SupabaseClient;
+    const parts = schemeBundleCacheParts(input, held);
+    const key = schemeBundleCacheKey(input, held);
+    await writeCachedBundles(admin, [{ key, parts, payload: { sentinel: 'original' } as never }]);
+    await writeCachedBundles(admin, [{ key, parts, payload: { sentinel: 'must not replace a valid entry' } as never }]);
+    expect(((await readCachedBundles(admin, [key])).get(key) as unknown as { sentinel: string }).sentinel).toBe('original');
+  });
+});
+
 describe('the correction worker invalidates by definition version too (NC-K4)', () => {
   const entry = (key: string, definitionVersion: string): Record<string, unknown> => ({ cache_key: key, instrument_id: INSTRUMENT, metric_id: 'scheme_performance_bundle', policy_version: NAV2_POLICY.version, definition_version: definitionVersion, actual_end: '2026-10-02', benchmark_id: null, risk_free_dataset_id: null, invalidated_at: null });
   const current = schemeBundleCacheParts(input, held).definitionVersion;
