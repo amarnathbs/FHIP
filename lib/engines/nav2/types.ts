@@ -144,6 +144,8 @@ export interface BenchmarkProvenance {
  */
 export interface RiskFreeProvenance {
   seriesId: string;
+  /** 'RBI 91-day T-bill' or 'RBI policy repo-rate proxy': the short label printed beside the ratio. */
+  seriesLabel: string;
   seriesName: string;
   source: string;
   /** Printed with any figure built on the series, e.g. "Source: Reserve Bank of India". */

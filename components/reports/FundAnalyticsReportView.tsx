@@ -9,6 +9,7 @@ import type { FundAnalyticsReport, FundAnalyticsSchemeBlock } from '@/lib/engine
 import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/investorExperience';
 import { chartRowsWithGaps, navPrice, period, pct, ratio, rupees, showResult, type ShownCell } from '@/lib/engines/nav2/presentation';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
+import { FUND_ANALYTICS_CAGR_CONVENTION_NOTE, riskFreeLabelOf } from '@/lib/engines/nav2/reportWording';
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
@@ -48,6 +49,13 @@ function ShortCell({ c }: { c: ShownCell }) {
       {c.detail ? <sup>*</sup> : null}
     </span>
   );
+}
+
+/** " (RBI 91-day T-bill)" or " (RBI policy repo-rate proxy)": the risk-free series every Sharpe, Sortino and alpha figure rests on, stated beside it. */
+function rfLabel(r: Nav2Result<unknown> | null | undefined): string {
+  if (!r || r.state !== 'available') return '';
+  const l = riskFreeLabelOf((r.provenance as { riskFree?: { seriesId?: string; seriesLabel?: string } }).riskFree);
+  return l ? ` (${l})` : '';
 }
 
 function Table({ caption, head, children }: { caption: string; head: Array<{ label: string; num?: boolean }>; children: React.ReactNode }) {
@@ -112,6 +120,7 @@ function SchemeSection({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: N
 
       <h3 className="mt-5 text-base font-semibold text-ink">The fund&apos;s own growth</h3>
       <p className="text-xs text-muted">{SCHEME_CAGR_LABEL}</p>
+      <p className="text-xs text-muted" data-testid="cagr-convention-note">{FUND_ANALYTICS_CAGR_CONVENTION_NOTE}</p>
       <Table caption="Fund return over trailing periods" head={[{ label: 'Period' }, { label: 'Total return', num: true }, { label: 'CAGR (a year)', num: true }, { label: 'Dates used' }]}>
         {s.pointToPoint.map((p) => {
           const abs = showResult(p.result, (v) => pct(v.absoluteReturn));
@@ -158,11 +167,11 @@ function SchemeSection({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: N
       <Table caption="Over the report period, from daily prices" head={[{ label: 'Measure' }, { label: 'Value', num: true }]}>
         {[
           ['Volatility (annualised)', showResult(s.volatility, (v) => pct(v.annualisedVolatility))],
-          ['Sharpe ratio', showResult(s.sharpe, (v) => ratio(v.annualisedRatio))],
-          ['Sortino ratio', showResult(s.sortino, (v) => ratio(v.annualisedRatio))],
+          [`Sharpe ratio${rfLabel(s.sharpe)}`, showResult(s.sharpe, (v) => ratio(v.annualisedRatio))],
+          [`Sortino ratio${rfLabel(s.sortino)}`, showResult(s.sortino, (v) => ratio(v.annualisedRatio))],
           ['Maximum drawdown', showResult(s.maxDrawdown, (v) => `${pct(v.maxDrawdown)} (${v.status === 'no_drawdown' ? 'no fall' : `peak ${showDate(ctx, v.peakDate)}, low ${showDate(ctx, v.troughDate)}${v.recoveryDate ? `, recovered ${showDate(ctx, v.recoveryDate)}` : ', not yet recovered'}`})`)],
           ['Beta (against the fund’s declared benchmark)', showResult(s.beta, (v) => `${ratio(v.beta)} (${v.benchmarkLabel})`)],
-          ['Jensen’s alpha (a year)', showResult(s.alpha, (v) => `${pct(v.alphaAnnualised)} (${v.benchmarkLabel})`)],
+          [`Jensen’s alpha (a year)${rfLabel(s.alpha)}`, showResult(s.alpha, (v) => `${pct(v.alphaAnnualised)} (${v.benchmarkLabel})`)],
         ].map(([label, cell]) => (
           <tr key={label as string} className={rowCls}>
             <th scope="row" className="py-2 pr-3 text-left font-medium">{label as string}</th>

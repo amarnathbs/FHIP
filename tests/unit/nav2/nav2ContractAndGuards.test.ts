@@ -219,7 +219,7 @@ describe('NC-G3: documentation cannot drift from the code', () => {
 
   it('the test matrix document lists all 50 spec rows, each with a status, and every test file it cites exists', () => {
     const doc = read('docs/nav2/NAV2_TEST_MATRIX_AND_STAGE_PLAN.md');
-    const rows = [...doc.matchAll(/^\| (\d{1,2}) \| (.+?) \| (COVERED|PARTIAL|DEFERRED|DROPPED) \|(.*)\|$/gm)];
+    const rows = [...doc.matchAll(/^\| (\d{1,2}) \| (.+?) \| (COVERED|PARTIAL|DEFERRED|DROPPED|NOT APPLICABLE — PO-deferred) \|(.*)\|$/gm)];
     const numbers = rows.map((r) => Number(r[1]));
     expect(numbers).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
     const cited = new Set([...doc.matchAll(/`(nav2[A-Za-z]+\.test\.ts)`/g)].map((m) => m[1]));
@@ -227,7 +227,12 @@ describe('NC-G3: documentation cannot drift from the code', () => {
     for (const f of cited) expect(fs.existsSync(path.join(process.cwd(), 'tests/unit/nav2', f)), f).toBe(true);
     // the stated counts match the table (no hand-edited summary)
     const tally = (st: string) => rows.filter((r) => r[3] === st).length;
-    expect(doc).toContain(`Count: COVERED ${tally('COVERED')}, PARTIAL ${tally('PARTIAL')}, DEFERRED ${tally('DEFERRED')}, DROPPED ${tally('DROPPED')}.`);
+    expect(doc).toContain(`Count: COVERED ${tally('COVERED')}, PARTIAL ${tally('PARTIAL')}, DEFERRED ${tally('DEFERRED')}, DROPPED ${tally('DROPPED')}, NOT APPLICABLE — PO-deferred ${tally('NOT APPLICABLE — PO-deferred')}.`);
+    // TWRR reads as an explained non-applicable row, never as an unexplained dropped test
+    const twrr = rows.find((r) => r[1] === '30');
+    expect(twrr?.[3]).toBe('NOT APPLICABLE — PO-deferred');
+    expect(twrr?.[4]).toMatch(/PO decision 03-10-2026/);
+    expect(rows.filter((r) => r[3] === 'DROPPED')).toEqual([]);
     // every COVERED row cites at least one test file
     for (const r of rows.filter((x) => x[3] === 'COVERED')) expect(r[4], `row ${r[1]}`).toMatch(/nav2[A-Za-z]+\.test\.ts/);
   });

@@ -6,7 +6,7 @@ Branch `feat/nav2-stage2-20261004` (from `feat/nav2-stage1-engine-20261003`, wit
 - **PGlite-verified**: `scripts/nav2_0260_0262_pglite_verification.mjs` replays the migration chain in an in-process Postgres with a platform shim (80 checks (whole file, parts, and half-applied state), all pass). That is a Postgres engine, NOT the DEV database.
 - **NOT verified on DEV, on production, in a browser, or against the live RBI site.** Nothing was pushed or merged, no migration was applied, no database or DEV write was made, no request was sent to rbi.org.in.
 
-Status words: COVERED = proven at unit / PGlite level by the named files; PARTIAL = the part this repository can prove is proven, the integrated or live part is not; DEFERRED = needs DEV (Stage 3); DROPPED = removed by PO decision.
+Status words: COVERED = proven at unit / PGlite level by the named files; PARTIAL = the part this repository can prove is proven, the integrated or live part is not; DEFERRED = needs DEV (Stage 3); DROPPED = removed by PO decision. NOT APPLICABLE — PO-deferred = the metric is deliberately not built (TWRR, PO decision 03-10-2026); there is nothing to test, the row records WHY, and it becomes a real test only if the PO asks for the metric.
 
 Independent oracle: `scripts/nav2_independent_oracle.py` (50-digit Decimal, imports no FHIP code) produced every expected number of Stage 1. Stage 2 adds no financial formula; its numbers are counts, dates, digests and the existing engine's results.
 
@@ -43,7 +43,7 @@ Independent oracle: `scripts/nav2_independent_oracle.py` (50-digit Decimal, impo
 | 27 | High / low dates and median behaviour are deterministic | COVERED | `nav2TrendAndRanking.test.ts` |
 | 28 | XIRR cash-flow signs and terminal value are correct | COVERED | `nav2InvestorExperience.test.ts` |
 | 29 | XIRR failure / no-root state is honest | COVERED | `nav2InvestorExperience.test.ts` |
-| 30 | TWRR passes an independent hand calculation | DROPPED | PO decision 03-10-2026: no time-based return anywhere. `noTimeWeightedReturnUserFacing.test.ts` stays green, and the rendered report is asserted free of those words (`nav2ReportPresentation.test.ts`) |
+| 30 | TWRR passes an independent hand calculation | NOT APPLICABLE — PO-deferred | NOT APPLICABLE — PO-deferred (not an unexplained dropped test). PO decision 03-10-2026: no time-based return anywhere; TWRR is deliberately not built, so there is nothing to certify. It is DEFERRED, not rejected: if the PO later asks for it, this row becomes a real test with an independent hand calculation and the guard below is revisited. Until then `noTimeWeightedReturnUserFacing.test.ts` stays green, and the rendered report is asserted free of those words (`nav2ReportPresentation.test.ts`) |
 | 31 | Scheme CAGR and personal return remain separately labelled | COVERED | `nav2InvestorExperience.test.ts`; the report view shows the two families in separate tables with the explanation sentence (`nav2ReportPresentation.test.ts`) |
 | 32 | Current value uses canonical units and eligible NAV | COVERED | `nav2InvestorExperience.test.ts`; the loader passes the certified `valueSchemeAcrossFolios` result through unchanged (`nav2FundAnalyticsLoader.test.ts`) |
 | 33 | Redeemed holding stays zero | COVERED | `nav2InvestorExperience.test.ts` |
@@ -65,7 +65,7 @@ Independent oracle: `scripts/nav2_independent_oracle.py` (50-digit Decimal, impo
 | 49 | Accessibility and mobile layout pass | PARTIAL | the report renders real tables with captions and column scopes, a two-select pair picker (no matrix), `role="alert"` / `aria-live` states, touch-height controls, sideways-scrolling tables (asserted on server-rendered markup, `nav2ReportPresentation.test.ts`). No browser, screen reader or phone check was made: Stage 3 |
 | 50 | Production feature switch and rollback path work without deleting NAV data | COVERED | four switches (`nav2_fund_analytics`, `nav2_trigger_planner`, `nav2_correction_worker`, `nav2_risk_free_weekly_refresh`) all ship disabled and fail closed; each off path does nothing and deletes nothing (`nav2FundAnalyticsService.test.ts`, `nav2TriggerRunner.test.ts`, `nav2CorrectionWorkerRoute.test.ts`, `nav2RiskFreeAdminRoutes.test.ts`); per-series switch with audit; the migrations' rollback notes are in the migration files |
 
-Count: COVERED 38, PARTIAL 10, DEFERRED 1, DROPPED 1.
+Count: COVERED 38, PARTIAL 10, DEFERRED 1, DROPPED 0, NOT APPLICABLE — PO-deferred 1.
 
 ## 1a. Stage 2 supplementary rows (the new surfaces the spec's 50 rows do not name)
 

@@ -147,7 +147,7 @@ export async function generateFundAnalyticsReport(args: {
   const base: FundAnalyticsInput = loaded.input;
   const keyed = base.schemes.map((h) => ({ h, key: schemeBundleCacheKey(base, h) }));
   const cached = await readCachedBundles(admin, keyed.map((k) => k.key));
-  const withCache: FundAnalyticsInput = { ...base, schemes: keyed.map(({ h, key }) => ({ ...h, cachedScheme: cached.get(key) ?? null })) };
+  const withCache: FundAnalyticsInput = { ...base, calculatedAt: deps.nowIso(), schemes: keyed.map(({ h, key }) => ({ ...h, cachedScheme: cached.get(key) ?? null })) };
   const { report, manifest } = buildFundAnalyticsReport(withCache);
 
   const writes: CacheWrite[] = [];

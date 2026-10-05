@@ -1,14 +1,18 @@
 // Migration 0263 (weekly refresh attempts + the monitoring summary) replayed in an in-process Postgres (PGlite) with the two things it depends
 // on stubbed: auth.uid() and is_pc6_reference_data_admin(). Proves the SQL runs from empty, runs twice (idempotent), counts correctly,
 // refuses a caller without the capability, and rejects an outcome outside the allowed set. Not DEV evidence.
+//
+// ORDER INDEPENDENT: every test starts from an emptied table and sets its own caller (beforeEach), so the suite passes in any order and
+// under --sequence.shuffle (a previous version shared rows and the session between tests and failed when shuffled).
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const SQL = readFileSync(path.resolve(__dirname, '..', '..', '..', 'supabase', 'migrations', '0263_nav2_risk_free_refresh_attempts.sql'), 'utf8');
 let db: PGlite;
 
+// A PGlite start and the SQL apply can take longer than the default 10 s hook limit when many suites run in parallel.
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(`
@@ -19,17 +23,19 @@ beforeAll(async () => {
   `);
   await db.exec(SQL);
   await db.exec(SQL); // idempotent: a second paste changes nothing and fails nothing
-});
+}, 120_000);
 afterAll(async () => {
   await db.close();
 });
 
-const asAdmin = async () => db.exec(`select set_config('test.uid', '00000000-0000-0000-0000-000000000001', false); select set_config('test.admin', 'yes', false);`);
+beforeEach(async () => {
+  await db.exec(`truncate ii_risk_free_refresh_attempts restart identity; select set_config('test.uid', '00000000-0000-0000-0000-000000000001', false); select set_config('test.admin', 'yes', false);`);
+});
+
 const summary = async () => ((await db.query<{ s: Record<string, unknown> }>('select nav2_refresh_attempt_summary() as s')).rows[0].s);
 
 describe('0263: the attempts table and the summary', () => {
   it('an empty table: zero counts, no last attempt (never a fake value)', async () => {
-    await asAdmin();
     expect(await summary()).toMatchObject({ runs_last_90_days: 0, robots_unavailable_continued_last_90_days: 0, blocked_by_source_last_90_days: 0, last_blocked_at: null, last_attempt_at: null });
   });
 
@@ -41,7 +47,6 @@ describe('0263: the attempts table and the summary', () => {
         (now() - interval '13 days', 'robots_ok', 'ok', 3, 1),
         (now() - interval '6 days', 'robots_unavailable_continued', 'blocked_by_source', 1, 1);
     `);
-    await asAdmin();
     expect(await summary()).toMatchObject({ runs_last_90_days: 3, robots_unavailable_continued_last_90_days: 2, blocked_by_source_last_90_days: 1, last_robots_outcome: 'robots_unavailable_continued', last_source_status: 'blocked_by_source' });
   });
 

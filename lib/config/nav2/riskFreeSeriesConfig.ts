@@ -80,6 +80,16 @@ export const RISK_FREE_SERIES: Record<RiskFreeSeriesId, RiskFreeSeriesDescriptor
   },
 };
 
+/**
+ * The short label printed beside EVERY ratio built on a series (Sharpe, Sortino, alpha) and kept in its provenance. The repo rate is
+ * only ever a PROXY for the risk-free rate (it is an overnight policy rate, not a Treasury bill yield) and is labelled as one; it is
+ * never substituted silently for the 91-day T-bill: the series is chosen by selectedSeriesId and nothing else.
+ */
+export const RISK_FREE_SERIES_LABELS: Record<RiskFreeSeriesId, string> = {
+  RBI_91D_TBILL_CUTOFF_YIELD: 'RBI 91-day T-bill',
+  RBI_POLICY_REPO_RATE: 'RBI policy repo-rate proxy',
+};
+
 export type RiskFreeTermsStatus = 'po_accepted_2026-10-03' | 'confirmed_in_writing' | 'pending_confirmation' | 'declined';
 
 export interface RiskFreeConfig {

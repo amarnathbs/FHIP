@@ -51,7 +51,7 @@ describe('the print document markup', () => {
   it('the long risk-free paragraph is printed ONCE (report note 1); each Sharpe / Sortino row only points to it', () => {
     expect(count(html, 'converted to a daily rate')).toBe(1);
     expect(html).toContain('Note 1');
-    expect(count(html, 'RBI 91-day T-bill rate, see note 1')).toBeGreaterThanOrEqual(report.schemes.length * 2 - 2);
+    expect(count(html, 'RBI 91-day T-bill, see note 1')).toBeGreaterThanOrEqual(report.schemes.length * 2 - 2);
   });
 
   it('an unavailable cell is a short headline with a lettered footnote; the engine sentence is NOT repeated in cells', () => {

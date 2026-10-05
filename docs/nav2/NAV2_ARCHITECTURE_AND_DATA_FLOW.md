@@ -2,7 +2,7 @@
 
 Status: Stage 1 (spec Phases A, B, C). Evidence label for everything below: **code-complete / unit-tested**. Nothing here has been run against DEV or production, no migration was applied, and nothing was pushed.
 
-Spec: `NAV2_User_Held_Scheme_Analytics_Implementation_Prompt_2026-10-03.md` (sections 1-23). PO amendments of 03-10-2026 are applied: no time-based return anywhere (XIRR is the only personal return); risk-free series = RBI 91-day T-bill cut-off yield (primary) and RBI policy repo rate (secondary), terms risk accepted by the PO, fed by a Stage 2 weekly refresh job (default off) plus admin upload; beta/alpha need a gated benchmark; Premium users only, as a separate report under the Reports menu (Stage 2); DEV writes and browser checks are Stage 3.
+Spec: `NAV2_User_Held_Scheme_Analytics_Implementation_Prompt_2026-10-03.md` (sections 1-23). PO amendments of 03-10-2026 are applied: no time-based return anywhere (XIRR is the only personal return; TWRR is NOT APPLICABLE — PO-deferred, not built, not certified); risk-free series = RBI 91-day T-bill cut-off yield (primary) and RBI policy repo rate (secondary), terms risk accepted by the PO, fed by a Stage 2 weekly refresh job (default off) plus admin upload; beta/alpha need a gated benchmark; Premium users only, as a separate report under the Reports menu (Stage 2); DEV writes and browser checks are Stage 3.
 
 ## 1. The one-paragraph picture
 

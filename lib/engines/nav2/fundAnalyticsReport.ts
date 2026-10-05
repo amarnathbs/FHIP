@@ -13,6 +13,7 @@
 
 import { createHash } from 'crypto';
 import { NAV2_ENGINE_VERSION, NAV2_METRICS, type Nav2Policy } from '@/lib/config/nav2/metricPolicy';
+import { RISK_FREE_SERIES_LABELS, type RiskFreeSeriesId } from '@/lib/config/nav2/riskFreeSeriesConfig';
 import type { IiOptionType, IiPlanType } from '@/lib/services/investment-intelligence/types';
 import type { AnalysisSpec, ReportPeriodChoice } from './analysisSpec';
 import { computeHeldSchemeAnalytics, type HeldSchemeAnalytics, type SchemePerformanceFamily } from './analyticsContract';
@@ -71,6 +72,8 @@ export interface FundAnalyticsInput {
   riskFree: RiskFreeSupply;
   schemes: readonly HeldSchemeInput[];
   scope: ReportScopeNotes;
+  /** ISO timestamp of the calculation, stored in the pinned manifest (the engine itself reads no clock). */
+  calculatedAt?: string;
 }
 
 export interface ChartData {
@@ -132,14 +135,20 @@ export interface FundAnalyticsManifest {
   metricDefinitions: Array<{ id: string; family: string; version: string }>;
   /** Digest of that list: the part of every cached bundle's definition version that changes when ANY metric definition changes. */
   metricRegistryDigest: string;
+  /** When the calculation ran (ISO). null only for a manifest built without a clock (tests). */
+  calculatedAt: string | null;
   periodChoice: ReportPeriodChoice;
-  riskFree: { seriesId: string; datasetVersion: string; retrievedOn: string; termsReviewStatus: string; verifiedThroughDate: string | null; enabled: boolean } | null;
+  riskFree: { seriesId: string; seriesLabel: string; datasetVersion: string; retrievedOn: string; termsReviewStatus: string; verifiedThroughDate: string | null; enabled: boolean } | null;
   schemes: Array<{
     instrumentId: string;
     navSeries: { checksum: string; firstDate: string | null; lastDate: string | null; count: number };
     /** The NAV range the figures rest on, for the retention pin. */
     navRange: { from: string | null; to: string | null };
     benchmark: { benchmarkId: string; datasetVersion: string | null; basis: string } | null;
+    /** Every benchmark segment supplied for the scheme (id, dataset version, basis), whether or not beta / alpha could use it. */
+    benchmarks: Array<{ benchmarkId: string; datasetVersion: string | null; basis: string }>;
+    /** Fingerprint of the user's transactions and valuation the investor-experience figures rest on; null when the scheme has none. */
+    transactionVersion: string | null;
   }>;
 }
 
@@ -346,8 +355,9 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
     metricDefinitionVersions: sortedObject(Object.fromEntries(Object.values(NAV2_METRICS).map((m) => [m.id, m.version]))),
     metricDefinitions: Object.values(NAV2_METRICS).map((m) => ({ id: m.id, family: m.family, version: m.version })).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     metricRegistryDigest: metricRegistryDigest(NAV2_METRICS),
+    calculatedAt: input.calculatedAt ?? null,
     periodChoice: input.periodChoice,
-    riskFree: supply ? { seriesId: supply.seriesId, datasetVersion: rfProv?.datasetVersion ?? supply.datasetVersion, retrievedOn: supply.retrievedOn, termsReviewStatus: supply.termsReviewStatus, verifiedThroughDate: supply.verifiedThroughDate, enabled: supply.enabled } : null,
+    riskFree: supply ? { seriesId: supply.seriesId, seriesLabel: RISK_FREE_SERIES_LABELS[supply.seriesId as RiskFreeSeriesId] ?? supply.seriesName, datasetVersion: rfProv?.datasetVersion ?? supply.datasetVersion, retrievedOn: supply.retrievedOn, termsReviewStatus: supply.termsReviewStatus, verifiedThroughDate: supply.verifiedThroughDate, enabled: supply.enabled } : null,
     schemes: schemes.map((h) => {
       const b = blocks.find((x) => x.instrumentId === h.instrumentId)!;
       const betaR = b.analytics.scheme.beta;
@@ -357,10 +367,18 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
         navSeries: { checksum: h.series.checksum, firstDate: h.series.firstDate, lastDate: h.series.lastDate, count: h.series.count },
         navRange: { from: h.series.firstDate, to: h.series.lastDate },
         benchmark: bp ? { benchmarkId: bp.benchmarkId, datasetVersion: bp.datasetVersion, basis: bp.basis } : null,
+        benchmarks: h.benchmarks.map((x) => ({ benchmarkId: x.benchmarkId, datasetVersion: x.datasetVersion ?? null, basis: x.basis ?? 'declared' })),
+        transactionVersion: h.investor ? transactionFingerprint(h.investor) : null,
       };
     }),
   };
   return { report, manifest };
+}
+
+/** Fingerprint of an investor's transactions and valuation (what the XIRR / value / gain figures rest on). Order-independent for the flows. */
+export function transactionFingerprint(i: InvestorExperienceInput): string {
+  const flows = [...i.flows].map((f) => [f.date instanceof Date ? f.date.toISOString().slice(0, 10) : String(f.date).slice(0, 10), f.amount]).sort((a, b) => (String(a[0]) + String(a[1]) < String(b[0]) + String(b[1]) ? -1 : 1));
+  return createHash('sha256').update(JSON.stringify({ flows, valuation: i.valuation, asOf: i.asOfDate }), 'utf8').digest('hex').slice(0, 16);
 }
 
 /** SHA-256 of the canonical (key-sorted) manifest JSON: the value stored beside the pinned report. */

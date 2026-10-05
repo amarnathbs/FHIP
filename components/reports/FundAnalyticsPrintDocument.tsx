@@ -3,7 +3,7 @@ import { REPORT_PERIOD_LABELS } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport, FundAnalyticsSchemeBlock } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/investorExperience';
 import { navPrice, period, pct, ratio, rupees, showResult, type ShownCell } from '@/lib/engines/nav2/presentation';
-import { FUND_ANALYTICS_SAVED_REPORT_SENTENCE, versionMadeLine } from '@/lib/engines/nav2/reportWording';
+import { FUND_ANALYTICS_CAGR_CONVENTION_NOTE, FUND_ANALYTICS_SAVED_REPORT_SENTENCE, riskFreeLabelOf, versionMadeLine } from '@/lib/engines/nav2/reportWording';
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
@@ -45,13 +45,13 @@ function Marks({ letters }: { letters: string[] }) {
 }
 
 /** A figure, or its fixed headline; explanations go to the sheet's footnotes (never repeated in the cell). */
-function figure(c: ShownCell, fn: Footnotes, opts: { riskFreeNote?: number | null } = {}) {
+function figure(c: ShownCell, fn: Footnotes, opts: { riskFreeNote?: number | null; riskFreeLabel?: string | null } = {}) {
   const letters: string[] = [];
   let pointer: string | null = null;
   if (c.available) {
     c.notes.forEach((n, i) => {
       const code = c.noteCodes[i];
-      if (RISK_FREE_CODES.has(code)) pointer = opts.riskFreeNote ? `RBI 91-day T-bill rate, see note ${opts.riskFreeNote}` : 'RBI 91-day T-bill rate, see the report notes';
+      if (RISK_FREE_CODES.has(code)) pointer = `${opts.riskFreeLabel ?? 'Risk-free series'}, ${opts.riskFreeNote ? `see note ${opts.riskFreeNote}` : 'see the report notes'}`;
       else letters.push(fn.mark(code === 'boundary_substitution' ? 'boundary_substitution' : `${code}:${n}`, code === 'boundary_substitution' ? BOUNDARY_NOTE : n));
     });
     return { node: <><span>{c.text}</span><Marks letters={[...new Set(letters)]} /></>, pointer };
@@ -159,7 +159,8 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
 
   // ---- sheet B ---------------------------------------------------------------------------------------------------
   function riskCell<T>(r: Nav2Result<T> | null, fmt: (v: T) => string, basis?: (v: T) => string): { node: React.ReactNode; basis: React.ReactNode } {
-    const f = figure(showResult(r, fmt), fnB, { riskFreeNote });
+    const label = r && r.state === 'available' ? riskFreeLabelOf((r.provenance as { riskFree?: { seriesId?: string; seriesLabel?: string } }).riskFree) : null;
+    const f = figure(showResult(r, fmt), fnB, { riskFreeNote, riskFreeLabel: label });
     return { node: f.node, basis: f.pointer ?? (basis && r && r.state === 'available' ? basis(r.value) : '') };
   }
   const vol = riskCell(s.volatility, (v) => pct(v.annualisedVolatility), (v) => `from ${v.returnCount} daily returns`);
@@ -328,6 +329,7 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
         <ul className="fa-howto">
           <li>{SCHEME_CAGR_LABEL}</li>
           <li>{INVESTOR_XIRR_LABEL}</li>
+          <li>{FUND_ANALYTICS_CAGR_CONVENTION_NOTE}</li>
           <li>A figure that cannot be worked out is shown as a plain label, never as zero, and a small letter beside it points to the explanation printed once at the foot of that page.</li>
           <li>Dates are written day first. Prices are published by AMFI; nothing here is a recommendation to buy, sell or switch.</li>
         </ul>

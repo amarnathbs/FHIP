@@ -42,7 +42,7 @@
 // the SAME N the volatility, Sharpe and Sortino use to annualise.
 
 import { resolveObservationAsOf } from '@/lib/engines/investment-intelligence/sip/dateAlignment';
-import { NAV2_RISK_FREE_CONFIG, type RiskFreeCadence, type RiskFreeConfig, type RiskFreeTermsStatus } from '@/lib/config/nav2/riskFreeSeriesConfig';
+import { NAV2_RISK_FREE_CONFIG, RISK_FREE_SERIES_LABELS, type RiskFreeSeriesId, type RiskFreeCadence, type RiskFreeConfig, type RiskFreeTermsStatus } from '@/lib/config/nav2/riskFreeSeriesConfig';
 import type { Nav2MetricId, ReturnFrequency } from '@/lib/config/nav2/metricPolicy';
 import { addDaysIso, daysBetweenIso, isValidIsoDate } from './dates';
 import type { ReturnPoint } from './series';
@@ -421,6 +421,7 @@ export function matchRiskFree(
     (carriedPeriods > 0 ? ' Where the Reserve Bank of India published no cut-off for a date, the last published rate was carried across a documented RBI gap.' : '');
   const provenance: RiskFreeProvenance = {
     seriesId: supply.seriesId,
+    seriesLabel: RISK_FREE_SERIES_LABELS[supply.seriesId as RiskFreeSeriesId] ?? supply.seriesName,
     seriesName: supply.seriesName,
     source: supply.source,
     attributionText: supply.attributionText,
