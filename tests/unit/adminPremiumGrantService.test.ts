@@ -524,15 +524,15 @@ describe('payment webhook uses the merge RPC (a payment never shortens or silent
   });
 });
 
-describe('admin navigation — the capability is its own group and is implied by nothing', () => {
-  it('entitlementManagement alone shows exactly the Entitlements group; Super Admin alone does not; no other capability shows it', async () => {
+describe('admin navigation — the capability gates its own item and is implied by nothing', () => {
+  it('entitlementManagement alone shows exactly the Premium Access item (in the shared Premium and Promo Codes group); Super Admin alone does not; no other capability shows it', async () => {
     const nav = await import('@/lib/admin/adminNav');
     const only = nav.buildAdminNavGroups(false, { ...nav.NO_ADMIN_CAPABILITIES, entitlementManagement: true });
-    expect(only.map((g) => g.label)).toEqual(['Entitlements']);
+    expect(only.map((g) => g.label)).toEqual(['Premium and Promo Codes']);
     expect(only[0].items).toEqual([{ label: 'Premium Access', href: '/admin/entitlements' }]);
-    expect(nav.buildAdminNavGroups(true, nav.NO_ADMIN_CAPABILITIES).map((g) => g.label)).not.toContain('Entitlements'); // §3: Super Admin does not imply it
+    expect(nav.buildAdminNavGroups(true, nav.NO_ADMIN_CAPABILITIES).map((g) => g.label)).not.toContain('Premium and Promo Codes'); // §3: Super Admin does not imply it
     const everythingElse = { ...nav.NO_ADMIN_CAPABILITIES, resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true, referenceDataQuality: true, lookthroughDataQuality: true };
-    expect(nav.buildAdminNavGroups(true, everythingElse).map((g) => g.label)).not.toContain('Entitlements');
+    expect(nav.buildAdminNavGroups(true, everythingElse).map((g) => g.label)).not.toContain('Premium and Promo Codes');
     expect(nav.shouldShowAdminMenu(false, { ...nav.NO_ADMIN_CAPABILITIES, entitlementManagement: true })).toBe(true);
   });
 
