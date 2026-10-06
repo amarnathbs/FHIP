@@ -177,6 +177,16 @@ const liveValues = async (ds: string) =>
       where v.dataset_id = $1 and (v.effective_to is null or v.effective_to > current_date) order by m.metric_code, v.statistic_type`,
     [await dsId(ds)]
   );
+// Migration 0277 (dataset to metric mapping) refuses a metric that is not mapped to the dataset. The datasets and metrics
+// this older suite invents are therefore mapped here, for both kinds of file, so its own rules are still what is under test.
+const TEST_METRICS = ['gross_household_income', 'income_growth_12m', 'income_concentration', 'net_household_income', 'passive_income_ratio'];
+async function mapTestDatasets() {
+  await db.exec(`insert into benchmark_dataset_metrics (dataset_id, metric_definition_id, applies_to_values, applies_to_target_ranges, evidence_note)
+    select d.id, m.id, true, true, 'test mapping' from benchmark_datasets d cross join benchmark_metric_definitions m
+     where d.dataset_name like 'PB %' and m.metric_code in (${TEST_METRICS.map((c) => `'${c}'`).join(',')})
+    on conflict (dataset_id, metric_definition_id) do nothing;`);
+}
+
 const countAll = async (t: string) => ((await q<{ c: number }>(`select count(*)::int c from ${t}`))[0]).c;
 
 beforeAll(async () => {
@@ -212,6 +222,7 @@ beforeAll(async () => {
     insert into benchmark_datasets (benchmark_source_id, dataset_name, version, benchmark_class, source_period, geography_level, statistic_coverage, data_status)
       select id, 'PB SUSPENDED DATASET', '1.0', 'fhip_planning', 'FY', 'country', 'bands', 'suspended' from benchmark_sources where source_name = 'PB_TEST_SOURCE';
   `);
+  await mapTestDatasets();
 }, 600_000);
 
 afterAll(async () => {
@@ -527,6 +538,7 @@ describe('activate - binding, staleness, self-activation, readiness, conflicts, 
   it('conflict: a live figure for the same key held by a DIFFERENT dataset name blocks the batch', async () => {
     // PB TEST DATASET 2 now holds a live net_household_income/median. Another dataset name staging the same key conflicts.
     await db.exec(`insert into benchmark_datasets (benchmark_source_id, dataset_name, version, benchmark_class, source_period, geography_level, statistic_coverage, data_status) select id, 'PB CONFLICT DATASET', '1.0', 'observed_market', 'FY', 'country', 'median', 'draft' from benchmark_sources where source_name = 'PB_TEST_SOURCE'`);
+    await mapTestDatasets();
     const s = await stage(UP, 'values', [vrow(2, { dataset_name: 'PB CONFLICT DATASET', metric_code: 'net_household_income' })], { dataset_name: 'PB CONFLICT DATASET' });
     expect(s.counts).toMatchObject({ conflict: 1 });
     await expectCode(activate(ACT, s.batch_id as string), 'PB_E_CONFLICT');
@@ -534,6 +546,7 @@ describe('activate - binding, staleness, self-activation, readiness, conflicts, 
 
   it('a new VERSION of the same dataset supersedes the old version, and the old dataset is marked superseded once it has no live value', async () => {
     await db.exec(`insert into benchmark_datasets (benchmark_source_id, dataset_name, version, benchmark_class, source_period, geography_level, statistic_coverage, data_status) select id, 'PB TEST DATASET 2', '2.0', 'observed_market', 'FY', 'country', 'median', 'draft' from benchmark_sources where source_name = 'PB_TEST_SOURCE'`);
+    await mapTestDatasets();
     const rows = [vrow(2, { dataset_name: 'PB TEST DATASET 2', dataset_version: '2.0', metric_code: 'net_household_income', value_numeric: 300 })];
     const s = await stage(UP, 'values', rows, { dataset_name: 'PB TEST DATASET 2', dataset_version: '2.0' });
     expect(s.counts).toMatchObject({ changed: 1, conflict: 0 });

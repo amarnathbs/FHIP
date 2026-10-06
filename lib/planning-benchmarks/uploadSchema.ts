@@ -351,6 +351,7 @@ export const UPLOAD_RULES: string[] = [
   'Dates: write them day first, as 30/06/2020 (day, month, then a four-digit year, joined by slashes or dashes). A real Excel date cell is accepted. The database order year first with dashes is still accepted in a file, but month-first dates and two-digit years are refused.',
   'Numbers: plain digits with a decimal point and at most 4 decimals. No thousands separators, no currency symbols, no percent signs. Percentages are percentage points (56.2, not 0.562).',
   'The unit must be the unit the metric is defined in. If it is not, the row is refused.',
+  'A metric may only be uploaded into a dataset it is mapped to, for that kind of file (see the allowed metrics per dataset). A row whose metric is not mapped to its dataset is refused, and the message names the metrics that are allowed.',
   'Excel files: the data must be on a sheet you choose explicitly when you upload. Cells must hold values, not formulas. Hidden sheets and hidden rows are listed and are not processed unless you say so.',
   'Maximum 5 MB and 5,000 data rows per file. Files are checked, then staged. Nothing is live until an authorised administrator activates the staged upload.',
 ];

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { bad, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { requirePlanningBenchmarkCapability, type PlanningBenchmarkCapability } from './guards';
-import { RpcFailure, UploadDependencyError, rpcFailureResponse } from './uploadService';
+import { MappingRpcFailure, RpcFailure, UploadDependencyError, rpcFailureResponse } from './uploadService';
 
 export const UuidSchema = z.string().uuid();
 
@@ -33,7 +33,7 @@ export async function failClosed<T>(fn: () => Promise<T>, onOk: (v: T) => Respon
   try {
     return onOk(await fn());
   } catch (e) {
-    if (e instanceof RpcFailure) return rpcFailureResponse(e.error);
+    if (e instanceof RpcFailure) return rpcFailureResponse(e.error, e instanceof MappingRpcFailure ? 'mapping' : 'upload');
     if (e instanceof UploadDependencyError) {
       return Response.json({ error: 'The upload service returned an unexpected result or is not available. Nothing was changed.', code: 'DEPENDENCY_UNAVAILABLE' }, { status: 503 });
     }

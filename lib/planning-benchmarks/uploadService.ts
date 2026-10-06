@@ -82,6 +82,9 @@ export class RpcFailure extends Error {
   }
 }
 
+/** A failure of one of the dataset to metric mapping functions (migration 0277). Same mapping of PB_E_ codes, a different "not installed" sentence. */
+export class MappingRpcFailure extends RpcFailure {}
+
 // ------------------------------------------------------------------------ RPC error mapping ---
 
 const PREFIX = /^PB_E_([A-Z_]+):\s*([\s\S]*)$/;
@@ -111,6 +114,8 @@ export function mapRpcError(error: { code?: string; message?: string } | null | 
       DATASET: [422, 'VALIDATION_FAILED'],
       CONFLICT: [422, 'ROW_CONFLICT'],
       NOT_READY: [422, 'DATASET_NOT_READY'],
+      MAPPING: [422, 'METRIC_NOT_MAPPED'],
+      LIVE: [409, 'LIVE_FIGURES_NEED_CONFIRMATION'],
     };
     const [status, code] = table[m[1]] ?? [422, 'VALIDATION_FAILED'];
     return { status, code, message };
@@ -129,8 +134,11 @@ export function mapRpcError(error: { code?: string; message?: string } | null | 
   return { status: 500, code: 'INTERNAL_ERROR', message: 'Something went wrong. Nothing was changed. Please try again.' };
 }
 
-export function rpcFailureResponse(err: { code?: string; message?: string } | null | undefined): Response {
+export function rpcFailureResponse(err: { code?: string; message?: string } | null | undefined, feature: 'upload' | 'mapping' = 'upload'): Response {
   const f = mapRpcError(err);
+  if (feature === 'mapping' && f.code === 'DEPENDENCY_UNAVAILABLE' && /not installed/.test(f.message)) {
+    return Response.json({ error: 'The dataset and metric mapping is not installed on this database yet (migration 0277). Nothing was changed.', code: 'DEPENDENCY_UNAVAILABLE' }, { status: 503 });
+  }
   return Response.json({ error: f.message, code: f.code }, { status: f.status });
 }
 

@@ -313,13 +313,17 @@ describe('NC-A3: the Read me lists and the validator are one source (they cannot
       const out = validate('values', baseValues({ dataset_name: d.name, dataset_version: d.version }), av);
       const refused = out.issues.some((i) => i.code === 'DATASET_NOT_FOUND' || i.code === 'DATASET_NOT_OPEN');
       expect(refused, `${d.name} (${d.status})`).toBe(!d.open);
-      expect(d.accepts.values.accepted).toBe(d.open);
+      // with the mapping installed a dataset also needs at least one metric mapped for the kind of file
+      expect(d.accepts.values.accepted).toBe(d.open && d.mappedMetrics.some((m) => m.values));
     }
   });
 
-  it('every listed metric is accepted with exactly its listed unit, and refused with any other unit', async () => {
+  it('every metric mapped to the dataset is accepted with exactly its listed unit, and refused with any other unit', async () => {
     const av = await loadOk();
-    for (const m of av.metrics) {
+    const wealth = av.datasets.find((d) => d.name === 'AU household wealth distribution')!;
+    const mappedCodes = new Set(wealth.mappedMetrics.filter((x) => x.values).map((x) => x.code));
+    expect(mappedCodes.size).toBeGreaterThan(0);
+    for (const m of av.metrics.filter((x) => mappedCodes.has(x.code))) {
       const cur = m.unit === 'currency' ? { original_currency: 'AUD' } : { original_currency: '' };
       expect(validate('values', baseValues({ metric_code: m.code, unit: m.unit, ...cur }), av).issues.filter((i) => i.severity === 'error')).toEqual([]);
       const other = m.unit === 'ratio' ? 'count' : 'ratio';

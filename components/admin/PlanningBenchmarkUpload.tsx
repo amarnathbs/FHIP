@@ -15,6 +15,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdminActionStatus, useAdminActionStatus } from '@/components/admin/AdminActionStatus';
 import { actionFailureMessage, failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { AllowedValuesPanel, ALLOWED_VALUES_CSV_URL } from '@/components/admin/PlanningBenchmarkAllowedValues';
+import { PlanningBenchmarkDatasetMetrics } from '@/components/admin/PlanningBenchmarkDatasetMetrics';
+import { MAPPING_NOT_INSTALLED_LINE } from '@/lib/planning-benchmarks/allowedValues';
 import { formatDayFirstDateTime } from '@/lib/planning-benchmarks/dayFirst';
 import { KIND_LABEL, UPLOAD_KINDS, XLSX_DATA_SHEET, type UploadKind } from '@/lib/planning-benchmarks/uploadSchema';
 
@@ -101,6 +103,8 @@ interface Preview {
   rows_truncated: boolean;
   removed: Array<{ metric_code: string; band_label: string; band_tier: number; lower: string | null; upper: string | null }>;
   capabilities: { upload: boolean; activate: boolean };
+  /** Is the dataset to metric mapping (migration 0277) installed on this database? Absent on an older server. */
+  mapping?: 'installed' | 'not_installed' | 'unavailable';
 }
 
 const CLASS_LABEL: Record<PreviewRow['classification'], string> = {
@@ -445,6 +449,20 @@ export function PlanningBenchmarkUpload() {
           </div>
         )}
 
+        {(stageResult?.status === 'staged' || stageResult?.status === 'already_staged') && stageResult.warningCount > 0 && (
+          <div role="status" className="mt-4 rounded border border-attention/40 bg-attention/5 p-3 text-sm" data-testid="pb-stage-warnings">
+            <p className="font-semibold text-ink">The file was staged with {stageResult.warningCount} warning(s). Read them before you activate:</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-ink">
+              {stageResult.warnings.map((w, i) => (
+                <li key={i}>
+                  {w.rowNumber !== null ? `Row ${w.rowNumber}: ` : ''}
+                  {w.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {stageResult?.status === 'rejected' && (
           <div role="alert" className="mt-4 rounded border border-risk/40 bg-risk/5 p-3 text-sm" data-testid="pb-rejected">
             <p className="font-semibold text-risk">The file was not staged. {stageResult.errorCount} problem(s) must be fixed first. Nothing was changed.</p>
@@ -504,6 +522,14 @@ export function PlanningBenchmarkUpload() {
               </div>
             ))}
           </dl>
+
+          {preview.mapping && preview.mapping !== 'installed' && (
+            <p role="status" className="mt-3 rounded border border-attention/40 bg-attention/5 p-3 text-sm text-ink" data-testid="pb-preview-mapping-warning">
+              {preview.mapping === 'not_installed'
+                ? `Dataset and metric mapping is not installed yet. ${MAPPING_NOT_INSTALLED_LINE} Check by hand that each metric below belongs to ${preview.batch.dataset_name}.`
+                : 'The dataset and metric mapping could not be checked right now, so this preview cannot confirm that each metric belongs to its dataset. Reload the preview before you activate.'}
+            </p>
+          )}
 
           {preview.batch.status === 'staged' && preview.blockers.length > 0 && (
             <div role="alert" className="mt-3 rounded border border-attention/40 bg-attention/5 p-3 text-sm">
@@ -633,6 +659,16 @@ export function PlanningBenchmarkUpload() {
           )}
         </section>
       )}
+
+      <section aria-labelledby="pb-up-mapping" className="rounded-card border border-line bg-white p-4" data-testid="pb-up-mapping">
+        <h2 id="pb-up-mapping" className="text-base font-semibold text-ink">
+          Dataset metric mapping
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted">
+          Which metrics each dataset may receive, for each kind of file. A file that puts a metric into a dataset it is not mapped to is refused. Everyone here can read it; a holder of the activate permission can change it, and every change is recorded.
+        </p>
+        <PlanningBenchmarkDatasetMetrics canManage={caps.activate} />
+      </section>
 
       <section aria-labelledby="pb-up-history" className="rounded-card border border-line bg-white p-4">
         <h2 id="pb-up-history" className="text-base font-semibold text-ink">

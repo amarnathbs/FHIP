@@ -20,7 +20,7 @@ import {
 } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';
 import { formatDayFirst, parseExcelSerialDate, parseFileDateText } from './dates';
 import { BOOLEAN_FALSE_WORDS, BOOLEAN_TRUE_WORDS, TEMPLATE_VERSION, UPLOAD_LIMITS, UPLOAD_SCHEMA, type ColumnDef, type UploadKind } from './uploadSchema';
-import { buildAllowedIndex, didYouMean, findDataset, listForMessage, type AllowedIndex, type AllowedValuesOk } from './allowedValues';
+import { MAPPING_NOT_INSTALLED_LINE, buildAllowedIndex, didYouMean, findDataset, kindWords, listForMessage, mappedFor, type AllowedDataset, type AllowedIndex, type AllowedValuesOk } from './allowedValues';
 
 export interface UploadIssue {
   severity: 'error' | 'warning';
@@ -410,6 +410,7 @@ function allowedValueChecks(kind: UploadKind, r: Record<string, string | number 
     } else if (!metric.active) {
       add('warning', 'METRIC_INACTIVE', rowNumber, 'metric_code', `The metric ${code} is marked inactive (retired). Check that it is the right metric before you activate.`, `metric-inactive|${code}`);
     }
+    if (metric && dataset && dataset.open) datasetMetricCheck(kind, code, dataset, av, add, rowNumber);
   }
 
   if (kind === 'values' && typeof r.cohort_code === 'string' && r.cohort_code !== '' && av.complete.cohorts && !ix.cohortCodes.has(r.cohort_code)) {
@@ -455,6 +456,48 @@ function allowedValueChecks(kind: UploadKind, r: Record<string, string | number 
       );
     }
   }
+}
+
+/**
+ * Dataset to metric mapping (migration 0277). A registered metric may only go into a dataset it is mapped to, for
+ * the kind of file it applies to. The message names the metrics that ARE allowed for that dataset and kind, says
+ * where the metric IS mapped when it is somewhere else, and may add a "did you mean" hint over the allowed ones. It
+ * never changes the file. When the mapping is not installed on this database the check cannot run: one visible
+ * warning per file says so (the fallback is the previous behaviour, not a silent pass).
+ */
+function datasetMetricCheck(kind: 'values' | 'target_ranges', code: string, dataset: AllowedDataset, av: AllowedValuesOk, add: Add, rowNumber: number): void {
+  if (!av.mapping.installed) {
+    add('warning', 'MAPPING_NOT_INSTALLED', null, null, `${MAPPING_NOT_INSTALLED_LINE} Check by hand that every metric in this file belongs to the dataset "${dataset.name}".`, 'mapping-not-installed');
+    return;
+  }
+  if (!av.complete.mappings) return;
+  const allowed = mappedFor(dataset, kind);
+  if (allowed.some((m) => m.code === code)) return;
+  const other: 'values' | 'target_ranges' = kind === 'values' ? 'target_ranges' : 'values';
+  const otherKindHas = mappedFor(dataset, other).some((m) => m.code === code);
+  const elsewhere = av.datasets.filter((d) => d !== dataset && mappedFor(d, kind).some((m) => m.code === code)).map((d) => `${d.name} (version ${d.version})`);
+  const where = elsewhere.length > 0 ? ` ${code} is mapped to: ${listForMessage(elsewhere, 4)}. Check that you chose the right dataset.` : ` ${code} is not mapped to any dataset for ${kindWords(kind)} files yet.`;
+  const onceKey = `map|${dataset.name}|${dataset.version}|${kind}|${code}`;
+  if (allowed.length === 0) {
+    add(
+      'error',
+      'METRIC_NOT_MAPPED',
+      rowNumber,
+      'metric_code',
+      `No metric is mapped to the dataset "${dataset.name}" version ${dataset.version} for ${kindWords(kind)} files yet, so the metric "${code}" cannot be uploaded to it in this kind of file.${otherKindHas ? ` ${code} is mapped to it for ${kindWords(other)} files: use that kind of file.` : where} A holder of the activate permission can map metrics on the Upload tab (Dataset metric mapping). Nothing was changed in your file.`,
+      onceKey
+    );
+    return;
+  }
+  const labels = allowed.map((m) => `${m.code} (${m.unit})`);
+  add(
+    'error',
+    'METRIC_NOT_MAPPED',
+    rowNumber,
+    'metric_code',
+    `The metric "${code}" is registered but is not mapped to the dataset "${dataset.name}" version ${dataset.version} for ${kindWords(kind)} files, so this row was refused. Metrics allowed for that dataset in ${kindWords(kind)} files (${allowed.length}): ${listForMessage(labels)}.${didYouMean(code, allowed.map((m) => m.code))}${otherKindHas ? ` ${code} is mapped to it for ${kindWords(other)} files only: use that kind of file.` : where} Nothing was changed in your file.`,
+    onceKey
+  );
 }
 
 function semanticChecks(kind: UploadKind, r: Record<string, string | number | boolean | null>, rowNumber: number, ctx: ValidateContext, add: Add, ix: AllowedIndex | null): void {

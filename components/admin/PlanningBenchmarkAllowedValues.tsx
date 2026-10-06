@@ -11,7 +11,7 @@
 // Dates a person reads are day-first; there are none other than the "read on" line.
 import { useCallback, useEffect, useId, useState } from 'react';
 import { failureFromResponse, failureFromThrown, readJsonSafely } from '@/lib/resources/admin/resultState';
-import { cohortsHeading, datasetsHeading, metricsHeading, UNAVAILABLE_LINE, type AllowedDataset, type AllowedValues, type AllowedValuesOk } from '@/lib/planning-benchmarks/allowedValues';
+import { cohortsHeading, datasetMetricsSection, datasetsHeading, metricsHeading, MAPPING_NOT_INSTALLED_LINE, UNAVAILABLE_LINE, type AllowedDataset, type AllowedValues, type AllowedValuesOk } from '@/lib/planning-benchmarks/allowedValues';
 import { formatDayFirst } from '@/lib/planning-benchmarks/dayFirst';
 import { KIND_LABEL, UPLOAD_KINDS, columnGuide, type UploadKind } from '@/lib/planning-benchmarks/uploadSchema';
 
@@ -175,6 +175,8 @@ function AllowedValuesLists({ data }: { data: AllowedValuesOk }) {
         </ScrollRegion>
       </section>
 
+      <MappingSection data={data} />
+
       <section aria-labelledby="pb-av-cohorts">
         <h3 id="pb-av-cohorts" className="text-base font-semibold text-ink">
           Part 3. Cohorts: {cohortsHeading(data)}
@@ -205,6 +207,59 @@ function AllowedValuesLists({ data }: { data: AllowedValuesOk }) {
         </ScrollRegion>
       </section>
     </div>
+  );
+}
+
+/**
+ * The allowed metrics PER DATASET, printed from datasetMetricsSection: the very rows the validator enforces and the
+ * Read me sheet prints. Not installed is a visible warning, never an empty table that looks complete.
+ */
+export function MappingSection({ data }: { data: AllowedValuesOk }) {
+  const section = datasetMetricsSection(data, 'all');
+  return (
+    <section aria-labelledby="pb-av-mapping" data-testid="pb-allowed-mapping">
+      <h4 id="pb-av-mapping" className="font-semibold text-ink">
+        Allowed metrics per dataset: {section.heading}
+      </h4>
+      {!data.mapping.installed ? (
+        <p role="status" className="mt-2 rounded border border-attention/40 bg-attention/5 p-3 text-xs text-ink" data-testid="pb-mapping-not-installed">
+          {MAPPING_NOT_INSTALLED_LINE}
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 max-w-3xl text-xs text-muted">{section.intro}</p>
+          <ScrollRegion label="Metrics each dataset may receive, by kind of file">
+            <table className="w-full text-left text-xs">
+              <caption className="sr-only">Allowed metrics per dataset</caption>
+              <thead className="sticky top-0 bg-gray-50 text-muted">
+                <tr>
+                  <th scope="col" className="px-3 py-2">dataset_name</th>
+                  <th scope="col" className="px-3 py-2">dataset_version</th>
+                  <th scope="col" className="px-3 py-2">metric_code</th>
+                  <th scope="col" className="px-3 py-2">Unit</th>
+                  <th scope="col" className="px-3 py-2">Observed values file</th>
+                  <th scope="col" className="px-3 py-2">Planning target ranges file</th>
+                  <th scope="col" className="px-3 py-2">Live figures</th>
+                </tr>
+              </thead>
+              <tbody>
+                {section.rows.map((r) => (
+                  <tr key={`${r[0]}|${r[1]}|${r[2]}`} className="border-t border-line align-top">
+                    <td className="px-3 py-2 font-medium text-ink">{r[0]}</td>
+                    <td className="px-3 py-2">{r[1]}</td>
+                    <td className="px-3 py-2">{r[2]}</td>
+                    <td className="px-3 py-2">{r[4]}</td>
+                    <td className="px-3 py-2">{r[5]}</td>
+                    <td className="px-3 py-2">{r[6]}</td>
+                    <td className="px-3 py-2">{r[7]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollRegion>
+        </>
+      )}
+    </section>
   );
 }
 

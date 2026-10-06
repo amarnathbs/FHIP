@@ -5,6 +5,7 @@ import { adminRoute } from '@/lib/services/adminAuth';
 import { ok } from '@/lib/api';
 import { guarded, idParam, failClosed } from '@/lib/planning-benchmarks/routeSupport';
 import { getPlanningBenchmarkUpload } from '@/lib/planning-benchmarks/uploadService';
+import { loadMappingStatus } from '@/lib/planning-benchmarks/allowedValues';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +14,11 @@ export const GET = adminRoute(async (_req: Request, { params }: { params: Promis
   if (!g.ok) return g.response;
   const p = await idParam(params);
   if (!p.ok) return p.response;
+  // The preview shows a visible warning when the dataset to metric mapping is not installed (migration 0277): the
+  // staged rows were then not checked against it. 'unavailable' is shown as such, never as 'installed'.
+  const mapping = await loadMappingStatus(g.supabase);
   return failClosed(
     () => getPlanningBenchmarkUpload(g.supabase, p.id),
-    (data) => ok({ ...data, capabilities: { upload: g.flags.upload, activate: g.flags.activate } })
+    (data) => ok({ ...data, capabilities: { upload: g.flags.upload, activate: g.flags.activate }, mapping })
   );
 });

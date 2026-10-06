@@ -37,9 +37,18 @@ export function pbReferenceTables(): Record<string, Row[]> {
       { metric_definition_id: 'm-ef', country_code: 'IN', life_stage: 'early_career', household_type: 'family', band_label: 'healthy', band_tier: 3, effective_to: null },
     ],
     benchmark_values: [
-      { dataset_id: 'ds-wealth' },
-      { dataset_id: 'ds-wealth' },
-      { dataset_id: 'ds-fhip' },
+      { dataset_id: 'ds-wealth', metric_definition_id: 'm-nw', effective_to: null },
+      { dataset_id: 'ds-wealth', metric_definition_id: 'm-nw', effective_to: null },
+      { dataset_id: 'ds-fhip', metric_definition_id: 'm-sr', effective_to: null },
+    ],
+    // The dataset to metric mapping (migration 0277). The closed and archived datasets have none; the draft India
+    // dataset takes target ranges for one metric and no observed values yet.
+    benchmark_dataset_metrics: [
+      { dataset_id: 'ds-wealth', metric_definition_id: 'm-nw', applies_to_values: true, applies_to_target_ranges: false, evidence_note: 'fixture: net worth values' },
+      { dataset_id: 'ds-wealth', metric_definition_id: 'm-old', applies_to_values: true, applies_to_target_ranges: false, evidence_note: 'fixture: a retired metric still mapped' },
+      { dataset_id: 'ds-fhip', metric_definition_id: 'm-sr', applies_to_values: false, applies_to_target_ranges: true, evidence_note: 'fixture: savings rate bands' },
+      { dataset_id: 'ds-fhip', metric_definition_id: 'm-ef', applies_to_values: false, applies_to_target_ranges: true, evidence_note: 'fixture: emergency fund bands' },
+      { dataset_id: 'ds-india', metric_definition_id: 'm-ef', applies_to_values: false, applies_to_target_ranges: true, evidence_note: null },
     ],
   };
 }
