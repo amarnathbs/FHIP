@@ -226,6 +226,16 @@ describe('the layout judge (NAMED NEGATIVE CONTROLS: each rule fails on a bad la
     expect(judgeLayout(doc([page(1, { min_size: 7.6 }), page(2)])).length).toBe(0);
   });
 
+  it('NC-L9: running header or footer text under 7 pt fails (Stage 3 PO review: 40 spans at 6.0 pt, all of them the header and footer templates)', () => {
+    expect(judgeLayout(doc([page(1, { min_size_all: 6.0 }), page(2)])).some((x) => x.includes('header or footer'))).toBe(true);
+    expect(judgeLayout(doc([page(1, { min_size_all: 7.1 }), page(2)])).length).toBe(0);
+  });
+
+  it('the header and footer templates are set at 9.5 px or more (7.1 pt), not the 8 px (6 pt) the PO found', () => {
+    const m = /font-size:(\d+(?:\.\d+)?)px/.exec(read('lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer.ts').split('const TEMPLATE_STYLE')[1] ?? '');
+    expect(Number(m?.[1])).toBeGreaterThanOrEqual(9.5);
+  });
+
   it('NC-L4: text past the right margin fails', () => {
     expect(judgeLayout(doc([page(1, { overflow_right: ['a very long unbroken line'] }), page(2)])).some((x) => x.includes('past the margin'))).toBe(true);
   });

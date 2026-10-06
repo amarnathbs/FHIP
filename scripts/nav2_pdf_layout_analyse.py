@@ -84,6 +84,8 @@ def main() -> None:
         last_line = max(lines, key=lambda l: l['y1']) if lines else None
         first_line = ordered[0] if ordered else None
         text = page.get_text()
+        # EVERY span on the page, the running header and footer included (they are Chromium templates and sit outside the text area)
+        all_sizes = [round(sp['size'], 1) for b in page.get_text('dict')['blocks'] if b.get('type') == 0 for ln in b['lines'] for sp in ln['spans'] if sp['text'].strip()]
         named = [n for n in fund_names if n in text]
         overflow = [l['text'][:60] for l in lines if l['x1'] > W - RIGHT + 2 or l['x0'] < LEFT - 2]
         png = os.path.join(out_dir, f'page-{i + 1:02d}.png')
@@ -98,6 +100,7 @@ def main() -> None:
             'overflow_right': overflow,
             'overlaps': overlaps[:10],
             'min_size': min(sizes) if sizes else None,
+            'min_size_all': min(all_sizes) if all_sizes else None,
             'body_size': sizes.most_common(1)[0][0] if sizes else None,
             'png': png,
         })

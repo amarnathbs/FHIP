@@ -30,6 +30,8 @@ export const BODY_PT_MIN = 8.5;
 export const BODY_PT_MAX = 10.5;
 /** No text on a page, footnotes and chart labels included, may be set smaller than this. */
 export const MIN_TEXT_PT = 7.5;
+/** The running header and footer (Chromium templates) may be a little smaller, but never under this. */
+export const MIN_FURNITURE_PT = 7;
 
 export interface PageReport {
   page: number;
@@ -42,8 +44,16 @@ export interface PageReport {
   png: string;
   /** Most common font size of the page's text (pt). */
   body_size?: number | null;
+  /** Pairs of text spans whose boxes overlap (a header or cell that runs into its neighbour). */
+  overlaps?: string[];
+  /** Smallest font size of body text (pt). */
+  min_size?: number | null;
+  /** Smallest font size of ANY text on the page, the running header and footer included (pt). */
+  min_size_all?: number | null;
 }
 export interface LayoutAnalysis {
+  /** Table cells whose text is wider than the cell (measured in the browser at the print text width). */
+  cell_overflow?: string[];
   page_count: number;
   pages: PageReport[];
 }
@@ -61,6 +71,7 @@ export function judgeLayout(a: LayoutAnalysis, opts: { maxBlank?: number } = {})
     const cover = i === 0;
     const titled = p.first_line && /^(Comparing your funds|Fund analytics report)/.test(p.first_line.text);
     if (!cover && !titled && p.funds_named.length === 0) out.push(`page ${p.page}: does not name a fund`);
+    if (p.min_size_all !== undefined && p.min_size_all !== null && p.min_size_all < MIN_FURNITURE_PT) out.push(`page ${p.page}: running header or footer text is ${p.min_size_all} pt, below ${MIN_FURNITURE_PT} pt`);
     if (p.min_size !== undefined && p.min_size !== null && p.min_size < MIN_TEXT_PT) out.push(`page ${p.page}: the smallest text is ${p.min_size} pt, below ${MIN_TEXT_PT} pt`);
     if ((p.overlaps ?? []).length > 0) out.push(`page ${p.page}: text collides ("${p.overlaps![0]}")`);
     if (p.overflow_right.length > 0) out.push(`page ${p.page}: text runs past the margin ("${p.overflow_right[0]}")`);

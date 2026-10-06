@@ -45,7 +45,7 @@ export interface PdfReportMeta {
 export const FUND_ANALYTICS_PDF_MARGIN = { top: '22mm', bottom: '20mm', left: '16mm', right: '16mm' } as const;
 
 const esc = (t: string): string => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const TEMPLATE_STYLE = 'width:100%;box-sizing:border-box;padding:0 16mm;font-size:8px;color:#6B7280;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:center;';
+const TEMPLATE_STYLE = 'width:100%;box-sizing:border-box;padding:0 16mm;gap:4mm;font-size:9.5px;color:#6B7280;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:center;';
 
 /** Running header: "FHIP - Fund analytics report" left, "Version N, made 05-10-2026, 9:30 am" right (day-first, minutes). */
 export function pdfHeaderTemplate(meta?: PdfReportMeta): string {
