@@ -1,0 +1,271 @@
+{
+  "run": "bulkcertmuwpuh2p",
+  "app": "http://localhost:3993",
+  "startedAt": "2026-10-06T13:30:10.083Z",
+  "timing500": {
+    "article": {
+      "dbMs": {
+        "n": 4,
+        "min": 3231,
+        "median": 3798,
+        "max": 4939,
+        "all": [
+          3798,
+          3465,
+          4939,
+          3231
+        ]
+      },
+      "clientMs": {
+        "n": 4,
+        "min": 4302,
+        "median": 4975,
+        "max": 6683,
+        "all": [
+          4975,
+          4578,
+          6683,
+          4302
+        ]
+      },
+      "concurrent": [
+        {
+          "status": 200,
+          "dbMs": 7066,
+          "clientMs": 8283
+        },
+        {
+          "status": 200,
+          "dbMs": 6841,
+          "clientMs": 8054
+        }
+      ]
+    },
+    "money_update": {
+      "dbMs": {
+        "n": 5,
+        "min": 3012,
+        "median": 3081,
+        "max": 4094,
+        "all": [
+          3072,
+          3012,
+          3156,
+          3081,
+          4094
+        ]
+      },
+      "clientMs": {
+        "n": 5,
+        "min": 4154,
+        "median": 4291,
+        "max": 5326,
+        "all": [
+          4775,
+          4291,
+          4245,
+          4154,
+          5326
+        ]
+      },
+      "concurrent": [
+        {
+          "status": 200,
+          "dbMs": 6881,
+          "clientMs": 8175
+        },
+        {
+          "status": 200,
+          "dbMs": 6840,
+          "clientMs": 8163
+        }
+      ]
+    }
+  },
+  "residue": {
+    "posts": 0,
+    "sources": 0,
+    "categories": 0,
+    "tags": 0,
+    "authors": 0,
+    "ctas": 0,
+    "importRuns": 0,
+    "postsByUsers": 0,
+    "authUsers": 0
+  },
+  "finishedAt": "2026-10-06T13:34:35.677Z",
+  "passed": 33,
+  "failed": 1,
+  "checks": [
+    {
+      "name": "A template article.xlsx: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template article.xlsx: four sheets, upload header equals the schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template article.xlsx: Lookup_Values lists live reference data (synthetic category present)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template article.csv: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template article.csv: header equals the parser schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.xlsx: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template money_update.xlsx: four sheets, upload header equals the schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.xlsx: Lookup_Values lists live reference data (synthetic category present)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.csv: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template money_update.csv: header equals the parser schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template access: anonymous -> 401",
+      "pass": true,
+      "detail": "got 401"
+    },
+    {
+      "name": "A template access: customer -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: analyst -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: publisher -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: compliance -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: author -> 200",
+      "pass": true,
+      "detail": "got 200"
+    },
+    {
+      "name": "0274 VERIFY the server assigns planned post ids when staging",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "0274 VERIFY the signed-in wrapper applies through the new core (created 2, db_ms reported)",
+      "pass": true,
+      "detail": "{\"ok\":true,\"db_ms\":998,\"run_id\":\"a2770a72-b92a-4b51-93dd-58c7708f43ae\",\"created\":2,\"post_ids\":[\"d1e38c68-81c3-4858-94b0-c1fae752f0e4\",\"70472981-d11a-428b-8be3-5b1f00a2b6a7\"],\"already_applied\":false}"
+    },
+    {
+      "name": "0274 VERIFY second apply is idempotent",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "0274 VERIFY forced values, planned ids used as post ids, no per-post version rows",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "0274 VERIFY the route (service-role twin) applies and reports dbMs",
+      "pass": true,
+      "detail": "{\"data\":{\"runId\":\"d2b870d3-1c60-4bbb-bba1-c80cb2577859\",\"created\":1,\"alreadyApplied\":false,\"postIds\":[\"a1e99a4d-a25f-40b7-96f2-98b9fe4dceac\"],\"dbMs\":1962}}"
+    },
+    {
+      "name": "TIMING article 500 rows run 1: applied (db_ms undefined, client 10172 ms)",
+      "pass": false,
+      "detail": "503 APPLY_FAILED"
+    },
+    {
+      "name": "TIMING article 500 rows run 2: applied (db_ms 3798, client 4975 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article 500 rows run 3: applied (db_ms 3465, client 4578 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article 500 rows run 4: applied (db_ms 4939, client 6683 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article 500 rows run 5: applied (db_ms 3231, client 4302 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article two CONCURRENT 500-row runs (different run ids): both applied (db_ms 7066,6841, client 8283,8054 ms)",
+      "pass": true,
+      "detail": "200  200 "
+    },
+    {
+      "name": "TIMING money_update 500 rows run 1: applied (db_ms 3072, client 4775 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update 500 rows run 2: applied (db_ms 3012, client 4291 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update 500 rows run 3: applied (db_ms 3156, client 4245 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update 500 rows run 4: applied (db_ms 3081, client 4154 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update 500 rows run 5: applied (db_ms 4094, client 5326 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update two CONCURRENT 500-row runs (different run ids): both applied (db_ms 6881,6840, client 8175,8163 ms)",
+      "pass": true,
+      "detail": "200  200 "
+    },
+    {
+      "name": "CLEANUP: synthetic posts, sources, categories, tags, authors, CTAs, import runs/rows and auth users all 0",
+      "pass": true,
+      "detail": "{\"posts\":0,\"sources\":0,\"categories\":0,\"tags\":0,\"authors\":0,\"ctas\":0,\"importRuns\":0,\"postsByUsers\":0,\"authUsers\":0}"
+    }
+  ]
+}
