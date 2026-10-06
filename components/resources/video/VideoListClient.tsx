@@ -34,7 +34,7 @@ function formatDuration(seconds: number | null): string {
 
 const selectClass = 'rounded border border-line bg-white px-2 py-1.5 text-sm text-ink';
 
-export function VideoListClient({ canCreate }: { canCreate: boolean }) {
+export function VideoListClient({ canCreate, canLink = false }: { canCreate: boolean; canLink?: boolean }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -188,7 +188,13 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
                               {v.title}
                             </Link>
                           </td>
-                          <td className="hidden py-2.5 pr-3 text-muted md:table-cell">{v.youtube_video_id}</td>
+                          <td className="hidden py-2.5 pr-3 text-muted md:table-cell">
+                            {v.youtube_video_id || (
+                              <Link href={`/admin/resources/videos/${v.id}/edit`} className="font-semibold text-attention hover:underline">
+                                Needs YouTube details
+                              </Link>
+                            )}
+                          </td>
                           <td className="hidden py-2.5 pr-3 text-muted lg:table-cell">{formatDuration(v.duration_seconds)}</td>
                           <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={v.jurisdiction} /></td>
                           <td className="hidden py-2.5 pr-3 text-muted xl:table-cell">{v.primary_category?.name ?? '—'}</td>
@@ -199,6 +205,11 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
                             <Link href={`/admin/resources/videos/${v.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${v.title}"`}>
                               Edit
                             </Link>
+                            {canLink && (
+                              <Link href={`/admin/resources/videos/${v.id}/edit#linked-content`} className="ml-3 inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Link "${v.title}" to content`}>
+                                Link to content
+                              </Link>
+                            )}
                           </td>
                         </tr>
                       );
@@ -219,7 +230,18 @@ export function VideoListClient({ canCreate }: { canCreate: boolean }) {
                       <ResourceComplianceBadge compliance={v.compliance_classification} />
                       <ResourceJurisdictionBadge jurisdiction={v.jurisdiction} />
                     </div>
+                    {!v.youtube_video_id && <p className="mt-2 text-xs font-semibold text-attention">Needs YouTube details. Open it to add them.</p>}
                     <p className="mt-2 text-xs text-muted">Updated {formatAdminDate(v.updated_at)}</p>
+                    <div className="mt-1 flex flex-wrap gap-4">
+                      <Link href={`/admin/resources/videos/${v.id}/edit`} className="inline-flex min-h-11 items-center text-sm font-semibold text-trust hover:underline" aria-label={`Edit "${v.title}"`}>
+                        Edit
+                      </Link>
+                      {canLink && (
+                        <Link href={`/admin/resources/videos/${v.id}/edit#linked-content`} className="inline-flex min-h-11 items-center text-sm font-semibold text-trust hover:underline" aria-label={`Link "${v.title}" to content`}>
+                          Link to content
+                        </Link>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
