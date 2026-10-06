@@ -650,9 +650,12 @@ describe('Wave 1 §8 — the Analytics route shell contains no analytics', () =>
     const text = collectText((r as { element: unknown }).element).join(' ');
     expect(text).not.toMatch(/export|download|csv|pdf/i);
     const source = ResourceAnalyticsPage.toString();
-    for (const forbidden of ['/admin/resources/content', '/admin/resources/users', '/admin/resources/videos', 'href']) {
+    for (const forbidden of ['/admin/resources/content', '/admin/resources/users', '/admin/resources/videos']) {
       expect(source).not.toContain(forbidden);
     }
+    // The one link allowed is the shared back link (PO review F6) to the Dashboard: nothing else carries an href.
+    expect([...source.matchAll(/href:\s*"([^"]+)"/g)].map((m) => m[1])).toEqual(['/dashboard']);
+    expect(source.match(/href/g)?.length).toBe(1);
   });
 
   it('makes no analytics API or database call of its own', async () => {

@@ -39,7 +39,7 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 | `/admin/investment-intelligence/reference-data-quality` | `app/(app)/admin/investment-intelligence/reference-data-quality/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/recommendations` | `app/(app)/admin/recommendations/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/resources` | `app/(app)/admin/resources/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
-| `/admin/resources/analytics` | `app/(app)/admin/resources/analytics/page.tsx` | `/admin/resources`: "Back to Resources" | Done |
+| `/admin/resources/analytics` | `app/(app)/admin/resources/analytics/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/resources/content` | `app/(app)/admin/resources/content/page.tsx` | `/admin/resources`: "Back to Resources" | Done |
 | `/admin/resources/content/[id]` | `app/(app)/admin/resources/content/[id]/page.tsx` | `/admin/resources/content`: "Back to All Content" | Done |
 | `/admin/resources/content/[id]/edit` | `app/(app)/admin/resources/content/[id]/edit/page.tsx` | `/admin/resources/content`: "Back to All Content" | Done |

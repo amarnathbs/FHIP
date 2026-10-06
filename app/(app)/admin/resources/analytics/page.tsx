@@ -32,7 +32,7 @@ import { canViewResourceAnalytics } from '@/lib/resources/permissions';
 // uses for its own stricter-than-the-shell gate (canManageResources): a
 // graceful redirect rather than a rendered-but-empty page, so a denied
 // caller is never shown a surface that looks like it holds no data.
-async function ResourceAnalyticsPageContent() {
+export default async function ResourceAnalyticsPage() {
   const current = await requireResourceAdminAccess();
   if (!canViewResourceAnalytics(current)) redirect('/admin/resources');
 
@@ -42,6 +42,8 @@ async function ResourceAnalyticsPageContent() {
   // `main` landmark, so this page adds neither.
   return (
     <div className="space-y-6">
+      {/* PO review F6: the shared back link. Dashboard (not Resources): an Analyst-only caller may not enter the Resources dashboard. */}
+      <PageBackLink href="/dashboard" label="Dashboard" className="-mb-2" />
       <header>
         <h1 className="text-2xl font-semibold text-ink">Analytics Intelligence Centre</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
@@ -61,15 +63,5 @@ async function ResourceAnalyticsPageContent() {
         </p>
       </section>
     </div>
-  );
-}
-
-// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
-export default function ResourceAnalyticsPage() {
-  return (
-    <>
-      <PageBackLink href="/admin/resources" label="Resources" />
-      <ResourceAnalyticsPageContent />
-    </>
   );
 }
