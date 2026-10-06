@@ -29,9 +29,9 @@ function checkList(table: string, column: string): string[] {
 }
 
 describe('numbering and preconditions', () => {
-  it('is migration 0252, the highest, with no sibling of the same number', () => {
+  it('is migration 0252 with no sibling of the same number (not asserted to be the highest: later migrations legitimately follow it)', () => {
     const files = fs.readdirSync(MIG_DIR).filter((f) => /^\d{4}_/.test(f)).sort();
-    expect(files.at(-1)).toBe(FILE);
+    expect(files).toContain(FILE);
     expect(files.filter((f) => f.startsWith('0252_'))).toEqual([FILE]);
     expect(files).toContain('0251_bench1_held_schemes_for_benchmark_mapping.sql');
   });
