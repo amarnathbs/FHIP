@@ -1,5 +1,7 @@
 # Owner-before-upload: DEV certification, checkpoint 1 (06-10-2026)
 
+> **CORRECTION (07-10-2026).** Sections 3 and 5 below say DEV held 4 CAS documents with 1 `user_selected`. That was a snapshot taken while the PO and other sessions were still adding rows. The PO's own grids and my later read show DEV held **16** `ii_source_documents`, **13** of them `user_selected` (self 8, spouse 1, joint 1, family_trust 1, other 1, company 1), so entity-owned documents already existed. The hand-over predictions (2 to copy, 1 `legacy_unset`) were still exactly right for the rows that were un-backfilled. Final results: `DEV_CERT_STEP_RESULTS_06-10-2026.md`.
+
 Spec: `DEV_APPLICATION_AND_CERTIFICATION_SPEC_06-10-2026.md` (38 steps). This checkpoint covers steps 1 to 5 (repository and DEV truth, read only), the hand-over to the Product Owner, and the work that does not need the schema (steps 29, 30, documentation reconciliation, regression on the merged tree).
 
 **Evidence labels used:** code-complete, unit-tested, PGlite-verified (in-memory PostgreSQL, not DEV), DEV-verified (database and API), DEV-browser-verified, production-verified. Nothing is rounded up. **No DEV-verified or browser-verified claim is made in this checkpoint beyond the read-only DEV facts in section 3.**

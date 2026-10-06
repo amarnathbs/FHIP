@@ -1,0 +1,74 @@
+[
+  {
+    "step": 26,
+    "label": "BROWSER payslip (Income): the owner selector \"Who does this document belong to?\" is on the panel",
+    "ok": true,
+    "detail": "{\"id\":\"payslip-owner-select\",\"label\":\"Who does this document belong to?\",\"opts\":[\"Choose one\",\"Forecast Test User TC009 (you)\",\"FHIP UI Spouse (Spouse)\"]}"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER payslip (Income): the owner options match the flow policy",
+    "ok": true,
+    "detail": "Choose one | Forecast Test User TC009 (you) | FHIP UI Spouse (Spouse)"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER payslip (Income): with a file chosen but NO owner the upload button is disabled",
+    "ok": true,
+    "detail": "button[button](disabled) Upload payslip"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER liability (Liabilities): the owner selector \"Who does this document belong to?\" is on the panel",
+    "ok": true,
+    "detail": "{\"id\":\"liability-owner-select\",\"label\":\"Who does this document belong to?\",\"opts\":[\"Choose one\",\"Forecast Test User TC009 (you)\",\"FHIP UI Spouse (Spouse)\",\"Joint — shared between owners\",\"My SMSF\"]}"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER liability (Liabilities): the owner options match the flow policy",
+    "ok": true,
+    "detail": "Choose one | Forecast Test User TC009 (you) | FHIP UI Spouse (Spouse) | Joint — shared between owners | My SMSF"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER liability (Liabilities): with a file chosen but NO owner the upload button is disabled",
+    "ok": true,
+    "detail": "button[button](disabled) Upload statement"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER retirement (Retirement): the owner selector \"Who does this document belong to?\" is on the panel",
+    "ok": true,
+    "detail": "{\"id\":\"retirement-owner-select\",\"label\":\"Who does this document belong to?\",\"opts\":[\"Choose one\",\"Forecast Test User TC009 (you)\",\"FHIP UI Spouse (Spouse)\"]}"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER retirement (Retirement): the owner options match the flow policy",
+    "ok": true,
+    "detail": "Choose one | Forecast Test User TC009 (you) | FHIP UI Spouse (Spouse)"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER retirement (Retirement): with a file chosen but NO owner the upload button is disabled",
+    "ok": true,
+    "detail": "button[button](disabled) Upload and read statement"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER AU investment (Investments): the owner selector \"Who does this document belong to?\" is on the panel",
+    "ok": true,
+    "detail": "{\"id\":\"au-investment-owner-select\",\"label\":\"Who does this document belong to?\",\"opts\":[\"Choose one\",\"Forecast Test User TC009 (you)\",\"FHIP UI Spouse (Spouse)\",\"Joint — shared between owners\"]}"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER AU investment (Investments): the owner options match the flow policy",
+    "ok": true,
+    "detail": "Choose one | Forecast Test User TC009 (you) | FHIP UI Spouse (Spouse) | Joint — shared between owners"
+  },
+  {
+    "step": 26,
+    "label": "BROWSER AU investment (Investments): with a file chosen but NO owner the upload button is disabled",
+    "ok": true,
+    "detail": "button[button](disabled) Upload statement"
+  }
+]
