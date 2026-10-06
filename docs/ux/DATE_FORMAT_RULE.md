@@ -21,4 +21,9 @@ PO: "I asked to change the date format globally to India or Australia but seeing
 
 `tests/unit/dateFormatVisibleTextGuard.test.ts` walks all of `app/`, `components/` and `lib/` and fails on year-first or month-first wording, a native date picker, a browser-locale day, an ISO string rendered in JSX text, and a raw stored date shown as text. The only exceptions are the exact machine-format lines listed in `ALLOWED_MACHINE_TOKENS` (file-format identifiers a parser reads), each re-checked so the list cannot widen silently. Negative controls prove the scanner fails on the exact placeholder from the PO screenshot.
 
-The upload file-layout dropdown (`DATE_FORMAT_OPTIONS`) still shows a sample such as `2024-01-31` next to the plain-words label "Year first (year, month, day)": it describes the layout of the person's own file, which may genuinely be year-first.
+The upload file-layout dropdown (`DATE_FORMAT_OPTIONS`) shows the plain-words label only for the year-first and month-first options ("Year first (year, month, day)", "Month first, US style (month, day, year)") and no sample date: the PO rule of 07-10-2026 is that yyyy-mm-dd must not appear anywhere visible, even to describe the layout of the person's own file. The day-first options keep their samples (31/01/2024, 31-01-2024). `tests/unit/benchmarkDataUiLogic.test.ts` enforces this.
+
+## PO confirmations (07-10-2026)
+
+- Public Resources pages and Admin lists show dates as **dd/mm/yyyy** (the Australian shape, the app-wide fallback) wherever no country is known; **dd-mm-yyyy** is used on India-context screens (Reference Data Quality, Look-Through, Market Index, Investment Intelligence notes). The change from "20 Aug 2026" to 20/08/2026 on Money Updates, Resources lists and the public Resources site is confirmed by the Product Owner.
+- A typed ISO date (2026-08-20) is rejected by the new date fields by design (day first only).
