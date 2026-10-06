@@ -12,6 +12,9 @@
 import { deflateRawSync } from 'node:zlib';
 import { columnLetters } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';
 import { safeCell } from './uploadValidate';
+import { UNAVAILABLE_LINE, allowedValuesSections, datasetsHeading, readOnLine, type AllowedValues, type ListSection } from './allowedValues';
+
+const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 import {
   TEMPLATE_VERSION,
   UPLOAD_RULES,
@@ -20,6 +23,7 @@ import {
   XLSX_README_SHEET,
   KIND_LABEL,
   KIND_PURPOSE,
+  columnGuide,
   columnNames,
   type ColumnDef,
   type UploadKind,
@@ -42,6 +46,34 @@ export function buildTemplateCsv(kind: UploadKind): string {
   const lines = [names.map((n) => csvQuote(safeCell(n))).join(',')];
   for (const ex of UPLOAD_SCHEMA[kind].examples) lines.push(names.map((n) => csvQuote(safeCell(ex[n] ?? ''))).join(','));
   return lines.join(CRLF) + CRLF;
+}
+
+// ------------------------------------------------------------------------- Allowed values (companion CSV) ---
+
+export const ALLOWED_VALUES_CSV_NAME = 'planning_benchmarks_allowed_values.csv';
+
+/**
+ * The companion "Allowed values (CSV)" download: a CSV has no second sheet, so the same live lists the XLSX
+ * Read me prints are offered as their own file. NOT an upload template (it has no template_version column, so
+ * it can never be staged). Blocks of: a heading line, a header row and the rows. Every cell passes the
+ * formula-injection neutraliser. When the lists cannot be read the file says so, plainly.
+ */
+export function buildAllowedValuesCsv(allowed: AllowedValues): string {
+  const line = (cells: string[]) => cells.map((c) => csvQuote(safeCell(c))).join(',');
+  const out: string[] = [line(['Planning Benchmarks upload: allowed values'])];
+  if (allowed.state !== 'ok') {
+    out.push(line([UNAVAILABLE_LINE]));
+    return out.join(CRLF) + CRLF;
+  }
+  out.push(line([readOnLine(allowed)]));
+  for (const s of allowedValuesSections(allowed, 'all')) {
+    out.push('');
+    out.push(line([s.heading]));
+    out.push(line([s.intro]));
+    out.push(line(s.columns));
+    for (const r of s.rows) out.push(line(r));
+  }
+  return out.join(CRLF) + CRLF;
 }
 
 // ------------------------------------------------------------------------------------------------ XLSX ---
@@ -123,28 +155,23 @@ function exampleCell(def: ColumnDef, value: string): XCell {
   return { text: value };
 }
 
-function typeWords(def: ColumnDef): string {
-  switch (def.type) {
-    case 'enum':
-      return `one of: ${(def.enumValues ?? []).join(', ')}`;
-    case 'boolean':
-      return 'true or false';
-    case 'date':
-      return 'date';
-    case 'integer':
-      return 'whole number';
-    case 'number':
-      return 'number';
-    case 'country':
-      return 'two-letter country code';
-    case 'code':
-      return 'code';
-    default:
-      return 'text';
+/** The Read me rows for the allowed lists: a clear heading per list, a header row, then the rows. Pure. */
+export function allowedReadmeRows(kind: UploadKind, allowed: AllowedValues | undefined): XCell[][] {
+  const rows: XCell[][] = [[], [{ text: 'Allowed values: what this file may name', bold: true }]];
+  if (!allowed || allowed.state !== 'ok') {
+    rows.push([{ text: UNAVAILABLE_LINE }]);
+    return rows;
   }
+  rows.push([{ text: readOnLine(allowed) }]);
+  const sections: ListSection[] = allowedValuesSections(allowed, kind);
+  for (const s of sections) {
+    rows.push([], [{ text: s.heading, bold: true }], [{ text: s.intro }], s.columns.map((c): XCell => ({ text: c, bold: true })));
+    for (const r of s.rows) rows.push(r.map((c): XCell => ({ text: c })));
+  }
+  return rows;
 }
 
-export function buildTemplateXlsx(kind: UploadKind): Uint8Array {
+export function buildTemplateXlsx(kind: UploadKind, allowed?: AllowedValues): Uint8Array {
   const defs = UPLOAD_SCHEMA[kind].columns;
   const dataRows: XCell[][] = [defs.map((d) => ({ text: d.name, bold: true as const }))];
   for (const ex of UPLOAD_SCHEMA[kind].examples) dataRows.push(defs.map((d) => exampleCell(d, ex[d.name] ?? '')));
@@ -153,14 +180,16 @@ export function buildTemplateXlsx(kind: UploadKind): Uint8Array {
     [{ text: `Planning Benchmarks upload template: ${KIND_LABEL[kind]}`, bold: true }],
     [{ text: `Template version: ${TEMPLATE_VERSION[kind]}` }],
     [{ text: KIND_PURPOSE[kind] }],
+    [{ text: allowed && allowed.state === 'ok' ? `${cap(datasetsHeading(allowed))}. The full lists of datasets, metrics and cohorts you may name are below the column table.` : UNAVAILABLE_LINE }],
     [],
     [{ text: 'Rules', bold: true }],
     ...UPLOAD_RULES.map((r): XCell[] => [{ text: r }]),
     [],
     [{ text: 'Column', bold: true }, { text: 'Required', bold: true }, { text: 'Type', bold: true }, { text: 'Description', bold: true }],
-    ...defs.map((d): XCell[] => [{ text: d.name }, { text: d.required ? 'yes' : 'no' }, { text: typeWords(d) }, { text: d.description }]),
+    ...columnGuide(kind).map((g): XCell[] => [{ text: g.name }, { text: g.required }, { text: g.type }, { text: g.description }]),
     [],
-    [{ text: `Upload the "${XLSX_DATA_SHEET}" sheet. Delete the example rows first.` }],
+    [{ text: `Upload the "${XLSX_DATA_SHEET}" sheet. Delete the example rows first. This "${XLSX_README_SHEET}" sheet is never imported.` }],
+    ...allowedReadmeRows(kind, allowed),
   ];
 
   const files = [
@@ -185,13 +214,14 @@ export function buildTemplateXlsx(kind: UploadKind): Uint8Array {
       text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>',
     },
     { name: 'xl/worksheets/sheet1.xml', text: sheetXml(dataRows, defs.map((d) => Math.max(14, Math.min(40, d.name.length + 4)))) },
-    { name: 'xl/worksheets/sheet2.xml', text: sheetXml(readme, [28, 10, 34, 90]) },
+    { name: 'xl/worksheets/sheet2.xml', text: sheetXml(readme, [34, 16, 30, 70, 24, 30, 24, 22, 40, 40, 40]) },
   ];
   return zip(files);
 }
 
-export function buildTemplate(kind: UploadKind, format: TemplateFormat): { body: string | Uint8Array; contentType: string; fileName: string } {
+/** `allowed` is the live lists for the XLSX Read me sheet (the CSV template stays header-only: it is imported as is). */
+export function buildTemplate(kind: UploadKind, format: TemplateFormat, allowed?: AllowedValues): { body: string | Uint8Array; contentType: string; fileName: string } {
   const fileName = templateFileName(kind, format);
   if (format === 'csv') return { body: buildTemplateCsv(kind), contentType: 'text/csv; charset=utf-8', fileName };
-  return { body: buildTemplateXlsx(kind), contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName };
+  return { body: buildTemplateXlsx(kind, allowed), contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName };
 }

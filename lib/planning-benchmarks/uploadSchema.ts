@@ -48,6 +48,16 @@ export const DIRECTIONS = ['higher_better', 'lower_better', 'target_range'] as c
 export const EVIDENCE_LEVELS = ['official_statistical', 'regulatory', 'research_informed', 'platform_derived'] as const;
 export const URBAN_RURAL = ['urban', 'rural', 'metro', 'regional'] as const;
 
+/**
+ * Dataset statuses that cannot receive an upload. Mirrors stage_planning_benchmark_upload (migration 0275:
+ * "suspended, archived, superseded"); a test pins it to the migration text.
+ */
+export const CLOSED_DATASET_STATUSES = ['suspended', 'archived', 'superseded'] as const;
+
+/** The words a boolean cell accepts (case-insensitive). The validator, the Read me and the screen all read these. */
+export const BOOLEAN_TRUE_WORDS = ['true', 'yes', '1'] as const;
+export const BOOLEAN_FALSE_WORDS = ['false', 'no', '0'] as const;
+
 export type ColumnType = 'text' | 'code' | 'integer' | 'number' | 'boolean' | 'date' | 'enum' | 'country';
 
 export interface ColumnDef {
@@ -282,6 +292,39 @@ export const UPLOAD_SCHEMA: Record<UploadKind, { columns: ColumnDef[]; examples:
     ],
   },
 };
+
+export function typeWords(def: ColumnDef): string {
+  switch (def.type) {
+    case 'enum':
+      return `one of: ${(def.enumValues ?? []).join(', ')}`;
+    case 'boolean':
+      return 'true or false';
+    case 'date':
+      return 'date';
+    case 'integer':
+      return 'whole number';
+    case 'number':
+      return 'number';
+    case 'country':
+      return 'two-letter country code';
+    case 'code':
+      return 'code';
+    default:
+      return 'text';
+  }
+}
+
+export interface ColumnGuideRow {
+  name: string;
+  required: 'yes' | 'no';
+  type: string;
+  description: string;
+}
+
+/** The Column | Required | Type | Description table. The XLSX Read me sheet and the Upload tab panel both print THIS. */
+export function columnGuide(kind: UploadKind): ColumnGuideRow[] {
+  return UPLOAD_SCHEMA[kind].columns.map((d) => ({ name: d.name, required: d.required ? 'yes' : 'no', type: typeWords(d), description: d.description }));
+}
 
 export function columnNames(kind: UploadKind): string[] {
   return UPLOAD_SCHEMA[kind].columns.map((c) => c.name);

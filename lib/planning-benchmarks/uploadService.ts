@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SheetInfo } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';
 import { readUploadFile, validateUploadTable, type UploadIssue } from './uploadValidate';
 import { TEMPLATE_VERSION, UPLOAD_LIMITS, type UploadKind } from './uploadSchema';
+import { loadAllowedValues } from './allowedValues';
 
 export interface StageInput {
   fileName: string;
@@ -39,11 +40,13 @@ export async function stagePlanningBenchmarkUpload(supabase: SupabaseClient, inp
     return { status: 'rejected', stage: 'inspection', problems: read.problems, issues: [], errorCount: read.problems.length, warningCount: 0, issuesTruncated: false, fileSha256 };
   }
 
-  const { data: metrics, error: mErr } = await supabase.from('benchmark_metric_definitions').select('metric_code, unit').limit(2000);
-  if (mErr || !metrics) throw new UploadDependencyError('metric definitions could not be read');
-  const metricUnits = new Map<string, string>((metrics as Array<{ metric_code: string; unit: string }>).map((m) => [m.metric_code, m.unit]));
+  // The SAME lists the template's Read me sheet and the screen print (allowedValues.ts), read now, so the check
+  // and the lists a person was shown cannot disagree. Fail closed: an unreadable list stages nothing.
+  const allowed = await loadAllowedValues(supabase, input.todayIso);
+  if (allowed.state !== 'ok') throw new UploadDependencyError('the allowed dataset, metric and cohort lists could not be read');
+  const metricUnits = new Map<string, string>(allowed.metrics.map((m) => [m.code, m.unit]));
 
-  const v = validateUploadTable(read.table, input.kind, { todayIso: input.todayIso, metricUnits });
+  const v = validateUploadTable(read.table, input.kind, { todayIso: input.todayIso, metricUnits, allowed });
   if (v.errorCount > 0) {
     const shown = v.issues.slice(0, UPLOAD_LIMITS.maxIssuesReturned);
     return { status: 'rejected', stage: 'validation', problems: [], issues: shown, errorCount: v.errorCount, warningCount: v.warningCount, issuesTruncated: v.issues.length > shown.length, fileSha256 };

@@ -19,7 +19,8 @@ import {
   type UploadTable,
 } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';
 import { formatDayFirst, parseExcelSerialDate, parseFileDateText } from './dates';
-import { TEMPLATE_VERSION, UPLOAD_LIMITS, UPLOAD_SCHEMA, type ColumnDef, type UploadKind } from './uploadSchema';
+import { BOOLEAN_FALSE_WORDS, BOOLEAN_TRUE_WORDS, TEMPLATE_VERSION, UPLOAD_LIMITS, UPLOAD_SCHEMA, type ColumnDef, type UploadKind } from './uploadSchema';
+import { buildAllowedIndex, didYouMean, findDataset, listForMessage, type AllowedIndex, type AllowedValuesOk } from './allowedValues';
 
 export interface UploadIssue {
   severity: 'error' | 'warning';
@@ -37,6 +38,13 @@ export interface ValidateContext {
   todayIso: string;
   /** metric_code -> unit, from benchmark_metric_definitions. */
   metricUnits: ReadonlyMap<string, string>;
+  /**
+   * The live allowed lists (datasets, metrics, cohorts) that the Read me sheet and the screen also print. When
+   * present, a row naming a dataset that is not open for upload, a metric or cohort that is not listed, or a
+   * target-range source that is not the dataset's own is refused here, in plain words that name the allowed
+   * values. The database refuses the same things again at staging; this pass gives the row-level message first.
+   */
+  allowed?: AllowedValuesOk;
 }
 
 export interface ValidatedUpload {
@@ -168,8 +176,8 @@ function parseCell(def: ColumnDef, cell: TableCell | undefined, date1904: boolea
     }
     case 'boolean': {
       const v = text.toLowerCase();
-      if (['true', 'yes', '1'].includes(v)) return { ok: true, value: true };
-      if (['false', 'no', '0'].includes(v)) return { ok: true, value: false };
+      if ((BOOLEAN_TRUE_WORDS as readonly string[]).includes(v)) return { ok: true, value: true };
+      if ((BOOLEAN_FALSE_WORDS as readonly string[]).includes(v)) return { ok: true, value: false };
       return fail('BOOLEAN_FORMAT', 'must be true or false.');
     }
     case 'integer': {
@@ -279,6 +287,8 @@ export function validateUploadTable(table: UploadTable, kind: UploadKind, ctx: V
   };
 
   // ---- rows ----
+  const allowedIndex = ctx.allowed ? buildAllowedIndex(ctx.allowed) : null;
+  const reportedOnce = new Set<string>();
   for (const row of table.rows) {
     if (row.cells.every((c) => cellKind(c) === 'empty')) {
       out.blankRowsSkipped++;
@@ -306,10 +316,19 @@ export function validateUploadTable(table: UploadTable, kind: UploadKind, ctx: V
       add('error', 'TEMPLATE_VERSION_MISMATCH', row.rowNumber, 'template_version', `template_version is "${String(rec.template_version).slice(0, 40)}" but this upload kind needs "${TEMPLATE_VERSION[kind]}". Download the current template for this kind.`);
       continue;
     }
-    const rowIssuesBefore = issues.length;
-    semanticChecks(kind, rec, row.rowNumber, ctx, add);
-    const hadError = issues.slice(rowIssuesBefore).some((i) => i.severity === 'error');
-    if (hadError) continue;
+    // A problem several rows share (an unlisted dataset, an unknown metric) is reported once, on the first row
+    // that has it; every such row is still refused, so nothing is staged.
+    let rowFailed = false;
+    const rowAdd: Add = (severity, code, rowNumber, column, message, onceKey) => {
+      if (severity === 'error') rowFailed = true;
+      if (onceKey !== undefined) {
+        if (reportedOnce.has(onceKey)) return;
+        reportedOnce.add(onceKey);
+      }
+      add(severity, code, rowNumber, column, message);
+    };
+    semanticChecks(kind, rec, row.rowNumber, ctx, rowAdd, allowedIndex);
+    if (rowFailed) continue;
 
     out.rows.push({ row_no: row.rowNumber, ...rec });
   }
@@ -342,9 +361,104 @@ export function validateUploadTable(table: UploadTable, kind: UploadKind, ctx: V
   return finish();
 }
 
-type Add = (severity: 'error' | 'warning', code: string, rowNumber: number | null, column: string | null, message: string) => void;
+type Add = (severity: 'error' | 'warning', code: string, rowNumber: number | null, column: string | null, message: string, onceKey?: string) => void;
 
-function semanticChecks(kind: UploadKind, r: Record<string, string | number | boolean | null>, rowNumber: number, ctx: ValidateContext, add: Add): void {
+/**
+ * Wrong-parameter protection against the LIVE lists (the same lists the Read me sheet prints): the dataset must
+ * be open for upload, the metric and cohort must be listed, and a target-range file must cite the dataset's own
+ * source. Every message names what is allowed and may add a "did you mean" hint, which never changes the file.
+ */
+function allowedValueChecks(kind: UploadKind, r: Record<string, string | number | boolean | null>, rowNumber: number, av: AllowedValuesOk, ix: AllowedIndex, add: Add): void {
+  const name = String(r.dataset_name);
+  const version = String(r.dataset_version);
+  const dataset = findDataset(ix, name, version);
+  const openDatasets = av.datasets.filter((d) => d.open);
+  const openLabels = openDatasets.map((d) => `${d.name} (version ${d.version})`);
+  if (!dataset) {
+    if (av.complete.datasets) {
+      const sameName = ix.datasetsByName.get(name);
+      const message = sameName
+        ? `The dataset "${name.slice(0, 200)}" exists, but not as version "${version.slice(0, 40)}". Its version(s): ${sameName.map((d) => d.version).join(', ')}. An upload never creates a dataset.`
+        : `The dataset "${name.slice(0, 200)}" version "${version.slice(0, 40)}" is not a registered dataset, so nothing can be uploaded to it. Datasets open for upload (${openDatasets.length}): ${listForMessage(openLabels)}.${didYouMean(name, av.datasets.map((d) => d.name))} An upload never creates a dataset.`;
+      add('error', 'DATASET_NOT_FOUND', rowNumber, 'dataset_name', message, `dataset|${name}|${version}`);
+    }
+  } else if (!dataset.open) {
+    add(
+      'error',
+      'DATASET_NOT_OPEN',
+      rowNumber,
+      'dataset_name',
+      `The dataset "${dataset.name}" version ${dataset.version} is ${dataset.status}, so it cannot receive an upload. Datasets open for upload (${openDatasets.length}): ${listForMessage(openLabels)}.${didYouMean(dataset.name, openDatasets.map((d) => d.name))}`,
+      `dataset|${name}|${version}`
+    );
+  }
+
+  if (kind !== 'cohorts') {
+    const code = String(r.metric_code);
+    const metric = ix.metricsByCode.get(code);
+    if (!metric) {
+      if (av.complete.metrics) {
+        add(
+          'error',
+          'UNKNOWN_METRIC',
+          rowNumber,
+          'metric_code',
+          `The metric "${code.slice(0, 80)}" is not registered. An upload cannot create metrics. ${av.metrics.length} metrics are registered${didYouMean(code, av.metrics.map((m) => m.code)) || `: ${listForMessage(av.metrics.map((m) => m.code))}`}.`,
+          `metric|${code}`
+        );
+      }
+    } else if (!metric.active) {
+      add('warning', 'METRIC_INACTIVE', rowNumber, 'metric_code', `The metric ${code} is marked inactive (retired). Check that it is the right metric before you activate.`, `metric-inactive|${code}`);
+    }
+  }
+
+  if (kind === 'values' && typeof r.cohort_code === 'string' && r.cohort_code !== '' && av.complete.cohorts && !ix.cohortCodes.has(r.cohort_code)) {
+    add(
+      'error',
+      'COHORT_NOT_FOUND',
+      rowNumber,
+      'cohort_code',
+      `The cohort "${r.cohort_code.slice(0, 64)}" is not a registered cohort. Leave cohort_code blank for a country-wide figure.${didYouMean(r.cohort_code, av.cohorts.map((c) => c.code)) || ` Registered cohorts (${av.cohorts.length}): ${listForMessage(av.cohorts.map((c) => c.code))}.`} A cohort that is not registered must first be loaded and activated as a Cohorts file.`,
+      `cohort|${r.cohort_code}`
+    );
+  }
+
+  if (kind === 'target_ranges' && dataset && dataset.sourceName !== null && r.source_name !== dataset.sourceName) {
+    add(
+      'error',
+      'SOURCE_MISMATCH',
+      rowNumber,
+      'source_name',
+      `source_name is "${String(r.source_name).slice(0, 100)}" but the source of the dataset "${dataset.name}" is "${dataset.sourceName}". Bands must cite the one source of their dataset.`,
+      `source|${name}|${version}|${String(r.source_name)}`
+    );
+  }
+  if (kind === 'target_ranges' && av.complete.bands) {
+    if (typeof r.household_type === 'string' && r.household_type !== '' && av.bandHouseholdTypes.length > 0 && !av.bandHouseholdTypes.includes(r.household_type)) {
+      add(
+        'warning',
+        'HOUSEHOLD_TYPE_NEW',
+        rowNumber,
+        'household_type',
+        `No live band uses household_type "${r.household_type.slice(0, 60)}". Household types in live bands: ${listForMessage(av.bandHouseholdTypes)}.${didYouMean(r.household_type, av.bandHouseholdTypes)} A new word is accepted, so check the spelling.`,
+        `household|${r.household_type}`
+      );
+    }
+    if (typeof r.life_stage === 'string' && r.life_stage !== '' && av.bandLifeStages.length > 0 && !av.bandLifeStages.includes(r.life_stage)) {
+      add(
+        'warning',
+        'LIFE_STAGE_NEW',
+        rowNumber,
+        'life_stage',
+        `No live band uses life_stage "${r.life_stage.slice(0, 60)}". Life stages in live bands: ${listForMessage(av.bandLifeStages)}.${didYouMean(r.life_stage, av.bandLifeStages)} A new word is accepted, so check the spelling.`,
+        `life|${r.life_stage}`
+      );
+    }
+  }
+}
+
+function semanticChecks(kind: UploadKind, r: Record<string, string | number | boolean | null>, rowNumber: number, ctx: ValidateContext, add: Add, ix: AllowedIndex | null): void {
+  if (ix && ctx.allowed) allowedValueChecks(kind, r, rowNumber, ctx.allowed, ix, add);
   const dateNotFuture = (col: string) => {
     const v = r[col];
     if (typeof v === 'string' && v > ctx.todayIso) add('error', 'DATE_IN_FUTURE', rowNumber, col, `${col} is ${formatDayFirst(v)}, which is in the future.`);
@@ -357,11 +471,12 @@ function semanticChecks(kind: UploadKind, r: Record<string, string | number | bo
 
   if (kind === 'values') {
     const code = String(r.metric_code);
-    const unit = ctx.metricUnits.get(code);
+    const unit = ctx.metricUnits.get(code) ?? ix?.metricsByCode.get(code)?.unit;
     if (unit === undefined) {
-      add('error', 'UNKNOWN_METRIC', rowNumber, 'metric_code', `The metric "${code.slice(0, 80)}" is not registered. An upload cannot create metrics.`);
+      // With a complete allowed list the check above already refused it, naming the registered metrics.
+      if (!ix || !ctx.allowed?.complete.metrics) add('error', 'UNKNOWN_METRIC', rowNumber, 'metric_code', `The metric "${code.slice(0, 80)}" is not registered. An upload cannot create metrics.`);
     } else if (unit !== r.unit) {
-      add('error', 'UNIT_MISMATCH', rowNumber, 'unit', `The unit is "${String(r.unit)}" but the metric ${code} is defined in "${unit}".`);
+      add('error', 'UNIT_MISMATCH', rowNumber, 'unit', `The unit is "${String(r.unit)}" but the metric ${code} is defined in "${unit}". Upload this metric in "${unit}" (the unit is never converted for you).`);
     }
     if (r.unit === 'currency' && !r.original_currency) add('error', 'CURRENCY_REQUIRED', rowNumber, 'original_currency', 'A currency amount needs original_currency.');
     if (r.unit !== 'currency' && r.original_currency) add('error', 'CURRENCY_NOT_ALLOWED', rowNumber, 'original_currency', 'original_currency must be blank unless the unit is currency.');
@@ -386,7 +501,9 @@ function semanticChecks(kind: UploadKind, r: Record<string, string | number | bo
     }
   } else if (kind === 'target_ranges') {
     const code = String(r.metric_code);
-    if (!ctx.metricUnits.has(code)) add('error', 'UNKNOWN_METRIC', rowNumber, 'metric_code', `The metric "${code.slice(0, 80)}" is not registered. An upload cannot create metrics.`);
+    if (!ctx.metricUnits.has(code) && !ix?.metricsByCode.has(code) && (!ix || !ctx.allowed?.complete.metrics)) {
+      add('error', 'UNKNOWN_METRIC', rowNumber, 'metric_code', `The metric "${code.slice(0, 80)}" is not registered. An upload cannot create metrics.`);
+    }
     if (r.lower_bound === null && r.upper_bound === null) add('error', 'BOUND_REQUIRED', rowNumber, 'lower_bound', 'A band needs a lower bound, an upper bound, or both.');
     if (typeof r.lower_bound === 'number' && typeof r.upper_bound === 'number' && r.lower_bound > r.upper_bound) add('error', 'BOUND_ORDER', rowNumber, 'upper_bound', 'The lower bound is above the upper bound.');
     dateNotFuture('effective_from');

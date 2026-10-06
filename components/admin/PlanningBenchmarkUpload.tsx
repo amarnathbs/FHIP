@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdminActionStatus, useAdminActionStatus } from '@/components/admin/AdminActionStatus';
 import { actionFailureMessage, failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
+import { AllowedValuesPanel, ALLOWED_VALUES_CSV_URL } from '@/components/admin/PlanningBenchmarkAllowedValues';
 import { formatDayFirstDateTime } from '@/lib/planning-benchmarks/dayFirst';
 import { KIND_LABEL, UPLOAD_KINDS, XLSX_DATA_SHEET, type UploadKind } from '@/lib/planning-benchmarks/uploadSchema';
 
@@ -351,7 +352,15 @@ export function PlanningBenchmarkUpload() {
               <span className="text-xs text-muted">{k.purpose}</span>
             </li>
           ))}
+          <li className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span className="min-w-48 font-medium text-ink">Allowed values</span>
+            <a className="min-h-11 content-center text-trust underline" href={ALLOWED_VALUES_CSV_URL} download>
+              Allowed values (CSV)
+            </a>
+            <span className="text-xs text-muted">Every dataset, metric (with its unit) and cohort a file may name. The Excel templates carry the same lists on their Read me sheet.</span>
+          </li>
         </ul>
+        <AllowedValuesPanel />
         <details className="mt-3 text-sm">
           <summary className="min-h-11 cursor-pointer py-2 font-medium text-trust">Rules for the file</summary>
           <ul className="list-disc space-y-1 pl-5 text-muted">
