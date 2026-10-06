@@ -320,7 +320,16 @@ describe('acknowledgement and option catalogues', () => {
   it('the date format and number locale lists cover the contract and show an example for each', () => {
     expect(DATE_FORMAT_OPTIONS.map((o) => o.value)).toEqual(['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'DD-MM-YYYY', 'DD-MMM-YYYY', 'DD MMM YYYY', 'excel_1900', 'excel_1904']);
     expect(NUMBER_LOCALE_OPTIONS.map((o) => o.value)).toEqual(['plain', 'en', 'in', 'eu']);
-    for (const o of [...DATE_FORMAT_OPTIONS, ...NUMBER_LOCALE_OPTIONS]) expect(o.example.length).toBeGreaterThan(0);
+    // PO rule 07-10-2026: no year-first (yyyy-mm-dd) and no month-first sample text on screen; those two options carry the plain-words label only.
+    const WORDS_ONLY = ['YYYY-MM-DD', 'MM/DD/YYYY'];
+    for (const o of DATE_FORMAT_OPTIONS) {
+      if (WORDS_ONLY.includes(o.value)) expect(o.example).toBe('');
+      else expect(o.example.length).toBeGreaterThan(0);
+      expect(`${o.label} ${o.example}`).not.toMatch(/\b\d{4}-\d{2}-\d{2}\b|\b\d{2}\/\d{2}\/\d{4}\b.*US/);
+    }
+    expect(DATE_FORMAT_OPTIONS.find((o) => o.value === 'YYYY-MM-DD')?.label).toBe('Year first (year, month, day)');
+    expect(DATE_FORMAT_OPTIONS.find((o) => o.value === 'MM/DD/YYYY')?.example).not.toMatch(/\d/);
+    for (const o of NUMBER_LOCALE_OPTIONS) expect(o.example.length).toBeGreaterThan(0);
     expect(NUMBER_LOCALE_OPTIONS.find((o) => o.value === 'in')?.example).toBe('1,23,456.78');
   });
 });

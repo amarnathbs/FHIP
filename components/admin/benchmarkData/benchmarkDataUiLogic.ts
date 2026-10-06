@@ -108,11 +108,11 @@ export const UPLOAD_MODE_OPTIONS: ReadonlyArray<{ value: UploadModeId; label: st
   { value: 'correction', label: 'Correction', description: 'Replaces stored levels with corrected values. The old level is kept as revision history. Needs a written reason and the correction permission.' },
 ];
 
-/** Explicit date formats. There is deliberately NO default: a date such as 03-04-2024 is two different days depending on the order. */
+/** Explicit date formats. A year-first or month-first sample is deliberately NOT shown (PO rule 07-10-2026: such text must not appear on screen); the plain-words label says the order. There is deliberately NO default: a date such as 03-04-2024 is two different days depending on the order. */
 export const DATE_FORMAT_OPTIONS: ReadonlyArray<{ value: DateFormatId; label: string; example: string }> = [
-  { value: 'YYYY-MM-DD', label: 'Year first (year, month, day)', example: '2024-01-31' },
+  { value: 'YYYY-MM-DD', label: 'Year first (year, month, day)', example: '' },
   { value: 'DD/MM/YYYY', label: 'Day/month/year (DD/MM/YYYY)', example: '31/01/2024' },
-  { value: 'MM/DD/YYYY', label: 'Month first, US style (month, day, year)', example: '01/31/2024' },
+  { value: 'MM/DD/YYYY', label: 'Month first, US style (month, day, year)', example: '' },
   { value: 'DD-MM-YYYY', label: 'Day-month-year (DD-MM-YYYY)', example: '31-01-2024' },
   { value: 'DD-MMM-YYYY', label: 'Day-Mon-year (DD-MMM-YYYY)', example: '31-Jan-2024' },
   { value: 'DD MMM YYYY', label: 'Day Mon year (DD MMM YYYY)', example: '31 Jan 2024' },
