@@ -1,8 +1,7 @@
 // Date helpers for the Planning Benchmarks upload. Pure.
 //
-// Inside an uploaded FILE a date is machine data: the database order (year first, dashes) is the primary
-// form, day-first dd/mm/yyyy and dd-mm-yyyy are also accepted (a CSV saved from an Australian or Indian
-// Excel contains them), and a real Excel date cell is accepted. Month-first and two-digit years are never
+// Inside an uploaded FILE the templates ask for day-first dd/mm/yyyy (what an Australian or Indian Excel
+// writes); dd-mm-yyyy, the database order (year first, dashes) and a real Excel date cell are also accepted. Month-first and two-digit years are never
 // accepted. Everything a PERSON reads goes through formatDayFirst (dayFirst.ts).
 import { excelSerialToIsoDate } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';
 

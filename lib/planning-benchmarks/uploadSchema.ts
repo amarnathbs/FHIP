@@ -8,9 +8,8 @@
 //
 // Pure module: no database, no network, no clock.
 //
-// Dates inside a FILE are written year-first with dashes (the database order). Every piece of text a
-// person reads (descriptions, messages, previews) is day-first, so no description below spells out a
-// year-first example; the template's example rows are file content, not prose.
+// Dates inside a FILE are asked for day first (dd/mm/yyyy); the database order (year first, dashes) and a real
+// Excel date cell are also accepted by the validator. Every piece of text a person reads is day-first.
 
 export const UPLOAD_KINDS = ['values', 'target_ranges', 'cohorts'] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
@@ -115,17 +114,17 @@ export const UPLOAD_SCHEMA: Record<UploadKind, { columns: ColumnDef[]; examples:
         value_numeric: '100.5',
         unit: 'percentage',
         original_currency: '',
-        base_date: '2020-06-30',
+        base_date: '30/06/2020',
         effective_from: '',
         is_derived: 'false',
         derivation_method: '',
         confidence_score: '',
         source_release: 'Example release title',
-        observation_period_start: '2019-07-01',
-        observation_period_end: '2020-06-30',
+        observation_period_start: '01/07/2019',
+        observation_period_end: '30/06/2020',
         source_file: 'example.xlsx',
         source_locator: 'Table 1, cell B2',
-        retrieval_date: '2026-10-01',
+        retrieval_date: '01/10/2026',
       },
       {
         template_version: TEMPLATE_VERSION.values,
@@ -143,11 +142,11 @@ export const UPLOAD_SCHEMA: Record<UploadKind, { columns: ColumnDef[]; examples:
         derivation_method: 'Example: published total divided by published count',
         confidence_score: '80',
         source_release: 'Example release title',
-        observation_period_start: '2019-07-01',
+        observation_period_start: '01/07/2019',
         observation_period_end: '',
         source_file: 'example.xlsx',
         source_locator: 'Table 2, cell C3',
-        retrieval_date: '2026-10-01',
+        retrieval_date: '01/10/2026',
       },
     ],
   },
@@ -197,11 +196,11 @@ export const UPLOAD_SCHEMA: Record<UploadKind, { columns: ColumnDef[]; examples:
         model_version: 'example-1',
         effective_from: '',
         source_release: 'Example release title',
-        observation_period_start: '2026-02-01',
+        observation_period_start: '01/02/2026',
         observation_period_end: '',
         source_file: 'example.pdf',
         source_locator: 'Page 3',
-        retrieval_date: '2026-10-01',
+        retrieval_date: '01/10/2026',
       },
       {
         template_version: TEMPLATE_VERSION.target_ranges,
@@ -222,11 +221,11 @@ export const UPLOAD_SCHEMA: Record<UploadKind, { columns: ColumnDef[]; examples:
         model_version: 'example-1',
         effective_from: '',
         source_release: 'Example release title',
-        observation_period_start: '2026-02-01',
+        observation_period_start: '01/02/2026',
         observation_period_end: '',
         source_file: 'example.pdf',
         source_locator: 'Page 3',
-        retrieval_date: '2026-10-01',
+        retrieval_date: '01/10/2026',
       },
     ],
   },
@@ -306,7 +305,7 @@ export const UPLOAD_RULES: string[] = [
   'Row 1 is the header row. Do not rename, reorder or delete columns, and do not add columns.',
   'One file loads one dataset, and one kind of data (observed values, planning target ranges or cohorts).',
   'Keep the template_version column exactly as given on every row.',
-  'Dates: write them year first, then month, then day, each part with two digits and joined by dashes (the order the database sorts correctly). Day-first dates such as 01/02/2026 or 01-02-2026 are also accepted, and a real Excel date cell is accepted. Two-digit years and month-first dates are refused.',
+  'Dates: write them day first, as 30/06/2020 (day, month, then a four-digit year, joined by slashes or dashes). A real Excel date cell is accepted. The database order year first with dashes is still accepted in a file, but month-first dates and two-digit years are refused.',
   'Numbers: plain digits with a decimal point and at most 4 decimals. No thousands separators, no currency symbols, no percent signs. Percentages are percentage points (56.2, not 0.562).',
   'The unit must be the unit the metric is defined in. If it is not, the row is refused.',
   'Excel files: the data must be on a sheet you choose explicitly when you upload. Cells must hold values, not formulas. Hidden sheets and hidden rows are listed and are not processed unless you say so.',
