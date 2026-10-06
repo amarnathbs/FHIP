@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
-import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
+import { getCurrentResourceRoles, isResourceStaff, canDeleteDraftResource } from '@/lib/resources/permissions';
+import { deleteNeverPublishedDraft } from '@/lib/resources/editor/deleteDraft';
 import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions, isSlugAvailable } from '@/lib/resources/editor/queries';
 import { updateResourceDraft } from '@/lib/resources/editor/mutations';
 import { validateForDraftSave, validateCtaAssignment } from '@/lib/resources/editor/validation';
@@ -105,5 +106,43 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   } catch (err) {
     console.error('Resources editor save error:', err);
     return bad('Could not save your changes.', 500);
+  }
+}
+
+// DELETE /api/admin/resources/content/[id] — PO review F3 (06/10/2026).
+//
+// Deletes a NEVER-PUBLISHED draft of any content type (Article, Guide, FHIP
+// Explainer, Money Update, Glossary, Video). Capability: canDeleteDraftResource
+// (Super Admin / Resource Administrator, the same set the database's own
+// "managers delete posts" policy allows). Published, scheduled, in-review and
+// archived content is refused with 409 and follows the existing workflow. The
+// response states what was removed and whether the audit row was written.
+// Child rows are removed by the existing ON DELETE CASCADE foreign keys. See
+// lib/resources/editor/deleteDraft.ts.
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return bad('unauthenticated', 401);
+
+  const countryBlock = await countryConfirmationBlockResponse(supabase, user.id);
+  if (countryBlock) return countryBlock;
+
+  const current = await getCurrentResourceRoles();
+  if (!canDeleteDraftResource(current)) return bad("You don't have permission to delete drafts. Ask a Resource Administrator.", 403);
+
+  const { id } = await params;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return bad('Resource not found.', 404);
+
+  try {
+    const outcome = await deleteNeverPublishedDraft(supabase, createAdminClient(), id, user.id);
+    if (outcome.status === 'not_found') return bad('Resource not found.', 404);
+    if (outcome.status === 'not_deletable') return Response.json({ error: outcome.reason }, { status: 409 });
+    if (outcome.status === 'failed') return bad('Could not delete this draft.', 500);
+    return ok({ deleted: true, auditWritten: outcome.auditWritten, removed: outcome.removed });
+  } catch (err) {
+    console.error('Resources draft delete error:', err);
+    return bad('Could not delete this draft.', 500);
   }
 }

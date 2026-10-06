@@ -1,0 +1,33 @@
+{
+ "f7_status": {
+  "status": 200,
+  "finalUrl": "/admin/investment-intelligence/reference-data-quality"
+ },
+ "f7_text_checks": {
+  "isoDateInText": false,
+  "isoTimestampInText": false,
+  "approvedFallbackGroup": true,
+  "exactSentence": true,
+  "blockedHeadingStillThere": true,
+  "mfnavUnderBlocked": false,
+  "succeededAmfiLines": 2,
+  "hiddenSummary": true
+ },
+ "f7_show_all_aria": "false",
+ "f7_overflow_390": 14,
+ "f7_overflow_768": 0,
+ "f7_overflow_1024": 0,
+ "f5_benchmarks_page": {
+  "status": 200,
+  "uploadTabVisible": 0,
+  "tabs": [
+   "Sources",
+   "Datasets",
+   "Cohorts"
+  ]
+ },
+ "f5_direct_url_without_capability": {
+  "status": 200,
+  "finalUrl": "/dashboard"
+ }
+}

@@ -34,6 +34,27 @@ export type ReferenceSourceFormat = 'amfi_navall_txt' | 'amfi_navhistory_txt' | 
  */
 export type ReferenceSourceLicence = 'public_open' | 'licence_required' | 'po_decision_required';
 
+/**
+ * A recorded Product Owner decision about a source that is NOT yet operational.
+ * It exists so the admin surface can say "approved, but not operational yet"
+ * instead of the misleading "awaiting a Product Owner decision".
+ *
+ * Recording a decision here NEVER enables a source: `enabled` stays false and
+ * `buildUrl()` keeps refusing until a genuine response is observed from the
+ * real FHIP network path and `enabled` is changed in a separate, reviewed edit.
+ */
+export interface ReferenceSourcePoDecision {
+  status: 'approved_fallback';
+  /** ISO yyyy-mm-dd (rendered day-first on screen). */
+  decidedOn: string;
+  /** Where the decision came from, shown verbatim. */
+  basis: string;
+}
+
+/** Exact wording shown on the admin surface for an approved-but-not-operational fallback. */
+export const APPROVED_FALLBACK_STATEMENT =
+  'Approved by the Product Owner as a fallback. Not operational until a genuine HTTP 200 is observed from the real FHIP network path.';
+
 export interface ReferenceSourceDefinition {
   /** Stable key. Also the `ii_sources.source_key` this source ingests under. */
   sourceKey: string;
@@ -62,6 +83,8 @@ export interface ReferenceSourceDefinition {
   /** false = the importer must refuse to run and say why. */
   enabled: boolean;
   notes: string;
+  /** Present only once the Product Owner has ruled on a not-yet-operational source. */
+  poDecision?: ReferenceSourcePoDecision;
 }
 
 /**
@@ -179,7 +202,7 @@ export const PC6_REFERENCE_SOURCES: Record<string, ReferenceSourceDefinition> = 
 
   mfnav_fallback_history: {
     sourceKey: 'mfnav',
-    label: 'mfnav.in — possible fallback mutual fund NAV history API',
+    label: 'mfnav.in — fallback mutual fund NAV history API',
     kind: 'nav_history',
     format: 'json',
     countryCode: 'IN',
@@ -190,13 +213,19 @@ export const PC6_REFERENCE_SOURCES: Record<string, ReferenceSourceDefinition> = 
     cadence: 'daily_business',
     staleAfterDays: 4,
     notes:
-      'Unqualified fallback (NAV 1.16). The workbook\'s own prior review recorded HTTP 403 from a ' +
-      'research environment; this session did not independently re-test it (no adapter built — building ' +
+      'APPROVED AS A FALLBACK by the Product Owner on 2026-10-06 (per Product Owner review) -- but NOT ' +
+      'operational. Unqualified fallback (NAV 1.16). The workbook\'s own prior review recorded HTTP 403 from a ' +
+      'research environment; this source has not been independently re-tested (no adapter built -- building ' +
       'one against an already-known-403 endpoint without a fresh access result would misrepresent ' +
       'qualification status). Do not call this operational until a genuine 200 response is observed from ' +
       'the actual FHIP network path per the workbook\'s own instruction ("test the real FHIP network path ' +
-      'without bypassing access controls").',
+      'without bypassing access controls"). enabled stays false and no endpoint is configured.',
     enabled: false,
+    poDecision: {
+      status: 'approved_fallback',
+      decidedOn: '2026-10-06',
+      basis: 'per Product Owner review',
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -314,7 +343,30 @@ export function buildUrl(id: string, window: BuildUrlWindow = {}): string {
   return url;
 }
 
-/** Every source the Product Owner still has to unblock, for the admin surface. */
+/**
+ * Every source that is not currently operational (superset). NOT the same as
+ * "awaiting a Product Owner decision": a source the PO has already approved
+ * as a fallback is disabled but is no longer awaiting anything. The admin
+ * surface uses sourcesAwaitingPoDecision() / approvedFallbackSources().
+ */
 export function blockedSources(): ReferenceSourceDefinition[] {
   return Object.values(PC6_REFERENCE_SOURCES).filter((s) => !s.enabled);
+}
+
+/** Disabled sources the Product Owner has NOT yet ruled on, for the admin "Blocked sources" group. */
+export function sourcesAwaitingPoDecision(
+  registry: Record<string, ReferenceSourceDefinition> = PC6_REFERENCE_SOURCES
+): ReferenceSourceDefinition[] {
+  return Object.values(registry).filter((s) => !s.enabled && s.poDecision?.status !== 'approved_fallback');
+}
+
+/**
+ * Disabled sources the Product Owner HAS approved as a fallback. An approved
+ * source that is operational (enabled) is not listed: this group exists to be
+ * honest that approval is not the same as being operational.
+ */
+export function approvedFallbackSources(
+  registry: Record<string, ReferenceSourceDefinition> = PC6_REFERENCE_SOURCES
+): ReferenceSourceDefinition[] {
+  return Object.values(registry).filter((s) => !s.enabled && s.poDecision?.status === 'approved_fallback');
 }

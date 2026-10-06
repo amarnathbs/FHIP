@@ -20,91 +20,13 @@
 //          screen with no signal, and had no zero-results state.
 //   §19    The purpose sentence cited "spec §29-30" to operators.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ResourceCombobox } from '@/components/ui/ResourceCombobox';
 import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { AdminActionStatus, useAdminActionStatus } from '@/components/admin/AdminActionStatus';
 import { actionFailureMessage, readJsonSafely } from '@/lib/resources/admin/resultState';
 import { RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABELS, formatStatusForPicker, formatContentTypeForPicker, type RelationshipType, type RelatedContentAdminRow, type RelatableSearchResult } from '@/lib/resources/discovery/relatedAdmin';
-
-function PostPicker({ onPick, excludeId, label }: { onPick: (post: RelatableSearchResult) => void; excludeId?: string; label: string }) {
-  const [q, setQ] = useState('');
-  const [results, setResults] = useState<RelatableSearchResult[]>([]);
-  const [searchState, setSearchState] = useState<'idle' | 'searching' | 'done' | 'failed'>('idle');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    // Every branch schedules its state update inside the timeout (even the
-    // empty-query "clear" case) rather than calling setState synchronously
-    // in the effect body.
-    debounceRef.current = setTimeout(async () => {
-      if (!q.trim()) {
-        setResults([]);
-        setSearchState('idle');
-        return;
-      }
-      setSearchState('searching');
-      try {
-        const qp = new URLSearchParams({ q });
-        if (excludeId) qp.set('exclude', excludeId);
-        const res = await fetch(`/api/admin/resources/related/search-posts?${qp.toString()}`);
-        const json = await readJsonSafely(res);
-        if (!res.ok) {
-          setResults([]);
-          setSearchState('failed');
-          return;
-        }
-        setResults((json?.data as RelatableSearchResult[]) ?? []);
-        setSearchState('done');
-      } catch {
-        setResults([]);
-        setSearchState('failed');
-      }
-    }, 300);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [q, excludeId]);
-
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-ink" htmlFor={`picker-${label}`}>
-        {label}
-      </label>
-      <input id={`picker-${label}`} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title…" className="w-full rounded-compact border border-line px-3 py-2 text-sm" />
-      <p role="status" aria-live="polite" className="mt-1 text-xs text-muted">
-        {searchState === 'searching' && 'Searching…'}
-        {searchState === 'failed' && 'That search could not be run. Try again.'}
-        {searchState === 'done' && results.length === 0 && 'No resources match that search.'}
-        {searchState === 'done' && results.length > 0 && `${results.length} ${results.length === 1 ? 'match' : 'matches'}.`}
-      </p>
-      {results.length > 0 && (
-        <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-compact border border-line p-2">
-          {results.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onPick(r);
-                  setQ('');
-                  setResults([]);
-                  setSearchState('idle');
-                }}
-                className="flex min-h-11 w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm outline-offset-2 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-trust"
-              >
-                <span className="truncate text-ink">{r.title}</span>
-                <span className="shrink-0 text-xs text-muted">
-                  {formatContentTypeForPicker(r.content_type)} · {formatStatusForPicker(r.status)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 export function RelatedContentManager({ canManage }: { canManage: boolean }) {
   const [source, setSource] = useState<RelatableSearchResult | null>(null);
@@ -288,7 +210,7 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
       <AdminTaskHelp taskId="ADM-16" />
 
       <div className="max-w-lg rounded-card border border-line bg-white p-4">
-        <PostPicker label="Choose a Resource to manage" onPick={setSource} />
+        <ResourceCombobox label="Choose a Resource to manage" helpText="Pick from the list of all current resources, or type to filter it." onSelect={setSource} />
         {source && (
           <p className="mt-2 text-sm text-ink">
             Managing: <span className="font-semibold">{source.title}</span>{' '}
@@ -398,7 +320,13 @@ export function RelatedContentManager({ canManage }: { canManage: boolean }) {
                   ))}
                 </select>
               </div>
-              <PostPicker label="Add a related Resource" onPick={addRelation} excludeId={source.id} />
+              <ResourceCombobox
+                label="Add a related Resource"
+                helpText="Pick from the list or type to filter. Resources already related to this one are not offered."
+                onSelect={addRelation}
+                excludeId={source.id}
+                excludeIds={relations.flatMap((r) => (r.related?.id ? [r.related.id] : []))}
+              />
             </div>
           )}
         </div>

@@ -46,8 +46,10 @@ import {
   type AdminFailure,
 } from '@/lib/resources/admin/resultState';
 import { cell, fmt, fmtCell, type Row } from '@/components/admin/adminBenchmarksCells';
+import { PlanningBenchmarkUpload } from '@/components/admin/PlanningBenchmarkUpload';
+import { parseAdminCapabilities } from '@/lib/admin/adminNav';
 
-type Tab = 'sources' | 'datasets' | 'cohorts' | 'values' | 'target-ranges' | 'update-runs';
+type Tab = 'sources' | 'datasets' | 'cohorts' | 'values' | 'target-ranges' | 'update-runs' | 'upload';
 
 const TABS: { key: Tab; label: string; purpose: string; subject: string; helpTaskId: string }[] = [
   {
@@ -93,6 +95,14 @@ const TABS: { key: Tab; label: string; purpose: string; subject: string; helpTas
     purpose:
       'Every benchmark lifecycle change that has been recorded, including activation attempts that were rejected. Read-only.',
     subject: 'the benchmark update and audit log',
+    helpTaskId: 'ADM-03',
+  },
+  {
+    key: 'upload',
+    label: 'Upload',
+    purpose:
+      'Upload new benchmark figures from a template. A file is checked and staged first and nothing is live until an authorised administrator activates it. The figures they replace are kept as history.',
+    subject: 'the benchmark upload area',
     helpTaskId: 'ADM-03',
   },
 ];
@@ -150,10 +160,20 @@ export function AdminBenchmarksClient() {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [validation, setValidation] = useState<{ name: string; valid: boolean; errors: string[] } | null>(null);
   const { outcome, reportSuccess, reportFailure, clearOutcome } = useAdminActionStatus();
+  // The Upload tab is shown only to a caller holding one of the two upload capabilities. UX only: the page, the
+  // API and the database each enforce the capability themselves (Admin Standard section 4).
+  const [showUploadTab, setShowUploadTab] = useState(false);
 
   const activeTab = TABS.find((t) => t.key === tab)!;
 
   const load = useCallback(async (t: Tab) => {
+    if (t === 'upload') {
+      // The Upload tab loads its own data (see PlanningBenchmarkUpload); there is no list to fetch here.
+      setRows(null);
+      setFailure(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setFailure(null);
     const subject = TABS.find((x) => x.key === t)?.subject ?? 'this data';
@@ -188,6 +208,22 @@ export function AdminBenchmarksClient() {
     const timer = setTimeout(() => void load(tab), 0);
     return () => clearTimeout(timer);
   }, [tab, load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/me');
+        const caps = parseAdminCapabilities(await readJsonSafely(res));
+        if (!cancelled) setShowUploadTab(res.ok && (caps.planningBenchmarkUpload || caps.planningBenchmarkActivate));
+      } catch {
+        if (!cancelled) setShowUploadTab(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function runLifecycle(action: PendingAction) {
     setBusyId(action.id);
@@ -279,10 +315,10 @@ export function AdminBenchmarksClient() {
         </p>
       </div>
 
-      <AdminTaskHelp taskId={activeTab.helpTaskId} />
+      {tab !== 'upload' && <AdminTaskHelp taskId={activeTab.helpTaskId} />}
 
       <div className="flex flex-wrap gap-2 border-b border-line">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.key !== 'upload' || showUploadTab).map((t) => (
           <button
             key={t.key}
             type="button"
@@ -304,6 +340,8 @@ export function AdminBenchmarksClient() {
       <p className="max-w-3xl text-sm text-muted">{activeTab.purpose}</p>
 
       <AdminActionStatus outcome={outcome} />
+
+      {tab === 'upload' && <PlanningBenchmarkUpload />}
 
       {validation && (
         <div
@@ -336,7 +374,7 @@ export function AdminBenchmarksClient() {
         </div>
       )}
 
-      {failure && (
+      {tab !== 'upload' && failure && (
         <div
           role={failure.retryable ? 'alert' : 'status'}
           className={`rounded-card border p-4 text-sm ${failure.retryable ? 'border-risk/40 bg-risk/5' : 'border-line bg-white'}`}
@@ -355,13 +393,13 @@ export function AdminBenchmarksClient() {
         </div>
       )}
 
-      {loading && (
+      {tab !== 'upload' && loading && (
         <p role="status" aria-live="polite" className="text-sm text-muted">
           Loading {activeTab.subject}…
         </p>
       )}
 
-      {!loading && rows && (
+      {tab !== 'upload' && !loading && rows && (
         <>
           <p role="status" aria-live="polite" className="text-xs text-muted">
             {rows.length} {rows.length === 1 ? 'row' : 'rows'} shown.
@@ -534,5 +572,7 @@ function columnsFor(tab: Tab): string[] {
       return ['Metric', 'country_code', 'Band Label', 'Band Tier', 'Min', 'Max', 'evidence_level'];
     case 'update-runs':
       return ['Dataset', 'Approval', 'rows_imported', 'rows_rejected', 'Imported At'];
+    case 'upload':
+      return [];
   }
 }

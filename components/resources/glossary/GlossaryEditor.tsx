@@ -18,6 +18,8 @@ import { RevisionHistoryPanel } from '@/components/resources/editor/RevisionHist
 import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { SaveStatus, type SaveState } from '@/components/resources/editor/SaveStatus';
 import { useUnsavedChangesGuard } from '@/components/resources/editor/useUnsavedChangesGuard';
+import { DeleteDraftButton } from '@/components/resources/admin/DeleteDraftButton';
+import { createRecordOnFirstSave } from '@/lib/resources/editor/blankPost';
 import { AliasesEditor } from '@/components/resources/specialist/AliasesEditor';
 import { RelatedTermsPicker } from '@/components/resources/specialist/RelatedTermsPicker';
 import { slugify } from '@/lib/resources/editor/slug';
@@ -28,8 +30,6 @@ import type { EditorSavePatch, PostVersionSnapshot, EditorReferenceData, PostVer
 import type { GlossaryEditorPost } from '@/lib/resources/glossary/types';
 import type { ResourceStatus, ComplianceClassification } from '@/lib/resources/types';
 import type { WorkflowHistoryEntry } from '@/lib/resources/admin/queries';
-
-const AUTOSAVE_DEBOUNCE_MS = 2500;
 
 function toMetadataForm(post: GlossaryEditorPost): MetadataFormState {
   return {
@@ -64,6 +64,7 @@ export function GlossaryEditor({
   initialWorkflowHistory,
   currentUserId,
   caps,
+  canDelete = false,
 }: {
   post: GlossaryEditorPost;
   reference: EditorReferenceData;
@@ -72,8 +73,13 @@ export function GlossaryEditor({
   initialWorkflowHistory: WorkflowHistoryEntry[];
   currentUserId: string;
   caps: WorkflowCapabilities;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
+  // F3: empty until the first explicit Save creates the record (a new
+  // definition is opened on a blank, never-persisted post with id '').
+  const [postId, setPostId] = useState(initialPost.id);
+  const postIdRef = useRef(initialPost.id);
 
   const [title, setTitle] = useState(initialPost.title);
   const [excerpt, setExcerpt] = useState(initialPost.excerpt ?? '');
@@ -98,7 +104,6 @@ export function GlossaryEditor({
   const [changeSummary, setChangeSummary] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
   const similarCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Wave 5 (§28): queue a save requested during an in-flight one instead of
@@ -128,7 +133,7 @@ export function GlossaryEditor({
     if (similarCheckTimer.current) clearTimeout(similarCheckTimer.current);
     if (!titleLongEnoughToCheck) return;
     similarCheckTimer.current = setTimeout(() => {
-      fetch(`/api/admin/resources/glossary/similar?term=${encodeURIComponent(title.trim())}&excludeId=${initialPost.id}`)
+      fetch(`/api/admin/resources/glossary/similar?term=${encodeURIComponent(title.trim())}&excludeId=${postId}`)
         .then((r) => r.json())
         .then((j) => {
           const matches = (j.data ?? []) as { title: string }[];
@@ -139,7 +144,7 @@ export function GlossaryEditor({
     return () => {
       if (similarCheckTimer.current) clearTimeout(similarCheckTimer.current);
     };
-  }, [title, titleLongEnoughToCheck, initialPost.id]);
+  }, [title, titleLongEnoughToCheck, postId]);
 
   const buildPatch = useCallback(
     (): EditorSavePatch => ({
@@ -205,12 +210,34 @@ export function GlossaryEditor({
         queuedSaveRef.current = true;
         return;
       }
+      // F3: no record exists until this explicit Save, and only with a term.
+      if (!postIdRef.current && !title.trim()) {
+        setFieldErrors({ title: 'Enter the term before saving.' });
+        setSaveState('error');
+        setSaveError('Enter the term before saving. Nothing has been created yet.');
+        return;
+      }
       savingRef.current = true;
       const seqAtStart = changeSeqRef.current;
       setSaveState('saving');
       setSaveError(null);
       try {
-        const res = await fetch(`/api/admin/resources/glossary/${initialPost.id}`, {
+        let expectedUpdatedAt = lastUpdatedAt;
+        if (!postIdRef.current) {
+          const created = await createRecordOnFirstSave('/api/admin/resources/glossary', { title: title.trim() });
+          if (!created.ok) {
+            setFieldErrors(created.fields ?? {});
+            setSaveState('error');
+            setSaveError(created.error);
+            return;
+          }
+          postIdRef.current = created.id;
+          setPostId(created.id);
+          expectedUpdatedAt = created.updatedAt;
+          setLastUpdatedAt(created.updatedAt);
+          window.history.replaceState(null, '', `/admin/resources/glossary/${created.id}/edit`);
+        }
+        const res = await fetch(`/api/admin/resources/glossary/${postIdRef.current}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -219,7 +246,7 @@ export function GlossaryEditor({
             relatedTermIds,
             categoryIds: meta.categoryIds,
             tagIds: meta.tagIds,
-            expectedUpdatedAt: lastUpdatedAt,
+            expectedUpdatedAt,
             createVersion,
             changeSummary: createVersion ? changeSummary : undefined,
             versionSnapshot: createVersion ? buildSnapshot() : undefined,
@@ -253,7 +280,7 @@ export function GlossaryEditor({
         }
         if (createVersion) {
           setChangeSummary('');
-          fetch(`/api/admin/resources/glossary/${initialPost.id}/versions`)
+          fetch(`/api/admin/resources/glossary/${postIdRef.current}/versions`)
             .then((r) => r.json())
             .then((j) => j.data && setVersions(j.data))
             .catch(() => {});
@@ -269,7 +296,7 @@ export function GlossaryEditor({
         }
       }
     },
-    [aliases, buildPatch, buildSnapshot, changeSummary, initialPost.id, lastUpdatedAt, meta.categoryIds, meta.tagIds, relatedTermIds]
+    [aliases, buildPatch, buildSnapshot, changeSummary, lastUpdatedAt, meta.categoryIds, meta.tagIds, relatedTermIds, title]
   );
 
   // Assigned in an effect, not during render (react-hooks/refs).
@@ -277,22 +304,13 @@ export function GlossaryEditor({
     doSaveRef.current = doSave;
   }, [doSave]);
 
-  useEffect(() => {
-    if (!dirty) return;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      void doSave(false);
-    }, AUTOSAVE_DEBOUNCE_MS);
-    return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, title, excerpt, slug, blocks, aliases, relatedTermIds, meta]);
+  // F3 decision (06/10/2026): no autosave. Content is saved only when Save is
+  // pressed; the unsaved-changes guard protects work in the meantime.
 
   const { promptOpen, confirmNavigate, cancelNavigate } = useUnsavedChangesGuard(dirty);
 
   async function handleTransition(toStatus: ResourceStatus, reason?: string, notes?: string): Promise<{ ok: boolean; error?: string }> {
-    const res = await fetch(`/api/admin/resources/glossary/${initialPost.id}/workflow`, {
+    const res = await fetch(`/api/admin/resources/glossary/${postId}/workflow`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toStatus, reason, notes }),
@@ -305,7 +323,7 @@ export function GlossaryEditor({
     setStatus(json.data.status);
     setLastUpdatedAt(json.data.updated_at);
     router.refresh();
-    fetch(`/api/admin/resources/glossary/${initialPost.id}/versions`)
+    fetch(`/api/admin/resources/glossary/${postId}/versions`)
       .then((r) => r.json())
       .then((j) => j.data && setVersions(j.data))
       .catch(() => {});
@@ -353,23 +371,27 @@ export function GlossaryEditor({
           <Link href="/admin/resources/glossary" className="hover:text-trust hover:underline">
             Glossary
           </Link>{' '}
-          &gt; <span className="text-ink">Edit</span>
+          &gt; <span className="text-ink">{postId ? 'Edit' : 'New'}</span>
         </nav>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <ResourceTypeBadge contentType={initialPost.content_type} />
             <ResourceStatusBadge status={status} />
             <ResourceComplianceBadge compliance={meta.complianceClassification} />
-            <h1 className="truncate text-lg font-semibold text-ink">{title || 'Untitled'}</h1>
+            <h1 className="truncate text-lg font-semibold text-ink">{title || (postId ? 'Untitled' : 'New, not saved yet')}</h1>
+            {!postId && <span className="rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-muted">Not saved yet</span>}
           </div>
           {/* Wave 5 (§12, §18): wraps, and matches the shared save label. */}
           <div className="flex flex-wrap items-center gap-3">
-            <SaveStatus state={saveState} onRetry={() => doSave(false)} />
-            <Link href={`/admin/resources/glossary/${initialPost.id}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
-              Preview
-            </Link>
+            {(postId || saveState !== 'saved') && <SaveStatus state={saveState} onRetry={() => doSave(false)} />}
+            {postId && (
+              <Link href={`/admin/resources/glossary/${postId}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
+                Preview
+              </Link>
+            )}
+            {postId && <DeleteDraftButton postId={postId} title={title} status={status} canDelete={canDelete} redirectTo="/admin/resources/glossary" />}
             <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="min-h-11 rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
-              {saveState === 'saving' ? 'Saving…' : 'Save Changes'}
+              {saveState === 'saving' ? 'Saving…' : postId ? 'Save Changes' : 'Save'}
             </button>
           </div>
         </div>
@@ -379,6 +401,12 @@ export function GlossaryEditor({
           </p>
         )}
       </div>
+
+      {!postId && (
+        <p role="status" className="rounded-compact border border-line bg-white p-3 text-sm text-muted">
+          Nothing is saved yet. This definition is created only when you press <strong>Save</strong>; leaving this page now creates nothing.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
         <div className="min-w-0 space-y-4">
@@ -433,7 +461,9 @@ export function GlossaryEditor({
             errors={{ ...fieldErrors, ...reviewCheck.errors }}
           />
           <AdminTaskHelp taskId="ADM-12" />
-          <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} />
+          {postId ? <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} /> : (
+            <p className="rounded-card border border-line bg-white p-4 text-sm text-muted">Review, approval and publishing become available after the first Save.</p>
+          )}
           <RevisionHistoryPanel versions={versions} currentUserId={currentUserId} />
         </div>
       </div>

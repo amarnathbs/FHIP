@@ -8,11 +8,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export function VideoNewForm({ canCreate }: { canCreate: boolean }) {
+export function VideoNewForm({ canCreate, canLink = false }: { canCreate: boolean; canLink?: boolean }) {
   const router = useRouter();
   const [input, setInput] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // PO review F12: after a successful add, offer "Link to content" as the next step.
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +24,8 @@ export function VideoNewForm({ canCreate }: { canCreate: boolean }) {
       const res = await fetch('/api/admin/resources/videos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ youtubeInput: input }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "This YouTube URL doesn't appear valid.");
-      router.push(`/admin/resources/videos/${json.data.id}/edit`);
+      setCreating(false);
+      setCreatedId(json.data.id as string);
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : 'Something went wrong.');
       setCreating(false);
@@ -37,6 +40,34 @@ export function VideoNewForm({ canCreate }: { canCreate: boolean }) {
         <Link href="/admin/resources/videos" className="mt-4 inline-block text-sm font-semibold text-trust hover:underline">
           Back to Videos
         </Link>
+      </div>
+    );
+  }
+
+  if (createdId) {
+    return (
+      <div className="max-w-lg space-y-4 rounded-card border border-line bg-white p-5">
+        <h1 className="text-xl font-semibold text-ink">Video added</h1>
+        <p role="status" className="text-sm text-muted">
+          The video was added as a private draft. What would you like to do next?
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {canLink && (
+            <Link href={`/admin/resources/videos/${createdId}/edit#linked-content`} className="inline-flex min-h-11 items-center rounded-full bg-trust px-5 py-2 text-sm font-semibold text-white hover:bg-trust/90">
+              Link to content
+            </Link>
+          )}
+          <Link
+            href={`/admin/resources/videos/${createdId}/edit`}
+            className={`inline-flex min-h-11 items-center rounded-full px-5 py-2 text-sm font-semibold ${canLink ? 'border border-line text-ink hover:bg-gray-50' : 'bg-trust text-white hover:bg-trust/90'}`}
+          >
+            Edit video details
+          </Link>
+          <Link href="/admin/resources/videos" className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-trust hover:underline">
+            Back to Videos
+          </Link>
+        </div>
+        {!canLink && <p className="text-xs text-muted">Linking videos to content is available to Resource Administrators and Editors.</p>}
       </div>
     );
   }

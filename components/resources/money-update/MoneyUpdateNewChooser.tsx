@@ -2,6 +2,10 @@
 
 // R1.4 Money Update creation — spec §41-45: Money Update vs Money Update
 // Template, plus "Create Update from Template".
+//
+// PO review F3 (06/10/2026): the two blank options only OPEN the editor; the
+// record is created when the author presses Save. "Create from template" is an
+// explicit copy action and still creates the copy immediately.
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -20,20 +24,6 @@ export function MoneyUpdateNewChooser({ canCreate }: { canCreate: boolean }) {
       .then((j) => setTemplates(j.data ?? []))
       .catch(() => {});
   }, []);
-
-  async function createBlank(contentType: 'money_update' | 'money_update_template') {
-    setCreating(contentType);
-    setError(null);
-    try {
-      const res = await fetch('/api/admin/resources/money-updates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contentType }) });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not create this record.');
-      router.push(`/admin/resources/money-updates/${json.data.id}/edit`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
-      setCreating(null);
-    }
-  }
 
   async function createFromTemplate() {
     if (!selectedTemplate) return;
@@ -86,16 +76,16 @@ export function MoneyUpdateNewChooser({ canCreate }: { canCreate: boolean }) {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <button type="button" onClick={() => createBlank('money_update')} disabled={creating !== null} className="rounded-card border border-line bg-white p-5 text-left hover:border-trust hover:shadow-sm disabled:opacity-50">
+        <Link href="/admin/resources/money-updates/new?type=money_update" className="block rounded-card border border-line bg-white p-5 text-left hover:border-trust hover:shadow-sm">
           <h2 className="text-base font-semibold text-ink">Money Update</h2>
           <p className="mt-2 text-sm text-muted">A time-sensitive interpretation of a current financial development, with the full structured section set.</p>
-          <p className="mt-4 text-sm font-semibold text-trust">{creating === 'money_update' ? 'Creating…' : 'Create Money Update'}</p>
-        </button>
-        <button type="button" onClick={() => createBlank('money_update_template')} disabled={creating !== null} className="rounded-card border border-line bg-white p-5 text-left hover:border-trust hover:shadow-sm disabled:opacity-50">
+          <p className="mt-4 text-sm font-semibold text-trust">Create Money Update</p>
+        </Link>
+        <Link href="/admin/resources/money-updates/new?type=money_update_template" className="block rounded-card border border-line bg-white p-5 text-left hover:border-trust hover:shadow-sm">
           <h2 className="text-base font-semibold text-ink">Money Update Template</h2>
           <p className="mt-2 text-sm text-muted">Reusable starter structure with guidance text — not itself a published current event.</p>
-          <p className="mt-4 text-sm font-semibold text-trust">{creating === 'money_update_template' ? 'Creating…' : 'Create Template'}</p>
-        </button>
+          <p className="mt-4 text-sm font-semibold text-trust">Create Template</p>
+        </Link>
       </div>
 
       {templates.length > 0 && (

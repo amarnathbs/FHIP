@@ -31,8 +31,9 @@
 //       inverse of a button label — there was no status shown at all.
 //   §19 The add path forwarded the raw server message.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ResourceCombobox } from '@/components/ui/ResourceCombobox';
 import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { AdminActionStatus, useAdminActionStatus } from '@/components/admin/AdminActionStatus';
 import { actionFailureMessage, failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
@@ -48,87 +49,6 @@ interface ContextMappingRow {
   sort_order: number;
   is_active: boolean;
   resource: { id: string; title: string; slug: string | null; content_type: string; status: string } | null;
-}
-
-function PostPicker({ onPick, excludeId }: { onPick: (post: RelatableSearchResult) => void; excludeId?: string }) {
-  const [q, setQ] = useState('');
-  const [results, setResults] = useState<RelatableSearchResult[]>([]);
-  const [searchState, setSearchState] = useState<'idle' | 'searching' | 'done' | 'failed'>('idle');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    // Every branch schedules its state update inside the timeout (even the
-    // empty-query "clear" case) rather than calling setState synchronously
-    // in the effect body — avoids cascading-render re-entrancy.
-    debounceRef.current = setTimeout(async () => {
-      if (!q.trim()) {
-        setResults([]);
-        setSearchState('idle');
-        return;
-      }
-      setSearchState('searching');
-      try {
-        const qp = new URLSearchParams({ q });
-        if (excludeId) qp.set('exclude', excludeId);
-        const res = await fetch(`/api/admin/resources/related/search-posts?${qp.toString()}`);
-        const json = await readJsonSafely(res);
-        if (!res.ok) {
-          // §9 — a failed search previously left the last results on screen
-          // with no signal, so the operator could act on stale matches.
-          setResults([]);
-          setSearchState('failed');
-          return;
-        }
-        setResults((json?.data as RelatableSearchResult[]) ?? []);
-        setSearchState('done');
-      } catch {
-        setResults([]);
-        setSearchState('failed');
-      }
-    }, 300);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [q, excludeId]);
-
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-ink" htmlFor="context-post-picker">
-        Map a Resource to this context
-      </label>
-      <input id="context-post-picker" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title…" className="w-full rounded-compact border border-line px-3 py-2 text-sm" />
-      <p role="status" aria-live="polite" className="mt-1 text-xs text-muted">
-        {searchState === 'searching' && 'Searching…'}
-        {searchState === 'failed' && 'That search could not be run. Try again.'}
-        {searchState === 'done' && results.length === 0 && 'No resources match that search.'}
-        {searchState === 'done' && results.length > 0 && `${results.length} ${results.length === 1 ? 'match' : 'matches'}.`}
-      </p>
-      {results.length > 0 && (
-        <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-compact border border-line p-2">
-          {results.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onPick(r);
-                  setQ('');
-                  setResults([]);
-                  setSearchState('idle');
-                }}
-                className="flex min-h-11 w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm outline-offset-2 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-trust"
-              >
-                <span className="truncate text-ink">{r.title}</span>
-                <span className="shrink-0 text-xs text-muted">
-                  {formatContentTypeForPicker(r.content_type)} · {formatStatusForPicker(r.status)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
 }
 
 type PendingMapping =
@@ -440,7 +360,13 @@ export function ContextMappingManager({ canManage }: { canManage: boolean }) {
 
         {canManage && (
           <div className="mt-4 border-t border-line pt-4">
-            <PostPicker onPick={addMapping} />
+            <ResourceCombobox
+              label="Map a Resource to this context"
+              helpText="Pick from the list of all current resources, or type to filter it. Resources already mapped to this context are not offered."
+              onSelect={addMapping}
+              disabled={busy}
+              excludeIds={mappings.flatMap((m) => (m.resource?.id ? [m.resource.id] : []))}
+            />
           </div>
         )}
       </div>

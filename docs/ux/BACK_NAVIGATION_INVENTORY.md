@@ -22,7 +22,7 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 
 ## Inventory
 
-122 pages: 112 carry the back link, 10 are exempt.
+123 pages: 113 carry the back link, 10 are exempt.
 
 | Page (URL) | File | Parent target | Status |
 |---|---|---|---|
@@ -31,6 +31,7 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 | `/accessibility` | `app/(marketing)/accessibility/page.tsx` | `/`: "Back to home" | Done |
 | `/admin/account-deletions` | `app/(app)/admin/account-deletions/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/benchmarks` | `app/(app)/admin/benchmarks/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
+| `/admin/benchmarks/upload` | `app/(app)/admin/benchmarks/upload/page.tsx` | `/admin/benchmarks`: "Back to Planning Benchmarks" | Done |
 | `/admin/entitlements` | `app/(app)/admin/entitlements/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/entitlements/promo-codes` | `app/(app)/admin/entitlements/promo-codes/page.tsx` | `/admin/entitlements`: "Back to Premium Access" | Done |
 | `/admin/investment-intelligence/benchmark-data` | `app/(app)/admin/investment-intelligence/benchmark-data/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |

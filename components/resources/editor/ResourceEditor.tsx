@@ -2,7 +2,7 @@
 
 // R1.3 editor shell — spec §14-15, §93-95. Orchestrates the title/excerpt/
 // block editor (main column) and the metadata sidebar + workflow panel
-// (sidebar column), save/autosave, validation, and the unsaved-changes guard.
+// (sidebar column), explicit Save (no autosave), validation, and the unsaved-changes guard.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -17,6 +17,8 @@ import { RevisionHistoryPanel } from './RevisionHistoryPanel';
 import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { SaveStatus, type SaveState } from './SaveStatus';
 import { useUnsavedChangesGuard } from './useUnsavedChangesGuard';
+import { DeleteDraftButton } from '@/components/resources/admin/DeleteDraftButton';
+import { createRecordOnFirstSave } from '@/lib/resources/editor/blankPost';
 import { slugify } from '@/lib/resources/editor/slug';
 import { toPlainText } from '@/lib/resources/editor/richtext';
 import { validateForReview, TITLE_MAX_LENGTH, EXCERPT_MAX_LENGTH } from '@/lib/resources/editor/validation';
@@ -24,8 +26,6 @@ import type { AnyBlock } from '@/lib/resources/editor/blocks';
 import type { EditorPost, EditorReferenceData, PostVersionSummary, EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
 import type { ResourceStatus, ComplianceClassification } from '@/lib/resources/types';
 import type { WorkflowHistoryEntry } from '@/lib/resources/admin/queries';
-
-const AUTOSAVE_DEBOUNCE_MS = 2500;
 
 function toMetadataForm(post: EditorPost): MetadataFormState {
   return {
@@ -59,6 +59,7 @@ export function ResourceEditor({
   initialWorkflowHistory,
   currentUserId,
   caps,
+  canDelete = false,
 }: {
   post: EditorPost;
   reference: EditorReferenceData;
@@ -66,8 +67,12 @@ export function ResourceEditor({
   initialWorkflowHistory: WorkflowHistoryEntry[];
   currentUserId: string;
   caps: WorkflowCapabilities;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
+  // The record id. Empty until the first explicit Save creates the record.
+  const [postId, setPostId] = useState(initialPost.id);
+  const postIdRef = useRef(initialPost.id);
 
   const [title, setTitle] = useState(initialPost.title);
   const [excerpt, setExcerpt] = useState(initialPost.excerpt ?? '');
@@ -96,8 +101,16 @@ export function ResourceEditor({
   const [changeSummary, setChangeSummary] = useState('');
   const [slugStatusMsg, setSlugStatusMsg] = useState<string | null>(null);
 
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
+  // F3 decision (06/10/2026): NO autosave. The Product Owner asked that content
+  // is saved only when Save is pressed. The earlier debounced autosave (and the
+  // create-on-open flow that left empty 'Untitled' drafts behind) is removed
+  // for every content editor, matching the FAQ editor which was always
+  // explicit-save. Work is protected instead by the unsaved-changes guard
+  // (useUnsavedChangesGuard: tab close, in-app links including the Back
+  // control, and the browser Back button all ask before leaving), and the
+  // header shows 'Unsaved changes' until Save succeeds.
+  //
   // Admin A0.2 Wave 5 (§28 "no misleading success remains"). Two linked
   // defects lived in the save path:
   //
@@ -191,19 +204,43 @@ export function ResourceEditor({
         queuedSaveRef.current = true;
         return;
       }
+      // F3: a brand-new editor has no record yet. A record is created only
+      // now, by this explicit Save, and only with a real title.
+      if (!postIdRef.current && !title.trim()) {
+        setFieldErrors({ title: 'Enter a title before saving.' });
+        setSaveState('error');
+        setSaveError('Enter a title before saving. Nothing has been created yet.');
+        return;
+      }
       savingRef.current = true;
       const seqAtStart = changeSeqRef.current;
       setSaveState('saving');
       setSaveError(null);
       try {
-        const res = await fetch(`/api/admin/resources/content/${initialPost.id}`, {
+        let expectedUpdatedAt = lastUpdatedAt;
+        if (!postIdRef.current) {
+          const created = await createRecordOnFirstSave('/api/admin/resources/content', { contentType: initialPost.content_type, title: title.trim() });
+          if (!created.ok) {
+            setFieldErrors(created.fields ?? {});
+            setSaveState('error');
+            setSaveError(created.error);
+            return;
+          }
+          postIdRef.current = created.id;
+          setPostId(created.id);
+          expectedUpdatedAt = created.updatedAt;
+          setLastUpdatedAt(created.updatedAt);
+          // The URL now names the real record, so a reload or Back lands on it.
+          window.history.replaceState(null, '', `/admin/resources/content/${created.id}/edit`);
+        }
+        const res = await fetch(`/api/admin/resources/content/${postIdRef.current}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             patch: buildPatch(),
             categoryIds: meta.categoryIds,
             tagIds: meta.tagIds,
-            expectedUpdatedAt: lastUpdatedAt,
+            expectedUpdatedAt,
             createVersion,
             changeSummary: createVersion ? changeSummary : undefined,
             versionSnapshot: createVersion ? buildSnapshot() : undefined,
@@ -240,7 +277,7 @@ export function ResourceEditor({
         }
         if (createVersion) {
           setChangeSummary('');
-          fetch(`/api/admin/resources/content/${initialPost.id}/versions`)
+          fetch(`/api/admin/resources/content/${postIdRef.current}/versions`)
             .then((r) => r.json())
             .then((j) => j.data && setVersions(j.data))
             .catch(() => {});
@@ -259,7 +296,7 @@ export function ResourceEditor({
         }
       }
     },
-    [buildPatch, buildSnapshot, changeSummary, initialPost.id, lastUpdatedAt, meta.categoryIds, meta.tagIds]
+    [buildPatch, buildSnapshot, changeSummary, initialPost.content_type, lastUpdatedAt, meta.categoryIds, meta.tagIds, title]
   );
 
   // Keeps the queue-drain above pointing at the current closure, so a
@@ -270,24 +307,10 @@ export function ResourceEditor({
     doSaveRef.current = doSave;
   }, [doSave]);
 
-  // Debounced autosave — never on the very first render, only after a real
-  // change (spec §38: "debounced autosave after meaningful changes").
-  useEffect(() => {
-    if (!dirty) return;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      void doSave(false);
-    }, AUTOSAVE_DEBOUNCE_MS);
-    return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, title, excerpt, slug, blocks, meta]);
-
   const { promptOpen, confirmNavigate, cancelNavigate } = useUnsavedChangesGuard(dirty);
 
   async function handleTransition(toStatus: ResourceStatus, reason?: string, notes?: string): Promise<{ ok: boolean; error?: string }> {
-    const res = await fetch(`/api/admin/resources/content/${initialPost.id}/workflow`, {
+    const res = await fetch(`/api/admin/resources/content/${postId}/workflow`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toStatus, reason, notes }),
@@ -301,7 +324,7 @@ export function ResourceEditor({
     setPublishedAt(json.data.published_at);
     setLastUpdatedAt(json.data.updated_at);
     router.refresh();
-    fetch(`/api/admin/resources/content/${initialPost.id}/versions`)
+    fetch(`/api/admin/resources/content/${postId}/versions`)
       .then((r) => r.json())
       .then((j) => j.data && setVersions(j.data))
       .catch(() => {});
@@ -376,23 +399,29 @@ export function ResourceEditor({
           <Link href="/admin/resources/content" className="hover:text-trust hover:underline">
             All Content
           </Link>{' '}
-          &gt; <span className="text-ink">Edit</span>
+          &gt; <span className="text-ink">{postId ? 'Edit' : 'New'}</span>
         </nav>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <ResourceTypeBadge contentType={initialPost.content_type} />
             <ResourceStatusBadge status={status} />
             <ResourceComplianceBadge compliance={meta.complianceClassification} />
-            <h1 className="truncate text-lg font-semibold text-ink">{title || 'Untitled'}</h1>
+            <h1 className="truncate text-lg font-semibold text-ink">{title || (postId ? 'Untitled' : 'New, not saved yet')}</h1>
+            {!postId && <span className="rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-muted">Not saved yet</span>}
           </div>
           {/* §12: the header cluster could not wrap, so at ~360px the
               "Save failed / Your latest changes could not be saved. / Retry
               Save" combination overflowed horizontally. */}
           <div className="flex flex-wrap items-center gap-3">
-            <SaveStatus state={saveState} onRetry={() => doSave(false)} />
-            <Link href={`/admin/resources/content/${initialPost.id}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
-              Preview
-            </Link>
+            {(postId || saveState !== 'saved') && <SaveStatus state={saveState} onRetry={() => doSave(false)} />}
+            {postId && (
+              <Link href={`/admin/resources/content/${postId}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
+                Preview
+              </Link>
+            )}
+            {postId && (
+              <DeleteDraftButton postId={postId} title={title} status={status} publishedAt={publishedAt} canDelete={canDelete} redirectTo="/admin/resources/content" />
+            )}
             {/* Admin A0.2 Wave 5 (§18): this button read "Save Draft" while
                 the three sibling editors that use the identical save path
                 read "Save", and the shared Revision History panel told every
@@ -401,7 +430,7 @@ export function ResourceEditor({
                 this same button saves without changing its status. All four
                 now use one label that describes what actually happens. */}
             <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="min-h-11 rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
-              {saveState === 'saving' ? 'Saving…' : 'Save Changes'}
+              {saveState === 'saving' ? 'Saving…' : postId ? 'Save Changes' : 'Save'}
             </button>
           </div>
         </div>
@@ -411,6 +440,12 @@ export function ResourceEditor({
           </p>
         )}
       </div>
+
+      {!postId && (
+        <p role="status" className="rounded-compact border border-line bg-white p-3 text-sm text-muted">
+          Nothing is saved yet. This content is created only when you press <strong>Save</strong>; leaving this page now creates nothing.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
         <div className="min-w-0 space-y-4">
@@ -441,13 +476,14 @@ export function ResourceEditor({
                 hint={publishedAt ? 'This content is published — changing the slug changes its public URL.' : 'Auto-generated from the title. You can override it before publication.'}
               />
               {slugStatusMsg && <p className="mt-1 text-xs text-muted">{slugStatusMsg}</p>}
+              {postId && (
               <button
                 type="button"
                 className="mt-1 text-xs font-semibold text-trust hover:underline"
                 onClick={async () => {
                   if (!slug) return;
                   setSlugStatusMsg('Checking…');
-                  const res = await fetch(`/api/admin/resources/content/${initialPost.id}/slug-check?slug=${encodeURIComponent(slug)}`);
+                  const res = await fetch(`/api/admin/resources/content/${postId}/slug-check?slug=${encodeURIComponent(slug)}`);
                   const json = await res.json();
                   if (!res.ok) {
                     setSlugStatusMsg('Could not check slug availability.');
@@ -459,6 +495,7 @@ export function ResourceEditor({
               >
                 Check availability
               </button>
+              )}
             </div>
             <div className="mt-4">
               <TextAreaField
@@ -528,7 +565,9 @@ export function ResourceEditor({
             canManageCtas={caps.canManage}
           />
           <AdminTaskHelp taskId="ADM-09" />
-          <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} />
+          {postId ? <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} /> : (
+            <p className="rounded-card border border-line bg-white p-4 text-sm text-muted">Review, approval and publishing become available after the first Save.</p>
+          )}
           <RevisionHistoryPanel versions={versions} currentUserId={currentUserId} />
           <p className="text-xs text-muted">Content ID: {initialPost.content_id ?? 'Not assigned (set by import, not editable here).'}</p>
         </div>

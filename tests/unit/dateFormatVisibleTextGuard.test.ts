@@ -48,6 +48,7 @@ export const ALLOWED_MACHINE_TOKENS: ReadonlyArray<{ file: string; line: RegExp;
 export const ALLOWED_LOCALE_FILES: ReadonlyArray<{ file: string; why: string }> = [
   { file: 'lib/engines/date.ts', why: 'the canonical day-first formatter: it takes only the 12-hour time from toLocaleTimeString' },
   { file: 'lib/read-models/core/window.ts', why: 'reads year/month/day PARTS in a named time zone (formatToParts) for a window, never shown' },
+  { file: 'lib/services/investment-intelligence/pc6/referenceDataQualityView.ts', why: 'reads year/month/day/hour/minute PARTS in a named time zone (formatToParts) and assembles the day-first dd-mm-yyyy text itself; the locale string is never shown' },
 ];
 
 export function stripComments(s: string): string {
