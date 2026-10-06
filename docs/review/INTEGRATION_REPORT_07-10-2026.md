@@ -126,3 +126,11 @@ The integration totals are **lower** than the baseline only because, under load,
 3. **Dates**: public and Admin Resources dates stay as Mission A made them (dd/mm/yyyy with the Australian fallback where no country is known, dd-mm-yyyy for India context). Recorded as PO-confirmed in `docs/ux/DATE_FORMAT_RULE.md`.
 4. **Planning Benchmarks U1 to U7** accepted as recommended; `docs/planning-benchmarks/UPLOAD_DESIGN.md` section 12 now says "Decided by the PO 07-10-2026". Code checked against each: U3 (Activate also activates the dataset: RPC sets `data_status = 'active'`, PGlite-tested), U4 (day-first dates accepted in files, month-first and two-digit years refused, tested), U5 (an unrestated tier is end-dated, shown in the preview, counted as `bands_removed`, PGlite-tested), U1 (self-activation needs the recorded acknowledgement, enforced in the RPC), U2 (filter in the Twin path), U6 (no unique key in 0275). **No mismatch found; no code change was needed.**
 5. **First-level Admin tools return to the Dashboard** (Admin has no home page; `/admin/resources/analytics` also returns to the Dashboard so an Analyst-only caller is not sent to a page they cannot enter). PO accepted.
+
+## 10. Housekeeping
+
+The temporary baseline worktree used for comparison was removed. The `node_modules` entry in the integration worktree is a junction to `D:/FHIP/node_modules`: remove it with `rmdir`, never a recursive delete, before removing the worktree.
+
+## 11. Final tip
+
+The final tip SHA is the commit that contains this section; it is reported in the hand-back message (a commit cannot name its own SHA).
