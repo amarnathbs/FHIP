@@ -177,6 +177,16 @@ export interface AdminCapabilities {
    * `isAdmin`, and NOT implied by `entitlementManagement` (or vice versa).
    */
   promoCodeManagement: boolean;
+  /**
+   * Planning Benchmarks staged upload (migration 0270) - stage a file, preview, discard own batch. Backed by
+   * admin_users.can_upload_planning_benchmarks. NOT implied by `isAdmin` and NOT implied by the activate capability.
+   */
+  planningBenchmarkUpload: boolean;
+  /**
+   * Planning Benchmarks staged upload (migration 0270) - ACTIVATE a staged upload (makes it live for the Twin).
+   * Backed by admin_users.can_activate_planning_benchmarks. Separately named from the upload capability.
+   */
+  planningBenchmarkActivate: boolean;
 }
 
 /**
@@ -201,6 +211,8 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   benchmarkEntitlementApprove: false,
   entitlementManagement: false,
   promoCodeManagement: false,
+  planningBenchmarkUpload: false,
+  planningBenchmarkActivate: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -240,6 +252,8 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     benchmarkEntitlementApprove: readBooleanField(source, 'benchmarkEntitlementApprove'),
     entitlementManagement: readBooleanField(source, 'entitlementManagement'),
     promoCodeManagement: readBooleanField(source, 'promoCodeManagement'),
+    planningBenchmarkUpload: readBooleanField(source, 'planningBenchmarkUpload'),
+    planningBenchmarkActivate: readBooleanField(source, 'planningBenchmarkActivate'),
   };
 }
 

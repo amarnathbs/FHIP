@@ -28,6 +28,16 @@ export interface HealthyRangeBand {
   sourceCitation: string | null;
 }
 
+// A figure that has been superseded carries an effective_to date (set by the Planning Benchmarks staged upload,
+// migration 0270, never deleted: immutable Twin runs reference the old rows). The Twin must never serve it.
+// "No end date, or an end date after today" matches every row that exists before any upload has superseded
+// anything, so for today's data this predicate changes nothing. See docs/planning-benchmarks/UPLOAD_DESIGN.md s9.
+export function liveWindowFilter(todayIso: string): string {
+  return `effective_to.is.null,effective_to.gt.${todayIso}`;
+}
+
+const todayIsoUtc = () => new Date().toISOString().slice(0, 10);
+
 // Retrieves the peer/observed-market (or regulatory) benchmark for a metric,
 // preferring an exact cohort match and falling back to the country-wide
 // value from the same dataset family. Never mixes benchmark classes without
@@ -45,7 +55,8 @@ export async function loadPeerBenchmark(
       .select(
         'id, statistic_type, value_numeric, is_derived, derivation_method, base_date, confidence_score, dataset_id, benchmark_datasets!inner(benchmark_class, evidence_level, is_indicative, benchmark_source_id, benchmark_sources!inner(citation_text, country_code, publication_date))'
       )
-      .eq('metric_definition_id', metricDefinitionId);
+      .eq('metric_definition_id', metricDefinitionId)
+      .or(liveWindowFilter(todayIsoUtc()));
     query = cohortFilter === null ? query.is('cohort_id', null) : query.eq('cohort_id', cohortFilter);
     const { data } = await query;
     return data ?? [];
@@ -118,6 +129,7 @@ export async function loadHealthyRange(
       .from('benchmark_target_ranges')
       .select('band_label, band_tier, lower_bound, upper_bound, explanation, evidence_level, model_version, benchmark_sources(citation_text)')
       .eq('metric_definition_id', metricDefinitionId)
+      .or(liveWindowFilter(todayIsoUtc()))
       .order('band_tier', { ascending: true });
     query = country === null ? query.is('country_code', null) : query.eq('country_code', country);
     query = life === null ? query.is('life_stage', null) : query.eq('life_stage', life);

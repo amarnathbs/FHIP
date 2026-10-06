@@ -14,6 +14,7 @@ import { MARKET_INDEX_ADMIN_CAPABILITY } from '@/lib/services/investment-intelli
 import { BENCHMARK_CAPABILITY_COLUMNS, BENCHMARK_VIEW_COLUMN, flagsFromAdminRow, NO_BENCHMARK_CAPABILITIES, type BenchmarkCapabilityFlags } from '@/lib/services/investment-intelligence/benchmarkData/guards';
 import { PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY } from '@/lib/services/premiumEntitlementAdmin';
 import { PROMO_CODE_ADMIN_CAPABILITY } from '@/lib/services/promoCodeAdmin';
+import { PLANNING_BENCHMARK_CAPABILITY_COLUMNS, planningBenchmarkFlagsFromRow, NO_PLANNING_BENCHMARK_CAPABILITIES, type PlanningBenchmarkFlags } from '@/lib/planning-benchmarks/guards';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -163,6 +164,28 @@ async function readBenchmarkCapabilities(): Promise<BenchmarkCapabilityFlags> {
   }
 }
 
+/**
+ * Planning Benchmarks staged upload (migration 0270) - the two separately named capabilities. ONE admin_users
+ * read, but each output field is its own === true evaluation of its own column. FAILS CLOSED: any error, a
+ * logged-out caller, a missing row or a missing COLUMN (0270 not applied) yields all-false.
+ */
+async function readPlanningBenchmarkCapabilities(): Promise<PlanningBenchmarkFlags> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ...NO_PLANNING_BENCHMARK_CAPABILITIES };
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select(Object.values(PLANNING_BENCHMARK_CAPABILITY_COLUMNS).join(', '))
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error || !data) return { ...NO_PLANNING_BENCHMARK_CAPABILITIES };
+    return planningBenchmarkFlagsFromRow(data as unknown as Record<string, unknown>);
+  } catch {
+    return { ...NO_PLANNING_BENCHMARK_CAPABILITIES };
+  }
+}
+
 // Lets the nav know which Admin groups to show, without exposing any admin
 // data itself — a logged-out, non-admin, non-Resources-role caller just gets
 // all-false flags, never a 403 (the actual admin/Resources routes still
@@ -201,6 +224,7 @@ async function readBenchmarkCapabilities(): Promise<BenchmarkCapabilityFlags> {
 export async function GET() {
   const current = await getCurrentResourceRoles();
   const benchmark = await readBenchmarkCapabilities();
+  const planning = await readPlanningBenchmarkCapabilities();
   return ok({
     // Unchanged legacy fields, kept for existing consumers. Neither is used
     // to derive any capability below.
@@ -222,6 +246,8 @@ export async function GET() {
       benchmarkEntitlementApprove: benchmark.entitlementApprove,
       entitlementManagement: await canManagePremiumEntitlements(),
       promoCodeManagement: await canManagePromoCodes(),
+      planningBenchmarkUpload: planning.upload,
+      planningBenchmarkActivate: planning.activate,
     },
   });
 }
