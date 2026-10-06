@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -9,7 +10,7 @@ import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from 
 import type { AnyBlock } from '@/lib/resources/editor/blocks';
 
 // /admin/resources/glossary/[id]/preview — spec §31/§63/§96. Admin-only.
-export default async function GlossaryPreviewPage({ params }: { params: Promise<{ id: string }> }) {
+async function GlossaryPreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -73,5 +74,16 @@ export default async function GlossaryPreviewPage({ params }: { params: Promise<
         )}
       </article>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Editor).
+export default async function GlossaryPreviewPage(props: Parameters<typeof GlossaryPreviewPageContent>[0]) {
+  const { id } = await props.params;
+  return (
+    <>
+      <PageBackLink href={`/admin/resources/glossary/${id}/edit`} label="Editor" />
+      <GlossaryPreviewPageContent {...props} />
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -27,7 +28,7 @@ const SPECIALIST_PREVIEW_ROUTES: Record<string, (id: string) => string> = {
 // editor (a non-staff viewer simply gets a 404 for a private draft, same as
 // every other Resources Admin surface — spec §63/§96/§118: "anonymous
 // access denied... customer access denied... no public indexing").
-export default async function ResourcePreviewPage({ params }: { params: Promise<{ id: string }> }) {
+async function ResourcePreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -76,5 +77,16 @@ export default async function ResourcePreviewPage({ params }: { params: Promise<
         </div>
       </article>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Editor).
+export default async function ResourcePreviewPage(props: Parameters<typeof ResourcePreviewPageContent>[0]) {
+  const { id } = await props.params;
+  return (
+    <>
+      <PageBackLink href={`/admin/resources/content/${id}/edit`} label="Editor" />
+      <ResourcePreviewPageContent {...props} />
+    </>
   );
 }

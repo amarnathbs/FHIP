@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -5,7 +6,7 @@ import { getTwinRunDetail } from '@/lib/services/financialTwinService';
 import { TwinDetailView } from '@/components/financial-twin/TwinDetailView';
 import { formatDateShort } from '@/lib/engines/date';
 
-export default async function FinancialTwinRunPage({ params }: { params: Promise<{ id: string }> }) {
+async function FinancialTwinRunPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
   const {
@@ -33,5 +34,15 @@ export default async function FinancialTwinRunPage({ params }: { params: Promise
         </div>
         <TwinDetailView twin={twin} currency={currency} />
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Twin History).
+export default function FinancialTwinRunPage(props: Parameters<typeof FinancialTwinRunPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/financial-twin/history" label="Twin History" />
+      <FinancialTwinRunPageContent {...props} />
+    </>
   );
 }

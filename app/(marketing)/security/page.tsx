@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { FHIP_BRAND_URL, getFhipApplicationUrl } from '@/lib/seo/entity';
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
 // here, rather than repeated across the site (spec §20: repeating
 // scam/phishing wording sitewide risks strengthening the wrong lexical
 // association, so it appears on exactly this one page).
-export default function SecurityTrustPage() {
+function SecurityTrustPageContent() {
   const appUrl = getFhipApplicationUrl();
 
   return (
@@ -111,5 +112,15 @@ export default function SecurityTrustPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (home).
+export default function SecurityTrustPage() {
+  return (
+    <>
+      <PageBackLink href="/" label="home" className="mx-auto max-w-3xl px-6 pt-8" />
+      <SecurityTrustPageContent />
+    </>
   );
 }

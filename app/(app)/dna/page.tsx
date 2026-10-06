@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionCard } from '@/components/dashboard/SectionCard';
@@ -42,7 +43,7 @@ const HEALTH_SCORE_LINKS: Record<string, string> = {
   retirement_focused_preserver: 'Low debt and stable passive income typically support your Debt Health and Retirement Readiness component scores.',
 };
 
-export default async function FinancialDnaPage() {
+async function FinancialDnaPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -135,5 +136,15 @@ export default async function FinancialDnaPage() {
           </>
         )}
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function FinancialDnaPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <FinancialDnaPageContent />
+    </>
   );
 }

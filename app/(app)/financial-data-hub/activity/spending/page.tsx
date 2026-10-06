@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getSpendingBreakdown, getMerchants } from '@/lib/financial-data-hub/analytics/financialActivityAnalytics';
@@ -20,7 +21,7 @@ const ESSENTIAL_DISCRETIONARY_LABELS: Record<string, string> = {
 // category" stat is built from (getSpendingBreakdown), so there is no
 // second definition of "how much did Groceries cost this period" anywhere
 // in this file.
-export default async function FinancialActivitySpendingPage({
+async function FinancialActivitySpendingPageContent({
   searchParams,
 }: {
   searchParams: Promise<RawSearchParams>;
@@ -170,5 +171,15 @@ export default async function FinancialActivitySpendingPage({
         </SectionCard>
       )}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Financial Activity).
+export default function FinancialActivitySpendingPage(props: Parameters<typeof FinancialActivitySpendingPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/financial-data-hub/activity" label="Financial Activity" />
+      <FinancialActivitySpendingPageContent {...props} />
+    </>
   );
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { PageBackLink } from '@/components/navigation/PageBackLink';
+
 import { useRef, useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { liabilityGridConfig } from '@/lib/grid/configs';
@@ -14,7 +16,7 @@ import { LiabilityStatementHistory } from '@/components/liabilities/LiabilitySta
 // top-level destination (spec section 2): everything statement-related is
 // reached from here, mirroring the exact pattern FDH-9 established for
 // Income (see app/(app)/income/page.tsx).
-export default function LiabilitiesPage() {
+function LiabilitiesPageContent() {
   const [showImport, setShowImport] = useState(false);
   const [gridKey, setGridKey] = useState(0);
   const importToggleRef = useRef<HTMLButtonElement>(null);
@@ -70,5 +72,15 @@ export default function LiabilitiesPage() {
       {/* WP-11 (G7): what each imported statement line became, after Apply. */}
       <LiabilityStatementHistory refreshKey={gridKey} />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function LiabilitiesPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <LiabilitiesPageContent />
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 // G3 section 10 — the interim destination for a GENERIC-experience user.
 //
 // A GB/US/SG/AE user has genuinely completed registration and country
@@ -39,7 +40,7 @@ const G4_ENABLED_LINKS: { label: string; href: string }[] = [
 
 export const dynamic = 'force-dynamic';
 
-export default async function GlobalSetupPage() {
+async function GlobalSetupPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -109,5 +110,15 @@ export default async function GlobalSetupPage() {
         </p>
       </section>
     </main>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function GlobalSetupPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <GlobalSetupPageContent />
+    </>
   );
 }

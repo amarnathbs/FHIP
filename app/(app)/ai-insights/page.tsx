@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 // Module 11.4 — the narrowest appropriate Premium page for the standard
 // question library (spec section 36). Deliberately NOT named "AI Coach" —
 // that would imply open chat, which does not exist until a future phase
@@ -7,7 +8,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { StandardQuestionLibrary } from '@/components/aiInsights/StandardQuestionLibrary';
 
-export default async function AiInsightsPage() {
+async function AiInsightsPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -25,5 +26,15 @@ export default async function AiInsightsPage() {
       </div>
       <StandardQuestionLibrary />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function AiInsightsPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <AiInsightsPageContent />
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -59,7 +60,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 // returns null identically for "never existed" and "exists but not
 // currently public" — notFound() below can't distinguish them, which is
 // the point.
-export default async function ResourceDetailPage({ params }: { params: Promise<Params> }) {
+async function ResourceDetailPageContent({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
   const supabase = await createClient();
   const post = await getPublicResourceBySlug(supabase, slug);
@@ -203,5 +204,15 @@ export default async function ResourceDetailPage({ params }: { params: Promise<P
         )}
       </div>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
+export default function ResourceDetailPage(props: Parameters<typeof ResourceDetailPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/resources" label="Resources" className="mx-auto max-w-6xl px-4 pt-6 sm:px-6" />
+      <ResourceDetailPageContent {...props} />
+    </>
   );
 }

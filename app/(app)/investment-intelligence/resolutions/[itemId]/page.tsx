@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -12,7 +13,7 @@ import { PC5_RESOLUTIONS_BASE } from '@/lib/pc5/deepLinks';
  * HERE, on the one case, with everything needed to decide it — never on a
  * statement list the user would then have to search.
  */
-export default async function ResolutionDetailPage({ params }: { params: Promise<{ itemId: string }> }) {
+async function ResolutionDetailPageContent({ params }: { params: Promise<{ itemId: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -38,5 +39,15 @@ export default async function ResolutionDetailPage({ params }: { params: Promise
           used to discover which items exist. */}
       <ResolutionDetailClient itemId={itemId} dateCurrency={dateCurrency} />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (statement questions).
+export default function ResolutionDetailPage(props: Parameters<typeof ResolutionDetailPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/investment-intelligence/resolutions" label="statement questions" />
+      <ResolutionDetailPageContent {...props} />
+    </>
   );
 }

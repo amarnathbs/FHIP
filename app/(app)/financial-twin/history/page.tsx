@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -5,7 +6,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { listTwinRuns } from '@/lib/services/financialTwinService';
 import { formatDateShort } from '@/lib/engines/date';
 
-export default async function FinancialTwinHistoryPage() {
+async function FinancialTwinHistoryPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -49,5 +50,15 @@ export default async function FinancialTwinHistoryPage() {
           </div>
         </SectionCard>
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Twin / Benchmark).
+export default function FinancialTwinHistoryPage() {
+  return (
+    <>
+      <PageBackLink href="/financial-twin" label="Twin / Benchmark" />
+      <FinancialTwinHistoryPageContent />
+    </>
   );
 }

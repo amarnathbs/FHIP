@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
@@ -24,7 +25,7 @@ import { ProbableDuplicateBanner } from '@/components/investment-intelligence/Pr
 // This page renders NO analytical figure of its own (spec section 11). It
 // aggregates already-persisted statuses and counts and points at the
 // certified page for every actual number.
-export default async function InvestmentIntelligencePage() {
+async function InvestmentIntelligencePageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -46,5 +47,15 @@ export default async function InvestmentIntelligencePage() {
       <NavHistoryStatusPanel />
       <OverviewClient />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function InvestmentIntelligencePage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <InvestmentIntelligencePageContent />
+    </>
   );
 }

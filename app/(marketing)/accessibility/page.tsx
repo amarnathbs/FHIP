@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 // practice (keyboard operability, labelled form controls, focus management)
 // rather than claiming a formal conformance certification this product has
 // not undergone.
-export default function AccessibilityPage() {
+function AccessibilityPageContent() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16 text-gray-800">
       <h1 className="text-3xl font-semibold text-trust">Accessibility</h1>
@@ -66,5 +67,15 @@ export default function AccessibilityPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (home).
+export default function AccessibilityPage() {
+  return (
+    <>
+      <PageBackLink href="/" label="home" className="mx-auto max-w-3xl px-6 pt-8" />
+      <AccessibilityPageContent />
+    </>
   );
 }

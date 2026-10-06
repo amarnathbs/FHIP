@@ -1,5 +1,7 @@
 'use client';
 
+import { PageBackLink } from '@/components/navigation/PageBackLink';
+
 import { useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { incomeGridConfig } from '@/lib/grid/configs';
@@ -13,7 +15,7 @@ import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability
 // the existing Income Sources experience. FDH-9 is deliberately NOT a new
 // top-level destination (spec section 3): everything payslip-related is
 // reached from here.
-export default function IncomePage() {
+function IncomePageContent() {
   const [showImport, setShowImport] = useState(false);
   const [gridKey, setGridKey] = useState(0);
   // G4 closure item 2: Payslip import creates income rows the same way the
@@ -63,5 +65,15 @@ export default function IncomePage() {
           twice, and nothing is copied into the entries. */}
       <ImportedIncomeActuals refreshKey={gridKey} />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function IncomePage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <IncomePageContent />
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -8,7 +9,7 @@ import { listReports, getReport } from '@/lib/services/reportsData';
 import { GenerateReportButton } from '@/components/reports/GenerateReportButton';
 import { ReportHistoryTable } from '@/components/reports/ReportHistoryTable';
 
-export default async function ReportsPage() {
+async function ReportsPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -122,5 +123,15 @@ function ReportOutputCard({ href, title, description }: { href: string; title: s
       <p className="mt-1 text-xs text-muted">{description}</p>
       <span className="mt-3 inline-block text-xs font-medium text-trust">Open →</span>
     </Link>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function ReportsPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <ReportsPageContent />
+    </>
   );
 }

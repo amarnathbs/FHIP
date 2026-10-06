@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -13,7 +14,7 @@ import type { AnyBlock } from '@/lib/resources/editor/blocks';
 // Structured headings inside BlockRenderer never introduce a second H1
 // (block heading levels are capped at H2-H4 by the R1.3 block model) — the
 // page's own <h1> (the title) remains the only H1 (spec §81).
-export default async function MoneyUpdatePreviewPage({ params }: { params: Promise<{ id: string }> }) {
+async function MoneyUpdatePreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -91,5 +92,16 @@ export default async function MoneyUpdatePreviewPage({ params }: { params: Promi
         )}
       </article>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Editor).
+export default async function MoneyUpdatePreviewPage(props: Parameters<typeof MoneyUpdatePreviewPageContent>[0]) {
+  const { id } = await props.params;
+  return (
+    <>
+      <PageBackLink href={`/admin/resources/money-updates/${id}/edit`} label="Editor" />
+      <MoneyUpdatePreviewPageContent {...props} />
+    </>
   );
 }

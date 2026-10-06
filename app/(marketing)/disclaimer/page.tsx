@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 // WP-04's own instruction. Draft-flagged for the same reason Privacy/Terms
 // are: this is FHIP's own good-faith description, not legally reviewed
 // final copy.
-export default function DisclaimerPage() {
+function DisclaimerPageContent() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16 text-gray-800">
       <div className="mb-8 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -83,5 +84,15 @@ export default function DisclaimerPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (home).
+export default function DisclaimerPage() {
+  return (
+    <>
+      <PageBackLink href="/" label="home" className="mx-auto max-w-3xl px-6 pt-8" />
+      <DisclaimerPageContent />
+    </>
   );
 }

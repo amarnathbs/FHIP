@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
@@ -11,7 +12,7 @@ import { PortfolioXrayClient } from '@/components/investment-intelligence/Portfo
 //
 // Coverage and both as-of dates are shown on every view, and an analysis
 // that cannot be calculated is shown as unavailable rather than as zeros.
-export default async function PortfolioXrayPage() {
+async function PortfolioXrayPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -30,5 +31,15 @@ export default async function PortfolioXrayPage() {
       <InvestmentIntelligenceSubNav />
       <PortfolioXrayClient />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Investment Intelligence).
+export default function PortfolioXrayPage() {
+  return (
+    <>
+      <PageBackLink href="/investment-intelligence" label="Investment Intelligence" />
+      <PortfolioXrayPageContent />
+    </>
   );
 }

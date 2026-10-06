@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { requireBenchmarkPage } from '@/lib/services/investment-intelligence/benchmarkData/guards';
 import BenchmarkDataClient from '@/components/admin/BenchmarkDataClient';
 
@@ -9,7 +10,17 @@ import BenchmarkDataClient from '@/components/admin/BenchmarkDataClient';
 // holding none of the benchmark-data capabilities is redirected, never shown an empty screen. Layers 1,
 // 2 and 4 are migration 0241's predicates/RPCs/RLS, requireBenchmarkCapability() in every route, and
 // lib/admin/adminNav.ts.
-export default async function BenchmarkDataPage() {
+async function BenchmarkDataPageContent() {
   await requireBenchmarkPage('view');
   return <BenchmarkDataClient />;
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function BenchmarkDataPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <BenchmarkDataPageContent />
+    </>
+  );
 }

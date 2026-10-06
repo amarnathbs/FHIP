@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -6,7 +7,7 @@ import { loadReportContent } from '@/lib/services/reportContentData';
 import { ReportPreview } from '@/components/reports/ReportPreview';
 import { ReportActions } from '@/components/reports/ReportActions';
 
-export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
+async function ReportDetailPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
   const {
@@ -46,5 +47,15 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           enableContextualExplain
         />
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Reports).
+export default function ReportDetailPage(props: Parameters<typeof ReportDetailPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/reports" label="Reports" />
+      <ReportDetailPageContent {...props} />
+    </>
   );
 }

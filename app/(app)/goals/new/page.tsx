@@ -1,9 +1,10 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { GoalCreationWizard } from './GoalCreationWizard';
 
-export default async function NewGoalPage() {
+async function NewGoalPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -27,6 +28,16 @@ export default async function NewGoalPage() {
       <div className="mt-6">
         <GoalCreationWizard />
       </div>
+    </>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Goals).
+export default function NewGoalPage() {
+  return (
+    <>
+      <PageBackLink href="/goals" label="Goals" />
+      <NewGoalPageContent />
     </>
   );
 }

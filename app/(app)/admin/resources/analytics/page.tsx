@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { canViewResourceAnalytics } from '@/lib/resources/permissions';
@@ -31,7 +32,7 @@ import { canViewResourceAnalytics } from '@/lib/resources/permissions';
 // uses for its own stricter-than-the-shell gate (canManageResources): a
 // graceful redirect rather than a rendered-but-empty page, so a denied
 // caller is never shown a surface that looks like it holds no data.
-export default async function ResourceAnalyticsPage() {
+async function ResourceAnalyticsPageContent() {
   const current = await requireResourceAdminAccess();
   if (!canViewResourceAnalytics(current)) redirect('/admin/resources');
 
@@ -60,5 +61,15 @@ export default async function ResourceAnalyticsPage() {
         </p>
       </section>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
+export default function ResourceAnalyticsPage() {
+  return (
+    <>
+      <PageBackLink href="/admin/resources" label="Resources" />
+      <ResourceAnalyticsPageContent />
+    </>
   );
 }

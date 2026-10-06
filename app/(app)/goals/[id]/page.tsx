@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -12,7 +13,7 @@ import { GoalWhatIfSimulator } from '@/components/goals/GoalWhatIfSimulator';
 import { GoalEditPanel } from '@/components/goals/GoalEditPanel';
 import { GoalLifecycleControls } from '@/components/goals/GoalLifecycleControls';
 
-export default async function GoalDetailPage({ params }: { params: Promise<{ id: string }> }) {
+async function GoalDetailPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
   const {
@@ -119,5 +120,15 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
           </div>
         </details>
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Goals).
+export default function GoalDetailPage(props: Parameters<typeof GoalDetailPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/goals" label="Goals" />
+      <GoalDetailPageContent {...props} />
+    </>
   );
 }

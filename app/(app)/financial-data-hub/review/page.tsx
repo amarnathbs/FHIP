@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -32,7 +33,7 @@ const RETURN_TARGETS: Record<string, { href: string; label: string }> = {
   hub: { href: '/financial-data-hub', label: 'Back to Financial Data Hub' },
 };
 
-export default async function FinancialDataHubReviewPage({
+async function FinancialDataHubReviewPageContent({
   searchParams,
 }: {
   searchParams: Promise<{ transaction?: string; statement?: string; reason?: string; account_id?: string; from?: string }>;
@@ -88,5 +89,15 @@ export default async function FinancialDataHubReviewPage({
         </>
       )}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Financial Data Hub).
+export default function FinancialDataHubReviewPage(props: Parameters<typeof FinancialDataHubReviewPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/financial-data-hub" label="Financial Data Hub" />
+      <FinancialDataHubReviewPageContent {...props} />
+    </>
   );
 }

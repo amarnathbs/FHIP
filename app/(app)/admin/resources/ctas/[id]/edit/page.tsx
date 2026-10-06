@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
@@ -5,7 +6,7 @@ import { canManageDiscovery } from '@/lib/resources/permissions';
 import { getCtaById, countCtaUsage } from '@/lib/resources/cta/queries';
 import { CtaForm } from '@/components/resources/cta/CtaForm';
 
-export default async function EditCtaPage({ params }: { params: Promise<{ id: string }> }) {
+async function EditCtaPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const current = await requireResourceAdminAccess();
   if (!canManageDiscovery(current)) redirect('/admin/resources/ctas');
@@ -24,5 +25,15 @@ export default async function EditCtaPage({ params }: { params: Promise<{ id: st
       )}
       <CtaForm initial={cta} ctaId={cta.id} />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (CTAs).
+export default function EditCtaPage(props: Parameters<typeof EditCtaPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/ctas" label="CTAs" />
+      <EditCtaPageContent {...props} />
+    </>
   );
 }

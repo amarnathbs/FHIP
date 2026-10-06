@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -10,7 +11,7 @@ import { ResourceEditor } from '@/components/resources/editor/ResourceEditor';
 import type { WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 
 // /admin/resources/content/[id]/edit — spec §9/§14.
-export default async function ResourceEditPage({ params }: { params: Promise<{ id: string }> }) {
+async function ResourceEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -53,4 +54,14 @@ export default async function ResourceEditPage({ params }: { params: Promise<{ i
   };
 
   return <ResourceEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} />;
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (All Content).
+export default function ResourceEditPage(props: Parameters<typeof ResourceEditPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/content" label="All Content" />
+      <ResourceEditPageContent {...props} />
+    </>
+  );
 }
