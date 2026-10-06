@@ -6,7 +6,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const MIG = (name: string) => readFileSync(path.resolve(__dirname, '..', '..', '..', 'supabase', 'migrations', name), 'utf8');
 const U = { premium: '00000000-0000-0000-0000-000000000001', free: '00000000-0000-0000-0000-000000000002', lapsed: '00000000-0000-0000-0000-000000000003', future: '00000000-0000-0000-0000-000000000004', openEnded: '00000000-0000-0000-0000-000000000005', endsToday: '00000000-0000-0000-0000-000000000006' };
@@ -16,7 +16,8 @@ const ROLES = `create role anon nologin; create role authenticated nologin; crea
 
 describe('0269: stored reports are readable only while the owner is Premium (NC-P1)', () => {
   let db: PGlite;
-  beforeAll(async () => {
+  // a fresh database for EVERY test, so the order of the tests (or shuffling) cannot matter
+  beforeEach(async () => {
     db = new PGlite();
     await db.exec(ROLES);
     await db.exec(`
@@ -38,7 +39,7 @@ describe('0269: stored reports are readable only while the owner is Premium (NC-
       insert into nav2_fund_analytics_reports (user_id, report_json) select u, jsonb_build_object('owner', u) from unnest(array['${Object.values(U).join("','")}']::uuid[]) u;
     `);
   }, 120_000);
-  afterAll(async () => {
+  afterEach(async () => {
     await db.close();
   });
   const rowsSeenBy = async (uid: string | null): Promise<string[]> => {
@@ -50,12 +51,11 @@ describe('0269: stored reports are readable only while the owner is Premium (NC-
     }
   };
 
-  it('BEFORE 0269 (the 0261 policy): a lapsed user and a not-yet-started user still read their own report (the defect, reproduced)', async () => {
+  // ONE test, in this order: the defect first (with the 0261 policy), then the fix. Order-independent under shuffling because it is a single test.
+  it('BEFORE 0269 (the 0261 policy) a lapsed user still reads their own report (the defect, reproduced); AFTER 0269 (run twice: idempotent) only a user who is Premium today reads, only their own row, the end date is inclusive, anon is refused', async () => {
     expect(await rowsSeenBy(U.lapsed)).toEqual([U.lapsed]);
     expect(await rowsSeenBy(U.free)).toEqual([U.free]);
-  });
 
-  it('AFTER 0269 (run twice: idempotent): only a user who is Premium today reads, only their own row; the end date is inclusive; anon is refused', async () => {
     await db.exec(MIG('0269_nav2_reports_premium_only_read.sql'));
     await db.exec(MIG('0269_nav2_reports_premium_only_read.sql'));
     expect(await rowsSeenBy(U.premium)).toEqual([U.premium]);
@@ -68,6 +68,7 @@ describe('0269: stored reports are readable only while the owner is Premium (NC-
   });
 
   it('the helper function is callable by a signed-in session and not by anon; the table still has no write grant', async () => {
+    await db.exec(MIG('0269_nav2_reports_premium_only_read.sql'));
     const q = async (sql: string) => (await db.query<{ v: boolean }>(sql)).rows[0].v;
     expect(await q(`select has_function_privilege('authenticated', 'nav2_viewer_has_premium()', 'execute') as v`)).toBe(true);
     expect(await q(`select has_function_privilege('anon', 'nav2_viewer_has_premium()', 'execute') as v`)).toBe(false);
