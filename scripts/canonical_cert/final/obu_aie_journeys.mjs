@@ -99,11 +99,18 @@ if (probe.status === 403) { console.log('AIE flags are OFF on this app: restart 
   record(27, 'AIE Investment Intelligence intake with NO owner -> 422 owner_required', none.status === 422 && none.json?.error === 'owner_required', `HTTP ${none.status} ${none.json?.error}`);
   const bare = await call(IN1, 'POST', `/api/aie/investment-intelligence/intake?filename=obu-aie.pdf&owner_member_id=${self1}`, { body: bytes, contentType: 'application/pdf', owner: null });
   record(27, 'a bare legacy owner_member_id is no longer an owner (still 422 owner_required)', bare.status === 422 && bare.json?.error === 'owner_required', `HTTP ${bare.status} ${bare.json?.error}`);
-  const ok = await iiI(IN1, bytes, MEMBER(self1));
+  // find a synthetic CAS the deterministic parser takes straight to awaiting_acceptance (some fixtures are deliberately ambiguous)
+  let ok = null; let usedFile = null; const tried = [];
+  for (const f of ['pc3-q01-baseline-multi-folio-multi-amc.pdf', 'pc3-q07-transaction-rich.pdf', 'pc3-q03-same-instrument-two-folios-fifo-scope.pdf', 'pc3-q04a-month1.pdf', 'pc3-q09-multi-page-continuation.pdf', 'pc3-q11-alternate-cams-layout.pdf', 'pc3-q06-sip-rich-skipped-month.pdf']) {
+    const r = await iiI(IN1, fs.readFileSync(path.join(CAS_DIR, f)), MEMBER(self1));
+    tried.push(f.slice(4, 7) + ':' + (r.json?.data?.status ?? r.status));
+    if (r.json?.data?.status === 'awaiting_acceptance') { ok = r; usedFile = f; break; }
+    ok = ok ?? r;
+  }
   const runId = ok.json?.data?.run_id;
   const intakeId = ok.json?.data?.intake_id;
   const intake = intakeId ? (await sb.from('aie_document_intake').select('owner_selection').eq('id', intakeId).single()).data : null;
-  record(27, 'AIE II intake with Self: run created; owner stored on the intake', ok.status === 200 && !!runId && intake?.owner_selection?.memberId === self1, `HTTP ${ok.status} status=${ok.json?.data?.status} ${ok.json?.error ?? ''}`);
+  record(27, 'AIE II intake with Self: run created; owner stored on the intake (fixtures tried: ' + tried.join(', ') + ')', ok.status === 200 && !!runId && intake?.owner_selection?.memberId === self1, 'HTTP ' + ok.status + ' status=' + ok.json?.data?.status + ' ' + (ok.json?.error ?? ''));
   const bad = await accept(IN1, runId, { ownerHouseholdRole: 'self', ownerMemberId: randomUUID(), countryCode: 'IN' });
   record(27, 'a caller-supplied ownerMemberId that DISAGREES with the stored owner is refused at Accept', bad.status >= 400, `HTTP ${bad.status} ${bad.json?.error ?? bad.json?.message}`);
   const acc = await accept(IN1, runId, { ownerHouseholdRole: 'self', ownerMemberId: self1, countryCode: 'IN' });

@@ -28,7 +28,7 @@ function pdf(bank, accountLine) {
     openingBalanceLine: 'Opening Balance: $1,000.00', closingBalanceLine: bank === ANZ ? 'Closing Balance: $1,454.80' : 'Closing Balance: $1,454.80', transactions: txns,
   }));
 }
-const up = (bytes, owner, extra = '') => call(AU3, 'POST', `/api/financial-data-hub/bank-pdf/upload?country_code=AU&currency_code=AUD${extra}`, { body: Buffer.from(bytes), contentType: 'application/pdf', owner });
+const up = (bytes, owner, extra = '') => call(AU3, 'POST', `/api/financial-data-hub/bank-pdf/upload?country_code=AU&currency_code=AUD&filename=obu-${salt}-${seq}.pdf${extra}`, { body: Buffer.from(bytes), contentType: 'application/pdf', owner });
 const doc = async (id) => (await sb.from('fdh_statement_uploads').select('*').eq('id', id).single()).data;
 const acct = async (id) => (await sb.from('fdh_financial_accounts').select('*').eq('id', id).single()).data;
 const processDoc = (id) => call(AU3, 'POST', `/api/financial-data-hub/bank-pdf/${id}/process`, { json: {}, owner: null });

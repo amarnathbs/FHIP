@@ -41,7 +41,7 @@ async function main() {
     const after = (await sb.from('fdh_statement_uploads').select('*').eq('id', d.id).single()).data;
     const gone = await sb.storage.from(bucket).download(before.ref);
     const label = `${d.document_type}/${d.owner_role}`;
-    record(33, `${label}: raw object existed, purge reports purged, and the object is verified ABSENT`, objectThereBefore && r.status === 'purged' && !!gone.error && after.raw_document_purge_status === 'purged' && after.raw_document_storage_reference === null, `before=${objectThereBefore} result=${r.status} after.status=${after.raw_document_purge_status}`);
+    record(33, `${label}: raw object existed, purge reports purged, and the object is verified ABSENT`, objectThereBefore && r.status === 'purged' && !!gone.error && after.raw_document_purge_status === 'purged' && after.raw_document_storage_reference === null, `before=${objectThereBefore} result=${r.status} after.status=${after.raw_document_purge_status} ref=${after.raw_document_storage_reference} downloadAfterErr=${gone.error?.message ?? 'NONE(object still downloadable)'}`);
     record(33, `${label}: owner provenance RETAINED (role, member, entity, source, allocation unchanged)`, JSON.stringify(OWNER_COLS.map((c) => after[c])) === JSON.stringify(OWNER_COLS.map((c) => before.owner[c])), JSON.stringify({ role: after.owner_role, src: after.owner_selection_source, alloc: after.owner_allocation }));
     record(33, `${label}: raw filename handled per policy (nulled on purge; owner metadata is not a filename)`, before.file !== null && after.original_filename_sanitised === null, `before=${before.file ? 'set' : 'null'} after=${after.original_filename_sanitised === null ? 'null' : 'set'}`);
     const dump = JSON.stringify(after);

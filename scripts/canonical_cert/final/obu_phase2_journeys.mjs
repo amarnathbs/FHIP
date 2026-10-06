@@ -71,12 +71,14 @@ const apply = (route, body) => call(AU3, 'POST', route, { json: body, owner: nul
   const pr = await call(AU3, 'POST', `/api/financial-data-hub/liability-statement/${id}/proposal`, { owner: null });
   const fields = (pr.json?.data?.fields ?? []).filter((f) => f.is_recommended && !f.requires_confirmation && f.proposed_value !== f.existing_value).map((f) => f.field_name);
   const proposalId = pr.json?.data?.proposal_id;
+  const liabBefore = (await sb.from('liabilities').select('id,owner').eq('user_id', U3)).data ?? [];
   const wrong = await apply(`/api/financial-data-hub/liability-proposals/${proposalId}/apply`, { decision: 'add_new', selectedFields: fields, owner: 'self' });
-  record(26, 'liability: owner changed between upload and Apply (Self vs Spouse) -> 409 owner_differs_from_upload; nothing written', wrong.status === 409 && wrong.json?.code === 'owner_differs_from_upload' && ((await sb.from('liabilities').select('id').eq('user_id', U3)).data ?? []).length === 0, `HTTP ${wrong.status} ${wrong.json?.code}`);
+  record(26, 'liability: owner changed between upload and Apply (Self vs Spouse) -> 409 owner_differs_from_upload; nothing written', wrong.status === 409 && wrong.json?.code === 'owner_differs_from_upload' && ((await sb.from('liabilities').select('id').eq('user_id', U3)).data ?? []).length === liabBefore.length, `HTTP ${wrong.status} ${wrong.json?.code}`);
   const a1 = await apply(`/api/financial-data-hub/liability-proposals/${proposalId}/apply`, { decision: 'add_new', selectedFields: fields });
   const a2 = await apply(`/api/financial-data-hub/liability-proposals/${proposalId}/apply`, { decision: 'add_new', selectedFields: fields });
-  const liab = (await sb.from('liabilities').select('id,owner').eq('user_id', U3)).data ?? [];
-  record(26, "liability: Apply without an owner takes the document's; exactly ONE liability, owner spouse; repeat Apply ALREADY_APPLIED", a1.status === 200 && a2.status === 409 && liab.length === 1 && liab[0].owner === 'spouse', `apply ${a1.status}/${a2.status} liabilities=${JSON.stringify(liab)}`);
+  const liabAfter = (await sb.from('liabilities').select('id,owner').eq('user_id', U3)).data ?? [];
+  const liab = liabAfter.filter((l) => !liabBefore.some((b) => b.id === l.id));
+  record(26, "liability: Apply without an owner takes the document's; exactly ONE NEW liability, owner spouse; repeat Apply ALREADY_APPLIED", a1.status === 200 && a2.status === 409 && liab.length === 1 && liab[0].owner === 'spouse', `apply ${a1.status}/${a2.status} liabilities=${JSON.stringify(liab)}`);
 }
 
 // ================= RETIREMENT (super summary CSV) =================
