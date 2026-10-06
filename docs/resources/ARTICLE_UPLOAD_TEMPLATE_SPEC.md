@@ -52,6 +52,7 @@ Generated from the canonical schema (`lib/resources/import/article/schema.ts`) b
 
 ## Rules
 
+- Each file may hold up to 250 rows (and 10 MB). For more, split the file and upload the parts one at a time.
 - Main content uses restricted Markdown: ## for a main heading, ### for a sub-heading, paragraphs separated by a blank line, bullet lists (- item) and numbered lists (1. item). Raw HTML, tables, images, code blocks and nested lists are rejected with the row and column named.
 - Key takeaways: put one takeaway on each line inside the cell.
 - Category, tags, author and CTAs must already exist. They are matched by exact name or slug and are never created by an upload.

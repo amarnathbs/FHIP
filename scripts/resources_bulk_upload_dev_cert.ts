@@ -18,8 +18,10 @@ import * as XLSX from 'xlsx';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { ARTICLE_SCHEMA } from '../lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '../lib/resources/import/money-update/schema';
+import { IMPORT_LIMITS } from '../lib/resources/import/types';
 import { stripUnusedBinContentType } from '../lib/resources/import/xlsx-sanitize';
 
+const CAP = IMPORT_LIMITS.maxRows;
 const APP = process.argv[2] ?? 'http://localhost:3993';
 const ROOT = path.resolve(__dirname, '..');
 function env(name: string): string {
@@ -164,7 +166,7 @@ async function deleteRunPosts() {
   for (let i = 0; i < ids.length; i += 100) await admin.from('resource_posts').delete().in('id', ids.slice(i, i + 100));
 }
 
-// ------------------------------------------------------------------ scale (1 / 50 / 100 / 500 rows, both adapters)
+// ------------------------------------------------------------------ scale (1 / 50 / 100 / cap rows, both adapters)
 async function scaleRun(E: TestUser, sizes: number[]): Promise<unknown[]> {
   const scale: unknown[] = [];
   for (const type of ['article', 'money_update'] as const) {
@@ -264,7 +266,7 @@ async function main() {
   }
 
   if (process.env.CERT_PHASE === 'timing') {
-    // 0274 verification + timing: >= 5 runs of 500 rows per type, then 2 CONCURRENT runs of different run ids per type.
+    // 0274 verification + timing: >= 5 runs of cap rows per type, then 2 CONCURRENT runs of different run ids per type.
     const stats = (xs: number[]) => {
       const s = [...xs].sort((a, b) => a - b);
       return { n: s.length, min: s[0], median: s[Math.floor(s.length / 2)], max: s[s.length - 1], all: xs };
@@ -292,11 +294,11 @@ async function main() {
       const db: number[] = [];
       const client: number[] = [];
       for (let k = 0; k < 5; k++) {
-        const rows = Array.from({ length: 500 }, (_, i) => (type === 'article' ? articleRow(80000 + k * 1000 + i) : muRow(80000 + k * 1000 + i)));
+        const rows = Array.from({ length: CAP }, (_, i) => (type === 'article' ? articleRow(80000 + k * 1000 + i) : muRow(80000 + k * 1000 + i)));
         const u = await upload(E, type, `timing_${type}_${k}.csv`, csvBytes(type, rows), 'text/csv');
         const ap = await api(E, 'POST', `/api/admin/resources/import/runs/${u.json?.data?.runId}/apply`);
-        const ok = ap.status === 200 && ap.json?.data?.created === 500;
-        check(`TIMING ${type} 500 rows run ${k + 1}: applied (db_ms ${ap.json?.data?.dbMs}, client ${ap.ms} ms)`, ok, `${ap.status} ${ap.json?.code ?? ''}`);
+        const ok = ap.status === 200 && ap.json?.data?.created === CAP;
+        check(`TIMING ${type} ${CAP} rows run ${k + 1}: applied (db_ms ${ap.json?.data?.dbMs}, client ${ap.ms} ms)`, ok, `${ap.status} ${ap.json?.code ?? ''}`);
         if (ok) {
           db.push(ap.json.data.dbMs);
           client.push(ap.ms);
@@ -305,24 +307,24 @@ async function main() {
       }
       // two concurrent runs of DIFFERENT run ids
       const mk = async (tag: number) => {
-        const rows = Array.from({ length: 500 }, (_, i) => (type === 'article' ? articleRow(90000 + tag * 1000 + i) : muRow(90000 + tag * 1000 + i)));
+        const rows = Array.from({ length: CAP }, (_, i) => (type === 'article' ? articleRow(90000 + tag * 1000 + i) : muRow(90000 + tag * 1000 + i)));
         return (await upload(E, type, `timing_${type}_c${tag}.csv`, csvBytes(type, rows), 'text/csv')).json?.data?.runId as string;
       };
       const [r1, r2] = [await mk(1), await mk(2)];
       const par = await Promise.all([r1, r2].map((r) => api(E, 'POST', `/api/admin/resources/import/runs/${r}/apply`)));
-      const bothOk = par.every((r) => r.status === 200 && r.json?.data?.created === 500);
-      check(`TIMING ${type} two CONCURRENT 500-row runs (different run ids): both applied (db_ms ${par.map((r) => r.json?.data?.dbMs)}, client ${par.map((r) => r.ms)} ms)`, bothOk && (await countPosts()) === 1000, par.map((r) => `${r.status} ${r.json?.code ?? ''}`).join(' '));
+      const bothOk = par.every((r) => r.status === 200 && r.json?.data?.created === CAP);
+      check(`TIMING ${type} two CONCURRENT ${CAP}-row runs (different run ids): both applied (db_ms ${par.map((r) => r.json?.data?.dbMs)}, client ${par.map((r) => r.ms)} ms)`, bothOk && (await countPosts()) === 2 * CAP, par.map((r) => `${r.status} ${r.json?.code ?? ''}`).join(' '));
       timing[type] = { dbMs: stats(db), clientMs: stats(client), concurrent: par.map((r) => ({ status: r.status, dbMs: r.json?.data?.dbMs ?? null, clientMs: r.ms })) };
       await deleteRunPosts();
     }
-    evidence.timing500 = timing;
+    evidence.timingCap = timing;
     console.log(JSON.stringify(timing));
     return;
   }
 
   if (process.env.CERT_PHASE === 'same') {
     for (const k of [6, 4]) {
-      const cRows = Array.from({ length: 500 }, (_, i) => articleRow(40000 + k * 1000 + i));
+      const cRows = Array.from({ length: CAP }, (_, i) => articleRow(40000 + k * 1000 + i));
       const cu = await upload(E, 'article', 'same'+k+'.csv', csvBytes('article', cRows), 'text/csv');
       const cid = cu.json?.data?.runId;
       const par = await Promise.all(Array.from({ length: k }, () => api(E, 'POST', `/api/admin/resources/import/runs/${cid}/apply`)));
@@ -333,16 +335,16 @@ async function main() {
   }
 
   if (process.env.CERT_PHASE === 'big') {
-    // 0273 follow-up: only the two 500-row cases, the concurrency probe and cleanup.
-    evidence.scale500 = await scaleRun(E, [500]);
-    const cRows = Array.from({ length: 500 }, (_, i) => articleRow(30000 + i));
+    // 0273 follow-up: only the two capped-size cases, the concurrency probe and cleanup.
+    evidence.scaleCap = await scaleRun(E, [CAP]);
+    const cRows = Array.from({ length: CAP }, (_, i) => articleRow(30000 + i));
     const cu = await upload(E, 'article', 'concurrent500.csv', csvBytes('article', cRows), 'text/csv');
     const cid = cu.json?.data?.runId;
     const cb = await countPosts();
     const par = await Promise.all(Array.from({ length: 6 }, () => api(E, 'POST', `/api/admin/resources/import/runs/${cid}/apply`)));
     const effective = par.filter((r) => r.status === 200 && r.json?.data?.alreadyApplied === false).length;
-    evidence.concurrentApply500 = par.map((r) => ({ status: r.status, already: r.json?.data?.alreadyApplied, created: r.json?.data?.created, ms: r.ms, code: r.json?.code }));
-    check('BIG concurrent apply of a 500-row run (6 parallel requests): exactly one effect, 500 posts, no duplicates', effective === 1 && (await countPosts()) - cb === 500 && par.every((r) => r.status === 200), JSON.stringify(evidence.concurrentApply500));
+    evidence.concurrentApplyCap = par.map((r) => ({ status: r.status, already: r.json?.data?.alreadyApplied, created: r.json?.data?.created, ms: r.ms, code: r.json?.code }));
+    check('BIG concurrent apply of a capped-size run (6 parallel requests): exactly one effect, the full row count created once, no duplicates', effective === 1 && (await countPosts()) - cb === CAP && par.every((r) => r.status === 200), JSON.stringify(evidence.concurrentApplyCap));
     return;
   }
 
@@ -435,7 +437,14 @@ async function main() {
   const w3 = await wf(E, gp.id, 'approved');
   const w4 = await wf(users.publisher, gp.id, 'published');
   check('B workflow GREEN: approved then published by a publisher', w3.status === 200 && w4.status === 200, `${w3.status}/${w4.status} ${w4.text.slice(0, 120)}`);
-  const pubLive = await fetch(`${APP}/resources/${slug1}`, { redirect: 'manual' });
+  // The database stamps published_at with ITS clock and the public page only shows rows whose published_at is not in the
+  // app clock's future; this machine's clock runs about 2 s behind, so the page legitimately 404s for a moment after
+  // publication. Poll up to 10 s (a real 404 forever still fails).
+  let pubLive = await fetch(`${APP}/resources/${slug1}`, { redirect: 'manual' });
+  for (let i = 0; i < 10 && pubLive.status !== 200; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    pubLive = await fetch(`${APP}/resources/${slug1}`, { redirect: 'manual' });
+  }
   check('B POSITIVE CONTROL: after real publication the public URL serves it (so "hidden while draft" is meaningful)', pubLive.status === 200, `${pubLive.status}`);
   await admin.from('resource_posts').update({ status: 'archived' }).eq('id', gp.id);
   // AMBER + RED on the second imported article
@@ -672,16 +681,16 @@ async function main() {
     check('F formula cell: FORMULA_NOT_ALLOWED on the row, never evaluated, Apply blocked', fu.json?.data?.status === 'has_errors' && fv.json.data.rows[0].validation_errors.some((e: any) => e.code === 'FORMULA_NOT_ALLOWED'));
     const big = await upload(E, 'article', 'big.csv', Buffer.alloc(10 * 1024 * 1024 + 10, 97), 'text/csv');
     check('F file over 10 MB: refused', big.status === 413 || big.status === 422 || big.status === 400, `${big.status}`);
-    const many = await upload(E, 'article', 'many.csv', csvBytes('article', Array.from({ length: 501 }, (_, i) => articleRow(5000 + i))), 'text/csv');
-    check('F 501 rows: TOO_MANY_ROWS', many.status === 422 && many.json?.code === 'TOO_MANY_ROWS', `${many.status} ${many.json?.code}`);
+    const many = await upload(E, 'article', 'many.csv', csvBytes('article', Array.from({ length: CAP + 1 }, (_, i) => articleRow(5000 + i))), 'text/csv');
+    check(`F ${CAP + 1} rows: TOO_MANY_ROWS`, many.status === 422 && many.json?.code === 'TOO_MANY_ROWS', `${many.status} ${many.json?.code}`);
   }
 
-  // ============================================================ G. scale: 1 / 50 / 100 / 500 for both adapters
-  const scale = await scaleRun(E, [1, 50, 100, 500]);
+  // ============================================================ G. scale: 1 / 50 / 100 / cap for both adapters
+  const scale = await scaleRun(E, [1, 50, 100, CAP]);
   evidence.scale = scale;
   const q1 = (scale as any[]).filter((s) => s.type === 'article');
   const qs = q1.map((s) => s.dbQueriesDuringUpload);
-  check('G no N+1: upload database round trips are constant across 1 -> 500 rows (rows staged in 50-row chunks only)', qs[0] <= 10 && qs[3] - qs[0] <= Math.ceil(500 / 50) + 1, JSON.stringify(qs));
+  check('G no N+1: upload database round trips are constant across 1 -> cap rows (rows staged in 50-row chunks only)', qs[0] <= 10 && qs[3] - qs[0] <= Math.ceil(CAP / 50) + 1, JSON.stringify(qs));
 
   // ============================================================ H. regression: manual flows and shared pieces
   const manualArticle = await api(E, 'POST', '/api/admin/resources/content', { contentType: 'article' });

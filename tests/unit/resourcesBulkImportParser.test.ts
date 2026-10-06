@@ -151,13 +151,15 @@ describe('structural file errors (named codes)', () => {
     expect(fileCodes(run('article', [good('article')], { headersOverride: [...schemaKeys, 'title'] }).parsed)).toEqual(['DUPLICATE_COLUMN']);
   });
 
-  it('EMPTY_FILE for no rows or no header; TOO_MANY_ROWS above 500 records; exactly 500 is accepted', () => {
+  it('EMPTY_FILE for no rows or no header; TOO_MANY_ROWS above 250 records; exactly 250 is accepted', () => {
     expect(fileCodes(parseImportFile({ fileName: 'a.csv', bytes: new Uint8Array() }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName }))).toEqual(['EMPTY_FILE']);
     expect(fileCodes(run('article', []).parsed)).toEqual(['EMPTY_FILE']);
     const many = (n: number) => Array.from({ length: n }, (_, i) => good('article', { external_id: `E${i}`, slug: `s-${i}`, title: `T${i}` }));
-    expect(run('article', many(500)).parsed.ok).toBe(true);
-    expect(fileCodes(run('article', many(501)).parsed)).toEqual(['TOO_MANY_ROWS']);
-    expect(IMPORT_LIMITS.maxRows).toBe(500);
+    expect(run('article', many(250)).parsed.ok).toBe(true);
+    expect(fileCodes(run('article', many(251)).parsed)).toEqual(['TOO_MANY_ROWS']);
+    expect(IMPORT_LIMITS.maxRows).toBe(250);
+    // the limit wording follows the single constant
+    expect(JSON.stringify(run('article', many(251)).parsed)).toContain(String(IMPORT_LIMITS.maxRows));
   });
 
   it('TEMPLATE_VERSION_UNSUPPORTED unless 1.0 (a numeric 1 from Excel counts as 1.0)', () => {

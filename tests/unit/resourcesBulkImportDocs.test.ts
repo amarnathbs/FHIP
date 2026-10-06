@@ -8,7 +8,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ARTICLE_SCHEMA } from '@/lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '@/lib/resources/import/money-update/schema';
-import type { ImportSchema } from '@/lib/resources/import/types';
+import { IMPORT_LIMITS, type ImportSchema } from '@/lib/resources/import/types';
+import { ARTICLE_TEMPLATE_NOTES } from '@/lib/resources/import/article/template';
+import { MONEY_UPDATE_TEMPLATE_NOTES } from '@/lib/resources/import/money-update/template';
 
 const DOCS = path.resolve(__dirname, '..', '..', 'docs', 'resources');
 
@@ -48,5 +50,20 @@ describe('template specification documents match the canonical schemas', () => {
     expect(drift(without, ARTICLE_SCHEMA)).toContain('missing column excerpt');
     const flipped = doc.replace('| `title` | Required |', '| `title` | Optional |');
     expect(drift(flipped, ARTICLE_SCHEMA)).toContain('required flag differs for title');
+  });
+});
+
+describe('the per-file row limit has one source and every surface follows it', () => {
+  it('250 rows is the chosen cap and the template notes, generated docs and upload label all read the one constant', () => {
+    expect(IMPORT_LIMITS.maxRows).toBe(250);
+    const sentence = `up to ${IMPORT_LIMITS.maxRows} rows`;
+    expect(ARTICLE_TEMPLATE_NOTES.join(' ')).toContain(sentence);
+    expect(MONEY_UPDATE_TEMPLATE_NOTES.join(' ')).toContain(sentence);
+    for (const f of ['ARTICLE_UPLOAD_TEMPLATE_SPEC.md', 'MONEY_UPDATE_UPLOAD_TEMPLATE_SPEC.md']) {
+      expect(fs.readFileSync(path.join(DOCS, f), 'utf8')).toContain(sentence);
+    }
+    const uploader = fs.readFileSync(path.resolve(__dirname, '..', '..', 'components', 'resources', 'import', 'ImportUploader.tsx'), 'utf8');
+    expect(uploader).toContain('{IMPORT_LIMITS.maxRows} rows');
+    expect(uploader).not.toMatch(/500 rows/);
   });
 });

@@ -7,7 +7,7 @@ Server-side and authoritative. Client validation is a convenience only. Nothing 
 | Control | Implementation |
 |---|---|
 | Only `.csv` and `.xlsx` | extension allow-list + content sniffing + declared MIME consistency (`file-security.ts` over the shared ingest inspector). `.xls`, `.xlsm`, `.xlsb`, `.ods`, zip, pdf, exe, gzip, png all `INVALID_FILE_TYPE` |
-| 10 MB, 500 records | size checked from the declared length before the body is read (413) and again on the bytes; 500 non-empty data rows (`TOO_MANY_ROWS`) |
+| 10 MB, 250 records | size checked from the declared length before the body is read (413) and again on the bytes; 250 non-empty data rows (`TOO_MANY_ROWS`; the single constant `IMPORT_LIMITS.maxRows`) |
 | Bounded decompression | own strict ZIP reader: central directory, per-entry and total size caps, compression-ratio cap, entry-count cap, zip64/encrypted/overlapping/duplicate/path-traversal rejected, declared size enforced AT inflate time (a lying header cannot expand) |
 | XML | linear scanner, no DTD, no entity definitions (no XXE, no entity expansion), only the five predefined entities |
 | No formulas | any formula cell (XLSX `<f>`) or a value starting with `=` is `FORMULA_NOT_ALLOWED`; the cached value is never used |
@@ -35,7 +35,7 @@ Staging writes use the service role **after** the capability check, and no API r
 
 ## Deliberate, bounded deviation from the Admin Standard's `auth.uid()` preference (migration 0273)
 
-Standard section 6 prefers that a privileged RPC take its actor from `auth.uid()`. The apply of a very large file does not fit the 8 second statement limit of the signed-in API role (measured on DEV: a 500-row apply needs 5 to 9 seconds of database time). A function-level setting cannot raise the limit of the call that is already running, so the apply is also offered as `public.apply_resource_content_import_as_actor(run id, actor id)`: callable by the **service role only**, naming the actor.
+Standard section 6 prefers that a privileged RPC take its actor from `auth.uid()`. The apply of a very large file does not fit the 8 second statement limit of the signed-in API role (measured on DEV before the faster core of 0274: a 500-row apply needed 5 to 9 seconds of database time). A function-level setting cannot raise the limit of the call that is already running, so the apply is also offered as `public.apply_resource_content_import_as_actor(run id, actor id)`: callable by the **service role only**, naming the actor.
 
 | | |
 |---|---|
@@ -47,7 +47,7 @@ Standard section 6 prefers that a privileged RPC take its actor from `auth.uid()
 | Residual risk | compromise of the service-role key (which already writes the staging tables and is the platform's own root of trust for the server) |
 | Rollback | the README of `po_apply_bulk_upload_0273`; the app falls back to the signed-in function if the twin is missing |
 
-The signed-in function `apply_resource_content_import(run id)` is unchanged for callers: it still takes the actor from `auth.uid()`. Standard section 16 record: clause departed from = section 6 (actor from `auth.uid()`); reason = the 8 second limit above; effect and compensating controls = the table above; approval = the Product Owner chose this option (option A) on 06-10-2026, relayed by the coordinating agent (a written confirmation from the Product Owner should be attached to the final certification if the Standard's own record-keeping requires one).
+The signed-in function `apply_resource_content_import(run id)` is unchanged for callers: it still takes the actor from `auth.uid()`. Standard section 16 record: clause departed from = section 6 (actor from `auth.uid()`); reason = the 8 second limit above; effect and compensating controls = the table above; approval = **ACCEPTED by the Product Owner** as a bounded deviation from Admin Standard section 6: decision "A" of 06-10-2026, relayed through the orchestrating agent and reaffirmed by the Product Owner on 07-10-2026 ("go with your recommendations"). Status: accepted, no further exception requested. The Product Owner's own written record, if the Standard's record-keeping requires one, is held outside this repository.
 
 ## What the apply function never takes from the data
 

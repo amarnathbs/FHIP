@@ -65,6 +65,6 @@ The Article / Guide / FHIP Explainer editor (`ResourceEditor`) now carries the e
 - Create-only: no update of existing content.
 - v1 types: article and money_update only (Guide and FHIP Explainer could be added by implementing the same four adapter files; none is built).
 - Two sources per row (the contract defines `source_1_*` and `source_2_*`).
-- 500 rows, 10 MB per file (`IMPORT_LIMITS.maxRows`). 500 rows is marginal against the API 8 second limit on DEV (see the runbook and certification); the recommended safe fallback is 250.
+- 250 rows, 10 MB per file (`IMPORT_LIMITS.maxRows`). 500 rows was found marginal against the API 8 second limit on DEV, so the Product Owner chose 250 (07-10-2026); it may be raised to 500 only after the production synthetic proof (see the runbook and certification).
 - The upload progress wording ("Uploading...", "Parsing...", "Validating...", "Preparing preview...") advances on a timer during one request; it is progress text, not a server measurement.
 - Retention purge runs on upload, not on a schedule (no cron job is added); an idle system keeps expired staging rows until the next upload.

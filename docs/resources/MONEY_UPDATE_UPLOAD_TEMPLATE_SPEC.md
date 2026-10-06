@@ -52,6 +52,7 @@ Generated from the canonical schema (`lib/resources/import/money-update/schema.t
 
 ## Rules
 
+- Each file may hold up to 250 rows (and 10 MB). For more, split the file and upload the parts one at a time.
 - Event date is required and cannot be in the future. At least one of next review date or expiry date is required.
 - At least one source is required. Links must start with https://.
 - Category, tags and CTAs must already exist. They are matched by exact name or slug and are never created by an upload.

@@ -24,7 +24,8 @@ export const TEMPLATE_VERSION = '1.0';
 
 export const IMPORT_LIMITS = Object.freeze({
   maxFileBytes: 10 * 1024 * 1024,
-  maxRows: 500,
+  /** Per-file record cap. 250 chosen 07-10-2026 (PO); 500 only after the production synthetic proof shows worst-case db_ms under about 6 s (see the runbook). */
+  maxRows: 250,
   /** A single cell may not exceed this many characters (a body field is the largest legitimate value). */
   maxCellChars: 50_000,
   /** The raw workbook may not hold more sheets than the template defines plus a little slack. */

@@ -110,11 +110,11 @@ describe('size and limits', () => {
     expect(codes(parse('a.csv', new Uint8Array()))).toEqual(['EMPTY_FILE']);
   });
 
-  it('too many cells in one value is caught by the field length limit, and 501 rows is TOO_MANY_ROWS for xlsx too', () => {
-    const rows = Array.from({ length: 501 }, (_, i) => good('article', { external_id: `E${i}`, slug: `s-${i}`, title: `T${i}` }));
+  it('too many cells in one value is caught by the field length limit, and 251 rows is TOO_MANY_ROWS for xlsx too', () => {
+    const rows = Array.from({ length: 251 }, (_, i) => good('article', { external_id: `E${i}`, slug: `s-${i}`, title: `T${i}` }));
     expect(codes(parse('a.xlsx', xlsxFor('article', rows)))).toEqual(['TOO_MANY_ROWS']);
-    const ok500 = rows.slice(0, 500);
-    expect(parse('a.xlsx', xlsxFor('article', ok500)).ok).toBe(true);
+    const ok250 = rows.slice(0, 250);
+    expect(parse('a.xlsx', xlsxFor('article', ok250)).ok).toBe(true);
   });
 });
 
