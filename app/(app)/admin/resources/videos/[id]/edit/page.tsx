@@ -3,7 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canCreateSpecialistContent, canManageDiscovery } from '@/lib/resources/permissions';
+import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canCreateSpecialistContent, canManageDiscovery, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { getVideoEditorPost } from '@/lib/resources/video/queries';
 import { getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
@@ -63,7 +63,7 @@ export default async function VideoEditPage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="space-y-6">
-      <VideoEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} />
+      <VideoEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />
       {linksPanel}
     </div>
   );

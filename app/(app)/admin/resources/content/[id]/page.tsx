@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { canDeleteDraftResource } from '@/lib/resources/permissions';
+import { canDeleteDraftResource, canManageDiscovery } from '@/lib/resources/permissions';
+import { LinkedVideosPanel } from '@/components/resources/video/LinkedVideosPanel';
 import { DeleteDraftButton } from '@/components/resources/admin/DeleteDraftButton';
 import { getResourceContentById, getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceJurisdictionBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
@@ -176,6 +177,9 @@ export default async function ResourceContentDetailPage({ params }: { params: Pr
       ) : (
         <LinkedVideosPanel supabase={supabase} contentPostId={post.id} contentTitle={post.title} canManage={canManageDiscovery(current)} />
       )}
+
+      {/* F12: videos this content shows, with Link / Remove (content pages, not video pages). */}
+      {post.content_type !== 'video' && <LinkedVideosPanel supabase={supabase} contentPostId={post.id} contentTitle={post.title} canManage={canManageDiscovery(current)} />}
 
       <section className="rounded-card border border-line bg-white p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Workflow History</h2>

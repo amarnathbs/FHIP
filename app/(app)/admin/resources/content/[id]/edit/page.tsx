@@ -2,11 +2,12 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canDeleteDraftResource } from '@/lib/resources/permissions';
+import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canDeleteDraftResource, canManageDiscovery } from '@/lib/resources/permissions';
 import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
 import { isEditableContentType } from '@/lib/resources/editor/types';
 import { ResourceEditor } from '@/components/resources/editor/ResourceEditor';
+import { LinkedVideosPanel } from '@/components/resources/video/LinkedVideosPanel';
 import type { WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 
 // /admin/resources/content/[id]/edit — spec §9/§14.
@@ -52,5 +53,10 @@ export default async function ResourceEditPage({ params }: { params: Promise<{ i
     canManage: canManageResources(current),
   };
 
-  return <ResourceEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />;
+  return (
+    <div className="space-y-6">
+      <ResourceEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />
+      <LinkedVideosPanel supabase={supabase} contentPostId={post.id} contentTitle={post.title} canManage={canManageDiscovery(current)} />
+    </div>
+  );
 }

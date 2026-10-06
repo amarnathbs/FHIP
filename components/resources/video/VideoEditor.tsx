@@ -20,6 +20,7 @@ import { RevisionHistoryPanel } from '@/components/resources/editor/RevisionHist
 import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { SaveStatus, type SaveState } from '@/components/resources/editor/SaveStatus';
 import { useUnsavedChangesGuard } from '@/components/resources/editor/useUnsavedChangesGuard';
+import { DeleteDraftButton } from '@/components/resources/admin/DeleteDraftButton';
 import { ChapterEditor } from '@/components/resources/specialist/ChapterEditor';
 import { slugify } from '@/lib/resources/editor/slug';
 import { TITLE_MAX_LENGTH, EXCERPT_MAX_LENGTH } from '@/lib/resources/editor/validation';
@@ -29,8 +30,6 @@ import type { EditorSavePatch, PostVersionSnapshot, EditorReferenceData, PostVer
 import type { VideoEditorPost } from '@/lib/resources/video/types';
 import type { ResourceStatus, ComplianceClassification } from '@/lib/resources/types';
 import type { WorkflowHistoryEntry } from '@/lib/resources/admin/queries';
-
-const AUTOSAVE_DEBOUNCE_MS = 2500;
 
 function toMetadataForm(post: VideoEditorPost): MetadataFormState {
   return {
@@ -64,6 +63,7 @@ export function VideoEditor({
   initialWorkflowHistory,
   currentUserId,
   caps,
+  canDelete = false,
 }: {
   post: VideoEditorPost;
   reference: EditorReferenceData;
@@ -71,6 +71,7 @@ export function VideoEditor({
   initialWorkflowHistory: WorkflowHistoryEntry[];
   currentUserId: string;
   caps: WorkflowCapabilities;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const video = initialPost.video;
@@ -104,7 +105,6 @@ export function VideoEditor({
   const [chapterErrors, setChapterErrors] = useState<Record<string, string>>({});
   const [changeSummary, setChangeSummary] = useState('');
 
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
   // Wave 5 (§28): queue a save requested during an in-flight one instead of
   // dropping it, and only claim "Saved" if nothing changed while the request
@@ -266,17 +266,8 @@ export function VideoEditor({
     doSaveRef.current = doSave;
   }, [doSave]);
 
-  useEffect(() => {
-    if (!dirty) return;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      void doSave(false);
-    }, AUTOSAVE_DEBOUNCE_MS);
-    return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, title, excerpt, slug, meta, durationSeconds, thumbnailUrl, youtubePublishedAt, transcript, chapters, embedEnabled, channelHandle, channelUrl]);
+  // F3 decision (06/10/2026): no autosave. Content is saved only when Save is
+  // pressed; the unsaved-changes guard protects work in the meantime.
 
   const { promptOpen, confirmNavigate, cancelNavigate } = useUnsavedChangesGuard(dirty);
 
@@ -366,6 +357,7 @@ export function VideoEditor({
             <Link href={`/admin/resources/videos/${initialPost.id}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
               Preview
             </Link>
+            <DeleteDraftButton postId={initialPost.id} title={title} status={status} canDelete={canDelete} redirectTo="/admin/resources/videos" />
             <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="min-h-11 rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
               {saveState === 'saving' ? 'Saving…' : 'Save Changes'}
             </button>
