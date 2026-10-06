@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
+import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { getMoneyUpdateEditorPost } from '@/lib/resources/money-update/queries';
 import { getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
@@ -35,5 +35,5 @@ export default async function MoneyUpdateEditPage({ params }: { params: Promise<
     canManage: canManageResources(current),
   };
 
-  return <MoneyUpdateEditor post={post} reference={reference} sourceOptions={sourceOptions} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} />;
+  return <MoneyUpdateEditor post={post} reference={reference} sourceOptions={sourceOptions} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />;
 }

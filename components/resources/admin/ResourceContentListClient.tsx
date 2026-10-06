@@ -59,6 +59,8 @@ export function ResourceContentListClient({ queue, title, description }: { queue
   const [categoriesUnavailable, setCategoriesUnavailable] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  // F3: server-resolved capability (UI visibility only; the DELETE route re-checks).
+  const [canDeleteDrafts, setCanDeleteDrafts] = useState(false);
 
   useEffect(() => {
     // Admin A0.2 Wave 5 (§8.5): this swallowed every failure, and the
@@ -108,7 +110,8 @@ export function ResourceContentListClient({ queue, title, description }: { queue
           setTotal(0);
           return;
         }
-        const data = json?.data as { items?: ContentListItem[]; total?: number; pageSize?: number } | undefined;
+        const data = json?.data as { items?: ContentListItem[]; total?: number; pageSize?: number; canDeleteDrafts?: boolean } | undefined;
+        setCanDeleteDrafts(data?.canDeleteDrafts === true);
         setItems(data?.items ?? []);
         setTotal(data?.total ?? 0);
         setPageSize(data?.pageSize ?? 25);
@@ -207,7 +210,7 @@ export function ResourceContentListClient({ queue, title, description }: { queue
             />
           ) : (
             <>
-              <ResourceContentTable items={items} />
+              <ResourceContentTable items={items} canDeleteDrafts={canDeleteDrafts} onDeleted={() => setReloadToken((t) => t + 1)} />
               <div className="mt-3">
                 <ResourcePagination page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
               </div>

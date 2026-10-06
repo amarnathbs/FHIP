@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
+import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
 import { isEditableContentType } from '@/lib/resources/editor/types';
@@ -52,5 +52,5 @@ export default async function ResourceEditPage({ params }: { params: Promise<{ i
     canManage: canManageResources(current),
   };
 
-  return <ResourceEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} />;
+  return <ResourceEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />;
 }

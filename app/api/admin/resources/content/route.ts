@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
-import { getCurrentResourceRoles, isResourceStaff, canCreateResource } from '@/lib/resources/permissions';
+import { getCurrentResourceRoles, isResourceStaff, canCreateResource, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { parseContentListFilters, QUEUE_STATUS_GROUPS, type QueuePreset } from '@/lib/resources/admin/filters';
 import { getResourceContentList } from '@/lib/resources/admin/queries';
 import { createResourceDraft } from '@/lib/resources/editor/mutations';
 import { isEditableContentType } from '@/lib/resources/editor/types';
+import { validateForDraftSave } from '@/lib/resources/editor/validation';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 const QUEUE_PRESETS = new Set(['drafts', 'review', 'scheduled', 'published', 'review-due', 'archived']);
@@ -47,14 +48,22 @@ export async function GET(request: Request) {
     const presetStatuses = preset ? QUEUE_STATUS_GROUPS[preset] : undefined;
 
     const result = await getResourceContentList(supabase, filters, presetStatuses);
-    return ok(result);
+    // F3: the list shows a Delete control only to callers who hold the
+    // delete-draft capability. UI visibility only; DELETE re-checks it.
+    return ok({ ...result, canDeleteDrafts: canDeleteDraftResource(current) });
   } catch (err) {
     console.error('Resources content list error:', err);
     return bad('Could not load Resources content.', 500);
   }
 }
 
-// POST /api/admin/resources/content { contentType: 'article'|'guide'|'fhip_explainer' }
+// POST /api/admin/resources/content { contentType: 'article'|'guide'|'fhip_explainer', title: string }
+//
+// PO review F3 (06/10/2026): a record is created ONLY when the author presses
+// Save in the editor, with the title they typed. Opening the Create screen no
+// longer calls this route. A request without a real title is refused, so no
+// 'Untitled' draft can be produced by this route any more. The editor then
+// sends the full content with an ordinary PATCH.
 //
 // Draft creation (spec §10-13). Role gate is checked twice — here (an early,
 // clear 403 with the exact reason, spec §96) and again by RLS itself
@@ -89,8 +98,13 @@ export async function POST(request: Request) {
     const contentType = typeof body?.contentType === 'string' ? body.contentType : '';
     if (!isEditableContentType(contentType)) return bad('Invalid content type. Must be one of: article, guide, fhip_explainer.', 400);
 
-    const { id } = await createResourceDraft(supabase, contentType, user.id);
-    return ok({ id });
+    const rawTitle = typeof body?.title === 'string' ? body.title.trim() : '';
+    if (!rawTitle) return Response.json({ error: 'Enter a title before saving.', fields: { title: 'Title is required to save.' } }, { status: 422 });
+    const titleCheck = validateForDraftSave({ title: rawTitle });
+    if (!titleCheck.valid) return Response.json({ error: 'Validation failed.', fields: titleCheck.errors }, { status: 422 });
+
+    const { id, updated_at } = await createResourceDraft(supabase, contentType, user.id, rawTitle);
+    return ok({ id, updated_at });
   } catch (err) {
     console.error('Resources create draft error:', err);
     return bad('Could not create the new draft.', 500);

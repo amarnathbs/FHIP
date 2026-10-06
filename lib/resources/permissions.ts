@@ -119,6 +119,18 @@ export function canManageFaqs(current: CurrentResourceRoles): boolean {
   return canCreateSpecialistContent(current);
 }
 
+// PO review F3 (06/10/2026) — deleting a NEVER-PUBLISHED draft. A separately
+// named capability (Admin Architecture Standard s2), deliberately NOT
+// isResourceStaff(): it mirrors the database's own "managers delete posts"
+// RLS policy (private.can_manage_resources: Super Admin and Resource
+// Administrator), so the UI, the route and the database all agree. An Author
+// or Editor who created a draft by mistake asks a Resource Administrator.
+// Published, scheduled, in-review and archived content is never deleted here:
+// it follows the existing workflow (archive / unpublish).
+export function canDeleteDraftResource(current: CurrentResourceRoles): boolean {
+  return canManageResources(current);
+}
+
 // R1.6 — Related Content / CTA Library / Context Mapping admin (spec §79/
 // §80: "Likely management roles: Super Admin, Resource Admin, Editor...
 // Compliance Reviewer/Publisher should not automatically become mapping
