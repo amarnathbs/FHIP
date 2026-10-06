@@ -97,6 +97,7 @@ def main() -> None:
             'funds_named': named,
             'overflow_right': overflow,
             'overlaps': overlaps[:10],
+            'min_size': min(sizes) if sizes else None,
             'body_size': sizes.most_common(1)[0][0] if sizes else None,
             'png': png,
         })

@@ -28,6 +28,8 @@ export const MAX_BLANK = 0.3;
 /** The designed body size is 9 pt; anything outside this band means the page was scaled. */
 export const BODY_PT_MIN = 8.5;
 export const BODY_PT_MAX = 10.5;
+/** No text on a page, footnotes and chart labels included, may be set smaller than this. */
+export const MIN_TEXT_PT = 7.5;
 
 export interface PageReport {
   page: number;
@@ -59,6 +61,7 @@ export function judgeLayout(a: LayoutAnalysis, opts: { maxBlank?: number } = {})
     const cover = i === 0;
     const titled = p.first_line && /^(Comparing your funds|Fund analytics report)/.test(p.first_line.text);
     if (!cover && !titled && p.funds_named.length === 0) out.push(`page ${p.page}: does not name a fund`);
+    if (p.min_size !== undefined && p.min_size !== null && p.min_size < MIN_TEXT_PT) out.push(`page ${p.page}: the smallest text is ${p.min_size} pt, below ${MIN_TEXT_PT} pt`);
     if ((p.overlaps ?? []).length > 0) out.push(`page ${p.page}: text collides ("${p.overlaps![0]}")`);
     if (p.overflow_right.length > 0) out.push(`page ${p.page}: text runs past the margin ("${p.overflow_right[0]}")`);
     if (p.lines >= 12 && p.body_size !== undefined && p.body_size !== null && (p.body_size < BODY_PT_MIN || p.body_size > BODY_PT_MAX)) out.push(`page ${p.page}: body text is ${p.body_size} pt, designed ${BODY_PT_MIN}-${BODY_PT_MAX} pt (the page was scaled)`);

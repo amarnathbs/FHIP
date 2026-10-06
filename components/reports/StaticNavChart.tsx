@@ -22,7 +22,7 @@ export default function StaticNavChart({ block, ctx }: { block: FundAnalyticsSch
         {g.yTicks.map((t) => (
           <g key={t.label + t.y}>
             <line x1={g.plot.left} x2={g.plot.right} y1={t.y} y2={t.y} stroke="#dde3ea" strokeDasharray="3 3" strokeWidth="0.7" />
-            <text x={g.plot.left - 6} y={t.y + 3.5} textAnchor="end" fontSize="10" fill="#5b677a">
+            <text x={g.plot.left - 6} y={t.y + 3.5} textAnchor="end" fontSize="10.6" fill="#5b677a">
               {t.label}
             </text>
           </g>
@@ -31,7 +31,7 @@ export default function StaticNavChart({ block, ctx }: { block: FundAnalyticsSch
         {g.xTicks.map((t, i) => (
           <g key={t.date + i}>
             <line x1={t.x} x2={t.x} y1={g.plot.bottom} y2={g.plot.bottom + 4} stroke="#5b677a" strokeWidth="0.8" />
-            <text x={t.x} y={g.plot.bottom + 17} textAnchor={i === 0 ? 'start' : i === g.xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#5b677a">
+            <text x={t.x} y={g.plot.bottom + 17} textAnchor={i === 0 ? 'start' : i === g.xTicks.length - 1 ? 'end' : 'middle'} fontSize="10.6" fill="#5b677a">
               {t.date}
             </text>
           </g>
@@ -40,7 +40,7 @@ export default function StaticNavChart({ block, ctx }: { block: FundAnalyticsSch
         {lines.map((l, i) => (
           <g key={l.label} transform={`translate(${g.plot.left + 150 + i * 90},${legendY})`}>
             <line x1="0" x2="18" y1="-3.5" y2="-3.5" stroke={l.color} strokeWidth="2" />
-            <text x="24" y="0" fontSize="10" fill="#172033">
+            <text x="24" y="0" fontSize="10.6" fill="#172033">
               {l.label}
             </text>
           </g>

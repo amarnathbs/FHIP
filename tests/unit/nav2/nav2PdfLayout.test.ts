@@ -220,6 +220,12 @@ describe('the layout judge (NAMED NEGATIVE CONTROLS: each rule fails on a bad la
     expect(judgeLayout({ ...doc([page(1), page(2)]), cell_overflow: ['Common returns'] }).some((x) => x.includes('narrower than its text'))).toBe(true);
   });
 
+  it('NC-L8: text set smaller than 7.5 pt fails (Stage 3 PO review: footnote marks were 7 pt and chart labels 7.4 pt)', () => {
+    expect(judgeLayout(doc([page(1, { min_size: 7.0 }), page(2)])).some((x) => x.includes('smallest text'))).toBe(true);
+    expect(judgeLayout(doc([page(1, { min_size: 7.4 }), page(2)])).some((x) => x.includes('smallest text'))).toBe(true);
+    expect(judgeLayout(doc([page(1, { min_size: 7.6 }), page(2)])).length).toBe(0);
+  });
+
   it('NC-L4: text past the right margin fails', () => {
     expect(judgeLayout(doc([page(1, { overflow_right: ['a very long unbroken line'] }), page(2)])).some((x) => x.includes('past the margin'))).toBe(true);
   });

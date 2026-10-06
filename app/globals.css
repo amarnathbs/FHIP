@@ -160,7 +160,7 @@
 .fa-doc .fa-table th:last-child { padding-right: 0; }
 .fa-doc .fa-na { color: #8a5a00; font-weight: 600; }
 .fa-doc .fa-table .num:has(.fa-na) { white-space: normal; }
-.fa-doc .fa-mark { font-size: 7pt; color: #2563eb; margin-left: 0.5mm; font-weight: 600; }
+.fa-doc .fa-mark { font-size: 7.6pt; color: #2563eb; margin-left: 0.5mm; font-weight: 600; }
 .fa-doc .fa-footnotes { margin-top: 4mm; padding-top: 2mm; border-top: 0.25mm solid #dde3ea; font-size: 8pt; color: #5b677a; }
 .fa-doc .fa-footnotes p { margin: 0 0 1mm; break-inside: avoid; }
 
