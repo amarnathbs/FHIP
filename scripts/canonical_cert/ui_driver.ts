@@ -96,6 +96,10 @@ async function main() {
             return `${e.tagName.toLowerCase()}${e.type ? '[' + e.type + ']' : ''}${e.disabled ? '(disabled)' : ''} ${name}${lab ? ' <label:' + lab + '>' : ''}${e.getAttribute('href') ? ' -> ' + e.getAttribute('href') : ''}`;
           }));
       case 'eval': return page.evaluate(act.js);
+      // {a:"key", key:"Tab"|"Enter"|"Space"|"Shift+Tab"|..., repeat?}: real keyboard input (focus / keyboard-operation checks)
+      case 'key': for (let i = 0; i < (act.repeat ?? 1); i++) await page.keyboard.press(act.key); return 'ok';
+      // {a:"focused"}: what has keyboard focus now (tag, accessible name, whether it shows a focus ring)
+      case 'focused': return page.evaluate(() => { const e = document.activeElement as HTMLElement | null; if (!e) return null; const cs = getComputedStyle(e); return { tag: e.tagName.toLowerCase(), name: (e.getAttribute('aria-label') ?? e.innerText ?? (e as HTMLInputElement).value ?? '').trim().replace(/\s+/g, ' ').slice(0, 80), label: (e as HTMLInputElement).labels?.[0]?.innerText?.trim().slice(0, 60) ?? null, outline: cs.outlineStyle !== 'none' && cs.outlineWidth !== '0px', boxShadow: cs.boxShadow !== 'none' }; });
       case 'viewport': await page.setViewportSize({ width: act.width, height: act.height }); return 'ok';
       case 'errors': return consoleErrors.splice(0);
       case 'close': setTimeout(async () => { await browser.close(); process.exit(0); }, 100); return 'closing';
