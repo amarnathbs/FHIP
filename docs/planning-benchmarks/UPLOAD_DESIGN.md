@@ -156,12 +156,14 @@ Every named negative control demonstrably fails something (the failure is named 
 - Staged batches expire after 14 days for Activate; there is no scheduled sweeper in v1 (expired batches stay visible as "expired" and can be discarded).
 - The upload cannot create a dataset, source or metric definition; a new dataset version is still created with the existing `POST datasets` route (no screen yet). Proposals P2/P4/P5 of the schema document remain open.
 
-## 12. Decisions the Product Owner must take
+## 12. Decisions (decided by the PO 07-10-2026: "go with your recommendations")
 
-- **U1** Grant `can_upload_planning_benchmarks` and `can_activate_planning_benchmarks` to named people. Recommended: upload to the Benchmarks owner, activate to a different person; allow one person to hold both only with the recorded self-activation acknowledgement.
-- **U2** Approve the consumer filter in the live Twin read path (section 9). Without it the supersede cannot be made safe; if declined, Activate must be limited to first loads of empty keys.
-- **U3** Confirm that a successful Activate also activates the target dataset (as the existing dataset Activate does) rather than requiring a separate click first (a first load cannot pass the "at least one value" rule before its values exist).
-- **U4** Day-first dates (`dd/mm/yyyy`, `dd-mm-yyyy`) are accepted in uploaded files in addition to the year-first form, because a CSV saved from an Indian or Australian Excel contains them. Confirm or restrict to year-first only.
-- **U5** Band-set replacement for target ranges (a tier missing from the new file is end-dated). Confirm, or require every tier to be restated.
-- **U6** Whether to add a unique key on the live tables after a data clean-up (not done: it can fail on existing duplicates).
-- **U7** Apply migration `0275` on DEV (hand-over `docs/planning-benchmarks/po_apply_upload/`), then grant the capabilities, then the DEV certification can run.
+All seven are accepted as recommended. The code was checked against each on the integration branch `integrate/po-review-and-owner-fixes-20261007`.
+
+- **U1 DECIDED.** `can_upload_planning_benchmarks` goes to the Benchmarks owner and `can_activate_planning_benchmarks` to a different named person. One person may hold both only with the recorded self-activation acknowledgement. Code: `activate_planning_benchmark_upload` refuses a self-activation without `self_activation_ack` (`PB_E_SELF`) and records `self_activated` on the batch and in the append-only event (PGlite-tested).
+- **U2 DECIDED.** The consumer filter in the live Twin read path (section 9) is approved. **It must be deployed before the first Activate**, because the first Activate that supersedes a figure is what gives a row an `effective_to`. Code: `lib/services/twinBenchmarkRetrieval.ts`, tests `twinBenchmarkRetrievalFilter.test.ts`.
+- **U3 DECIDED.** A successful Activate also activates the target dataset. Code matches: the RPC sets `data_status = 'active'` (keeping an earlier effective date and approver) and the result carries `dataset_status: 'active'` (PGlite test "a first load becomes live in one step, activates the dataset").
+- **U4 DECIDED.** Day-first dates (`dd/mm/yyyy`, `dd-mm-yyyy`) are accepted in uploaded files, in addition to the database order and a real Excel date cell; month-first and two-digit years are refused. Code: `lib/planning-benchmarks/dates.ts` (`parseFileDateText`), test "parses day-first and database-order text, refuses month-first and two-digit years".
+- **U5 DECIDED.** Band-set replacement: a tier missing from the new file is end-dated, shown in the preview and counted as `bands_removed`. Code: `pb_removed_band_ids` and the Activate update; PGlite test "replacing the set ... an unrestated tier removed".
+- **U6 DECIDED.** No unique key on the live tables for now. Migration 0275 adds none; duplicate protection is by classification and the advisory lock.
+- **U7 DECIDED (PO action).** Apply migration `0275` on DEV first (hand-over `docs/planning-benchmarks/po_apply_upload/`), then grant the capabilities, then the DEV certification can run.
