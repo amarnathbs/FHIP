@@ -11,7 +11,7 @@ The database did not tie a dataset to a metric set or a file kind: any open data
 | SHA | Content |
 |---|---|
 | `88a07af` | migration 0277 (+ parts, rollback), seed document, validator, allowed-metrics lists, maintenance route and section, first tests |
-| the commit holding this report | remaining tests (validator, route and screen, hand-over query check), `UPLOAD_DESIGN.md` section 14, hand-over README, this report |
+| `c639907` | remaining tests (validator, route and screen, hand-over query check), `UPLOAD_DESIGN.md` section 14, hand-over README, this report |
 
 (`git log feat/pb-dataset-metric-mapping-20261007` is authoritative.)
 
