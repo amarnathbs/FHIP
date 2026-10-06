@@ -7,6 +7,7 @@
 
 import { COMPLIANCE_VALUES, DIFFICULTY_VALUES, JURISDICTION_VALUES, ARTICLE_FRESHNESS_VALUES, SOURCE_TYPE_LOOKUP } from './common-schema';
 import { getImportAdapter } from './adapters';
+import { stripUnusedBinContentType } from './xlsx-sanitize';
 import type { ImportContentType, ImportSchema } from './types';
 
 export interface TemplateLookups {
@@ -99,5 +100,5 @@ export async function buildTemplateXlsx(type: ImportContentType, lookups: Templa
   XLSX.utils.book_append_sheet(wb, toSheet([headers, schema.columns.map((c) => c.example)], headers.map((h) => Math.max(14, h.length + 2))), schema.exampleSheetName);
 
   const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx', compression: true }) as ArrayBuffer;
-  return new Uint8Array(out);
+  return stripUnusedBinContentType(new Uint8Array(out));
 }

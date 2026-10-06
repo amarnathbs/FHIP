@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { ARTICLE_SCHEMA } from '@/lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '@/lib/resources/import/money-update/schema';
 import type { ImportContentType, ImportReferenceData, ImportSchema } from '@/lib/resources/import/types';
+import { stripUnusedBinContentType } from '@/lib/resources/import/xlsx-sanitize';
 
 export const SCHEMAS: Record<ImportContentType, ImportSchema> = { article: ARTICLE_SCHEMA, money_update: MONEY_UPDATE_SCHEMA };
 
@@ -166,7 +167,8 @@ export function xlsxOf(sheets: Record<string, CellSpec[][]>): Uint8Array {
     ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(aoa.length - 1, 0), c: maxC } });
     XLSX.utils.book_append_sheet(wb, ws, name);
   }
-  return new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer);
+  // The SAME sanitiser the template generator uses, so fixtures reach the SHARED inspector exactly as real templates do.
+  return stripUnusedBinContentType(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer));
 }
 
 export function rowsToAoa(type: ImportContentType, rows: Record<string, string>[]): string[][] {

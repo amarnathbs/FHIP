@@ -342,15 +342,25 @@ export function ImportPreview({ run: initialRun, rows: initialRows, editBase, li
         </dl>
       </section>
 
-      {run.file_issues.length > 0 && (
+      {run.file_issues.some((i) => i.severity === 'error') && (
         <div role="alert" className="rounded-card border border-risk/40 bg-risk/5 p-4">
           <p className="text-sm font-semibold text-risk">This file could not be used.</p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink">
-            {run.file_issues.map((i, n) => (
+            {run.file_issues.filter((i) => i.severity === 'error').map((i, n) => (
               <li key={n}><span className="font-mono text-xs">{i.code}</span> {i.message}</li>
             ))}
           </ul>
         </div>
+      )}
+      {run.file_issues.some((i) => i.severity === 'warning') && (
+        <section aria-label="What was and was not imported from the file" className="rounded-card border border-line bg-white p-4 text-sm text-ink">
+          <p className="font-semibold">About this file</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {run.file_issues.filter((i) => i.severity === 'warning').map((i, n) => (
+              <li key={n}>{i.message}</li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {!applied && run.error_count > 0 && (

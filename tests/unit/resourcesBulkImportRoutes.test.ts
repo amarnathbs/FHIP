@@ -51,7 +51,18 @@ const spies = {
   getRowDetail: vi.fn(async () => ({ row_number: 2 })),
   applyRun: vi.fn(async () => ({ ok: true, alreadyApplied: false, created: 1, postIds: ['p1'], runId: 'r1' })),
   template: vi.fn(async () => new Uint8Array([1, 2, 3])),
+  inspect: vi.fn(),
 };
+vi.mock('@/lib/resources/import/file-security', async () => {
+  const real = await vi.importActual<typeof import('@/lib/resources/import/file-security')>('@/lib/resources/import/file-security');
+  return {
+    ...real,
+    listUploadSheets: (...a: unknown[]) => {
+      if (!spies.inspect.getMockImplementation()) spies.inspect.mockImplementation((...b: unknown[]) => real.listUploadSheets(...(b as [Parameters<typeof real.listUploadSheets>[0]])));
+      return spies.inspect(...a);
+    },
+  };
+});
 vi.mock('@/lib/resources/import/staging', async () => {
   const real = await vi.importActual<typeof import('@/lib/resources/import/staging')>('@/lib/resources/import/staging');
   return {
@@ -74,6 +85,7 @@ import { GET as runGet } from '@/app/api/admin/resources/import/runs/[id]/route'
 import { GET as rowGet } from '@/app/api/admin/resources/import/runs/[id]/rows/[rowNumber]/route';
 import { GET as resultsGet } from '@/app/api/admin/resources/import/runs/[id]/results/route';
 import { POST as applyPost } from '@/app/api/admin/resources/import/runs/[id]/apply/route';
+import { POST as inspectPost } from '@/app/api/admin/resources/import/inspect/route';
 import { GET as templateGet } from '@/app/api/admin/resources/import/templates/route';
 import { canBulkImportResources, canCreateSpecialistContent, isResourceStaff, BULK_IMPORT_CAPABILITY } from '@/lib/resources/permissions';
 import { buildAdminNavGroups, NO_ADMIN_CAPABILITIES, parseAdminCapabilities } from '@/lib/admin/adminNav';
@@ -92,6 +104,7 @@ type Call = () => Promise<Response>;
 const BULK_ROUTES: { name: string; call: Call; spy: ReturnType<typeof vi.fn> }[] = [
   { name: 'GET runs (history)', call: () => historyGet(), spy: spies.listRuns },
   { name: 'POST runs (upload)', call: () => uploadPost(upload()), spy: spies.processUpload },
+  { name: 'POST inspect (sheet list)', call: () => inspectPost(upload()), spy: spies.inspect },
   { name: 'GET runs/[id]', call: () => runGet(new Request('https://x.test'), params()), spy: spies.getRun },
   { name: 'GET runs/[id]/rows/[n]', call: () => rowGet(new Request('https://x.test'), params({ rowNumber: '2' })), spy: spies.getRowDetail },
   { name: 'GET runs/[id]/results (csv)', call: () => resultsGet(new Request('https://x.test'), params()), spy: spies.getRunRows },
@@ -218,7 +231,7 @@ describe('the upload route trusts nothing from the browser', () => {
     as({ user: true, roles: ['editor'] });
     await uploadPost(upload());
     const arg = (spies.processUpload.mock.calls[0] as unknown as [Record<string, unknown>])[0];
-    expect(Object.keys(arg).sort()).toEqual(['admin', 'bytes', 'contentType', 'declaredMime', 'fileName', 'user', 'userId']);
+    expect(Object.keys(arg).sort()).toEqual(['admin', 'bytes', 'contentType', 'declaredMime', 'fileName', 'sheetName', 'user', 'userId']);
     expect(arg.contentType).toBe('article');
     expect(arg.userId).toBe('u1');
   });
@@ -278,6 +291,7 @@ describe('every import route and page starts with the capability guard (structur
   const root = path.resolve(__dirname, '../..');
   const apiFiles = [
     'app/api/admin/resources/import/runs/route.ts',
+    'app/api/admin/resources/import/inspect/route.ts',
     'app/api/admin/resources/import/runs/[id]/route.ts',
     'app/api/admin/resources/import/runs/[id]/rows/[rowNumber]/route.ts',
     'app/api/admin/resources/import/runs/[id]/results/route.ts',

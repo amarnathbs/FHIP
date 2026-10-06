@@ -18,6 +18,7 @@ import * as XLSX from 'xlsx';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { ARTICLE_SCHEMA } from '../lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '../lib/resources/import/money-update/schema';
+import { stripUnusedBinContentType } from '../lib/resources/import/xlsx-sanitize';
 
 const APP = process.argv[2] ?? 'http://localhost:3993';
 const ROOT = path.resolve(__dirname, '..');
@@ -136,12 +137,15 @@ function fillTemplate(templateBytes: Buffer, t: 'article' | 'money_update', rows
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   for (const addr of Object.keys(ws)) if (!addr.startsWith('!') && typeof (ws[addr] as any).v === 'string') (ws[addr] as any).t = 's';
   wb.Sheets[sheetName] = ws;
-  return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  // Re-saving through the writer re-adds the unused .bin default that Excel itself never writes: sanitise like the template generator.
+  return Buffer.from(stripUnusedBinContentType(new Uint8Array(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))));
 }
-async function upload(user: TestUser | null, type: 'article' | 'money_update', name: string, bytes: Buffer, mime = ''): Promise<Api> {
+async function upload(user: TestUser | null, type: 'article' | 'money_update', name: string, bytes: Buffer, mime = '', sheetName?: string): Promise<Api> {
   const f = new FormData();
   f.set('contentType', type);
   f.set('file', new File([new Uint8Array(bytes)], name, { type: mime }));
+  // Shared ingest convention: for a workbook the operator CHOOSES the sheet (the UI preselects the template's).
+  if (name.toLowerCase().endsWith('.xlsx')) f.set('sheetName', sheetName ?? (type === 'article' ? 'Article_Upload' : 'Money_Update_Upload'));
   return api(user, 'POST', '/api/admin/resources/import/runs', f);
 }
 
@@ -340,6 +344,34 @@ async function main() {
   const csvApply = await api(E, 'POST', `/api/admin/resources/import/runs/${csvUp.json?.data?.runId}/apply`);
   check('C article CSV: upload -> preview -> apply (2 created)', csvUp.json?.data?.status === 'ready' && csvApply.json?.data?.created === 2, `${csvUp.status}/${csvApply.status}`);
 
+  // ---- shared ingest convention: the operator chooses the sheet; others and hidden rows are disclosed
+  {
+    const wbBytes = fillTemplate(tpl['article.xlsx'], 'article', [articleRow(60)]);
+    const insp = new FormData();
+    insp.set('contentType', 'article');
+    insp.set('file', new File([new Uint8Array(wbBytes)], 'conv.xlsx'));
+    const ir = await api(E, 'POST', '/api/admin/resources/import/inspect', insp);
+    check('C inspect route lists the workbook sheets and preselects the template sheet', ir.status === 200 && ir.json?.data?.kind === 'xlsx' && ir.json.data.sheets.length === 4 && ir.json.data.preselect === 'Article_Upload', JSON.stringify(ir.json).slice(0, 200));
+    const noSheet = new FormData();
+    noSheet.set('contentType', 'article');
+    noSheet.set('file', new File([new Uint8Array(wbBytes)], 'conv.xlsx'));
+    const nr = await api(E, 'POST', '/api/admin/resources/import/runs', noSheet);
+    check('C an XLSX with NO sheet chosen is refused: UPLOAD_SHEET_MISSING (the server never picks a sheet)', nr.status === 422 && nr.json?.code === 'UPLOAD_SHEET_MISSING', `${nr.status} ${nr.json?.code}`);
+    const ur = await upload(E, 'article', 'conv.xlsx', wbBytes);
+    const uv = await api(E, 'GET', `/api/admin/resources/import/runs/${ur.json?.data?.runId}`);
+    const noteText = JSON.stringify(uv.json?.data?.run?.file_issues ?? []);
+    check('C the preview run discloses the sheet imported and the sheets NOT imported (file-level notes)', ur.json?.data?.status === 'ready' && noteText.includes('Article_Upload') && noteText.includes('Instructions') && noteText.includes('Example_Article'), noteText.slice(0, 200));
+    // a workbook whose sheet has ANY other name works because the operator chooses it
+    const renamed = XLSX.read(wbBytes, { type: 'buffer' });
+    renamed.Sheets['My Rows'] = renamed.Sheets['Article_Upload'];
+    delete renamed.Sheets['Article_Upload'];
+    renamed.SheetNames = renamed.SheetNames.map((n) => (n === 'Article_Upload' ? 'My Rows' : n));
+    const rb = Buffer.from(stripUnusedBinContentType(new Uint8Array(XLSX.write(renamed, { type: 'buffer', bookType: 'xlsx' }))));
+    const rr = await upload(E, 'article', 'renamed.xlsx', rb, '', 'My Rows');
+    check('C a workbook with ANY sheet name imports when the operator chooses that sheet', rr.json?.data?.status === 'ready' && rr.json.data.summary.rowCount === 1, JSON.stringify(rr.json).slice(0, 200));
+    await admin.from('resource_content_import_runs').delete().in('id', [ur.json?.data?.runId, rr.json?.data?.runId].filter(Boolean));
+  }
+
   const muUp = await upload(E, 'money_update', 'money.xlsx', fillTemplate(tpl['money_update.xlsx'], 'money_update', [muRow(1), muRow(2)]));
   check('C money update XLSX: preview ready (2 rows)', muUp.json?.data?.status === 'ready' && muUp.json.data.summary.rowCount === 2, JSON.stringify(muUp.json).slice(0, 300));
   const muApply = await api(E, 'POST', `/api/admin/resources/import/runs/${muUp.json?.data?.runId}/apply`);
@@ -468,7 +500,9 @@ async function main() {
     // pages (route layer)
     for (const [label, u] of [['author', users.author], ['analyst', users.analyst], ['publisher', users.publisher], ['compliance', users.compliance], ['customer', users.customer]] as const) {
       const pr = await fetch(`${APP}/admin/resources/import`, { headers: { cookie: u.cookie }, redirect: 'manual' });
-      check(`F page /admin/resources/import for ${label} is redirected, never rendered`, pr.status >= 300 && pr.status < 400, `${pr.status}`);
+      const body = await pr.text();
+      // a server-component redirect after streaming has begun is a 200 carrying NEXT_REDIRECT, never the page itself
+      check(`F page /admin/resources/import for ${label} is redirected, never rendered`, (pr.status >= 300 && pr.status < 400) || (body.includes('NEXT_REDIRECT') && !body.includes('What would you like to upload?')), `${pr.status}`);
     }
     const anonPage = await fetch(`${APP}/admin/resources/import`, { redirect: 'manual' });
     check('F page anonymous is redirected to login', anonPage.status >= 300 && anonPage.status < 400);
@@ -522,7 +556,7 @@ async function main() {
     const fws = XLSX.utils.aoa_to_sheet([ARTICLE_COLS, ARTICLE_COLS.map((c) => articleRow(420)[c] ?? '')]);
     (fws[XLSX.utils.encode_cell({ r: 1, c: ARTICLE_COLS.indexOf('title') })] as any) = { t: 's', v: 'cached', f: '"A"&"B"' };
     XLSX.utils.book_append_sheet(formulaWb, fws, 'Article_Upload');
-    const fu = await upload(E, 'article', 'formula.xlsx', Buffer.from(XLSX.write(formulaWb, { type: 'buffer', bookType: 'xlsx' })));
+    const fu = await upload(E, 'article', 'formula.xlsx', Buffer.from(stripUnusedBinContentType(new Uint8Array(XLSX.write(formulaWb, { type: 'buffer', bookType: 'xlsx' })))));
     const fv = await api(E, 'GET', `/api/admin/resources/import/runs/${fu.json?.data?.runId}`);
     check('F formula cell: FORMULA_NOT_ALLOWED on the row, never evaluated, Apply blocked', fu.json?.data?.status === 'has_errors' && fv.json.data.rows[0].validation_errors.some((e: any) => e.code === 'FORMULA_NOT_ALLOWED'));
     const big = await upload(E, 'article', 'big.csv', Buffer.alloc(10 * 1024 * 1024 + 10, 97), 'text/csv');

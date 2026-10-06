@@ -6,7 +6,7 @@ export const ARTICLE_TEMPLATE_INTRO: string[] = [
   'FHIP Resources: Article upload template (version 1.0)',
   'Paste one finished article per row into the Article_Upload sheet, then upload the file under Resources > Bulk Upload > Articles.',
   'Every uploaded article becomes a PRIVATE DRAFT. Nothing is published, scheduled or approved by uploading. The normal Resources review and approval workflow still applies.',
-  'Only the Article_Upload sheet is imported. The Instructions, Lookup_Values and Example_Article sheets are never processed.',
+  'Your rows go on the Article_Upload sheet. When you upload, you choose which sheet to import (it is preselected); the other sheets (Instructions, Lookup_Values, Example_Article) are never imported.',
   'The finished body fields (quick answer, key takeaways, main content, example, what this means for your financial health) become the real article blocks you can edit in the normal Article editor.',
 ];
 

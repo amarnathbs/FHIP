@@ -1,12 +1,12 @@
 // Resources Bulk Upload -- server-side file security. Authoritative: the browser's
 // file type / size / extension are never trusted.
 //
-// This DELEGATES the hard parts to the already-certified, dependency-free
+// This DELEGATES the hard parts, UNCHANGED, to the already-certified, dependency-free
 // hostile-input readers under lib/services/investment-intelligence/
 // benchmarkData/fileIngest (strict ZIP central-directory reader with bounded
 // inflate, linear XML scanner that refuses DTDs/entities, RFC-4180 CSV reader).
-// It deliberately does NOT use SheetJS to READ uploads (unmaintained, known
-// CVEs); SheetJS is used only to WRITE the downloadable templates.
+// SheetJS is never used to READ uploads (unmaintained, known CVEs); it is used
+// only to WRITE the downloadable templates (see template-generator.ts).
 //
 // Guarantees:
 //  * only .csv and .xlsx are accepted (.xls, .xlsm/.xlsb, .ods, zip, pdf, ... rejected);
@@ -18,7 +18,7 @@
 //    normalised rows.
 
 import { createHash } from 'node:crypto';
-import { inspectUpload, tryReadZipEntries } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';
+import { inspectUpload, listWorkbookSheets, type SheetInfo } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';
 import { IMPORT_LIMITS, type ImportIssue } from './types';
 
 export function sha256Hex(bytes: Uint8Array): string {
@@ -55,39 +55,23 @@ export function mapIngestProblem(problem: { code: string; message: string }): Im
 
 export type InspectOutcome = { ok: true; kind: 'csv' | 'xlsx'; text?: string } | { ok: false; issues: ImportIssue[] };
 
-/**
- * The shared inspector refuses a workbook whose [Content_Types].xml merely CONTAINS the text "macroEnabled".
- * That is too blunt for this feature: workbooks written by common tools (including the SheetJS library that
- * writes our own downloadable templates) carry a harmless Default mapping for the .bin extension whose content
- * type mentions macroEnabled, although the workbook holds no macro and no binary part. A workbook is
- * macro-enabled only when the WORKBOOK PART itself is declared macro-enabled (an Override for /xl/workbook.xml)
- * or a vbaProject part exists (already refused by the shared inspector with its own message).
- *
- * The shared inspector has already, by the time this check runs: opened the archive with every size/ratio/path
- * limit, inflated every entry against its declared size, confirmed there is no vbaProject.bin and confirmed the
- * workbook structure. Only the final blunt text check is re-decided here, precisely.
- */
-export function isWorkbookPartMacroEnabled(bytes: Uint8Array): boolean {
-  const z = tryReadZipEntries(bytes, INGEST_LIMITS);
-  if (!z.ok) return true; // cannot tell: refuse
-  const ct = z.entries.get('[Content_Types].xml');
-  if (!ct) return true;
-  const text = new TextDecoder().decode(ct);
-  for (const m of text.matchAll(/<Override\b[^>]*>/g)) {
-    const tag = m[0];
-    if (/PartName="\/xl\/(workbook|vbaProject)[^"]*"/i.test(tag) && /macroEnabled/i.test(tag)) return true;
-  }
-  return z.entries.has('xl/vbaProject.bin');
-}
-
 /** Extension, content sniffing, MIME consistency, size, archive limits, encoding. Never throws. */
 export function inspectImportFile(input: { fileName: string; declaredMime?: string | null; bytes: Uint8Array }): InspectOutcome {
-  let r = inspectUpload({ fileName: input.fileName, declaredMime: input.declaredMime ?? null, bytes: input.bytes, limits: INGEST_LIMITS });
-  if (!r.ok && r.problems.length === 1 && r.problems[0].code === 'XLSX_MACRO_PRESENT' && /declared macro-enabled/i.test(r.problems[0].message) && !isWorkbookPartMacroEnabled(input.bytes)) {
-    r = { ok: true, kind: 'xlsx', problems: [] };
-  }
+  const r = inspectUpload({ fileName: input.fileName, declaredMime: input.declaredMime ?? null, bytes: input.bytes, limits: INGEST_LIMITS });
   if (!r.ok || r.kind === null) {
     return { ok: false, issues: r.problems.length > 0 ? r.problems.map(mapIngestProblem) : [fileLevel('INVALID_FILE_TYPE', 'The file could not be read as a CSV or XLSX file.')] };
   }
   return { ok: true, kind: r.kind, text: r.text };
+}
+
+export type SheetListing = { ok: true; kind: 'csv' } | { ok: true; kind: 'xlsx'; sheets: SheetInfo[] } | { ok: false; issues: ImportIssue[] };
+
+/** The inspect step of the shared convention: safe checks plus the workbook's sheets, so the operator can CHOOSE one. Persists nothing. */
+export function listUploadSheets(input: { fileName: string; declaredMime?: string | null; bytes: Uint8Array }): SheetListing {
+  const inspected = inspectImportFile(input);
+  if (!inspected.ok) return inspected;
+  if (inspected.kind === 'csv') return { ok: true, kind: 'csv' };
+  const listing = listWorkbookSheets(input.bytes, INGEST_LIMITS);
+  if (listing.sheets.length === 0) return { ok: false, issues: listing.problems.length > 0 ? listing.problems.map(mapIngestProblem) : [fileLevel('INVALID_FILE_TYPE', 'The workbook has no sheets.')] };
+  return { ok: true, kind: 'xlsx', sheets: listing.sheets.filter((s) => s.state !== 'veryHidden') };
 }

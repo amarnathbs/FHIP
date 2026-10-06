@@ -136,6 +136,8 @@ export interface UploadParams {
   contentType: ImportContentType;
   fileName: string;
   declaredMime?: string | null;
+  /** XLSX only: the sheet the operator chose (the shared convention: never defaulted silently). */
+  sheetName?: string | null;
   bytes: Uint8Array;
   now?: Date;
 }
@@ -168,7 +170,7 @@ export async function processUpload(p: UploadParams): Promise<UploadResult> {
   await Promise.resolve(p.admin.rpc('purge_expired_resource_content_import_staging')).catch(() => undefined);
 
   const t0 = Date.now();
-  const parsed = parseImportFile({ fileName, declaredMime: p.declaredMime, bytes: p.bytes }, adapter.schema);
+  const parsed = parseImportFile({ fileName, declaredMime: p.declaredMime, bytes: p.bytes }, adapter.schema, { sheetName: p.sheetName });
   const parseMs = Date.now() - t0;
 
   const reject = async (issues: ImportIssue[], sha: string | null): Promise<UploadResult> => {
@@ -234,7 +236,7 @@ export async function processUpload(p: UploadParams): Promise<UploadResult> {
     warning_count: summary.warningCount,
     error_count: summary.errorCount,
     normalized_digest: normalisedDigest(outcome.rows),
-    file_issues: outcome.fileIssues,
+    file_issues: [...parsed.notes, ...outcome.fileIssues],
     validated_at: now.toISOString(),
     expires_at: expiresAt,
   });
@@ -271,7 +273,7 @@ export async function processUpload(p: UploadParams): Promise<UploadResult> {
   return {
     runId,
     status: summary.errorCount === 0 ? 'ready' : 'has_errors',
-    fileIssues: outcome.fileIssues,
+    fileIssues: [...parsed.notes, ...outcome.fileIssues],
     summary,
     metrics: { parseMs, resolveMs, validateMs, stageMs, dbQueries: counter.queries },
   };
@@ -350,7 +352,15 @@ export function parseApplyError(raw: string): { code: string; message: string; s
 }
 
 export async function applyRun(user: SupabaseClient, admin: SupabaseClient, runId: string, actorUserId: string): Promise<ApplyOutcome> {
-  const { data, error } = await user.rpc('apply_resource_content_import', { p_run_id: runId });
+  // Migration 0273: the server calls the service-role-only twin, naming the SESSION-VERIFIED user (the route has already
+  // run guardBulkImport(); `actorUserId` is never read from request input). The database still re-checks that this actor
+  // holds the capability and uploaded the run. The service role is not subject to the 8 second limit that the signed-in
+  // API role has, which a 500-row apply can exceed. Before 0273 is applied (function not found) fall back to the
+  // signed-in function so nothing breaks while the migration is pending: it behaves identically within the limit.
+  let { data, error } = await admin.rpc('apply_resource_content_import_as_actor', { p_run_id: runId, p_actor: actorUserId });
+  if (error && (error.code === 'PGRST202' || /could not find the function/i.test(error.message ?? ''))) {
+    ({ data, error } = await user.rpc('apply_resource_content_import', { p_run_id: runId }));
+  }
   if (error) {
     const parsed = parseApplyError(error.message ?? '');
     // Failures roll back inside the database; record the outcome on the run for the history screen.

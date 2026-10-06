@@ -25,7 +25,7 @@ For the people who run Resources day to day and for whoever supports them.
 |---|---|---|
 | `INVALID_FILE_TYPE` | not a plain .csv or .xlsx (or a macro/old/encrypted/odd workbook) | save as .xlsx or .csv |
 | `FILE_TOO_LARGE`, `TOO_MANY_ROWS`, `EMPTY_FILE` | over 10 MB, over 500 rows, or no data rows | split or fill the file |
-| `UPLOAD_SHEET_MISSING` | the workbook has no `Article_Upload` / `Money_Update_Upload` sheet | use the template |
+| `UPLOAD_SHEET_MISSING` | no sheet was chosen, or the chosen sheet is not in the workbook | choose the sheet that holds your rows (the template keeps them on `Article_Upload` / `Money_Update_Upload`, preselected) |
 | `TEMPLATE_VERSION_UNSUPPORTED` | `template_version` is not 1.0 | download the current template |
 | `MISSING_REQUIRED_COLUMN`, `DUPLICATE_COLUMN`, `UNKNOWN_COLUMN` | header problem | use the template header |
 | `FORBIDDEN_COLUMN` | the file has a status, visibility, type, approval or publish column | remove it: uploads are always private drafts |

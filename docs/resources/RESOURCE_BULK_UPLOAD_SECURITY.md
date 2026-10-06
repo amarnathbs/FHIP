@@ -16,7 +16,7 @@ Server-side and authoritative. Client validation is a convenience only. Nothing 
 | No stored raw file | only SHA-256 + normalised rows; no bucket |
 | Hostile input never throws | every stage returns structured issues; randomised and mangled files tested |
 
-**Note on the macro check.** The shared inspector refuses any workbook whose content-types file merely contains the text "macroEnabled". Libraries that write xlsx (including the one that writes our templates) carry a harmless `.bin` default with that text, so the shared check would reject our own template. `isWorkbookPartMacroEnabled()` re-decides only that final check precisely (workbook part declared macro-enabled, or a vbaProject part); every earlier archive defence has already run. The shared benchmark code was not changed.
+**Note on the macro check (no local override).** The shared inspector is used UNCHANGED. It refuses any workbook whose content-types file merely contains the text "macroEnabled". The library that WRITES our templates always emits an unused `.bin` default mapping with that text (the workbook has no `.bin` part and no macro), so a template straight from the writer would be refused by the shared inspector. The template generator therefore removes that one unused default (`lib/resources/import/xlsx-sanitize.ts`, only when the package has no `.bin` part) and the generated templates then pass the shared inspector as it is; a test shows the raw writer output is refused (control) and the sanitised output and both real templates are accepted. If a workbook saved by some other tool is ever refused as "macro-enabled" although it holds no macro, that is a limitation of the shared inspector's blunt text check, to be raised with its owner; nothing here weakens it.
 
 ## Source links
 
@@ -32,6 +32,22 @@ Capability `resources.content.bulk_import` = Super Admin, Resource Admin, Editor
 4. **Navigation**: its own field and group; fails closed.
 
 Staging writes use the service role **after** the capability check, and no API role holds a write grant on the staging tables, so a browser can never write or alter staged rows. The preview shown in the browser is not apply authority: Apply carries only a run id and the database reads the server-staged rows.
+
+## Deliberate, bounded deviation from the Admin Standard's `auth.uid()` preference (migration 0273)
+
+Standard section 6 prefers that a privileged RPC take its actor from `auth.uid()`. The apply of a very large file does not fit the 8 second statement limit of the signed-in API role (measured on DEV: a 500-row apply needs 5 to 9 seconds of database time). A function-level setting cannot raise the limit of the call that is already running, so the apply is also offered as `public.apply_resource_content_import_as_actor(run id, actor id)`: callable by the **service role only**, naming the actor.
+
+| | |
+|---|---|
+| What is different | for this one function, the database trusts the server (not `auth.uid()`) for WHO the actor is |
+| Who can call it | `EXECUTE` is revoked for `public`, `anon` and `authenticated`: no browser and no signed-in session can call it or name an actor (proved in PGlite, with a negative control that GRANTs it and shows the impersonation the revoke prevents) |
+| Where the actor comes from | the API route's verified session user (`guardBulkImport()` has already confirmed the capability); it is never read from the request, body, query or headers (structural test) |
+| What the database re-checks anyway | inside the shared private core: the named actor must hold `resources.content.bulk_import` AND must be the person who uploaded that very run; unknown ids and null are refused. A wrong actor can only ever act as someone already entitled to apply that exact run |
+| What cannot change | content type of the run, status `draft`, visibility `private`, not indexable, all-or-none, `STALE_PREVIEW`, `FILE_ALREADY_APPLIED` (unique index + advisory lock), idempotent second apply: one private core shared by both callers |
+| Residual risk | compromise of the service-role key (which already writes the staging tables and is the platform's own root of trust for the server) |
+| Rollback | the README of `po_apply_bulk_upload_0273`; the app falls back to the signed-in function if the twin is missing |
+
+The signed-in function `apply_resource_content_import(run id)` is unchanged for callers: it still takes the actor from `auth.uid()`. Standard section 16 record: clause departed from = section 6 (actor from `auth.uid()`); reason = the 8 second limit above; effect and compensating controls = the table above; approval = the Product Owner chose this option (option A) on 06-10-2026, relayed by the coordinating agent (a written confirmation from the Product Owner should be attached to the final certification if the Standard's own record-keeping requires one).
 
 ## What the apply function never takes from the data
 

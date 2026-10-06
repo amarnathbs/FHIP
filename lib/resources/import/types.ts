@@ -96,6 +96,9 @@ export const IMPORT_WARNING_CODES = [
   'SOURCE_URL_MISSING',
   'REVIEW_DATE_IN_PAST',
   'SLUG_GENERATED',
+  // File-level disclosures (the shared ingest convention: nothing the operator did not choose is silently ignored).
+  'SHEET_NOTE',
+  'HIDDEN_ROWS_SKIPPED',
 ] as const;
 export type ImportWarningCode = (typeof IMPORT_WARNING_CODES)[number];
 

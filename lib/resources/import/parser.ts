@@ -18,9 +18,19 @@ export interface ParseInput {
   bytes: Uint8Array;
 }
 
+/** Per the shared ingest convention an XLSX sheet is CHOSEN by the operator, never defaulted silently. */
+export interface ParseOptions {
+  /** XLSX only: the exact sheet to import (the uploader lists the workbook's sheets and preselects the template's). */
+  sheetName?: string | null;
+}
+
 export type ParseOutcome =
-  | { ok: true; fileSha256: string; table: ParsedTable; cellIssues: ImportIssue[] }
+  | { ok: true; fileSha256: string; table: ParsedTable; cellIssues: ImportIssue[]; /** file-level disclosures (warnings) */ notes: ImportIssue[] }
   | { ok: false; fileSha256: string | null; issues: ImportIssue[] };
+
+function note(code: ImportIssue['code'], message: string): ImportIssue {
+  return { row: null, field: null, code, message, severity: 'warning' };
+}
 
 function fileIssue(code: ImportIssue['code'], message: string, field: string | null = null): ImportIssue {
   return { row: null, field, code, message, severity: 'error' };
@@ -46,11 +56,13 @@ interface RawGrid {
   rows: { rowNumber: number; cells: string[]; cellIssues: ImportIssue[] }[];
   sheetName: string | null;
   kind: 'csv' | 'xlsx';
+  notes: ImportIssue[];
 }
 
 function readCsv(text: string): { ok: true; grid: RawGrid } | { ok: false; issues: ImportIssue[] } {
-  // ',' is the CSV contract; no delimiter guessing (a wrong guess silently re-maps columns).
-  const parsed = parseCsvText(text, { delimiter: ',', maxRows: IMPORT_LIMITS.maxRows + 2, headerRow: 1 });
+  // Same rule as the shared ingest library: the delimiter is detected deterministically (a comma, semicolon, tab or
+  // pipe that splits every sampled record the same way); an ambiguous or inconsistent file is refused, never guessed.
+  const parsed = parseCsvText(text, { delimiter: 'auto', maxRows: IMPORT_LIMITS.maxRows + 2, headerRow: 1 });
   const issues: ImportIssue[] = [];
   if (parsed.truncated) issues.push(fileIssue('TOO_MANY_ROWS', `The file has more than ${IMPORT_LIMITS.maxRows} records. Split it into smaller files.`));
   for (const p of parsed.problems) {
@@ -64,10 +76,10 @@ function readCsv(text: string): { ok: true; grid: RawGrid } | { ok: false; issue
     const cellIssues: ImportIssue[] = [];
     return { rowNumber: parsed.lineNumbers[i + 1], cells, cellIssues };
   });
-  return { ok: true, grid: { header, rows, sheetName: null, kind: 'csv' } };
+  return { ok: true, grid: { header, rows, sheetName: null, kind: 'csv', notes: [] } };
 }
 
-function readXlsx(bytes: Uint8Array, schema: ImportSchema): { ok: true; grid: RawGrid } | { ok: false; issues: ImportIssue[] } {
+function readXlsx(bytes: Uint8Array, schema: ImportSchema, chosen: string | null | undefined): { ok: true; grid: RawGrid } | { ok: false; issues: ImportIssue[] } {
   const listing = listWorkbookSheets(bytes, INGEST_LIMITS);
   if (listing.sheets.length === 0) {
     return { ok: false, issues: listing.problems.length > 0 ? listing.problems.map(mapIngestProblem) : [fileIssue('INVALID_FILE_TYPE', 'The workbook has no sheets.')] };
@@ -75,15 +87,19 @@ function readXlsx(bytes: Uint8Array, schema: ImportSchema): { ok: true; grid: Ra
   if (listing.sheets.length > IMPORT_LIMITS.maxSheets) {
     return { ok: false, issues: [fileIssue('INVALID_FILE_TYPE', `The workbook has ${listing.sheets.length} sheets; the limit is ${IMPORT_LIMITS.maxSheets}.`)] };
   }
-  const wanted = schema.uploadSheetName.toLowerCase();
-  const sheet = listing.sheets.find((s) => s.name.trim().toLowerCase() === wanted);
-  if (!sheet) {
+  const available = listing.sheets.map((s) => `"${s.name}"`).join(', ');
+  const wanted = (chosen ?? '').trim().toLowerCase();
+  if (!wanted) {
     return {
       ok: false,
-      issues: [fileIssue('UPLOAD_SHEET_MISSING', `The workbook has no sheet named "${schema.uploadSheetName}". Only that sheet is imported. Download the template again and paste your rows into it.`)],
+      issues: [fileIssue('UPLOAD_SHEET_MISSING', `Choose the sheet to import: the system never picks one for you. This workbook has: ${available}. (The ${schema.templateFileBase} template keeps its rows on "${schema.uploadSheetName}".)`)],
     };
   }
-  const ws = readWorksheet(bytes, sheet.name, { headerRow: 1, includeHiddenRows: true, limits: INGEST_LIMITS });
+  const sheet = listing.sheets.find((s) => s.name.trim().toLowerCase() === wanted);
+  if (!sheet) {
+    return { ok: false, issues: [fileIssue('UPLOAD_SHEET_MISSING', `The workbook has no sheet named "${(chosen ?? '').slice(0, 60)}". This workbook has: ${available}.`)] };
+  }
+  const ws = readWorksheet(bytes, sheet.name, { headerRow: 1, includeHiddenRows: false, limits: INGEST_LIMITS });
   const fatal = ws.problems.filter((p) => p.code !== 'TOO_MANY_ROWS');
   if (fatal.length > 0) return { ok: false, issues: fatal.map(mapIngestProblem) };
 
@@ -133,18 +149,26 @@ function readXlsx(bytes: Uint8Array, schema: ImportSchema): { ok: true; grid: Ra
     });
     rows.push({ rowNumber: r.rowNumber, cells, cellIssues });
   }
-  return { ok: true, grid: { header: ws.header.map((h) => h.trim()), rows, sheetName: sheet.name, kind: 'xlsx' } };
+  // Disclosure (shared convention): say which sheet was read, which were not, and what was skipped. Nothing silent.
+  const notes: ImportIssue[] = [];
+  const others = ws.disclosure.otherSheetsNotProcessed;
+  notes.push(note('SHEET_NOTE', `Imported the sheet "${sheet.name}"${sheet.state !== 'visible' ? ` (a ${sheet.state} sheet)` : ''}. ${others.length > 0 ? `Not imported: ${others.map((n) => `"${n}"`).join(', ')}.` : 'It is the only sheet in the workbook.'}`));
+  if (ws.disclosure.hiddenRowsSkipped.length > 0) {
+    const shown = ws.disclosure.hiddenRowsSkipped.slice(0, 20).join(', ');
+    notes.push(note('HIDDEN_ROWS_SKIPPED', `${ws.disclosure.hiddenRowsSkipped.length} hidden row(s) with content were NOT imported (rows ${shown}${ws.disclosure.hiddenRowsSkipped.length > 20 ? ', ...' : ''}). Unhide them and upload again if they should be imported.`));
+  }
+  return { ok: true, grid: { header: ws.header.map((h) => h.trim()), rows, sheetName: sheet.name, kind: 'xlsx', notes } };
 }
 
 /** Parse + structurally validate an uploaded file against ONE schema. Never throws. */
-export function parseImportFile(input: ParseInput, schema: ImportSchema): ParseOutcome {
+export function parseImportFile(input: ParseInput, schema: ImportSchema, options: ParseOptions = {}): ParseOutcome {
   let fileSha256: string | null = null;
   try {
     fileSha256 = sha256Hex(input.bytes);
     const inspected = inspectImportFile(input);
     if (!inspected.ok) return { ok: false, fileSha256, issues: inspected.issues };
 
-    const read = inspected.kind === 'csv' ? readCsv(inspected.text ?? '') : readXlsx(input.bytes, schema);
+    const read = inspected.kind === 'csv' ? readCsv(inspected.text ?? '') : readXlsx(input.bytes, schema, options.sheetName);
     if (!read.ok) return { ok: false, fileSha256, issues: read.issues };
     const { grid } = read;
 
@@ -228,7 +252,7 @@ export function parseImportFile(input: ParseInput, schema: ImportSchema): ParseO
       };
     }
 
-    return { ok: true, fileSha256, table: { headers: [...seen.keys()], rows, sheetName: grid.sheetName, kind: grid.kind }, cellIssues };
+    return { ok: true, fileSha256, table: { headers: [...seen.keys()], rows, sheetName: grid.sheetName, kind: grid.kind }, cellIssues, notes: grid.notes };
   } catch {
     // Hostile input must never surface as an exception.
     return { ok: false, fileSha256, issues: [fileIssue('FILE_PARSE_ERROR', 'The file could not be read safely.')] };

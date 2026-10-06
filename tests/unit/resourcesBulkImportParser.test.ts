@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 import { parseImportFile } from '@/lib/resources/import/parser';
 import { collectLookupKeys, validateImportTable } from '@/lib/resources/import/validation';
 import { getImportAdapter } from '@/lib/resources/import/adapters';
+import { stripUnusedBinContentType } from '@/lib/resources/import/xlsx-sanitize';
 import { buildTemplateCsv, buildTemplateXlsx, templateFileName, templateHeaders, EMPTY_LOOKUPS } from '@/lib/resources/import/template-generator';
 import { IMPORT_CONTENT_TYPES, IMPORT_LIMITS, type ImportContentType, type ImportReferenceData } from '@/lib/resources/import/types';
 import { CAT_ID, csvOf, good, refs, SCHEMAS, xlsxFor, xlsxOf, rowsToAoa } from '../support/resourcesImportFixtures';
@@ -18,7 +19,7 @@ import { CAT_ID, csvOf, good, refs, SCHEMAS, xlsxFor, xlsxOf, rowsToAoa } from '
 const TODAY = '2026-10-06';
 
 function run(type: ImportContentType, rows: Record<string, string>[], opts: Parameters<typeof csvOf>[2] = {}, refOver: Partial<ImportReferenceData> = {}) {
-  const parsed = parseImportFile({ fileName: 'upload.csv', bytes: csvOf(type, rows, opts) }, SCHEMAS[type]);
+  const parsed = parseImportFile({ fileName: 'upload.csv', bytes: csvOf(type, rows, opts) }, SCHEMAS[type], { sheetName: SCHEMAS[type].uploadSheetName });
   if (!parsed.ok) return { parsed, outcome: null as never };
   const outcome = validateImportTable(parsed.table, parsed.cellIssues, getImportAdapter(type).hooks, refs(refOver), TODAY);
   return { parsed, outcome };
@@ -46,14 +47,14 @@ describe('canonical schema: template and parser cannot drift', () => {
     });
 
     it(`${type}: the template round trip works -- header-only is an EMPTY_FILE, a filled template (CSV and XLSX) is accepted`, async () => {
-      const header = parseImportFile({ fileName: 'a.csv', bytes: new TextEncoder().encode(buildTemplateCsv(type)) }, SCHEMAS[type]);
+      const header = parseImportFile({ fileName: 'a.csv', bytes: new TextEncoder().encode(buildTemplateCsv(type)) }, SCHEMAS[type], { sheetName: SCHEMAS[type].uploadSheetName });
       expect(fileCodes(header)).toEqual(['EMPTY_FILE']);
-      const xlsxEmpty = parseImportFile({ fileName: 'a.xlsx', bytes: await buildTemplateXlsx(type) }, SCHEMAS[type]);
+      const xlsxEmpty = parseImportFile({ fileName: 'a.xlsx', bytes: await buildTemplateXlsx(type) }, SCHEMAS[type], { sheetName: SCHEMAS[type].uploadSheetName });
       expect(fileCodes(xlsxEmpty)).toEqual(['EMPTY_FILE']);
       const filledCsv = run(type, [good(type)]);
       expect(filledCsv.parsed.ok).toBe(true);
       expect(filledCsv.outcome.rows[0].errors).toEqual([]);
-      const xl = parseImportFile({ fileName: 'a.xlsx', bytes: xlsxFor(type, [good(type)]) }, SCHEMAS[type]);
+      const xl = parseImportFile({ fileName: 'a.xlsx', bytes: xlsxFor(type, [good(type)]) }, SCHEMAS[type], { sheetName: SCHEMAS[type].uploadSheetName });
       expect(xl.ok).toBe(true);
     });
 
@@ -125,7 +126,7 @@ describe('structural file errors (named codes)', () => {
       expect(fileCodes(r.parsed), col).toEqual(['FORBIDDEN_COLUMN']);
     }
     // and a money-update file uploaded on the Article screen is not accepted as an article
-    const wrong = parseImportFile({ fileName: 'mu.csv', bytes: csvOf('money_update', [good('money_update')]) }, SCHEMAS.article);
+    const wrong = parseImportFile({ fileName: 'mu.csv', bytes: csvOf('money_update', [good('money_update')]) }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName });
     expect(fileCodes(wrong)).toEqual(expect.arrayContaining(['UNKNOWN_COLUMN']));
   });
 
@@ -151,7 +152,7 @@ describe('structural file errors (named codes)', () => {
   });
 
   it('EMPTY_FILE for no rows or no header; TOO_MANY_ROWS above 500 records; exactly 500 is accepted', () => {
-    expect(fileCodes(parseImportFile({ fileName: 'a.csv', bytes: new Uint8Array() }, SCHEMAS.article))).toEqual(['EMPTY_FILE']);
+    expect(fileCodes(parseImportFile({ fileName: 'a.csv', bytes: new Uint8Array() }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName }))).toEqual(['EMPTY_FILE']);
     expect(fileCodes(run('article', []).parsed)).toEqual(['EMPTY_FILE']);
     const many = (n: number) => Array.from({ length: n }, (_, i) => good('article', { external_id: `E${i}`, slug: `s-${i}`, title: `T${i}` }));
     expect(run('article', many(500)).parsed.ok).toBe(true);
@@ -164,26 +165,26 @@ describe('structural file errors (named codes)', () => {
     expect(run('article', [good('article', { template_version: '1' })]).parsed.ok).toBe(true);
     for (const v of ['2.0', '0.9', '', 'v1', '1.1']) expect(fileCodes(run('article', [good('article', { template_version: v })]).parsed), v).toEqual(['TEMPLATE_VERSION_UNSUPPORTED']);
     const num = xlsxOf({ Article_Upload: [SCHEMAS.article.columns.map((c) => c.key), SCHEMAS.article.columns.map((c) => (c.key === 'template_version' ? { n: 1 } : (good('article')[c.key] ?? '')))] });
-    expect(parseImportFile({ fileName: 'a.xlsx', bytes: num }, SCHEMAS.article).ok).toBe(true);
+    expect(parseImportFile({ fileName: 'a.xlsx', bytes: num }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName }).ok).toBe(true);
   });
 
   it('UPLOAD_SHEET_MISSING when the workbook has no sheet with the upload name; only that sheet is ever read', () => {
     const wrong = xlsxFor('article', [good('article')], 'Sheet1');
-    expect(fileCodes(parseImportFile({ fileName: 'a.xlsx', bytes: wrong }, SCHEMAS.article))).toEqual(['UPLOAD_SHEET_MISSING']);
+    expect(fileCodes(parseImportFile({ fileName: 'a.xlsx', bytes: wrong }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName }))).toEqual(['UPLOAD_SHEET_MISSING']);
     // a decoy: the other sheets hold a different (bad) row; only Article_Upload counts
     const decoy = xlsxOf({
       Instructions: [['title', 'status'], ['x', 'published']],
       Example_Article: rowsToAoa('article', [good('article', { title: 'DECOY' })]),
       Article_Upload: rowsToAoa('article', [good('article', { title: 'REAL' })]),
     });
-    const p = parseImportFile({ fileName: 'a.xlsx', bytes: decoy }, SCHEMAS.article);
+    const p = parseImportFile({ fileName: 'a.xlsx', bytes: decoy }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName });
     expect(p.ok && p.table.rows.map((r) => r.values.title)).toEqual(['REAL']);
   });
 
   it('CSV and XLSX produce the same table for the same data (parity), including multi-line cells', () => {
     const row = good('article');
-    const c = parseImportFile({ fileName: 'a.csv', bytes: csvOf('article', [row]) }, SCHEMAS.article);
-    const x = parseImportFile({ fileName: 'a.xlsx', bytes: xlsxFor('article', [row]) }, SCHEMAS.article);
+    const c = parseImportFile({ fileName: 'a.csv', bytes: csvOf('article', [row]) }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName });
+    const x = parseImportFile({ fileName: 'a.xlsx', bytes: xlsxFor('article', [row]) }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName });
     expect(c.ok && x.ok).toBe(true);
     if (c.ok && x.ok) expect(x.table.rows[0].values).toEqual(c.table.rows[0].values);
   });
@@ -197,8 +198,8 @@ describe('structural file errors (named codes)', () => {
     const evCol = header.indexOf('event_date');
     ws[XLSX.utils.encode_cell({ r: 1, c: evCol })] = { t: 'n', v: 46295, z: 'dd/mm/yyyy' }; // 2026-09-30
     XLSX.utils.book_append_sheet(wb, ws, 'Money_Update_Upload');
-    const bytes = new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true }) as ArrayBuffer);
-    const p = parseImportFile({ fileName: 'm.xlsx', bytes }, SCHEMAS.money_update);
+    const bytes = stripUnusedBinContentType(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true }) as ArrayBuffer));
+    const p = parseImportFile({ fileName: 'm.xlsx', bytes }, SCHEMAS.money_update, { sheetName: SCHEMAS.money_update.uploadSheetName });
     expect(p.ok && p.table.rows[0].values.event_date).toBe('2026-09-30');
   });
 });
@@ -310,7 +311,7 @@ describe('row validation primitives', () => {
 
   it('a source link is batched into the lookup keys with every slug and external id (constant query count however many rows)', () => {
     const rows = Array.from({ length: 50 }, (_, i) => good('article', { external_id: `E${i}`, slug: `s-${i}` }));
-    const p = parseImportFile({ fileName: 'a.csv', bytes: csvOf('article', rows) }, SCHEMAS.article);
+    const p = parseImportFile({ fileName: 'a.csv', bytes: csvOf('article', rows) }, SCHEMAS.article, { sheetName: SCHEMAS.article.uploadSheetName });
     expect(p.ok).toBe(true);
     if (p.ok) {
       const keys = collectLookupKeys(p.table);

@@ -33,7 +33,12 @@ export function ImportUploader({ type }: { type: ImportContentType }) {
   const [serverIssues, setServerIssues] = useState<ImportIssue[] | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [rejectedRunId, setRejectedRunId] = useState<string | null>(null);
-  const busy = stage !== 'idle';
+  // Shared ingest convention: for a workbook the operator CHOOSES the sheet (preselected, never silent).
+  const sheetId = useId();
+  const [sheets, setSheets] = useState<{ name: string; state: string; rowCount: number | null }[] | null>(null);
+  const [sheet, setSheet] = useState('');
+  const [inspecting, setInspecting] = useState(false);
+  const busy = stage !== 'idle' || inspecting;
 
   // The request is a single round trip; the stage wording advances on a timer so the person sees that work is
   // happening. (It is progress text, not a measurement of the server.)
@@ -50,11 +55,39 @@ export function ImportUploader({ type }: { type: ImportContentType }) {
     if ((clientError || serverError) && summaryRef.current) summaryRef.current.focus();
   }, [clientError, serverError]);
 
+  async function inspect(f: File) {
+    setInspecting(true);
+    try {
+      const form = new FormData();
+      form.set('contentType', type);
+      form.set('file', f);
+      const res = await fetch('/api/admin/resources/import/inspect', { method: 'POST', body: form });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFile(null);
+        setClientError(json?.error ?? 'This file could not be read.');
+        return;
+      }
+      setFile(f);
+      if (json.data?.kind === 'xlsx') {
+        setSheets(json.data.sheets ?? []);
+        setSheet(json.data.preselect ?? '');
+      }
+    } catch {
+      setFile(null);
+      setClientError('Could not reach the server to check the file. Try again.');
+    } finally {
+      setInspecting(false);
+    }
+  }
+
   function pick(f: File | null) {
     setServerIssues(null);
     setServerError(null);
     setRejectedRunId(null);
     setClientError(null);
+    setSheets(null);
+    setSheet('');
     if (!f) {
       setFile(null);
       return;
@@ -68,6 +101,11 @@ export function ImportUploader({ type }: { type: ImportContentType }) {
     if (f.size > IMPORT_LIMITS.maxFileBytes) {
       setFile(null);
       setClientError('That file is larger than 10 MB.');
+      return;
+    }
+    if (lower.endsWith('.xlsx')) {
+      setFile(null);
+      void inspect(f);
       return;
     }
     setFile(f);
@@ -84,6 +122,7 @@ export function ImportUploader({ type }: { type: ImportContentType }) {
       const form = new FormData();
       form.set('contentType', type);
       form.set('file', file);
+      if (sheets) form.set('sheetName', sheet);
       const res = await fetch('/api/admin/resources/import/runs', { method: 'POST', body: form });
       const json = await res.json().catch(() => ({}));
       if (res.status === 422 && json?.data?.runId) {
@@ -184,10 +223,33 @@ export function ImportUploader({ type }: { type: ImportContentType }) {
               Selected: <span className="text-ink">{file.name}</span> ({Math.max(1, Math.round(file.size / 1024))} KB)
             </p>
           )}
+          {inspecting && (
+            <p role="status" className="mt-1 text-xs text-muted">
+              Checking the workbook...
+            </p>
+          )}
+          {sheets && (
+            <div className="mt-3">
+              <label htmlFor={sheetId} className="block text-sm font-medium text-ink">
+                Sheet to import
+              </label>
+              <select id={sheetId} value={sheet} onChange={(e) => setSheet(e.target.value)} className="mt-1 block min-h-11 w-full max-w-xl rounded-compact border border-line bg-white px-3 py-2 text-sm text-ink">
+                <option value="">Choose a sheet...</option>
+                {sheets.map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name}
+                    {s.state !== 'visible' ? ` (${s.state})` : ''}
+                    {s.rowCount !== null ? `, ${s.rowCount} rows` : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted">Only the sheet you choose is imported. Every other sheet is ignored, and the preview tells you which. Rows hidden in the sheet are not imported, and the preview lists them.</p>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button type="submit" disabled={!file || busy} className="min-h-11 rounded-full bg-trust px-5 py-2 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
+          <button type="submit" disabled={!file || busy || (sheets !== null && !sheet)} className="min-h-11 rounded-full bg-trust px-5 py-2 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
             {busy ? STAGE_TEXT[stage as Exclude<Stage, 'idle'>] : 'Upload and preview'}
           </button>
           <Link href="/admin/resources/import" className="min-h-11 rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-gray-50 inline-flex items-center">

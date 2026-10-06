@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       contentType,
       fileName: file.name,
       declaredMime: file.type || null,
+      sheetName: typeof form.get('sheetName') === 'string' ? (form.get('sheetName') as string).slice(0, 120) : null,
       bytes,
     });
     if (result.status === 'rejected') {

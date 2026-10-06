@@ -4,7 +4,8 @@ Generated from the canonical schema (`lib/resources/import/money-update/schema.t
 
 - Template version: **1.0** (any other value is rejected with `TEMPLATE_VERSION_UNSUPPORTED`).
 - Files: `FHIP_Money_Update_Upload_Template_v1.xlsx` and `FHIP_Money_Update_Upload_Template_v1.csv`. Only `.xlsx` and `.csv` are accepted.
-- XLSX sheets: `Instructions`, `Money_Update_Upload` (the **only** sheet that is imported), `Lookup_Values`, `Example_Money_Update` (an example, never processed).
+- XLSX template sheets: `Instructions`, `Money_Update_Upload` (where your rows go), `Lookup_Values`, `Example_Money_Update` (an example). **You choose the sheet to import when you upload** (the shared ingest convention: the system never picks a sheet silently), and the upload screen preselects `Money_Update_Upload`. Only the chosen sheet is read; the preview lists the sheets that were not imported and any hidden rows that were skipped. The preselected name is one constant per type (`uploadSheetName` in the adapter schema); a workbook with any other sheet names works because you choose the sheet.
+- Header row is row 1. CSV files: the delimiter is detected the same way as the other uploads (comma, semicolon, tab or pipe, never guessed when ambiguous); the CSV template is the header row only.
 - Dates inside the upload file are written year-month-day with hyphens (this is the file format only; the app shows dates day first).
 - Every row becomes a **private draft**. The file cannot set status, visibility, approvals, scheduling, publication, the content type or whether the item is indexable. A column with such a name rejects the whole file.
 

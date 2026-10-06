@@ -9,7 +9,8 @@
 //   NC-S5  DTD / entity (XXE, billion laughs) in a sheet is refused
 //   NC-S6  CSV results injection: every cell of the downloadable results file is neutralised
 import { describe, expect, it } from 'vitest';
-import { inspectImportFile, isWorkbookPartMacroEnabled, mapIngestProblem, sha256Hex } from '@/lib/resources/import/file-security';
+import { inspectImportFile, mapIngestProblem, sha256Hex } from '@/lib/resources/import/file-security';
+import { stripUnusedBinContentType } from '@/lib/resources/import/xlsx-sanitize';
 import { parseImportFile } from '@/lib/resources/import/parser';
 import { buildResultsCsv } from '@/lib/resources/import/results-csv';
 import { IMPORT_LIMITS, type ImportIssue } from '@/lib/resources/import/types';
@@ -18,7 +19,7 @@ import { minimalXlsxZip, zipOf } from '../support/zipWriter';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 const codes = (r: { ok: boolean; issues?: ImportIssue[] }) => (r.ok ? [] : (r.issues ?? []).map((i) => i.code));
-const parse = (name: string, bytes: Uint8Array, type: 'article' | 'money_update' = 'article', mime: string | null = null) => parseImportFile({ fileName: name, declaredMime: mime, bytes }, SCHEMAS[type]);
+const parse = (name: string, bytes: Uint8Array, type: 'article' | 'money_update' = 'article', mime: string | null = null) => parseImportFile({ fileName: name, declaredMime: mime, bytes }, SCHEMAS[type], { sheetName: SCHEMAS[type].uploadSheetName });
 
 describe('NC-S1 only .csv and .xlsx are accepted; everything else is INVALID_FILE_TYPE', () => {
   it('the clean pair passes', () => {
@@ -72,9 +73,24 @@ describe('NC-S1 only .csv and .xlsx are accepted; everything else is INVALID_FIL
       contentTypes: '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="application/vnd.ms-excel.sheet.macroEnabled.main+xml"/></Types>',
     });
     expect(codes(parse('a.xlsx', macroPart))).toEqual(['INVALID_FILE_TYPE']);
-    expect(isWorkbookPartMacroEnabled(macroPart)).toBe(true);
-    // the harmless .bin Default that library-written workbooks carry is NOT a macro
-    expect(isWorkbookPartMacroEnabled(xlsxFor('article', [good('article')]))).toBe(false);
+  });
+
+  it('NO local override of the shared inspector: our generated templates pass it UNCHANGED, and the unsanitised writer output is what it refuses (so the sanitiser is what makes the difference)', async () => {
+    const { inspectUpload } = await import('@/lib/services/investment-intelligence/benchmarkData/fileIngest');
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['a'], ['b']]), 'S');
+    const raw = new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer);
+    const bare = inspectUpload({ fileName: 'a.xlsx', bytes: raw });
+    expect(bare.ok, 'control: the writer output with the unused .bin default is refused by the shared inspector').toBe(false);
+    expect(bare.problems[0]?.code).toBe('XLSX_MACRO_PRESENT');
+    const clean = stripUnusedBinContentType(raw);
+    expect(inspectUpload({ fileName: 'a.xlsx', bytes: clean }).ok).toBe(true);
+    // and the real templates, straight from the generator
+    const { buildTemplateXlsx } = await import('@/lib/resources/import/template-generator');
+    for (const t of ['article', 'money_update'] as const) expect(inspectUpload({ fileName: 'a.xlsx', bytes: await buildTemplateXlsx(t) }).ok, t).toBe(true);
+    // the sanitiser only removes the unused default: it never touches a package that really has a .bin part
+    expect(stripUnusedBinContentType(clean)).toBe(clean);
   });
 
   it('a truncated or corrupted workbook is refused cleanly', () => {

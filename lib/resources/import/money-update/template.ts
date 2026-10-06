@@ -5,7 +5,7 @@ export const MONEY_UPDATE_TEMPLATE_INTRO: string[] = [
   'FHIP Resources: Money Update upload template (version 1.0)',
   'Paste one finished Money Update per row into the Money_Update_Upload sheet, then upload the file under Resources > Bulk Upload > Money Updates.',
   'Every uploaded Money Update becomes a PRIVATE DRAFT with freshness set to time-sensitive. Nothing is published, scheduled or approved by uploading. The normal Resources review and approval workflow still applies.',
-  'Only the Money_Update_Upload sheet is imported. The Instructions, Lookup_Values and Example_Money_Update sheets are never processed.',
+  'Your rows go on the Money_Update_Upload sheet. When you upload, you choose which sheet to import (it is preselected); the other sheets (Instructions, Lookup_Values, Example_Money_Update) are never imported.',
   'The five finished sections (what happened, why it matters, who may be affected, financial health impact, how FHIP can help) become the real Money Update sections you can edit in the normal Money Update editor.',
 ];
 
