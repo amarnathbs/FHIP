@@ -50,5 +50,28 @@ export async function ensureSelfHouseholdMember(userId: string): Promise<{ membe
     .select('id')
     .single();
   if (error || !created) return { memberId: null, error: error?.message ?? 'Could not record you as a household member.' };
-  return { memberId: created.id as string, error: null };
+  return { memberId: await settleOnOldestSelf(userId, created.id as string), error: null };
+}
+
+/**
+ * Concurrency guard (DEV browser finding, 07-10-2026): "look for a self member, else insert one" lets two callers that start together
+ * each insert one (two rows 67 ms apart were seen, and the owner selector then listed the user twice). After inserting, the call
+ * re-reads the user's active self members: the OLDEST one (earliest created_at, then id) is the one that stays. If this call's own
+ * row is not the oldest it removes ONLY that row (it was created a moment ago and nothing can reference it yet) and returns the
+ * oldest id. A second look after a short pause catches an older row that was not yet visible to the first look.
+ * A unique index on (user_id) for active self members would close this completely; that is a schema change and is left to the PO.
+ */
+async function settleOnOldestSelf(userId: string, ownId: string): Promise<string> {
+  const admin = createAdminClient();
+  for (let pass = 0; pass < 2; pass++) {
+    const { data } = await admin.from('household_members').select('id, created_at').eq('user_id', userId).eq('relationship', 'self').eq('is_active', true);
+    const sorted = [...((data ?? []) as Array<{ id: string; created_at: string }>)].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+    const oldest = sorted[0]?.id;
+    if (oldest && oldest !== ownId) {
+      await admin.from('household_members').delete().eq('id', ownId).eq('user_id', userId);
+      return oldest;
+    }
+    if (pass === 0) await new Promise((r) => setTimeout(r, 150));
+  }
+  return ownId;
 }
