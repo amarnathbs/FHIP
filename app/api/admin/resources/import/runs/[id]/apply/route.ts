@@ -18,7 +18,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   try {
     const result = await applyRun(g.supabase, createAdminClient(), id, g.user.id);
     if (!result.ok) return Response.json({ error: result.message, code: result.code }, { status: result.status });
-    return ok({ runId: result.runId, created: result.created, alreadyApplied: result.alreadyApplied, postIds: result.postIds });
+    return ok({ runId: result.runId, created: result.created, alreadyApplied: result.alreadyApplied, postIds: result.postIds, dbMs: result.dbMs });
   } catch (err) {
     console.error('Resources import apply error:', err);
     return Response.json({ error: 'The import could not be completed. Nothing was created.', code: 'APPLY_FAILED' }, { status: 500 });

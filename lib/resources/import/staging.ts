@@ -11,7 +11,7 @@
 //     capability, the ownership of the run and the forced draft/private state are enforced in the
 //     database whatever this code does.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logResourceAudit } from '@/lib/resources/admin/auditLog';
 import { getImportAdapter } from './adapters';
@@ -249,6 +249,8 @@ export async function processUpload(p: UploadParams): Promise<UploadResult> {
       title: r.display.title ? r.display.title.slice(0, 300) : null,
       display: r.display,
       normalized_payload: r.payload ?? {},
+      // The server names each row's post id now (migration 0274): the apply then does no per-row update first.
+      planned_post_id: randomUUID(),
       validation_errors: r.errors,
       validation_warnings: r.warnings,
     }));
@@ -329,7 +331,7 @@ export { flattenIssues };
 // Apply
 // ---------------------------------------------------------------------------
 export type ApplyOutcome =
-  | { ok: true; alreadyApplied: boolean; created: number; postIds: string[]; runId: string }
+  | { ok: true; alreadyApplied: boolean; created: number; postIds: string[]; runId: string; dbMs: number | null }
   | { ok: false; code: string; message: string; status: number };
 
 const CODE_RE = /^([A-Z][A-Z_]+):\s*([\s\S]*)$/;
@@ -363,6 +365,8 @@ export async function applyRun(user: SupabaseClient, admin: SupabaseClient, runI
   }
   if (error) {
     const parsed = parseApplyError(error.message ?? '');
+    // Operators need the real reason; callers never get it (the safe message above is what leaves the server).
+    if (parsed.code === 'APPLY_FAILED') console.error('Resources import apply failed:', error.code, error.message);
     // Failures roll back inside the database; record the outcome on the run for the history screen.
     if (parsed.code === 'STALE_PREVIEW') {
       await admin.from('resource_content_import_runs').update({ status: 'stale', failure_code: parsed.code, failure_message_safe: parsed.message }).eq('id', runId).neq('status', 'applied');
@@ -374,7 +378,7 @@ export async function applyRun(user: SupabaseClient, admin: SupabaseClient, runI
     }
     return { ok: false, ...parsed };
   }
-  const v = (data ?? {}) as { ok?: boolean; already_applied?: boolean; created?: number; post_ids?: string[]; run_id?: string };
+  const v = (data ?? {}) as { ok?: boolean; already_applied?: boolean; created?: number; post_ids?: string[]; run_id?: string; db_ms?: number };
   if (!v.ok) return { ok: false, ...parseApplyError('APPLY_FAILED: unexpected result') };
-  return { ok: true, alreadyApplied: v.already_applied === true, created: v.created ?? 0, postIds: v.post_ids ?? [], runId: v.run_id ?? runId };
+  return { ok: true, alreadyApplied: v.already_applied === true, created: v.created ?? 0, postIds: v.post_ids ?? [], runId: v.run_id ?? runId, dbMs: typeof v.db_ms === 'number' ? v.db_ms : null };
 }

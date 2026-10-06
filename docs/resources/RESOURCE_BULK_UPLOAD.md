@@ -33,7 +33,7 @@ One reusable framework for two content types, not two upload systems. Manual cre
 - `resource_content_import_runs` (one row per file: actor, content type, file name, SHA-256, template version, counts, status, failure code, timestamps) and `resource_content_import_rows` (normalised rows between preview and apply).
 - The raw file is never stored: only its SHA-256 and the normalised rows. No bucket is used.
 - Unapplied runs: staged rows purged after 7 days (opportunistically on each upload; the run record stays as history). Applied runs: the full payload is cleared by the apply function itself; metadata stays.
-- Import-level audit: the run row plus `resource_audit_log` rows `uploaded` / `rejected` / `applied` / `apply_failed`. Resource-level audit: one `resource_audit_log` row per created post with `created_via=bulk_import`, `import_run_id`, `import_row_number`, `external_id`. A revision-history version 1 ("Created by bulk upload") is also written.
+- Import-level audit: the run row plus `resource_audit_log` rows `uploaded` / `rejected` / `applied` / `apply_failed`. Resource-level audit: one `resource_audit_log` row per created post with `created_via=bulk_import`, `import_run_id`, `import_row_number`, `external_id`. No revision-history snapshot is written at apply (migration 0274): the first manual save of an imported draft creates version 1 exactly as for a hand-made draft, and neither the workflow nor review readiness reads versions (PGlite-tested).
 
 ## Create-only behaviour
 

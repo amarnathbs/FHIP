@@ -14,6 +14,8 @@ import path from 'node:path';
 import { chromium, type Page, type BrowserContext } from 'playwright';
 import AxeBuilder from '@axe-core/playwright';
 import { createClient } from '@supabase/supabase-js';
+import * as XLSX from 'xlsx';
+import { stripUnusedBinContentType } from '../lib/resources/import/xlsx-sanitize';
 import { ARTICLE_SCHEMA } from '../lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '../lib/resources/import/money-update/schema';
 
@@ -131,6 +133,24 @@ async function main() {
   // client-side rejection
   await page.getByLabel(/Article upload file/).setInputFiles({ name: 'bad.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1') });
   check('UI uploader: a .pdf is rejected in the browser with a clear message (server re-checks anyway)', (await page.getByRole('alert').innerText()).includes('Only .csv and .xlsx'));
+
+  // ---- XLSX: the operator chooses the sheet (shared ingest convention)
+  {
+    const cols = ARTICLE_SCHEMA.columns.map((c) => c.key);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['notes']]), 'Instructions');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cols, cols.map((c) => aRow(5)[c] ?? '')]), 'Article_Upload');
+    const xbytes = Buffer.from(stripUnusedBinContentType(new Uint8Array(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))));
+    await page.getByLabel(/Article upload file/).setInputFiles({ name: 'sheets.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: xbytes });
+    const sel = page.getByLabel('Sheet to import');
+    await sel.waitFor({ timeout: 60_000 });
+    check('UI uploader: for a workbook the sheet picker is shown, labelled, and the template sheet is preselected', (await sel.inputValue()) === 'Article_Upload' && !(await page.getByRole('button', { name: 'Upload and preview' }).isDisabled()));
+    await sel.selectOption('');
+    check('UI uploader: with no sheet chosen Upload is disabled (the system never picks one)', await page.getByRole('button', { name: 'Upload and preview' }).isDisabled());
+    await shot(page, 'uploader_sheet_picker');
+    axeLog.uploaderSheetPicker = await axe(page, 'uploader with sheet picker');
+    await page.reload({ waitUntil: 'networkidle' });
+  }
 
   // ---- valid upload -> preview
   const good = csvFile('article', [aRow(1), aRow(2)], 'good.csv');

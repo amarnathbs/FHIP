@@ -343,7 +343,7 @@ describe('apply: Article', () => {
     expect(after.tags - before.tags).toBe(4);
     expect(after.sources - before.sources).toBe(2); // the shared source is created ONCE, plus the name-only one
     expect(after.links - before.links).toBe(3);
-    expect(after.versions - before.versions).toBe(3);
+    expect(after.versions - before.versions, 'since 0274 the apply writes no per-post version snapshot').toBe(0);
     expect(after.audit - before.audit).toBe(3);
 
     const audit = await one<{ metadata: Json }>(`select metadata from resource_audit_log where entity_id=$1 and action='created'`, [ids[0]]);

@@ -29,6 +29,7 @@ const NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_resource_content_b
 if (!NAME) throw new Error('0273 migration not found');
 const M = fs.readFileSync(path.join(MIG_DIR, NAME), 'utf8');
 const PARTS = path.join(SUPABASE_ROOT, '..', 'docs', 'resources', 'po_apply_bulk_upload_0273', 'parts');
+const FASTER = fs.readFileSync(path.join(MIG_DIR, fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_resource_content_bulk_import_faster_apply.sql'))!), 'utf8');
 
 const U = (n: number) => `dddddddd-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const EDITOR = U(1);
@@ -40,7 +41,7 @@ let uniq = 0;
 type Json = Record<string, unknown>;
 
 function core(): string {
-  const m = M.match(/create or replace function private\.apply_resource_content_import_core\([\s\S]*?\n\$fn\$;/);
+  const m = FASTER.match(/create or replace function private\.apply_resource_content_import_core\([\s\S]*?\n\$fn\$;/);
   if (!m) throw new Error('core not found');
   return m[0];
 }
@@ -212,7 +213,7 @@ describe('everything 0272 guaranteed is preserved through the twin', () => {
     const posts = (await db.query(`select content_type, status, visibility, is_indexable, created_by, published_at from resource_posts where id = any($1::uuid[])`, [res.post_ids])).rows as Json[];
     for (const p of posts) expect(p).toEqual({ content_type: 'article', status: 'draft', visibility: 'private', is_indexable: false, created_by: EDITOR, published_at: null });
     expect(await count(`select count(*) n from resource_audit_log where metadata->>'import_run_id' = $1`, [run])).toBe(2);
-    expect(await count(`select count(*) n from resource_post_versions where post_id = any($1::uuid[])`, [res.post_ids])).toBe(2);
+    expect(await count(`select count(*) n from resource_post_versions where post_id = any($1::uuid[])`, [res.post_ids]), 'since 0274 no per-post version snapshot').toBe(0);
     expect(await twin(EDITOR, run)).toMatchObject({ ok: true, already_applied: true });
     expect(await count(`select count(*) n from resource_posts where id = any($1::uuid[])`, [res.post_ids])).toBe(2);
   });

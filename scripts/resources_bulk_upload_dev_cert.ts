@@ -164,6 +164,24 @@ async function deleteRunPosts() {
   for (let i = 0; i < ids.length; i += 100) await admin.from('resource_posts').delete().in('id', ids.slice(i, i + 100));
 }
 
+// ------------------------------------------------------------------ scale (1 / 50 / 100 / 500 rows, both adapters)
+async function scaleRun(E: TestUser, sizes: number[]): Promise<unknown[]> {
+  const scale: unknown[] = [];
+  for (const type of ['article', 'money_update'] as const) {
+    for (const n of sizes) {
+      const rows = Array.from({ length: n }, (_, i) => (type === 'article' ? articleRow(10000 + n * 10 + i) : muRow(20000 + n * 10 + i)));
+      const f = csvBytes(type, rows);
+      const u = await upload(E, type, `scale_${type}_${n}.csv`, f, 'text/csv');
+      const m = u.json?.data?.metrics ?? {};
+      const ap = await api(E, 'POST', `/api/admin/resources/import/runs/${u.json?.data?.runId}/apply`);
+      const pv = await api(E, 'GET', `/api/admin/resources/import/runs/${u.json?.data?.runId}`);
+      scale.push({ type, rows: n, fileBytes: f.length, uploadTotalMs: u.ms, parseMs: m.parseMs, resolveMs: m.resolveMs, validateMs: m.validateMs, stageMs: m.stageMs, dbQueriesDuringUpload: m.dbQueries, uploadResponseBytes: u.bytes, previewResponseBytes: pv.bytes, applyMs: ap.ms, applyResponseBytes: ap.bytes, applyHttp: ap.status, applyCode: ap.json?.code ?? null, applyError: ap.json?.error ?? null, created: ap.json?.data?.created });
+      check(`G scale ${type} ${n} rows: upload ok, apply created ${n}`, u.json?.data?.status === 'ready' && ap.json?.data?.created === n, `${u.status} apply ${ap.status} ${ap.json?.code ?? ''} ${ap.json?.error ?? ''}`);
+    }
+  }
+  return scale;
+}
+
 // ------------------------------------------------------------------ the run
 async function main() {
   console.log(`Resources Bulk Upload DEV certification, run ${RUN}, app ${APP}`);
@@ -232,6 +250,20 @@ async function main() {
     check('PRE Money Updates page shows the contextual Upload Updates and Download Template buttons', cm.status === 200 && cmHtml.includes('Upload Updates') && cmHtml.includes('Download Template'));
     const ac = await fetch(`${APP}/admin/resources/content`, { headers: { cookie: E.cookie } });
     check('PRE All Content page renders for the editor', ac.status === 200);
+    return;
+  }
+
+  if (process.env.CERT_PHASE === 'big') {
+    // 0273 follow-up: only the two 500-row cases, the concurrency probe and cleanup.
+    evidence.scale500 = await scaleRun(E, [500]);
+    const cRows = Array.from({ length: 500 }, (_, i) => articleRow(30000 + i));
+    const cu = await upload(E, 'article', 'concurrent500.csv', csvBytes('article', cRows), 'text/csv');
+    const cid = cu.json?.data?.runId;
+    const cb = await countPosts();
+    const par = await Promise.all(Array.from({ length: 6 }, () => api(E, 'POST', `/api/admin/resources/import/runs/${cid}/apply`)));
+    const effective = par.filter((r) => r.status === 200 && r.json?.data?.alreadyApplied === false).length;
+    evidence.concurrentApply500 = par.map((r) => ({ status: r.status, already: r.json?.data?.alreadyApplied, created: r.json?.data?.created, ms: r.ms, code: r.json?.code }));
+    check('BIG concurrent apply of a 500-row run (6 parallel requests): exactly one effect, 500 posts, no duplicates', effective === 1 && (await countPosts()) - cb === 500 && par.every((r) => r.status === 200), JSON.stringify(evidence.concurrentApply500));
     return;
   }
 
@@ -566,19 +598,7 @@ async function main() {
   }
 
   // ============================================================ G. scale: 1 / 50 / 100 / 500 for both adapters
-  const scale: unknown[] = [];
-  for (const type of ['article', 'money_update'] as const) {
-    for (const n of [1, 50, 100, 500]) {
-      const rows = Array.from({ length: n }, (_, i) => (type === 'article' ? articleRow(10000 + n * 10 + i + (type === 'article' ? 0 : 5000)) : muRow(20000 + n * 10 + i)));
-      const f = csvBytes(type, rows);
-      const u = await upload(E, type, `scale_${type}_${n}.csv`, f, 'text/csv');
-      const m = u.json?.data?.metrics ?? {};
-      const ap = await api(E, 'POST', `/api/admin/resources/import/runs/${u.json?.data?.runId}/apply`);
-      const pv = await api(E, 'GET', `/api/admin/resources/import/runs/${u.json?.data?.runId}`);
-      scale.push({ type, rows: n, fileBytes: f.length, uploadTotalMs: u.ms, parseMs: m.parseMs, resolveMs: m.resolveMs, validateMs: m.validateMs, stageMs: m.stageMs, dbQueriesDuringUpload: m.dbQueries, uploadResponseBytes: u.bytes, previewResponseBytes: pv.bytes, applyMs: ap.ms, applyResponseBytes: ap.bytes, created: ap.json?.data?.created });
-      check(`G scale ${type} ${n} rows: upload ok, apply created ${n}`, u.json?.data?.status === 'ready' && ap.json?.data?.created === n, `${u.status} ${ap.status} ${JSON.stringify(u.json).slice(0, 160)}`);
-    }
-  }
+  const scale = await scaleRun(E, [1, 50, 100, 500]);
   evidence.scale = scale;
   const q1 = (scale as any[]).filter((s) => s.type === 'article');
   const qs = q1.map((s) => s.dbQueriesDuringUpload);
