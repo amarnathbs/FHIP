@@ -173,9 +173,19 @@ async function scaleRun(E: TestUser, sizes: number[]): Promise<unknown[]> {
       const f = csvBytes(type, rows);
       const u = await upload(E, type, `scale_${type}_${n}.csv`, f, 'text/csv');
       const m = u.json?.data?.metrics ?? {};
-      const ap = await api(E, 'POST', `/api/admin/resources/import/runs/${u.json?.data?.runId}/apply`);
+      let ap = await api(E, 'POST', `/api/admin/resources/import/runs/${u.json?.data?.runId}/apply`);
+      let timeoutPath: unknown = null;
+      if (ap.status === 503) {
+        // the graceful database-time-limit path: plain message, nothing created, run still ready, a retry is safe
+        const first = ap;
+        const stat = await api(E, 'GET', `/api/admin/resources/import/runs/${u.json?.data?.runId}`);
+        const created0 = await countPosts();
+        ap = await api(E, 'POST', `/api/admin/resources/import/runs/${u.json?.data?.runId}/apply`);
+        timeoutPath = { firstStatus: first.status, firstMessage: first.json?.error, runStatusAfter: stat.json?.data?.run?.status, postsCreatedByFirst: created0, retryStatus: ap.status, retryCreated: ap.json?.data?.created, retryMs: ap.ms };
+        check(`G TIMEOUT PATH ${type} ${n}: first apply hit the time limit: plain message, nothing created, run still ready; the retry is safe (no duplicates whatever its outcome)`, first.json?.error?.startsWith('Nothing was created.') === true && stat.json?.data?.run?.status === 'ready' && (await countPosts()) - created0 === (ap.status === 200 ? n : 0), JSON.stringify(timeoutPath));
+      }
       const pv = await api(E, 'GET', `/api/admin/resources/import/runs/${u.json?.data?.runId}`);
-      scale.push({ type, rows: n, fileBytes: f.length, uploadTotalMs: u.ms, parseMs: m.parseMs, resolveMs: m.resolveMs, validateMs: m.validateMs, stageMs: m.stageMs, dbQueriesDuringUpload: m.dbQueries, uploadResponseBytes: u.bytes, previewResponseBytes: pv.bytes, applyMs: ap.ms, applyResponseBytes: ap.bytes, applyHttp: ap.status, applyCode: ap.json?.code ?? null, applyError: ap.json?.error ?? null, created: ap.json?.data?.created });
+      scale.push({ type, rows: n, fileBytes: f.length, uploadTotalMs: u.ms, parseMs: m.parseMs, resolveMs: m.resolveMs, validateMs: m.validateMs, stageMs: m.stageMs, dbQueriesDuringUpload: m.dbQueries, uploadResponseBytes: u.bytes, previewResponseBytes: pv.bytes, applyMs: ap.ms, applyResponseBytes: ap.bytes, timeoutPath, applyHttp: ap.status, applyCode: ap.json?.code ?? null, applyError: ap.json?.error ?? null, created: ap.json?.data?.created });
       check(`G scale ${type} ${n} rows: upload ok, apply created ${n}`, u.json?.data?.status === 'ready' && ap.json?.data?.created === n, `${u.status} apply ${ap.status} ${ap.json?.code ?? ''} ${ap.json?.error ?? ''}`);
     }
   }
@@ -307,6 +317,18 @@ async function main() {
     }
     evidence.timing500 = timing;
     console.log(JSON.stringify(timing));
+    return;
+  }
+
+  if (process.env.CERT_PHASE === 'same') {
+    for (const k of [6, 4]) {
+      const cRows = Array.from({ length: 500 }, (_, i) => articleRow(40000 + k * 1000 + i));
+      const cu = await upload(E, 'article', 'same'+k+'.csv', csvBytes('article', cRows), 'text/csv');
+      const cid = cu.json?.data?.runId;
+      const par = await Promise.all(Array.from({ length: k }, () => api(E, 'POST', `/api/admin/resources/import/runs/${cid}/apply`)));
+      console.log('SAME-RUN x'+k, JSON.stringify(par.map((r) => ({ s: r.status, already: r.json?.data?.alreadyApplied, db: r.json?.data?.dbMs, ms: r.ms }))), 'posts', await countPosts());
+      await deleteRunPosts();
+    }
     return;
   }
 
