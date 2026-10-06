@@ -253,6 +253,63 @@ async function main() {
     return;
   }
 
+  if (process.env.CERT_PHASE === 'timing') {
+    // 0274 verification + timing: >= 5 runs of 500 rows per type, then 2 CONCURRENT runs of different run ids per type.
+    const stats = (xs: number[]) => {
+      const s = [...xs].sort((a, b) => a - b);
+      return { n: s.length, min: s[0], median: s[Math.floor(s.length / 2)], max: s[s.length - 1], all: xs };
+    };
+    // behavioural verification of 0274 (db_ms present, no version rows, forced values, planned ids, wrapper + twin, idempotent)
+    const vrun = await upload(E, 'article', 'verify0274.csv', csvBytes('article', [articleRow(70001), articleRow(70002)]), 'text/csv');
+    const vid = vrun.json?.data?.runId as string;
+    const planned = await admin.from('resource_content_import_rows').select('row_number, planned_post_id').eq('import_run_id', vid).order('row_number');
+    check('0274 VERIFY the server assigns planned post ids when staging', (planned.data ?? []).length === 2 && (planned.data ?? []).every((r: any) => !!r.planned_post_id));
+    const tok = JSON.parse(Buffer.from(E.cookie.split('=').slice(1).join('=').replace(/^base64-/, '').split(';')[0], 'base64url').toString());
+    const userDb = createClient(URL_, ANON, { global: { headers: { Authorization: `Bearer ${tok.access_token}` } }, auth: { autoRefreshToken: false, persistSession: false } });
+    const w = await userDb.rpc('apply_resource_content_import', { p_run_id: vid });
+    check('0274 VERIFY the signed-in wrapper applies through the new core (created 2, db_ms reported)', !w.error && w.data?.created === 2 && typeof w.data?.db_ms === 'number', JSON.stringify(w.error ?? w.data).slice(0, 200));
+    const w2 = await userDb.rpc('apply_resource_content_import', { p_run_id: vid });
+    check('0274 VERIFY second apply is idempotent', !w2.error && w2.data?.already_applied === true && (await countPosts()) === 2);
+    const vposts = await postsBySlugPrefix(`${RUN}-article-7000`);
+    check('0274 VERIFY forced values, planned ids used as post ids, no per-post version rows', vposts.length === 2 && vposts.every((p) => p.status === 'draft' && p.visibility === 'private' && p.is_indexable === false && p.content_type === 'article') && vposts.map((p) => p.id).sort().join() === (planned.data ?? []).map((r: any) => r.planned_post_id).sort().join() && ((await admin.from('resource_post_versions').select('id', { count: 'exact', head: true }).in('post_id', vposts.map((p) => p.id))).count ?? -1) === 0);
+    const twinRun = await upload(E, 'money_update', 'verify0274b.csv', csvBytes('money_update', [muRow(70003)]), 'text/csv');
+    const tw = await api(E, 'POST', `/api/admin/resources/import/runs/${twinRun.json?.data?.runId}/apply`);
+    check('0274 VERIFY the route (service-role twin) applies and reports dbMs', tw.status === 200 && tw.json?.data?.created === 1 && typeof tw.json?.data?.dbMs === 'number', JSON.stringify(tw.json).slice(0, 200));
+    await deleteRunPosts();
+
+    const timing: Record<string, unknown> = {};
+    for (const type of ['article', 'money_update'] as const) {
+      const db: number[] = [];
+      const client: number[] = [];
+      for (let k = 0; k < 5; k++) {
+        const rows = Array.from({ length: 500 }, (_, i) => (type === 'article' ? articleRow(80000 + k * 1000 + i) : muRow(80000 + k * 1000 + i)));
+        const u = await upload(E, type, `timing_${type}_${k}.csv`, csvBytes(type, rows), 'text/csv');
+        const ap = await api(E, 'POST', `/api/admin/resources/import/runs/${u.json?.data?.runId}/apply`);
+        const ok = ap.status === 200 && ap.json?.data?.created === 500;
+        check(`TIMING ${type} 500 rows run ${k + 1}: applied (db_ms ${ap.json?.data?.dbMs}, client ${ap.ms} ms)`, ok, `${ap.status} ${ap.json?.code ?? ''}`);
+        if (ok) {
+          db.push(ap.json.data.dbMs);
+          client.push(ap.ms);
+        }
+        await deleteRunPosts();
+      }
+      // two concurrent runs of DIFFERENT run ids
+      const mk = async (tag: number) => {
+        const rows = Array.from({ length: 500 }, (_, i) => (type === 'article' ? articleRow(90000 + tag * 1000 + i) : muRow(90000 + tag * 1000 + i)));
+        return (await upload(E, type, `timing_${type}_c${tag}.csv`, csvBytes(type, rows), 'text/csv')).json?.data?.runId as string;
+      };
+      const [r1, r2] = [await mk(1), await mk(2)];
+      const par = await Promise.all([r1, r2].map((r) => api(E, 'POST', `/api/admin/resources/import/runs/${r}/apply`)));
+      const bothOk = par.every((r) => r.status === 200 && r.json?.data?.created === 500);
+      check(`TIMING ${type} two CONCURRENT 500-row runs (different run ids): both applied (db_ms ${par.map((r) => r.json?.data?.dbMs)}, client ${par.map((r) => r.ms)} ms)`, bothOk && (await countPosts()) === 1000, par.map((r) => `${r.status} ${r.json?.code ?? ''}`).join(' '));
+      timing[type] = { dbMs: stats(db), clientMs: stats(client), concurrent: par.map((r) => ({ status: r.status, dbMs: r.json?.data?.dbMs ?? null, clientMs: r.ms })) };
+      await deleteRunPosts();
+    }
+    evidence.timing500 = timing;
+    console.log(JSON.stringify(timing));
+    return;
+  }
+
   if (process.env.CERT_PHASE === 'big') {
     // 0273 follow-up: only the two 500-row cases, the concurrency probe and cleanup.
     evidence.scale500 = await scaleRun(E, [500]);

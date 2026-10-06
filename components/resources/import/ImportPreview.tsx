@@ -56,10 +56,10 @@ function dayFirst(iso: string | null | undefined, jurisdiction?: string | null):
 const DUPLICATE_CODES = new Set(['DUPLICATE_SLUG_IN_FILE', 'DUPLICATE_EXTERNAL_ID_IN_FILE', 'EXISTING_CONTENT_CONFLICT']);
 
 function RowStatus({ row }: { row: PreviewRow }) {
-  if (row.result_status === 'created') return <span className="rounded border border-positive/40 bg-positive/10 px-2 py-0.5 text-xs font-semibold text-positive">Created (draft)</span>;
+  if (row.result_status === 'created') return <span className="rounded border border-positive/40 bg-positive/10 px-2 py-0.5 text-xs font-semibold text-ink">Created (draft)</span>;
   if (row.validation_errors.length > 0) return <span className="rounded border border-risk/40 bg-risk/10 px-2 py-0.5 text-xs font-semibold text-risk">Error</span>;
-  if (row.validation_warnings.length > 0) return <span className="rounded border border-attention/40 bg-attention/10 px-2 py-0.5 text-xs font-semibold text-attention">Ready, with notes</span>;
-  return <span className="rounded border border-positive/40 bg-positive/10 px-2 py-0.5 text-xs font-semibold text-positive">Ready</span>;
+  if (row.validation_warnings.length > 0) return <span className="rounded border border-attention/40 bg-attention/10 px-2 py-0.5 text-xs font-semibold text-ink">Ready, with notes</span>;
+  return <span className="rounded border border-positive/40 bg-positive/10 px-2 py-0.5 text-xs font-semibold text-ink">Ready</span>;
 }
 
 function Block({ label, children }: { label: string; children: React.ReactNode }) {
@@ -122,7 +122,7 @@ function RowDetail({ runId, rowNumber, type, applied, errors, warnings }: { runI
       )}
       {warnings.length > 0 && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-attention">Notes</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink">Notes</p>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-ink">
             {warnings.map((e, i) => (
               <li key={i}>
@@ -180,7 +180,7 @@ function RowDetail({ runId, rowNumber, type, applied, errors, warnings }: { runI
       </dl>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">{type === 'article' ? 'Article body, as it will be stored' : 'The five sections, as they will be stored'}</p>
-        <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap rounded-compact border border-line bg-gray-50 p-3 text-xs text-ink">{bodyPreview(blocks)}</pre>
+        <pre tabIndex={0} aria-label="Stored content preview" className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap rounded-compact border border-line bg-gray-50 p-3 text-xs text-ink">{bodyPreview(blocks)}</pre>
       </div>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Sources ({p.sources.length})</p>
@@ -334,8 +334,8 @@ export function ImportPreview({ run: initialRun, rows: initialRows, editBase, li
           <div className="col-span-2"><dt className="text-xs text-muted">File</dt><dd className="break-all text-sm font-semibold text-ink">{run.file_name}</dd></div>
           <div><dt className="text-xs text-muted">Template version</dt><dd className="text-sm font-semibold text-ink">{run.template_version ?? 'Unknown'}</dd></div>
           <div><dt className="text-xs text-muted">Rows</dt><dd className="text-sm font-semibold text-ink">{run.row_count}</dd></div>
-          <div><dt className="text-xs text-muted">Ready</dt><dd className="text-sm font-semibold text-positive">{run.valid_count}</dd></div>
-          <div><dt className="text-xs text-muted">With notes</dt><dd className="text-sm font-semibold text-attention">{run.warning_count}</dd></div>
+          <div><dt className="text-xs text-muted">Ready</dt><dd className="text-sm font-semibold text-ink">{run.valid_count}</dd></div>
+          <div><dt className="text-xs text-muted">With notes</dt><dd className="text-sm font-semibold text-ink">{run.warning_count}</dd></div>
           <div><dt className="text-xs text-muted">With errors</dt><dd className="text-sm font-semibold text-risk">{run.error_count}</dd></div>
           <div><dt className="text-xs text-muted">Duplicates</dt><dd className="text-sm font-semibold text-ink">{duplicates}</dd></div>
           <div className="col-span-2 md:col-span-3"><dt className="text-xs text-muted">Uploaded</dt><dd className="text-sm font-semibold text-ink">{formatAdminDateTime(run.created_at)}</dd></div>
@@ -402,7 +402,7 @@ export function ImportPreview({ run: initialRun, rows: initialRows, editBase, li
           </div>
           <p role="status" aria-live="polite" className="text-xs text-muted">Showing {visible.length} of {filtered.length} rows.</p>
 
-          <div className="overflow-x-auto rounded-card border border-line bg-white">
+          <div tabIndex={0} role="region" aria-label="Rows of the import (scrollable)" className="overflow-x-auto rounded-card border border-line bg-white">
             <table className="w-full min-w-[820px] text-left text-sm">
               <caption className="sr-only">Rows of the import with their validation status</caption>
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">

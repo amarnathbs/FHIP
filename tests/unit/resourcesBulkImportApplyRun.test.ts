@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { applyRun } from '@/lib/resources/import/staging';
+import { APPLY_TIMEOUT_MESSAGE, applyRun } from '@/lib/resources/import/staging';
 
 function clients(twin: { data?: unknown; error?: { code?: string; message: string } | null }, signedIn?: { data?: unknown; error?: { code?: string; message: string } | null }) {
   const adminRpc = vi.fn(async () => ({ data: twin.data ?? null, error: twin.error ?? null }));
@@ -40,6 +40,25 @@ describe('applyRun', () => {
       expect(r).toMatchObject({ ok: false, code, status });
       expect(c.userRpc).not.toHaveBeenCalled();
     }
+  });
+
+  it('a statement timeout (57014) is graceful: plain message, 503, run NOT marked applied or stale (stays retryable), no fallback, no double apply, elapsed time logged', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const c = clients({ error: { code: '57014', message: 'canceling statement due to statement timeout' } }, OK);
+    const r = await applyRun(c.user, c.admin, 'run-9', 'user-1');
+    expect(r).toMatchObject({ ok: false, code: 'APPLY_FAILED', status: 503, message: APPLY_TIMEOUT_MESSAGE });
+    expect(APPLY_TIMEOUT_MESSAGE).toBe('Nothing was created. This file is too large to apply in one go right now. Split it into smaller files or try again.');
+    expect(c.userRpc, 'a timeout must never trigger the signed-in fallback (that would be a second apply attempt)').not.toHaveBeenCalled();
+    expect(c.adminRpc).toHaveBeenCalledTimes(1);
+    // the recorded failure never changes the run's status: it remains 'ready' and can be applied again
+    expect(c.updates[0]).toMatchObject({ failure_code: 'APPLY_FAILED' });
+    expect(c.updates[0]).not.toHaveProperty('status');
+    expect(JSON.stringify(r)).not.toMatch(/57014|statement timeout/i);
+    expect(log.mock.calls.some((a) => /TIMED OUT after \d+ ms/.test(String(a[0])))).toBe(true);
+    log.mockRestore();
+    // and the retry is a normal apply: the very next call can succeed
+    const c2 = clients(OK);
+    expect(await applyRun(c2.user, c2.admin, 'run-9', 'user-1')).toMatchObject({ ok: true, created: 3 });
   });
 
   it('records a stale run so history shows it, and never leaks the database message', async () => {

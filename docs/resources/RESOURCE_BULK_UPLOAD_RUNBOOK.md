@@ -41,6 +41,15 @@ For the people who run Resources day to day and for whoever supports them.
 | `IMPORT_NOT_READY` | the import has errors, is already applied, or expired | upload again |
 | `APPLY_FAILED` | the database refused the import; nothing was created | try again or upload again |
 
+## Large files, the 8 second limit, and production
+
+The API connects to the database through a login role that allows **8 seconds per call**, and that limit applies to the server's own calls too. Creating the drafts of a file is one database call, so a file that needs more than 8 seconds of database time cannot be applied (nothing is created; the whole call is cancelled).
+
+- **DEV measurements (migration 0274, 500 rows, 5 runs each):** Article database time min 3.4 s, median 3.5 s, max 4.6 s; Money Update min 2.9 s, median 3.0 s, max 3.2 s. Two 500-row runs applied at the same moment: Article about 6.5 s each, Money Update about 5.9 s each (all applied). Per-file limit: **500 rows** (the single constant `IMPORT_LIMITS.maxRows`, `lib/resources/import/types.ts`; the parser, template notes and upload screen read it).
+- **If an apply ever hits the limit** the person sees: "Nothing was created. This file is too large to apply in one go right now. Split it into smaller files or try again." The import stays "Ready, not applied" and can be applied again (the guards make a retry safe; a repeated apply can never create anything twice). The server log records `Resources import apply TIMED OUT after N ms`; a completed apply returns `dbMs` (database time) in its response.
+- **PRODUCTION MUST BE PROVEN BEFORE REAL BULK FILES ARE USED.** Production has the same 8 second limit but a different data volume (more existing posts and indexes, different hardware). Before the first real file, the Product Owner runs the synthetic proof there (500-row Article and Money Update uploads of clearly synthetic content, apply, read `dbMs`, delete the synthetic drafts) and keeps the numbers. **If the production worst-case `dbMs` exceeds about 6 seconds, set the per-file limit to 250** (change `IMPORT_LIMITS.maxRows`; nothing else needs to change) and re-prove.
+- A chunked-but-atomic apply is not possible here: the application has no direct database connection (only the API), and one transaction cannot span several API calls, so chunking would give up all-or-none.
+
 ## Support procedures
 
 - **A person says "my upload created nothing".** Open Import history. `Has errors` or `File rejected`: download the results CSV from the preview. `Ready, not applied`: they did not confirm. `Out of date`: re-upload.

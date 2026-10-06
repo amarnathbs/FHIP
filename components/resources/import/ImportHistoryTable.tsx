@@ -41,7 +41,7 @@ export function ImportHistoryTable({ rows, emptyText = 'No imports yet.' }: { ro
     return <p className="rounded-card border border-dashed border-line bg-gray-50/50 px-4 py-6 text-center text-sm text-muted">{emptyText}</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-card border border-line bg-white">
+    <div tabIndex={0} role="region" aria-label="Recent imports (scrollable)" className="overflow-x-auto rounded-card border border-line bg-white">
       <table className="w-full min-w-[760px] text-left text-sm">
         <caption className="sr-only">Recent imports</caption>
         <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">

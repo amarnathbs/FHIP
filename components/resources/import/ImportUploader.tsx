@@ -208,7 +208,7 @@ export function ImportUploader({ type }: { type: ImportContentType }) {
 
         <div className="mt-3">
           <label htmlFor={inputId} className="block text-sm font-medium text-ink">
-            {label.singular} upload file (.xlsx or .csv, up to 10 MB and 500 rows)
+            {label.singular} upload file (.xlsx or .csv, up to 10 MB and {IMPORT_LIMITS.maxRows} rows)
           </label>
           <input
             id={inputId}

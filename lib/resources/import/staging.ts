@@ -353,18 +353,27 @@ export function parseApplyError(raw: string): { code: string; message: string; s
   return { code, ...known };
 }
 
+export const APPLY_TIMEOUT_MESSAGE = 'Nothing was created. This file is too large to apply in one go right now. Split it into smaller files or try again.';
+
 export async function applyRun(user: SupabaseClient, admin: SupabaseClient, runId: string, actorUserId: string): Promise<ApplyOutcome> {
   // Migration 0273: the server calls the service-role-only twin, naming the SESSION-VERIFIED user (the route has already
   // run guardBulkImport(); `actorUserId` is never read from request input). The database still re-checks that this actor
-  // holds the capability and uploaded the run. The service role is not subject to the 8 second limit that the signed-in
-  // API role has, which a 500-row apply can exceed. Before 0273 is applied (function not found) fall back to the
-  // signed-in function so nothing breaks while the migration is pending: it behaves identically within the limit.
+  // holds the capability and uploaded the run. (Measured on DEV: the API login role's 8 second limit bounds EVERY API
+  // call including the service role's, so the real protection against the limit is the lightweight core of migration
+  // 0274; the twin remains because the actor is named by the verified server session.) Before 0273 is applied
+  // (function not found) fall back to the signed-in function so nothing breaks while the migration is pending.
+  const started = Date.now();
   let { data, error } = await admin.rpc('apply_resource_content_import_as_actor', { p_run_id: runId, p_actor: actorUserId });
   if (error && (error.code === 'PGRST202' || /could not find the function/i.test(error.message ?? ''))) {
     ({ data, error } = await user.rpc('apply_resource_content_import', { p_run_id: runId }));
   }
   if (error) {
-    const parsed = parseApplyError(error.message ?? '');
+    // A statement timeout (57014) cancels the whole transaction: nothing was created, the run stays 'ready' and can be
+    // retried (the all-or-none, already-applied and advisory-lock guards make a retry safe). The person gets a plain
+    // message; the operator log carries the elapsed time (db_ms is only returned by a call that completes).
+    const timedOut = error.code === '57014' || /canceling statement due to statement timeout/i.test(error.message ?? '');
+    const parsed = timedOut ? { code: 'APPLY_FAILED', status: 503, message: APPLY_TIMEOUT_MESSAGE } : parseApplyError(error.message ?? '');
+    if (timedOut) console.error(`Resources import apply TIMED OUT after ${Date.now() - started} ms (run ${runId}); nothing was created, the run stays retryable.`);
     // Operators need the real reason; callers never get it (the safe message above is what leaves the server).
     if (parsed.code === 'APPLY_FAILED') console.error('Resources import apply failed:', error.code, error.message);
     // Failures roll back inside the database; record the outcome on the run for the history screen.
