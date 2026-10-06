@@ -29,9 +29,11 @@ function checkList(table: string, column: string): string[] {
 }
 
 describe('numbering and preconditions', () => {
-  it('is migration 0252, the highest, with no sibling of the same number', () => {
+  it('is migration 0252 with no sibling of the same number (later migrations may exist; the repo collision checkers guard the ledger)', () => {
     const files = fs.readdirSync(MIG_DIR).filter((f) => /^\d{4}_/.test(f)).sort();
-    expect(files.at(-1)).toBe(FILE);
+    expect(files).toContain(FILE);
+    // Every migration after 0252 is a later number; none shares it. (Was "0252 is the highest", which broke as soon as any later migration landed.)
+    expect(files.slice(files.indexOf(FILE) + 1).every((f) => f > '0252_')).toBe(true);
     expect(files.filter((f) => f.startsWith('0252_'))).toEqual([FILE]);
     expect(files).toContain('0251_bench1_held_schemes_for_benchmark_mapping.sql');
   });

@@ -250,7 +250,7 @@ describe('Wave 5 — in-product Help registry (§15, §17)', () => {
 
     const benchmarks = read('components/admin/AdminBenchmarksClient.tsx');
     const benchmarkIds = [...benchmarks.matchAll(/helpTaskId: '(ADM-\d+)'/g)].map((m) => m[1]);
-    expect(benchmarkIds.length, 'every Benchmarks tab declares a Help task').toBe(6);
+    expect(benchmarkIds.length, 'every Benchmarks tab declares a Help task (the 6 original tabs plus the F5 Upload tab)').toBe(7);
     for (const id of benchmarkIds) expect(ADMIN_TASK_IDS).toContain(id);
   });
 });
