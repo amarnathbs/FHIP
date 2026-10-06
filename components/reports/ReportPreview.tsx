@@ -1500,7 +1500,7 @@ export function ReportPreview({
                     ).map((d, i) => (
                       <tr key={i} className="border-t">
                         <td className="py-1">{d.instrument}</td>
-                        <td className="py-1">{formatDateShort(d.disposalDate, currency)}</td>
+                        <td className="py-1">{d.disposalDate}</td>
                         <td className="py-1 capitalize">{d.classification}</td>
                         <td className="py-1 text-right">{d.taxableGain}</td>
                       </tr>

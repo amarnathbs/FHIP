@@ -108,7 +108,9 @@ const ISO_WORDS = /yyyy\s*[-/.]\s*mm\s*[-/.]\s*dd|\bmm\s*[-/.]\s*dd\s*[-/.]\s*yy
 
 const RAW_DATE_TAIL = /(Date|AsOf|asOf|At|On|Through|Since|Until)$/;
 /** Identifiers that end like a date but are not one, or already hold a formatted string. Exact names. */
-const RAW_DATE_OK = new Set<string>([]);
+const RAW_DATE_OK: ReadonlyArray<{ file: string; expr: string; why: string }> = [
+  { file: 'components/reports/ReportPreview.tsx', expr: 'd.disposalDate', why: 'taxTableRows() (lib/engines/reportTaxTable.ts) already formats it day-first with formatDateShort' },
+];
 
 export function scan(file: string, rawSource: string): Violation[] {
   const out: Violation[] = [];
@@ -130,7 +132,7 @@ export function scan(file: string, rawSource: string): Violation[] {
   if (/\.tsx$/.test(file)) {
     for (const m of src.matchAll(/(?<![=\w$.)\]])\{\s*([A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*)\s*\}(?!\s*(?:=|from|:))/g)) {
       const tail = m[1].split(/\??\./).pop() as string;
-      if (RAW_DATE_TAIL.test(tail) && !RAW_DATE_OK.has(m[1])) out.push({ file, rule: 'raw-date-in-jsx', detail: m[1] });
+      if (RAW_DATE_TAIL.test(tail) && !RAW_DATE_OK.some((a) => a.file === file && a.expr === m[1])) out.push({ file, rule: 'raw-date-in-jsx', detail: m[1] });
     }
   }
 
@@ -193,6 +195,16 @@ describe('F13 guard: no ISO / month-first date wording and no browser-locale dat
       expect(code.split('\n').some((l) => ISO_WORDS.test(l) && a.line.test(l)), `${a.file}: ${a.why}`).toBe(true);
     }
     for (const a of ALLOWED_LOCALE_FILES) expect(existsSync(path.join(ROOT, a.file)), a.file).toBe(true);
+  });
+
+  it('a dynamic <input type={field.type}> (the financial grid) routes its date fields to the day-first DateInput, never to a native date picker', () => {
+    const offenders = [...SOURCES].filter(([f, src]) => /\.tsx$/.test(f) && /type=\{\s*f\.type\s*\}/.test(stripComments(src)) && !/f\.type === 'date'[\s\S]{0,200}<DateInput/.test(stripComments(src))).map(([f]) => f);
+    expect(offenders).toEqual([]);
+    expect(SOURCES.get('components/grid/FinancialDataGrid.tsx')).toMatch(/f\.type === 'date'/);
+  });
+
+  it('every raw-date allowance still matches a real use in its file', () => {
+    for (const a of RAW_DATE_OK) expect((SOURCES.get(a.file) ?? '').includes(`{${a.expr}}`), `${a.file}: ${a.why}`).toBe(true);
   });
 
   it('the Money Update Event Date field the PO reported shows the day-first placeholder', () => {

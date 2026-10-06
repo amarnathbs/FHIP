@@ -19,6 +19,7 @@ import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability
 import { LockedFeatureCard } from '@/components/ui/LockedFeatureCard';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { ProvenanceBadge } from '@/components/grid/ProvenanceBadge';
+import { DateInput } from '@/components/ui/DateInput';
 import { isFieldHiddenOnRow, isImportSourceType } from '@/lib/grid/provenance';
 
 interface MasterItem {
@@ -1041,6 +1042,14 @@ export function FinancialDataGrid({
                               </option>
                             ))}
                           </select>
+                        ) : f.type === 'date' ? (
+                          // Day-first typed date (PO review F13): the native date picker renders in the browser's locale.
+                          <DateInput
+                            value={String(draft[f.name] ?? '')}
+                            disabled={isFieldLockedForRow(draft, f.name)}
+                            onChange={(e) => updateDraftField(f.name, e.target.value)}
+                            className="mt-1 w-full max-w-xs rounded border px-3 py-2 text-sm disabled:bg-gray-50"
+                          />
                         ) : (
                           <input
                             type={f.type}
