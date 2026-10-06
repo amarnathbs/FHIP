@@ -327,7 +327,8 @@ export async function confirmOwnerChange(
     });
   }
   const remaining = conflicts.filter((c) => !changed.includes(c.accountId));
-  await saveOwnerReview(userId, documentId, { conflicts: remaining, warnings: review?.warnings ?? [], appliedAccountIds: [...(review?.appliedAccountIds ?? []), ...changed] });
+  // The target owner stays on the saved review: the screen sends it back with the NEXT confirmation of a still-waiting folio.
+  await saveOwnerReview(userId, documentId, { conflicts: remaining, warnings: review?.warnings ?? [], appliedAccountIds: [...(review?.appliedAccountIds ?? []), ...changed], targetSignature: review?.targetSignature ?? targetSignature });
   return { ok: true, changed, remainingConflicts: remaining.length };
 }
 

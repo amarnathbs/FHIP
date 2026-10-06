@@ -1,0 +1,140 @@
+[
+  {
+    "step": 26,
+    "label": "payslip: no owner -> 422 owner_required (no session opened)",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 26,
+    "label": "payslip: another tenant's member as the owner -> refused owner_not_found",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_found"
+  },
+  {
+    "step": 26,
+    "label": "payslip: valid owner (Spouse) accepted, session opened",
+    "ok": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "step": 26,
+    "label": "payslip: DB document stores the chosen owner (spouse / user_selected / member)",
+    "ok": true,
+    "detail": "{\"role\":\"spouse\"}"
+  },
+  {
+    "step": 26,
+    "label": "payslip: owner changed between upload and Approve (Self vs Spouse) -> 409 owner_differs_from_upload",
+    "ok": true,
+    "detail": "HTTP 409 owner_differs_from_upload"
+  },
+  {
+    "step": 26,
+    "label": "payslip: approve without an owner takes the document's; Apply writes exactly ONE income source, owned by the Spouse; a repeat Apply is ALREADY_APPLIED",
+    "ok": true,
+    "detail": "approve 200 apply 200/409 created=[{\"id\":\"edf89f69-4056-44cd-9cf0-0639909d6535\",\"owner\":\"spouse\"}]"
+  },
+  {
+    "step": 26,
+    "label": "liability: no owner -> 422 owner_required",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 26,
+    "label": "liability: another tenant's member as owner -> refused owner_not_found",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_found"
+  },
+  {
+    "step": 26,
+    "label": "liability: valid owner (Spouse) accepted; DB document stores spouse",
+    "ok": true,
+    "detail": "HTTP 200 "
+  },
+  {
+    "step": 26,
+    "label": "liability: owner changed between upload and Apply (Self vs Spouse) -> 409 owner_differs_from_upload; nothing written",
+    "ok": true,
+    "detail": "HTTP 409 owner_differs_from_upload"
+  },
+  {
+    "step": 26,
+    "label": "liability: Apply without an owner takes the document's; exactly ONE NEW liability, owner spouse; repeat Apply ALREADY_APPLIED",
+    "ok": true,
+    "detail": "apply 200/409 liabilities=[{\"id\":\"6aff0f02-5048-441f-b271-c8719644ad5f\",\"owner\":\"spouse\"}]"
+  },
+  {
+    "step": 26,
+    "label": "retirement: no owner -> 422 owner_required",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 26,
+    "label": "retirement: another tenant's member as owner -> refused owner_not_found",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_found"
+  },
+  {
+    "step": 26,
+    "label": "retirement: valid owner (Self) accepted; DB document stores self",
+    "ok": true,
+    "detail": "HTTP 200 "
+  },
+  {
+    "step": 26,
+    "label": "retirement: matching the statement to a DIFFERENT retirement member than the upload owner -> 409 owner_differs_from_upload",
+    "ok": true,
+    "detail": "HTTP 409 owner_differs_from_upload"
+  },
+  {
+    "step": 26,
+    "label": "retirement: matching with no member takes the owner's own retirement member",
+    "ok": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "step": 26,
+    "label": "AU investment: no owner -> 422 owner_required",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 26,
+    "label": "AU investment: Joint WITHOUT percentages -> refused joint_allocation_required",
+    "ok": true,
+    "detail": "HTTP 422 joint_allocation_required"
+  },
+  {
+    "step": 26,
+    "label": "AU investment: an entity owner is refused (entity investment records do not exist yet)",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_allowed_for_flow"
+  },
+  {
+    "step": 26,
+    "label": "AU investment: another tenant's member as owner -> refused owner_not_found",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_found"
+  },
+  {
+    "step": 26,
+    "label": "AU investment: Joint 50/50 accepted; DB document keeps the split (5000 + 5000 = 10000)",
+    "ok": true,
+    "detail": "HTTP 200 "
+  },
+  {
+    "step": 26,
+    "label": "generic upload session: a bank_statement session with no owner -> 422 owner_required",
+    "ok": true,
+    "detail": "HTTP 422"
+  },
+  {
+    "step": 26,
+    "label": "generic upload session: tax_document (no financial effect) needs no owner (asserted exception)",
+    "ok": true,
+    "detail": "HTTP 200"
+  }
+]

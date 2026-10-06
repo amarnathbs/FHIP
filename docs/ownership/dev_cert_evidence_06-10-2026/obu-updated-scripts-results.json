@@ -1,0 +1,46 @@
+[
+  {
+    "script": "econ/scenario_payslip.ts (payslip first)",
+    "result": "13/13 checks passed",
+    "exit": 0,
+    "fails": []
+  },
+  {
+    "script": "econ/scenario_payslip.ts (bank first)",
+    "result": "12/12 checks passed",
+    "exit": 0,
+    "fails": []
+  },
+  {
+    "script": "econ/scenario_broker.ts",
+    "result": "13/13 checks passed",
+    "exit": 0,
+    "fails": []
+  },
+  {
+    "script": "econ/scenario_retirement.ts",
+    "result": "14/14 checks passed",
+    "exit": 0,
+    "fails": []
+  },
+  {
+    "script": "econ/scenario_unknown.ts",
+    "result": "4/4 checks passed",
+    "exit": 0,
+    "fails": []
+  },
+  {
+    "script": "econ/scenario_card.ts",
+    "result": "22/23 checks passed",
+    "exit": 0,
+    "fails": [
+      "FAIL  card pair 2: before Apply only the bank line counts (card purchases 0, liability 0)  {\"dSpend\":0,\"dLiab\":0}"
+    ]
+  },
+  {
+    "script": "econ/scenario_loan.ts",
+    "result": "22/22 checks passed",
+    "exit": 0,
+    "fails": []
+  }
+]

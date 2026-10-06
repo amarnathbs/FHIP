@@ -11,7 +11,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 
 | Registry file | Owner | Entries | A | B | C | D | E | open_gap | ceiling | not_active |
 |---|---|---|---|---|---|---|---|---|---|---|
-| bankStatement | WP-08 | 162 | 2 | 20 | 25 | 115 | 0 | 0 | 0 | 0 |
+| bankStatement | WP-08 | 167 | 2 | 20 | 25 | 120 | 0 | 0 | 0 | 0 |
 | economicTransactionType | WP-02 | 13 | 0 | 13 | 0 | 0 | 0 | 0 | 0 | 0 |
 | payslip | WP-09 | 130 | 18 | 12 | 57 | 40 | 3 | 0 | 0 | 0 |
 | liabilityStatement | WP-10 | 145 | 29 | 22 | 34 | 47 | 13 | 0 | 0 | 0 |
@@ -20,7 +20,7 @@ Every field an active upload adapter extracts, every evidence column and every a
 | retirementStatement | WP-13 | 203 | 17 | 0 | 118 | 68 | 0 | 0 | 0 | 0 |
 | iiCas | WP-12 | 41 | 15 | 5 | 9 | 12 | 0 | 0 | 0 | 0 |
 | insurance | WP-14 | 21 | 10 | 0 | 8 | 0 | 3 | 0 | 0 | 21 |
-| **total** | | **893** | 133 | 115 | 272 | 340 | 33 | 0 | | 21 |
+| **total** | | **898** | 133 | 115 | 272 | 345 | 33 | 0 | | 21 |
 
 ## Open gaps by id
 
@@ -167,6 +167,11 @@ Every field an active upload adapter extracts, every evidence column and every a
 | `document_type` | D metadata | fdh_statement_uploads.document_type | — | compliant | — | — |
 | `country_code` | D metadata | fdh_statement_uploads.country_code | — | compliant | — | — |
 | `currency_code` | D metadata | fdh_statement_uploads.currency_code | — | compliant | — | — |
+| `owner_member_id` | D metadata | fdh_statement_uploads.owner_member_id (the household member the user chose as owner; the economic owner is fdh_financial_accounts.owner_role) | — | compliant | — | — |
+| `owner_business_entity_id` | D metadata | fdh_statement_uploads.owner_business_entity_id (the entity the user chose as owner (refused for bank statements today); the economic owner is fdh_financial_accounts.owner_role) | — | compliant | — | — |
+| `owner_role` | D metadata | fdh_statement_uploads.owner_role (the owner role the user chose (self, spouse, joint, smsf ...); the economic owner is fdh_financial_accounts.owner_role) | — | compliant | — | — |
+| `owner_selection_source` | D metadata | fdh_statement_uploads.owner_selection_source (how the owner was recorded (user_selected, backfill_from_account, backfill_from_document, legacy_unset); the economic owner is fdh_financial_accounts.owner_role) | — | compliant | — | — |
+| `owner_allocation` | D metadata | fdh_statement_uploads.owner_allocation (the joint split the user chose (basis points, total 10000); AU investment statements only; the economic owner is fdh_financial_accounts.owner_role) | — | compliant | — | — |
 | `original_filename_sanitised` | C evidence | evidence:fdh_statement_uploads.original_filename_sanitised | Financial Data Hub > documents | compliant | — | — |
 | `file_hash` | D metadata | fdh_statement_uploads.file_hash | — | compliant | — | — |
 | `mime_type` | D metadata | fdh_statement_uploads.mime_type | — | compliant | — | — |

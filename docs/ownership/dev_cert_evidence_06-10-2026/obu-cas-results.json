@@ -1,0 +1,524 @@
+[
+  {
+    "step": "setup",
+    "label": "IN1 has a Self member and a REAL Spouse member (added through the explicit Add-household-member route)",
+    "ok": true,
+    "detail": "self 3d558e4c spouse 587fdc53"
+  },
+  {
+    "step": "setup",
+    "label": "the Spouse member belongs to IN1 and has relationship spouse (not a role-only label)",
+    "ok": true,
+    "detail": "{\"rel\":\"spouse\"}"
+  },
+  {
+    "step": 11,
+    "label": "owner is required before upload: no owner -> 422 owner_required (before the file is read)",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 11,
+    "label": "India CAS as Self: upload accepted and processed",
+    "ok": true,
+    "detail": "HTTP 200 dedup=true"
+  },
+  {
+    "step": 11,
+    "label": "DB: owner stored on the document (self / user_selected / member = Self)",
+    "ok": true,
+    "detail": "{\"role\":\"self\",\"src\":\"user_selected\"}"
+  },
+  {
+    "step": 11,
+    "label": "DB: owner applied to BOTH folio accounts (owner_member_id = Self)",
+    "ok": true,
+    "detail": "2 accounts"
+  },
+  {
+    "step": 11,
+    "label": "DB: no owner_unmatched case exists for this document",
+    "ok": true,
+    "detail": "[]"
+  },
+  {
+    "step": 11,
+    "label": "API: \"Filed under\" shows a friendly name, not a raw id",
+    "ok": true,
+    "detail": "label=Forecast Test User TC083"
+  },
+  {
+    "step": 11,
+    "label": "reprocess + Re-evaluate keep the owner (document and accounts unchanged)",
+    "ok": true,
+    "detail": "reprocess HTTP 200, certify HTTP 200"
+  },
+  {
+    "step": 11,
+    "label": "raw-document lifecycle intact: storage purged and owner columns retained",
+    "ok": true,
+    "detail": "purged_at set=true"
+  },
+  {
+    "step": 12,
+    "label": "India CAS as Spouse accepted and processed",
+    "ok": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "step": 12,
+    "label": "DB: document owner = real Spouse member, role spouse, user_selected",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 12,
+    "label": "DB: both folio accounts owned by the Spouse member",
+    "ok": true,
+    "detail": "2"
+  },
+  {
+    "step": 12,
+    "label": "persistence after reload / reprocess: owner unchanged, label friendly",
+    "ok": true,
+    "detail": "label=FHIP Synthetic Spouse reprocess HTTP 200"
+  },
+  {
+    "step": 13,
+    "label": "Joint 60/40 upload accepted and processed",
+    "ok": true,
+    "detail": "HTTP 200 {}"
+  },
+  {
+    "step": 13,
+    "label": "DB: document keeps the joint intent (role joint, 6000/4000 = 10000)",
+    "ok": true,
+    "detail": "[{\"basisPoints\":6000,\"ownerMemberId\":\"3d558e4c-4454-4c64-a20e-a6037bfb1061\"},{\"basisPoints\":4000,\"ownerMemberId\":\"587fdc53-33f7-487c-a7b2-c98cf4b8ef7f\"}]"
+  },
+  {
+    "step": 13,
+    "label": "DB: active account allocation group is 6000/4000 and sums to 10000",
+    "ok": true,
+    "detail": "[{\"bp\":6000,\"m\":\"3d558e4c\",\"st\":\"active\"},{\"bp\":4000,\"m\":\"587fdc53\",\"st\":\"active\"}]"
+  },
+  {
+    "step": 13,
+    "label": "recertification: owner resolved (no blocking owner reason)",
+    "ok": true,
+    "detail": "status=certified_with_warnings blocking=[]"
+  },
+  {
+    "step": 13,
+    "label": "holding value is exactly 1,000,000.00 (oracle input)",
+    "ok": true,
+    "detail": "value=1000000"
+  },
+  {
+    "step": 13,
+    "label": "ORACLE: joint class 1,000,000 = Self 600,000 + Spouse 400,000 (never 2,000,000)",
+    "ok": true,
+    "detail": "joint=1000000 self=600000 spouse=400000"
+  },
+  {
+    "step": 13,
+    "label": "household total is the sum of the classes: the joint 1,000,000 is counted once",
+    "ok": true,
+    "detail": "consolidated=1052617.64 sumOfClasses=1052617.64"
+  },
+  {
+    "step": 13,
+    "label": "owner-class selector offers the joint class and each member class",
+    "ok": true,
+    "detail": "[\"personal\",\"personal\",\"joint\"]"
+  },
+  {
+    "step": 13,
+    "label": "publication happens once for the joint position (a repeat with the same correlation id adds nothing)",
+    "ok": true,
+    "detail": "publish1 HTTP 200 {\"data\":{\"publicationId\":\"85625a09-0f8e-495e-9a09-385915f6f034\",\"publishedRowId\":\"8a80ef09-a24b-4bba-8235-fb5f703519a4\",\"action\":\"LEAVE_UNCHANGED\",\"financialImp publish2 HTTP 200; published rows=1"
+  },
+  {
+    "step": 13,
+    "label": "published once into the personal register as JOINT (owner joint, value once, one investments row)",
+    "ok": true,
+    "detail": "published_owner=joint published_value=1000000 investments rows=1"
+  },
+  {
+    "step": 13,
+    "label": "per-member class views list only that member's own folios; the joint holding is its own class with the 60/40 attribution (design: owner classes are separate, never added to each other)",
+    "ok": "INFO",
+    "detail": "FHIP Synthetic Spouse=26046.235200000003; Forecast Test User TC083=19500.14779"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: 9999 basis points total fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 joint_total_not_100 rows=0"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: 10001 basis points total fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 joint_total_not_100 rows=0"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: negative share fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 joint_zero_share rows=0"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: zero share fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 joint_zero_share rows=0"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: duplicate owner fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 joint_duplicate_owner rows=0"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: one-owner joint fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 joint_needs_two_owners rows=0"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: fractional share fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 joint_share_invalid rows=0"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: cross-tenant member as a joint owner fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_found rows=0"
+  },
+  {
+    "step": 14,
+    "label": "joint negative: joint with no percentages at all fails safely (4xx, no document row)",
+    "ok": true,
+    "detail": "HTTP 422 joint_allocation_required rows=0"
+  },
+  {
+    "step": 14,
+    "label": "no document row was created by any of the 9 refused joint uploads",
+    "ok": true,
+    "detail": "before 3 after 3"
+  },
+  {
+    "step": 14,
+    "label": "DB-level (service role, app bypassed): unknown owner_role is refused by the database",
+    "ok": true,
+    "detail": "23514 new row for relation \"ii_source_documents\" violates check constraint \"chk_ii_source_documents_owner_role_0236\""
+  },
+  {
+    "step": 14,
+    "label": "DB-level (service role, app bypassed): joint user_selected with no split is refused by the database",
+    "ok": true,
+    "detail": "23514 new row for relation \"ii_source_documents\" violates check constraint \"chk_ii_source_documents_owner_joint_alloc_0236\""
+  },
+  {
+    "step": 14,
+    "label": "DB-level (service role, app bypassed): 9999 split is refused by the database",
+    "ok": true,
+    "detail": "23514 new row for relation \"ii_source_documents\" violates check constraint \"chk_ii_source_documents_owner_joint_alloc_0236\""
+  },
+  {
+    "step": 14,
+    "label": "DB-level (service role, app bypassed): member AND entity together is refused by the database",
+    "ok": true,
+    "detail": "23514 ii_source_documents.owner_business_entity_id does not belong to user_id 854fd280-0d90-4795-a528-4792aef1c524"
+  },
+  {
+    "step": 14,
+    "label": "DB-level (service role, app bypassed): user_selected with no role is refused by the database",
+    "ok": true,
+    "detail": "23514 new row for relation \"ii_source_documents\" violates check constraint \"chk_ii_source_documents_owner_chosen_has_role_0236\""
+  },
+  {
+    "step": 14,
+    "label": "DB-level (service role, app bypassed): another tenant's household member (trigger) is refused by the database",
+    "ok": true,
+    "detail": "23514 ii_source_documents.owner_member_id does not belong to user_id 854fd280-0d90-4795-a528-4792aef1c524"
+  },
+  {
+    "step": 14,
+    "label": "DB-level fdh_statement_uploads: unknown owner_role is refused by the database",
+    "ok": true,
+    "detail": "23514 new row for relation \"fdh_statement_uploads\" violates check constraint \"chk_fdh_uploads_owner_role_0236\""
+  },
+  {
+    "step": 14,
+    "label": "DB-level fdh_statement_uploads: 9999 joint split is refused by the database",
+    "ok": true,
+    "detail": "23514 new row for relation \"fdh_statement_uploads\" violates check constraint \"chk_fdh_uploads_owner_joint_alloc_0236\""
+  },
+  {
+    "step": 14,
+    "label": "DB-level fdh_statement_uploads: entity id with a person role is refused by the database",
+    "ok": true,
+    "detail": "23514 fdh_statement_uploads.owner_business_entity_id does not belong to user_id 854fd280-0d90-4795-a528-4792aef1c524"
+  },
+  {
+    "step": 14,
+    "label": "DB-level fdh_statement_uploads: another tenant's household member (trigger) is refused by the database",
+    "ok": true,
+    "detail": "23514 fdh_statement_uploads.owner_member_id does not belong to user_id 854fd280-0d90-4795-a528-4792aef1c524"
+  },
+  {
+    "step": 15,
+    "label": "synthetic Company, Family Trust and HUF created for IN1 (India user: HUF allowed)",
+    "ok": true,
+    "detail": "[\"company\",\"family_trust\",\"huf\"]"
+  },
+  {
+    "step": 15,
+    "label": "DB: all three entities belong to IN1",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 15,
+    "label": "company: CAS upload accepted and processed",
+    "ok": true,
+    "detail": "HTTP 200 "
+  },
+  {
+    "step": 15,
+    "label": "company: DB document owner is the entity (owner_business_entity_id), no member",
+    "ok": true,
+    "detail": "role=company"
+  },
+  {
+    "step": 15,
+    "label": "company: active allocation is 10000 bp to the entity, no personal member on the account",
+    "ok": true,
+    "detail": "[10000]"
+  },
+  {
+    "step": 15,
+    "label": "company: publication into the PERSONAL register is refused (no personal-register pollution)",
+    "ok": true,
+    "detail": "HTTP 422 {\"error\":\"This account is owned by a trust, HUF or company (or shared with one). Entity holdings are kept separate from your personal Net Wo"
+  },
+  {
+    "step": 15,
+    "label": "trust: CAS upload accepted and processed",
+    "ok": true,
+    "detail": "HTTP 200 "
+  },
+  {
+    "step": 15,
+    "label": "trust: DB document owner is the entity (owner_business_entity_id), no member",
+    "ok": true,
+    "detail": "role=family_trust"
+  },
+  {
+    "step": 15,
+    "label": "trust: active allocation is 10000 bp to the entity, no personal member on the account",
+    "ok": true,
+    "detail": "[10000]"
+  },
+  {
+    "step": 15,
+    "label": "trust: publication into the PERSONAL register is refused (no personal-register pollution)",
+    "ok": true,
+    "detail": "HTTP 422 {\"error\":\"This account is owned by a trust, HUF or company (or shared with one). Entity holdings are kept separate from your personal Net Wo"
+  },
+  {
+    "step": 15,
+    "label": "huf: CAS upload accepted and processed",
+    "ok": true,
+    "detail": "HTTP 200 "
+  },
+  {
+    "step": 15,
+    "label": "huf: DB document owner is the entity (owner_business_entity_id), no member",
+    "ok": true,
+    "detail": "role=other"
+  },
+  {
+    "step": 15,
+    "label": "huf: active allocation is 10000 bp to the entity, no personal member on the account",
+    "ok": true,
+    "detail": "[10000]"
+  },
+  {
+    "step": 15,
+    "label": "huf: publication into the PERSONAL register is refused (no personal-register pollution)",
+    "ok": true,
+    "detail": "HTTP 422 {\"error\":\"This account is owned by a trust, HUF or company (or shared with one). Entity holdings are kept separate from your personal Net Wo"
+  },
+  {
+    "step": 15,
+    "label": "DB: the personal investments register gained nothing from the three entity documents",
+    "ok": true,
+    "detail": "before 5 after 5"
+  },
+  {
+    "step": 15,
+    "label": "owner-class report: each entity is its own class; the macro line is exactly the sum (each position once)",
+    "ok": true,
+    "detail": "entity classes=3 values=1000000,600000,750000 macro=3402617.64"
+  },
+  {
+    "step": 15,
+    "label": "HUF outside India: an AU user cannot create an HUF (403)",
+    "ok": true,
+    "detail": "HTTP 403"
+  },
+  {
+    "step": 15,
+    "label": "an AU user cannot use IN1's HUF as a CAS owner (owner_not_found, identical to a missing id)",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_found"
+  },
+  {
+    "step": 16,
+    "label": "a CAS under Self for two folios already filed under the Spouse is accepted (not blocked)",
+    "ok": true,
+    "detail": "HTTP 200 "
+  },
+  {
+    "step": 16,
+    "label": "DB: BOTH folios still belong to the Spouse (nothing silently overwritten)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 16,
+    "label": "API: the conflict list names each folio individually (2 conflicts, folio numbers present)",
+    "ok": true,
+    "detail": "[{\"accountId\":\"2f589f19-1dfc-4208-8098-7d303d7ed1dc\",\"folioNumber\":\"9303040000301\",\"existingOwner\":\"FHIP Synthetic Spouse\",\"selectedOwner\":\"Forecast Test User TC083\",\"institutionName\":\"Axis Mutual Fund\"},{\"accountId\":\"3343c90f-a954-4702-b740-d05575bde0c7\",\"folioNumber\":\"9303040000302\",\"existingOwner"
+  },
+  {
+    "step": 16,
+    "label": "a stale / wrong target owner signature is refused (409) and changes nothing",
+    "ok": true,
+    "detail": "HTTP 409"
+  },
+  {
+    "step": 16,
+    "label": "select ONE folio and confirm: the selected folio changes to Self, the unselected one stays with the Spouse",
+    "ok": true,
+    "detail": "HTTP 200 remaining=1"
+  },
+  {
+    "step": 16,
+    "label": "audit event written for the changed folio (user_correction, owner_change_confirmed_at_upload)",
+    "ok": true,
+    "detail": "4 audit rows"
+  },
+  {
+    "step": 16,
+    "label": "reload persists: one conflict remains, listing only the unselected folio",
+    "ok": true,
+    "detail": "[{\"accountId\":\"3343c90f-a954-4702-b740-d05575bde0c7\",\"folioNumber\":\"9303040000302\",\"existingOwner\":\"FHIP Synthetic Spouse\",\"selectedOwner\":\"Forecast Test User TC083\",\"institutionName\":\"Axis Mutual Fun"
+  },
+  {
+    "step": 16,
+    "label": "Re-evaluate uses the latest decision (the folio stays Self)",
+    "ok": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "step": 16,
+    "label": "Select all (the remaining folio) then changes it too; no conflicts left",
+    "ok": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "step": 16,
+    "label": "cross-tenant: another user cannot confirm folios of this document (404)",
+    "ok": true,
+    "detail": "HTTP 404"
+  },
+  {
+    "step": 17,
+    "label": "a CAS that PRINTS a joint holding, uploaded under a single owner, is accepted (non-blocking)",
+    "ok": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "step": 17,
+    "label": "DB: a non-blocking joint warning is recorded for the folio (no blocking case)",
+    "ok": true,
+    "detail": "[\"statement_prints_joint_holding\"]"
+  },
+  {
+    "step": 17,
+    "label": "DB: no open blocking reconciliation case for it",
+    "ok": true,
+    "detail": "[]"
+  },
+  {
+    "step": 17,
+    "label": "\"This is not joint\": warning cleared, the folio owner NOT rewritten",
+    "ok": true,
+    "detail": "HTTP 200 remaining=0"
+  },
+  {
+    "step": 17,
+    "label": "acknowledgement persists through reprocessing; unrelated owner data unchanged",
+    "ok": true,
+    "detail": "[]"
+  },
+  {
+    "step": 17,
+    "label": "tenant-safe: another user gets 404",
+    "ok": true,
+    "detail": "HTTP 404"
+  },
+  {
+    "step": 17,
+    "label": "auditable: an audit event exists for the acknowledgement",
+    "ok": true,
+    "detail": "2 audit rows for the account: account_resolved:, user_correction:confirmed_sole_owner"
+  },
+  {
+    "step": 18,
+    "label": "same bytes + same owner: deduplicated (200, deduplicated=true, same document id)",
+    "ok": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "step": 18,
+    "label": "same bytes + different owner: 409 identical_upload_different_owner naming the first owner",
+    "ok": true,
+    "detail": "HTTP 409 identical_upload_different_owner :: This exact file was already uploaded under Forecast Test User TC083. You chose FHIP Synthetic Spouse this time, so it was not uploaded again. If the first owner was wrong, change it on the existing statement; otherwise choose the same owner as before."
+  },
+  {
+    "step": 18,
+    "label": "same people + a DIFFERENT joint allocation on the same bytes is refused (409)",
+    "ok": true,
+    "detail": "first HTTP 200; second HTTP 409 identical_upload_different_owner"
+  },
+  {
+    "step": 18,
+    "label": "same people + the SAME joint allocation: deduplicated",
+    "ok": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "step": 18,
+    "label": "cross-tenant: User B uploading User A's exact bytes gets an ordinary fresh upload (own new row, no dedupe flag, no existing_document_id, same response shape as any new file)",
+    "ok": true,
+    "detail": "HTTP 200 sameShape=true"
+  },
+  {
+    "step": 18,
+    "label": "cross-tenant: User B re-uploading the same bytes under a different B-owner gets B's own 409 (about B's own file), never A's",
+    "ok": true,
+    "detail": "HTTP 409 existing=75747112 own=75747112"
+  },
+  {
+    "step": 18,
+    "label": "User B reading User A's document id gets the same answer as for a random id",
+    "ok": true,
+    "detail": "foreign HTTP 404, missing HTTP 404"
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "step": 19,
+    "label": "BROWSER: before an owner is chosen \"Upload statement\" is disabled",
+    "ok": true,
+    "detail": "button[button](disabled) Upload statement"
+  },
+  {
+    "step": 19,
+    "label": "BROWSER: the bank owner list offers You, Joint and My SMSF (AU) and NO Trust / Company / HUF",
+    "ok": true,
+    "detail": "[\"Choose one\",\"Forecast Test User TC009 (you)\",\"Joint — shared between owners\",\"My SMSF\"]"
+  },
+  {
+    "step": 19,
+    "label": "BROWSER+DB: bank statement uploaded through the panel as self: the document and its account carry owner_role self",
+    "ok": true,
+    "detail": "doc=self account=self screen=\"Expenses  Manage your household expenses.  Import bank statement  Upload a bank statement (PDF or CSV) and FHIP will ext\""
+  },
+  {
+    "step": 19,
+    "label": "BROWSER+DB: bank statement uploaded through the panel as joint: the document and its account carry owner_role joint",
+    "ok": true,
+    "detail": "doc=joint account=joint screen=\"Expenses  Manage your household expenses.  Import bank statement  Upload a bank statement (PDF or CSV) and FHIP will ext\""
+  },
+  {
+    "step": 19,
+    "label": "BROWSER+DB: bank statement uploaded through the panel as smsf: the document and its account carry owner_role smsf",
+    "ok": true,
+    "detail": "doc=smsf account=smsf screen=\"Expenses  Manage your household expenses.  Import bank statement  Upload a bank statement (PDF or CSV) and FHIP will ext\""
+  },
+  {
+    "step": 19,
+    "label": "BROWSER: with no Spouse the panel offers the inline \"add a spouse or partner\" form (saved as a real household member, never a role-only Spouse)",
+    "ok": true,
+    "detail": "No spouse or partner is on your household yet. To choose them, add them below — they are saved as a real household member and then selected."
+  },
+  {
+    "step": 19,
+    "label": "BROWSER+DB: saving the person creates a REAL household member (relationship spouse) and the selector now offers and selects it",
+    "ok": true,
+    "detail": "{\"id\":\"cbe605a8-c59b-4d68-85b7-9005f6ce68ef\",\"relationship\":\"spouse\",\"user_id\":\"387ddc55-4813-4913-9e2c-64348eb0461f\"}"
+  },
+  {
+    "step": 19,
+    "label": "BROWSER+DB: bank statement uploaded through the panel as Spouse: document and account owner_role spouse, member recorded",
+    "ok": true,
+    "detail": "doc=spouse account=spouse"
+  },
+  {
+    "step": 25,
+    "label": "BROWSER: choosing Self for a statement that matches the Spouse account shows the conflict dialog BEFORE anything is uploaded",
+    "ok": true,
+    "detail": "This statement matches an account that is recorded as your partner’s, but you chose yours. Nothing has been uploaded. Keep the account as it is, or confirm that you want to change its owner.  Yes, change the account's ow"
+  },
+  {
+    "step": 25,
+    "label": "BROWSER+DB: \"No, go back\" stores nothing and the account stays Spouse",
+    "ok": true,
+    "detail": "spouse accounts=1"
+  },
+  {
+    "step": 25,
+    "label": "BROWSER+DB: \"Yes, change\" uploads the statement and the account owner becomes Self (explicit, audited change)",
+    "ok": true,
+    "detail": "doc=self account=self"
+  },
+  {
+    "step": 23,
+    "label": "BROWSER: with several accounts and no digits the panel asks \"which account is this statement for?\" and says the file is already uploaded (no re-upload)",
+    "ok": true,
+    "detail": "One quick check so your statement goes to the right account  We could not read an account number from this statement, so please tell us which account it is for. Your file is already uploaded — you do not need to upload i"
+  },
+  {
+    "step": 23,
+    "label": "BROWSER: the picker lists the existing accounts (name and last digits only) plus \"A different / new account\"",
+    "ok": true,
+    "detail": "[\"4c529b1e\",\"4bbb98ce\",\"4b5c98dd\",\"9c5ff59a\",\"new\"]"
+  },
+  {
+    "step": 23,
+    "label": "BROWSER+DB: choosing an account assigns it on the SAME uploaded document (no second upload)",
+    "ok": true,
+    "detail": "same document=true"
+  }
+]

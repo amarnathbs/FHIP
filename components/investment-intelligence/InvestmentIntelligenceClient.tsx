@@ -708,7 +708,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
         <button className="text-left text-sm font-medium text-gray-900 hover:underline" onClick={() => selectDocument(doc.id)}>
           {doc.original_filename}
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={doc.status} />
           {/* 2026-09-28 fix: a top-level "needs attention" signal, so a
               person can tell something is wrong with THIS statement

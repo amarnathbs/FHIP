@@ -1,4 +1,41 @@
-# Owner-before-upload -- final matrix (2026-10-02)
+# Owner-before-upload -- final matrix
+
+## DEV CERTIFICATION MATRIX (updated 07-10-2026; supersedes the "DEV browser tested" and "Production" columns of the 02-10-2026 tables below)
+
+Columns per flow: **Code** (unit / route tests, PGlite), **Migration** (0236 on DEV, applied twice, backfill committed: PO grids), **DEV** (database and API agree, live), **Browser** (headless Chromium on the localhost app against DEV; not the PO's browser), **Oracle** (hand-written financial figure), **Cross-tenant** (answer identical to a random id), **Cleanup**, **Prod code**, **Prod DB**, **Prod upload**. "n/r" = not run live.
+
+| Flow | Code | Migration | DEV | Browser | Oracle | Cross-tenant | Cleanup | Prod code | Prod DB | Prod upload |
+|---|---|---|---|---|---|---|---|---|---|---|
+| India CAS, Self | unit-tested | applied | PASS | PASS (upload gate, "Filed under") | -- | PASS | ledger | not confirmed | unknown, not read | OFF |
+| India CAS, Spouse (real member) | unit-tested | applied | PASS | gate and add-member form in bank panel; CAS select shows member | -- | PASS | ledger | not confirmed | unknown | OFF |
+| India CAS, Joint 60 / 40 | unit-tested | applied | PASS | PASS (labelled boxes, 95.00% message, 60 + 40 valid) | **1,000,000 = 600,000 + 400,000, never 2,000,000** | PASS | ledger | not confirmed | unknown | OFF |
+| India CAS, Company / Trust / HUF | unit-tested | applied | PASS (10000 bp, personal register unchanged, publication refused) | n/r | personal register +0 | PASS (HUF: AU refused) | ledger | not confirmed | unknown | OFF |
+| Per-folio owner conflict | unit-tested (+1 test for D6) | applied | PASS | **PASS (mobile 375 px, one folio then Select all)** | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Printed joint vs sole owner | unit-tested | applied | PASS | n/r | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Same file, different owner | unit-tested | applied | PASS (409; no leak) | n/r | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Bank CSV, Self / Spouse / Joint | unit-tested | applied | PASS | **PASS (panel: gate, options, upload, add member)** | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Bank CSV / PDF, SMSF (AU) | unit-tested | applied | PASS (attribution) | CSV: PASS; PDF: n/r | personal Expenses +0 (control +1,000) | PASS | ledger | not confirmed | unknown | OFF |
+| Bank PDF, Self / Spouse / Joint | unit-tested | applied | PASS | n/r | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Bank, Company / Trust / HUF (refused) | unit-tested | applied | PASS (422, nothing stored) | n/r | personal totals +0 | PASS | ledger | not confirmed | unknown | OFF |
+| Bank account picker (CSV and PDF) | unit-tested | applied | PASS | **PASS (CSV picker)** | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Account reassignment, race, currency, closed | unit-tested | applied | PASS | n/r | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Owner-change conflict on an account | unit-tested | applied | PASS | **PASS (No stores nothing; Yes changes, audited)** | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Payslip | unit-tested | applied | PASS (409 at approve; one income source) | owner gate only | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Liability | unit-tested | applied | PASS (409 at apply; one liability) | owner gate only | -- | PASS | **60 rows: PO SQL** | not confirmed | unknown | OFF |
+| Retirement | unit-tested | applied | PASS (409 at account-match) | owner gate only | -- | PASS | ledger | not confirmed | unknown | OFF |
+| AU investment (Joint 50 / 50) | unit-tested | applied | PASS | owner gate only | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Generic upload sessions | unit-tested | applied | PASS | n/r | -- | PASS | ledger | not confirmed | unknown | OFF |
+| AIE bank intake and Accept | unit-tested | applied (`aie_document_intake.owner_selection`) | PASS (stored owner re-validated) | n/r | -- | PASS | ledger | not confirmed | unknown | OFF |
+| AIE Investment Intelligence intake and Accept | unit-tested | applied | PASS | n/r | -- | PASS | ledger | not confirmed | unknown | OFF |
+| Raw-file purge keeps owner | unit-tested | applied | PASS | -- | -- | -- | ledger | not confirmed | unknown | OFF |
+| Malware admission before the identity reader | unit-tested | -- | PASS | -- | -- | -- | ledger | not confirmed | unknown | OFF |
+| Reload / Back / keyboard / mobile | -- | -- | -- | **PASS (headless; not a screen reader)** | -- | -- | -- | -- | -- | -- |
+
+Entity-owned bank statements, SMSF bank-transaction cash-flow integration and `institution_id` general ingestion remain the deferred capabilities named in the report; the matrix does not claim them.
+
+---
+
+# Owner-before-upload -- code-complete matrix (2026-10-02, kept as written)
 
 Branch `feat/owner-before-upload-phase1-20261001` (merged with `origin/main` `bf5068c`, which contains the owner-edit branch, premium grants and the Net Worth NAV change). Companion: `OWNER_BEFORE_UPLOAD_FINAL_REPORT.md`.
 

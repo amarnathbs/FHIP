@@ -68,8 +68,14 @@ export function OwnerBreakupTable({ breakup }: { breakup: OwnerBreakupPayload })
                       <td className="py-2 pr-3 text-ink">
                         {c.info.label}
                         {c.info.detail && <span className="ml-1 text-xs text-muted">{c.info.detail}</span>}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">{c.accountCount}</td>
+                      <td className="py-2 pr-3 tabular-nums">{c.positionCount}</td>
+                      {/* G2: every amount sits in a right-aligned cell. A joint row lists each owner's part under the total, in the same column. */}
+                      <td className="py-2 text-right">
+                        <Values items={c.valueByCurrency} />
                         {c.ownerAttribution && (
-                          <ul className="mt-1 space-y-0.5 text-xs text-muted">
+                          <ul className="mt-1 space-y-0.5 text-xs text-muted tabular-nums" data-testid="owner-attribution">
                             {c.ownerAttribution.map((o) => (
                               <li key={o.ownerKey}>
                                 {o.ownerLabel}: {o.valueByCurrency.map((v) => formatMoneyCode(v.totalValue, v.currencyCode)).join(' + ')}
@@ -77,11 +83,6 @@ export function OwnerBreakupTable({ breakup }: { breakup: OwnerBreakupPayload })
                             ))}
                           </ul>
                         )}
-                      </td>
-                      <td className="py-2 pr-3 tabular-nums">{c.accountCount}</td>
-                      <td className="py-2 pr-3 tabular-nums">{c.positionCount}</td>
-                      <td className="py-2 text-right">
-                        <Values items={c.valueByCurrency} />
                       </td>
                     </tr>
                   ))}
