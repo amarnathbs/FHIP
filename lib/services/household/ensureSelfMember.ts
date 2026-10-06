@@ -28,6 +28,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isDuplicateSelfMemberError } from './selfMemberUnique';
 
 export async function ensureSelfHouseholdMember(userId: string): Promise<{ memberId: string | null; error: string | null }> {
   const admin = createAdminClient();
@@ -49,7 +50,21 @@ export async function ensureSelfHouseholdMember(userId: string): Promise<{ membe
     .insert({ user_id: userId, full_name: fullName, relationship: 'self' })
     .select('id')
     .single();
+  if (isDuplicateSelfMemberError(error)) {
+    // Migration 0276: a caller racing us won. That is not an error: re-read and return the row that exists.
+    const { data: winner } = await admin
+      .from('household_members')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('relationship', 'self')
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return winner ? { memberId: winner.id as string, error: null } : { memberId: null, error: 'Could not record you as a household member.' };
+  }
   if (error || !created) return { memberId: null, error: error?.message ?? 'Could not record you as a household member.' };
+  // Databases without 0276 have no unique index: settle on the oldest row instead.
   return { memberId: await settleOnOldestSelf(userId, created.id as string), error: null };
 }
 
