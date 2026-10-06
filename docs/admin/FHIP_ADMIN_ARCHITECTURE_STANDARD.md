@@ -403,7 +403,7 @@ A workstream claiming compliance with this standard must be able to show, on req
 | Version | Date | Change | Approved by |
 |---|---|---|---|
 | 1.0 | 2026-08-30 | Initial canonical standard established (Wave 0), consolidating the Analyst Analytics Phase 0/Phase A planning closure decisions. | Product Owner |
-| 1.1 | 2026-10-06 | Added §18 Back navigation (every page has the shared `PageBackLink`, repo-wide guard test). Source: Product Owner review 06-10-2026, finding F6 (written instruction "all pages do have the button to return back ... for all future pages"). **Awaiting the Product Owner's formal ratification of this wording (§16.2).** | Product Owner instruction F6; wording pending ratification |
+| 1.1 | 2026-10-06 | Added §18 Back navigation (every page has the shared `PageBackLink`, repo-wide guard test). Source: Product Owner review 06-10-2026, finding F6 (written instruction "all pages do have the button to return back ... for all future pages"). **Ratified by the Product Owner on 07-10-2026 (§16.2).** | Product Owner instruction F6; wording ratified 07-10-2026 |
 
 ---
 
