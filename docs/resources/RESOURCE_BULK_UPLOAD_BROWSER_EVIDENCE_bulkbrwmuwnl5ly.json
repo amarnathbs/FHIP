@@ -1,0 +1,269 @@
+{
+  "run": "bulkbrwmuwnl5ly",
+  "app": "http://localhost:3993",
+  "startedAt": "2026-10-06T12:26:56.038Z",
+  "axe": {
+    "chooser": [],
+    "uploader": [],
+    "uploaderSheetPicker": [],
+    "preview": [],
+    "result": [],
+    "editorWholePageInformational": [
+      "color-contrast(serious) x3"
+    ],
+    "previewInvalid": [],
+    "history": []
+  },
+  "residue": {
+    "posts": 0,
+    "sources": 0,
+    "categories": 0,
+    "tags": 0,
+    "authors": 0,
+    "runs": 0
+  },
+  "checks": [
+    {
+      "name": "RESPONSIVE chooser 390px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE chooser 768px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE chooser 1024px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE chooser 1440px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "UI chooser: heading, both cards, templates",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): chooser: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "RESPONSIVE article uploader 390px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE article uploader 768px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE article uploader 1024px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE article uploader 1440px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "UI uploader: file input has a programmatic label and Upload is disabled until a file is chosen",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): uploader: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI uploader: a .pdf is rejected in the browser with a clear message (server re-checks anyway)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI uploader: for a workbook the sheet picker is shown, labelled, and the template sheet is preselected",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI uploader: with no sheet chosen Upload is disabled (the system never picks one)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): uploader with sheet picker: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI preview: summary shows type, file, template version 1.0, 2 rows, 2 ready",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI preview: row table has proper column headers and Apply is ENABLED for a clean file",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "RESPONSIVE preview 390px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE preview 768px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE preview 1024px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE preview 1440px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "UI preview: a row expands with the keyboard and announces aria-expanded",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI preview: expanded detail shows quick answer, takeaways, body, example, sources",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): preview (expanded row): no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI confirm: exact wording and focus lands on the safe choice",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI confirm: Escape closes it and nothing was created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI result: \"2 Articles created, 0 failed\" with View imported drafts, Open first draft, View import history",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): result: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI editor: the imported draft opens in the normal Article editor with the Sources picker showing the imported source",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated): the SourcePicker added to the Article editor has no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI invalid file: error summary shown, Apply DISABLED, nothing created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI invalid file: row status uses text, not colour alone, and errors are listed with codes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI invalid file: validation results download link present",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): preview with errors: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI rejected file: error summary is focused and names the problem; results download offered",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI contextual buttons on Money Updates: New Money Update, Upload Updates, Download Template",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI Money Update confirm wording",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI imported Money Update opens in the normal Money Update editor with its five sections and source",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI All Content shows Upload Articles (Article preselected)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "RESPONSIVE history 390px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE history 768px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE history 1024px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE history 1440px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "UI history lists both types with Date, File, Type, Actor, Rows, Result, Status",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): history: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI an Author is redirected away from /admin/resources/import (no chooser rendered)",
+      "pass": true,
+      "detail": "http://localhost:3993/admin/resources"
+    },
+    {
+      "name": "BROWSER CLEANUP: synthetic posts, sources, categories, tags, authors, import runs all 0",
+      "pass": true,
+      "detail": "{\"posts\":0,\"sources\":0,\"categories\":0,\"tags\":0,\"authors\":0,\"runs\":0}"
+    }
+  ],
+  "passed": 48,
+  "failed": 0
+}

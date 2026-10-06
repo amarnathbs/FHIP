@@ -267,7 +267,7 @@ async function main() {
   p2.setDefaultNavigationTimeout(180_000);
   p2.setDefaultTimeout(90_000);
   await p2.goto(`${APP}/admin/resources/import`, { waitUntil: 'domcontentloaded' });
-  await p2.waitForTimeout(4000);
+  await p2.waitForURL((u) => !u.pathname.startsWith('/admin/resources/import'), { timeout: 90_000 }).catch(() => undefined);
   check('UI an Author is redirected away from /admin/resources/import (no chooser rendered)', !new URL(p2.url()).pathname.startsWith('/admin/resources/import') && (await p2.getByText('What would you like to upload?').count()) === 0, p2.url());
   await ctx2.close();
   await browser.close();
