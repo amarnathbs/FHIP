@@ -157,7 +157,7 @@ export default function ReferenceDataQualityClient() {
   const bm = payload.benchmark_mapping_gaps?.data;
 
   return (
-    <main style={{ padding: '1.5rem', maxWidth: 1100 }}>
+    <main style={{ padding: '1.5rem', maxWidth: 1100, overflowWrap: 'anywhere' }}>
       <h1 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Reference Data Quality</h1>
       <p style={{ opacity: 0.75, marginBottom: '1.5rem' }}>
         External market reference data only — scheme identity, NAV history, benchmarks, risk-free rates.

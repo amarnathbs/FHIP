@@ -1,0 +1,26 @@
+{
+ "f11_related": {
+  "optionsRenderedOnOpen": 50,
+  "firstOption": "7 Financial Numbers Every Household Should Know Article Approved",
+  "filteredCount": 13,
+  "activedescendantSet": true,
+  "secondPickerAppearsAfterChoosing": true
+ },
+ "f11_context_page_loaded": {
+  "comboboxes": 2,
+  "mapPicker": 1
+ },
+ "overflow_390_/admin/resources/content/new?type=article": 0,
+ "overflow_390_/admin/resources/related": 0,
+ "overflow_390_/admin/resources/content": 0,
+ "overflow_768_/admin/resources/content/new?type=article": 0,
+ "overflow_768_/admin/resources/related": 0,
+ "overflow_768_/admin/resources/content": 0,
+ "overflow_1024_/admin/resources/content/new?type=article": 0,
+ "overflow_1024_/admin/resources/related": 0,
+ "overflow_1024_/admin/resources/content": 0,
+ "overflow_1440_/admin/resources/content/new?type=article": 0,
+ "overflow_1440_/admin/resources/related": 0,
+ "overflow_1440_/admin/resources/content": 0,
+ "console_errors": []
+}
