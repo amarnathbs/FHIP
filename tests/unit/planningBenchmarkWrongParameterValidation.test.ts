@@ -193,7 +193,7 @@ describe('lists that cannot prove absence do not refuse on absence (NC-A4)', () 
   it('NEW: when the dataset, metric and cohort lists are incomplete the validator leaves those refusals to the database', async () => {
     const out = await check('values', [values({ dataset_name: 'Unknown set', metric_code: 'unknown_metric', cohort_code: 'UNKNOWN_COHORT' })], (av) => ({
       ...av,
-      complete: { datasets: false, metrics: false, cohorts: false, bands: false },
+      complete: { datasets: false, metrics: false, cohorts: false, bands: false, mappings: false },
     }));
     expect(out.issues.some((i) => i.code === 'DATASET_NOT_FOUND' || i.code === 'COHORT_NOT_FOUND')).toBe(false);
     // the metric is still refused by the older, unit-map based rule: a metric whose unit is unknown cannot be checked

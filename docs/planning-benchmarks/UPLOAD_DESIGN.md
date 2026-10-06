@@ -173,3 +173,68 @@ All seven are accepted as recommended. The code was checked against each on the 
 ## 13. Allowed values on the templates and the screen (PO request 07/10/2026)
 
 The XLSX Read me sheet, a companion "Allowed values (CSV)" download and a collapsible panel on the Upload tab (Columns, Allowed datasets and metrics, Cohorts) all print the live lists read by `lib/planning-benchmarks/allowedValues.ts`, the same module the validator uses. The preview check also refuses a dataset that is not open for upload, an unlisted metric or cohort, and a target-range source that is not the dataset's own, naming the allowed values. Full account, counts and evidence: `TEMPLATE_ALLOWED_VALUES_REPORT.md`.
+
+---
+
+## 14. Dataset to metric mapping (PO decision 07/10/2026: "yes, add the metric mapping")
+
+Branch `feat/pb-dataset-metric-mapping-20261007`, migration `0277`. Evidence label: **code-complete, unit-tested, PGlite-verified**; not DEV-verified (the Product Owner applies `0277`, see `po_apply_mapping/README.md`). The seeded pairs and their evidence are in `DATASET_METRIC_MAPPING.md`; the outcome, counts and the open items are in `DATASET_METRIC_MAPPING_REPORT.md`.
+
+### 14.1 The finding
+
+The database tied no dataset to a metric set or file kind: any open dataset accepted any registered metric (67 metrics, 12 datasets, 11 open), so an upload could put a metric into a dataset it does not belong to. Section 13 only listed the problem; this closes it.
+
+### 14.2 The rule and where it is enforced (three layers, each independent)
+
+A row of an observed values file or a planning target ranges file is refused unless its metric is mapped to its dataset for that kind of file. Cohort files carry no metric and are not affected.
+
+| Layer | Where | Behaviour |
+|---|---|---|
+| Preview check | `uploadValidate.ts` (`METRIC_NOT_MAPPED`) | Row-level, plain language: names the metrics that ARE allowed for that dataset and kind (with units), says where the metric is mapped if it is mapped elsewhere (the likely mistake), adds a "did you mean" hint over the allowed metrics only, and never changes the file. A problem shared by many rows is reported once; every such row is still refused. |
+| Staging (database) | trigger `trg_benchmark_upload_rows_dataset_metric` on the staged rows, inside `stage_planning_benchmark_upload` | `PB_E_MAPPING`, naming up to 12 allowed metrics. A caller who bypasses the route is refused identically and nothing is staged. |
+| Activate (database) | `pb_dataset_readiness`, called by `get_planning_benchmark_upload` (a blocker in the preview) and by `activate_planning_benchmark_upload` (`PB_E_NOT_READY`, inside the one transaction) | Re-checks the mapping at the moment of activation, so a batch staged before the migration, or whose pair was removed after staging, cannot go live. |
+
+I chose to re-emit only `pb_dataset_readiness` (a 45-line function) and add a trigger, rather than re-emit the two long RPCs of 0275: the smaller surface keeps the diff reviewable and leaves the audited Activate body byte-identical. A named negative control (`NC-MAP3`) proves the activate path really goes through the check. Re-running `0275` after `0277` would put the old readiness function back; the hand-over says to re-run `0277` if that ever happens.
+
+### 14.3 Data model (migration 0277)
+
+| Object | Purpose |
+|---|---|
+| `benchmark_dataset_metrics` | one row per (dataset, metric): `applies_to_values`, `applies_to_target_ranges` (at least one), `evidence_note`, created and updated by and at. Unique per pair. Readable like the other benchmark reference tables (`select using (true)`); no insert, update or delete grant for `anon` or `authenticated`. |
+| `benchmark_dataset_metric_events` | append-only audit trail of every change (added, changed, removed): before and after kinds, live figures held, whether the caller confirmed them, staged batches affected, reason, actor, time. Readable by holders only. Update and delete are blocked by trigger. |
+| `set_planning_benchmark_dataset_metric`, `remove_planning_benchmark_dataset_metric` | the only write path. `SECURITY DEFINER`, pinned empty `search_path`, `EXECUTE` revoked from `PUBLIC` and `anon`, an explicit exception for an unauthorised caller. |
+| `pb_enforce_dataset_metric`, `pb_live_figures`, `pb_staged_batches_using` | internal (no `EXECUTE` for API roles). |
+
+**No statistic-type column.** The DEV data shows statistics differ by figure, not by metric (`net_worth` carries mean, median, P20 and P80; `property_concentration` is `mean` on DEV and `share` in the first-load file), so a per-pair list would be a guess (evidence in `DATASET_METRIC_MAPPING.md` section 5). The closed list of statistic types still applies to every row.
+
+**Capability: the existing `can_activate_planning_benchmarks`, no new one.** Changing which metrics a dataset may receive decides what can be made live, so it carries the same weight as Activate and is gated the same way (a holder of upload only is refused by the route and by the database function; the audit trail is readable by either holder). Admin Standard s2: the capability is already separately named; s14: no shared privilege was created.
+
+**Seed.** 71 pairs across 11 datasets, written from DEV reads, the first-load files and the schema map, with an evidence text per pair; a test fails if the migration seed and the document differ in any row. The seed runs only while the table is empty, so running the file again never undoes a change made on the screen. Datasets with no evidence-backed pair are listed as "needs PO input" and left unmapped (a dataset with nothing mapped refuses every upload, with a message saying so, until a pair is added).
+
+### 14.4 Not installed yet: the fallback (chosen, with the reason)
+
+The integration must keep working on production before `0277` is applied. **Chosen: fall back to the previous behaviour with a visible warning, not fail closed.** Reasons: failing closed would stop every upload on any database that has `0275` but not `0277` (production, today), turning a deploy-order detail into an outage of a screen the PO uses; and the database layers cannot disagree with the app, because the trigger and the stricter readiness function do not exist either until `0277` is applied. The app detects the missing table (`PGRST205` or `42P01`) and reports `mapping.installed = false`:
+
+- the file check raises one warning per file, `MAPPING_NOT_INSTALLED`, shown after staging ("staged with 1 warning");
+- the preview of a staged batch shows a banner, "Dataset and metric mapping is not installed yet";
+- the Read me sheet, the Allowed values CSV and the panel print the same line instead of a mapping table;
+- the maintenance section says it is not installed and offers no controls;
+- any other failure reading the table (a timeout, a permission error) is **not** treated as "not installed": the lists are `unavailable` and staging fails closed, as for every other reference table;
+- an installed but empty table is not the fallback: nothing is mapped, so nothing may be uploaded.
+
+### 14.5 Allowed metrics on the files and the screen
+
+`datasetMetricsSection` (in `allowedValues.ts`) is the one source: the validator reads `mappedFor(dataset, kind)` from the same lists, and the XLSX Read me, the Allowed values CSV and the Upload tab panel print the same rows (dataset, version, metric, name, unit, observed values file, planning target ranges file, live figures, status). The drift guard (`NC-V3`) proves every listed pair is accepted and every registered metric not listed for a dataset and kind is refused. The per-dataset acceptance in the dataset table also changes: a dataset with no metric mapped for a kind is shown as not accepting that kind.
+
+### 14.6 Maintenance without SQL (the small option, implemented)
+
+Upload tab, section "Dataset metric mapping" (`PlanningBenchmarkDatasetMetrics`), route `GET` and `POST /api/admin/benchmarks/upload/dataset-metrics`. Everyone who can see the Upload tab reads the mapping and the last 25 changes; a holder of the activate permission can add a metric, change the kinds of file, or remove a pair. Admin Standard: capability (s2, s4: route and database both check it; the controls are shown from the capability flag as UX only), an audit row for every change (s15), a reason of at least 3 characters, an explicit `confirmed: true` plus a confirmation dialog, and **a pair that still holds live figures needs a stronger warning and an explicit `confirmLiveFigures`** (refused by the database with `PB_E_LIVE` otherwise). Live figures are never deleted; removing a pair only stops new uploads of that metric. Planning bands have no dataset column, so the live-figure count for a target ranges pair uses the bands of the metric that cite the dataset's source or no source (the same rule in the database and on the screen). The audit rows returned to the screen carry no actor identifier (s9). A metric cannot be created here.
+
+### 14.7 Test plan
+
+| Layer | Proof | File |
+|---|---|---|
+| Migration text, parts, editor safety, seed equals document | `NC-S1`, `NC-S2`, `NC-M1`, `NC-M2` | `planningBenchmarkDatasetMetricMapping.test.ts` |
+| Database (PGlite, full ledger replay) | RLS and grants, no direct write, append-only, staging refusal (wrong metric, wrong kind, empty dataset), legitimate pair accepted, activation re-check, capability separation, audit rows, live-figure confirmation, idempotent rerun, rollback; negative controls `NC-MAP1` to `NC-MAP5` | `planningBenchmarkDatasetMetricMappingPglite.test.ts` |
+| Validator, lists, fallback, drift guard | `NC-V1`, `NC-V2`, `NC-V3` | `planningBenchmarkDatasetMetricValidation.test.ts` |
+| Route and screen | `NC-R1` to `NC-R4`, section states, wording, day-first text | `planningBenchmarkDatasetMetricRoutesUi.test.ts` |

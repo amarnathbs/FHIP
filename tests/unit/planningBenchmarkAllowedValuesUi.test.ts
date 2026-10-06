@@ -59,11 +59,11 @@ describe('Allowed values panel', () => {
 
   it('is accessible: captioned tables, column-scoped headers, named and keyboard-focusable scroll regions, headings in order', async () => {
     const html = renderToStaticMarkup(createElement('div', null, createElement(ColumnGuide), createElement(AllowedValuesView, { data: await lists() })));
-    expect((html.match(/<caption class="sr-only">/g) ?? []).length).toBe(4);
+    expect((html.match(/<caption class="sr-only">/g) ?? []).length).toBe(5); // columns, datasets, metrics, allowed metrics per dataset (0277), cohorts
     expect((html.match(/<th scope="col"/g) ?? []).length).toBeGreaterThanOrEqual(16);
     expect(html).not.toMatch(/<th (?!scope)/);
     const regions = html.match(/<div role="region" aria-label="[^"]+" tabindex="0"/g) ?? [];
-    expect(regions.length).toBe(4);
+    expect(regions.length).toBe(5); // columns, datasets, metrics, allowed metrics per dataset (0277), cohorts
     expect(html).toMatch(/<label for="[^"]+"[^>]*><span>Kind of file<\/span><select id="[^"]+"/);
     expect(html.indexOf('Part 1.')).toBeLessThan(html.indexOf('Part 2.'));
     expect(html.indexOf('Part 2.')).toBeLessThan(html.indexOf('Part 3.'));

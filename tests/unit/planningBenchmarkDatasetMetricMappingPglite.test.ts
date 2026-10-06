@@ -346,7 +346,7 @@ describe('maintaining the mapping: capability, audit, confirmation, live figures
     const ev = await q<{ action: string; reason: string; values_before: boolean | null; values_after: boolean | null }>(`select action, reason, values_before, values_after from benchmark_dataset_metric_events order by created_at, id offset ${before}`);
     expect(ev.map((e) => e.action)).toEqual(['added', 'changed', 'removed']);
     expect(ev.map((e) => e.reason)).toEqual(['add for the test', 'both kinds', 'remove again']);
-    expect(await q(`select 1 from benchmark_dataset_metric_events where actor_user_id = '${ACT}' and dataset_name = '${DS}' and metric_code = '${M_PCT2}'`)).toHaveLength(3);
+    expect(await q(`select 1 from benchmark_dataset_metric_events where actor_user_id = '${ACT}' and dataset_name = '${DS}' and metric_code = '${M_PCT2}'`)).toHaveLength(5); // 2 from the visibility check plus these 3
   });
 
   it('refuses a missing reason, no kind of file, an unknown metric, an unknown dataset and a pair that does not exist', async () => {
@@ -393,6 +393,22 @@ describe('maintaining the mapping: capability, audit, confirmation, live figures
       if (!(await mappedCodes(wealth, 'values')).includes('net_worth')) await setMap(ACT, wealth, 'net_worth', true, false, 'restore after the control');
     }
     throw new Error('the control did not go red');
+  });
+});
+
+describe('hand-over', () => {
+  it('the check queries in the README run and return the values the README promises (before any test mapping change they were 71 seeded pairs)', async () => {
+    const readme = fs.readFileSync(path.resolve(HERE, '..', '..', 'docs', 'planning-benchmarks', 'po_apply_mapping', 'README.md'), 'utf8');
+    const blocks = [...readme.matchAll(/```sql\r?\n([\s\S]*?)```/g)].map((m) => m[1]);
+    expect(blocks.length).toBeGreaterThanOrEqual(2);
+    const first = (await db.query(blocks[0])).rows[0] as Record<string, unknown>;
+    expect(first).toMatchObject({ tables_ok: true, functions_ok: true, trigger_ok: true, no_api_write_ok: true });
+    expect(Number(first.seeded_pairs)).toBeGreaterThanOrEqual(71);
+    const per = (await db.query(blocks[1])).rows as Array<{ dataset_name: string; pairs: number }>;
+    const byName = new Map(per.map((r) => [r.dataset_name, Number(r.pairs)]));
+    expect(byName.get('FHIP Planning Benchmarks v1.0')).toBe(48);
+    expect(byName.get('FHIP dependant-band household benchmark model')).toBe(11);
+    expect(byName.has('India household consumption expenditure (rural/urban)')).toBe(false);
   });
 });
 
