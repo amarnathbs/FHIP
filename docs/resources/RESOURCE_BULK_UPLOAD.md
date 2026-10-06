@@ -16,7 +16,7 @@ One reusable framework for two content types, not two upload systems. Manual cre
 | Admin pages | `app/(app)/admin/resources/import/**` (chooser, upload, preview/result, history) |
 | Components | `components/resources/import/**` |
 | Capability | `lib/resources/permissions.ts` `canBulkImportResources` (`resources.content.bulk_import`), `lib/admin/adminNav.ts` field `resourceContentBulkImport` |
-| Database | `supabase/migrations/0272_resource_content_bulk_import.sql` |
+| Database | `supabase/migrations/0272_resource_content_bulk_import.sql` (tables, capability, lookup, purge, apply), `0273_resource_content_bulk_import_apply_as_actor.sql` (private core + server-only twin), `0274_resource_content_bulk_import_faster_apply.sql` (lighter core) |
 | Template docs (generated) | `ARTICLE_UPLOAD_TEMPLATE_SPEC.md`, `MONEY_UPDATE_UPLOAD_TEMPLATE_SPEC.md` |
 
 ## The flow
@@ -65,6 +65,6 @@ The Article / Guide / FHIP Explainer editor (`ResourceEditor`) now carries the e
 - Create-only: no update of existing content.
 - v1 types: article and money_update only (Guide and FHIP Explainer could be added by implementing the same four adapter files; none is built).
 - Two sources per row (the contract defines `source_1_*` and `source_2_*`).
-- 500 rows, 10 MB per file.
+- 500 rows, 10 MB per file (`IMPORT_LIMITS.maxRows`). 500 rows is marginal against the API 8 second limit on DEV (see the runbook and certification); the recommended safe fallback is 250.
 - The upload progress wording ("Uploading...", "Parsing...", "Validating...", "Preparing preview...") advances on a timer during one request; it is progress text, not a server measurement.
 - Retention purge runs on upload, not on a schedule (no cron job is added); an idle system keeps expired staging rows until the next upload.
