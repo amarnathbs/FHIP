@@ -12,6 +12,7 @@
 // scroll:false, so typing in the search box doesn't jump the page.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ResourceFilters, type FilterState } from './ResourceFilters';
 import { ResourceContentTable } from './ResourceContentTable';
@@ -44,7 +45,7 @@ function filtersFromParams(params: URLSearchParams): FilterState {
   };
 }
 
-export function ResourceContentListClient({ queue, title, description }: { queue?: QueuePreset; title: string; description: string }) {
+export function ResourceContentListClient({ queue, title, description, canBulkImport = false }: { queue?: QueuePreset; title: string; description: string; canBulkImport?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -164,9 +165,18 @@ export function ResourceContentListClient({ queue, title, description }: { queue
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">{title}</h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted">{description}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">{title}</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted">{description}</p>
+        </div>
+        {/* Resources Bulk Upload: shown only to holders of resources.content.bulk_import (the page decides). Article is
+            preselected; the same shared importer opens. Manual creation (New Content) is unchanged. */}
+        {canBulkImport && (
+          <Link href="/admin/resources/import/upload?type=article" className="inline-flex min-h-11 items-center rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-trust hover:bg-gray-50">
+            Upload Articles
+          </Link>
+        )}
       </div>
 
       <AdminTaskHelp taskId={queue ? 'ADM-21' : 'ADM-08'} />

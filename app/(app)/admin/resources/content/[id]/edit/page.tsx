@@ -5,6 +5,7 @@ import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
 import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
+import { getSourceOptionsForPost } from '@/lib/resources/sources/queries';
 import { isEditableContentType } from '@/lib/resources/editor/types';
 import { ResourceEditor } from '@/components/resources/editor/ResourceEditor';
 import type { WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
@@ -42,7 +43,12 @@ export default async function ResourceEditPage({ params }: { params: Promise<{ i
     redirect(SPECIALIST_EDIT_ROUTES[post.content_type] ?? `/admin/resources/content/${id}`);
   }
 
-  const [reference, versions, workflowHistory] = await Promise.all([getEditorReferenceData(supabase, createAdminClient()), getResourcePostVersions(supabase, id), getResourceWorkflowHistory(supabase, id)]);
+  const [reference, versions, workflowHistory, sources] = await Promise.all([
+    getEditorReferenceData(supabase, createAdminClient()),
+    getResourcePostVersions(supabase, id),
+    getResourceWorkflowHistory(supabase, id),
+    getSourceOptionsForPost(supabase, id),
+  ]);
 
   const caps: WorkflowCapabilities = {
     isCreator: post.created_by === current.userId,
@@ -52,5 +58,16 @@ export default async function ResourceEditPage({ params }: { params: Promise<{ i
     canManage: canManageResources(current),
   };
 
-  return <ResourceEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} />;
+  return (
+    <ResourceEditor
+      post={post}
+      reference={reference}
+      initialVersions={versions}
+      initialWorkflowHistory={workflowHistory}
+      currentUserId={current.userId ?? ''}
+      caps={caps}
+      sourceOptions={sources.options}
+      initialSourceIds={sources.linkedIds}
+    />
+  );
 }

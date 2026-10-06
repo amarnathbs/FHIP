@@ -32,7 +32,7 @@ function isReviewDue(item: MoneyUpdateListItem): boolean {
   return new Date(target).getTime() <= Date.now();
 }
 
-export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
+export function MoneyUpdateListClient({ canCreate, canBulkImport = false }: { canCreate: boolean; canBulkImport?: boolean }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [contentType, setContentType] = useState<'all' | 'money_update' | 'money_update_template'>('all');
@@ -101,11 +101,24 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
           <h1 className="text-2xl font-semibold text-ink">Money Updates</h1>
           <p className="mt-1 text-sm text-muted">Governed interpretation of important financial developments — not generic news.</p>
         </div>
-        {canCreate && (
-          <Link href="/admin/resources/money-updates/new" className="inline-flex min-h-11 items-center rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
-            New Money Update
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canCreate && (
+            <Link href="/admin/resources/money-updates/new" className="inline-flex min-h-11 items-center rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
+              New Money Update
+            </Link>
+          )}
+          {/* Resources Bulk Upload: both buttons open the same shared importer with Money Updates preselected. */}
+          {canBulkImport && (
+            <Link href="/admin/resources/import/upload?type=money_update" className="inline-flex min-h-11 items-center rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-trust hover:bg-gray-50">
+              Upload Updates
+            </Link>
+          )}
+          {canCreate && (
+            <a href="/api/admin/resources/import/templates?type=money_update&format=xlsx" className="inline-flex min-h-11 items-center rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-trust hover:bg-gray-50">
+              Download Template
+            </a>
+          )}
+        </div>
       </div>
 
       <AdminTaskHelp taskId="ADM-13" />
