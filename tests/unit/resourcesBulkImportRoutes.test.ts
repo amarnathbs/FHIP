@@ -80,11 +80,11 @@ import { buildAdminNavGroups, NO_ADMIN_CAPABILITIES, parseAdminCapabilities } fr
 import { csvOf, good } from '../support/resourcesImportFixtures';
 
 const ID = '11111111-1111-4111-8111-111111111111';
-const params = (extra: Record<string, string> = {}) => ({ params: Promise.resolve({ id: ID, ...extra }) });
+const params = (extra: Record<string, string> = {}) => ({ params: Promise.resolve({ id: ID, ...extra }) }) as never;
 const upload = () => {
   const form = new FormData();
   form.set('contentType', 'article');
-  form.set('file', new File([csvOf('article', [good('article')])], 'a.csv', { type: 'text/csv' }));
+  form.set('file', new File([csvOf('article', [good('article')]) as unknown as BlobPart], 'a.csv', { type: 'text/csv' }));
   return new Request('https://fhip.test/api/admin/resources/import/runs', { method: 'POST', body: form });
 };
 
