@@ -13,3 +13,10 @@ export const shot = (name, full = false) => act({ a: 'shot', name, full });
 export const text = async (sel, max = 6000) => (await act({ a: 'text', sel, max })) ?? '';
 export const evalJs = (js) => act({ a: 'eval', js });
 export const controls = () => act({ a: 'controls' });
+
+/** poll a predicate over the page text until true (or give up) */
+export async function waitFor(fn, tries = 20, ms = 1500) {
+  for (let i = 0; i < tries; i++) { if (await fn()) return true; await act({ a: 'wait', ms }); }
+  return false;
+}
+export const selectReady = () => evalJs(`(() => { const s = document.querySelector('select'); return !!s && !s.disabled; })()`);

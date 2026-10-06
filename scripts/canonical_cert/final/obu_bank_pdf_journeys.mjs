@@ -10,7 +10,7 @@ import { call, db, hostGuard, record, saveResults, results, selfMember, ensureSp
 
 console.log('DEV host verified:', hostGuard());
 const sb = await db();
-const AU3 = 'forecast.tc015@example.test';
+const AU3 = process.env.OBU_ACTOR ?? 'forecast.tc015@example.test';
 const U3 = (await sb.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u) => u.email === AU3).id;
 const self = await selfMember(AU3);
 const spouse = await ensureSpouse(AU3, 'FHIP Synthetic Spouse AU3');
@@ -21,8 +21,8 @@ const ANZ = { brand: ['Australia and New Zealand Banking Group', 'Account Statem
 function pdf(bank, accountLine) {
   seq += 1;
   const txns = bank === ANZ
-    ? [{ date: '01/08/2026', description: `EFTPOS COLES ${salt}${seq}`, amount: '-45.20', balance: '954.80' }, { date: '03/08/2026', description: 'SALARY XYZ PTY LTD', amount: '500.00', balance: '1,454.80' }]
-    : [{ date: '1 Aug 2026', description: `CARD PURCHASE WOOLWORTHS ${salt}${seq}`, amount: '45.20 DR', balance: '954.80' }, { date: '3 Aug 2026', description: 'SALARY XYZ PTY LTD', amount: '500.00 CR', balance: '1,454.80' }];
+    ? [{ date: '01/08/2026', description: `EFTPOS COLES ${salt}${seq}`, amount: '-45.20', balance: '954.80' }, { date: '03/08/2026', description: `SALARY XYZ ${salt}${seq}`, amount: '500.00', balance: '1,454.80' }]
+    : [{ date: '1 Aug 2026', description: `CARD PURCHASE WOOLWORTHS ${salt}${seq}`, amount: '45.20 DR', balance: '954.80' }, { date: '3 Aug 2026', description: `SALARY XYZ ${salt}${seq}`, amount: '500.00 CR', balance: '1,454.80' }];
   return new Uint8Array(buildBankPdfFixture({
     brandLines: bank.brand, columnHeaderLine: bank.cols, accountLine,
     openingBalanceLine: 'Opening Balance: $1,000.00', closingBalanceLine: bank === ANZ ? 'Closing Balance: $1,454.80' : 'Closing Balance: $1,454.80', transactions: txns,

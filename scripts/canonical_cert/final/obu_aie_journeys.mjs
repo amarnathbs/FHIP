@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildBankPdfFixture } from '../../../tests/support/buildBankPdfFixture.ts';
+import { buildMinimalTextPdf } from '../../../tests/support/buildMinimalPdf.ts';
 import { call, db, hostGuard, record, saveResults, results, selfMember, ensureSpouse, CAS_DIR, USERS } from './obu_lib.mjs';
 
 console.log('DEV host verified:', hostGuard());
@@ -26,10 +27,11 @@ const salt = String(Math.floor(1000 + Math.random() * 9000));
 let seq = 0;
 const bankPdf = (digits) => {
   seq += 1;
+  const yr = 2000 + ((Number(salt) + seq * 7) % 24);
   return Buffer.from(buildBankPdfFixture({
     brandLines: ['Commonwealth Bank of Australia', 'Statement of Account'], columnHeaderLine: 'Date Transaction Details Debit Credit Balance', accountLine: `Account Number: ****${digits}`,
     openingBalanceLine: 'Opening Balance: $1,000.00', closingBalanceLine: 'Closing Balance: $1,454.80',
-    transactions: [{ date: '1 Aug 2026', description: `CARD PURCHASE AIE ${salt}${seq}`, amount: '45.20 DR', balance: '954.80' }, { date: '3 Aug 2026', description: 'SALARY XYZ PTY LTD', amount: '500.00 CR', balance: '1,454.80' }],
+    transactions: [{ date: `1 Aug ${yr}`, description: `CARD PURCHASE AIE ${salt}${seq}`, amount: '45.20 DR', balance: '954.80' }, { date: `3 Aug ${yr}`, description: 'SALARY XYZ PTY LTD', amount: '500.00 CR', balance: '1,454.80' }],
   }));
 };
 const bankIntake = (email, bytes, owner, extra = '') => call(email, 'POST', `/api/aie/fdh-bank/intake?country_code=AU&currency_code=AUD${extra}`, { body: bytes, contentType: 'application/pdf', owner });
@@ -99,14 +101,12 @@ if (probe.status === 403) { console.log('AIE flags are OFF on this app: restart 
   record(27, 'AIE Investment Intelligence intake with NO owner -> 422 owner_required', none.status === 422 && none.json?.error === 'owner_required', `HTTP ${none.status} ${none.json?.error}`);
   const bare = await call(IN1, 'POST', `/api/aie/investment-intelligence/intake?filename=obu-aie.pdf&owner_member_id=${self1}`, { body: bytes, contentType: 'application/pdf', owner: null });
   record(27, 'a bare legacy owner_member_id is no longer an owner (still 422 owner_required)', bare.status === 422 && bare.json?.error === 'owner_required', `HTTP ${bare.status} ${bare.json?.error}`);
-  // find a synthetic CAS the deterministic parser takes straight to awaiting_acceptance (some fixtures are deliberately ambiguous)
-  let ok = null; let usedFile = null; const tried = [];
-  for (const f of ['pc3-q01-baseline-multi-folio-multi-amc.pdf', 'pc3-q07-transaction-rich.pdf', 'pc3-q03-same-instrument-two-folios-fifo-scope.pdf', 'pc3-q04a-month1.pdf', 'pc3-q09-multi-page-continuation.pdf', 'pc3-q11-alternate-cams-layout.pdf', 'pc3-q06-sip-rich-skipped-month.pdf']) {
-    const r = await iiI(IN1, fs.readFileSync(path.join(CAS_DIR, f)), MEMBER(self1));
-    tried.push(f.slice(4, 7) + ':' + (r.json?.data?.status ?? r.status));
-    if (r.json?.data?.status === 'awaiting_acceptance') { ok = r; usedFile = f; break; }
-    ok = ok ?? r;
-  }
+  // a synthetic CAS whose printed holder name equals the chosen owner's own name (a different printed name is a deliberate, blocking owner_mismatch item)
+  const holder = ((await sb.from('household_members').select('full_name').eq('id', self1).single()).data?.full_name ?? 'FHIP SYNTHETIC HOLDER').toUpperCase();
+  const folioNo = '77' + salt + '00001';
+  const casLines = ['CAMS Consolidated Account Statement', 'Statement Period : 01-Jan-2025 To 30-Jun-2025', '', 'Folio No: ' + folioNo, 'PAN: PCQAL' + folioNo.slice(-4) + 'F', 'Name: ' + holder, 'Holding Mode: SI', '', 'AMC Name: HDFC Mutual Fund', 'Scheme Name: HDFC Flexi Cap Fund - Growth (Direct Plan)', 'ISIN: INF179K01YW8', 'AMFI Code: 118834', 'Registrar: CAMS', '', 'Date          Description                              Amount(Rs.)      Units         NAV(Rs.)      Unit Balance', '01-Feb-2025   Purchase                              10,000.00  83.500  119.7605  83.500 [Ref: AIE' + salt + ']', '', 'Closing Unit Balance as on 30-Jun-2025 : 83.500 Units   Valuation : Rs. 11264.15   NAV as on 30-Jun-2025 : Rs. 134.9000', ''];
+  const ok = await iiI(IN1, buildMinimalTextPdf([casLines]), MEMBER(self1));
+  const tried = ['holder=' + holder];
   const runId = ok.json?.data?.run_id;
   const intakeId = ok.json?.data?.intake_id;
   const intake = intakeId ? (await sb.from('aie_document_intake').select('owner_selection').eq('id', intakeId).single()).data : null;

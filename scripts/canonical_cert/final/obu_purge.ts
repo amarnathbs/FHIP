@@ -19,7 +19,7 @@ console.log('DEV host verified:', hostGuard());
 async function main() {
   const { runPurgeAttempt } = await import('@/lib/financial-data-hub/services/purge');
   const sb = await db();
-  const U3 = (await sb.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u: any) => u.email === 'forecast.tc015@example.test').id;
+  const U3 = (await sb.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u: any) => u.email === (process.env.OBU_ACTOR ?? 'forecast.tc015@example.test')).id;
   const OWNER_COLS = ['owner_member_id', 'owner_business_entity_id', 'owner_role', 'owner_selection_source', 'owner_allocation'];
   const docs = ((await sb.from('fdh_statement_uploads').select('*').eq('user_id', U3).not('raw_document_storage_reference', 'is', null).in('raw_document_purge_status', ['not_required', 'pending', 'failed'])).data ?? []) as any[];
   const picks: any[] = [];
@@ -39,9 +39,12 @@ async function main() {
     const fresh = (await sb.from('fdh_statement_uploads').select('*').eq('id', d.id).single()).data;
     const r = await runPurgeAttempt(fresh);
     const after = (await sb.from('fdh_statement_uploads').select('*').eq('id', d.id).single()).data;
-    const gone = await sb.storage.from(bucket).download(before.ref);
+    // the download endpoint can serve a just-deleted object for a few seconds (read-after-delete): poll until it reports absent
+    let gone = await sb.storage.from(bucket).download(before.ref);
+    let waited = 0;
+    while (!gone.error && waited < 60) { await new Promise((res) => setTimeout(res, 3000)); waited += 3; gone = await sb.storage.from(bucket).download(before.ref); }
     const label = `${d.document_type}/${d.owner_role}`;
-    record(33, `${label}: raw object existed, purge reports purged, and the object is verified ABSENT`, objectThereBefore && r.status === 'purged' && !!gone.error && after.raw_document_purge_status === 'purged' && after.raw_document_storage_reference === null, `before=${objectThereBefore} result=${r.status} after.status=${after.raw_document_purge_status} ref=${after.raw_document_storage_reference} downloadAfterErr=${gone.error?.message ?? 'NONE(object still downloadable)'}`);
+    record(33, `${label}: raw object existed, purge reports purged, and the object is verified ABSENT`, objectThereBefore && r.status === 'purged' && !!gone.error && after.raw_document_purge_status === 'purged' && after.raw_document_storage_reference === null, `before=${objectThereBefore} result=${r.status} after.status=${after.raw_document_purge_status} ref=${after.raw_document_storage_reference} downloadAfterErr=${gone.error?.message ?? 'NONE(object still downloadable)'} absentAfter=${waited}s`);
     record(33, `${label}: owner provenance RETAINED (role, member, entity, source, allocation unchanged)`, JSON.stringify(OWNER_COLS.map((c) => after[c])) === JSON.stringify(OWNER_COLS.map((c) => before.owner[c])), JSON.stringify({ role: after.owner_role, src: after.owner_selection_source, alloc: after.owner_allocation }));
     record(33, `${label}: raw filename handled per policy (nulled on purge; owner metadata is not a filename)`, before.file !== null && after.original_filename_sanitised === null, `before=${before.file ? 'set' : 'null'} after=${after.original_filename_sanitised === null ? 'null' : 'set'}`);
     const dump = JSON.stringify(after);

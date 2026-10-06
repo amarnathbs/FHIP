@@ -11,7 +11,7 @@ import { call, db, hostGuard, record, saveResults, results, selfMember, ensureSp
 
 console.log('DEV host verified:', hostGuard());
 const sb = await db();
-const AU3 = 'forecast.tc015@example.test';
+const AU3 = process.env.OBU_ACTOR ?? 'forecast.tc015@example.test';
 const AU4 = 'forecast.tc024@example.test';
 const users = (await sb.auth.admin.listUsers({ perPage: 1000 })).data.users;
 const U3 = users.find((u) => u.email === AU3).id;

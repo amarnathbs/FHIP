@@ -11,7 +11,7 @@ const files = fs.readdirSync(dir).filter((f) => /^obu-.*-results\.json$/.test(f)
 const by = {};
 for (const f of files) {
   for (const r of JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))) {
-    const k = String(r.step ?? r.label?.slice(0, 3) ?? '?');
+    const k = /oracles/.test(f) ? '31' : String(r.step ?? '?');
     by[k] ??= { pass: 0, fail: 0, info: 0, files: new Set(), fails: [] };
     if (r.ok === true) by[k].pass += 1; else if (r.ok === false) { by[k].fail += 1; by[k].fails.push(r.label); } else by[k].info += 1;
     by[k].files.add(f.replace(/^obu-|-results\.json$/g, ''));

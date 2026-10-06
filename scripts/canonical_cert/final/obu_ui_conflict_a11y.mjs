@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildMinimalTextPdf } from '../../../tests/support/buildMinimalPdf.ts';
-import { act, goto, wait, waitText, shot, text, evalJs, controls } from './obu_ui_lib.mjs';
+import { act, goto, wait, waitText, shot, text, evalJs, controls, waitFor, selectReady } from './obu_ui_lib.mjs';
 import { record, saveResults, results, db, USERS, hostGuard, uploadCas, selfMember, ensureSpouse } from './obu_lib.mjs';
 
 console.log('DEV host verified:', hostGuard());
@@ -94,7 +94,8 @@ const variant = path.join(dir, `ui-conflict-self-${salt}.pdf`);
 fs.writeFileSync(variant, twoFolioPdf(`${tag}V`));
 await act({ a: 'viewport', width: 375, height: 812 });
 await goto('/investment-intelligence/data');
-await wait(3000);
+await waitFor(selectReady, 40);
+await wait(1000);
 const overflow0 = await evalJs(`({sw: document.documentElement.scrollWidth, iw: window.innerWidth})`);
 record(34, 'MOBILE 375px: no horizontal page overflow on Statements & data', overflow0.sw <= overflow0.iw + 1, JSON.stringify(overflow0));
 await act({ a: 'select', label: 'Who does this document belong to?', value: 'Forecast Test User TC083 (you)' });
@@ -123,7 +124,7 @@ const confirmText = await text('[data-testid=owner-conflicts-confirm]', 2000).ca
 record(16, 'BROWSER: ticking ONE folio asks for confirmation naming the target and says the other folio stays as it is', !!confirmText && /1 folio/.test(confirmText) && /other 1 stay as they are/.test(confirmText), (confirmText ?? '').replace(/\n/g, ' ').slice(0, 260));
 await shot('obu-16-conflict-confirm-mobile', false);
 await act({ a: 'click', role: 'button', name: 'Confirm change', exact: true });
-await wait(4000);
+await waitFor(async () => /A folio on this statement is already filed/.test(await text('[data-testid=owner-conflicts]', 3000).catch(() => '')), 20);
 const after1 = (await sb.from('ii_accounts').select('folio_number,owner_member_id').eq('user_id', U1).in('folio_number', folioNos).order('folio_number')).data ?? [];
 record(16, 'BROWSER+DB: after "Confirm change" the ticked folio is Self and the unticked folio is still the Spouse', after1.filter((a) => a.owner_member_id === selfId).length === 1 && after1.filter((a) => a.owner_member_id === spouseId).length === 1, JSON.stringify(after1.map((a) => [a.folio_number.slice(-3), a.owner_member_id === selfId ? 'self' : 'spouse'])));
 const panel2 = await text('[data-testid=owner-conflicts]', 4000).catch(() => null);
@@ -132,7 +133,7 @@ await act({ a: 'click', role: 'button', name: 'Select all', exact: true });
 await act({ a: 'click', sel: '[data-testid=owner-conflicts] button >> nth=1' });
 await wait(500);
 await act({ a: 'click', role: 'button', name: 'Confirm change', exact: true });
-await wait(4000);
+await waitFor(async () => !(await text('main', 30000)).includes('already filed under a different owner'), 20);
 const after2 = (await sb.from('ii_accounts').select('folio_number,owner_member_id').eq('user_id', U1).in('folio_number', folioNos)).data ?? [];
 record(16, 'BROWSER+DB: Select all then confirm moves the remaining folio; both are Self and the panel disappears', after2.every((a) => a.owner_member_id === selfId) && !(await text('main', 20000)).includes('already filed under a different owner'), JSON.stringify(after2.map((a) => a.owner_member_id === selfId)));
 const ev = (await sb.from('ii_audit_events').select('metadata').eq('user_id', U1).eq('event_type', 'user_correction').in('subject_id', after2.map((a) => a.id ?? '')).limit(5)).data;

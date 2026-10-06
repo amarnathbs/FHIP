@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildMinimalTextPdf } from '../../../tests/support/buildMinimalPdf.ts';
-import { act, goto, wait, waitText, shot, text, evalJs, controls } from './obu_ui_lib.mjs';
+import { act, goto, wait, waitText, shot, text, evalJs, controls, waitFor, selectReady } from './obu_ui_lib.mjs';
 import { record, saveResults, results, db, USERS, hostGuard } from './obu_lib.mjs';
 
 console.log('DEV host verified:', hostGuard());
@@ -30,7 +30,8 @@ const U1 = users.users.find((u) => u.email === USERS.IN1).id;
 
 // ---- the page, before choosing an owner
 await goto('/investment-intelligence/data');
-await wait(2500);
+await waitFor(selectReady, 40);
+await wait(500);
 let ctl = await controls();
 const uploadBtn = ctl.find((c) => /^button\[submit\](\(disabled\))? Upload$/.test(c));
 record(11, 'BROWSER: before an owner is chosen the Upload button is disabled', /\(disabled\)/.test(uploadBtn ?? ''), uploadBtn);
@@ -67,7 +68,7 @@ await shot('obu-11-filed-under', true);
 
 // ---- Joint selector: tick owners, percentages appear, inline total (steps 13 / 14 / 34)
 await goto('/investment-intelligence/data');
-await wait(2500);
+await waitFor(selectReady, 40);
 await act({ a: 'select', label: 'Who does this document belong to?', value: 'Joint — shared between owners' });
 await wait(600);
 const t0 = await text(undefined, 6000);

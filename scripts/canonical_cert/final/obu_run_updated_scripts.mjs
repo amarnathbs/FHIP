@@ -18,22 +18,28 @@ const reset = () => {
 const scenarios = [
   ['econ/scenario_payslip.ts (payslip first)', ['--order', 'payslip-first', '--email', E, '--attacker', A]],
   ['econ/scenario_payslip.ts (bank first)', ['--order', 'bank-first', '--email', E, '--attacker', A]],
-  ['econ/scenario_card.ts', ['--email', E, '--attacker', A]],
-  ['econ/scenario_loan.ts', ['--email', E, '--attacker', A]],
-  ['econ/scenario_retirement.ts', ['--email', E, '--attacker', A]],
+  ['econ/scenario_card.ts', ['--email', E, '--attacker', A, '--salt', 'R7']],
+  ['econ/scenario_loan.ts', ['--email', E, '--attacker', A, '--salt', 'R7']],
+  ['econ/scenario_retirement.ts', ['--email', E, '--attacker', A, '--salt', 'R7']],
   ['econ/scenario_broker.ts', ['--email', E, '--attacker', A]],
-  ['econ/scenario_unknown.ts', ['--email', E, '--attacker', A]],
+  ['econ/scenario_unknown.ts', ['--email', E, '--attacker', A, '--salt', 'R7']],
 ];
-const rows = [];
+const only = process.argv.slice(2);
+const outFile = '.canonical-cert/obu-updated-scripts-results.json';
+let rows = [];
+try { rows = JSON.parse(fs.readFileSync(outFile, 'utf8')); } catch { /* first write */ }
 for (const [label, args] of scenarios) {
+  if (only.length && !only.some((o) => label.includes(o))) continue;
   reset();
   const file = label.split(' ')[0];
-  const r = run('npx', ['tsx', `scripts/canonical_cert/${file}`, ...args]);
+  const r = run('npx', ['tsx', `scripts/canonical_cert/${file}`, ...args], 1800000);
   const out = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
   const summary = out.match(/(\d+)\/(\d+) checks passed/)?.[0] ?? (out.split('\n').filter((l) => /^(FAIL|Error)/.test(l)).slice(0, 2).join(' | ') || `exit ${r.status}`);
   const fails = out.split('\n').filter((l) => l.startsWith('FAIL')).slice(0, 5);
+  rows = rows.filter((x) => x.script !== label);
   rows.push({ script: label, result: summary, exit: r.status, fails });
+  fs.writeFileSync(outFile, JSON.stringify(rows, null, 2));
   console.log(`${label}: ${summary}${fails.length ? '\n   ' + fails.join('\n   ') : ''}`);
 }
 reset();
-fs.writeFileSync('.canonical-cert/obu-updated-scripts-results.json', JSON.stringify(rows, null, 2));
+
