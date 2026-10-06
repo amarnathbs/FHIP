@@ -14,6 +14,8 @@ interface Cell {
   state: 'ok' | 'suppressed' | 'unavailable';
   value?: unknown;
   label?: string;
+  /** The figure is an estimate (migration 0271): it must be shown as one. */
+  approximate?: boolean;
 }
 
 const LABELS: Array<[string, string]> = [
@@ -51,9 +53,12 @@ interface RefreshAttempts {
   reason?: string;
 }
 
-function show(c: Cell | undefined): string {
+export function show(c: Cell | undefined): string {
   if (!c) return 'Not available.';
-  if (c.state === 'ok') return typeof c.value === 'number' ? c.value.toLocaleString('en-IN') : String(c.value ?? '');
+  if (c.state === 'ok') {
+    const text = typeof c.value === 'number' ? c.value.toLocaleString('en-IN') : String(c.value ?? '');
+    return c.approximate ? `${text} (approximate)` : text;
+  }
   return c.label ?? (c.state === 'suppressed' ? 'Insufficient data to display safely.' : 'Not available.');
 }
 
