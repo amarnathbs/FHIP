@@ -207,13 +207,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 onClick={() => toggleGroup(group.label)}
                 aria-expanded={!isCollapsed}
                 aria-controls={`${scope}-navgroup-${groupSlug}`}
-                className="flex w-full items-center justify-between px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50 hover:text-white/70"
+                className="flex w-full items-center justify-between px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/60 hover:text-white"
               >
                 {group.label}
                 <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} aria-hidden="true" />
               </button>
             ) : (
-              <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/50">{group.label}</p>
+              <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-white/60">{group.label}</p>
             )}
             {(!collapsible || !isCollapsed) && (
             <ul id={collapsible ? `${scope}-navgroup-${groupSlug}` : undefined} className="space-y-0.5">
@@ -267,7 +267,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         {entry.items.map((item) => {
                           const itemActive = isActive(pathname, item.href);
                           return (
-                            <li key={item.href}>
+                            <li key={item.href} role="none">
                               <Link
                                 href={item.href}
                                 data-testid={NAV_ITEM_TEST_IDS[item.href]}
@@ -330,7 +330,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 aria-current={adminActive ? 'page' : undefined}
                 onClick={() => setOpenDropdown((o) => (o === 'admin' ? null : 'admin'))}
                 className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide ${
-                  adminActive ? 'text-white' : 'text-white/50 hover:text-white/70'
+                  adminActive ? 'text-white' : 'text-white/60 hover:text-white'
                 }`}
               >
                 Admin
@@ -360,7 +360,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           request; the group's items and their aria-label still identify
                           it for assistive tech. */}
                       {group.label !== 'Content' && (
-                        <p role="presentation" className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
+                        <p role="presentation" className="px-3 pb-0.5 pt-1.5 text-xs font-semibold uppercase tracking-wide text-white/60">
                           {group.label}
                         </p>
                       )}
