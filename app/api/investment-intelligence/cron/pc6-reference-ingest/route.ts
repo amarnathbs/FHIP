@@ -77,7 +77,7 @@ export async function POST(req: Request) {
   // once, so a clock-skewed host produces a visibly wrong as-of rather than a
   // silently admitted future NAV.
   const asOfDate = typeof body.asOfDate === 'string' ? body.asOfDate : new Date().toISOString().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) return bad('asOfDate must be ISO yyyy-mm-dd', 422);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) return bad('asOfDate must be an ISO 8601 calendar date', 422);
 
   try {
     const result = await runReferenceIngest({

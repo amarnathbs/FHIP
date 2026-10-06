@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
@@ -36,7 +37,7 @@ interface AccountLookupRow {
 // pagination (documented known simplification — the analytics layer's
 // getTransactions is deterministic keyset-style but exposes no cursor param
 // yet; "load more" re-issues the same query with a larger `limit`).
-export default async function FinancialActivityTransactionsPage({
+async function FinancialActivityTransactionsPageContent({
   searchParams,
 }: {
   searchParams: Promise<RawSearchParams>;
@@ -186,5 +187,15 @@ export default async function FinancialActivityTransactionsPage({
         )}
       </SectionCard>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Financial Activity).
+export default function FinancialActivityTransactionsPage(props: Parameters<typeof FinancialActivityTransactionsPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/financial-data-hub/activity" label="Financial Activity" />
+      <FinancialActivityTransactionsPageContent {...props} />
+    </>
   );
 }

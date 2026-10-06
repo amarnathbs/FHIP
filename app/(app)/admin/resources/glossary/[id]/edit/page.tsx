@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -9,7 +10,7 @@ import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
 import { GlossaryEditor } from '@/components/resources/glossary/GlossaryEditor';
 import type { WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 
-export default async function GlossaryEditPage({ params }: { params: Promise<{ id: string }> }) {
+async function GlossaryEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -35,4 +36,14 @@ export default async function GlossaryEditPage({ params }: { params: Promise<{ i
   };
 
   return <GlossaryEditor post={post} reference={reference} termOptions={termOptions} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} />;
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Glossary).
+export default function GlossaryEditPage(props: Parameters<typeof GlossaryEditPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/glossary" label="Glossary" />
+      <GlossaryEditPageContent {...props} />
+    </>
+  );
 }

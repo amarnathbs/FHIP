@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { canManageResources } from '@/lib/resources/permissions';
@@ -9,7 +10,7 @@ import { ResourceUsersClient } from '@/components/resources/admin/ResourceUsersC
 // settings/users nesting, for consistency with every sibling Resources admin
 // screen already shipped — see the completion report section G for the
 // explicit deviation note.
-export default async function ResourceUsersPage() {
+async function ResourceUsersPageContent() {
   const current = await requireResourceAdminAccess();
   // spec §5: "Only authorised Resource Admin/Super Admin users should be
   // able to access role-management functions" — a stricter gate than the
@@ -17,4 +18,14 @@ export default async function ResourceUsersPage() {
   // role in the door for read-only screens elsewhere).
   if (!canManageResources(current)) redirect('/admin/resources');
   return <ResourceUsersClient currentUserId={current.userId ?? ''} />;
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
+export default function ResourceUsersPage() {
+  return (
+    <>
+      <PageBackLink href="/admin/resources" label="Resources" />
+      <ResourceUsersPageContent />
+    </>
+  );
 }

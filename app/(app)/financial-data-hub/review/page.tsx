@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { categoriesRepository } from '@/lib/financial-data-hub/repositories/index';
@@ -32,7 +32,7 @@ const RETURN_TARGETS: Record<string, { href: string; label: string }> = {
   hub: { href: '/financial-data-hub', label: 'Back to Financial Data Hub' },
 };
 
-export default async function FinancialDataHubReviewPage({
+async function FinancialDataHubReviewPageContent({
   searchParams,
 }: {
   searchParams: Promise<{ transaction?: string; statement?: string; reason?: string; account_id?: string; from?: string }>;
@@ -56,11 +56,6 @@ export default async function FinancialDataHubReviewPage({
 
   return (
     <div className="space-y-6">
-      <nav aria-label="Return">
-        <Link href={backTarget.href} className="text-sm font-semibold text-trust hover:underline">
-          ← {backTarget.label}
-        </Link>
-      </nav>
       {sp.statement ? (
         <StatementCategoryReview
           statementId={sp.statement}
@@ -88,5 +83,17 @@ export default async function FinancialDataHubReviewPage({
         </>
       )}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: the shared back link returns to where the person came from (?from=expenses|activity|hub, default Expenses).
+export default async function FinancialDataHubReviewPage(props: Parameters<typeof FinancialDataHubReviewPageContent>[0]) {
+  const sp = await props.searchParams;
+  const target = RETURN_TARGETS[sp.from ?? ''] ?? RETURN_TARGETS.expenses;
+  return (
+    <>
+      <PageBackLink href={target.href} label={target.label.replace(/^Back to /, '')} />
+      <FinancialDataHubReviewPageContent {...props} />
+    </>
   );
 }

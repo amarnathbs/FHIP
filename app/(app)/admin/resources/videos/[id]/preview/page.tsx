@@ -1,8 +1,8 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff } from '@/lib/resources/permissions';
 import { getVideoEditorPost } from '@/lib/resources/video/queries';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
 import { YouTubeEmbed } from '@/components/resources/specialist/YouTubeEmbed';
@@ -11,8 +11,8 @@ import { YouTubeEmbed } from '@/components/resources/specialist/YouTubeEmbed';
 // (requireResourceAdminAccess), never a public draft URL. The embed itself
 // is always derived from the validated video ID via YouTubeEmbed — never an
 // arbitrary iframe.
-export default async function VideoPreviewPage({ params }: { params: Promise<{ id: string }> }) {
-  const current = await requireResourceAdminAccess();
+async function VideoPreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
+  await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -42,11 +42,6 @@ export default async function VideoPreviewPage({ params }: { params: Promise<{ i
           <ResourceStatusBadge status={post.status} />
           <ResourceComplianceBadge compliance={post.compliance_classification} />
         </div>
-        {isResourceStaff(current) && (
-          <Link href={`/admin/resources/videos/${id}/edit`} className="text-sm font-semibold text-trust hover:underline">
-            Back to Editor
-          </Link>
-        )}
       </div>
 
       <article className="rounded-card border border-line bg-white p-6">
@@ -89,5 +84,16 @@ export default async function VideoPreviewPage({ params }: { params: Promise<{ i
         )}
       </article>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Editor).
+export default async function VideoPreviewPage(props: Parameters<typeof VideoPreviewPageContent>[0]) {
+  const { id } = await props.params;
+  return (
+    <>
+      <PageBackLink href={`/admin/resources/videos/${id}/edit`} label="Editor" />
+      <VideoPreviewPageContent {...props} />
+    </>
   );
 }

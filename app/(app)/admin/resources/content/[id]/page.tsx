@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -30,7 +31,7 @@ const SPECIALIST_EDIT_ROUTES: Record<string, (id: string) => { href: string; lab
 // no content_blocks are fetched or rendered here. It links out to the real
 // editor (SPECIALIST_EDIT_ROUTES above, one entry per content_type) for
 // every type that has one, rather than duplicating editing UI on this page.
-export default async function ResourceContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+async function ResourceContentDetailPageContent({ params }: { params: Promise<{ id: string }> }) {
   await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -179,5 +180,15 @@ export default async function ResourceContentDetailPage({ params }: { params: Pr
         )}
       </section>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (All Content).
+export default function ResourceContentDetailPage(props: Parameters<typeof ResourceContentDetailPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/content" label="All Content" />
+      <ResourceContentDetailPageContent {...props} />
+    </>
   );
 }

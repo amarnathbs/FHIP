@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-export default async function ResourcesSearchPage({ searchParams }: { searchParams: Promise<Search> }) {
+async function ResourcesSearchPageContent({ searchParams }: { searchParams: Promise<Search> }) {
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -100,5 +101,15 @@ export default async function ResourcesSearchPage({ searchParams }: { searchPara
         </>
       )}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
+export default function ResourcesSearchPage(props: Parameters<typeof ResourcesSearchPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/resources" label="Resources" className="mx-auto max-w-6xl px-4 pt-6 sm:px-6" />
+      <ResourcesSearchPageContent {...props} />
+    </>
   );
 }

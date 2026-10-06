@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateShort } from '@/lib/engines/date';
 // LR-9 WP-06 — the user-facing entry point into account closure. Submitting
 // this form never deletes anything itself: it only creates a queued
 // request an authorised Admin must separately review and execute. WP-06's
@@ -95,7 +96,7 @@ export function CloseAccountPanel() {
     return (
       <div>
         <p className="text-sm text-ink">
-          {`Account closure requested ${new Date(active.requested_at).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' })} — ${STATUS_LABEL[active.status]}.`}
+          {`Account closure requested ${formatDateShort(active.requested_at, 'AUD')} — ${STATUS_LABEL[active.status]}.`}
         </p>
         <p className="mt-1 text-xs text-muted">
           Your account and data have not been deleted yet. An authorised reviewer processes closure requests; you can

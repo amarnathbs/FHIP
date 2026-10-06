@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getIncomeBreakdown } from '@/lib/financial-data-hub/analytics/financialActivityAnalytics';
@@ -10,7 +11,7 @@ import { resolveActivityParams, type RawSearchParams } from '../_lib/searchParam
 // FDH-8 spec — Income Explorer. Mirrors spending/page.tsx exactly, but for
 // `economic_type = 'income'` categories via getIncomeBreakdown — same
 // certified per-category totals path, no second definition.
-export default async function FinancialActivityIncomePage({
+async function FinancialActivityIncomePageContent({
   searchParams,
 }: {
   searchParams: Promise<RawSearchParams>;
@@ -91,5 +92,15 @@ export default async function FinancialActivityIncomePage({
         );
       })}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Financial Activity).
+export default function FinancialActivityIncomePage(props: Parameters<typeof FinancialActivityIncomePageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/financial-data-hub/activity" label="Financial Activity" />
+      <FinancialActivityIncomePageContent {...props} />
+    </>
   );
 }

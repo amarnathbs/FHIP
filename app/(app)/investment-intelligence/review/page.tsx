@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
@@ -12,7 +13,7 @@ import { ReviewCentreClient } from '@/components/investment-intelligence/ReviewC
 // Forecasting, and R4/R5/R6 Investment Intelligence — never a
 // PERSONALISED_ADVICE-classified item, and never a value this page or its
 // client component computed itself (spec sections 40-42, 130-131).
-export default async function InvestmentReviewCentrePage() {
+async function InvestmentReviewCentrePageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,5 +34,15 @@ export default async function InvestmentReviewCentrePage() {
       <InvestmentIntelligenceSubNav />
       <ReviewCentreClient dateCurrency={dateCurrency} />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Investment Intelligence).
+export default function InvestmentReviewCentrePage() {
+  return (
+    <>
+      <PageBackLink href="/investment-intelligence" label="Investment Intelligence" />
+      <InvestmentReviewCentrePageContent />
+    </>
   );
 }

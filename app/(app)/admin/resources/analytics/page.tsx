@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { canViewResourceAnalytics } from '@/lib/resources/permissions';
@@ -41,6 +42,8 @@ export default async function ResourceAnalyticsPage() {
   // `main` landmark, so this page adds neither.
   return (
     <div className="space-y-6">
+      {/* PO review F6: the shared back link. Dashboard (not Resources): an Analyst-only caller may not enter the Resources dashboard. */}
+      <PageBackLink href="/dashboard" label="Dashboard" className="-mb-2" />
       <header>
         <h1 className="text-2xl font-semibold text-ink">Analytics Intelligence Centre</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">

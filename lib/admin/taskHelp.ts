@@ -283,7 +283,7 @@ export const ADMIN_TASK_HELP: Record<string, AdminTaskHelp> = {
     prerequisites: ['The date the development actually occurred.'],
     steps: [
       'Select Create money update, or create one from an existing template.',
-      'Enter the title, the summary and the event date in YYYY-MM-DD form.',
+      'Enter the title, the summary and the event date as day-month-year, like 20-08-2026.',
       'Complete the structured sections that are pre-populated for you.',
       'Cite the official sources the update relies on.',
       'Select Save.',

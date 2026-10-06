@@ -97,7 +97,7 @@ export function parseCreatePromoRequest(body: unknown, today: string, maxDuratio
   if (noExpiry) {
     if (b.expiresOn !== undefined && b.expiresOn !== null) return fail('PROMO_EXPIRY_INVALID', 'Choose either an expiry date or no expiry, not both.');
   } else {
-    if (!isValidIsoDate(b.expiresOn)) return fail('PROMO_EXPIRY_INVALID', 'expiresOn must be a date (YYYY-MM-DD), or choose no expiry explicitly.');
+    if (!isValidIsoDate(b.expiresOn)) return fail('PROMO_EXPIRY_INVALID', 'expiresOn must be a valid date, or choose no expiry explicitly.');
     if (b.expiresOn < today) return fail('PROMO_EXPIRY_INVALID', 'The code expiry date cannot be in the past.');
     if (b.expiresOn > addDaysIso(today, PROMO_MAX_EXPIRY_DAYS)) return fail('PROMO_EXPIRY_INVALID', 'The code expiry date is too far in the future.');
     expiresOn = b.expiresOn;

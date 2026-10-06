@@ -50,7 +50,8 @@ describe('the panels collect and send it', () => {
   it('Expenses -> Import bank statement: date inputs + the shared query builder', () => {
     const panel = src('components/expenses/BankStatementImportPanel.tsx');
     expect(panel).toMatch(/bankUploadParams\(\{[^}]*periodStart[^}]*periodEnd[^}]*\}\)/);
-    expect((panel.match(/type="date"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((panel.match(/<DateInput/g) ?? []).length).toBeGreaterThanOrEqual(2); // day-first typed date (PO review F13), not a native picker
+    expect(panel).not.toContain('type="date"');
     expect(panel).not.toMatch(/new URLSearchParams\(\{ country_code: country, currency_code: currency \}\)/);
   });
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
@@ -147,8 +148,7 @@ export function CommitmentsManager({ initial, currency }: { initial: Commitment[
           onChange={(e) => setForm({ ...form, amount: e.target.value })}
           className="rounded border px-2 py-1.5 text-sm"
         />
-        <input
-          type="date"
+        <DateInput
           value={form.due_date}
           onChange={(e) => setForm({ ...form, due_date: e.target.value })}
           className="rounded border px-2 py-1.5 text-sm"

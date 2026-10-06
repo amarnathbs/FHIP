@@ -1,5 +1,7 @@
 'use client';
 
+import { PageBackLink } from '@/components/navigation/PageBackLink';
+
 // LR-11 — Company entity workspace. LR-13 — Family Trust fast-follow: same
 // page/schema, entity_type widened at migration 0136. M4B — HUF fast-follow
 // on exactly the same line, entity_type widened again at migration 0154,
@@ -63,7 +65,7 @@ function formatCurrency(value: number, currencyCode: string): string {
   return formatMoneyCode(value, currencyCode);
 }
 
-export default function CompaniesPage() {
+function CompaniesPageContent() {
   const [entities, setEntities] = useState<BusinessEntity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -471,5 +473,15 @@ function CompanyCard({
         </button>
       </div>
     </SectionCard>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function CompaniesPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <CompaniesPageContent />
+    </>
   );
 }

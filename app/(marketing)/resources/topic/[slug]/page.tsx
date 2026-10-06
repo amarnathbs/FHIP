@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -36,7 +37,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 }
 
 // Spec §72: an unknown topic slug returns proper not-found behaviour.
-export default async function TopicPage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Search> }) {
+async function TopicPageContent({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Search> }) {
   const { slug } = await params;
   const search = await searchParams;
   const supabase = await createClient();
@@ -83,5 +84,15 @@ export default async function TopicPage({ params, searchParams }: { params: Prom
         </>
       )}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
+export default function TopicPage(props: Parameters<typeof TopicPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/resources" label="Resources" className="mx-auto max-w-6xl px-4 pt-6 sm:px-6" />
+      <TopicPageContent {...props} />
+    </>
   );
 }

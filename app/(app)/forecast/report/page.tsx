@@ -1,10 +1,11 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { buildForecastReportData, type ForecastReportData } from '@/lib/services/forecastReportData';
 import { ForecastReportActions } from '@/components/forecast/ForecastReportActions';
 import { ForecastReportContent } from '@/components/forecast/ForecastReportContent';
 
-export default async function ConsolidatedForecastingReportPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
+async function ConsolidatedForecastingReportPageContent({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
   const { scenario } = await searchParams;
   const supabase = await createClient();
   const {
@@ -22,5 +23,15 @@ export default async function ConsolidatedForecastingReportPage({ searchParams }
         </div>
         <ForecastReportContent data={data} />
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Forecasting).
+export default function ConsolidatedForecastingReportPage(props: Parameters<typeof ConsolidatedForecastingReportPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/forecast" label="Forecasting" />
+      <ConsolidatedForecastingReportPageContent {...props} />
+    </>
   );
 }

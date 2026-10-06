@@ -1,3 +1,4 @@
+import { formatDateShort } from '@/lib/engines/date';
 // Resources / Financial Knowledge & Insights — R1.5 public SEO/metadata
 // helpers (spec §63-68).
 
@@ -131,7 +132,7 @@ export function formatPublicDate(value: string | null): string | null {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDateShort(d, 'AUD'); // day-first dd/mm/yyyy; PO review F13
 }
 
 export function buildFaqJsonLd(faqs: { question: string; shortAnswer: string }[]) {

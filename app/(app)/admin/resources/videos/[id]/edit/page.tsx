@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -12,7 +13,7 @@ import type { WorkflowCapabilities } from '@/components/resources/editor/Workflo
 // /admin/resources/videos/[id]/edit — spec §17-24, §68 (specialist edit
 // routing: a video-typed post is never loaded through the R1.3 Article
 // editor).
-export default async function VideoEditPage({ params }: { params: Promise<{ id: string }> }) {
+async function VideoEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -33,4 +34,14 @@ export default async function VideoEditPage({ params }: { params: Promise<{ id: 
   };
 
   return <VideoEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} />;
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Videos).
+export default function VideoEditPage(props: Parameters<typeof VideoEditPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/videos" label="Videos" />
+      <VideoEditPageContent {...props} />
+    </>
+  );
 }

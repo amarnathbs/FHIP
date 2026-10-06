@@ -276,7 +276,7 @@ const AMFI_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 
 export function toAmfiDate(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) throw new Error(`PC6: expected an ISO yyyy-mm-dd date, got '${iso}'`);
+  if (!m) throw new Error(`PC6: expected an ISO 8601 calendar date, got '${iso}'`);
   const monthIndex = Number(m[2]) - 1;
   if (monthIndex < 0 || monthIndex > 11) throw new Error(`PC6: invalid month in '${iso}'`);
   return `${m[3]}-${AMFI_MONTHS[monthIndex]}-${m[1]}`;

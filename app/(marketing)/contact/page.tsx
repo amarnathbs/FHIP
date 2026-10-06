@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ContactForm } from '@/components/marketing/ContactForm';
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 // Deliberately shows no phone number, address, or email address on the page
 // itself — only the form. Submissions post to app/api/contact/route.ts,
 // which stores them in contact_submissions and emails a notification.
-export default function ContactPage() {
+function ContactPageContent() {
   return (
     <div className="mx-auto max-w-xl px-6 py-16 text-gray-800">
       <h1 className="text-3xl font-semibold text-trust">Contact us</h1>
@@ -31,5 +32,15 @@ export default function ContactPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (home).
+export default function ContactPage() {
+  return (
+    <>
+      <PageBackLink href="/" label="home" className="mx-auto max-w-3xl px-6 pt-8" />
+      <ContactPageContent />
+    </>
   );
 }

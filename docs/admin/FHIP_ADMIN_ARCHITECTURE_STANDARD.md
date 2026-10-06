@@ -1,6 +1,6 @@
 # FHIP Admin Architecture Standard
 
-**Version:** 1.0
+**Version:** 1.1
 **Effective date:** 2026-08-30
 **Status:** Product Owner approved
 **Source:** Analyst Analytics Phase 0 discovery, Phase 0 correction supplement, Phase 0 final closure addendum, and the Phase A Implementation Plan's three correction/closure addenda (planning closure)
@@ -403,3 +403,18 @@ A workstream claiming compliance with this standard must be able to show, on req
 | Version | Date | Change | Approved by |
 |---|---|---|---|
 | 1.0 | 2026-08-30 | Initial canonical standard established (Wave 0), consolidating the Analyst Analytics Phase 0/Phase A planning closure decisions. | Product Owner |
+| 1.1 | 2026-10-06 | Added §18 Back navigation (every page has the shared `PageBackLink`, repo-wide guard test). Source: Product Owner review 06-10-2026, finding F6 (written instruction "all pages do have the button to return back ... for all future pages"). **Awaiting the Product Owner's formal ratification of this wording (§16.2).** | Product Owner instruction F6; wording pending ratification |
+
+---
+
+## 18. Back navigation
+
+Every page of the application, Admin and user-facing, gives the person a visible way back to its parent page (Product Owner review 06-10-2026, finding F6).
+
+- **One shared control.** Every `page.tsx` under `app/` (Admin pages under `app/(app)/admin/**` included) renders `<PageBackLink href="<parent>" label="<Parent name>" />` from `components/navigation/PageBackLink.tsx`, which shows "Back to <Parent name>". No page invents its own back control, and none uses `router.back()` or `window.history` (they break deep links and bookmarks).
+- **Parent, not history.** The target is the page's parent in the app hierarchy (a list's parent is its module home; an editor's or a record's parent is its list; a preview's parent is its editor). Admin tools with no Admin home return to the Dashboard.
+- **Accessible.** The control is a real link: keyboard focusable, with a visible focus outline, at least 44 px high, in a `nav` landmark labelled "Back navigation".
+- **Exemptions are explicit.** Only the top-level landing page and Dashboard, authentication pages, mandatory onboarding gates and print/PDF render targets are exempt. Each exemption is named, with its reason, in `BACK_LINK_EXEMPT` in `tests/unit/pageBackLinkGuard.test.ts`.
+- **Editors.** An editor keeps the control visible after Save, Approve and View. While it has unsaved changes, `useUnsavedChangesGuard` asks for confirmation before any in-page link (this one included) leaves the page.
+- **Enforced.** `tests/unit/pageBackLinkGuard.test.ts` fails when any `page.tsx` outside the allow-list lacks the component, when its target is not a real route, or when the page is missing from `docs/ux/BACK_NAVIGATION_INVENTORY.md`. New Admin pages (§14) add their own row to that inventory.
+- **Navigation grouping (related rule).** Admin sidebar entries that belong together share one group (for example "Premium and Promo Codes"); each entry is still gated by its own capability (§2, §4).

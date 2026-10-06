@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
@@ -10,7 +11,7 @@ import { PriceHistoryGate } from '@/components/investment-intelligence/PriceHist
 // is read back into, any FHIP financial register or net worth figure.
 // Every narrative string is an OBSERVATION or EDUCATION item; this page
 // contains no recommendation, and no buy/sell/switch/rebalance guidance.
-export default async function InvestmentPerformancePage() {
+async function InvestmentPerformancePageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -32,5 +33,15 @@ export default async function InvestmentPerformancePage() {
         <PerformanceClient />
       </PriceHistoryGate>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Investment Intelligence).
+export default function InvestmentPerformancePage() {
+  return (
+    <>
+      <PageBackLink href="/investment-intelligence" label="Investment Intelligence" />
+      <InvestmentPerformancePageContent />
+    </>
   );
 }

@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:a11y:sidebar": "node scripts/a11y/sidebarAxe.mjs",
     "resources:import-r0a": "tsx --env-file=.env.local scripts/resources/import-r0a-content-master.ts",
     "resources:rollback-r0a": "tsx --env-file=.env.local scripts/resources/rollback-r0a.ts",
     "resources:verify-r0a": "tsx --env-file=.env.local scripts/resources/verify-r0a.ts",

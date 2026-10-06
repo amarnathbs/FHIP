@@ -110,9 +110,9 @@ export const UPLOAD_MODE_OPTIONS: ReadonlyArray<{ value: UploadModeId; label: st
 
 /** Explicit date formats. There is deliberately NO default: a date such as 03-04-2024 is two different days depending on the order. */
 export const DATE_FORMAT_OPTIONS: ReadonlyArray<{ value: DateFormatId; label: string; example: string }> = [
-  { value: 'YYYY-MM-DD', label: 'Year first (YYYY-MM-DD)', example: '2024-01-31' },
+  { value: 'YYYY-MM-DD', label: 'Year first (year, month, day)', example: '2024-01-31' },
   { value: 'DD/MM/YYYY', label: 'Day/month/year (DD/MM/YYYY)', example: '31/01/2024' },
-  { value: 'MM/DD/YYYY', label: 'Month/day/year, US (MM/DD/YYYY)', example: '01/31/2024' },
+  { value: 'MM/DD/YYYY', label: 'Month first, US style (month, day, year)', example: '01/31/2024' },
   { value: 'DD-MM-YYYY', label: 'Day-month-year (DD-MM-YYYY)', example: '31-01-2024' },
   { value: 'DD-MMM-YYYY', label: 'Day-Mon-year (DD-MMM-YYYY)', example: '31-Jan-2024' },
   { value: 'DD MMM YYYY', label: 'Day Mon year (DD MMM YYYY)', example: '31 Jan 2024' },

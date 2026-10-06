@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
@@ -21,7 +22,7 @@ import { ProbableDuplicateBanner } from '@/components/investment-intelligence/Pr
 // sub-route is the clean option here: the import workflow is a substantial
 // stateful client component, and nesting it under an Overview that must stay
 // cheap (spec section 40) would have coupled the two.
-export default async function InvestmentIntelligenceDataPage({
+async function InvestmentIntelligenceDataPageContent({
   searchParams,
 }: {
   // 2026-09-29 fix (resolution-guidance links): an optional `?documentId=`
@@ -58,5 +59,15 @@ export default async function InvestmentIntelligenceDataPage({
       <InvestmentIntelligenceClient initialDocumentId={initialDocumentId} />
       <ManualDirectPositionForm />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Investment Intelligence).
+export default function InvestmentIntelligenceDataPage(props: Parameters<typeof InvestmentIntelligenceDataPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/investment-intelligence" label="Investment Intelligence" />
+      <InvestmentIntelligenceDataPageContent {...props} />
+    </>
   );
 }

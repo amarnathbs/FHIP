@@ -1,5 +1,8 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
+import { PageBackLink } from '@/components/navigation/PageBackLink';
+
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { SectionCard } from '@/components/dashboard/SectionCard';
@@ -81,7 +84,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -214,8 +217,7 @@ export default function ProfilePage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-muted">Date of birth</label>
-            <input
-              type="date"
+            <DateInput
               min={DOB_MIN_DATE}
               max={DOB_MAX_DATE}
               value={profile.date_of_birth ?? ''}
@@ -348,5 +350,15 @@ export default function ProfilePage() {
         <CloseAccountPanel />
       </SectionCard>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function ProfilePage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <ProfilePageContent />
+    </>
   );
 }

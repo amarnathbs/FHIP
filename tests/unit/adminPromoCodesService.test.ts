@@ -522,10 +522,14 @@ describe('admin navigation — promo codes is its own capability', () => {
   it('promoCodeManagement alone shows exactly "Promo Codes"; entitlementManagement / Super Admin do not imply it, and it does not imply them', async () => {
     const nav = await import('@/lib/admin/adminNav');
     const promoOnly = nav.buildAdminNavGroups(false, { ...nav.NO_ADMIN_CAPABILITIES, promoCodeManagement: true });
-    expect(promoOnly.map((g) => g.label)).toEqual(['Promo Codes']);
+    // PO review F10: one shared group; the capability still gates each ITEM on its own.
+    expect(promoOnly.map((g) => g.label)).toEqual(['Premium and Promo Codes']);
     expect(promoOnly[0].items).toEqual([{ label: 'Promo Codes', href: '/admin/entitlements/promo-codes' }]);
-    expect(nav.buildAdminNavGroups(false, { ...nav.NO_ADMIN_CAPABILITIES, entitlementManagement: true }).map((g) => g.label)).toEqual(['Entitlements']);
-    expect(nav.buildAdminNavGroups(true, nav.NO_ADMIN_CAPABILITIES).map((g) => g.label)).not.toContain('Promo Codes');
+    const entitlementOnly = nav.buildAdminNavGroups(false, { ...nav.NO_ADMIN_CAPABILITIES, entitlementManagement: true });
+    expect(entitlementOnly.map((g) => g.label)).toEqual(['Premium and Promo Codes']);
+    expect(entitlementOnly[0].items.map((i) => i.label)).toEqual(['Premium Access']);
+    const groupLabels = nav.buildAdminNavGroups(true, nav.NO_ADMIN_CAPABILITIES).map((g) => g.label);
+    expect(groupLabels).not.toContain('Premium and Promo Codes');
     expect(nav.parseAdminCapabilities({ data: { capabilities: { promoCodeManagement: 'true' } } }).promoCodeManagement).toBe(false);
   });
 

@@ -343,7 +343,7 @@ const NAVHISTORY_LAYOUT: ColumnLayout = {
 function parseWithLayout(text: string, fingerprint: SourceFingerprint, layout: ColumnLayout, opts: ParseOptions): AmfiParseResult {
   const maxNavDecimals = opts.maxNavDecimals ?? 10;
   const asOf = opts.asOfDate;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) throw new Error(`PC6: asOfDate must be ISO yyyy-mm-dd, got '${asOf}'`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) throw new Error(`PC6: asOfDate must be an ISO 8601 calendar date, got '${asOf}'`);
 
   const lines = text.split(/\r?\n/);
   const records: AmfiSchemeNavRecord[] = [];

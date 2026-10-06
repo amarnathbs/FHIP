@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 
@@ -62,9 +63,8 @@ export function RetirementTimingSettings({
           <label htmlFor="retirement_date" className="block text-sm text-gray-600">
             Retirement date (optional, most precise)
           </label>
-          <input
+          <DateInput
             id="retirement_date"
-            type="date"
             value={retirementDate}
             onChange={(e) => setRetirementDate(e.target.value)}
             className="mt-1 w-full rounded border px-3 py-2 text-sm"

@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
@@ -13,7 +14,7 @@ import { SipIntelligenceClient } from '@/components/investment-intelligence/SipI
 // Every narrative string is an OBSERVATION, EDUCATION, or SIMULATION item.
 // This page contains no recommendation: it never tells anyone to increase,
 // pause, stop, or switch a recurring investment.
-export default async function SipIntelligencePage() {
+async function SipIntelligencePageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -32,5 +33,15 @@ export default async function SipIntelligencePage() {
       <InvestmentIntelligenceSubNav />
       <SipIntelligenceClient />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Investment Intelligence).
+export default function SipIntelligencePage() {
+  return (
+    <>
+      <PageBackLink href="/investment-intelligence" label="Investment Intelligence" />
+      <SipIntelligencePageContent />
+    </>
   );
 }

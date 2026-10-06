@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const asOfRaw = url.searchParams.get('asOf');
   if (asOfRaw && !/^\d{4}-\d{2}-\d{2}$/.test(asOfRaw)) {
-    return bad('Invalid date parameter: expected YYYY-MM-DD.');
+    return bad('Invalid date parameter: expected a valid calendar date.');
   }
 
   // R6-FINAL (Sections 20-23): explicit, EXPLICIT-ONLY tax-profile

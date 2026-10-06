@@ -205,7 +205,7 @@ describe('PC6 amfiParser — whole-file behaviour', () => {
   });
 
   it('refuses to run without an explicit as-of date shape', () => {
-    expect(() => parseNavAll(navAll([]), { asOfDate: 'today' })).toThrow(/ISO yyyy-mm-dd/);
+    expect(() => parseNavAll(navAll([]), { asOfDate: 'today' })).toThrow(/ISO 8601 calendar date/);
   });
 
   it('collapses a byte-identical duplicate but REJECTS a conflicting one', () => {

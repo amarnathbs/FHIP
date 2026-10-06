@@ -6,6 +6,7 @@
 // inputs anywhere in the editor use this without a real <label>.
 
 import { useId } from 'react';
+import { DateInput } from '@/components/ui/DateInput';
 
 export function FieldWrap({
   label,
@@ -57,6 +58,45 @@ export function FieldWrap({
 
 const inputClass = 'block w-full rounded-compact border border-line px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-trust focus:outline-none focus:ring-1 focus:ring-trust';
 const errorInputClass = 'block w-full rounded-compact border border-risk px-3 py-2 text-sm text-ink focus:border-risk focus:outline-none focus:ring-1 focus:ring-risk';
+
+/**
+ * A DAY-FIRST date field (PO review 06-10-2026, F13): the person types DD-MM-YYYY (placeholder and one-line help come from
+ * components/ui/DateInput.tsx); the value in and out is the ISO date-only string the editors already keep in state and send to the
+ * API ('' while empty or not yet a real date). Replaces the old TextField with the year-first placeholder.
+ */
+export function DateTextField({
+  label,
+  value,
+  onChange,
+  hint,
+  error,
+  required,
+  id,
+}: {
+  label: string;
+  value: string;
+  onChange: (isoOrEmpty: string) => void;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  id?: string;
+}) {
+  const autoId = useId();
+  const fieldId = id ?? autoId;
+  return (
+    <FieldWrap label={label} htmlFor={fieldId} hint={hint} error={error} required={required}>
+      <DateInput
+        id={fieldId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        showHint={!hint}
+        aria-invalid={!!error}
+        aria-describedby={[hint ? `${fieldId}-hint` : null, error ? `${fieldId}-error` : null].filter(Boolean).join(' ') || undefined}
+        className={error ? errorInputClass : inputClass}
+      />
+    </FieldWrap>
+  );
+}
 
 export function TextField({
   label,
