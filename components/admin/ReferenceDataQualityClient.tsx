@@ -1,6 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { PC6_REFERENCE_SOURCES } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
+import {
+  buildCorrectionView,
+  buildImportBatchView,
+  formatDateDMY,
+  formatDateTimeDMY,
+  localiseIsoDatesInText,
+} from '@/lib/services/investment-intelligence/pc6/referenceDataQualityView';
+import { ImportBatchesPanel } from '@/components/admin/referenceDataQuality/ImportBatchesPanel';
+import { CorrectionsPanel } from '@/components/admin/referenceDataQuality/CorrectionsPanel';
+import {
+  ApprovedFallbackList,
+  BlockedSourcesList,
+  type ApprovedFallbackRow,
+  type BlockedSourceRow,
+} from '@/components/admin/referenceDataQuality/SourceRegisterPanels';
 
 // PC6/N.11 — read-only operator view of reference-market-data health.
 //
@@ -36,7 +52,8 @@ interface QualityPayload {
   corrections?: Panel<Array<Record<string, unknown>>>;
   risk_free?: Panel<Record<string, { status: string; detail?: string; freshness: { state: string; detail: string } }>>;
   job_control?: Panel<Array<{ job_key: string; enabled: boolean; disabled_reason: string | null; last_success_at: string | null; last_failure_at?: string | null; consecutive_failures: number }>>;
-  blocked_sources?: Panel<Array<{ sourceKey: string; label: string; licence: string; reason: string; termsUrl: string | null }>>;
+  blocked_sources?: Panel<BlockedSourceRow[]>;
+  approved_fallback_sources?: Panel<ApprovedFallbackRow[]>;
   scheme_mapping_gaps?: Panel<Array<Record<string, unknown>>>;
 }
 
@@ -67,6 +84,13 @@ const JOB_SOURCE_CONFIG: Record<string, string> = {
   pc6_amfi_scheme_master: 'amfi_scheme_master',
   pc6_amfi_daily_nav: 'amfi_nav_daily',
 };
+
+// Feeds that are scheduled to run: one with no run at all in the loaded window is shown as missed.
+const EXPECTED_FEEDS = Object.values(JOB_SOURCE_CONFIG);
+// Staleness is judged only for scheduled feeds: a one-off backfill window is not expected to be recent.
+const STALE_AFTER_DAYS_BY_FEED: Record<string, number> = Object.fromEntries(
+  EXPECTED_FEEDS.map((id) => [id, PC6_REFERENCE_SOURCES[id].staleAfterDays])
+);
 
 export default function ReferenceDataQualityClient() {
   const [payload, setPayload] = useState<QualityPayload | null>(null);
@@ -121,6 +145,14 @@ export default function ReferenceDataQualityClient() {
   if (error) return <main style={{ padding: '1.5rem' }}><h1>Reference Data Quality</h1><p><strong>Unavailable.</strong> {error}</p></main>;
   if (!payload) return <main style={{ padding: '1.5rem' }}><h1>Reference Data Quality</h1><p>Loading…</p></main>;
 
+  const importView = payload.import_batches?.data
+    ? buildImportBatchView(payload.import_batches.data, {
+        asOfDate: payload.asOfDate,
+        staleAfterDaysByFeed: STALE_AFTER_DAYS_BY_FEED,
+        expectedFeeds: EXPECTED_FEEDS,
+      })
+    : null;
+  const correctionView = payload.corrections?.data ? buildCorrectionView(payload.corrections.data) : null;
   const nav = payload.nav_freshness?.data;
   const bm = payload.benchmark_mapping_gaps?.data;
 
@@ -130,7 +162,8 @@ export default function ReferenceDataQualityClient() {
       <p style={{ opacity: 0.75, marginBottom: '1.5rem' }}>
         External market reference data only — scheme identity, NAV history, benchmarks, risk-free rates.
         Nothing here is derived from any user&apos;s holdings, and nothing here overrides what a user&apos;s
-        statement said. As at {payload.asOfDate}, generated {new Date(payload.generatedAt).toLocaleString()}.
+        statement said. As at {formatDateDMY(payload.asOfDate) ?? 'unknown date'}, generated{' '}
+        {formatDateTimeDMY(payload.generatedAt) ?? 'at an unknown time'}.
       </p>
 
       <Section title="NAV freshness" panel={payload.nav_freshness}>
@@ -145,7 +178,7 @@ export default function ReferenceDataQualityClient() {
               <ul>
                 {nav.stalest.slice(0, 10).map((s) => (
                   <li key={s.instrumentId}>
-                    {s.instrumentId} — last observation {s.latestAsOf ?? 'never ingested'}
+                    {s.instrumentId} — last observation {formatDateDMY(s.latestAsOf) ?? 'never ingested'}
                     {s.ageDays !== null ? ` (${s.ageDays} days old)` : ''}
                   </li>
                 ))}
@@ -158,7 +191,7 @@ export default function ReferenceDataQualityClient() {
       <Section title="Benchmark mapping gaps" panel={payload.benchmark_mapping_gaps}>
         {bm && (
           <p>
-            {bm.mapped} of {bm.totalFunds} funds mapped; <strong>{bm.unmapped} unmapped</strong>. {bm.note}
+            {bm.mapped} of {bm.totalFunds} funds mapped; <strong>{bm.unmapped} unmapped</strong>. {localiseIsoDatesInText(bm.note)}
           </p>
         )}
       </Section>
@@ -168,16 +201,7 @@ export default function ReferenceDataQualityClient() {
       </Section>
 
       <Section title="Import batches — including failures and the last successful run" panel={payload.import_batches}>
-        <ul>
-          {(payload.import_batches?.data ?? []).slice(0, 15).map((b, i) => (
-            <li key={String(b.id ?? i)}>
-              <code>{String(b.status)}</code> {String(b.source_config_id)} as at {String(b.as_of_date)} — read{' '}
-              {String(b.rows_read)}, accepted {String(b.rows_accepted)}, rejected {String(b.rows_rejected)}, inserted{' '}
-              {String(b.rows_inserted)}, unchanged {String(b.rows_unchanged)}, superseded {String(b.rows_superseded)}
-              {b.error_code ? ` — ${String(b.error_code)}: ${String(b.error_detail ?? '')}` : ''}
-            </li>
-          ))}
-        </ul>
+        {importView && <ImportBatchesPanel view={importView} />}
       </Section>
 
       <Section title="Unusual jumps and outliers" panel={payload.outliers}>
@@ -185,20 +209,14 @@ export default function ReferenceDataQualityClient() {
       </Section>
 
       <Section title="Source corrections" panel={payload.corrections}>
-        <ul>
-          {(payload.corrections?.data ?? []).slice(0, 15).map((c, i) => (
-            <li key={String(c.id ?? i)}>
-              {String(c.created_at)} — {String(c.correction_kind)} on {String(c.target_table)} by {String(c.actor_kind)}: {String(c.reason)}
-            </li>
-          ))}
-        </ul>
+        {correctionView && <CorrectionsPanel view={correctionView} />}
       </Section>
 
       <Section title="Risk-free freshness and governance" panel={payload.risk_free}>
         <ul>
           {Object.entries(payload.risk_free?.data ?? {}).map(([cc, v]) => (
             <li key={cc}>
-              <strong>{cc}</strong> — {v.status}. {v.detail ?? ''} Freshness: {v.freshness.state} ({v.freshness.detail})
+              <strong>{cc}</strong> — {v.status}. {localiseIsoDatesInText(v.detail ?? '')} Freshness: {v.freshness.state} ({localiseIsoDatesInText(v.freshness.detail)})
             </li>
           ))}
         </ul>
@@ -209,7 +227,7 @@ export default function ReferenceDataQualityClient() {
           {(payload.job_control?.data ?? []).map((j) => (
             <li key={j.job_key} style={{ marginBottom: '0.5rem' }}>
               <code>{j.job_key}</code> — {j.enabled ? 'enabled' : 'DISABLED'}
-              {j.disabled_reason ? `: ${j.disabled_reason}` : ''}. Last success {j.last_success_at ?? 'never'}; last failure {j.last_failure_at ?? 'none recorded'}; consecutive failures {j.consecutive_failures}.
+              {j.disabled_reason ? `: ${localiseIsoDatesInText(j.disabled_reason)}` : ''}. Last success {formatDateTimeDMY(j.last_success_at) ?? 'never'}; last failure {formatDateTimeDMY(j.last_failure_at) ?? 'none recorded'}; consecutive failures {j.consecutive_failures}.
               {JOB_SOURCE_CONFIG[j.job_key] && (
                 <>
                   {' '}
@@ -222,7 +240,7 @@ export default function ReferenceDataQualityClient() {
                   </button>
                   {rerunResult?.jobKey === j.job_key && (
                     <span style={{ marginLeft: '0.5rem', opacity: 0.85 }}>
-                      → <code>{rerunResult.status}</code>: {rerunResult.detail}
+                      → <code>{rerunResult.status}</code>: {localiseIsoDatesInText(rerunResult.detail)}
                     </span>
                   )}
                 </>
@@ -233,14 +251,11 @@ export default function ReferenceDataQualityClient() {
       </Section>
 
       <Section title="Blocked sources — awaiting a Product Owner decision" panel={payload.blocked_sources}>
-        <ul>
-          {(payload.blocked_sources?.data ?? []).map((s) => (
-            <li key={s.label} style={{ marginBottom: '0.5rem' }}>
-              <strong>{s.label}</strong> ({s.licence}) — {s.reason}
-              {s.termsUrl ? <> <a href={s.termsUrl} target="_blank" rel="noreferrer">Terms</a></> : null}
-            </li>
-          ))}
-        </ul>
+        <BlockedSourcesList rows={payload.blocked_sources?.data ?? []} />
+      </Section>
+
+      <Section title="Approved fallback sources" panel={payload.approved_fallback_sources}>
+        <ApprovedFallbackList rows={payload.approved_fallback_sources?.data ?? []} />
       </Section>
     </main>
   );

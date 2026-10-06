@@ -37,7 +37,7 @@ import { requireReferenceDataAdmin } from '@/lib/services/investment-intelligenc
 import { ok, bad, badValidation } from '@/lib/api';
 import { assessFreshness } from '@/lib/services/investment-intelligence/pc6/referenceDataQuality';
 import { classifyRiskFree, riskFreeFreshness } from '@/lib/services/investment-intelligence/pc6/riskFreeSeries';
-import { PC6_REFERENCE_SOURCES, blockedSources } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
+import { PC6_REFERENCE_SOURCES, sourcesAwaitingPoDecision, approvedFallbackSources, APPROVED_FALLBACK_STATEMENT } from '@/lib/config/investment-intelligence/pc6ReferenceSources';
 import { runReferenceIngest } from '@/lib/services/investment-intelligence/pc6/referenceIngestJob';
 
 export const dynamic = 'force-dynamic';
@@ -65,6 +65,7 @@ const PANELS = [
   'risk_free',
   'job_control',
   'blocked_sources',
+  'approved_fallback_sources',
   'nav1_retention_policy',
   'nav1_retention_holds',
 ] as const;
@@ -166,7 +167,9 @@ export const GET = adminRoute(async (req: Request) => {
       db.from('ii_reference_import_batches')
         .select('id, source_key, source_config_id, batch_kind, as_of_date, status, attempt, started_at, finished_at, rows_read, rows_accepted, rows_rejected, rows_inserted, rows_unchanged, rows_superseded, error_code, error_detail, source_sha256, source_byte_length')
         .order('started_at', { ascending: false })
-        .limit(100)
+        // 300 (was 100): the page now folds repeated healthy runs, so a wider window is cheap and keeps
+        // the latest success of a quiet feed inside it. The UI states the window size honestly.
+        .limit(300)
     );
   }
 
@@ -188,7 +191,7 @@ export const GET = adminRoute(async (req: Request) => {
       db.from('ii_reference_corrections')
         .select('id, target_table, target_row_id, correction_kind, actor_kind, actor_admin_id, reason, created_at')
         .order('created_at', { ascending: false })
-        .limit(100)
+        .limit(300)
     );
   }
 
@@ -227,11 +230,33 @@ export const GET = adminRoute(async (req: Request) => {
   }
 
   // --- Blocked sources (the honest gaps) -----------------------------------
+  // Only sources still AWAITING a Product Owner decision. A source the PO has already approved as
+  // a fallback (e.g. mfnav.in, 06/10/2026) moves to approved_fallback_sources below; it is not
+  // blocked on a decision, and it is not operational either.
   if (wanted.includes('blocked_sources')) {
     out.blocked_sources = {
       state: 'ok',
-      data: blockedSources().map((s) => ({
+      data: sourcesAwaitingPoDecision().map((s) => ({
         sourceKey: s.sourceKey, label: s.label, kind: s.kind, licence: s.licence, termsUrl: s.termsUrl, reason: s.notes,
+      })),
+    };
+  }
+
+  // --- Approved fallback sources (decided by the PO, NOT operational) --------
+  // Read-only registry data. Listing a source here never enables it and never calls its endpoint.
+  if (wanted.includes('approved_fallback_sources')) {
+    out.approved_fallback_sources = {
+      state: 'ok',
+      data: approvedFallbackSources().map((s) => ({
+        sourceKey: s.sourceKey,
+        label: s.label,
+        licence: s.licence,
+        termsUrl: s.termsUrl,
+        statement: APPROVED_FALLBACK_STATEMENT,
+        decidedOn: s.poDecision?.decidedOn ?? '',
+        decisionBasis: s.poDecision?.basis ?? '',
+        technicalNotes: s.notes,
+        operational: s.enabled,
       })),
     };
   }
