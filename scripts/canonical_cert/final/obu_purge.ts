@@ -19,7 +19,7 @@ console.log('DEV host verified:', hostGuard());
 async function main() {
   const { runPurgeAttempt } = await import('@/lib/financial-data-hub/services/purge');
   const sb = await db();
-  const U3 = (await sb.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u: any) => u.email === (process.env.OBU_ACTOR ?? 'forecast.tc015@example.test')).id;
+  const U3 = (await sb.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u: any) => u.email === (process.env.OBU_ACTOR ?? 'forecast.tc015@example.test'))?.id as string;
   const OWNER_COLS = ['owner_member_id', 'owner_business_entity_id', 'owner_role', 'owner_selection_source', 'owner_allocation'];
   const docs = ((await sb.from('fdh_statement_uploads').select('*').eq('user_id', U3).not('raw_document_storage_reference', 'is', null).in('raw_document_purge_status', ['not_required', 'pending', 'failed'])).data ?? []) as any[];
   const picks: any[] = [];
@@ -51,7 +51,7 @@ async function main() {
     record(33, `${label}: no full account number (7+ digit run) remains anywhere on the row`, !/\d{7,}/.test(dump.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '').replace(/20\d\d-\d\d-\d\dT[\d:.+]+/g, '').replace(/[0-9a-f]{64}/g, '')), '');
   }
   // CAS side (already purged at processing time): owner provenance of the documents is intact on DEV
-  const U1 = (await sb.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u: any) => u.email === 'forecast.tc083@example.test').id;
+  const U1 = (await sb.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u: any) => u.email === 'forecast.tc083@example.test')?.id as string;
   const cas = ((await sb.from('ii_source_documents').select('owner_role,owner_selection_source,owner_member_id,owner_business_entity_id,owner_allocation,storage_purged_at').eq('user_id', U1).eq('owner_selection_source', 'user_selected')).data ?? []) as any[];
   record(33, 'India CAS documents: raw files already purged and owner provenance (role, member / entity, joint allocation) retained on every one', cas.length >= 6 && cas.every((c) => c.storage_purged_at && c.owner_role) && cas.some((c) => c.owner_role === 'joint' && Array.isArray(c.owner_allocation)) && cas.some((c) => c.owner_business_entity_id), `${cas.length} documents; roles=${[...new Set(cas.map((c) => c.owner_role))].join(',')}`);
   const allocs = (await sb.from('ii_ownership_allocation').select('status,allocation_basis_points').eq('user_id', U1).eq('status', 'active')).data ?? [];

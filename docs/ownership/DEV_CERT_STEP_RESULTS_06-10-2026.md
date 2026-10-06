@@ -1,0 +1,86 @@
+# Owner-before-upload: DEV certification, per-step results (06-10-2026 to 07-10-2026)
+
+Spec: `DEV_APPLICATION_AND_CERTIFICATION_SPEC_06-10-2026.md` (38 steps). DEV project `vqycarelcoijzwlpkpcz` only; production was never read or written; no push; no PO credential used (existing synthetic fixture users, minted sessions).
+
+**Code under test.** `origin/main` `b105cf48bcef8adb1e14d6f3c53ad3015c57e797` plus the commits of branch `fix/owner-before-upload-dev-cert-20261006` (tip recorded in section 4). The DEV app was the repository's own `next dev` (webpack) on `127.0.0.1:3991`, run from this worktree against DEV. That is "DEV app running the exact code", **not** an Amplify deployment: Amplify was not touched.
+
+**Evidence labels.** unit-tested, PGlite-verified, **DEV-verified** (database and API agree), **DEV-browser-verified** (a headless Chromium driven by the harness against the localhost app on DEV; it is **not** the PO's own browser), production-verified (none). Raw result files: `dev_cert_evidence_06-10-2026/*.json`; screenshots: `dev_cert_evidence_06-10-2026/screens/`.
+
+## 1. Per-step results
+
+| Step | Result | Evidence (label) |
+|---|---|---|
+| 1 Repository truth | PASS | HEAD `b105cf4` = `origin/main`; `2d09fb6` and the owner-edit / owner-before-upload commits are ancestors (checkpoint 1). |
+| 2 Collision re-scan | PASS | 833 refs, all history: one file ever named `0236*`. |
+| 3 DEV prerequisites | PASS | 0032, 0140 to 0142, 0153, 0207, AIE tables, institution master present (read only). |
+| 4 Is 0236 applied? | PASS: ALREADY APPLIED, exact match | Columns, FKs, comments, function: my read-only probe. Constraints, triggers, RLS: **PO grids 01 and 03, identical, fingerprint `0d1dcc01ebb3285cc0c0f27f510cd38d`** (12 column rows, 13 constraints, 2 triggers, 2 functions, 4 FKs, RLS on 3 tables). The `ii_source_documents.owner_member_id` FK has no delete rule because it comes from 0032: not drift. DEV-verified. |
+| 5 Constraint count | PASS | 13 is authoritative (6 + 6 + 1); table in checkpoint 1; no schema change. |
+| 6 Apply 0236 once, then again | PASS (DEV-verified) | Already present, so "once" was impossible; the PO ran the migration twice with no error and fingerprint 01 = 03. |
+| 7 Backfill preview | PASS (DEV-verified) | PO ran the shipped script (rolled back): preview matched my prediction; invariants held (no Self invented: 1 document with no member became `legacy_unset`, role NULL). Note: DEV really held 16 CAS documents (13 `user_selected`: self 8, spouse 1, joint 1, family_trust 1, other 1, company 1), not the 4 / 1 my checkpoint 1 stated. |
+| 8 Backfill commit + second preview | PASS (DEV-verified) | PO ran the COMMIT copy once; I read DEV myself: bank documents 6 `legacy_unset`; CAS 2 `backfill_from_document` (role self), 1 `legacy_unset`, 13 `user_selected` unchanged; PO grid 08: totals 6 and 16, every "will" line 0 (idempotent). |
+| 9 Current code on DEV | PASS, with the labelling above | `next dev` on port 3991 from this worktree; AIE flags switched on for the AIE step only. Not a deployment. |
+| 10 Owner-required scripts | PASS with 2 recorded caveats | Table in section 2. |
+| 11 India CAS, Self | PASS | DEV-verified + DEV-browser-verified: owner required before upload (Upload disabled until chosen; 422 `owner_required` from the API), stored on the document (`self` / `user_selected`), applied to both folio accounts, "Filed under" friendly name, no `owner_unmatched` case, reprocess and Re-evaluate keep the owner, raw file purged and owner kept. |
+| 12 Spouse | PASS | A real Spouse member was added through the Add-household-member route (relationship `spouse`, never role-only); document and both accounts owned by it; persists after reprocess. |
+| 13 Joint 60/40 | PASS | Document keeps 6000/4000 = 10000; active allocation group 6000/4000; recertification has no owner blocker; published **once** as joint; **oracle: holding 1,000,000 -> Self 600,000 + Spouse 400,000, joint class 1,000,000, household macro line equals the sum of the classes, never 2,000,000.** Browser: labelled percentage boxes and the running total message. |
+| 14 Joint negatives | PASS | 9 refused through the API (9999, 10001, negative, zero, duplicate, one-owner, fractional, cross-tenant member, no percentages), no row created; the same shapes refused by the database itself with the named 0236 constraint or the cross-tenant trigger (service role, app bypassed): 10 DB-level refusals on both tables. Browser: 70 + 25 shows "The shares add up to 95.00%. They must add up to exactly 100%." |
+| 15 Company / Trust / HUF CAS | PASS | Synthetic entities created for the fixture user (DEV had none for it); each CAS owned by the entity, active allocation 10000 bp, account has no personal member, **publication into the personal register refused (422)**, the personal investments table gained nothing, each entity is its own owner class and the macro line is the sum; an AU user cannot create an HUF (403) nor use an India user's HUF id (`owner_not_found`). |
+| 16 Per-folio owner conflict | PASS after one defect was fixed | API and **browser (mobile 375 px)**: both folios listed individually; a wrong target signature is refused (409); one folio ticked and confirmed changes only that folio, the other stays with the Spouse, audit event written, reload persists, Re-evaluate uses the latest decision, then Select all moves the rest; cross-tenant 404. **Defect found live and fixed (section 3, D6)**: the screen could not confirm the second folio. |
+| 17 Printed joint vs sole owner | PASS | Non-blocking `statement_prints_joint_holding` warning, no blocking case; "This is not joint" clears it without rewriting any owner, survives reprocess, another tenant gets 404, audit event written. |
+| 18 Same file, different owner | PASS | Same bytes + same owner: deduplicated. Different owner: **409 `identical_upload_different_owner`** naming the first owner. Same people, different split: 409. Bank CSV likewise. **Cross-tenant: a second user uploading the first user's exact bytes gets an ordinary new upload with the identical response shape (no dedupe flag, no foreign document id), and reading the first user's document id answers exactly like a random id: no leak.** |
+| 19 Bank CSV, Self / Spouse / Joint | PASS | Owner required; document owner; account created with that `owner_role`; transactions land on the linked account with the period read from the statement; three separate accounts; options offer no Trust, Company or HUF; Joint takes no percentage box. |
+| 20 Bank PDF, Self / Spouse / Joint / SMSF | **PASS for owner attribution; PARTIAL / DEFERRED DOWNSTREAM CAPABILITY for SMSF cash flow** | Bank PDF accepted for all four, accounts carry the owner, transactions read. SMSF is AU only (an India user gets 403 `owner_not_allowed_for_country`). **`SMSF OWNER ATTRIBUTION` is certified. `SMSF BANK TRANSACTION -> SMSF CASH-FLOW INTEGRATION` does not exist (PO-deferred, final report section 8 item 2) and is not claimed.** |
+| 21 Bank entity refusal | PASS | Company, Family Trust and (India) HUF refused with 422 `owner_not_allowed_for_flow` before any processing; no document or account row; personal totals unchanged. |
+| 22 Account picker, synthetic PDF | PASS with 1 recorded finding | One exact match: assigned automatically. No match: never guessed, picker lists accounts and prefilled suggestion "Commonwealth Bank ... ****9999". Bank-name tie-break works (an ANZ statement does not take the CBA account, a CBA statement still picks the CBA one). Full account number printed: nothing beyond trailing digits appears anywhere (API, document row, account row). Password-protected: nothing read. Truncated and unrecognised: nothing invented. **Finding:** with exactly one institution-less account, a statement from an unrecognised bank is attached to it without asking (existing "only account" rule). |
+| 23 Account picker, CSV | PASS | No digits and no account: created. One account: reused. Several accounts: `ambiguous` with a blocking review item, never guessed; picker lists candidates (name and last digits only); choosing assigns on the same document; "new account" with digits creates it; a 10-digit number is refused (`invalid_digits`). |
+| 24 Reassignment | PASS | Same account again: idempotent. Different account after assignment: 409 `already_assigned_to_other`. Two simultaneous different choices: exactly one winner. Wrong currency and closed account refused. Another user's statement and another user's account answer exactly like a random id (404, identical body). Review item closes and processing continues. |
+| 25 Owner-change conflict | PASS | Upload as Spouse to the Self account: 409 `account_owner_conflict` before anything is written; with `confirm_owner_change` the account becomes Spouse, audited, reload proves it. |
+| 26 Phase 2 routes | PASS | Payslip, liability, retirement, AU investment (Joint 50/50), generic upload sessions: no owner refused; foreign owner `owner_not_found`; valid owner stored on the document; owner changed between upload and Approve / Apply / account-match: **409 `owner_differs_from_upload`**; canonical write exactly once (one new income source, one new liability), repeat Apply `ALREADY_APPLIED`; entity and joint-without-percentages refused for AU investment; `tax_document` needs no owner. |
+| 27 AIE routes | PASS | Flags on, no AI key: AIE bank intake needs an owner (422 before the body is read), stores the validated selection (ids only), writes nothing at intake, Accept writes the canonical statement once with the STORED owner (self / user_selected) and is idempotent; a deactivated member between intake and Accept is refused; an ownerless legacy intake is refused; another tenant cannot Accept. AIE Investment Intelligence: owner required, a bare `owner_member_id` is not an owner, a disagreeing owner at Accept is refused, Accept writes the source document with the stored owner. Static scan: no AI prompt, provider or gateway file reads owner data (19 files). |
+| 28 Malware admission boundary | PASS (DEV-verified) | A document whose scan state was set to `malicious` is **not parsed** by the bank identity reader (the printed digits do not select the account); control: the same document with the state restored is read and the printed digits select the account. Does not certify the production malware programme. |
+| 29 Scheduler baseline | PASS: stale test fixed | Checkpoint 1 section 6. |
+| 30 Institution identity | **INCOMPLETE, as declared** | Deterministic adapter-derived institution worked live (two banks with the same last digits stayed separate accounts; CBA resolved from the master). The panel still sends no canonical `institution_id`. **`INSTITUTION_ID — NOT YET COMPLETE FOR GENERAL PRODUCTION BANK INGESTION`.** Non-blocking for the DEV verdict. |
+| 31 Financial oracles | PASS, one gap reported | SMSF expense 1,000: personal Expenses +0 (control: the same 1,000 as Self is +1,000). Company 1,000,000 at 50%: Net Worth +500,000, personal Investments +0 (control: at 100% a further +500,000). Bank entity attempt refused, Income, Expenses, Net Worth unchanged. **Gap, not a pass: an SMSF bank statement does not feed the SMSF cash-flow view.** |
+| 32 Cross-tenant matrix | PASS | 23 probes: foreign member, entity, joint participant, statement, account, holding, case, business entity, household member, bank statement id: each answered exactly like a random id (same status and body); control: the owner gets 200. |
+| 33 Purge keeps ownership | PASS | Real purge service on synthetic bank (Self, Spouse, Joint, SMSF) and a Joint AU investment statement: raw object deleted and absent, owner columns and joint allocation unchanged, raw filename nulled, no 7-digit run left on the row; CAS documents already purged keep role, member / entity and allocation. **Observation:** the storage download endpoint kept serving a just-deleted object for about 51 to 54 seconds after the purge reported it absent (list was empty at once); synthetic data, noted for the production-readiness review. |
+| 34 Reload / mobile / keyboard | PASS (headless Chromium, not a screen reader) | Owner selector reachable with Tab, visible focus ring, arrow keys choose Joint, Tab and Space tick owners, inline 95.00% message, reload and Back leave the form empty (no stale owner); mobile 375 px: no horizontal overflow on Statements & data and with the conflict panel open (after fix D5), conflict dialog operable. **Not a formal screen-reader certification.** |
+| 35 Full regression | see section 5 | |
+| 36 Zero residue | **NOT ZERO: PO action needed** | Section 6. |
+| 37 Final documents | done | Matrix and report updated. |
+| 38 Verdict | see the report | |
+
+## 2. Step 10: updated certification scripts run live
+
+| Script | Result | Owner context used | Cleanup |
+|---|---|---|---|
+| `final/owner_required_negative_controls.mjs` | **17 / 17 PASS** (incl. control with a valid owner; entity-bank refusal ran in the CAS and bank journeys because the fixture user had no entity at that moment) | none, then Self | ledger |
+| `econ/scenario_payslip.ts` payslip first | 13 / 13 | Self (injected by `api()`), Spouse in step 26 | ledger |
+| `econ/scenario_payslip.ts` bank first | 12 / 12 | Self | ledger |
+| `econ/scenario_broker.ts` | 13 / 13 | Self | ledger |
+| `econ/scenario_retirement.ts` | 14 / 14 | Self | ledger |
+| `econ/scenario_unknown.ts` | 4 / 4 | Self | ledger |
+| `econ/scenario_loan.ts` | 22 / 22 on a user with no earlier liabilities (21 / 22 on a user holding leftovers: the check "attacker has no imported liabilities" saw the earlier residue) | Self | liability chains: PO SQL |
+| `econ/scenario_card.ts` | **22 / 23**: "card pair 2: before Apply only the bank line counts" saw 0 instead of 220; the final oracle for the same pair (+220, never 440) passes. Not owner-related: none of the read models changed in this branch. Recorded, not repaired. | Self | liability chains: PO SQL |
+
+The remaining ~25 older live scripts (`fdh4`, `fdh5`, `fdh6`, `fdh8`, `fdh11`, `fdh12`, `g5`, `lr1`, `r7final`, `aie1_*`, `nav1_r2_*`) create their own throw-away users with passwords through the Auth admin API. Under the PO rule (no created accounts or passwords) they were **not run**; they stay syntax-checked, type-checked and covered by the repository guard test `ownerBeforeUploadScripts` (no script may post to an owner-required route without naming an owner). That is the honest gap in step 10.
+
+## 3. Defects found by this testing, each repaired with a test that failed first
+
+| # | Defect | Found by | Repair | Test that failed before |
+|---|---|---|---|---|
+| D1 | The five 0236 columns of `fdh_statement_uploads` had no field disposition (R1 orphan, R7 strict) | full test run (failing on `main`) | five D_METADATA entries, floor 67 to 72, registry doc regenerated | `uploadFieldDispositionRegistry`, `...AntiVacuity` (17 tests) |
+| D2 | Joint owner amounts printed in a left-aligned cell (G2) in `OwnerBreakupTable` | full test run | amounts moved into the right-aligned Value cell | `g2AmountColumnAlignment` |
+| D3 | `statementResumeListAndApplyOnce` still posted a retirement upload with no owner (stale test) | full test run | test names an owner, plus a refusal control | the test itself (422) |
+| D4 | `aie1MalwareScanSweepSchedulerPglite` stale after migration 0229 | full test run | asserts the 0228 / 0229 end state with a production control | 3 failing tests |
+| D5 | Statements & data scrolled sideways at 375 px (statement rows did not wrap) | DEV browser, mobile | `flex-wrap` on the row action container | `ownerBeforeUploadMobileLayout` (2 tests, with a named negative control) |
+| **D6** | **After the first per-folio confirmation the saved owner review lost its target owner, so the screen sent an empty signature and every later confirmation was a 422: the "then Select all" step could not be done from the screen** | DEV browser step 16 | `documentOwner.confirmOwnerChange` keeps `targetSignature` | `ownerBeforeUploadIi` "DEV-found defect ..." |
+
+**Observations, not repaired (not defects of this programme, or out of scope):** (a) a household member removed after documents were uploaded leaves documents with role `self` and no member; a later identical re-upload under the re-created Self reports "different owner (self)", which is confusing; (b) the storage download delay in step 33; (c) the unrecognised-bank PDF attaching to a lone institution-less account (step 22); (d) `scenario_card` pair 2 (step 10); (e) the manual-entry form on Statements & data still uses a native date input.
+
+## 4. Commits (branch `fix/owner-before-upload-dev-cert-20261006`, not pushed)
+
+See `git log origin/main..HEAD` in the worktree; the final tip is in the report.
+
+{{SECTION5}}
+
+{{SECTION6}}

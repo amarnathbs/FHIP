@@ -1,0 +1,90 @@
+{
+  "at": "2026-10-06T06:33:02.891Z",
+  "results": [
+    {
+      "ok": true,
+      "label": "bank-csv: no owner is refused 422 owner_required",
+      "detail": "HTTP 422 owner_required"
+    },
+    {
+      "ok": true,
+      "label": "bank-csv: a garbled owner is refused 422 owner_invalid",
+      "detail": "HTTP 422 owner_invalid"
+    },
+    {
+      "ok": true,
+      "label": "bank-csv: a member id that is not this user's is refused owner_not_found",
+      "detail": "HTTP 422 owner_not_found"
+    },
+    {
+      "ok": true,
+      "label": "bank-pdf: no owner is refused 422 owner_required",
+      "detail": "HTTP 422 owner_required"
+    },
+    {
+      "ok": true,
+      "label": "bank-pdf: a garbled owner is refused 422 owner_invalid",
+      "detail": "HTTP 422 owner_invalid"
+    },
+    {
+      "ok": true,
+      "label": "bank-pdf: a member id that is not this user's is refused owner_not_found",
+      "detail": "HTTP 422 owner_not_found"
+    },
+    {
+      "ok": true,
+      "label": "liability: no owner is refused 422 owner_required",
+      "detail": "HTTP 422 owner_required"
+    },
+    {
+      "ok": true,
+      "label": "liability: a garbled owner is refused 422 owner_invalid",
+      "detail": "HTTP 422 owner_invalid"
+    },
+    {
+      "ok": true,
+      "label": "liability: a member id that is not this user's is refused owner_not_found",
+      "detail": "HTTP 422 owner_not_found"
+    },
+    {
+      "ok": true,
+      "label": "retirement: no owner is refused 422 owner_required",
+      "detail": "HTTP 422 owner_required"
+    },
+    {
+      "ok": true,
+      "label": "retirement: a garbled owner is refused 422 owner_invalid",
+      "detail": "HTTP 422 owner_invalid"
+    },
+    {
+      "ok": true,
+      "label": "retirement: a member id that is not this user's is refused owner_not_found",
+      "detail": "HTTP 422 owner_not_found"
+    },
+    {
+      "ok": true,
+      "label": "au-investment: no owner is refused 422 owner_required",
+      "detail": "HTTP 422 owner_required"
+    },
+    {
+      "ok": true,
+      "label": "au-investment: a garbled owner is refused 422 owner_invalid",
+      "detail": "HTTP 422 owner_invalid"
+    },
+    {
+      "ok": true,
+      "label": "au-investment: a member id that is not this user's is refused owner_not_found",
+      "detail": "HTTP 422 owner_not_found"
+    },
+    {
+      "ok": true,
+      "label": "CONTROL: the same bank-csv upload WITH a valid Self owner is accepted (200)",
+      "detail": "HTTP 200"
+    },
+    {
+      "ok": true,
+      "label": "upload-sessions (payslip): no owner is refused 422 owner_required",
+      "detail": "HTTP 422 owner_required"
+    }
+  ]
+}

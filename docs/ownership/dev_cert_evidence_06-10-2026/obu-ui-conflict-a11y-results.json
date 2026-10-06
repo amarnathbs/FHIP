@@ -1,0 +1,98 @@
+[
+  {
+    "step": 34,
+    "label": "KEYBOARD: the owner selector can be reached with the Tab key alone",
+    "ok": true,
+    "detail": "{\"tag\":\"select\",\"name\":\"Choose one Forecast Test User TC083 (you) FHIP Synthetic Spouse (Spouse) FHIP OB\",\"label\":\"Who does this document belong to?\",\"outline\":true,\"boxShadow\":false}"
+  },
+  {
+    "step": 34,
+    "label": "FOCUS: the focused owner selector shows a visible focus indicator (outline or ring)",
+    "ok": true,
+    "detail": "{\"tag\":\"select\",\"name\":\"Choose one Forecast Test User TC083 (you) FHIP Synthetic Spouse (Spouse) FHIP OB\",\"label\":\"Who does this document belong to?\",\"outline\":true,\"boxShadow\":false}"
+  },
+  {
+    "step": 34,
+    "label": "KEYBOARD: the arrow keys move the selector to Joint and the joint panel opens",
+    "ok": true,
+    "detail": "value=joint"
+  },
+  {
+    "step": 34,
+    "label": "KEYBOARD: Tab and Space tick owners in the joint list (2 ticked without a mouse)",
+    "ok": true,
+    "detail": "ticked=2"
+  },
+  {
+    "step": 34,
+    "label": "two labelled percentage boxes appear for the two ticked owners",
+    "ok": true,
+    "detail": "boxes=2"
+  },
+  {
+    "step": 34,
+    "label": "INLINE VALIDATION: 70 + 25 says the shares add up to 95.00% and must be exactly 100%",
+    "ok": true,
+    "detail": "The shares add up to 95.00%. They must add up to exactly 100%."
+  },
+  {
+    "step": 34,
+    "label": "RELOAD: the owner selector starts empty again (\"Choose one\"): a stale owner is never silently carried over",
+    "ok": true,
+    "detail": "value=\"\""
+  },
+  {
+    "step": 34,
+    "label": "BACK/forward navigation: the form comes back empty and the page is intact (no stale owner, upload disabled)",
+    "ok": true,
+    "detail": "value=\"\""
+  },
+  {
+    "step": 16,
+    "label": "BROWSER setup: two folios were filed under the Spouse through the API first",
+    "ok": true,
+    "detail": "2 accounts"
+  },
+  {
+    "step": 34,
+    "label": "MOBILE 375px: no horizontal page overflow on Statements & data",
+    "ok": true,
+    "detail": "{\"sw\":375,\"iw\":375}"
+  },
+  {
+    "step": 16,
+    "label": "BROWSER (mobile): the conflict panel appears, lists BOTH folios individually and says they were left as they were",
+    "ok": true,
+    "detail": "2 folios on this statement are already filed under a different owner. They were left exactly as they were. Choose which folios, if any, should move to Forecast Test User TC083. |  | Select all | 4452740000101: now FHIP Synthetic Spouse → change to Forecast Test User TC083 | 4452740000202: now FHIP S"
+  },
+  {
+    "step": 34,
+    "label": "MOBILE 375px: no horizontal overflow with the conflict panel open",
+    "ok": true,
+    "detail": "{\"sw\":375,\"iw\":375}"
+  },
+  {
+    "step": 16,
+    "label": "BROWSER: ticking ONE folio asks for confirmation naming the target and says the other folio stays as it is",
+    "ok": true,
+    "detail": "You are about to change the owner of 1 folio to Forecast Test User TC083. The other 1 stay as they are. Holdings and transactions are not changed — only who they are attributed to.  Confirm change Cancel"
+  },
+  {
+    "step": 16,
+    "label": "BROWSER+DB: after \"Confirm change\" the ticked folio is Self and the unticked folio is still the Spouse",
+    "ok": true,
+    "detail": "[[\"101\",\"self\"],[\"202\",\"spouse\"]]"
+  },
+  {
+    "step": 16,
+    "label": "BROWSER: the panel now lists only the remaining folio, and offers Select all",
+    "ok": true,
+    "detail": "A folio on this statement is already filed under a different owner. They were left exactly as they were. Choose which folios, if any, should move to Forecast Test User TC083. |  | Select all | 4452740"
+  },
+  {
+    "step": 16,
+    "label": "BROWSER+DB: Select all then confirm moves the remaining folio; both are Self and the panel disappears",
+    "ok": true,
+    "detail": "[true,true]"
+  }
+]

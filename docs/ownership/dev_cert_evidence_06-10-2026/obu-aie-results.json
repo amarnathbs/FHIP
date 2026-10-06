@@ -1,0 +1,122 @@
+[
+  {
+    "step": 27,
+    "label": "AIE II intake with Self: run created; owner stored on the intake",
+    "ok": true,
+    "detail": "HTTP 200 status=unresolved "
+  },
+  {
+    "step": 27,
+    "label": "AIE II intake with Self: run created; owner stored on the intake (fixtures tried: q01:unresolved, q07:unresolved, q03:unresolved, q04:unresolved, q09:unresolved, q11:unresolved, q06:unresolved)",
+    "ok": true,
+    "detail": "HTTP 200 status=unresolved "
+  },
+  {
+    "step": 27,
+    "label": "AIE bank intake is reachable on this DEV app (flags on) and an intake with NO owner is refused 422 owner_required before the body is read",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 27,
+    "label": "AIE bank intake: a member id that is not this tenant's -> owner_not_found",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_found"
+  },
+  {
+    "step": 27,
+    "label": "AIE bank intake: a Company owner is refused (PO-OBU-02)",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_allowed_for_flow"
+  },
+  {
+    "step": 27,
+    "label": "AIE bank intake with an owner: accepted, run created, and the validated wire selection is stored on the intake (ids only)",
+    "ok": true,
+    "detail": "HTTP 200 status=awaiting_acceptance stored={\"kind\":\"member\",\"memberId\":\"6fe1b255-3fe5-443e-a0d6-f147b5851ee0\"}"
+  },
+  {
+    "step": 27,
+    "label": "the stored owner_selection holds no document content (keys: kind + ids only)",
+    "ok": true,
+    "detail": "[\"kind\",\"memberId\"]"
+  },
+  {
+    "step": 27,
+    "label": "NO canonical write at intake: no statement row exists for this run before Accept",
+    "ok": true,
+    "detail": "statements=22"
+  },
+  {
+    "step": 27,
+    "label": "AIE bank Accept uses the STORED owner: the canonical statement is written once, owner self / user_selected",
+    "ok": true,
+    "detail": "HTTP 200  written=true role=self"
+  },
+  {
+    "step": 27,
+    "label": "Accept again is idempotent (alreadyCompleted, no second statement)",
+    "ok": true,
+    "detail": "HTTP 200 {\"accepted\":true,\"alreadyCompleted\":true,\"insurancePolicyId\":null,\"iiSourceDocumentId\":null,\"statementUploadId\":null}"
+  },
+  {
+    "step": 27,
+    "label": "owner changed between intake and Accept (the Spouse member was deactivated): Accept RE-VALIDATES and refuses, nothing written",
+    "ok": true,
+    "detail": "HTTP 422 missing_required_input"
+  },
+  {
+    "step": 27,
+    "label": "an OLD ownerless intake (owner_selection NULL) is refused at Accept with the re-upload message; nothing written",
+    "ok": true,
+    "detail": "HTTP 422 missing_required_input"
+  },
+  {
+    "step": 27,
+    "label": "another tenant cannot Accept this run (404, same as an unknown run)",
+    "ok": true,
+    "detail": "HTTP 404"
+  },
+  {
+    "step": 27,
+    "label": "AIE Investment Intelligence intake with NO owner -> 422 owner_required",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 27,
+    "label": "a bare legacy owner_member_id is no longer an owner (still 422 owner_required)",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 27,
+    "label": "AIE II intake with Self: run created; owner stored on the intake (fixtures tried: holder=FORECAST TEST USER TC083)",
+    "ok": true,
+    "detail": "HTTP 200 status=awaiting_acceptance "
+  },
+  {
+    "step": 27,
+    "label": "a caller-supplied ownerMemberId that DISAGREES with the stored owner is refused at Accept",
+    "ok": true,
+    "detail": "HTTP 422 missing_required_input"
+  },
+  {
+    "step": 27,
+    "label": "AIE II Accept: the canonical source document is written with the STORED owner (self / user_selected)",
+    "ok": true,
+    "detail": "HTTP 200  role=self"
+  },
+  {
+    "step": 27,
+    "label": "no AI prompt / provider / gateway module reads owner, household-role or intake-owner data (static scan of lib/aie provider, prompt and adapter prompt files)",
+    "ok": true,
+    "detail": "19 files scanned; offenders=[]"
+  },
+  {
+    "step": 27,
+    "label": "AI fallback is OFF on this app (no OpenAI key, AIE_AI_FALLBACK_ENABLED unset): nothing was sent to a model during these journeys",
+    "ok": "INFO",
+    "detail": "dev_server.mjs blanks AIE_OPENAI_API_KEY; the deterministic parsers produced the runs"
+  }
+]
