@@ -23,14 +23,7 @@ async function FinancialTwinRunPageContent({ params }: { params: Promise<{ id: s
   return (
       <div className="space-y-6">
         <div>
-          {/* App Review 2026-09-14, item (nav audit): this drill-in page had
-              NO way back at all — not to /financial-twin/history, not to
-              /financial-twin — the only escape was the browser's own back
-              button. Same "← Back to X" pattern as goals/[id]/page.tsx. */}
-          <Link href="/financial-twin/history" className="text-xs text-muted hover:underline">
-            ← Back to Twin History
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-trust">Financial Twin™ — {formatDateShort(twin.createdAt, currency)}</h1>
+          <h1 className="text-2xl font-semibold text-trust">Financial Twin™ — {formatDateShort(twin.createdAt, currency)}</h1>
         </div>
         <TwinDetailView twin={twin} currency={currency} />
       </div>

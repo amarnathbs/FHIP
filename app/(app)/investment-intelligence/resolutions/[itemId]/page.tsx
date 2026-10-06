@@ -27,10 +27,7 @@ async function ResolutionDetailPageContent({ params }: { params: Promise<{ itemI
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <header className="mb-6">
-        <Link href={PC5_RESOLUTIONS_BASE} className="text-sm text-brand underline">
-          ← All statement questions
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-ink">Answer this question</h1>
+        <h1 className="text-2xl font-semibold text-ink">Answer this question</h1>
       </header>
       <InvestmentIntelligenceSubNav />
       {/* Ownership is proven server-side by the API this component calls —

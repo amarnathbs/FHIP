@@ -43,11 +43,6 @@ async function VideoPreviewPageContent({ params }: { params: Promise<{ id: strin
           <ResourceStatusBadge status={post.status} />
           <ResourceComplianceBadge compliance={post.compliance_classification} />
         </div>
-        {isResourceStaff(current) && (
-          <Link href={`/admin/resources/videos/${id}/edit`} className="text-sm font-semibold text-trust hover:underline">
-            Back to Editor
-          </Link>
-        )}
       </div>
 
       <article className="rounded-card border border-line bg-white p-6">

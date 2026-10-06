@@ -62,11 +62,6 @@ async function ResourcePreviewPageContent({ params }: { params: Promise<{ id: st
           <ResourceStatusBadge status={post.status} />
           <ResourceComplianceBadge compliance={post.compliance_classification} />
         </div>
-        {isResourceStaff(current) && (
-          <Link href={`/admin/resources/content/${id}/edit`} className="text-sm font-semibold text-trust hover:underline">
-            Back to Editor
-          </Link>
-        )}
       </div>
 
       <article className="rounded-card border border-line bg-white p-6">

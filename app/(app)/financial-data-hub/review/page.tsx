@@ -57,11 +57,6 @@ async function FinancialDataHubReviewPageContent({
 
   return (
     <div className="space-y-6">
-      <nav aria-label="Return">
-        <Link href={backTarget.href} className="text-sm font-semibold text-trust hover:underline">
-          ← {backTarget.label}
-        </Link>
-      </nav>
       {sp.statement ? (
         <StatementCategoryReview
           statementId={sp.statement}
@@ -92,11 +87,13 @@ async function FinancialDataHubReviewPageContent({
   );
 }
 
-// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Financial Data Hub).
-export default function FinancialDataHubReviewPage(props: Parameters<typeof FinancialDataHubReviewPageContent>[0]) {
+// PO review 06-10-2026 F6: the shared back link returns to where the person came from (?from=expenses|activity|hub, default Expenses).
+export default async function FinancialDataHubReviewPage(props: Parameters<typeof FinancialDataHubReviewPageContent>[0]) {
+  const sp = await props.searchParams;
+  const target = RETURN_TARGETS[sp.from ?? ''] ?? RETURN_TARGETS.expenses;
   return (
     <>
-      <PageBackLink href="/financial-data-hub" label="Financial Data Hub" />
+      <PageBackLink href={target.href} label={target.label.replace(/^Back to /, '')} />
       <FinancialDataHubReviewPageContent {...props} />
     </>
   );

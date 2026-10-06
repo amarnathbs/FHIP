@@ -22,10 +22,7 @@ async function ReportDetailPageContent({ params }: { params: Promise<{ id: strin
 
   return (
       <div className="space-y-6">
-        <div className="no-print flex items-center justify-between">
-          <Link href="/reports" className="text-xs text-muted hover:underline">
-            ← Back to Reports
-          </Link>
+        <div className="no-print flex items-center justify-end">
           <ReportActions reportId={id} />
         </div>
 

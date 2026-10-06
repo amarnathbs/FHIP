@@ -32,10 +32,7 @@ async function GoalDetailPageContent({ params }: { params: Promise<{ id: string 
   return (
       <div className="space-y-8">
         <div>
-          <Link href="/goals" className="text-xs text-muted hover:underline">
-            ← Back to Goals
-          </Link>
-          <div className="mt-2">
+          <div>
             <GoalEditPanel
               goalId={goal.id}
               goalTypeLabel={goal.goalType.replace(/_/g, ' ')}
