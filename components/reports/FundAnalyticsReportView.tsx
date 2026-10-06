@@ -10,6 +10,7 @@ import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/inves
 import { chartRowsWithGaps, navPrice, period, pct, ratio, rupees, showResult, type ShownCell } from '@/lib/engines/nav2/presentation';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
 import { FUND_ANALYTICS_CAGR_CONVENTION_NOTE, riskFreeLabelOf } from '@/lib/engines/nav2/reportWording';
+import { ownershipSentence } from '@/lib/engines/nav2/ownershipShare';
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
@@ -112,6 +113,11 @@ function SchemeSection({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: N
   const meta = [block.categoryLabel, block.planType && block.planType !== 'not_applicable' ? `${block.planType} plan` : null, block.optionType && block.optionType !== 'not_applicable' ? block.optionType.replace(/_/g, ' ') : null].filter(Boolean).join(' - ');
   return (
     <SectionCard title={block.schemeName} description={meta || undefined}>
+      {ownershipSentence(block.ownership) && (
+        <p className="mb-2 text-sm font-medium text-ink" data-testid="ownership-share" data-ownership={block.ownership?.mode}>
+          {ownershipSentence(block.ownership)}
+        </p>
+      )}
       <p className="text-xs text-muted">
         Price history: {block.navSeriesSummary.count.toLocaleString('en-IN')} prices from {showDate(ctx, block.navSeriesSummary.firstDate)} to {showDate(ctx, block.navSeriesSummary.lastDate)}
         {block.navSeriesSummary.materialGapCount > 0 ? `, with ${block.navSeriesSummary.materialGapCount} gap(s)` : ''}.

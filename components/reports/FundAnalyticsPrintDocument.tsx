@@ -4,6 +4,7 @@ import type { FundAnalyticsReport, FundAnalyticsSchemeBlock } from '@/lib/engine
 import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/investorExperience';
 import { navPrice, period, pct, ratio, rupees, showResult, type ShownCell } from '@/lib/engines/nav2/presentation';
 import { FUND_ANALYTICS_CAGR_CONVENTION_NOTE, FUND_ANALYTICS_SAVED_REPORT_SENTENCE, riskFreeLabelOf, versionMadeLine } from '@/lib/engines/nav2/reportWording';
+import { ownershipSentence, percentLabel } from '@/lib/engines/nav2/ownershipShare';
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
@@ -207,6 +208,7 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
       <section className="fa-sheet fa-fund">
         <h2 className="fa-fund-name">{block.schemeName}</h2>
         {meta && <p className="fa-meta">{meta}</p>}
+        {ownershipSentence(block.ownership) && <p className="fa-meta fa-own-share" data-fa-ownership={block.ownership?.mode}>{ownershipSentence(block.ownership)}</p>}
         <FaTable head={['At a glance', 'Value', 'Detail']} widths={[27, 22, 51]} num={[false, true, false]} rows={factRows} />
         <div className="fa-chart">
           <StaticNavChart block={block} ctx={ctx} />
@@ -231,6 +233,7 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
         <p className="fa-sub">Latest value of each average, counted in price observations (not calendar days).</p>
         <FaTable head={['Measure', 'Latest', 'As at']} widths={[34, 24, 42]} num={[false, true, false]} rows={trendRows} />
         <h3>Your own money in this fund</h3>
+        {ownershipSentence(block.ownership) && <p className="fa-sub">{ownershipSentence(block.ownership)}</p>}
         {inv ? (
           <>
             <p className="fa-sub">{INVESTOR_XIRR_LABEL}</p>
@@ -272,7 +275,7 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
     return {
       key: b.instrumentId,
       cells: [
-        b.schemeName,
+        `${b.schemeName}${b.ownership?.mode === 'share' && b.ownership.jointBasisPoints !== null ? ` (your share ${percentLabel(b.ownership.jointBasisPoints)})` : b.ownership?.mode === 'not_set' ? ' (ownership share not set)' : ''}`,
         inv ? figure(showResult(inv.currentValue, (v) => rupees(v.value)), fnCover).node : '',
         inv ? figure(showResult(inv.gainLoss, (v) => rupees(v.gainLoss)), fnCover).node : '',
         inv ? figure(showResult(inv.xirr, (v) => pct(v.rate)), fnCover).node : '',
@@ -302,6 +305,9 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
             </p>
             <h3>Your funds at a glance</h3>
             <FaTable head={['Fund', 'Value now', 'Gain or loss', 'Your return (XIRR)', 'Fund CAGR, 3 year']} widths={[34, 16, 16, 17, 17]} num={[false, true, true, true, true]} rows={summaryRows} />
+            {report.schemes.some((b) => b.ownership) && (
+              <p className="fa-sub">Where a fund is held jointly, the figures about your own money (value now, gain or loss, your return) are your share of it, as the fund sheet states. Your share of each fund is shown beside its name.</p>
+            )}
             <FootnoteList fn={fnCover} />
             <h3>Price history used</h3>
             <p className="fa-sub">Every figure for a fund comes from its own published price history. Gaps are never filled in.</p>

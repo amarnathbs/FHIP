@@ -20,6 +20,7 @@ import { computeHeldSchemeAnalytics, type HeldSchemeAnalytics, type SchemePerfor
 import { buildResultCacheKey, bundleDefinitionVersion, metricRegistryDigest, policyDigest, SCHEME_PERFORMANCE_BUNDLE, type ResultCacheKeyParts } from './cacheKeys';
 import type { Nav2BenchmarkInput } from './benchmarkGate';
 import { rankHeldSchemes, type HeldRankingValue, type RankingCandidate } from './heldRanking';
+import type { OwnershipShare } from './ownershipShare';
 import { computeInvestorExperience, SCHEME_VS_INVESTOR_EXPLANATION, type InvestorExperienceInput } from './investorExperience';
 import type { RiskFreeSupply } from './riskFree';
 import { correlationBetweenHeldSchemes, type CorrelationValue } from './schemeRisk';
@@ -46,6 +47,8 @@ export interface HeldSchemeInput {
   series: PreparedSeries;
   benchmarks: Nav2BenchmarkInput[];
   investor: InvestorExperienceInput | null;
+  /** The user's ownership of the folios behind `investor` (a joint holding is the user's SHARE). Absent for a fund held only in the user's own name. */
+  ownership?: OwnershipShare | null;
   /** Earliest date the scheme is held from (transaction / investment date / snapshot); null when unknown. */
   firstHeldDate: string | null;
   /** A compact scheme-performance family from the shared result cache (same key = same inputs); computed here when absent. */
@@ -92,6 +95,8 @@ export interface FundAnalyticsSchemeBlock {
   optionType: IiOptionType | null;
   categoryLabel: string | null;
   firstHeldDate: string | null;
+  /** Present only when the user's figures are not simply the whole holding: a joint SHARE, or an ownership share that is not set. */
+  ownership?: OwnershipShare;
   analytics: HeldSchemeAnalytics;
   chart: ChartData;
   navSeriesSummary: { firstDate: string | null; lastDate: string | null; count: number; checksum: string; materialGapCount: number; weekdayCoverageRatio: number | null };
@@ -149,6 +154,8 @@ export interface FundAnalyticsManifest {
     benchmarks: Array<{ benchmarkId: string; datasetVersion: string | null; basis: string }>;
     /** Fingerprint of the user's transactions and valuation the investor-experience figures rest on; null when the scheme has none. */
     transactionVersion: string | null;
+    /** The ownership the investor figures were scaled by (member, basis points, allocation group): a changed allocation changes this and the transaction version. */
+    ownership: OwnershipShare | null;
   }>;
 }
 
@@ -271,6 +278,7 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
       optionType: h.optionType,
       categoryLabel: h.categoryLabel,
       firstHeldDate: h.firstHeldDate,
+      ...(h.ownership ? { ownership: h.ownership } : {}),
       analytics: stored,
       chart,
       navSeriesSummary: { firstDate: h.series.firstDate, lastDate: h.series.lastDate, count: h.series.count, checksum: h.series.checksum, materialGapCount: h.series.gaps.length, weekdayCoverageRatio: h.series.weekdayCoverageRatio },
@@ -369,6 +377,7 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
         benchmark: bp ? { benchmarkId: bp.benchmarkId, datasetVersion: bp.datasetVersion, basis: bp.basis } : null,
         benchmarks: h.benchmarks.map((x) => ({ benchmarkId: x.benchmarkId, datasetVersion: x.datasetVersion ?? null, basis: x.basis ?? 'declared' })),
         transactionVersion: h.investor ? transactionFingerprint(h.investor) : null,
+        ownership: h.ownership ?? null,
       };
     }),
   };

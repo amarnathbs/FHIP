@@ -17,12 +17,14 @@ import { reportAnalysisSpec, type ReportPeriodChoice } from '@/lib/engines/nav2/
 import type { Nav2BenchmarkInput } from '@/lib/engines/nav2/benchmarkGate';
 import type { FundAnalyticsInput, HeldSchemeInput, ReportScopeNotes } from '@/lib/engines/nav2/fundAnalyticsReport';
 import type { InvestorExperienceInput, ValuationView } from '@/lib/engines/nav2/investorExperience';
+import type { OwnershipShare } from '@/lib/engines/nav2/ownershipShare';
 import { prepareSeries, type CoverageGapInput, type RawNavRow } from '@/lib/engines/nav2/series';
 import { splitTerminalFlow } from '@/lib/engines/investment-intelligence/holdingBenchmarkComparison';
 import type { SchemeDataset } from '@/lib/engines/investment-intelligence/analyticsOrchestrator';
 import { resolveFundCategory } from '../benchmarkData/categoryReference';
 import { loadAnalyticsDataset } from '../analyticsRepository';
 import { loadOwnerClassScopeForReport } from '../ownerClassReportScope';
+import { loadOwnershipShares } from './ownershipShareLoader';
 import { fetchAllRows } from '../pagination';
 import type { ReportNavGate } from '../pc6/reportNavHistoryGate';
 import type { IiOptionType, IiPlanType } from '../types';
@@ -116,6 +118,17 @@ export function benchmarkSegmentsFor(instrumentId: string, ds: NonNullable<Await
   });
 }
 
+/** Pure. The ownership block is shown only when the figures are not simply the whole holding (a share, or a folio left out for want of a share). */
+export function ownershipToShow(o: OwnershipShare | undefined): OwnershipShare | undefined {
+  return o && (o.mode !== 'sole' || o.notSetFolios > 0 || o.notYoursFolios > 0) ? o : undefined;
+}
+
+/** Pure. The earliest cash-flow date of an investor input (ISO), or null. */
+export function firstFlowDate(i: InvestorExperienceInput | null): string | null {
+  if (!i || i.flows.length === 0) return null;
+  return i.flows.map((f) => iso(f.date)).sort()[0];
+}
+
 /** The label recorded when a row's source cannot be resolved (no source_id, or a source_id with no ii_sources row). Never guessed. */
 export const UNKNOWN_NAV_SOURCE = 'unknown_source';
 
@@ -137,7 +150,7 @@ const toRaw = (r: NavRowDb, providerById: ReadonlyMap<string, string>): RawNavRo
 export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promise<FundAnalyticsLoadResult> {
   const policy = args.policy ?? NAV2_POLICY;
   const warnings: string[] = [];
-  const { client } = await loadOwnerClassScopeForReport(args.userId, args.sessionClient);
+  const { client, ctx: ownerCtx } = await loadOwnerClassScopeForReport(args.userId, args.sessionClient);
 
   const loaded = await loadAnalyticsDataset(client as unknown as SupabaseClient, args.userId, { asOfDate: new Date(`${args.asOfDate}T00:00:00.000Z`), benchmarkAccessNeed: 'export' });
   warnings.push(...loaded.warnings.map((w) => w.detail));
@@ -221,6 +234,15 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
   }
   const hydrating = new Set(args.gate.waiting.map((f) => f.instrumentId));
 
+  // ---- the user's OWN SHARE of jointly held funds (PO decision 06-10-2026); unchanged when every folio is held by one household member ----
+  const shares = !ownerCtx ? { special: false, byInstrument: new Map<string, { investor: InvestorExperienceInput | null; ownership: OwnershipShare }>() } : await loadOwnershipShares(
+    { sessionClient: args.sessionClient as unknown as SupabaseClient, userId: args.userId, ctx: ownerCtx },
+    {
+      loadDataset: async (c) => (await loadAnalyticsDataset(c, args.userId, { asOfDate: new Date(`${args.asOfDate}T00:00:00.000Z`), benchmarkAccessNeed: 'export' })).dataset ?? null,
+      investorInputFor: (sd) => investorInputFor(sd, args.asOfDate),
+    }
+  );
+
   const schemes: HeldSchemeInput[] = fundSchemes.map((s) => {
     const i = inst.get(s.instrumentId)!;
     const master = sm.get(s.instrumentId);
@@ -244,8 +266,9 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
       categoryLabel: cat.displayCategory,
       series,
       benchmarks: benchmarkSegmentsFor(s.instrumentId, ds),
-      investor: investorInputFor(s, args.asOfDate),
-      firstHeldDate: firstHeldDateFor(s),
+      investor: shares.special && shares.byInstrument.has(s.instrumentId) ? shares.byInstrument.get(s.instrumentId)!.investor : investorInputFor(s, args.asOfDate),
+      ownership: shares.special ? ownershipToShow(shares.byInstrument.get(s.instrumentId)?.ownership) : undefined,
+      firstHeldDate: shares.special && shares.byInstrument.has(s.instrumentId) ? firstFlowDate(shares.byInstrument.get(s.instrumentId)!.investor) ?? firstHeldDateFor(s) : firstHeldDateFor(s),
     };
   });
 
