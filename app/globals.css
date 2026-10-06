@@ -152,6 +152,7 @@
 .fa-doc .fa-table thead tr { break-after: avoid; }
 .fa-doc .fa-table th,
 .fa-doc .fa-table td { padding: 0.85mm 2mm 0.85mm 0; vertical-align: top; text-align: left; border-top: 0.25mm solid #dde3ea; overflow-wrap: anywhere; }
+.fa-doc .fa-table thead th.num { white-space: normal; }
 .fa-doc .fa-table thead th { border-top: 0; border-bottom: 0.4mm solid #5b677a; font-size: 8.5pt; font-weight: 600; color: #5b677a; padding-bottom: 1mm; }
 .fa-doc .fa-table .fa-label { font-weight: 600; overflow-wrap: normal; }
 .fa-doc .fa-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 4mm; }

@@ -47,6 +47,24 @@ def main() -> None:
                 for sp in ln['spans']:
                     sizes[round(sp['size'], 1)] += len(sp['text'].strip())
                 lines.append({'y0': y0, 'y1': y1, 'x0': x0, 'x1': x1, 'text': txt, 'size': round(size, 1), 'bold': bool(bold)})
+        # COLLISIONS: two text spans of the page whose boxes overlap (a header or cell that runs into its neighbour: 'Common returnsPeriod').
+        spans = []
+        for b in page.get_text('dict')['blocks']:
+            if b.get('type') != 0:
+                continue
+            for ln in b['lines']:
+                for sp in ln['spans']:
+                    if sp['text'].strip() and not (sp['bbox'][3] < area_top - 1 or sp['bbox'][1] > area_bottom + 1):
+                        spans.append((sp['bbox'], sp['text'].strip()))
+        overlaps = []
+        for m in range(len(spans)):
+            for n in range(m + 1, len(spans)):
+                (ax0, ay0, ax1, ay1), at = spans[m]
+                (bx0, by0, bx1, by1), bt = spans[n]
+                oy = min(ay1, by1) - max(ay0, by0)
+                ox = min(ax1, bx1) - max(ax0, bx0)
+                if oy > 0.5 * min(ay1 - ay0, by1 - by0) and ox > 1.0:
+                    overlaps.append(f'{at[:30]} / {bt[:30]}')
         lowest = max([l['y1'] for l in lines], default=area_top)
         for d in page.get_drawings():
             r = d['rect']
@@ -78,6 +96,7 @@ def main() -> None:
             'first_line': first_line and {'text': first_line['text'][:90], 'size': first_line['size'], 'bold': first_line['bold']},
             'funds_named': named,
             'overflow_right': overflow,
+            'overlaps': overlaps[:10],
             'body_size': sizes.most_common(1)[0][0] if sizes else None,
             'png': png,
         })

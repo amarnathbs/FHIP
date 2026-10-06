@@ -50,6 +50,7 @@ export interface LayoutAnalysis {
 export function judgeLayout(a: LayoutAnalysis, opts: { maxBlank?: number } = {}): string[] {
   const maxBlank = opts.maxBlank ?? MAX_BLANK;
   const out: string[] = [];
+  for (const c of a.cell_overflow ?? []) out.push(`a table cell is narrower than its text and runs into its neighbour ("${c}")`);
   a.pages.forEach((p, i) => {
     const isLast = i === a.pages.length - 1;
     if (!isLast && p.blank_ratio > maxBlank) out.push(`page ${p.page}: ${(p.blank_ratio * 100).toFixed(0)}% blank below its last content (limit ${(maxBlank * 100).toFixed(0)}%)`);
@@ -58,10 +59,18 @@ export function judgeLayout(a: LayoutAnalysis, opts: { maxBlank?: number } = {})
     const cover = i === 0;
     const titled = p.first_line && /^(Comparing your funds|Fund analytics report)/.test(p.first_line.text);
     if (!cover && !titled && p.funds_named.length === 0) out.push(`page ${p.page}: does not name a fund`);
+    if ((p.overlaps ?? []).length > 0) out.push(`page ${p.page}: text collides ("${p.overlaps![0]}")`);
     if (p.overflow_right.length > 0) out.push(`page ${p.page}: text runs past the margin ("${p.overflow_right[0]}")`);
     if (p.lines >= 12 && p.body_size !== undefined && p.body_size !== null && (p.body_size < BODY_PT_MIN || p.body_size > BODY_PT_MAX)) out.push(`page ${p.page}: body text is ${p.body_size} pt, designed ${BODY_PT_MIN}-${BODY_PT_MAX} pt (the page was scaled)`);
   });
   return out;
+}
+
+/** The browser-side measure: every th and td whose content is wider than the cell, with the page laid out at the A4 text width (178 mm). */
+export async function measureCellOverflow(page: import('playwright').Page): Promise<string[]> {
+  await page.setViewportSize({ width: 673, height: 1000 });
+  await page.emulateMedia({ media: 'print' });
+  return page.evaluate(() => [...document.querySelectorAll('.fa-doc th, .fa-doc td')].filter((c) => c.scrollWidth > c.clientWidth + 1).map((c) => (c.textContent ?? '').trim().slice(0, 40)));
 }
 
 /** Rasterises every page to PNG and measures it (PyMuPDF). Shared with the live-path check. */
@@ -95,10 +104,12 @@ async function main() {
 
   // 3. the PDF, through the export route's own print function
   let pdf: Buffer;
+  let cellOverflow: string[] = [];
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
     await page.goto(`file:///${path.join(out, 'index.html').replace(/\\/g, '/')}`, { waitUntil: 'networkidle' });
+    cellOverflow = await measureCellOverflow(page);
     pdf = await printPageToPdf(page, version);
   } finally {
     await browser.close();
@@ -114,6 +125,7 @@ async function main() {
     console.error('PyMuPDF is not available: ', e instanceof Error ? e.message : e);
     process.exit(2);
   }
+  analysis.cell_overflow = cellOverflow;
   writeFileSync(path.join(out, 'analysis.json'), JSON.stringify(analysis, null, 1));
   printAnalysis(pdfPath, analysis);
   const failures = judgeLayout(analysis);

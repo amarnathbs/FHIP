@@ -214,6 +214,12 @@ describe('the layout judge (NAMED NEGATIVE CONTROLS: each rule fails on a bad la
     expect(judgeLayout(doc([page(1, { body_size: 13.4 }), page(2)])).some((x) => x.includes('scaled'))).toBe(true);
     expect(judgeLayout(doc([page(1, { body_size: 9 }), page(2)]))).toEqual([]);
   });
+  it('NC-L7: two pieces of text whose boxes overlap fail (Stage 3 PO review: the correlation headers read "Common returnsPeriod")', () => {
+    expect(judgeLayout(doc([page(1, { overlaps: ['Common returns / Period'] }), page(2)])).some((x) => x.includes('collides'))).toBe(true);
+    expect(judgeLayout(doc([page(1, { overlaps: [] }), page(2)])).length).toBe(0);
+    expect(judgeLayout({ ...doc([page(1), page(2)]), cell_overflow: ['Common returns'] }).some((x) => x.includes('narrower than its text'))).toBe(true);
+  });
+
   it('NC-L4: text past the right margin fails', () => {
     expect(judgeLayout(doc([page(1, { overflow_right: ['a very long unbroken line'] }), page(2)])).some((x) => x.includes('past the margin'))).toBe(true);
   });

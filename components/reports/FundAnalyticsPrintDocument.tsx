@@ -373,7 +373,7 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
             <p className="fa-text">You need at least two funds to compare how they move together.</p>
           ) : (
             <>
-              <FaTable head={['Fund A', 'Fund B', 'Correlation', 'Common returns', 'Period']} widths={[24, 24, 12, 12, 28]} num={[false, false, true, true, false]} rows={corrRows(report, ctx, nm)} />
+              <FaTable head={['Fund A', 'Fund B', 'Correlation', 'Common returns', 'Period']} widths={[22, 22, 11, 16, 29]} num={[false, false, true, true, false]} rows={corrRows(report, ctx, nm)} />
               <p className="fa-sub">A correlation near 1 means the two funds usually rise and fall together; near 0, little relationship; below 0, they tend to move in opposite directions. It describes past returns only.</p>
             </>
           )}
