@@ -1,3 +1,4 @@
+import { formatDateShort } from '@/lib/engines/date';
 import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -160,7 +161,7 @@ async function FinancialActivitySpendingPageContent({
                         <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(row.totalSpent, m.currencyCode as 'AUD' | 'INR')}</td>
                         <td className="py-2 pr-2 text-right tabular-nums text-muted">{row.transactionCount}</td>
                         <td className="py-2 pr-2 text-right tabular-nums text-muted">{formatMoney(row.averageTransaction, m.currencyCode as 'AUD' | 'INR')}</td>
-                        <td className="py-2 text-right tabular-nums text-muted">{row.lastTransactionDate}</td>
+                        <td className="py-2 text-right tabular-nums text-muted">{formatDateShort(row.lastTransactionDate, m.currencyCode as 'AUD' | 'INR')}</td>
                       </tr>
                     ))}
                   </tbody>

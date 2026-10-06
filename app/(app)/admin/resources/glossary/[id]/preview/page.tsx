@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff } from '@/lib/resources/permissions';
 import { getGlossaryEditorPost } from '@/lib/resources/glossary/queries';
 import { BlockRenderer } from '@/components/resources/blocks/BlockRenderer';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
@@ -11,7 +10,7 @@ import type { AnyBlock } from '@/lib/resources/editor/blocks';
 
 // /admin/resources/glossary/[id]/preview — spec §31/§63/§96. Admin-only.
 async function GlossaryPreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
-  const current = await requireResourceAdminAccess();
+  await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
 

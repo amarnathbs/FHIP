@@ -1,3 +1,4 @@
+import { formatDateShort } from '@/lib/engines/date';
 import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -26,7 +27,7 @@ function DisclaimerPageContent() {
       </div>
 
       <h1 className="text-3xl font-semibold text-trust">Disclaimer</h1>
-      <p className="mt-2 text-sm text-gray-500">Last updated: {new Date().toISOString().slice(0, 10)}</p>
+      <p className="mt-2 text-sm text-gray-500">Last updated: {formatDateShort(new Date(), 'AUD')}</p>
 
       <section className="mt-8 space-y-3">
         <h2 className="text-xl font-semibold">Informational tool, not advice</h2>

@@ -1,3 +1,4 @@
+import { formatDateShort } from '@/lib/engines/date';
 // Human-readable label maps for Resources enum columns — spec §40: "Do not
 // expose raw enum naming." Every raw DB value shown anywhere in the Admin
 // shell should be looked up here rather than title-cased ad hoc, so a value
@@ -59,12 +60,12 @@ export function formatAdminDate(value: string | null): string {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDateShort(d, 'AUD'); // day-first dd/mm/yyyy (the app-wide AU fallback); PO review F13
 }
 
 export function formatAdminDateTime(value: string | null): string {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return `${d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}`;
+  return `${formatDateShort(d, 'AUD')}, ${d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}`;
 }

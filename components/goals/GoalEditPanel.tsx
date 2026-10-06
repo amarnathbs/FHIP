@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 // LR-2 WP-10 (2026-09-07): before this, a Goal had NO working edit
 // capability anywhere in the app for any field after creation — not even
 // target_date (an earlier discovery pass claimed a `GoalActionabilityCard`
@@ -194,8 +195,7 @@ export function GoalEditPanel({
           </div>
           <div>
             <label className="block text-sm text-gray-600">Target date</label>
-            <input
-              type="date"
+            <DateInput
               value={form.targetDate ?? ''}
               onChange={(e) => update({ targetDate: e.target.value })}
               className="mt-1 w-full rounded border px-3 py-2 text-sm"

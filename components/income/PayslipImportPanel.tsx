@@ -102,8 +102,8 @@ interface AiFallbackDraft {
 
 const AI_DRAFT_FIELD_LABELS: Record<string, string> = {
   employerName: 'Employer',
-  payPeriodStart: 'Pay period start (YYYY-MM-DD)',
-  payPeriodEnd: 'Pay period end (YYYY-MM-DD)',
+  payPeriodStart: 'Pay period start',
+  payPeriodEnd: 'Pay period end',
   grossPay: 'Gross pay',
   netPay: 'Net pay',
   taxWithheld: 'Tax withheld',
@@ -188,9 +188,9 @@ type CorrectableField = (typeof CORRECTABLE_FIELDS)[number];
 
 const CORRECTION_LABELS: Record<CorrectableField, string> = {
   employer_name: 'Employer',
-  pay_period_start: 'Pay period start (YYYY-MM-DD)',
-  pay_period_end: 'Pay period end (YYYY-MM-DD)',
-  payment_date: 'Payment date (YYYY-MM-DD)',
+  pay_period_start: 'Pay period start',
+  pay_period_end: 'Pay period end',
+  payment_date: 'Payment date',
   pay_frequency: 'How often you are paid',
   gross_pay: 'Gross pay for this pay period',
   base_pay: 'Ordinary earnings for this pay period',

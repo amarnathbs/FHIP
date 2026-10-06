@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff } from '@/lib/resources/permissions';
 import { getMoneyUpdateEditorPost } from '@/lib/resources/money-update/queries';
 import { BlockRenderer } from '@/components/resources/blocks/BlockRenderer';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
@@ -15,7 +14,7 @@ import type { AnyBlock } from '@/lib/resources/editor/blocks';
 // (block heading levels are capped at H2-H4 by the R1.3 block model) — the
 // page's own <h1> (the title) remains the only H1 (spec §81).
 async function MoneyUpdatePreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
-  const current = await requireResourceAdminAccess();
+  await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
 

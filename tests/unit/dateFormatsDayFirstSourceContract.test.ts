@@ -68,7 +68,7 @@ const MESSAGE_FILES = [
 // engine-level format union types (machine identifiers, never rendered as screen data).
 const YYYY_ALLOWED: ReadonlyArray<{ file: string; line: RegExp }> = [
   { file: 'lib/services/investment-intelligence/benchmarkData/fileIngest/dateParsing.ts', line: /^\s*case 'YYYY-MM-DD': \{/ },
-  { file: 'components/admin/benchmarkData/benchmarkDataUiLogic.ts', line: /value: 'YYYY-MM-DD', label: 'Year first \(YYYY-MM-DD\)'/ },
+  { file: 'components/admin/benchmarkData/benchmarkDataUiLogic.ts', line: /value: 'YYYY-MM-DD', label: 'Year first \(year, month, day\)'/ },
 ];
 
 function stripComments(src: string): string {

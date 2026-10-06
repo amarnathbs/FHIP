@@ -1,5 +1,7 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
+import { parseDateInput } from '@/lib/engines/dateInput';
 // FDH-8 Financial Activity UI — shared sub-nav + period selector.
 //
 // "URL is the state" — same pattern already used by
@@ -133,11 +135,13 @@ export function ActivityLayoutContent({ children }: { children: React.ReactNode 
               <label htmlFor="activity-from" className="sr-only">
                 Custom range start date
               </label>
-              <input
+              <DateInput
                 id="activity-from"
-                type="date"
-                defaultValue={fromValue}
-                onBlur={(e) => setCustomRange(e.target.value, toValue)}
+                value={fromValue}
+                onBlur={(e) => {
+                  const iso = parseDateInput(e.target.value);
+                  if (iso !== null) setCustomRange(iso, toValue);
+                }}
                 className="rounded-compact border border-line bg-white px-2 py-1.5 text-sm text-ink"
               />
               <span className="text-sm text-muted" aria-hidden="true">
@@ -146,11 +150,13 @@ export function ActivityLayoutContent({ children }: { children: React.ReactNode 
               <label htmlFor="activity-to" className="sr-only">
                 Custom range end date
               </label>
-              <input
+              <DateInput
                 id="activity-to"
-                type="date"
-                defaultValue={toValue}
-                onBlur={(e) => setCustomRange(fromValue, e.target.value)}
+                value={toValue}
+                onBlur={(e) => {
+                  const iso = parseDateInput(e.target.value);
+                  if (iso !== null) setCustomRange(fromValue, iso);
+                }}
                 className="rounded-compact border border-line bg-white px-2 py-1.5 text-sm text-ink"
               />
             </>

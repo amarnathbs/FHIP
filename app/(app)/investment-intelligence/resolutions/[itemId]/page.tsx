@@ -1,12 +1,10 @@
 import { PageBackLink } from '@/components/navigation/PageBackLink';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
 import { ResolutionDetailClient } from '@/components/pc5/ResolutionDetailClient';
 import { getUserHomeCountry } from '@/lib/services/jurisdiction';
 import { dateFormatKeyForCountry } from '@/lib/engines/date';
-import { PC5_RESOLUTIONS_BASE } from '@/lib/pc5/deepLinks';
 
 /**
  * PC5 (M4) — K.14's destination. A deep link from the Review Centre lands

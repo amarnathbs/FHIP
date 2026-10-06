@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff } from '@/lib/resources/permissions';
 import { getResourceEditorPost } from '@/lib/resources/editor/queries';
 import { BlockRenderer } from '@/components/resources/blocks/BlockRenderer';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
@@ -29,7 +28,7 @@ const SPECIALIST_PREVIEW_ROUTES: Record<string, (id: string) => string> = {
 // every other Resources Admin surface — spec §63/§96/§118: "anonymous
 // access denied... customer access denied... no public indexing").
 async function ResourcePreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
-  const current = await requireResourceAdminAccess();
+  await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 import { useEffect, useState } from 'react';
 
 // PC6/N.11 — read-only operator view of reference-market-data health.
@@ -130,7 +131,7 @@ export default function ReferenceDataQualityClient() {
       <p style={{ opacity: 0.75, marginBottom: '1.5rem' }}>
         External market reference data only — scheme identity, NAV history, benchmarks, risk-free rates.
         Nothing here is derived from any user&apos;s holdings, and nothing here overrides what a user&apos;s
-        statement said. As at {payload.asOfDate}, generated {new Date(payload.generatedAt).toLocaleString()}.
+        statement said. As at {formatDateShort(payload.asOfDate, 'INR')}, generated {formatDateTimeShort(payload.generatedAt, 'INR')}.
       </p>
 
       <Section title="NAV freshness" panel={payload.nav_freshness}>

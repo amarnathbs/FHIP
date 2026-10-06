@@ -54,9 +54,9 @@ export async function POST(req: Request) {
     // constant (this programme's PO decision, 2026-09-21), not a moving
     // "today". A caller must supply it explicitly, exactly like asOfDate on
     // the sibling ingest route is supplied rather than assumed.
-    return bad('changeoverDate is required (ISO yyyy-mm-dd) — the NAV 1 policy changeover date, not "today".', 422);
+    return bad('changeoverDate is required (an ISO 8601 calendar date) — the NAV 1 policy changeover date, not "today".', 422);
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(changeoverDate)) return bad('changeoverDate must be ISO yyyy-mm-dd', 422);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(changeoverDate)) return bad('changeoverDate must be an ISO 8601 calendar date', 422);
 
   try {
     const result = await runSelectiveHistoricalHydration({

@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateShort } from '@/lib/engines/date';
 import { useEffect, useState } from 'react';
 import { MARKET_INDEX_KEY_LIST, MARKET_INDEX_LABELS, type MarketIndexKey } from '@/lib/config/investment-intelligence/marketIndexConfig';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
@@ -201,7 +202,7 @@ export default function MarketIndexDataClient() {
         <section style={{ marginTop: '1.5rem' }}>
           <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Upload historical closes</h2>
           <p style={{ opacity: 0.8 }}>
-            Accepted layouts: the niftyindices.com historical export (Index Name, Date, Open, High, Low, Close), the NSE daily index file (Closing Index Value), the BSE archive (Date, Open, High, Low, Close), or two columns date,close. Dates are day-first (02-01-2024, 02 Jan 2024, 02-January-2024) or yyyy-mm-dd. Maximum 5 MB / 20,000 rows. You always preview before anything is written.
+            Accepted layouts: the niftyindices.com historical export (Index Name, Date, Open, High, Low, Close), the NSE daily index file (Closing Index Value), the BSE archive (Date, Open, High, Low, Close), or two columns date,close. Dates are day-first (02-01-2024, 02 Jan 2024, 02-January-2024). Maximum 5 MB / 20,000 rows. You always preview before anything is written.
           </p>
           <label style={{ display: 'block', marginTop: '0.5rem' }}>
             Index{' '}
@@ -284,7 +285,7 @@ export default function MarketIndexDataClient() {
                   <ul>
                     {preview.largeMoves.map((m, i) => (
                       <li key={i}>
-                        {m.previousDate} to {m.date}: {(m.changeFraction * 100).toFixed(1)}%
+                        {formatDateShort(m.previousDate, 'INR')} to {formatDateShort(m.date, 'INR')}: {(m.changeFraction * 100).toFixed(1)}%
                       </li>
                     ))}
                   </ul>

@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 import { PageBackLink } from '@/components/navigation/PageBackLink';
 
 import { useEffect, useState } from 'react';
@@ -216,8 +217,7 @@ function ProfilePageContent() {
           </div>
           <div>
             <label className="block text-xs font-medium text-muted">Date of birth</label>
-            <input
-              type="date"
+            <DateInput
               min={DOB_MIN_DATE}
               max={DOB_MAX_DATE}
               value={profile.date_of_birth ?? ''}

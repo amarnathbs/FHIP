@@ -1,3 +1,5 @@
+import { formatDateShort, dateFormatKeyForCountry } from '@/lib/engines/date';
+import { getUserHomeCountry } from '@/lib/services/jurisdiction';
 import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
@@ -35,6 +37,7 @@ async function FinancialActivityOverviewPageContent({
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  const dateKey = dateFormatKeyForCountry(await getUserHomeCountry(user.id, supabase));
   const { period, accountId, error } = resolveActivityParams(sp);
   if (error) {
     return <ResourceErrorState message={error} />;
@@ -88,7 +91,7 @@ async function FinancialActivityOverviewPageContent({
       <p className="text-sm text-muted">
         Latest activity:{' '}
         {overview.freshness.latestTransactionDate ? (
-          <span className="font-medium text-ink">{overview.freshness.latestTransactionDate}</span>
+          <span className="font-medium text-ink">{formatDateShort(overview.freshness.latestTransactionDate, dateKey)}</span>
         ) : (
           'no transactions yet'
         )}

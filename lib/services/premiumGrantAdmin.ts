@@ -56,7 +56,7 @@ function fail(code: string, message: string, status = 422): ParseManageResult {
  */
 export function checkEndDate(endsOn: unknown, today: string, maxDays: number = ENTITLEMENT_GRANT_MAX_DAYS): RouteError | null {
   if (!isValidIsoDate(endsOn)) {
-    return { status: 422, code: 'ENTITLEMENT_END_DATE_REQUIRED', message: 'endsOn must be a valid date in YYYY-MM-DD form.' };
+    return { status: 422, code: 'ENTITLEMENT_END_DATE_REQUIRED', message: 'endsOn must be a valid date.' };
   }
   if (endsOn < today) {
     return { status: 422, code: 'ENTITLEMENT_END_DATE_IN_PAST', message: 'The end date cannot be in the past.' };

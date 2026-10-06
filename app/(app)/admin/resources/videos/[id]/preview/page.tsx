@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff } from '@/lib/resources/permissions';
 import { getVideoEditorPost } from '@/lib/resources/video/queries';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
 import { YouTubeEmbed } from '@/components/resources/specialist/YouTubeEmbed';
@@ -13,7 +12,7 @@ import { YouTubeEmbed } from '@/components/resources/specialist/YouTubeEmbed';
 // is always derived from the validated video ID via YouTubeEmbed — never an
 // arbitrary iframe.
 async function VideoPreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
-  const current = await requireResourceAdminAccess();
+  await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
 

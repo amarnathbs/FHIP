@@ -1,5 +1,4 @@
 import { PageBackLink } from '@/components/navigation/PageBackLink';
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getReport, recordAccessEvent } from '@/lib/services/reportsData';

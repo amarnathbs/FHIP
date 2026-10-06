@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 import { useEffect, useState } from 'react';
 
 // PC7/O.9 — read-only operator view of Underlying Fund Holdings data quality.
@@ -106,8 +107,8 @@ export default function LookthroughDataQualityClient() {
         The constituent securities held <em>inside</em> mutual-fund schemes — the data Portfolio X-Ray
         decomposes a fund position into. This is external reference data about a scheme, identical for
         every user who holds it. It is never a user&apos;s own position, and it never contributes to any
-        household&apos;s net worth. As at {payload.asOfDate}, generated{' '}
-        {new Date(payload.generatedAt).toLocaleString()} ({payload.qualityVersion}).
+        household&apos;s net worth. As at {formatDateShort(payload.asOfDate, 'INR')}, generated{' '}
+        {formatDateTimeShort(payload.generatedAt, 'INR')} ({payload.qualityVersion}).
       </p>
 
       {!payload.ingestionActive && (
@@ -163,7 +164,7 @@ export default function LookthroughDataQualityClient() {
             </p>
             <ul>
               {stale.stalest.slice(0, 10).map((s) => (
-                <li key={s.fundInstrumentId}>{s.fundInstrumentId} — {s.holdingsAsOfDate} ({s.ageDays} days, {s.freshness})</li>
+                <li key={s.fundInstrumentId}>{s.fundInstrumentId} — {formatDateShort(s.holdingsAsOfDate, 'INR')} ({s.ageDays} days, {s.freshness})</li>
               ))}
             </ul>
           </>
@@ -201,7 +202,7 @@ export default function LookthroughDataQualityClient() {
             <ul>
               {coverage.gaps.slice(0, 15).map((g) => (
                 <li key={g.snapshotId}>
-                  {g.fundInstrumentId} @ {g.holdingsAsOfDate} — <code>{g.reason}</code>
+                  {g.fundInstrumentId} @ {formatDateShort(g.holdingsAsOfDate, 'INR')} — <code>{g.reason}</code>
                   {g.reason === 'no_lines'
                     ? ' (a snapshot header with no constituent lines: the engine would select it and compute zero exposure that looks measured)'
                     : ` (${g.disclosedWeightTotalPct ?? '?'}% disclosed across ${g.lineCount} line(s))`}
@@ -223,7 +224,7 @@ export default function LookthroughDataQualityClient() {
             </p>
             <ul>
               {failures.recentFailures.slice(0, 10).map((b) => (
-                <li key={b.id}><code>{b.status}</code> {b.startedAt} {b.errorCode ? `— ${b.errorCode}` : ''}</li>
+                <li key={b.id}><code>{b.status}</code> {formatDateTimeShort(b.startedAt, 'INR')} {b.errorCode ? `— ${b.errorCode}` : ''}</li>
               ))}
             </ul>
           </>
