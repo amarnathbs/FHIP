@@ -119,6 +119,7 @@ function num(v: string | null): string {
 export function PlanningBenchmarkUpload() {
   const [status, setStatus] = useState<StatusPayload | null>(null);
   const [failure, setFailure] = useState<AdminFailure | null>(null);
+  const [renderedAtMs] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [kind, setKind] = useState<UploadKind>('values');
   const [file, setFile] = useState<File | null>(null);
@@ -660,7 +661,7 @@ export function PlanningBenchmarkUpload() {
                     <td className="px-3 py-2">{b.row_count}</td>
                     <td className="px-3 py-2">
                       {STATUS_LABEL[b.status]}
-                      {b.status === 'staged' && new Date(b.expires_at).getTime() <= Date.now() ? ' - expired' : ''}
+                      {b.status === 'staged' && new Date(b.expires_at).getTime() <= renderedAtMs ? ' - expired' : ''}
                       {b.status === 'activated' ? ` ${formatDayFirstDateTime(b.activated_at)}${b.self_activated ? ', self-activated' : ''}` : ''}
                     </td>
                     <td className="px-3 py-2">{b.stagedByMe ? 'you' : 'another admin'}</td>

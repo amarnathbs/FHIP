@@ -63,7 +63,7 @@ export interface Finding {
 export function inspectPage(source: string): { imports: boolean; renders: boolean; href: string | null; label: string | null } {
   const code = stripComments(source);
   const imports = /import\s*\{[^}]*\bPageBackLink\b[^}]*\}\s*from\s*['"]@\/components\/navigation\/PageBackLink['"]/.test(code);
-  const tag = /<PageBackLink\b([^>]*?)\/>/s.exec(code);
+  const tag = /<PageBackLink\b([^>]*?)\/>/.exec(code);
   const renders = tag !== null;
   const attrs = tag?.[1] ?? '';
   const href = /href=(?:"([^"]+)"|\{`([^`]+)`\}|\{([^}]+)\})/.exec(attrs);

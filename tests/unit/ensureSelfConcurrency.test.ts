@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- chained query-builder test double */
 // DEV browser certification (07-10-2026) found TWO "Self" household members for one user, created 67 ms apart: the owner selector
 // calls POST /api/ownership/self from two places at once (a development double-effect, and two tabs would do the same), and
 // ensureSelfHouseholdMember was "check, then insert" with no protection against two callers racing. The selector then listed the

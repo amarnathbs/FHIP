@@ -81,7 +81,7 @@ export class RpcFailure extends Error {
 
 // ------------------------------------------------------------------------ RPC error mapping ---
 
-const PREFIX = /^PB_E_([A-Z_]+):\s*(.*)$/s;
+const PREFIX = /^PB_E_([A-Z_]+):\s*([\s\S]*)$/;
 
 /**
  * Maps a database error to an HTTP status and a SAFE message. Messages the migration raises start with
