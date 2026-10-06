@@ -2,7 +2,7 @@
 //
 // ADMIN ARCHITECTURE STANDARD - applicability, stated:
 //   Capabilities : planningBenchmarkUpload (admin_users.can_upload_planning_benchmarks) for POST, and
-//                  view = upload OR activate for GET. Separately named (migration 0270); NOT implied by
+//                  view = upload OR activate for GET. Separately named (migration 0275); NOT implied by
 //                  Super Admin or by any Market Index capability (section 2).
 //   Four layers  : (1) DB   - stage_planning_benchmark_upload checks auth.uid() and the capability itself,
 //                             RLS on the three tables;
@@ -25,7 +25,7 @@ import { todayIsoUtc } from '@/lib/planning-benchmarks/dates';
 
 export const dynamic = 'force-dynamic';
 
-const UNAVAILABLE = 'Migration 0270 has not been applied to this database, so the upload tables do not exist yet. This is reported as unavailable, not as an empty healthy state.';
+const UNAVAILABLE = 'Migration 0275 has not been applied to this database, so the upload tables do not exist yet. This is reported as unavailable, not as an empty healthy state.';
 
 function isMissingRelation(error: { code?: string; message?: string } | null | undefined): boolean {
   return Boolean(error && (error.code === 'PGRST205' || error.code === '42P01' || error.code === '42703' || /does not exist|schema cache/i.test(error.message ?? '')));

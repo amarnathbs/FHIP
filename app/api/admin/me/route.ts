@@ -165,9 +165,9 @@ async function readBenchmarkCapabilities(): Promise<BenchmarkCapabilityFlags> {
 }
 
 /**
- * Planning Benchmarks staged upload (migration 0270) - the two separately named capabilities. ONE admin_users
+ * Planning Benchmarks staged upload (migration 0275) - the two separately named capabilities. ONE admin_users
  * read, but each output field is its own === true evaluation of its own column. FAILS CLOSED: any error, a
- * logged-out caller, a missing row or a missing COLUMN (0270 not applied) yields all-false.
+ * logged-out caller, a missing row or a missing COLUMN (0275 not applied) yields all-false.
  */
 async function readPlanningBenchmarkCapabilities(): Promise<PlanningBenchmarkFlags> {
   try {

@@ -178,12 +178,12 @@ export interface AdminCapabilities {
    */
   promoCodeManagement: boolean;
   /**
-   * Planning Benchmarks staged upload (migration 0270) - stage a file, preview, discard own batch. Backed by
+   * Planning Benchmarks staged upload (migration 0275) - stage a file, preview, discard own batch. Backed by
    * admin_users.can_upload_planning_benchmarks. NOT implied by `isAdmin` and NOT implied by the activate capability.
    */
   planningBenchmarkUpload: boolean;
   /**
-   * Planning Benchmarks staged upload (migration 0270) - ACTIVATE a staged upload (makes it live for the Twin).
+   * Planning Benchmarks staged upload (migration 0275) - ACTIVATE a staged upload (makes it live for the Twin).
    * Backed by admin_users.can_activate_planning_benchmarks. Separately named from the upload capability.
    */
   planningBenchmarkActivate: boolean;

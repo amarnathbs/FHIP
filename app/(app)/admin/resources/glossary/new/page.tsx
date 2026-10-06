@@ -1,5 +1,5 @@
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource } from '@/lib/resources/permissions';
+import { canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { GlossaryNewButton } from '@/components/resources/glossary/GlossaryNewButton';
@@ -29,7 +29,7 @@ export default async function NewGlossaryPage() {
       canPublish: canPublishResource(current),
       canManage: canManageResources(current),
     };
-    return <GlossaryEditor post={post} reference={reference} termOptions={termOptions} initialVersions={[]} initialWorkflowHistory={[]} currentUserId={current.userId ?? ''} caps={caps} />;
+    return <GlossaryEditor post={post} reference={reference} termOptions={termOptions} initialVersions={[]} initialWorkflowHistory={[]} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />;
   }
 
   return <GlossaryNewButton canCreate={canCreate} />;

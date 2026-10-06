@@ -29,7 +29,7 @@ export interface HealthyRangeBand {
 }
 
 // A figure that has been superseded carries an effective_to date (set by the Planning Benchmarks staged upload,
-// migration 0270, never deleted: immutable Twin runs reference the old rows). The Twin must never serve it.
+// migration 0275, never deleted: immutable Twin runs reference the old rows). The Twin must never serve it.
 // "No end date, or an end date after today" matches every row that exists before any upload has superseded
 // anything, so for today's data this predicate changes nothing. See docs/planning-benchmarks/UPLOAD_DESIGN.md s9.
 export function liveWindowFilter(todayIso: string): string {

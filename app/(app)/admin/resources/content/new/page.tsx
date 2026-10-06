@@ -1,5 +1,5 @@
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource } from '@/lib/resources/permissions';
+import { canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NewContentChooser } from '@/components/resources/editor/NewContentChooser';
@@ -36,7 +36,7 @@ export default async function NewResourceContentPage({ searchParams }: { searchP
       canPublish: canPublishResource(current),
       canManage: canManageResources(current),
     };
-    return <ResourceEditor post={blankEditorPost(type, current.userId)} reference={reference} initialVersions={[]} initialWorkflowHistory={[]} currentUserId={current.userId ?? ''} caps={caps} />;
+    return <ResourceEditor post={blankEditorPost(type, current.userId)} reference={reference} initialVersions={[]} initialWorkflowHistory={[]} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />;
   }
 
   return <NewContentChooser canCreate={canCreate} />;

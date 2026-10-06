@@ -44,7 +44,7 @@ function filtersFromParams(params: URLSearchParams): FilterState {
   };
 }
 
-export function ResourceContentListClient({ queue, title, description }: { queue?: QueuePreset; title: string; description: string }) {
+export function ResourceContentListClient({ queue, title, description, canDeleteDrafts = false }: { queue?: QueuePreset; title: string; description: string; canDeleteDrafts?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -59,8 +59,7 @@ export function ResourceContentListClient({ queue, title, description }: { queue
   const [categoriesUnavailable, setCategoriesUnavailable] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
-  // F3: server-resolved capability (UI visibility only; the DELETE route re-checks).
-  const [canDeleteDrafts, setCanDeleteDrafts] = useState(false);
+  // F3: `canDeleteDrafts` is resolved on the server by the page (UI visibility only; the DELETE route re-checks).
 
   useEffect(() => {
     // Admin A0.2 Wave 5 (§8.5): this swallowed every failure, and the
@@ -110,8 +109,7 @@ export function ResourceContentListClient({ queue, title, description }: { queue
           setTotal(0);
           return;
         }
-        const data = json?.data as { items?: ContentListItem[]; total?: number; pageSize?: number; canDeleteDrafts?: boolean } | undefined;
-        setCanDeleteDrafts(data?.canDeleteDrafts === true);
+        const data = json?.data as { items?: ContentListItem[]; total?: number; pageSize?: number } | undefined;
         setItems(data?.items ?? []);
         setTotal(data?.total ?? 0);
         setPageSize(data?.pageSize ?? 25);

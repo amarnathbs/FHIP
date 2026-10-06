@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
-import { getCurrentResourceRoles, isResourceStaff, canCreateResource, canDeleteDraftResource } from '@/lib/resources/permissions';
+import { getCurrentResourceRoles, isResourceStaff, canCreateResource } from '@/lib/resources/permissions';
 import { parseContentListFilters, QUEUE_STATUS_GROUPS, type QueuePreset } from '@/lib/resources/admin/filters';
 import { getResourceContentList } from '@/lib/resources/admin/queries';
 import { createResourceDraft } from '@/lib/resources/editor/mutations';
@@ -48,9 +48,7 @@ export async function GET(request: Request) {
     const presetStatuses = preset ? QUEUE_STATUS_GROUPS[preset] : undefined;
 
     const result = await getResourceContentList(supabase, filters, presetStatuses);
-    // F3: the list shows a Delete control only to callers who hold the
-    // delete-draft capability. UI visibility only; DELETE re-checks it.
-    return ok({ ...result, canDeleteDrafts: canDeleteDraftResource(current) });
+    return ok(result);
   } catch (err) {
     console.error('Resources content list error:', err);
     return bad('Could not load Resources content.', 500);

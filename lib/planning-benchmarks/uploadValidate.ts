@@ -4,7 +4,7 @@
 // explicit sheet choice, formula cells, hidden rows) is the shared ingest library the Market Index Data
 // upload already uses. This module adds only what is specific to benchmark rows: the column schema, the
 // per-cell parsing and the cross-field rules. Every rule here is enforced a second time inside the database
-// RPC (migration 0270); the app-side pass exists to give row-level messages before anything is staged.
+// RPC (migration 0275); the app-side pass exists to give row-level messages before anything is staged.
 import {
   inspectUpload,
   parseCsvText,

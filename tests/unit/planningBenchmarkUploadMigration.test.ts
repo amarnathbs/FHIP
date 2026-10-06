@@ -1,4 +1,4 @@
-// Migration 0270 (Planning Benchmarks staged upload, F5): the hand-run parts must be exact slices of the migration, each
+// Migration 0275 (Planning Benchmarks staged upload, F5): the hand-run parts must be exact slices of the migration, each
 // must be pasteable alone, and the SQL must avoid the constructs that broke a paste into the Supabase SQL editor before.
 // Evidence label: UNIT-TESTED (text checks). The behaviour of the SQL is proven separately on PGlite
 // (planningBenchmarkUploadPglite.test.ts).
@@ -13,18 +13,18 @@ import path from 'node:path';
 import { hazards } from './support/sqlEditorHazards';
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const FILE = fs.readdirSync(path.join(ROOT, 'supabase', 'migrations')).find((f) => f.startsWith('0270_planning_benchmark_staged_upload'))!;
+const FILE = fs.readdirSync(path.join(ROOT, 'supabase', 'migrations')).find((f) => f.startsWith('0275_planning_benchmark_staged_upload'))!;
 const MIGRATION = fs.readFileSync(path.join(ROOT, 'supabase', 'migrations', FILE), 'utf8');
 const PARTS_DIR = path.join(ROOT, 'docs', 'planning-benchmarks', 'po_apply_upload', 'parts');
-const part = (l: string) => fs.readFileSync(path.join(PARTS_DIR, `0270${l}.sql`), 'utf8');
+const part = (l: string) => fs.readFileSync(path.join(PARTS_DIR, `0275${l}.sql`), 'utf8');
 
-describe('migration 0270 hand-run safety', () => {
+describe('migration 0275 hand-run safety', () => {
   it('NC-M1: parts a, b, c joined are byte-equal to the migration file', () => {
     expect([part('a'), part('b'), part('c')].join('')).toBe(MIGRATION);
   });
 
   it('every part starts on a banner or the file header and ends on a complete statement (pasteable alone)', () => {
-    expect(part('a').startsWith('-- 0270')).toBe(true);
+    expect(part('a').startsWith('-- 0275')).toBe(true);
     expect(part('b').startsWith('-- PART B starts here')).toBe(true);
     expect(part('c').startsWith('-- PART C starts here')).toBe(true);
     // the last NON-COMMENT line of each part ends a statement (a trailing banner comment before the next part is harmless)

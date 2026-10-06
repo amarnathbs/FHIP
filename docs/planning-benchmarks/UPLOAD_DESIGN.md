@@ -2,7 +2,7 @@
 
 Prepared 06/10/2026 on branch `fix/po-review-resources-data-20261006`. Admin Architecture Standard v1.0 (`docs/admin/FHIP_ADMIN_ARCHITECTURE_STANDARD.md`) and `AGENTS.md` were read in full before this design.
 
-Evidence labels used in this file: **code-complete**, **unit-tested**, **PGlite-verified** (an isolated in-memory Postgres replaying the real migrations), **DEV-verified**, **DEV-browser-verified**. Nothing in this work is DEV-verified: migration `0270` has not been applied anywhere and waits on the Product Owner (section 12).
+Evidence labels used in this file: **code-complete**, **unit-tested**, **PGlite-verified** (an isolated in-memory Postgres replaying the real migrations), **DEV-verified**, **DEV-browser-verified**. Nothing in this work is DEV-verified: migration `0275` has not been applied anywhere and waits on the Product Owner (section 12).
 
 ---
 
@@ -103,7 +103,7 @@ Idempotency and duplicate protection:
 - Activating an already activated batch returns the stored result and writes nothing (row lock then status check). Two simultaneous Activates serialise on the batch row and on a transaction-level advisory lock that also serialises any two activations, so two batches cannot end-date and insert the same key twice.
 - Activate is bound to what the reviewer saw: it carries the SHA-256, the staging digest and the previewed counts; the RPC recomputes the digest from the **current** live tables and refuses with "stale" if live data changed since staging (re-stage to continue).
 
-## 7. Tables (migration `0270`)
+## 7. Tables (migration `0275`)
 
 | Table | Purpose |
 |---|---|
@@ -164,4 +164,4 @@ Every named negative control demonstrably fails something (the failure is named 
 - **U4** Day-first dates (`dd/mm/yyyy`, `dd-mm-yyyy`) are accepted in uploaded files in addition to the year-first form, because a CSV saved from an Indian or Australian Excel contains them. Confirm or restrict to year-first only.
 - **U5** Band-set replacement for target ranges (a tier missing from the new file is end-dated). Confirm, or require every tier to be restated.
 - **U6** Whether to add a unique key on the live tables after a data clean-up (not done: it can fail on existing duplicates).
-- **U7** Apply migration `0270` on DEV (hand-over `docs/planning-benchmarks/po_apply_upload/`), then grant the capabilities, then the DEV certification can run.
+- **U7** Apply migration `0275` on DEV (hand-over `docs/planning-benchmarks/po_apply_upload/`), then grant the capabilities, then the DEV certification can run.

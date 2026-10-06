@@ -1,6 +1,6 @@
 // Capability guards for the Planning Benchmarks upload (F5). Admin Architecture Standard sections 2, 4, 13.
 //
-// Two SEPARATELY NAMED capabilities, each backed by its own admin_users column (migration 0270), each read
+// Two SEPARATELY NAMED capabilities, each backed by its own admin_users column (migration 0275), each read
 // fresh on every call from the caller's OWN session (never the service-role client):
 //
 //   upload    can_upload_planning_benchmarks    stage, preview, discard a batch the caller staged

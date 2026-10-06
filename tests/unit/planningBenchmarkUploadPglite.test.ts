@@ -1,10 +1,10 @@
-// Planning Benchmarks staged upload (migration 0270) - real-Postgres (PGlite) proof of the DATABASE half.
+// Planning Benchmarks staged upload (migration 0275) - real-Postgres (PGlite) proof of the DATABASE half.
 //
-// The whole migration ledger (0001 .. latest, including 0270) is replayed into an ISOLATED in-memory Postgres.
+// The whole migration ledger (0001 .. latest, including 0275) is replayed into an ISOLATED in-memory Postgres.
 // Every rule is then exercised through the real SECURITY DEFINER functions as the real database roles with
 // auth.uid() driven by request.jwt.claims. Nothing is reimplemented in the test.
 //
-// EVIDENCE LABEL: PGlite-verified. NOT DEV-verified and NOT production-verified (0270 is applied nowhere).
+// EVIDENCE LABEL: PGlite-verified. NOT DEV-verified and NOT production-verified (0275 is applied nowhere).
 //
 // NAMED NEGATIVE CONTROLS (NC-DB*). A green test proves nothing if it cannot go red. Each control runs the SAME
 // assertion against a copy of the function with exactly one rule surgically removed, and the assertion MUST
@@ -21,7 +21,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SUPABASE_ROOT = path.resolve(HERE, '..', '..', 'supabase');
 const MIG_DIR = path.join(SUPABASE_ROOT, 'migrations');
 const SHIM = path.join(SUPABASE_ROOT, '..', 'scripts', 'db-rebuild-check', 'shim.sql');
-const MIG_NAME = '0270_planning_benchmark_staged_upload.sql';
+const MIG_NAME = '0275_planning_benchmark_staged_upload.sql';
 const MIGRATION = fs.readFileSync(path.join(MIG_DIR, MIG_NAME), 'utf8');
 
 const UP = 'cccccccc-0000-0000-0000-00000000a001'; // can_upload only
@@ -219,7 +219,7 @@ afterAll(async () => {
 });
 
 // ------------------------------------------------------------------------------------------------ shape ---
-describe('migration 0270 - shape', () => {
+describe('migration 0275 - shape', () => {
   it('adds the two capability columns defaulting to false and grants them to nobody', async () => {
     const cols = await q<{ column_name: string; column_default: string }>(
       `select column_name, column_default from information_schema.columns where table_name = 'admin_users' and column_name in ('can_upload_planning_benchmarks','can_activate_planning_benchmarks') order by 1`

@@ -1,4 +1,4 @@
-# Planning Benchmarks upload: how to apply migration 0270 on DEV (Product Owner step)
+# Planning Benchmarks upload: how to apply migration 0275 on DEV (Product Owner step)
 
 Written 06/10/2026 for finding F5 ("there is no upload option"). Design and trade-offs: `docs/planning-benchmarks/UPLOAD_DESIGN.md`. How often to refresh each dataset and whether a feed exists: `docs/planning-benchmarks/REFRESH_CADENCE_AND_FEEDS.md`.
 
@@ -22,11 +22,11 @@ Written 06/10/2026 for finding F5 ("there is no upload option"). Design and trad
 
 The file is long, so it is also split into three parts that you paste one at a time, in order. Each part can be run on its own and can be run twice safely.
 
-1. Open `parts/0270a.sql`, paste all of it, press Run. Expect "Success. No rows returned".
-2. Open `parts/0270b.sql`, paste, Run.
-3. Open `parts/0270c.sql`, paste, Run.
+1. Open `parts/0275a.sql`, paste all of it, press Run. Expect "Success. No rows returned".
+2. Open `parts/0275b.sql`, paste, Run.
+3. Open `parts/0275c.sql`, paste, Run.
 
-(Or paste `supabase/migrations/0270_planning_benchmark_staged_upload.sql` in one go. If the editor complains, use the parts.)
+(Or paste `supabase/migrations/0275_planning_benchmark_staged_upload.sql` in one go. If the editor complains, use the parts.)
 
 ## Check it worked
 

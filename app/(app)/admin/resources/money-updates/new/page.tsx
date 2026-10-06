@@ -1,5 +1,5 @@
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource } from '@/lib/resources/permissions';
+import { canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MoneyUpdateNewChooser } from '@/components/resources/money-update/MoneyUpdateNewChooser';
@@ -40,6 +40,7 @@ export default async function NewMoneyUpdatePage({ searchParams }: { searchParam
         initialWorkflowHistory={[]}
         currentUserId={current.userId ?? ''}
         caps={caps}
+        canDelete={canDeleteDraftResource(current)}
       />
     );
   }
