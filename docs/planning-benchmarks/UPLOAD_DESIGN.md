@@ -167,3 +167,9 @@ All seven are accepted as recommended. The code was checked against each on the 
 - **U5 DECIDED.** Band-set replacement: a tier missing from the new file is end-dated, shown in the preview and counted as `bands_removed`. Code: `pb_removed_band_ids` and the Activate update; PGlite test "replacing the set ... an unrestated tier removed".
 - **U6 DECIDED.** No unique key on the live tables for now. Migration 0275 adds none; duplicate protection is by classification and the advisory lock.
 - **U7 DECIDED (PO action).** Apply migration `0275` on DEV first (hand-over `docs/planning-benchmarks/po_apply_upload/`), then grant the capabilities, then the DEV certification can run.
+
+---
+
+## 13. Allowed values on the templates and the screen (PO request 07/10/2026)
+
+The XLSX Read me sheet, a companion "Allowed values (CSV)" download and a collapsible panel on the Upload tab (Columns, Allowed datasets and metrics, Cohorts) all print the live lists read by `lib/planning-benchmarks/allowedValues.ts`, the same module the validator uses. The preview check also refuses a dataset that is not open for upload, an unlisted metric or cohort, and a target-range source that is not the dataset's own, naming the allowed values. Full account, counts and evidence: `TEMPLATE_ALLOWED_VALUES_REPORT.md`.
