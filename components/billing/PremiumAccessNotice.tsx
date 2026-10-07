@@ -85,7 +85,7 @@ export function PremiumAccessNotice({ noticeKey, kind, title, message }: Props) 
           }
           window.dispatchEvent(new Event(DISMISS_EVENT));
         }}
-        className="text-xs text-gray-500 hover:underline"
+        className="text-xs text-muted underline-offset-2 hover:underline"
       >
         Dismiss
       </button>

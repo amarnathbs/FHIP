@@ -95,7 +95,7 @@ export function PromoSetupCheck() {
       setOutcome(
         r.rowsNotVerified > 0
           ? { kind: 'failure', message: `${r.rowsVerified} of ${r.rowsSeen} existing codes were prepared. ${r.rowsNotVerified} could not be verified and still work as before. Run it again, and if it repeats, stop and tell the developer.` }
-          : { kind: 'success', message: r.rowsSeen === 0 ? 'Nothing to prepare: every existing code already has a verified protected copy.' : `${r.rowsVerified} existing codes now have a verified protected copy. They still work exactly as before. Nothing was removed.` }
+          : { kind: 'success', message: r.rowsSeen === 0 ? 'Nothing to prepare: every existing code already has a verified protected copy.' : `${r.rowsVerified} existing code${r.rowsVerified === 1 ? '' : 's'} now ${r.rowsVerified === 1 ? 'has' : 'have'} a verified protected copy. ${r.rowsVerified === 1 ? 'It still works' : 'They still work'} exactly as before. Nothing was removed.` }
       );
       await load();
     } catch (e) {
@@ -188,7 +188,7 @@ export function PromoSetupCheck() {
               <>
                 <p className="text-sm text-muted">
                   {health.existingCodes.total} codes in total. {health.existingCodes.stillStoredInPlainText} still hold their text in the database, of which{' '}
-                  {health.existingCodes.waitingForPreparation} are waiting for a verified protected copy. Preparing them is safe to repeat and removes nothing: every existing code
+                  {health.existingCodes.waitingForPreparation} {health.existingCodes.waitingForPreparation === 1 ? 'is' : 'are'} waiting for a verified protected copy. Preparing them is safe to repeat and removes nothing: every existing code
                   keeps working at every step. The developer removes the stored text in a separate, deliberate step after you have checked a code still works.
                 </p>
                 <button

@@ -333,7 +333,7 @@ export function PremiumEntitlementsClient() {
         {summary === null && !summaryError && <p className="text-sm text-muted">Loading…</p>}
         {summary !== null && summary.rows.length === 0 && <p className="text-sm text-muted">Nothing expired or expiring this month for this source.</p>}
         {summary !== null && summary.rows.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
+          <div className="overflow-x-auto rounded-card border" tabIndex={0} role="region" aria-label="Expiry summary table">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
                 <tr>
@@ -394,7 +394,7 @@ export function PremiumEntitlementsClient() {
         {grants === null && !grantsError && <p className="text-sm text-muted">Loading…</p>}
         {grants !== null && grants.length === 0 && <p className="text-sm text-muted">No grants in this list.</p>}
         {grants !== null && grants.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
+          <div className="overflow-x-auto rounded-card border" tabIndex={0} role="region" aria-label="Grants table">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
                 <tr>
@@ -459,7 +459,7 @@ export function PremiumEntitlementsClient() {
         {searchError && <p role="alert" className="text-sm text-risk">{searchError}</p>}
         {results !== null && results.length === 0 && <p className="text-sm text-muted">No matching users.</p>}
         {results !== null && results.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
+          <div className="overflow-x-auto rounded-card border" tabIndex={0} role="region" aria-label="User search results table">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
                 <tr>
@@ -633,7 +633,7 @@ export function PremiumEntitlementsClient() {
             {history === null && <p className="mt-1 text-sm text-muted">Loading…</p>}
             {history !== null && history.length === 0 && <p className="mt-1 text-sm text-muted">No admin changes recorded for this user.</p>}
             {history !== null && history.length > 0 && (
-              <div className="mt-2 overflow-x-auto rounded-card border">
+              <div className="mt-2 overflow-x-auto rounded-card border" tabIndex={0} role="region" aria-label="History table">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
                     <tr>

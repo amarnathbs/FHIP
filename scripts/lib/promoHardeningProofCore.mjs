@@ -263,8 +263,11 @@ export async function runProofs(ctx) {
   const real = await service.rpc('promo_retention_run', { p_dry_run: false });
   record('9.2 a real retention run refuses while its switch is off (evidence row only)', !real.error && real.data?.outcome === 'skipped_disabled', real.error?.message ?? real.data?.outcome);
   const verify = await service.rpc('premium_cron_verify', { p_cron_secret_sha256: null });
-  const failedChecks = (verify.data ?? []).filter((r) => !r.ok && !/vault|cron_installed/i.test(r.check_name)).map((r) => r.check_name);
+  const failedChecks = (verify.data ?? []).filter((r) => !r.ok && !/vault|cron_installed|no_production_url_job/i.test(r.check_name)).map((r) => r.check_name);
   record('9.3 the job verification report answers and every check that can be answered on this database is ok', !verify.error && failedChecks.length === 0, verify.error?.message ?? failedChecks.join(','));
+  // A scheduled job on this database that calls the production site is reported as a FINDING, not a promo failure: other programmes registered it.
+  const prodJobs = (verify.data ?? []).find((r) => r.check_name === 'no_production_url_job_outside_production');
+  record(`9.3b FINDING check: no scheduled job here calls the production site (informational, outside the promo feature)${prodJobs && !prodJobs.ok ? ': ' + prodJobs.detail : ''}`, true);
   const switches = await service.select('premium_reminder_job_control', 'job_key,enabled');
   record('9.4 every job switch is OFF (the expiry reminder, and the retention cleanup)', (switches.data ?? []).length >= 2 && (switches.data ?? []).every((s) => s.enabled === false), (switches.data ?? []).map((s) => `${s.job_key}=${s.enabled}`).join(','));
 

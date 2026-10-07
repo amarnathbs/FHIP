@@ -523,7 +523,7 @@ export function PromoCodesClient() {
         {rows === null && !error && <p className="text-sm text-muted">Loading…</p>}
         {rows !== null && rows.length === 0 && <p className="text-sm text-muted">No promo codes yet.</p>}
         {rows !== null && rows.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
+          <div className="overflow-x-auto rounded-card border" tabIndex={0} role="region" aria-label="Promo codes table">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
                 <tr>
@@ -660,7 +660,7 @@ export function PromoCodesClient() {
         <p className="text-xs text-muted">Shows the code id hint only (never a code value). Redemptions are listed with the redeeming account&apos;s email.</p>
         {events !== null && events.length === 0 && <p className="text-sm text-muted">No events yet.</p>}
         {events !== null && events.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
+          <div className="overflow-x-auto rounded-card border" tabIndex={0} role="region" aria-label="Promo code audit trail table">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
                 <tr>

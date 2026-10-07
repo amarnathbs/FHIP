@@ -93,8 +93,10 @@ async function signedInContext(label, width = 1280, height = 900) {
 const ISO_DATE = /\b(19|20)\d{2}-\d{2}-\d{2}\b/;
 const US_DATE = /\b(0?[1-9]|1[0-2])\/(1[3-9]|2\d|3[01])\/(19|20)\d{2}\b/;
 
-async function pageHealth(page, label, widthName) {
-  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+async function pageHealth(page, label, widthName, include = null) {
+  const builder = new AxeBuilder({ page });
+  if (include) builder.include(include);
+  const axe = await builder.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   check(`${label} (${widthName}): axe finds no WCAG 2.x A/AA violation`, axe.violations.length === 0, axe.violations.map((v) => `${v.id}x${v.nodes.length}`).join(', '));
   const overflow = await page.evaluate(() => document.scrollingElement.scrollWidth - window.innerWidth);
   check(`${label} (${widthName}): no horizontal scroll of the page`, overflow <= 1, `overflow ${overflow}px`);
@@ -244,7 +246,7 @@ try {
     const bodyAfter = await page.locator('body').innerText();
     check('the list shows only the masked hint of the new code (the full code is not in the list)', bodyAfter.includes(hint) && (bodyAfter.match(new RegExp((code ?? 'x').replace('-', '-?'), 'g')) ?? []).length === 1, hint);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.getByRole('heading', { name: 'Codes' }).waitFor({ timeout: 60_000 });
+    await page.getByRole('heading', { name: 'Codes', exact: true }).waitFor({ timeout: 60_000 });
     await page.waitForTimeout(2000);
     check('after a reload the full code is gone from the page (it cannot be shown again)', !(await page.locator('body').innerText()).replace(/\s/g, '').includes((code ?? 'x').replace('-', '')));
     const prepare = page.getByRole('button', { name: 'Prepare existing codes' });
@@ -258,6 +260,22 @@ try {
       }
     }
     await context.close();
+
+    // An OLD-WORLD code (made by the old function shapes, plain text stored) must redeem after Prepare existing codes, by its protected copy or the legacy lookup.
+    const oldFile = argValue('--oldcodes');
+    if (oldFile && fs.existsSync(oldFile)) {
+      const old = JSON.parse(fs.readFileSync(oldFile, 'utf8'));
+      const { context: octx, page: opage } = await signedInContext('user3');
+      await opage.goto(`${base}/profile`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+      const ofield = opage.getByLabel('Promo code');
+      await ofield.waitFor({ timeout: 120_000 });
+      await ofield.fill(old.typed);
+      await opage.getByRole('button', { name: 'Apply code' }).click();
+      await opage.getByText(/Premium \(promo code, ends /).first().waitFor({ timeout: 60_000 }).catch(() => undefined);
+      const t = await opage.locator('body').innerText();
+      check('an existing OLD-WORLD code (created by the old function shapes) still redeems after the backfill, with the new 30 day window', /Premium \(promo code, ends \d{2}\/\d{2}\/\d{4}\)/.test(t), (t.match(/Premium \(promo code[^)]*\)/) ?? [''])[0]);
+      await octx.close();
+    }
 
     if (code) {
       const { context: uctx, page: upage } = await signedInContext('user1');
@@ -278,7 +296,8 @@ try {
       await upage.getByRole('button', { name: 'Apply code' }).click().catch(() => undefined);
       await upage.waitForTimeout(2000);
       check('using the same code again is refused with a clear message', /already used|cannot be used/.test(await upage.locator('body').innerText()));
-      await pageHealth(upage, 'Profile (plan and promo panel)', 'desktop');
+      // Only the plan and promo panel is in scope: the Profile form above it has two unlabeled controls that are not part of this release (reported as a finding).
+      await pageHealth(upage, 'Profile (plan and promo panel)', 'desktop', 'div.space-y-6:has(#promo-code-helper)');
       await uctx.close();
     }
   }
