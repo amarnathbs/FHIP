@@ -29,6 +29,19 @@ export function bodyOf(sql, name) {
 
 const md5 = (s) => crypto.createHash('md5').update(s, 'utf8').digest('hex');
 
+/**
+ * NORMALISATION. A function body that was pasted into the SQL editor may differ from the migration file only in layout: line endings,
+ * indentation, trailing space, or comment lines (the editor safety rules forced some hand-run text to be reworded in comments). Such a
+ * difference is cosmetic. The comparison therefore removes every comment (two hyphens to the end of the line), collapses every run of
+ * white space (including carriage returns) to one space and trims. The database computes the SAME thing with the SQL expression below, and a
+ * test proves the two agree on the real migrations. Anything that survives the normalisation (a changed word, number, condition) changes the hash.
+ */
+export function normaliseBody(text) {
+  return text.replace(/-{2}[^\n]*/g, '').replace(/\s+/g, ' ').trim();
+}
+/** The same normalisation as a SQL expression over a text expression. */
+export const normalisedSql = (expr) => `btrim(regexp_replace(regexp_replace(${expr}, '-{2}[^' || chr(10) || ']*', '', 'g'), '\\s+', ' ', 'g'))`;
+
 export const OLD_FUNCTIONS = [
   { name: 'admin_create_promo_code', ident: 'public.admin_create_promo_code(text,integer,integer,boolean,date,boolean,text,text,integer)', file: '0242_', label: 'create (old, 9 arguments)' },
   { name: 'admin_list_promo_codes', ident: 'public.admin_list_promo_codes()', file: '0242_', label: 'list (old, returns the plain code)' },
@@ -39,7 +52,7 @@ export const OLD_FUNCTIONS = [
 
 export function fingerprints() {
   const out = {};
-  for (const f of OLD_FUNCTIONS) out[f.name] = md5(bodyOf(read(f.file), f.name));
+  for (const f of OLD_FUNCTIONS) out[f.name] = md5(normaliseBody(bodyOf(read(f.file), f.name)));
   return out;
 }
 
@@ -59,7 +72,8 @@ function build() {
   for (const f of OLD_FUNCTIONS) add('A', `old function exists: ${f.label}`, t(`to_regprocedure('${f.ident}') is not null`), `'true'`);
   // B. the old functions are exactly the repository text
   for (const f of OLD_FUNCTIONS) {
-    add('B', `old function text matches the repository: ${f.label}`, `(select md5(prosrc) from pg_proc where oid = to_regprocedure('${f.ident}'))`, `'${fp[f.name]}'`);
+    add('B', `old function text matches the repository (layout and comments ignored): ${f.label}`, `(select md5(${normalisedSql('prosrc')}) from pg_proc where oid = to_regprocedure('${f.ident}'))`, `'${fp[f.name]}'`);
+    add('B2', `old function raw size in characters and raw hash (information only): ${f.label}`, `(select length(prosrc)::text || ' / ' || md5(prosrc) from pg_proc where oid = to_regprocedure('${f.ident}'))`, null);
   }
   // C. nothing of this release is there yet (every row says false before you apply)
   add('C', 'digest column exists (false before you apply)', t(`(select count(*) = 1 from information_schema.columns where table_schema = 'public' and table_name = 'promo_codes' and column_name = 'code_digest')`), `'false'`);
@@ -99,7 +113,7 @@ function build() {
     '-- D1 detection pack: read only, safe to run on DEV and on production, any number of times',
     '-- Paste the whole file in the SQL editor and press Run. You get one row per check.',
     '-- Section A: the database is in the state this release was built against (ok must be true).',
-    '-- Section B: the five old functions are exactly the text the repository says they are (ok must be true).',
+    '-- Section B: the five old functions are the text the repository says they are, ignoring layout and comments (ok must be true). Section B2 is information only.',
     '-- Section C: nothing of this release is applied yet (every row must say false before you apply, and ok true).',
     '-- Section D and F: facts for the record. They have no expected value, so ok is true. Copy them to your reply.',
     '-- Section E: the environment marker. At most one row is allowed.',
@@ -114,16 +128,53 @@ function build() {
   ].join('\n');
 }
 
-export const CHECK_FILES = [{ file: 'D1_before_detect.sql', build: build }];
+/** The chunk size, in characters, of one result row of the definition pack. */
+export const D2_CHUNK = 900;
+
+/**
+ * D2: the read-only DEFINITION pack. It returns each old function in its normalised form (comments removed, white space collapsed) cut into
+ * rows of ${D2_CHUNK} characters, with the normalised hash and length, so a difference reported by D1 can be pasted back and compared
+ * word by word. Same normalisation as D1 (normalisedSql). Writes nothing.
+ */
+function buildD2() {
+  const norm = normalisedSql('p.prosrc');
+  const rows = OLD_FUNCTIONS.map((f, i) => `  ${i === 0 ? 'select' : 'union all select'} ${i + 1}${i === 0 ? ' as k' : ''}, '${f.label}'${i === 0 ? ' as function_name' : ''}, ${norm}${i === 0 ? ' as norm' : ''} from pg_proc p where p.oid = to_regprocedure('${f.ident}')`).join('\n');
+  return [
+    '-- D2 definition pack: read only, safe to run on DEV and on production',
+    '-- Paste the whole file in the SQL editor and press Run. It returns the five old functions as normalised text (comments removed and white space',
+    '-- collapsed) cut in pieces, with the hash and the length of each. Use it when D1 section B says a function differs: send me the whole result.',
+    '-- The hash column must equal the expected value in D1 for the function to match the repository.',
+    '',
+    'select f.function_name, g.n as part, substr(f.norm, (g.n - 1) * ' + D2_CHUNK + ' + 1, ' + D2_CHUNK + ') as text_part, md5(f.norm) as normalised_hash, length(f.norm) as normalised_length',
+    'from (',
+    rows,
+    ') f',
+    'cross join lateral generate_series(1, greatest(ceil(length(f.norm) / ' + D2_CHUNK + '.0)::int, 1)) g(n)',
+    'order by f.k, g.n;',
+    '',
+  ].join('\n');
+}
+
+export const CHECK_FILES = [
+  { file: 'D1_before_detect.sql', build: build },
+  { file: 'D2_old_function_definitions.sql', build: buildD2 },
+];
 
 if (process.argv[1] && process.argv[1].endsWith('promo_hardening_build_checks.mjs')) {
-  const text = build();
-  if (process.argv.includes('--check')) {
-    const same = fs.existsSync(OUT) && fs.readFileSync(OUT, 'utf8') === text;
-    if (!same) console.log('DIFFERS: D1_before_detect.sql');
-    process.exit(same ? 0 : 1);
-  }
+  let bad = 0;
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
-  fs.writeFileSync(OUT, text);
-  console.log(`wrote D1_before_detect.sql (${text.length} bytes)`);
+  for (const c of CHECK_FILES) {
+    const text = c.build();
+    const target = path.join(path.dirname(OUT), c.file);
+    if (process.argv.includes('--check')) {
+      if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== text) {
+        bad += 1;
+        console.log(`DIFFERS: ${c.file}`);
+      }
+    } else {
+      fs.writeFileSync(target, text);
+      console.log(`wrote ${c.file} (${text.length} bytes)`);
+    }
+  }
+  process.exit(bad ? 1 : 0);
 }

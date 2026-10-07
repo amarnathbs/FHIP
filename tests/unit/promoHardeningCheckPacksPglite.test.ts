@@ -17,7 +17,8 @@ import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { hazards } from '../../scripts/migration_editor_safety_lint.mjs';
-import { fingerprints, OLD_FUNCTIONS } from '../../scripts/promo_hardening_build_checks.mjs';
+import { createHash } from 'node:crypto';
+import { fingerprints, normalisedSql, OLD_FUNCTIONS } from '../../scripts/promo_hardening_build_checks.mjs';
 import { MIG_DIR, REPO_ROOT, expectNamedFailure, migrationFiles, replayAll } from './support/promoTestHelpers';
 
 const PACK_DIR = path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_promo_hardening_release', 'checks');
@@ -58,6 +59,55 @@ describe('D1 detection pack on the OLD-WORLD database', () => {
   it('the fingerprints in the file are the ones the generator computes from the migrations', () => {
     const text = pack('D1_before_detect.sql');
     for (const [name, md5] of Object.entries(fingerprints())) expect(text, name).toContain(md5);
+  });
+
+  it('NORMALISATION: the hash the database computes equals the hash the repository side computes, for all five old functions', async () => {
+    const { rows } = await db.query(`select p.proname as name, md5(${normalisedSql('p.prosrc')}) as h from pg_proc p where p.oid in (${OLD_FUNCTIONS.map((f) => `to_regprocedure('${f.ident}')`).join(',')})`);
+    const fp = fingerprints();
+    expect(rows).toHaveLength(5);
+    for (const r of rows as { name: string; h: string }[]) expect(r.h, r.name).toBe(fp[r.name]);
+  });
+
+  it('NORMALISATION: layout and comments are cosmetic (CRLF, indentation, a reworded comment, trailing space leave section B green)', async () => {
+    const def = (await db.query(`select pg_get_functiondef(to_regprocedure('public.admin_promo_email_begin(text,integer,boolean)')) d`)).rows[0] as { d: string };
+    const cosmetic = def.d.replace(/\n/g, '\r\n').replace(/\r\n  /g, '\r\n      ').replace('declare', 'declare -- a reworded comment that is not in the repository  ') + '   ';
+    expect(cosmetic).not.toBe(def.d);
+    await db.exec(cosmetic);
+    try {
+      const rows = await run('D1_before_detect.sql');
+      expect(failing(rows.filter((r) => r.section === 'B')), 'cosmetic differences must not turn section B red').toEqual([]);
+      const info = rows.filter((r) => r.section === 'B2');
+      expect(info.length, 'the raw hash rows are information only').toBe(5);
+    } finally {
+      await db.exec(def.d);
+    }
+  });
+
+  it('NORMALISATION control: a one-word semantic change (a number in a condition) DOES change the hash and turns that row red', async () => {
+    const def = (await db.query(`select pg_get_functiondef(to_regprocedure('public.admin_promo_email_begin(text,integer,boolean)')) d`)).rows[0] as { d: string };
+    const semantic = def.d.replace('>= 10', '>= 11');
+    if (semantic === def.d) throw new Error('the control mutation must change the text');
+    await db.exec(semantic);
+    try {
+      const bad = failing((await run('D1_before_detect.sql')).filter((r) => r.section === 'B'));
+      await expectNamedFailure(() => expect(bad, 'the old function is the repository text').toEqual([]), 'the old function is the repository text');
+      expect(bad).toHaveLength(1);
+    } finally {
+      await db.exec(def.d);
+    }
+  });
+
+  it('D2 returns the normalised definition in pieces that join back to exactly the repository side normalisation', async () => {
+    const rows = (await db.query(pack('D2_old_function_definitions.sql'))).rows as { function_name: string; part: number; text_part: string; normalised_hash: string; normalised_length: number }[];
+    const fp = fingerprints();
+    for (const f of OLD_FUNCTIONS) {
+      const mine = rows.filter((r) => r.function_name === f.label).sort((a, b) => a.part - b.part);
+      expect(mine.length, f.label).toBeGreaterThan(0);
+      const joined = mine.map((r) => r.text_part).join('');
+      expect(joined.length, f.label).toBe(mine[0].normalised_length);
+      expect(mine[0].normalised_hash, f.label).toBe(fp[f.name]);
+      expect(createHash('md5').update(joined, 'utf8').digest('hex'), f.label).toBe(fp[f.name]);
+    }
   });
 
   it('NC-K1: a drifted old function (edited by hand) turns exactly its fingerprint row red', async () => {
@@ -165,7 +215,7 @@ describe('the pack files themselves', () => {
   const files = fs.readdirSync(PACK_DIR).filter((f) => f.endsWith('.sql'));
 
   it('there is a detection pack and a verification pack for every step of the runbook', () => {
-    expect(files.sort()).toEqual(['D1_before_detect.sql', 'V0264_after_0264.sql', 'V0265_after_0265.sql', 'V0266_after_0266.sql', 'V0267_after_0267.sql', 'V0268_after_0268.sql', 'V0279_after_0279.sql', 'V_after_finalise.sql', 'V_after_prepare_existing_codes.sql']);
+    expect(files.sort()).toEqual(['D1_before_detect.sql', 'D2_old_function_definitions.sql', 'V0264_after_0264.sql', 'V0265_after_0265.sql', 'V0266_after_0266.sql', 'V0267_after_0267.sql', 'V0268_after_0268.sql', 'V0279_after_0279.sql', 'V_after_finalise.sql', 'V_after_prepare_existing_codes.sql']);
   });
 
   it('every pack passes the editor safety lint (ASCII, no percent sign, no statement word followed by a name in a comment or string)', () => {
