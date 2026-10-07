@@ -21,7 +21,10 @@ TOP, BOTTOM, LEFT, RIGHT = 22 * MM, 20 * MM, 16 * MM, 16 * MM
 def main() -> None:
     pdf, out_dir, names_path = sys.argv[1], sys.argv[2], sys.argv[3]
     dpi = int(sys.argv[4]) if len(sys.argv) > 4 else 110
-    fund_names = json.load(open(names_path, encoding='utf-8'))
+    loaded = json.load(open(names_path, encoding='utf-8'))
+    # the third argument is a list of fund names, or {"names": [...], "cells": [...]} where cells are the texts of table body cells
+    fund_names = loaded['names'] if isinstance(loaded, dict) else loaded
+    cell_texts = [c for c in (loaded.get('cells', []) if isinstance(loaded, dict) else []) if len(c) > 3]
     os.makedirs(out_dir, exist_ok=True)
     doc = pymupdf.open(pdf)
     pages = []
@@ -88,6 +91,16 @@ def main() -> None:
         all_sizes = [round(sp['size'], 1) for b in page.get_text('dict')['blocks'] if b.get('type') == 0 for ln in b['lines'] for sp in ln['spans'] if sp['text'].strip()]
         named = [n for n in fund_names if n in text]
         overflow = [l['text'][:60] for l in lines if l['x1'] > W - RIGHT + 2 or l['x0'] < LEFT - 2]
+        # SPLIT ROWS: a table row that continues on the next page shows its last wrapped line(s) at the top of that page, i.e. one of the first
+        # lines is the trailing part of a longer table-cell text. (Fund pages and the comparison page start with their own title: not checked.)
+        split_rows = []
+        starts_page = bool(first_line) and (first_line['text'].startswith('Comparing your funds') or any(n.startswith(first_line['text']) or first_line['text'].startswith(n) for n in fund_names if len(first_line['text']) >= 8))
+        if i > 0 and not starts_page:
+            for l in ordered[:4]:
+                t = l['text']
+                if any(len(c) > len(t) + 1 and c.endswith(t) and c[-len(t) - 1] == ' ' for c in cell_texts):
+                    split_rows.append(t[:60])
+        continued = '(continued)' in text
         png = os.path.join(out_dir, f'page-{i + 1:02d}.png')
         page.get_pixmap(dpi=dpi).save(png)
         pages.append({
@@ -99,6 +112,8 @@ def main() -> None:
             'funds_named': named,
             'overflow_right': overflow,
             'overlaps': overlaps[:10],
+            'split_rows': split_rows,
+            'continued': continued,
             'min_size': min(sizes) if sizes else None,
             'min_size_all': min(all_sizes) if all_sizes else None,
             'body_size': sizes.most_common(1)[0][0] if sizes else None,

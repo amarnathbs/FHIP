@@ -1,4 +1,5 @@
 import StaticNavChart from '@/components/reports/StaticNavChart';
+import { COMPARISON_FULL_MAX_FUNDS, COMPARISON_MAX_RANK_ROWS, COMPARISON_TOP_PAIRS, FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND, type FundPagePlan } from '@/lib/config/nav2/printLayout';
 import { REPORT_PERIOD_LABELS } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport, FundAnalyticsSchemeBlock } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/investorExperience';
@@ -38,6 +39,11 @@ class Footnotes {
   }
 }
 
+/** The chart's drawing height on a one-page fund (the two-page plan keeps the default). */
+const CHART_HEIGHT_COMPACT = 125;
+const WIDTHS_TWO_PAGES = { glance: [27, 22, 51], growth: [17, 22, 22, 39], rolling: [16, 20, 20, 20, 24], risk: [29, 29, 42], trend: [34, 24, 42], own: [34, 24, 42] };
+// half-width tables (a column is 86 mm)
+const WIDTHS_ONE_PAGE = { glance: [27, 22, 51], growth: [12, 22, 22, 44], rolling: [14, 21, 21, 21, 23], risk: [34, 22, 44], trend: [44, 28, 28], own: [38, 20, 42] };
 const BOUNDARY_NOTE = 'Prices are not published every day. Where a start or end date had no price, the latest earlier price (within 10 days) was used; each fund’s own page shows the dates actually used.';
 const RISK_FREE_CODES = new Set(['risk_free_series_used']);
 
@@ -61,6 +67,14 @@ function figure(c: ShownCell, fn: Footnotes, opts: { riskFreeNote?: number | nul
   return { node: <><span className="fa-na">{c.headline}</span><Marks letters={l ? [l] : []} /></>, pointer };
 }
 
+/** A footnote is an explanation, not a data dump: the engine's own text can be very long (a solver listing hundreds of roots), so a printed note is capped. The full text stays in the stored report. */
+export const FOOTNOTE_MAX_CHARS = 320;
+export function clipFootnote(text: string): string {
+  if (text.length <= FOOTNOTE_MAX_CHARS) return text;
+  const cut = text.slice(0, FOOTNOTE_MAX_CHARS);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), FOOTNOTE_MAX_CHARS - 40))} ... (shortened here; the full text is in the stored report)`;
+}
+
 function FootnoteList({ fn }: { fn: Footnotes }) {
   const items = fn.list();
   if (items.length === 0) return null;
@@ -68,7 +82,7 @@ function FootnoteList({ fn }: { fn: Footnotes }) {
     <div className="fa-footnotes">
       {items.map((x) => (
         <p key={x.letter}>
-          <sup className="fa-mark">{x.letter}</sup> {x.text}
+          <sup className="fa-mark">{x.letter}</sup> {clipFootnote(x.text)}
           {x.shared ? (/\d{2}-\d{2}-\d{4}/.test(x.text) ? ' The same applies to every cell carrying this mark; each names its own date.' : ' The same applies to every cell carrying this mark.') : ''}
         </p>
       ))}
@@ -118,7 +132,7 @@ function FaTable({ caption, head, widths, num, rows }: { caption?: string; head:
   );
 }
 
-function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBlock; ctx: Nav2Context; riskFreeNote: number | null }) {
+function FundSheets({ block, ctx, riskFreeNote, onePage }: { block: FundAnalyticsSchemeBlock; ctx: Nav2Context; riskFreeNote: number | null; onePage: boolean }) {
   const a = block.analytics;
   const s = a.scheme;
   const inv = a.investor;
@@ -126,14 +140,17 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
   const last = block.chart.navPoints[block.chart.navPoints.length - 1];
   const sum = block.navSeriesSummary;
   const fnA = new Footnotes();
-  const fnB = new Footnotes();
+  // one page per fund: ONE footnote list for the whole page, so the letters never repeat
+  const fnB = onePage ? fnA : new Footnotes();
+  const W = onePage ? WIDTHS_ONE_PAGE : WIDTHS_TWO_PAGES;
 
   // ---- sheet A ---------------------------------------------------------------------------------------------------
   const factRows: Row[] = [
     { key: 'hist', cells: ['Price history', `${sum.count.toLocaleString('en-IN')} prices`, `${showDate(ctx, sum.firstDate)} to ${showDate(ctx, sum.lastDate)}${sum.materialGapCount > 0 ? `, ${sum.materialGapCount} gap(s)` : ''}`] },
     ...(last ? [{ key: 'nav', cells: ['Latest price (NAV)', navPrice(last[1]), `on ${showDate(ctx, last[0])}`] }] : []),
   ];
-  if (inv) {
+  // one page per fund: Value now, Amount you put in, Gain or loss and Your return are printed ONCE, in "Your own money in this fund" (the two-page plan repeats them here)
+  if (inv && !onePage) {
     const xirr = showResult(inv.xirr, (v) => pct(v.rate));
     const cur = showResult(inv.currentValue, (v) => rupees(v.value));
     const put = showResult(inv.investedAmount, (v) => rupees(v.invested));
@@ -193,7 +210,7 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
     }),
     { key: 'hi', cells: ['Highest NAV in the period', figure(showResult(s.extremes, (v) => navPrice(v.highestNav)), fnB).node, s.extremes.state === 'available' ? showDate(ctx, s.extremes.value.highestNavDate) : ''] },
     { key: 'lo', cells: ['Lowest NAV in the period', figure(showResult(s.extremes, (v) => navPrice(v.lowestNav)), fnB).node, s.extremes.state === 'available' ? showDate(ctx, s.extremes.value.lowestNavDate) : ''] },
-    { key: 'avg', cells: ['Average NAV (mean / median)', figure(showResult(s.average, (v) => `${navPrice(v.meanNav)} / ${navPrice(v.medianNav)}`), fnB).node, 'describes prices, not a return'] },
+    { key: 'avg', cells: ['Average NAV (mean / median)', <span key="avg" className="fa-wrapnum">{figure(showResult(s.average, (v) => `${navPrice(v.meanNav)} / ${navPrice(v.medianNav)}`), fnB).node}</span>, 'describes prices, not a return'] },
   ];
 
   // The compact money table repeats under its own heading on sheet B (the heading never stands over a lone sentence).
@@ -207,47 +224,124 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
       ]
     : [];
 
-  return (
+  // ---- the pieces, built once and arranged for the chosen page plan ------------------------------------------------
+  const nameLine = (continued: boolean) => (
+    <h2 className="fa-fund-name">
+      {block.schemeName}
+      {continued ? <span className="fa-cont"> (continued)</span> : null}
+    </h2>
+  );
+  const identity = (
     <>
-      <section className="fa-sheet fa-fund">
-        <h2 className="fa-fund-name">{block.schemeName}</h2>
-        {meta && <p className="fa-meta">{meta}</p>}
-        {ownershipSentence(block.ownership) && <p className="fa-meta fa-own-share" data-fa-ownership={block.ownership?.mode}>{ownershipSentence(block.ownership)}</p>}
-        <FaTable head={['At a glance', 'Value', 'Detail']} widths={[27, 22, 51]} num={[false, true, false]} rows={factRows} />
-        <div className="fa-chart">
-          <StaticNavChart block={block} ctx={ctx} />
+      {meta && <p className="fa-meta">{meta}</p>}
+      {ownershipSentence(block.ownership) && <p className="fa-meta fa-own-share" data-fa-ownership={block.ownership?.mode}>{ownershipSentence(block.ownership)}</p>}
+    </>
+  );
+  const glance = onePage ? (
+    // one page per fund: the two facts about the fund's prices are one plain line (the money figures are in "Your own money in this fund")
+    <p className="fa-facts" data-fa-facts="true">
+      <span className="fa-fact-label">Price history</span> {sum.count.toLocaleString('en-IN')} prices, {showDate(ctx, sum.firstDate)} to {showDate(ctx, sum.lastDate)}
+      {sum.materialGapCount > 0 ? `, ${sum.materialGapCount} gap(s)` : ''}.
+      {last ? (
+        <>
+          {' '}
+          <span className="fa-fact-label">Latest price (NAV)</span> {navPrice(last[1])} on {showDate(ctx, last[0])}.
+        </>
+      ) : null}
+    </p>
+  ) : (
+    <FaTable head={['At a glance', 'Value', 'Detail']} widths={W.glance} num={[false, true, false]} rows={factRows} />
+  );
+  const chart = (
+    <div className="fa-chart">
+      <StaticNavChart block={block} ctx={ctx} height={onePage ? CHART_HEIGHT_COMPACT : undefined} />
+    </div>
+  );
+  const growth = (
+    <>
+      <h3>The fund’s own growth</h3>
+      <p className="fa-sub">{SCHEME_CAGR_LABEL}</p>
+      <FaTable head={['Period', 'Total return', 'CAGR (a year)', 'Dates used']} widths={W.growth} num={[false, true, true, false]} rows={trailing} />
+    </>
+  );
+  const rollingBlock = (
+    <>
+      <h3>Rolling returns</h3>
+      <p className="fa-sub">Every available window, not a single start date.</p>
+      <FaTable head={['Window', 'Median', 'Lowest', 'Highest', 'Windows above zero']} widths={W.rolling} num={[false, true, true, true, true]} rows={rolling} />
+    </>
+  );
+  const risk = (
+    <>
+      <h3>Risk and risk-adjusted measures</h3>
+      <p className="fa-sub">Over the report period, from daily prices.</p>
+      <FaTable head={['Measure', 'Value', 'Basis']} widths={W.risk} num={[false, true, false]} rows={riskRows} />
+      {noBenchmark && <p className="fa-sub" data-fa-beta-alpha="none">{BETA_ALPHA_NO_BENCHMARK_LINE}</p>}
+    </>
+  );
+  const trend = (
+    <>
+      <h3>Trend</h3>
+      <p className="fa-sub">Latest value of each average, counted in price observations (not calendar days).</p>
+      <FaTable head={['Measure', 'Latest', 'As at']} widths={W.trend} num={[false, true, false]} rows={trendRows} />
+    </>
+  );
+  const own = (
+    <>
+      <h3>Your own money in this fund</h3>
+      {ownershipSentence(block.ownership) && <p className="fa-sub">{ownershipSentence(block.ownership)}</p>}
+      {inv ? (
+        <>
+          <p className="fa-sub">{INVESTOR_XIRR_LABEL}</p>
+          <FaTable head={['Measure', 'Value', 'Detail']} widths={W.own} num={[false, true, false]} rows={ownRows} />
+          <p className="fa-text">{a.explanation}</p>
+        </>
+      ) : (
+        <p className="fa-text">Your own return is not shown for this fund because your transactions and holding could not be matched to it.</p>
+      )}
+    </>
+  );
+
+  if (onePage) {
+    // ONE page per fund: the name, the glance table and the chart across the full width, then two columns, then ONE footnote list.
+    return (
+      <section className="fa-fund fa-one" data-fa-fund={block.instrumentId}>
+        {nameLine(false)}
+        {identity}
+        {glance}
+        {chart}
+        <div className="fa-cols">
+          <div className="fa-col">
+            {growth}
+            {rollingBlock}
+            {risk}
+          </div>
+          <div className="fa-col">
+            {own}
+            {trend}
+          </div>
         </div>
-        <h3>The fund’s own growth</h3>
-        <p className="fa-sub">{SCHEME_CAGR_LABEL}</p>
-        <FaTable head={['Period', 'Total return', 'CAGR (a year)', 'Dates used']} widths={[17, 22, 22, 39]} num={[false, true, true, false]} rows={trailing} />
-        <h3>Rolling returns</h3>
-        <p className="fa-sub">Every available window, not a single start date.</p>
-        <FaTable head={['Window', 'Median', 'Lowest', 'Highest', 'Windows above zero']} widths={[16, 20, 20, 20, 24]} num={[false, true, true, true, true]} rows={rolling} />
         <FootnoteList fn={fnA} />
       </section>
-
-      <section className="fa-sheet fa-sheet-b">
-        <h2 className="fa-fund-name">
-          {block.schemeName} <span className="fa-cont">(continued)</span>
-        </h2>
-        <h3>Risk and risk-adjusted measures</h3>
-        <p className="fa-sub">Over the report period, from daily prices.</p>
-        <FaTable head={['Measure', 'Value', 'Basis']} widths={[29, 29, 42]} num={[false, true, false]} rows={riskRows} />
-        {noBenchmark && <p className="fa-sub" data-fa-beta-alpha="none">{BETA_ALPHA_NO_BENCHMARK_LINE}</p>}
-        <h3>Trend</h3>
-        <p className="fa-sub">Latest value of each average, counted in price observations (not calendar days).</p>
-        <FaTable head={['Measure', 'Latest', 'As at']} widths={[34, 24, 42]} num={[false, true, false]} rows={trendRows} />
-        <h3>Your own money in this fund</h3>
-        {ownershipSentence(block.ownership) && <p className="fa-sub">{ownershipSentence(block.ownership)}</p>}
-        {inv ? (
-          <>
-            <p className="fa-sub">{INVESTOR_XIRR_LABEL}</p>
-            <FaTable head={['Measure', 'Value', 'Detail']} widths={[34, 24, 42]} num={[false, true, false]} rows={ownRows} />
-            <p className="fa-text">{a.explanation}</p>
-          </>
-        ) : (
-          <p className="fa-text">Your own return is not shown for this fund because your transactions and holding could not be matched to it.</p>
-        )}
+    );
+  }
+  // TWO pages per fund: page A (glance, chart, growth, rolling) and page B (risk, trend, own money), each starting with the fund name.
+  return (
+    <>
+      <section className="fa-fund fa-sheet-a" data-fa-fund={block.instrumentId}>
+        {nameLine(false)}
+        {identity}
+        {glance}
+        {chart}
+        {growth}
+        {rollingBlock}
+        <FootnoteList fn={fnA} />
+      </section>
+      <section className="fa-fund fa-sheet-b">
+        {nameLine(true)}
+        {risk}
+        {trend}
+        {own}
         <FootnoteList fn={fnB} />
       </section>
     </>
@@ -266,7 +360,88 @@ function corrRows(report: FundAnalyticsReport, ctx: Nav2Context, nm: (id: string
   });
 }
 
-export default function FundAnalyticsPrintDocument({ report, version }: { report: FundAnalyticsReport; version?: { versionNumber: number; createdAt: string } }) {
+const groupCaption = (g: { category: string; planType: string | null; optionType: string | null }): string =>
+  `${g.category.replace(/_/g, ' ')}${g.planType ? `, ${g.planType} plan` : ''}${g.optionType ? `, ${g.optionType.replace(/_/g, ' ')}` : ''}`;
+
+/**
+ * The COMPACT comparison (more than COMPARISON_FULL_MAX_FUNDS funds): ONE ranking table (a row per fund, its CAGR and its rank among funds of
+ * the same category, plan and option for 1, 3 and 5 years) and the most closely related pairs, so the page is one page for any number of funds.
+ * What is left out is said in plain words under each table; nothing is invented and no figure is shown as zero.
+ */
+function CompactComparison({ report, ctx, nm }: { report: FundAnalyticsReport; ctx: Nav2Context; nm: (id: string) => string }) {
+  const horizons = report.comparison.rankings.map((r) => r.horizonId);
+  const per = new Map<string, { caption: string; cells: Map<string, { value: number; rank: number; tied: boolean }> }>();
+  for (const r of report.comparison.rankings) {
+    if (r.result.state !== 'available') continue;
+    for (const g of r.result.value.groups) {
+      for (const row of g.rows) {
+        const e = per.get(row.instrumentId) ?? { caption: groupCaption(g), cells: new Map() };
+        e.cells.set(r.horizonId, { value: row.value, rank: row.rank, tied: row.tied });
+        per.set(row.instrumentId, e);
+      }
+    }
+  }
+  const order = ['3Y', '1Y', '5Y'];
+  const firstRank = (id: string) => {
+    const h = order.find((o) => per.get(id)?.cells.has(o));
+    return h ? per.get(id)!.cells.get(h)!.rank : 999;
+  };
+  const ranked = [...per.keys()].sort((a, b) => per.get(a)!.caption.localeCompare(per.get(b)!.caption) || firstRank(a) - firstRank(b));
+  const shown = ranked.slice(0, COMPARISON_MAX_RANK_ROWS);
+  const unranked = report.schemes.filter((b) => !per.has(b.instrumentId)).length;
+  const cell = (id: string, h: string): React.ReactNode => {
+    const c = per.get(id)?.cells.get(h);
+    return c ? `${pct(c.value)} (${c.rank}${c.tied ? ', tied' : ''})` : <span className="fa-na">Not ranked</span>;
+  };
+  const pairs = report.comparison.correlations
+    .map((p) => ({ p, r: p.result as Nav2Result<CorrelationValue> }))
+    .filter((x): x is { p: (typeof report.comparison.correlations)[number]; r: Extract<Nav2Result<CorrelationValue>, { state: 'available' }> } => x.r.state === 'available')
+    .sort((x, y) => y.r.value.correlation - x.r.value.correlation || `${x.p.aInstrumentId}|${x.p.bInstrumentId}`.localeCompare(`${y.p.aInstrumentId}|${y.p.bInstrumentId}`));
+  const topPairs = pairs.slice(0, COMPARISON_TOP_PAIRS);
+  const totalPairs = report.comparison.correlations.length;
+  return (
+    <>
+      <h3>Ranked by CAGR, within each category</h3>
+      <p className="fa-sub">Each fund is ranked only against your other funds of the same category, plan and option; its rank is in brackets (1 is the highest).</p>
+      {shown.length === 0 ? (
+        <p className="fa-text">No two of your funds are comparable over these periods.</p>
+      ) : (
+        <FaTable
+          head={['Fund', 'Category', ...horizons.map((h) => h.replace('Y', ' year'))]}
+          widths={[30, 21, 16, 16, 17]}
+          num={[false, false, true, true, true]}
+          rows={shown.map((id) => ({ key: id, cells: [nm(id), per.get(id)!.caption, ...horizons.map((h) => cell(id, h))] }))}
+        />
+      )}
+      {ranked.length > shown.length && <p className="fa-sub">Showing {shown.length} of the {ranked.length} ranked funds; the others are in the stored report.</p>}
+      {unranked > 0 && (
+        <p className="fa-sub">
+          {unranked} fund{unranked === 1 ? ' is' : 's are'} not ranked: no other fund of the same category, plan and option, a category that is not known, or no figure for the period.
+        </p>
+      )}
+      <h3>How closely your funds move together</h3>
+      {report.comparison.correlationsSkippedReason ? (
+        <p className="fa-text">{report.comparison.correlationsSkippedReason}</p>
+      ) : topPairs.length === 0 ? (
+        <p className="fa-text">No pair of your funds has enough common history to compare.</p>
+      ) : (
+        <>
+          <FaTable
+            head={['Fund A', 'Fund B', 'Correlation', 'Common returns', 'Period']}
+            widths={[22, 22, 11, 16, 29]}
+            num={[false, false, true, true, false]}
+            rows={topPairs.map(({ p, r }) => ({ key: `${p.aInstrumentId}|${p.bInstrumentId}`, cells: [nm(p.aInstrumentId), nm(p.bInstrumentId), ratio(r.value.correlation), r.value.commonReturnCount.toLocaleString('en-IN'), period(ctx, r.value.windowStart, r.value.windowEnd)] }))}
+          />
+          <p className="fa-sub">
+            Showing the {topPairs.length} most closely related of {totalPairs.toLocaleString('en-IN')} pairs; the others are in the stored report. A correlation near 1 means the two funds usually rise and fall together; near 0, little relationship; below 0, they tend to move in opposite directions. It describes past returns only.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
+export default function FundAnalyticsPrintDocument({ report, version, pagesPerFund = FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND }: { report: FundAnalyticsReport; version?: { versionNumber: number; createdAt: string }; pagesPerFund?: FundPagePlan }) {
   const ctx: Nav2Context = { policy: NAV2_POLICY, currency: report.displayCurrency };
   const names = new Map(report.schemes.map((s) => [s.instrumentId, s.schemeName]));
   const nm = (id: string) => names.get(id) ?? 'Unknown fund';
@@ -290,11 +465,12 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
     };
   });
 
+  const compactComparison = report.schemes.length > COMPARISON_FULL_MAX_FUNDS;
   const expectedCharts = report.schemes.filter((b) => b.chart.navPoints.length >= 2).length;
   return (
     // Everything below is server-rendered HTML (no client-only chart): the print renderer waits for this marker and then checks that every
     // expected chart is in the page, so a missing chart can never be printed as a blank rectangle.
-    <div className="fa-doc" data-fa-print-ready="true" data-fa-expected-charts={expectedCharts}>
+    <div className="fa-doc" data-fa-print-ready="true" data-fa-expected-charts={expectedCharts} data-fa-pages-per-fund={pagesPerFund}>
       <section className="fa-cover">
         <h1>Fund analytics report</h1>
         <p className="fa-lead">
@@ -341,13 +517,17 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
       </section>
 
       {report.schemes.map((b) => (
-        <FundSheets key={b.instrumentId} block={b} ctx={ctx} riskFreeNote={riskFreeNote} />
+        <FundSheets key={b.instrumentId} block={b} ctx={ctx} riskFreeNote={riskFreeNote} onePage={pagesPerFund === 1} />
       ))}
 
       {report.schemes.length > 0 && (
-        <section className="fa-sheet fa-comparison">
+        <section className={`fa-comparison${compactComparison ? ' fa-compact' : ''}`} data-fa-comparison={compactComparison ? 'compact' : 'full'}>
           <h2 className="fa-fund-name">Comparing your funds</h2>
           <p className="fa-meta">{report.comparison.label}: only the funds you hold are compared with each other, and only against funds of the same category, plan and option.</p>
+          {compactComparison ? (
+            <CompactComparison report={report} ctx={ctx} nm={nm} />
+          ) : (
+            <>
           {report.comparison.rankings.map((r) => {
             const v = r.result.state === 'available' ? r.result.value : null;
             const cell = showResult(r.result, () => '');
@@ -380,6 +560,8 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
             <>
               <FaTable head={['Fund A', 'Fund B', 'Correlation', 'Common returns', 'Period']} widths={[22, 22, 11, 16, 29]} num={[false, false, true, true, false]} rows={corrRows(report, ctx, nm)} />
               <p className="fa-sub">A correlation near 1 means the two funds usually rise and fall together; near 0, little relationship; below 0, they tend to move in opposite directions. It describes past returns only.</p>
+            </>
+          )}
             </>
           )}
           {report.calculationNotes && report.calculationNotes.length > 0 && (

@@ -94,6 +94,22 @@ export async function printPageToPdf(page: Page, meta?: PdfReportMeta): Promise<
   });
 }
 
+/** The text area of an A4 page between the margins above (297 - 22 - 20 mm). */
+export const FUND_ANALYTICS_TEXT_AREA_HEIGHT_MM = 255;
+
+/**
+ * Does EVERY one-page fund sheet fit the text area of one page? Measured in the browser, at the print text width, before anything is printed.
+ * A sheet that does not fit (a fund with many unavailable figures wraps into taller rows and longer footnotes) makes the export print the WHOLE
+ * report with the two-page plan, so a fund never spills onto a stray page and the funds of one report never mix layouts.
+ */
+export async function oneFundPerPageFits(page: Page): Promise<boolean> {
+  // 178 mm = 673 px: the width the printed page lays the document out at (the layout does depend on the viewport, so measure at THAT width)
+  await page.setViewportSize({ width: 673, height: 1000 });
+  await page.emulateMedia({ media: 'print' });
+  const limitPx = (FUND_ANALYTICS_TEXT_AREA_HEIGHT_MM * 96) / 25.4 - 6;
+  return page.evaluate((limit) => [...document.querySelectorAll('.fa-doc .fa-one')].every((el) => el.getBoundingClientRect().height <= limit), limitPx);
+}
+
 export async function renderFundAnalyticsReportToPdf(admin: SupabaseClient, userId: string, reportId: string, meta?: PdfReportMeta): Promise<Buffer> {
   const token = await createNav2RenderToken(admin, userId, reportId);
   const browser = await chromium.launch();
@@ -102,6 +118,10 @@ export async function renderFundAnalyticsReportToPdf(admin: SupabaseClient, user
     const url = `${BASE_URL}/reports/fund-analytics/print?${new URLSearchParams({ token }).toString()}`;
     const response = await page.goto(url, { waitUntil: 'networkidle' });
     if (!response || !response.ok()) throw new Error(`Print route returned ${response?.status() ?? 'no response'}`);
+    if (!(await oneFundPerPageFits(page))) {
+      const second = await page.goto(`${url}&plan=2`, { waitUntil: 'networkidle' });
+      if (!second || !second.ok()) throw new Error(`Print route returned ${second?.status() ?? 'no response'}`);
+    }
     return await printPageToPdf(page, meta);
   } finally {
     await browser.close();

@@ -140,10 +140,39 @@
 .fa-doc .fa-text { margin: 1.5mm 0 0; }
 .fa-doc .fa-cover { padding-top: 4mm; }
 
-/* each fund starts on a new page, and its second sheet does too: every sheet begins with the fund name */
+/* PAGE PLAN (lib/config/nav2/printLayout.ts): the summary flows; every fund starts on a fresh page and is kept whole (one page, or A and B
+   pages of a two-page plan); the comparison is one page of its own. */
 .fa-doc .fa-fund,
-.fa-doc .fa-sheet-b,
 .fa-doc .fa-comparison { break-before: page; page-break-before: always; }
+.fa-doc .fa-fund,
+.fa-doc .fa-comparison { break-inside: avoid; page-break-inside: avoid; }
+/* ONE-PAGE FUND: the glance table and the chart run across the page, the rest sits in two columns of 86 mm; tighter rows, 8 pt table text (never below 7.5 pt) */
+.fa-doc .fa-one h2.fa-fund-name { font-size: 13pt; margin-bottom: 1mm; padding-bottom: 1.2mm; }
+.fa-doc .fa-one .fa-meta { margin-bottom: 1.2mm; }
+.fa-doc .fa-one h3 { margin: 2.2mm 0 0.4mm; font-size: 10pt; }
+.fa-doc .fa-one .fa-sub { font-size: 7.8pt; margin-bottom: 0.8mm; }
+.fa-doc .fa-one .fa-text { font-size: 8pt; margin-top: 1mm; }
+.fa-doc .fa-one .fa-chart { margin: 1.5mm 0 0; }
+.fa-doc .fa-one .fa-facts { font-size: 8pt; margin: 0 0 0.5mm; break-after: avoid; }
+.fa-doc .fa-one .fa-fact-label { font-weight: 600; margin-left: 0; }
+.fa-doc .fa-one .fa-table { font-size: 8pt; margin: 0; }
+.fa-doc .fa-one .fa-table th,
+.fa-doc .fa-one .fa-table td { padding: 0.38mm 1.6mm 0.38mm 0; }
+.fa-doc .fa-one .fa-table thead th { font-size: 7.8pt; padding-bottom: 0.6mm; overflow-wrap: normal; }
+.fa-doc .fa-one .fa-table .num { padding-right: 1.5mm; }
+.fa-doc .fa-one .fa-na { font-size: 7.6pt; overflow-wrap: normal; }
+.fa-doc .fa-one .fa-footnotes { margin-top: 2mm; padding-top: 1.2mm; font-size: 7.8pt; }
+.fa-doc .fa-one .fa-footnotes p { margin: 0 0 0.6mm; }
+.fa-doc .fa-compact .fa-table { font-size: 8pt; margin: 0; }
+.fa-doc .fa-compact .fa-table th,
+.fa-doc .fa-compact .fa-table td { padding: 0.45mm 1.6mm 0.45mm 0; }
+.fa-doc .fa-compact .fa-table .num { padding-right: 4mm; }
+.fa-doc .fa-compact .fa-table + .fa-sub,
+.fa-doc .fa-one .fa-table + .fa-sub { margin-top: 1mm; }
+.fa-doc .fa-compact h3 { margin: 2.5mm 0 0.5mm; }
+.fa-doc .fa-compact .fa-sub { font-size: 7.8pt; }
+.fa-doc .fa-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 6mm; align-items: start; }
+.fa-doc .fa-col { min-width: 0; }
 
 .fa-doc .fa-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 0 0 1mm; break-inside: auto; page-break-inside: auto; }
 .fa-doc .fa-table caption { text-align: left; font-size: 8.5pt; color: #5b677a; padding-bottom: 1mm; caption-side: top; break-after: avoid; }
@@ -159,7 +188,8 @@
 .fa-doc .fa-table td:last-child,
 .fa-doc .fa-table th:last-child { padding-right: 0; }
 .fa-doc .fa-na { color: #8a5a00; font-weight: 600; }
-.fa-doc .fa-table .num:has(.fa-na) { white-space: normal; }
+.fa-doc .fa-table .num:has(.fa-na),
+.fa-doc .fa-table .num:has(.fa-wrapnum) { white-space: normal; }
 .fa-doc .fa-mark { font-size: 7.6pt; color: #2563eb; margin-left: 0.5mm; font-weight: 600; }
 .fa-doc .fa-footnotes { margin-top: 4mm; padding-top: 2mm; border-top: 0.25mm solid #dde3ea; font-size: 8pt; color: #5b677a; }
 .fa-doc .fa-footnotes p { margin: 0 0 1mm; break-inside: avoid; }

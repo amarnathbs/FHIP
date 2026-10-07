@@ -6,9 +6,9 @@ import { showDate, type Nav2Context } from '@/lib/engines/nav2/types';
 // The price chart of the PRINT document: plain inline SVG drawn from fixed geometry (lib/engines/nav2/staticChart.ts). No client-side
 // chart library, no measurement after load: it is part of the server-rendered HTML, so it is present when the PDF is printed and it
 // scales with the page width (viewBox) instead of being sized by the browser window. Dates on the axis are day-first.
-export default function StaticNavChart({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: Nav2Context }) {
+export default function StaticNavChart({ block, ctx, height }: { block: FundAnalyticsSchemeBlock; ctx: Nav2Context; height?: number }) {
   const rows = chartRowsWithGaps(block.chart);
-  const g = buildStaticChart(rows, (d) => showDate(ctx, d), (v) => v.toLocaleString('en-IN', { maximumFractionDigits: v < 100 ? 1 : 0 }));
+  const g = buildStaticChart(rows, (d) => showDate(ctx, d), (v) => v.toLocaleString('en-IN', { maximumFractionDigits: v < 100 ? 1 : 0 }), 680, height);
   if (!g) return <p className="fa-sub">Not enough price history to draw a chart.</p>;
   const legendY = g.height - 10;
   const lines: Array<{ d: string; color: string; w: number; label: string }> = [
