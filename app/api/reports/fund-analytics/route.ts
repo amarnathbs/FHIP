@@ -13,6 +13,13 @@ import { FUND_ANALYTICS_PREMIUM_MESSAGE, generateFundAnalyticsReport, listFundAn
 // 404 "not available yet" and does nothing else. A held price-history gate answers 202 with the shared waiting body.
 // The caller is always the authenticated, country-confirmed session user; nothing user-identifying is read from the body.
 export const dynamic = 'force-dynamic';
+// TIME LIMIT. Production runs on AWS Amplify compute, which kills EVERY request at 28 s whatever a route declares ("Request timed out - your
+// application took too long to respond", Duration 28003 ms in CloudWatch; lib/services/investment-intelligence/pc6/ingestBudget.ts and
+// docs/nav1/po_run_2026-09-29_hydration_incident/README.md). 28 is therefore the longest value the platform honours; a larger one (the other
+// routes declare 60 and 300) is not honoured. Generating a report is the fund engine plus the price reads: about 0.6 to 0.9 s of engine time per
+// fund on the development machine (10 funds 10.7 s, 20 funds 18 s, 25 funds 14.5 to 17 s, 40 funds 35 s), so the limit is reached at roughly 30
+// funds before any database time. See docs/nav2/NAV2_STAGE3_CERTIFICATION_REPORT.md (limits met by the 25-fund test) for the recommendation.
+export const maxDuration = 28;
 
 const generateBody = z.object({ period: z.enum(REPORT_PERIOD_CHOICES as unknown as [string, ...string[]]).optional() }).strict();
 

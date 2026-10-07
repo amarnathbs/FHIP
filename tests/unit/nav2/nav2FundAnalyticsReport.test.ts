@@ -166,6 +166,6 @@ describe('scope notes and caps', () => {
     const many = Array.from({ length: MAX_SCHEMES_FOR_PAIRS + 1 }, (_, i) => scheme(`s${i}`, `Fund ${String(i).padStart(2, '0')}`, i + 1));
     const { report } = buildFundAnalyticsReport(input(many));
     expect(report.comparison.correlations).toEqual([]);
-    expect(report.comparison.correlationsSkippedReason).toMatch(/pick fewer funds/);
+    expect(report.comparison.correlationsSkippedReason).toMatch(/Correlations are shown for up to 20 funds\. This report has \d+ funds, so pairs are not calculated\./);
   });
 });

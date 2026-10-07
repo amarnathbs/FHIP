@@ -316,7 +316,7 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
   const correlations: CorrelationPair[] = [];
   let skipped: string | null = null;
   if (schemes.length > MAX_SCHEMES_FOR_PAIRS) {
-    skipped = `You hold ${schemes.length} funds, more than the ${MAX_SCHEMES_FOR_PAIRS} for which pairwise correlations are shown; pick fewer funds to compare.`;
+    skipped = `Correlations are shown for up to ${MAX_SCHEMES_FOR_PAIRS} funds. This report has ${schemes.length} funds, so pairs are not calculated.`;
   } else {
     for (let i = 0; i < schemes.length; i++) {
       for (let j = i + 1; j < schemes.length; j++) {
