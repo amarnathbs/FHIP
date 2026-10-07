@@ -15,6 +15,7 @@ import { BENCHMARK_CAPABILITY_COLUMNS, BENCHMARK_VIEW_COLUMN, flagsFromAdminRow,
 import { PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY } from '@/lib/services/premiumEntitlementAdmin';
 import { PROMO_CODE_ADMIN_CAPABILITY } from '@/lib/services/promoCodeAdmin';
 import { PLANNING_BENCHMARK_CAPABILITY_COLUMNS, planningBenchmarkFlagsFromRow, NO_PLANNING_BENCHMARK_CAPABILITIES, type PlanningBenchmarkFlags } from '@/lib/planning-benchmarks/guards';
+import { NO_RISK_FREE_CAPABILITIES, readRiskFreeCapabilityFlags, type RiskFreeCapabilityFlags } from '@/lib/services/investment-intelligence/nav2/riskFreeAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -186,6 +187,22 @@ async function readPlanningBenchmarkCapabilities(): Promise<PlanningBenchmarkFla
   }
 }
 
+/**
+ * NAV2 Stage 2 (migration 0260) - the two risk-free capabilities. ONE admin_users read, but each output field is its own
+ * strict `=== true` evaluation of its own column: neither is derived from the other, from isAdmin, or from any other
+ * capability. FAILS CLOSED: an error, a logged-out caller, a missing row or a missing COLUMN yields both false.
+ */
+async function readRiskFreeCapabilities(): Promise<RiskFreeCapabilityFlags> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ...NO_RISK_FREE_CAPABILITIES };
+    return await readRiskFreeCapabilityFlags(supabase as never, user.id);
+  } catch {
+    return { ...NO_RISK_FREE_CAPABILITIES };
+  }
+}
+
 // Lets the nav know which Admin groups to show, without exposing any admin
 // data itself — a logged-out, non-admin, non-Resources-role caller just gets
 // all-false flags, never a 403 (the actual admin/Resources routes still
@@ -225,6 +242,7 @@ export async function GET() {
   const current = await getCurrentResourceRoles();
   const benchmark = await readBenchmarkCapabilities();
   const planning = await readPlanningBenchmarkCapabilities();
+  const riskFree = await readRiskFreeCapabilities();
   return ok({
     // Unchanged legacy fields, kept for existing consumers. Neither is used
     // to derive any capability below.
@@ -244,6 +262,8 @@ export async function GET() {
       benchmarkDataCorrect: benchmark.correct,
       benchmarkCatalogueManage: benchmark.catalogue,
       benchmarkEntitlementApprove: benchmark.entitlementApprove,
+      riskFreeDataUpload: riskFree.upload,
+      riskFreeSeriesSwitch: riskFree.switch,
       entitlementManagement: await canManagePremiumEntitlements(),
       promoCodeManagement: await canManagePromoCodes(),
       planningBenchmarkUpload: planning.upload,

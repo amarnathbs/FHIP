@@ -56,6 +56,14 @@ export function formatDateTimeShort(date: Date | string, currency: 'AUD' | 'INR'
   return `${formatDateShort(d, currency)}, ${time}`;
 }
 
+// "05-10-2026, 9:30 am": date and time to the MINUTE (no seconds), for "made on" lines on saved reports. Same day-first date as
+// formatDateShort; the time shape is explicit 'en-AU' (h:mm am/pm), any narrow no-break space ICU may emit is turned into a plain space.
+export function formatDateTimeMinutes(date: Date | string, currency: 'AUD' | 'INR'): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const time = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s/g, ' ').toLowerCase();
+  return `${formatDateShort(d, currency)}, ${time}`;
+}
+
 // Country -> the date-format key above (formatDateShort is currency-keyed: AU
 // dd/mm/yyyy, India dd-mm-yyyy). Anything that is not India (including an
 // unresolved country) uses the AU shape, the app-wide display fallback.

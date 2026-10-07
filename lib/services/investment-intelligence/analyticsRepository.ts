@@ -633,6 +633,7 @@ export async function loadAnalyticsDataset(
       valuationSeries,
       reconstructedValuationSeries,
       ...(folioDatasets ? { folios: folioDatasets } : {}),
+      valuation: schemeValuation,
     });
   }
 

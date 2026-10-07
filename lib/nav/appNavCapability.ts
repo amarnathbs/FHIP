@@ -50,6 +50,7 @@ export const NAV_HREF_MODULE_MAP: Record<string, ModuleKey> = {
   '/forecast/history': 'FORECASTING',
   '/recommendations': 'RECOMMENDATIONS',
   '/reports': 'REPORTS',
+  '/reports/fund-analytics': 'REPORTS',
   '/ai-insights': 'AI_INSIGHTS',
   '/profile': 'PROFILE',
 };
@@ -150,6 +151,25 @@ export function isModuleDeleteAvailable(moduleKey: string, deleteDecisions: Reco
 }
 
 /**
+ * Nav entries that are visible only to people entitled to the page behind them (NAV2 Fund analytics: Premium AND the
+ * `nav2_fund_analytics` switch on). GET /api/capabilities/nav answers this per person in `premiumNavigation`; an absent or
+ * malformed answer means HIDDEN (fail closed). Visibility only: the page and every API enforce Premium themselves.
+ */
+export const PREMIUM_ONLY_NAV_HREFS: Readonly<Record<string, 'fundAnalytics'>> = Object.freeze({
+  '/reports/fund-analytics': 'fundAnalytics',
+});
+
+export type PremiumNavigation = { fundAnalytics: boolean };
+export const NO_PREMIUM_NAVIGATION: PremiumNavigation = Object.freeze({ fundAnalytics: false });
+
+/** Fail-closed parse of the `premiumNavigation` field of GET /api/capabilities/nav: only a literal `true` shows an entry. */
+export function parsePremiumNavigation(body: unknown): PremiumNavigation {
+  const raw = (body as { data?: { premiumNavigation?: unknown } } | null | undefined)?.data?.premiumNavigation;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...NO_PREMIUM_NAVIGATION };
+  return { fundAnalytics: (raw as Record<string, unknown>).fundAnalytics === true };
+}
+
+/**
  * Is this href shown in the nav at all?
  *
  * - An href with no ModuleKey mapping is always shown (nav visibility is UX
@@ -162,7 +182,13 @@ export function isModuleDeleteAvailable(moduleKey: string, deleteDecisions: Reco
  *   absent decision (fail closed — no decisions object yet, or the module
  *   key was missing from the response, both mean "not shown").
  */
-export function isNavHrefVisible(href: string, decisions: Record<string, CapabilityDecision>): boolean {
+export function isNavHrefVisible(
+  href: string,
+  decisions: Record<string, CapabilityDecision>,
+  premiumNavigation: PremiumNavigation = NO_PREMIUM_NAVIGATION
+): boolean {
+  const premiumKey = PREMIUM_ONLY_NAV_HREFS[href];
+  if (premiumKey && premiumNavigation[premiumKey] !== true) return false;
   const moduleKey = NAV_HREF_MODULE_MAP[href];
   if (!moduleKey) return true;
   const decision = decisions[moduleKey];

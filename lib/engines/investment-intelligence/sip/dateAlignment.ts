@@ -103,19 +103,35 @@ export function resolveObservationOnOrAfter(sortedSeries: Observation[], date: s
  * Use for terminal values, as-of-date marks, and any point-in-time
  * valuation. Never used for a contribution.
  */
-export function resolveObservationAsOf(sortedSeries: Observation[], date: string): AlignmentResult {
+export function resolveObservationAsOf(sortedSeries: Observation[], date: string, maxBackwardDays: number = MAX_BACKWARD_SEARCH_DAYS): AlignmentResult {
   if (!sortedSeries || sortedSeries.length === 0) {
     return { status: 'unavailable', reason: 'EMPTY_SERIES', method: SIP_DATE_ALIGNMENT_VERSION };
   }
-  if (Number.isNaN(toUtc(date))) {
+  const target = toUtc(date);
+  if (Number.isNaN(target)) {
     return { status: 'unavailable', reason: 'INVALID_DATE', method: SIP_DATE_ALIGNMENT_VERSION };
   }
-  for (let i = sortedSeries.length - 1; i >= 0; i--) {
-    const obs = sortedSeries[i];
+  // NAV2 (2026-10-03): the last observation on or before `date` is found by binary search over the
+  // sorted series (it was a backwards linear scan, O(n) per lookup, which made NAV2's rolling windows
+  // quadratic). The result is identical for a sorted series: the highest index whose date is <= target
+  // (the later element wins a duplicate date, exactly as the scan did). `maxBackwardDays` defaults to
+  // the R5 rule's MAX_BACKWARD_SEARCH_DAYS; only NAV2's configurable boundary-lookup window passes it.
+  let lo = 0;
+  let hi = sortedSeries.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (toUtc(sortedSeries[mid].date) <= target) {
+      found = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (found >= 0) {
+    const obs = sortedSeries[found];
     const delta = daysBetween(obs.date, date);
-    if (delta < 0) continue;
-    if (delta > MAX_BACKWARD_SEARCH_DAYS) break;
-    return { status: 'ok', observation: obs, offsetDays: delta, method: SIP_DATE_ALIGNMENT_VERSION };
+    if (delta <= maxBackwardDays) return { status: 'ok', observation: obs, offsetDays: delta, method: SIP_DATE_ALIGNMENT_VERSION };
   }
   return { status: 'unavailable', reason: 'NO_OBSERVATION_IN_WINDOW', method: SIP_DATE_ALIGNMENT_VERSION };
 }

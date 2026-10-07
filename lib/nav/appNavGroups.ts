@@ -48,6 +48,10 @@ export const FORECASTING_ITEMS = [
 //     generated outputs rather than the 11 interactive forecast pages.
 export const REPORTS_ITEMS = [
   { label: 'Monthly Report', href: '/reports' },
+  // NAV2: the Fund analytics report, a SEPARATE report from the Monthly Report. Premium only AND switched on: AppShell shows this
+  // entry only when GET /api/capabilities/nav says so (lib/nav/appNavCapability.ts PREMIUM_ONLY_NAV_HREFS), so a free person is never
+  // shown a link that ends in a refusal. The page and the APIs enforce Premium independently; this is visibility only.
+  { label: 'Fund Analytics', href: '/reports/fund-analytics' },
   { label: 'Financial Activity', href: '/financial-data-hub/activity' },
   { label: 'Consolidated Report', href: '/forecast/report' },
   { label: 'Forecast Variance', href: '/forecast/variance' },

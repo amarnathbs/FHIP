@@ -8,12 +8,12 @@
  * Kept out of investmentIntelligenceReportData.ts so that module's own contract and tests are untouched.
  */
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
-import { loadOwnerBreakup, loadOwnerClassContext, nonEntityScopeAccountIds, scopeClientToAccounts, type OwnerBreakup } from './ownerClass';
+import { loadOwnerBreakup, loadOwnerClassContext, nonEntityScopeAccountIds, scopeClientToAccounts, type OwnerBreakup, type OwnerClassContext } from './ownerClass';
 
-export async function loadOwnerClassScopeForReport(userId: string, supabase: SupabaseServerClient): Promise<{ client: SupabaseServerClient; breakup: OwnerBreakup | null }> {
+export async function loadOwnerClassScopeForReport(userId: string, supabase: SupabaseServerClient): Promise<{ client: SupabaseServerClient; breakup: OwnerBreakup | null; ctx: OwnerClassContext }> {
   const ctx = await loadOwnerClassContext(supabase, userId);
   const hasEntity = ctx.classes.some((c) => c.kind === 'entity' || c.kind === 'entity_shared');
   const breakup = ctx.classes.length > 1 ? await loadOwnerBreakup(supabase, userId).catch(() => null) : null;
-  if (!hasEntity) return { client: supabase, breakup };
-  return { client: scopeClientToAccounts(supabase, nonEntityScopeAccountIds(ctx)), breakup };
+  if (!hasEntity) return { client: supabase, breakup, ctx };
+  return { client: scopeClientToAccounts(supabase, nonEntityScopeAccountIds(ctx)), breakup, ctx };
 }

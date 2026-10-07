@@ -1,0 +1,10 @@
+import { api, db, USERS, userIdOf, logoutAll } from './_lib.mjs';
+const uid = await userIdOf(USERS.holder);
+const snapA = (await db.from('ii_holding_snapshots').select('id').eq('user_id', uid).eq('instrument_id', '575b7dc3-dc60-4218-8b75-5ef68c964afe').limit(1).maybeSingle()).data?.id;
+const pv = await api(USERS.holder, 'GET', `/api/investment-intelligence/positions/${snapA}/preview`);
+console.log('preview', pv.status, pv.text.slice(0, 600));
+const r = await api(USERS.holder, 'POST', `/api/investment-intelligence/positions/${snapA}/publish`, { json: { acknowledgedNoDuplicate: true } });
+console.log('publish', r.status, r.text.slice(0, 600));
+const inv = (await db.from('investments').select('id, name, created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(6)).data;
+console.log(JSON.stringify(inv));
+await logoutAll();
