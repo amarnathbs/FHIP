@@ -61,7 +61,7 @@ export function promoSetupHealth(env: Env = process.env): PromoSetupHealth {
   const digestKeyUsable = promoDigestKeys(env) !== null;
   const features: PromoFeatureLine[] = (Object.keys(FEATURE_SECRETS) as PromoFeature[]).map((feature) => {
     const need = FEATURE_SECRETS[feature] as readonly PromoSecretKey[];
-    const blockedBy = need.filter((k) => promoSecretStatus(k, env) !== 'ok').map((k) => PROMO_SECRET_ENV[k]);
+    const blockedBy: string[] = need.filter((k) => promoSecretStatus(k, env) !== 'ok').map((k) => PROMO_SECRET_ENV[k]);
     if (need.includes('digest') && blockedBy.length === 0 && !digestKeyUsable) blockedBy.push('PROMO_CODE_DIGEST_VERSION or PROMO_CODE_DIGEST_SECRET_PREVIOUS');
     return { feature, label: FEATURE_TEXT[feature], available: blockedBy.length === 0, blockedBy };
   });

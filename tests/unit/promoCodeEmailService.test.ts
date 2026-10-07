@@ -868,7 +868,7 @@ describe('routes: capability, create + e-mail, replacement, redeem hash', () => 
     const listed = (over: Record<string, unknown> = {}) => [{ id: OLD_ID, duration_days: 45, max_redemptions: 7, expires_on: '2099-02-02', note: 'old note', status: 'active', state: 'active', code_hint: 'AB******CD', ...over }];
     const replaceRpc = (rows: unknown[]) =>
       makeRpc({
-        admin_list_promo_codes: () => ({ data: rows }),
+        admin_list_promo_codes_v2: () => ({ data: rows }),
         admin_promo_email_begin: () => ({ data: { new: true } }),
         admin_create_promo_code: okCreate,
         admin_promo_email_record: () => ({ data: true }),

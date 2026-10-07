@@ -20,6 +20,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dns from 'node:dns/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEV_REF = 'vqycarelcoijzwlpkpcz';
@@ -64,24 +68,42 @@ function printPlan() {
   console.log(fs.readFileSync(path.join(HERE, '..', 'docs', 'admin', 'PROMO_EMAIL_RESEND_DEV_CERTIFICATION_RUNBOOK.md'), 'utf8'));
 }
 
+/**
+ * TXT records for a name. The resolver built into Node can fail on some machines (ECONNREFUSED, found on the build machine),
+ * and a failed lookup used to be printed as a missing record. So the operating system resolver (nslookup) is the fallback and a
+ * lookup that could not run is reported as such, never as "no record".
+ */
 async function txt(name) {
   try {
     return (await dns.resolveTxt(name)).map((parts) => parts.join(''));
   } catch (e) {
-    return e && e.code ? [`(no record: ${e.code})`] : ['(lookup failed)'];
+    const code = e && e.code ? e.code : 'lookup_failed';
+    if (code === 'ENODATA' || code === 'ENOTFOUND') return [`(no record: ${code})`];
+    try {
+      const { stdout } = await execFileAsync('nslookup', ['-type=TXT', name], { timeout: 15000 });
+      if (/non-existent domain|NXDOMAIN/i.test(stdout)) return ['(no record: NXDOMAIN)'];
+      const pieces = [...stdout.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+      return pieces.length ? [pieces.join('')] : ['(no record: none)'];
+    } catch {
+      return [`(lookup failed: ${code})`];
+    }
   }
 }
 
+const present = (records) => records.filter((r) => !r.startsWith('(no record') && !r.startsWith('(lookup failed'));
+
 async function dnsChecks(domain, selector) {
-  const spf = (await txt(domain)).filter((r) => r.startsWith('v=spf1'));
-  console.log(`SPF    ${spf.length === 1 ? 'ok  ' : 'FAIL'}  records starting v=spf1: ${spf.length}${spf.length === 1 ? `  ${spf[0]}` : ''}`);
-  const dmarc = (await txt(`_dmarc.${domain}`)).filter((r) => r.startsWith('v=DMARC1'));
-  console.log(`DMARC  ${dmarc.length === 1 ? 'ok  ' : 'FAIL'}  ${dmarc[0] ?? 'no DMARC record'}`);
-  if (selector) {
-    const dkim = await txt(`${selector}._domainkey.${domain}`);
-    const found = dkim.some((r) => !r.startsWith('(no record') && !r.startsWith('(lookup failed'));
-    console.log(`DKIM   ${found ? 'ok  ' : 'FAIL'}  ${selector}._domainkey.${domain}`);
-  } else console.log('DKIM   skipped (give --dkim-selector from the Resend dashboard)');
+  // Resend publishes SPF (and the return path MX) on a send. subdomain of the sending domain, so look at both names.
+  const spf = [];
+  for (const n of [domain, `send.${domain}`]) for (const r of present(await txt(n))) if (r.startsWith('v=spf1')) spf.push(`${n}: ${r}`);
+  console.log(`SPF    ${spf.length >= 1 ? 'ok  ' : 'FAIL'}  records starting v=spf1 (on the domain or its send. subdomain): ${spf.length}${spf.length ? `  ${spf.join('  |  ')}` : ''}`);
+  const parent = domain.split('.').slice(1).join('.');
+  let dmarc = present(await txt(`_dmarc.${domain}`)).filter((r) => r.startsWith('v=DMARC1'));
+  if (dmarc.length === 0 && parent.includes('.')) dmarc = present(await txt(`_dmarc.${parent}`)).filter((r) => r.startsWith('v=DMARC1'));
+  console.log(`DMARC  ${dmarc.length === 1 ? 'ok  ' : 'FAIL'}  ${dmarc[0] ?? 'no DMARC record on the domain or its parent'}`);
+  const sel = selector || 'resend';
+  const dkim = present(await txt(`${sel}._domainkey.${domain}`));
+  console.log(`DKIM   ${dkim.length ? 'ok  ' : 'FAIL'}  ${sel}._domainkey.${domain}${selector ? '' : ' (default selector resend; pass --dkim-selector if the dashboard shows another)'}`);
   console.log('What the provider requires for this domain is read from its dashboard: these are the standard record names only.');
 }
 

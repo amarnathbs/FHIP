@@ -100,16 +100,19 @@ describe('capabilities are NOT implied (Standard sections 2 and 3)', () => {
   });
 
   it('navigation: the override capability alone adds no menu entry; each ordinary capability adds only its own group', () => {
-    const labels = (caps: Partial<typeof NO_ADMIN_CAPABILITIES>) => buildAdminNavGroups(true, { ...NO_ADMIN_CAPABILITIES, ...caps }).map((g) => g.label);
-    // Super Admin (isAdmin true) with no capability sees neither group
-    expect(labels({})).not.toContain('Entitlements');
-    expect(labels({})).not.toContain('Promo Codes');
-    expect(labels({ entitlementOverride: true })).not.toContain('Entitlements');
-    expect(labels({ entitlementOverride: true })).not.toContain('Promo Codes');
-    expect(labels({ entitlementManagement: true })).toContain('Entitlements');
-    expect(labels({ entitlementManagement: true })).not.toContain('Promo Codes');
-    expect(labels({ promoCodeManagement: true })).toContain('Promo Codes');
-    expect(labels({ promoCodeManagement: true })).not.toContain('Entitlements');
+    // The two ordinary capabilities share ONE menu group (PO review F10, 'Premium and Promo Codes'); each ENTRY is gated by
+    // its own capability. The override capability has no entry of its own: it lives on the Premium Access screen.
+    const entries = (caps: Partial<typeof NO_ADMIN_CAPABILITIES>) =>
+      buildAdminNavGroups(true, { ...NO_ADMIN_CAPABILITIES, ...caps })
+        .filter((g) => g.label === 'Premium and Promo Codes')
+        .flatMap((g) => g.items.map((i) => i.label));
+    // Super Admin (isAdmin true) with no capability sees neither entry, and not the group
+    expect(entries({})).toEqual([]);
+    expect(buildAdminNavGroups(true, { ...NO_ADMIN_CAPABILITIES }).map((g) => g.label)).not.toContain('Premium and Promo Codes');
+    expect(entries({ entitlementOverride: true })).toEqual([]);
+    expect(entries({ entitlementManagement: true })).toEqual(['Premium Access']);
+    expect(entries({ promoCodeManagement: true })).toEqual(['Promo Codes']);
+    expect(entries({ entitlementManagement: true, promoCodeManagement: true })).toEqual(['Premium Access', 'Promo Codes']);
   });
 
   it('/api/admin/me: each of the three capabilities has its own independent read of its own column, and none is combined with Super Admin', () => {
