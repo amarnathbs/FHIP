@@ -83,7 +83,8 @@ describe('12 funds: the compact comparison', () => {
   });
 });
 
-describe('25 funds: built by the real engine', () => {
+// 25 funds is a LAYOUT / ENGINE STRESS case only: since 07-10-2026 one report covers at most 20 funds (nav2ReportFundCap.test.ts), so the largest real report is 20.
+describe('25 funds (stress, not a real report): built by the real engine', () => {
   const t0 = Date.now();
   const { report, manifest, timings } = buildPrintFixture(parseFixtureName('funds-25+unavailable+redeemed+long+young'));
   const html = doc(report);

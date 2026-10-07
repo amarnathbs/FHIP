@@ -8,8 +8,14 @@
 //      held scheme) is planned read-only; if some of it is missing and its fetch could be started, the answer is 'preparing'
 //      (a failed attempt goes into the existing cooldown, so this cannot hold forever; a fetch that could not be scheduled
 //      never holds, and neither does one the NAV fetch kill switch would refuse to run). Switch OFF: this step does not exist and generation behaves exactly as before.
+//   3c. ONE REPORT COVERS AT MOST FUND_ANALYTICS_MAX_FUNDS (20) FUNDS (PO decision 07-10-2026; the platform kills a request at 28 s). A person who holds
+//      more must choose which funds go in: without a choice the answer is 'select_funds' (the plain refusal, the funds with their values and the
+//      suggested choice: the 20 largest holdings); a choice that is empty, longer than the cap, repeats a fund or names a fund the person does not hold
+//      is 'invalid_selection' (one message for all of them, so another household's fund ids can never be probed). The choice is stored in the manifest.
 //   4. the household holds at least one Indian mutual fund this report covers                              -> 'no_funds'
-//   5. build the report (pure), reuse the shared scheme-performance cache, persist the pinned row.
+//   5. TIME BUDGET: engine work that would not finish inside GENERATION_BUDGET_MS is not started; the funds that fit are prepared into the shared
+//      cache and the answer is 'in_steps' (retry; the next generation carries on where this one stopped).
+//   6. build the report (pure), reuse the shared scheme-performance cache, persist the pinned row.
 //
 // The persisted row is IMMUTABLE (migration 0261): a regenerated report is a NEW version
 // (version_number = previous + 1, supersedes_report_id = previous); an earlier version is never edited.
@@ -19,11 +25,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isReportPeriodChoice, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
 import { buildFundAnalyticsReport, compactSchemeFamily, manifestChecksum, schemeBundleCacheKey, schemeBundleCacheParts, type FundAnalyticsInput, type FundAnalyticsManifest, type FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
+import { ENGINE_MS_PER_UNCACHED_FUND, FUND_ANALYTICS_MAX_FUNDS, GENERATION_BUDGET_MS } from '@/lib/config/nav2/reportLimits';
+import { invalidSelectionMessage, largeReportStepsMessage, tooManyFundsMessage } from '@/lib/engines/nav2/reportWording';
 import { getPlanTier } from '@/lib/services/entitlements';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
 import { checkReportNavHistoryGate, NAV_FETCH_KILL_SWITCH_JOB_KEY, REPORT_NAV_RETRY_WINDOW_MINUTES, waitingBody, type ReportNavGate } from '../pc6/reportNavHistoryGate';
 import { kickUserNavHistory } from '../pc6/userNavHistoryKick';
-import { loadFundAnalyticsInput, type FundAnalyticsLoadResult } from './fundAnalyticsLoader';
+import { loadFundAnalyticsInput, type FundAnalyticsLoadResult, type FundChoiceCandidate } from './fundAnalyticsLoader';
 import { isNav2FlagOn, NAV2_JOB_KEYS } from './nav2Flags';
 import { readCachedBundles, writeCachedBundles, type CacheWrite } from './nav2ResultCacheStore';
 import { kickNav2ReportPeriod, planForReportPeriod } from './nav2TriggerRunner';
@@ -47,6 +55,9 @@ export type GenerateResult =
   | { status: 'forbidden'; message: string }
   | { status: 'preparing'; message: string; waiting: ReturnType<typeof waitingBody> }
   | { status: 'no_funds'; message: string }
+  | { status: 'select_funds'; message: string; max: number; heldFundCount: number; candidates: FundChoiceCandidate[]; suggestedIds: string[] }
+  | { status: 'invalid_selection'; message: string }
+  | { status: 'in_steps'; message: string; ready: number; total: number; retryAfterSeconds: number }
   | { status: 'ready'; report: StoredReportSummary; cache: { hits: number; computed: number; stored: number } };
 
 export interface FundAnalyticsDeps {
@@ -55,6 +66,8 @@ export interface FundAnalyticsDeps {
   gate: (args: { admin: SupabaseClient; userId: string; today: string }) => Promise<ReportNavGate>;
   load: (args: Parameters<typeof loadFundAnalyticsInput>[0]) => Promise<FundAnalyticsLoadResult>;
   nowIso: () => string;
+  /** Milliseconds clock for the time budget (injectable so a test can make a generation slow). */
+  nowMs: () => number;
   /** The nav2_trigger_planner switch (OFF unless its row exists and is enabled). */
   plannerOn: (admin: SupabaseClient) => Promise<boolean>;
   /** Read-only: the NAV2 window plan the chosen period needs for this user. */
@@ -74,6 +87,7 @@ const defaultDeps: FundAnalyticsDeps = {
   gate: ({ admin, userId, today }) => checkReportNavHistoryGate({ db: admin as never, userId, today, createAnchor: true, kick: kickUserNavHistory }),
   load: loadFundAnalyticsInput,
   nowIso: () => new Date().toISOString(),
+  nowMs: () => Date.now(),
   plannerOn: (admin) => isNav2FlagOn(admin, NAV2_JOB_KEYS.triggerPlanner),
   planPeriod: ({ admin, userId, period, today }) => planForReportPeriod(admin, userId, period, today),
   kickPeriod: (userId, period) => kickNav2ReportPeriod(userId, period),
@@ -115,14 +129,23 @@ export async function generateFundAnalyticsReport(args: {
   sessionClient: SupabaseServerClient;
   adminClient: SupabaseClient;
   periodChoice?: unknown;
+  /** The funds to cover (instrument ids), for a person who holds more than one report covers; null / absent = every fund held. */
+  fundIds?: readonly string[] | null;
   /** ISO date; defaults to today (UTC). */
   asOfDate?: string;
   deps?: Partial<FundAnalyticsDeps>;
 }): Promise<GenerateResult> {
   const deps = { ...defaultDeps, ...(args.deps ?? {}) };
+  const startedMs = deps.nowMs();
   const admin = args.adminClient;
   if (!(await deps.isFlagOn(admin))) return { status: 'disabled', message: FUND_ANALYTICS_DISABLED_MESSAGE };
   if (!(await deps.isPremium(args.userId, admin))) return { status: 'forbidden', message: FUND_ANALYTICS_PREMIUM_MESSAGE };
+
+  // a choice that can never be valid is refused before any work (and after the Premium check, so a free user is told about Premium first)
+  const requested = args.fundIds ?? null;
+  if (requested !== null && (requested.length === 0 || requested.length > FUND_ANALYTICS_MAX_FUNDS || new Set(requested).size !== requested.length)) {
+    return { status: 'invalid_selection', message: invalidSelectionMessage(FUND_ANALYTICS_MAX_FUNDS) };
+  }
 
   const nowIso = deps.nowIso();
   const asOfDate = args.asOfDate ?? nowIso.slice(0, 10);
@@ -153,13 +176,36 @@ export async function generateFundAnalyticsReport(args: {
     }
   }
 
-  const loaded = await deps.load({ userId: args.userId, sessionClient: args.sessionClient, adminClient: admin, asOfDate, displayCurrency: 'INR', periodChoice, gate });
+  const loaded = await deps.load({ userId: args.userId, sessionClient: args.sessionClient, adminClient: admin, asOfDate, displayCurrency: 'INR', periodChoice, gate, selection: { max: FUND_ANALYTICS_MAX_FUNDS, chosen: requested } });
+  if (loaded.selectionProblem === 'invalid') return { status: 'invalid_selection', message: invalidSelectionMessage(FUND_ANALYTICS_MAX_FUNDS) };
+  if (loaded.selectionProblem === 'needed' && loaded.choice) {
+    const held = loaded.choice.candidates.length;
+    return { status: 'select_funds', message: tooManyFundsMessage(held, FUND_ANALYTICS_MAX_FUNDS), max: FUND_ANALYTICS_MAX_FUNDS, heldFundCount: held, candidates: loaded.choice.candidates, suggestedIds: loaded.choice.suggestedIds };
+  }
   if (!loaded.input || loaded.input.schemes.length === 0) return { status: 'no_funds', message: FUND_ANALYTICS_NO_FUNDS_MESSAGE };
 
   // ---- reuse the shared per-scheme cache --------------------------------------------------------------------------
   const base: FundAnalyticsInput = loaded.input;
   const keyed = base.schemes.map((h) => ({ h, key: schemeBundleCacheKey(base, h) }));
   const cached = await readCachedBundles(admin, keyed.map((k) => k.key));
+  // ---- time budget: never start engine work the platform would kill --------------------------------------------------
+  const uncachedKeyed = keyed.filter((k) => !cached.has(k.key));
+  const affordable = Math.max(0, Math.floor((GENERATION_BUDGET_MS - (deps.nowMs() - startedMs)) / ENGINE_MS_PER_UNCACHED_FUND));
+  if (uncachedKeyed.length > affordable) {
+    const slice = uncachedKeyed.slice(0, affordable);
+    if (slice.length > 0) {
+      // the engine's per-fund results do not depend on the other funds, so a report of just this slice yields exactly the entries a full report would
+      const partial = buildFundAnalyticsReport({ ...base, selection: undefined, calculatedAt: deps.nowIso(), schemes: slice.map(({ h }) => ({ ...h, cachedScheme: null })) });
+      const partialWrites: CacheWrite[] = [];
+      for (const { h, key } of slice) {
+        const block = partial.report.schemes.find((b) => b.instrumentId === h.instrumentId);
+        if (block) partialWrites.push({ key, parts: schemeBundleCacheParts(base, h), payload: compactSchemeFamily(block.analytics.scheme) });
+      }
+      if (partialWrites.length) await writeCachedBundles(admin, partialWrites);
+    }
+    const ready = cached.size + slice.length;
+    return { status: 'in_steps', message: largeReportStepsMessage(ready, keyed.length), ready, total: keyed.length, retryAfterSeconds: 60 };
+  }
   const withCache: FundAnalyticsInput = { ...base, calculatedAt: deps.nowIso(), schemes: keyed.map(({ h, key }) => ({ ...h, cachedScheme: cached.get(key) ?? null })) };
   const { report, manifest } = buildFundAnalyticsReport(withCache);
 

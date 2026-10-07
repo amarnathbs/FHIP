@@ -21,7 +21,8 @@ export const dynamic = 'force-dynamic';
 // funds before any database time. See docs/nav2/NAV2_STAGE3_CERTIFICATION_REPORT.md (limits met by the 25-fund test) for the recommendation.
 export const maxDuration = 28;
 
-const generateBody = z.object({ period: z.enum(REPORT_PERIOD_CHOICES as unknown as [string, ...string[]]).optional() }).strict();
+// `funds` = the instrument ids to cover, for a person who holds more funds than one report covers (the service refuses an empty, repeated, over-long or foreign choice with one message)
+const generateBody = z.object({ period: z.enum(REPORT_PERIOD_CHOICES as unknown as [string, ...string[]]).optional(), funds: z.array(z.string().uuid()).max(200).optional() }).strict();
 
 export async function GET() {
   const { user, unauthenticated } = await requireUser();
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return badValidation(parsed.error);
 
   try {
-    const result = await generateFundAnalyticsReport({ userId: user.id, sessionClient: supabase, adminClient: createAdminClient(), periodChoice: parsed.data.period });
+    const result = await generateFundAnalyticsReport({ userId: user.id, sessionClient: supabase, adminClient: createAdminClient(), periodChoice: parsed.data.period, fundIds: parsed.data.funds ?? null });
     switch (result.status) {
       case 'disabled':
         return bad(result.message, 404);
@@ -62,6 +63,16 @@ export async function POST(req: Request) {
         return Response.json({ data: { status: 'preparing', message: result.message, ...result.waiting } }, { status: 202 });
       case 'no_funds':
         return ok({ status: 'no_funds', message: result.message });
+      case 'select_funds':
+        // 409: the report was not made because a choice is needed; `error` carries the plain message, `data` the funds to choose from
+        return Response.json({ error: result.message, data: { status: 'select_funds', message: result.message, max: result.max, heldFundCount: result.heldFundCount, candidates: result.candidates, suggestedIds: result.suggestedIds } }, { status: 409 });
+      case 'invalid_selection':
+        return bad(result.message, 422);
+      case 'in_steps':
+        return Response.json(
+          { data: { status: 'in_steps', message: result.message, headline: result.message, loaded: result.ready, total: result.total, waitingFunds: [], unavailableFunds: [], retryAfterSeconds: result.retryAfterSeconds } },
+          { status: 202, headers: { 'Retry-After': String(result.retryAfterSeconds) } }
+        );
       case 'ready':
         return Response.json({ data: { status: 'ready', report: result.report } }, { status: 201 });
     }

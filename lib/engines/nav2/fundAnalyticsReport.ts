@@ -21,7 +21,7 @@ import { buildResultCacheKey, bundleDefinitionVersion, metricRegistryDigest, pol
 import type { Nav2BenchmarkInput } from './benchmarkGate';
 import { rankHeldSchemes, type HeldRankingValue, type RankingCandidate } from './heldRanking';
 import type { OwnershipShare } from './ownershipShare';
-import { figuresAsAtNote, riskFreeShortNote } from './reportWording';
+import { coversSomeFundsNote, figuresAsAtNote, riskFreeShortNote } from './reportWording';
 import { computeInvestorExperience, SCHEME_VS_INVESTOR_EXPLANATION, type InvestorExperienceInput } from './investorExperience';
 import type { RiskFreeSupply } from './riskFree';
 import { correlationBetweenHeldSchemes, type CorrelationValue } from './schemeRisk';
@@ -29,6 +29,7 @@ import type { SeriesGap, PreparedSeries } from './series';
 import { sma, type TrendValue } from './schemeTrend';
 import type { Nav2Context, Nav2Result, Nav2State } from './types';
 import { showDate } from './types';
+import { FUND_ANALYTICS_MAX_FUNDS } from '@/lib/config/nav2/reportLimits';
 
 export const FUND_ANALYTICS_REPORT_VERSION = 'nav2-fund-analytics-report-v1';
 export const FUND_ANALYTICS_MANIFEST_VERSION = 'nav2-fund-analytics-manifest-v1';
@@ -67,6 +68,18 @@ export interface ReportScopeNotes {
   priceHistoryUnavailable: Array<{ schemeName: string; reason: string }>;
 }
 
+/** Which of the funds held this report covers (PO decision 07-10-2026: one report covers at most FUND_ANALYTICS_MAX_FUNDS funds). */
+export interface ReportSelection {
+  /** 'all_held' when the report covers every fund held, 'chosen' when the person chose a subset. */
+  basis: 'all_held' | 'chosen';
+  /** How many Indian mutual funds were held (the personal ones this report can cover). */
+  heldFundCount: number;
+  /** The funds the report covers (instrument ids). */
+  chosenInstrumentIds: string[];
+  /** The cap in force when the report was made. */
+  max: number;
+}
+
 export interface FundAnalyticsInput {
   asOfDate: string;
   displayCurrency: 'INR' | 'AUD';
@@ -76,6 +89,8 @@ export interface FundAnalyticsInput {
   riskFree: RiskFreeSupply;
   schemes: readonly HeldSchemeInput[];
   scope: ReportScopeNotes;
+  /** Which funds are covered; absent = every fund in `schemes` (all held). */
+  selection?: ReportSelection;
   /** ISO timestamp of the calculation, stored in the pinned manifest (the engine itself reads no clock). */
   calculatedAt?: string;
 }
@@ -125,6 +140,8 @@ export interface FundAnalyticsReport {
     correlationsSkippedReason: string | null;
   };
   scope: ReportScopeNotes;
+  /** Present only when the report covers some, not all, of the funds held: the numbers behind the sentence in `notes`. Absent in reports made before 07-10-2026. */
+  selection?: { heldFundCount: number; chosenCount: number; max: number; chosenInstrumentIds: string[] };
   /** Plain sentences stated once for the whole report (scope, risk-free series used, benchmark basis). */
   notes: string[];
   /** The long explanations (the risk-free formula and the dates of the rates used): kept with the report and shown collapsed on the page. Absent in reports made before 07-10-2026. */
@@ -146,6 +163,8 @@ export interface FundAnalyticsManifest {
   /** When the calculation ran (ISO). null only for a manifest built without a clock (tests). */
   calculatedAt: string | null;
   periodChoice: ReportPeriodChoice;
+  /** Which funds the report covers (the chosen ids are sorted). Absent in manifests made before 07-10-2026. */
+  selection?: ReportSelection;
   /** The full risk-free formula text and the dates of the rates used (the report body prints one plain sentence). */
   calculationNotes: string[];
   riskFree: { seriesId: string; seriesLabel: string; datasetVersion: string; retrievedOn: string; termsReviewStatus: string; verifiedThroughDate: string | null; enabled: boolean } | null;
@@ -344,6 +363,9 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
   }
   const bench = blocks.flatMap((b) => [b.analytics.scheme.beta, b.analytics.scheme.alpha]).find((r) => r && r.state === 'available' && r.provenance.benchmark);
   if (bench && bench.state === 'available' && bench.provenance.benchmark) notes.push(`Beta and alpha use ${bench.provenance.benchmark.label} (${bench.provenance.benchmark.basisLabel}) where a declared benchmark is available.`);
+  const selection: ReportSelection = input.selection ?? { basis: 'all_held', heldFundCount: schemes.length, chosenInstrumentIds: schemes.map((h) => h.instrumentId), max: FUND_ANALYTICS_MAX_FUNDS };
+  const partial = selection.heldFundCount > selection.chosenInstrumentIds.length;
+  if (partial) notes.push(coversSomeFundsNote(selection.chosenInstrumentIds.length, selection.heldFundCount));
   notes.push(figuresAsAtNote(showDate(ctx, input.asOfDate)));
 
   const report: FundAnalyticsReport = {
@@ -357,6 +379,7 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
     schemes: blocks,
     comparison: { label: 'Your held schemes', rankings, correlations, correlationsSkippedReason: skipped },
     scope: input.scope,
+    ...(partial ? { selection: { heldFundCount: selection.heldFundCount, chosenCount: selection.chosenInstrumentIds.length, max: selection.max, chosenInstrumentIds: [...selection.chosenInstrumentIds].sort() } } : {}),
     notes,
     ...(calculationNotes.length > 0 ? { calculationNotes } : {}),
     stateCounts: {},
@@ -376,6 +399,7 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
     metricRegistryDigest: metricRegistryDigest(NAV2_METRICS),
     calculatedAt: input.calculatedAt ?? null,
     periodChoice: input.periodChoice,
+    selection: { ...selection, chosenInstrumentIds: [...selection.chosenInstrumentIds].sort() },
     calculationNotes,
     riskFree: supply ? { seriesId: supply.seriesId, seriesLabel: RISK_FREE_SERIES_LABELS[supply.seriesId as RiskFreeSeriesId] ?? supply.seriesName, datasetVersion: rfProv?.datasetVersion ?? supply.datasetVersion, retrievedOn: supply.retrievedOn, termsReviewStatus: supply.termsReviewStatus, verifiedThroughDate: supply.verifiedThroughDate, enabled: supply.enabled } : null,
     schemes: schemes.map((h) => {

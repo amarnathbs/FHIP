@@ -13,7 +13,7 @@ import { RISK_FREE_MAX_STALENESS_DAYS } from '../lib/config/nav2/metricPolicy';
 import { RISK_FREE_SERIES } from '../lib/config/nav2/riskFreeSeriesConfig';
 import { reportAnalysisSpec } from '../lib/engines/nav2/analysisSpec';
 import { buildFundAnalyticsReport, type FundAnalyticsInput, type FundAnalyticsReport, type HeldSchemeInput } from '../lib/engines/nav2/fundAnalyticsReport';
-import type { RiskFreeDataset } from '../lib/engines/nav2/riskFree';
+import type { RiskFreeDataset, RiskFreeObservation } from '../lib/engines/nav2/riskFree';
 import { prepareSeries } from '../lib/engines/nav2/series';
 
 export const PRINT_FIXTURE_AS_OF = '2026-10-01';
@@ -52,7 +52,7 @@ function weekdaysBetween(start: string, end: string): string[] {
 }
 
 function riskFree(): RiskFreeDataset {
-  const observations: RiskFreeDataset['observations'] = [];
+  const observations: RiskFreeObservation[] = [];
   const cur = new Date('2012-12-31T00:00:00.000Z');
   while (cur.toISOString().slice(0, 10) <= PRINT_FIXTURE_AS_OF) {
     observations.push({ observationDate: cur.toISOString().slice(0, 10), yieldPercent: 6.2, sourceDocument: 'SYNTHETIC TEST FIXTURE (not RBI data)', sourceUrl: null, retrievedOn: '2026-10-03' });
