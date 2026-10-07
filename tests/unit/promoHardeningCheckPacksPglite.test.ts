@@ -63,7 +63,7 @@ describe('D1 detection pack on the OLD-WORLD database', () => {
 
   it('NORMALISATION: the hash the database computes equals the hash the repository side computes, for all five old functions', async () => {
     const { rows } = await db.query(`select p.proname as name, md5(${normalisedSql('p.prosrc')}) as h from pg_proc p where p.oid in (${OLD_FUNCTIONS.map((f) => `to_regprocedure('${f.ident}')`).join(',')})`);
-    const fp = fingerprints();
+    const fp = fingerprints() as Record<string, string>;
     expect(rows).toHaveLength(5);
     for (const r of rows as { name: string; h: string }[]) expect(r.h, r.name).toBe(fp[r.name]);
   });
@@ -99,7 +99,7 @@ describe('D1 detection pack on the OLD-WORLD database', () => {
 
   it('D2 returns the normalised definition in pieces that join back to exactly the repository side normalisation', async () => {
     const rows = (await db.query(pack('D2_old_function_definitions.sql'))).rows as { function_name: string; part: number; text_part: string; normalised_hash: string; normalised_length: number }[];
-    const fp = fingerprints();
+    const fp = fingerprints() as Record<string, string>;
     for (const f of OLD_FUNCTIONS) {
       const mine = rows.filter((r) => r.function_name === f.label).sort((a, b) => a.part - b.part);
       expect(mine.length, f.label).toBeGreaterThan(0);
