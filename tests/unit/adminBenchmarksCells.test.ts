@@ -175,7 +175,7 @@ describe('wiring: the client uses this module, the routes join the metric defini
   it('both tabs\' API selects join benchmark_metric_definitions with the name and the code', () => {
     for (const f of ['values', 'target-ranges']) {
       const src = readFileSync(path.join(ROOT, `app/api/admin/benchmarks/${f}/route.ts`), 'utf8');
-      expect(src, f).toMatch(/benchmark_metric_definitions(!inner)?\(metric_code, metric_name\)/);
+      expect(src, f).toMatch(/benchmark_metric_definitions(!inner)?\(metric_code, metric_name(, unit)?\)/);
     }
   });
 

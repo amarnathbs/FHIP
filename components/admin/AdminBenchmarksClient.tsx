@@ -45,7 +45,7 @@ import {
   readJsonSafely,
   type AdminFailure,
 } from '@/lib/resources/admin/resultState';
-import { cell, fmt, fmtCell, type Row } from '@/components/admin/adminBenchmarksCells';
+import { cell, displayCell, fmt, type Row } from '@/components/admin/adminBenchmarksCells';
 import { PlanningBenchmarkUpload } from '@/components/admin/PlanningBenchmarkUpload';
 import { parseAdminCapabilities } from '@/lib/admin/adminNav';
 
@@ -436,8 +436,8 @@ export function AdminBenchmarksClient() {
                 {rows.map((r, i) => (
                   <tr key={(r.id as string) ?? i} className="border-t border-line">
                     {columns.map((c) => (
-                      <td key={c} className="max-w-xs truncate px-3 py-2" title={fmtCell(c, cell(r, c))}>
-                        {fmtCell(c, cell(r, c))}
+                      <td key={c} className="max-w-xs truncate px-3 py-2" title={displayCell(r, c)}>
+                        {displayCell(r, c)}
                       </td>
                     ))}
                     {tab === 'datasets' && (

@@ -18,6 +18,7 @@ import { AllowedValuesPanel, ALLOWED_VALUES_CSV_URL } from '@/components/admin/P
 import { PlanningBenchmarkDatasetMetrics } from '@/components/admin/PlanningBenchmarkDatasetMetrics';
 import { MAPPING_NOT_INSTALLED_LINE } from '@/lib/planning-benchmarks/allowedValues';
 import { formatDayFirstDateTime } from '@/lib/planning-benchmarks/dayFirst';
+import { formatCount, formatFigure, type FigureContext } from '@/lib/planning-benchmarks/figureFormat';
 import { KIND_LABEL, UPLOAD_KINDS, XLSX_DATA_SHEET, type UploadKind } from '@/lib/planning-benchmarks/uploadSchema';
 
 interface KindInfo {
@@ -71,6 +72,14 @@ interface PreviewRow {
   statistic_type: string | null;
   band_label: string | null;
   band_tier: string | null;
+  /** metric unit of an observed value (from the database function) */
+  unit?: string | null;
+  /** original_currency of the staged value and of the live value it replaces (added by the preview route) */
+  currency?: string | null;
+  live_currency?: string | null;
+  /** metric unit and country of a band, which has no currency of its own (added by the preview route) */
+  metric_unit?: string | null;
+  country_code?: string | null;
   new_value: string | null;
   new_lower: string | null;
   new_upper: string | null;
@@ -101,7 +110,7 @@ interface Preview {
   blockers: string[];
   rows: PreviewRow[];
   rows_truncated: boolean;
-  removed: Array<{ metric_code: string; band_label: string; band_tier: number; lower: string | null; upper: string | null }>;
+  removed: Array<{ metric_code: string; band_label: string; band_tier: number; lower: string | null; upper: string | null; country_code?: string | null; metric_unit?: string | null }>;
   capabilities: { upload: boolean; activate: boolean };
   /** Is the dataset to metric mapping (migration 0277) installed on this database? Absent on an older server. */
   mapping?: 'installed' | 'not_installed' | 'unavailable';
@@ -115,10 +124,14 @@ const CLASS_LABEL: Record<PreviewRow['classification'], string> = {
 };
 const STATUS_LABEL: Record<BatchRow['status'], string> = { staged: 'Staged (not live)', activated: 'Activated (live)', discarded: 'Discarded' };
 
-function num(v: string | null): string {
-  if (v === null || v === undefined) return 'none';
-  const n = Number(v);
-  return Number.isFinite(n) ? n.toLocaleString('en-IN', { maximumFractionDigits: 4 }) : v;
+// A figure is shown by ITS OWN currency or unit, never by the viewer's locale (lib/planning-benchmarks/figureFormat.ts).
+function num(v: string | null, ctx: FigureContext = {}): string {
+  return formatFigure(v, ctx);
+}
+/** The context of the figures of one preview row: a value has its own currency, a band has the country of its group. */
+function rowCtx(kind: UploadKind, r: PreviewRow, which: 'new' | 'live'): FigureContext {
+  if (kind === 'target_ranges') return { unit: r.metric_unit ?? null, country: r.country_code ?? null };
+  return { unit: r.unit ?? null, currency: which === 'live' ? (r.live_currency ?? null) : (r.currency ?? null) };
 }
 
 export function PlanningBenchmarkUpload() {
@@ -404,7 +417,7 @@ export function PlanningBenchmarkUpload() {
               </select>
             </label>
             <label className="block text-sm">
-              <span className="font-medium text-ink">File (.csv or .xlsx, at most {maxMb} MB and {status.limits?.maxRows.toLocaleString('en-IN')} rows)</span>
+              <span className="font-medium text-ink">File (.csv or .xlsx, at most {maxMb} MB and {formatCount(status.limits?.maxRows ?? 0)} rows)</span>
               <input
                 ref={fileInput}
                 type="file"
@@ -558,7 +571,7 @@ export function PlanningBenchmarkUpload() {
               <ul className="list-disc pl-5 text-muted">
                 {preview.removed.map((r, i) => (
                   <li key={i}>
-                    {r.metric_code}, tier {r.band_tier} ({r.band_label}): {num(r.lower)} to {num(r.upper)}
+                    {r.metric_code}, tier {r.band_tier} ({r.band_label}): {num(r.lower, { unit: r.metric_unit, country: r.country_code })} to {num(r.upper, { unit: r.metric_unit, country: r.country_code })}
                   </li>
                 ))}
               </ul>
@@ -612,13 +625,13 @@ export function PlanningBenchmarkUpload() {
                       {r.detail ? <span className="block text-muted">{r.detail}</span> : null}
                     </td>
                     <td className="px-3 py-2">
-                      {preview.batch.kind === 'values' && (r.live_value === null ? 'nothing' : num(r.live_value))}
-                      {preview.batch.kind === 'target_ranges' && (r.live_lower === null && r.live_upper === null && r.classification === 'new' ? 'nothing' : `${num(r.live_lower)} to ${num(r.live_upper)}`)}
+                      {preview.batch.kind === 'values' && (r.live_value === null ? 'nothing' : num(r.live_value, rowCtx(preview.batch.kind, r, 'live')))}
+                      {preview.batch.kind === 'target_ranges' && (r.live_lower === null && r.live_upper === null && r.classification === 'new' ? 'nothing' : `${num(r.live_lower, rowCtx(preview.batch.kind, r, 'live'))} to ${num(r.live_upper, rowCtx(preview.batch.kind, r, 'live'))}`)}
                       {preview.batch.kind === 'cohorts' && (r.classification === 'new' ? 'nothing' : 'exists')}
                     </td>
                     <td className="px-3 py-2">
-                      {preview.batch.kind === 'values' && num(r.new_value)}
-                      {preview.batch.kind === 'target_ranges' && `${num(r.new_lower)} to ${num(r.new_upper)}`}
+                      {preview.batch.kind === 'values' && num(r.new_value, rowCtx(preview.batch.kind, r, 'new'))}
+                      {preview.batch.kind === 'target_ranges' && `${num(r.new_lower, rowCtx(preview.batch.kind, r, 'new'))} to ${num(r.new_upper, rowCtx(preview.batch.kind, r, 'new'))}`}
                       {preview.batch.kind === 'cohorts' && (r.cohort_description ?? '')}
                     </td>
                   </tr>

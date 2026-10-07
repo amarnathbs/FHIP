@@ -8,7 +8,7 @@ export const GET = adminRoute(async (req: Request) => {
   const metricCode = url.searchParams.get('metric_code');
   let query = adminClient()
     .from('benchmark_target_ranges')
-    .select('*, benchmark_metric_definitions!inner(metric_code, metric_name)')
+    .select('*, benchmark_metric_definitions!inner(metric_code, metric_name, unit)')
     .order('band_tier')
     .limit(300);
   if (metricCode) query = query.eq('benchmark_metric_definitions.metric_code', metricCode);

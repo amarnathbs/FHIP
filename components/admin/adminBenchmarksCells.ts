@@ -9,6 +9,7 @@
 //   2. Dates are day-first through the canonical formatter. This page has no single country, so it
 //      uses the AU shape dd/mm/yyyy (PO rule, Document2 findings #8/#19).
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
+import { formatFigure, type FigureContext } from '@/lib/planning-benchmarks/figureFormat';
 
 export type Row = Record<string, unknown>;
 
@@ -107,5 +108,22 @@ export function fmtCell(col: string, v: unknown): string {
 
 /** Convenience: the displayed text for one cell of one row. */
 export function displayCell(r: Row, col: string): string {
-  return fmtCell(col, cell(r, col));
+  const v = cell(r, col);
+  const ctx = figureContextFor(r, col);
+  if (ctx !== null && v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v))) return formatFigure(v as string | number, ctx);
+  return fmtCell(col, v);
+}
+
+/**
+ * A figure is shown by ITS OWN currency or unit (lib/planning-benchmarks/figureFormat.ts), never by the viewer's locale.
+ * An observed value carries its unit and original_currency on the row. A band carries the country of its group and the
+ * unit of its metric (the joined definition), and has no currency of its own.
+ */
+function figureContextFor(r: Row, col: string): FigureContext | null {
+  if (col === 'Value') return { unit: typeof r['unit'] === 'string' ? (r['unit'] as string) : null, currency: typeof r['original_currency'] === 'string' ? (r['original_currency'] as string) : null };
+  if (col === 'Min' || col === 'Max') {
+    const def = r['benchmark_metric_definitions'] as Row | null | undefined;
+    return { unit: typeof def?.unit === 'string' ? def.unit : null, country: typeof r['country_code'] === 'string' ? (r['country_code'] as string) : null };
+  }
+  return null;
 }

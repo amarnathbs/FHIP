@@ -21,6 +21,7 @@ import {
 import { formatDayFirst, parseExcelSerialDate, parseFileDateText } from './dates';
 import { BOOLEAN_FALSE_WORDS, BOOLEAN_TRUE_WORDS, TEMPLATE_VERSION, UPLOAD_LIMITS, UPLOAD_SCHEMA, type ColumnDef, type UploadKind } from './uploadSchema';
 import { MAPPING_NOT_INSTALLED_LINE, buildAllowedIndex, didYouMean, findDataset, kindWords, listForMessage, mappedFor, type AllowedDataset, type AllowedIndex, type AllowedValuesOk } from './allowedValues';
+import { formatCount } from './figureFormat';
 
 export interface UploadIssue {
   severity: 'error' | 'warning';
@@ -276,7 +277,7 @@ export function validateUploadTable(table: UploadTable, kind: UploadKind, ctx: V
   if (d?.otherSheetsNotProcessed && d.otherSheetsNotProcessed.length > 0) add('warning', 'OTHER_SHEETS_NOT_PROCESSED', null, null, `These sheets were not processed: ${d.otherSheetsNotProcessed.join(', ')}.`);
 
   if (table.rows.length > UPLOAD_LIMITS.maxRows) {
-    add('error', 'TOO_MANY_ROWS', null, null, `The file has more than ${UPLOAD_LIMITS.maxRows.toLocaleString('en-IN')} data rows.`);
+    add('error', 'TOO_MANY_ROWS', null, null, `The file has more than ${formatCount(UPLOAD_LIMITS.maxRows)} data rows.`);
     return finish();
   }
 

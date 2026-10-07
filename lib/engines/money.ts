@@ -30,6 +30,12 @@ export const toMonthly = (amount: number, freq: Frequency) => amount * TO_MONTHL
 // "$542" rather than "$542.00" across every runtime/ICU version.
 const WHOLE_UNIT_OPTIONS = { minimumFractionDigits: 0, maximumFractionDigits: 0 } as const;
 
+// The one rule that picks the digit grouping of a figure: BY THE FIGURE'S OWN CURRENCY, never by the viewer's profile or
+// browser locale. INR uses Indian grouping (1,83,000), every other currency uses Australian grouping (183,000).
+export function localeForCurrencyCode(currencyCode: string | null | undefined): string {
+  return (currencyCode ?? '').toUpperCase() === 'INR' ? 'en-IN' : 'en-AU';
+}
+
 export function formatMoney(amount: number, currency: 'AUD' | 'INR') {
   const locale = currency === 'INR' ? 'en-IN' : 'en-AU';
   return new Intl.NumberFormat(locale, { style: 'currency', currency, ...WHOLE_UNIT_OPTIONS }).format(amount);
@@ -42,7 +48,7 @@ export function formatMoney(amount: number, currency: 'AUD' | 'INR') {
 // code can never throw inside a render.
 export function formatMoneyCode(amount: number, currencyCode: string | null | undefined): string {
   const code = (currencyCode ?? 'AUD').toUpperCase();
-  const locale = code === 'INR' ? 'en-IN' : 'en-AU';
+  const locale = localeForCurrencyCode(code);
   try {
     return new Intl.NumberFormat(locale, { style: 'currency', currency: code, ...WHOLE_UNIT_OPTIONS }).format(amount);
   } catch {
@@ -70,7 +76,7 @@ export function formatMoneyCode(amount: number, currencyCode: string | null | un
 // pointing its call sites at formatMoneyCode() is a one-line change per site.
 export function formatMoneyExact(amount: number, currencyCode: string | null | undefined): string {
   const code = (currencyCode ?? 'AUD').toUpperCase();
-  const locale = code === 'INR' ? 'en-IN' : 'en-AU';
+  const locale = localeForCurrencyCode(code);
   const options = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
   try {
     return new Intl.NumberFormat(locale, { style: 'currency', currency: code, ...options }).format(amount);

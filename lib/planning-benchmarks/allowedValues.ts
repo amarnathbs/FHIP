@@ -30,6 +30,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { formatDayFirst } from './dayFirst';
 import { CLOSED_DATASET_STATUSES, KIND_LABEL, UPLOAD_KINDS, UPLOAD_SCHEMA, BOOLEAN_FALSE_WORDS, BOOLEAN_TRUE_WORDS, type UploadKind } from './uploadSchema';
+import { formatCount } from './figureFormat';
 
 export const ALLOWED_VALUES_LIMITS = Object.freeze({ datasets: 500, sources: 500, metrics: 2000, cohorts: 2000, bands: 5000, values: 5000, mappings: 5000 });
 
@@ -536,7 +537,7 @@ export interface ListSection {
   rows: string[][];
 }
 
-const plural = (n: number, one: string, many: string): string => `${n.toLocaleString('en-IN')} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many: string): string => `${formatCount(n)} ${n === 1 ? one : many}`;
 
 export function datasetsHeading(av: AllowedValuesOk): string {
   const n = av.counts.datasetsOpen;
