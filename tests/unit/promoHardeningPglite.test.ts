@@ -8,7 +8,7 @@
 // assertion must go red as a real AssertionError (a database error does not count), and the live function is restored.
 //
 // WHAT PGLITE CANNOT PROVE (listed in docs/admin/ADMIN_PROMO_CODES_AND_REMINDERS_REPORT.md section 14 and in the DEV proof
-// script scripts/promo_hardening_dev_proof.mjs): true concurrency (PGlite is one connection, so the advisory lock around
+// script scripts/promo_hardening_release_dev_proof.mjs): true concurrency (PGlite is one connection, so the advisory lock around
 // admin_promo_email_begin and the row lock of the redeem function cannot be raced here), the real pg_cron / pg_net / Vault
 // extensions (stubbed below), and the real Supabase role grants of a hosted project.
 //

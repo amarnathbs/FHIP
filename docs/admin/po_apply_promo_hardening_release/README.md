@@ -1,153 +1,80 @@
-# Promo and Premium hardening: PO hand-over (migrations 0264 to 0268)
+# Premium and promo code hardening: your hand-over pack (DEV first)
 
-Branch `feat/promo-premium-hardening-20261005`, cut from `origin/main` (b105cf4). Nothing in this branch is pushed, merged or applied anywhere. Nothing is switched on.
+Branch `feat/promo-hardening-release-20261007`. Nothing in this pack has been applied anywhere. Nothing is pushed. Dates in this pack are written day first.
 
-Migration numbers: the highest number found on every branch and every worktree was **0263** (NAV2, `0263_nav2_risk_free_refresh_attempts.sql`), so these five are **0264 to 0268**. They do not collide with NAV2 (0260 to 0263) or with 0253 (PC7).
+**What this changes for people using the app: nothing they can see, except that promo codes are no longer stored in plain text, a 30-day code now gives exactly 30 days (counting the day you redeem it), and the admin screens show a masked code (like AB******YZ) instead of the code.**
 
-The migrations are written to be pasted into the Supabase SQL editor in small parts. The editor on DEV mis-parsed text in comments and strings, so every file here follows the editor safety rule (ASCII only, no statement word followed by a name inside a comment or string, no semicolon or quote inside a comment). `scripts/migration_editor_safety_lint.mjs` checks it and a test enforces it. Each migration file is the exact concatenation of its parts (a test proves it), so you may paste the whole file or the parts one by one.
+**Why the order matters.** The site that is live today keeps working while you do this. The database changes only ADD things beside the old ones (a test proves it on a copy of today's database, `tests/unit/promoHardeningDeploySafetyPglite.test.ts`). The old things are removed by a separate last step (0279) that you run only after everything is checked. If you stop half way, nothing is broken.
 
-## 1. Apply order
+## 0. Which project am I on?
 
-DEV first. Production only after DEV passed and you have read section 5 (decisions). Always apply the migrations BEFORE deploying the application of this branch. The application then finds its new functions. (If the application is deployed first, creating and redeeming codes shows an explicit "not available" message until the migrations are applied. Nothing is granted or lost.)
+Every Supabase page shows the project in its address. DEV is `.../dashboard/project/vqycarelcoijzwlpkpcz`. **Production is `.../dashboard/project/twwpnltizhtjxhamyoxt`. This README is for DEV. Do not open any file of this pack on the production project until you have read `PRODUCTION_RUNBOOK.md`.**
 
-| Step | What | Parts (in `parts/`) | Notes |
+## 1. How to run a file
+
+1. Open the file in Notepad (or VS Code). Press Ctrl+A, then Ctrl+C.
+2. In Supabase open **SQL Editor**, choose **New query**, press Ctrl+V, press **Run**.
+3. Check files (`checks/`) show a table. The last column `ok` must say `true` on every row. Migration files show "Success. No rows returned". 
+4. If the editor shows a red error: copy the error text and send it to me. Do not run anything else. Every file is safe to run again.
+5. If a whole migration file is too long for the editor, run its **parts** (`parts/0265a.sql`, `0265b.sql`, ...) one after the other in letter order. Joined, the parts are exactly the file.
+
+## 2. DEV steps, in this order
+
+| Step | Run this | Then run this check | What you should see |
 |---|---|---|---|
-| 0 | Set the four secrets and the Vault secret (section 3) | none | Before the application is deployed |
-| 1 | `0264_promo_hardening_foundations.sql` | `0264a`, `0264b`, `0264c`, `0264d` | Additive. Part D hides the plain code and digest columns from API roles |
-| 2 | `0265_promo_hardening_functions.sql` | `0265a` to `0265f` | Drops and recreates 5 functions, creates the digest backfill functions |
-| 3 | `0266_promo_email_abuse_controls.sql` | `0266a` to `0266d` | Drops the 3 argument begin function, adds limits, alerts, circuit breaker, status |
-| 4 | `0267_promo_retention_and_cleanup.sql` | `0267a` to `0267d` | Policy, holds, evidence; the job switch ships OFF |
-| 5 | `0268_platform_marker_hardening_and_cron_verify.sql` | `0268a`, `0268b` | Run the pre-check in 4.5 first |
-| 6 | Deploy the application | none | Then the digest backfill (section 6) |
+| 1 | `checks/D1_before_detect.sql` (read only) | none | every `ok` is `true` (section C says `false` in the `actual` column because nothing is applied yet). **Send me the table.** If any row in section A, B or E is not ok, STOP and send it to me. |
+| 2 | `supabase/migrations/0264_promo_hardening_foundations.sql` (parts `0264a` to `0264d`) | `checks/V0264_after_0264.sql` | all `ok` true |
+| 3 | `supabase/migrations/0265_promo_hardening_functions.sql` (parts `0265a` to `0265f`) | `checks/V0265_after_0265.sql` | all `ok` true |
+| 4 | `supabase/migrations/0266_promo_email_abuse_controls.sql` (parts `0266a` to `0266d`) | `checks/V0266_after_0266.sql` | all `ok` true |
+| 5 | `supabase/migrations/0267_promo_retention_and_cleanup.sql` (parts `0267a` to `0267d`) | `checks/V0267_after_0267.sql` | all `ok` true; both job switches say `false` |
+| 6 | `supabase/migrations/0268_platform_marker_hardening_and_cron_verify.sql` (parts `0268a`, `0268b`) | `checks/V0268_after_0268.sql` | all `ok` true |
 
-Do not edit the applied migrations 0231, 0237, 0238, 0242, 0250, 0251, 0252 (a test pins their hashes).
+After step 6 tell me: **"applied on DEV"**. I then run the proof scripts, the browser checks and the real e-mail checks on DEV (you do nothing during that). I will come back with a report.
 
-## 2. Verify after each part
+After my DEV proof passes I report back and ask you to continue. DEV has no deployed copy of the new application, so **steps 7 and 8 are done by me on my own local copy of the app that talks to DEV**. You run steps 9 and 10.
 
-Run these in the SQL editor after the part named. Expected results are in the comment on the right of each query. Dates print year first in the database; the text says them day first.
+| Step | Who | What | Then run this check | What you should see |
+|---|---|---|---|---|
+| 7 | me | press **Prepare existing codes** in the Setup check box of the Admin Promo Codes page (safe to repeat) | `checks/V_after_prepare_existing_codes.sql` (you or me) | row 4 is `0`; all `ok` true |
+| 8 | me | redeem an existing DEV test code with a test account: it must still work | none | the account shows Premium from a promo code |
+| 9 | you | the finalise. It removes the stored code text for good (on production you make a backup first). Paste and run: `select public.promo_codes_finalise_hash_only(false);` | `checks/V_after_finalise.sql` | all `ok` true |
+| 10 | you | `supabase/migrations/0279_promo_hardening_legacy_cleanup.sql` (parts `0279a`, `0279b`). It refuses with `PROMO_CLEANUP_BLOCKED` until step 9 is done. That refusal is correct, not a fault. | `checks/V0279_after_0279.sql` | all `ok` true |
 
-### 2.1 Migration 0264
+## 3. What to paste back to me
 
-```sql
--- after part A
-select public.access_end_date('2024-02-28', 30) as end_date,          -- 28 March 2024
-       public.access_window_days('2024-02-28', '2024-03-28') as days,  -- 30
-       public.promo_normalise_email(E'  A@B.COM\n') as normalised,     -- a@b.com
-       public.premium_grant_lifetime_ceiling() as ceiling;             -- 10
-select count(*) from admin_users where can_override_entitlement_limits;  -- 0 (nobody holds it)
--- after part B
-select to_regclass('public.admin_monitoring_events') is not null as monitoring,
-       to_regclass('public.premium_entitlement_overrides') is not null as overrides;  -- true, true
--- after part C: the counter was counted out of the audit trail
-select (select count(distinct target_user_id) from admin_entitlement_events where action in ('grant', 'extend')) as audited_users,
-       (select count(*) from user_entitlements where admin_lifetime_grant_units > 0) as counted_users;  -- the two numbers are equal
--- after part D: API roles can no longer read the plain code or the digest
-select has_column_privilege('authenticated', 'public.promo_codes', 'code', 'select') as code,            -- false
-       has_column_privilege('authenticated', 'public.promo_codes', 'code_digest', 'select') as digest,   -- false
-       has_column_privilege('authenticated', 'public.promo_codes', 'code_hint', 'select') as hint;      -- true
-```
+- After step 1: the table (a screenshot is fine).
+- After each migration: the check table, or a screenshot showing the `ok` column.
+- If anything is red: the exact red message, copied as text.
 
-### 2.2 Migration 0265
+## 4. Secrets (DEV is done by me, production is done by you)
 
-```sql
--- after parts A and B and C: one definition each, the old shapes are gone
-select proname, count(*) from pg_proc where pronamespace = 'public'::regnamespace
- and proname in ('admin_create_promo_code', 'admin_list_promo_codes', 'redeem_promo_code_for_user', 'admin_manage_premium_entitlement', 'premium_reminder_claim')
- group by proname order by proname;                                   -- every count is 1
-select has_function_privilege('authenticated', 'public.redeem_promo_code_for_user(uuid,text[],text,text,text)', 'execute') as users,   -- false
-       has_function_privilege('service_role', 'public.redeem_promo_code_for_user(uuid,text[],text,text,text)', 'execute') as server;  -- true
--- the list no longer returns a code column
-select pg_get_function_result('public.admin_list_promo_codes()'::regprocedure) not like '%code text%' as no_code_column;  -- true
--- after part D (backfill functions exist and report the counts)
-select public.promo_codes_finalise_hash_only(true);                    -- {"dry_run": true, "rows_total": N, "rows_with_plain_value": N, "rows_unverified": N}
--- after part E
-select obj_description('public.admin_manage_premium_entitlement(text,uuid,date,text,boolean)'::regprocedure, 'pg_proc') is not null as has_comment;  -- true
-```
+- **DEV:** I generate four random values into my own test environment. They are never printed and never committed. If your DEV site on Amplify must run this code, it needs the same four variable names set to four DIFFERENT random values of at least 32 characters. Tell me and I will give you the PowerShell line.
+- **Production:** `PRODUCTION_RUNBOOK.md` section 3 has the PowerShell line. It puts one random value at a time on your clipboard (nothing is shown on screen) and tells you which Amplify variable to paste it into.
 
-### 2.3 Migration 0266
+The four names, each with its own value, none shared: `PROMO_CODE_DIGEST_SECRET`, `PREMIUM_PROMO_EMAIL_BIND_SECRET`, `PROMO_IP_HASH_SECRET`, `CRON_SECRET`. If one is missing, too short (under 32 characters) or the same as another, the feature that needs it refuses and the Promo Codes page says exactly which one in the "Setup check" box. Nothing falls back to another secret. Ordinary Premium use, billing and the other Admin pages never read these secrets (a test proves it).
 
-```sql
-select public.promo_email_limits();   -- admin 100 a day, platform 300 a day, 3 replacements per code per day, alert at 80 percent, breaker 5 failures / 15 minutes
-select count(*) from pg_proc where proname = 'admin_promo_email_begin';                                   -- 1
-select has_function_privilege('authenticated', 'public.promo_email_circuit_report(boolean)', 'execute');   -- false (server only)
-select kind, count(*) from promo_email_requests group by kind;                                              -- existing rows: create
-```
+## 5. What stays OFF
 
-### 2.4 Migration 0267
-
-```sql
-select data_set, retention_days, action from promo_retention_policy order by data_set;   -- 6 rows: the proposed periods
-select job_key, enabled from premium_reminder_job_control order by job_key;               -- expiry_email false, promo_retention false
-select public.promo_retention_run(true);                                                  -- a DRY run: counts only, changes nothing
-select count(*) from cron.job where jobname = 'promo-retention-cleanup';                  -- DEV: 0. Production: 1 only if the marker row exists
-```
-
-### 2.5 Migration 0268 (run the pre-check BEFORE part A)
-
-```sql
--- pre-check: must return 0 or 1 row, and never a production row on DEV
-select environment, updated_at from platform_deployment_environment;
--- after part B
-select * from public.premium_cron_verify(null);   -- one row per check; on DEV every row is ok (the vault and cron rows may say not installed)
--- production only: compare the Vault secret with the application CRON_SECRET by digest (never paste the secret):
---   on your machine:  printf '%s' "$CRON_SECRET" | sha256sum        then
-select * from public.premium_cron_verify('<that hex digest>');
--- the constraint is added NOT VALID. After reading the pre-check output you may validate it:
-alter table public.platform_deployment_environment validate constraint platform_deployment_environment_value_check;
-```
-
-## 3. Secrets the PO must generate
-
-Exactly these. Each is a different random value of at least 32 characters (for example 32 random bytes written as 64 hex characters: `openssl rand -hex 32`). No secret is ever written to a file, a chat or a log. **There are no fallbacks between them any more**: a feature whose secret is missing, too short or equal to another one refuses with an explicit message.
-
-| Name | New? | Needed for | Where it goes |
-|---|---|---|---|
-| `PROMO_CODE_DIGEST_SECRET` | **New, generate now** | creating and redeeming any code | Amplify environment (DEV and production) |
-| `PREMIUM_PROMO_EMAIL_BIND_SECRET` | Generate if it is not already a dedicated value. It used to fall back to the IP secret then `CRON_SECRET` | address-bound codes, e-mailed codes, and redemption | Amplify environment. Changing an existing value makes already bound codes unusable (they read as "cannot be used") |
-| `PROMO_IP_HASH_SECRET` | Generate if production relied on the `CRON_SECRET` fallback | the per-network redemption limit | Amplify environment |
-| `CRON_SECRET` | Keep, unless it is shorter than 32 characters or equals one of the three above (then rotate it) | the scheduled routes | Amplify environment **and** the Vault secret `premium_reminder_cron_secret` (same value) |
-
-Optional settings (none required): `PROMO_TRUSTED_PROXY_HOPS` (default 1; see the report, item 6, before changing it), `PROMO_CODE_DIGEST_VERSION` and `PROMO_CODE_DIGEST_SECRET_PREVIOUS` (only during a key rotation: `docs/admin/PROMO_CODE_DIGEST_KEY_ROTATION_RUNBOOK.md`).
-
-`amplify.yml` already forwards these names (the `PROMO_CODE_DIGEST_` prefix, `PROMO_TRUSTED_PROXY_HOPS`, `PROMO_IP_HASH_SECRET`, `CRON_SECRET`, `PREMIUM_PROMO_EMAIL_`, `PREMIUM_REMINDER_`). `ENVIRONMENT_VARIABLES.md` describes each.
-
-## 4. What stays OFF
-
-- `PREMIUM_PROMO_EMAIL_ENABLED`: unset (off). Only the exact text `true` turns code e-mail on.
-- The expiry reminder e-mail job (`premium_reminder_job_control`, key `expiry_email`): disabled.
-- The optional seven day reminder (`PREMIUM_REMINDER_SEVEN_DAY_ENABLED`): unset (off). Built and proven not to duplicate the thirty day reminder (`tests/unit/premiumExpiryReminderSevenDayPglite.test.ts`). Enabling it is your decision.
-- The retention cleanup (`premium_reminder_job_control`, key `promo_retention`): disabled. The scheduled job is registered only where the production marker row exists and does nothing while the switch is off.
+- `PREMIUM_PROMO_EMAIL_ENABLED`: you decided on 07-10-2026 to KEEP it on in production. On DEV it is off unless I am testing. If e-mails ever look wrong, run `emergency/STOP_promo_emails.sql` (stops sending within a second, no redeploy; codes are then shown once on screen). `emergency/RESUME_promo_emails.sql` resumes.
+- The expiry reminder e-mail job and the 7-day reminder: off.
+- The cleanup (retention) job: off. It is registered only on production and does nothing while its switch is off.
 - The override capability `can_override_entitlement_limits`: granted to nobody.
 
-## 5. Decisions needed from the PO
+## 6. If something goes wrong
 
-1. **Hint format.** The mission example `ABCD...WXYZ` shows 8 of the 10 characters of a generated code. I kept the existing two plus two (`AB******YZ`), which shows 4 of 10. Confirm, or choose a shorter hint.
-2. **Lifetime ceiling = 10** admin grants and extensions per user, never reset by a revoke. Promo redemptions are NOT counted (they are bounded per code and per user per code). Confirm both.
-3. **Latest end date of a grant is today plus 364** (a 365 day window counting today). It used to be today plus 365, which was 366 calendar days. This is one day shorter than before.
-4. **Limits**: 100 e-mail recipients per admin per day, 300 across all admins per day, 3 replacements per code per day, alert at 80 percent; circuit breaker after 5 consecutive provider failures for 15 minutes.
-5. **Retention periods** (proposals): attempts 30 days, e-mail requests 180 days, send ledger 180 days (anonymised), reminder ledger 400 days, codes 365 days after disable or expiry (anonymised), audit events 7 years (anonymised). Alert rows are not purged.
-6. **Who gets `can_override_entitlement_limits`**, if anyone.
-7. **Trusted hop count.** The default (1, CloudFront) is UNVERIFIED for Amplify. Prove it on DEV (report, item 6) before relying on the per-network limit.
-8. **Secret length.** A minimum of 32 characters is enforced. If the current `CRON_SECRET` is shorter, the reminder route refuses until you rotate it.
-9. Whether to run the digest backfill and the finalise on DEV first (recommended) and when on production.
+- A migration part fails: stop, send me the message. Every part can be run again.
+- You want the DEV database back as it was: `rollback/R2_undo_0264_to_0268.sql` (and `rollback/R1_after_0279_restore_old_function_shapes.sql` first if 0279 was applied). A test proves both on a copy. You normally do not need them: the new database objects do no harm to the old site.
+- The application only: redeploy the previous Amplify build. This is safe up to step 9.
 
-## 6. Digest backfill, verification and the reversal plan
+## 7. Files in this folder
 
-Existing codes keep working at every step. `scripts/promo_code_digest_backfill.mjs` is a dry run unless told otherwise and never prints a code, a digest or a secret.
+| Path | What it is |
+|---|---|
+| `parts/` | the migrations in small pieces (source of truth; joined they are byte for byte the files in `supabase/migrations`) |
+| `checks/` | one read only detection file (D1) and one verification file per step (V...) |
+| `rollback/` | R1 and R2, generated from the original migrations |
+| `emergency/` | STOP and RESUME for promo e-mails |
+| `PRODUCTION_RUNBOOK.md` | the production order, the failure behaviour of every step, the checks after the deploy |
+| `resend_sample_body.txt` | the sample message of the e-mail test (a test keeps it equal to the real message) |
 
-1. After step 6 of section 1 (application deployed with `PROMO_CODE_DIGEST_SECRET`): `node scripts/promo_code_digest_backfill.mjs` (dry run, counts only).
-2. `node scripts/promo_code_digest_backfill.mjs --apply` stores each digest and asks the database to verify the copy (the digest is recomputed from the plain value read back and compared inside the database).
-3. Check: `select count(*) filter (where code is not null) as plain, count(*) filter (where code_digest_verified_at is not null) as verified from promo_codes;` Every row with a plain value must be verified.
-4. Redeem one existing code on DEV to see it still works by digest.
-5. Make a restore point or backup. `node scripts/promo_code_digest_backfill.mjs --finalise-dry`, then `--finalise --i-have-a-backup`. This blanks the plain values for good. It is all or nothing: it refuses while any plain row is unverified.
-6. Check: `select count(*) from promo_codes where code is not null;` is 0.
-
-Reversal. Before step 5: `update promo_codes set code_digest = null, code_digest_version = null, code_digest_verified_at = null;` returns every code to the legacy plain lookup. After step 5 the plain values exist nowhere by design; the digests keep every code working; the only way back is a restore. A code that must be handed out again is replaced with "Generate a replacement code and email it". The structural migrations are additive; the functions they replace can be restored by re-running their `create or replace` text from 0231, 0237, 0238 and 0242, together with a rollback of the application.
-
-## 7. Files
-
-- `parts/` the hand-run parts (source of truth; `scripts/promo_hardening_build_migrations.mjs` rebuilds the migrations from them)
-- `resend_sample_body.txt` the sample message the real-send certification uses (a test keeps it equal to the real message)
-- `../ADMIN_PROMO_CODES_AND_REMINDERS_REPORT.md` section 18: one section per item with finding, change, evidence and residual risk
-- `../PROMO_CODE_DIGEST_KEY_ROTATION_RUNBOOK.md`, `../PROMO_EMAIL_RESEND_DEV_CERTIFICATION_RUNBOOK.md`, `../PROMO_HARDENING_BROWSER_TEST_PLAN.md`
-- `scripts/promo_code_digest_backfill.mjs`, `scripts/promo_hardening_dev_proof.mjs`, `scripts/promo_email_resend_dev_certification.mjs`
+The long report with every evidence label and the 14 review items is `../PROMO_PREMIUM_HARDENING_CERTIFICATION.md`.

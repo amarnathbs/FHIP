@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { computePromoDigest } from '@/lib/services/promoCodeDigest';
 import { digestOf, parseArgs, refusal, projectRefOf } from '../../../scripts/promo_code_digest_backfill.mjs';
-import { refusal as devProofRefusal } from '../../../scripts/promo_hardening_dev_proof.mjs';
+import { refusal as devProofRefusal } from '../../../scripts/promo_hardening_release_dev_proof.mjs';
 import { TEST_ENV, expectNamedFailure } from '../support/promoTestHelpers';
 
 const PROD = 'https://twwpnltizhtjxhamyoxt.supabase.co';
@@ -49,13 +49,17 @@ describe('backfill script', () => {
 });
 
 describe('DEV proof script', () => {
-  const full = { ...env(DEV), NEXT_PUBLIC_SUPABASE_ANON_KEY: 'a', PROMO_ADMIN_JWT: 'j' };
-  it('refuses without --confirm-dev, against production or any other project, and with a missing input', () => {
-    expect(devProofRefusal([], full)).toMatch(/--confirm-dev/);
-    expect(devProofRefusal(['--confirm-dev'], full)).toBeNull();
-    expect(devProofRefusal(['--confirm-dev'], { ...full, NEXT_PUBLIC_SUPABASE_URL: PROD }), 'never production').toMatch(/only against the DEV project/);
-    expect(devProofRefusal(['--confirm-dev'], { ...full, NEXT_PUBLIC_SUPABASE_URL: 'https://abcdefghij.supabase.co' })).toMatch(/only against the DEV project/);
-    expect(devProofRefusal(['--confirm-dev'], { ...full, PROMO_ADMIN_JWT: '' })).toMatch(/PROMO_ADMIN_JWT/);
+  const full = { ...env(DEV), NEXT_PUBLIC_SUPABASE_ANON_KEY: 'a', PREMIUM_PROMO_EMAIL_BIND_SECRET: TEST_ENV.PREMIUM_PROMO_EMAIL_BIND_SECRET };
+  const args = ['--confirm-dev', '--fixtures', 'f.json'];
+  it('refuses without --confirm-dev, against production or any other project, without the fixtures file and with a missing or short secret', () => {
+    expect(devProofRefusal(['--fixtures', 'f.json'], full)).toMatch(/--confirm-dev/);
+    expect(devProofRefusal(args, full)).toBeNull();
+    expect(devProofRefusal(args, { ...full, NEXT_PUBLIC_SUPABASE_URL: PROD }), 'never production').toMatch(/only against DEV/);
+    expect(devProofRefusal(args, { ...full, NEXT_PUBLIC_SUPABASE_URL: 'https://abcdefghij.supabase.co' })).toMatch(/only against DEV/);
+    expect(devProofRefusal(['--confirm-dev'], full)).toMatch(/--fixtures/);
+    expect(devProofRefusal(args, { ...full, PROMO_CODE_DIGEST_SECRET: 'short' })).toMatch(/PROMO_CODE_DIGEST_SECRET/);
+    expect(devProofRefusal(args, { ...full, PREMIUM_PROMO_EMAIL_BIND_SECRET: '' })).toMatch(/PREMIUM_PROMO_EMAIL_BIND_SECRET/);
+    expect(devProofRefusal(args, { ...full, SUPABASE_SERVICE_ROLE_KEY: '' })).toMatch(/SUPABASE_SERVICE_ROLE_KEY/);
   });
 });
 
