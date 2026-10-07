@@ -1,4 +1,4 @@
--- P4 (read only). How big the database is and how big the price table is. NAV2 adds 12 small tables and a few functions, no price rows.
+-- P4 (read only). How big the database is and how big the price table is. fund analytics adds 12 small tables and a few functions, no price rows.
 -- It uses the table statistics for the row count (never a full count, which is slow on the big price table).
 -- Expect ONE row. Paste it back. The free disk space is read in the Supabase dashboard (Reports, Database, Disk size) and is not available here.
 select

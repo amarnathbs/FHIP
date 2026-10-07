@@ -1,4 +1,4 @@
-// NAV2 migrations 0260 (parts a-e, or the whole file), 0261, 0262, 0263: the EXPECTED database shape, proven in an in-process Postgres
+// NAV2 migrations 0260 (parts a-e, or the whole file), 0261, 0262, 0263, 0269, 0270, 0271: the EXPECTED database shape, proven in an in-process Postgres
 // (PGlite) from empty, from partial and from complete state and on re-run, and a READ-ONLY comparison with DEV.
 //
 //   node scripts/nav2_schema_inventory.mjs prove                 replay the chain, apply in four ways, prove identical, write expected_inventory.json
@@ -27,7 +27,7 @@ const DEV_REF = 'vqycarelcoijzwlpkpcz';
 const strip = (s) => s.replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, '');
 const files = fs.readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort();
 const F = (p) => files.find((f) => f.startsWith(p));
-const NAV2_FILES = [F('0260_'), F('0261_'), F('0262_'), F('0263_')];
+const NAV2_FILES = [F('0260_'), F('0261_'), F('0262_'), F('0263_'), F('0269_'), F('0270_'), F('0271_')];
 const partFiles = ['a', 'b', 'c', 'd', 'e'].map((l) => path.join(PARTS, `0260${l}.sql`));
 const read = (f) => strip(fs.readFileSync(f, 'utf8'));
 

@@ -1,5 +1,5 @@
--- P1 (read only). NAV2 is NOT on this database yet. Expect ONE row and every value true.
--- If any value is false, STOP and send me the row: either this is the wrong database (the DEV project already has all of this) or part of NAV2 is already here.
+-- P1 (read only). fund analytics is NOT on this database yet. Expect ONE row and every value true.
+-- If any value is false, STOP and send me the row: either this is the wrong database (the DEV project already has all of this) or part of fund analytics is already here.
 select
   (select count(*) = 0 from information_schema.tables where table_schema = 'public' and table_name in ('ii_risk_free_series', 'ii_risk_free_batches', 'ii_risk_free_observations', 'ii_risk_free_review_items', 'ii_risk_free_corrections', 'ii_risk_free_series_state_log', 'ii_risk_free_refresh_attempts', 'nav2_fund_analytics_reports', 'nav2_report_nav_dependencies', 'nav2_result_cache', 'nav2_report_render_tokens', 'nav2_correction_events')) as no_nav2_tables,
   (select count(*) = 0 from information_schema.columns where table_schema = 'public' and table_name = 'admin_users' and column_name in ('can_upload_risk_free_data', 'can_switch_risk_free_series')) as no_capability_columns,

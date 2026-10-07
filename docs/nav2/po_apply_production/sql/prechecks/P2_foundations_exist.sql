@@ -1,5 +1,5 @@
--- P2 (read only). Everything NAV2 builds on is already on this database. Expect ONE row and every value true.
--- If any value is false, STOP and send me the row. A false value means a migration that NAV2 depends on is missing here.
+-- P2 (read only). Everything fund analytics builds on is already on this database. Expect ONE row and every value true.
+-- If any value is false, STOP and send me the row. A false value means a migration that fund analytics depends on is missing here.
 select
   (select count(*) = 14 from information_schema.tables where table_schema = 'public' and table_name in ('admin_users', 'ii_reference_job_control', 'ii_reference_corrections', 'ii_prices_nav', 'ii_benchmarks', 'ii_benchmark_series', 'ii_nav_hydration_attempts', 'ii_nav_retention_holds', 'ii_nav_source_coverage_gaps', 'ii_report_nav_dependencies', 'ii_instrument_benchmarks', 'ii_instruments', 'ii_scheme_master', 'user_entitlements')) as foundation_tables_ok,
   (select count(*) = 2 from information_schema.columns where table_schema = 'public' and table_name = 'user_entitlements' and column_name in ('effective_from', 'effective_to')) as premium_window_columns_ok,
