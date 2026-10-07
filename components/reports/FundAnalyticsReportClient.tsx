@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import FundAnalyticsReportView from '@/components/reports/FundAnalyticsReportView';
-import { ActionMessage, Btn, Notice, SelectField } from '@/components/admin/benchmarkData/ui';
+import { ActionMessage, Btn, CheckField, Notice, SelectField } from '@/components/admin/benchmarkData/ui';
+import { rupees } from '@/lib/engines/nav2/presentation';
 import { REPORT_PERIOD_CHOICES, REPORT_PERIOD_LABELS, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
@@ -29,6 +30,14 @@ interface Waiting {
   unavailableFunds: string[];
 }
 
+/** The funds a person can choose from when they hold more than one report covers (the API's 409 answer). */
+interface FundPick {
+  max: number;
+  heldFundCount: number;
+  candidates: Array<{ instrumentId: string; schemeName: string; currentValue: number | null }>;
+  chosen: string[];
+}
+
 export default function FundAnalyticsReportClient() {
   const [versions, setVersions] = useState<Summary[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -38,6 +47,11 @@ export default function FundAnalyticsReportClient() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
+  const [pick, setPick] = useState<FundPick | null>(null);
+  // the funds chosen for the report being made: kept so the screen's own re-checks (while it is prepared in steps) ask for the same funds
+  const fundIds = useRef<string[] | null>(null);
+  // when a second report is wanted for the funds the last one left out, these are ticked first
+  const preselect = useRef<string[] | null>(null);
   const [exporting, setExporting] = useState<'download' | 'view' | null>(null);
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
   const polls = useRef(0);
@@ -81,13 +95,26 @@ export default function FundAnalyticsReportClient() {
     };
   }, [loadList]);
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (funds?: string[] | null) => {
+    if (funds !== undefined) fundIds.current = funds;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const r = await fetch('/api/reports/fund-analytics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period }) });
+      const r = await fetch('/api/reports/fund-analytics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period, ...(fundIds.current ? { funds: fundIds.current } : {}) }) });
       const j = await r.json().catch(() => null);
+      if (r.status === 409 && j?.data?.status === 'select_funds') {
+        // more funds held than one report covers: show the plain message and let the person choose (the largest holdings are ticked first)
+        const d = j.data as { message: string; max: number; heldFundCount: number; candidates: FundPick['candidates']; suggestedIds: string[] };
+        const covered = preselect.current;
+        const wanted = covered ? d.candidates.filter((c) => !covered.includes(c.instrumentId)).map((c) => c.instrumentId) : [];
+        preselect.current = null;
+        fundIds.current = null;
+        setWaiting(null);
+        setPick({ max: d.max, heldFundCount: d.heldFundCount, candidates: d.candidates, chosen: (wanted.length > 0 ? wanted : d.suggestedIds).slice(0, d.max) });
+        setNotice(d.message);
+        return;
+      }
       if (r.status === 202) {
         setWaiting(j.data as Waiting);
         return;
@@ -101,6 +128,7 @@ export default function FundAnalyticsReportClient() {
         setNotice(j.data.message as string);
         return;
       }
+      setPick(null);
       await loadList(false);
       await loadReport(j.data.report.id as string);
     } catch {
@@ -179,7 +207,7 @@ export default function FundAnalyticsReportClient() {
           <div className="min-w-[12rem]">
             <SelectField label="Period" value={period} hidePlaceholder options={periodOptions} onChange={(v) => setPeriod(v as ReportPeriodChoice)} />
           </div>
-          <Btn kind="primary" busy={busy} onClick={() => void generate()}>
+          <Btn kind="primary" busy={busy} onClick={() => void generate(null)}>
             {versions && versions.length > 0 ? 'Generate a new version' : 'Generate report'}
           </Btn>
           {versions && versions.length > 0 && (
@@ -214,6 +242,60 @@ export default function FundAnalyticsReportClient() {
         <Notice tone="info" live="status">
           {notice}
         </Notice>
+      )}
+      {pick && (
+        <fieldset className="rounded-card border border-line p-4 text-sm text-ink" data-testid="fund-pick">
+          <legend className="px-1 font-medium">Choose up to {pick.max} funds for this report</legend>
+          <p className="text-muted">
+            You hold {pick.heldFundCount} funds. The {pick.max} largest by current value are ticked; untick some and tick others if you prefer. You can make a second report for the rest.
+          </p>
+          <ul className="mt-3 space-y-1">
+            {pick.candidates.map((c) => {
+              const on = pick.chosen.includes(c.instrumentId);
+              return (
+                <li key={c.instrumentId}>
+                  <CheckField
+                    label={
+                      <>
+                        {c.schemeName}
+                        {c.currentValue !== null && <span className="text-muted"> - {rupees(c.currentValue)}</span>}
+                      </>
+                    }
+                    checked={on}
+                    disabled={!on && pick.chosen.length >= pick.max}
+                    onChange={(v) => setPick({ ...pick, chosen: v ? [...pick.chosen, c.instrumentId] : pick.chosen.filter((x) => x !== c.instrumentId) })}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-muted" aria-live="polite" data-testid="fund-pick-count">
+            {pick.chosen.length} of {pick.max} chosen
+          </p>
+          <div className="mt-2">
+            <Btn kind="primary" busy={busy} disabled={pick.chosen.length === 0} onClick={() => void generate(pick.chosen)}>
+              Generate a report for these funds
+            </Btn>
+          </div>
+        </fieldset>
+      )}
+      {report?.selection && report.selection.heldFundCount > report.selection.max && !pick && (
+        <div className="no-print flex flex-wrap items-center gap-3 text-sm text-ink" data-testid="rest-of-funds">
+          <span>
+            This report covers {report.selection.chosenCount} of your {report.selection.heldFundCount} funds.
+          </span>
+          <Btn
+            kind="secondary"
+            busy={busy}
+            onClick={() => {
+              preselect.current = report.selection!.chosenInstrumentIds;
+              // ask without a choice: the answer lists the funds, and the ones this report left out are ticked
+              void generate(null);
+            }}
+          >
+            Choose the other funds
+          </Btn>
+        </div>
       )}
       {waiting && (
         <div role="status" aria-live="polite" className="rounded-card border border-line p-4 text-sm text-ink">

@@ -370,7 +370,17 @@ describe('the real PDF: rendered by Chromium through the export route\'s printPa
     300_000
   );
   it.skipIf(skip !== null)(
-    '25 funds: the summary takes two pages, 25 fund pages, ONE comparison page = 28 pages',
+    '20 funds, the LARGEST REAL REPORT (the cap, 07-10-2026): summary of at most 2 pages, 20 fund pages, ONE comparison page = 23 pages',
+    () => {
+      const { analysis } = run(['--fixture', 'funds-20+unavailable+redeemed+long+young']);
+      expect(analysis.pages_per_fund).toBe(1);
+      expect(analysis.page_count).toBe(23);
+      expect(analysis.pages[analysis.pages.length - 1].first_line?.text).toBe('Comparing your funds');
+    },
+    300_000
+  );
+  it.skipIf(skip !== null)(
+    '25 funds, a LAYOUT-ONLY STRESS TEST (no person can make a 25-fund report any more): the summary takes two pages, 25 fund pages, ONE comparison page = 28 pages',
     () => {
       const { analysis } = run(['--fixture', 'funds-25+unavailable+redeemed+long+young']);
       expect(analysis.page_count).toBe(28);

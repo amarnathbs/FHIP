@@ -50,6 +50,15 @@ export function betaAlphaNoBenchmark(s: { beta?: { state: string; reason?: strin
   return no(s.beta) && no(s.alpha);
 }
 
+/** The plain refusal when more funds are held than one report covers (PO decision 07-10-2026). */
+export const tooManyFundsMessage = (held: number, max: number): string => `A report covers up to ${max} funds. You hold ${held}, so generate it in two reports.`;
+export const invalidSelectionMessage = (max: number): string => `Choose between 1 and ${max} of the funds you hold.`;
+/** Said when a large report is prepared in steps instead of running into the platform's time limit. */
+export const largeReportStepsMessage = (ready: number, total: number): string =>
+  `Your report is large, so it is prepared in steps (${ready} of ${total} ${total === 1 ? 'fund' : 'funds'} ready). This screen carries on by itself; if you leave, generate it again later and it picks up where it stopped.`;
+/** The note on a report that covers some, not all, of the funds held. */
+export const coversSomeFundsNote = (chosen: number, held: number): string => `This report covers ${chosen} of your ${held} Indian mutual funds, as you chose. The others can go in a second report.`;
+
 /** The collapsed "How this was calculated" heading on the web page. */
 export const HOW_CALCULATED_HEADING = 'How this was calculated';
 

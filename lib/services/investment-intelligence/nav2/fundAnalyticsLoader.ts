@@ -44,6 +44,22 @@ export interface FundAnalyticsLoadArgs {
   periodChoice: ReportPeriodChoice;
   gate: Pick<ReportNavGate, 'waiting' | 'unavailable'>;
   policy?: Nav2Policy;
+  /** One report covers at most `max` funds: `chosen` is the person's choice (instrument ids), null = every fund held (only allowed up to `max`). */
+  selection?: { max: number; chosen: readonly string[] | null };
+}
+
+/** One fund the person can put in a report: its name and the value of their own holding (their share when a holding is joint). */
+export interface FundChoiceCandidate {
+  instrumentId: string;
+  schemeName: string;
+  currentValue: number | null;
+}
+
+export interface FundChoice {
+  candidates: FundChoiceCandidate[];
+  max: number;
+  /** The default choice: the `max` largest holdings by current value (ties by name, then id). */
+  suggestedIds: string[];
 }
 
 export interface FundAnalyticsLoadResult {
@@ -52,6 +68,14 @@ export interface FundAnalyticsLoadResult {
   warnings: string[];
   /** Plain reason the risk-free rate data is missing (shown with the report); null when present. */
   riskFreeUnavailableReason: string | null;
+  /**
+   * Set when the household holds more funds than one report covers, or a choice was made: 'needed' = none was made (no input returned, no price
+   * history was read), 'invalid' = the choice names a fund the person does not hold, repeats one, or is longer than the cap.
+   */
+  selectionProblem?: 'needed' | 'invalid';
+  choice?: FundChoice;
+  /** The funds actually covered, and how many were held (set whenever an input is returned). */
+  coverage?: { heldFundCount: number; chosenInstrumentIds: string[] };
 }
 
 interface InstrumentRow {
@@ -147,6 +171,21 @@ const toRaw = (r: NavRowDb, providerById: ReadonlyMap<string, string>): RawNavRo
   dataVersion: r.data_version,
 });
 
+/**
+ * Pure. Which of the held funds one report covers. `chosen` null = every fund held, allowed only up to `max` (more is 'needed': the person must
+ * choose). A choice must be non-empty, no longer than `max`, without repeats, and only funds the person holds (`candidates` is built from the
+ * caller's own holdings, so another household's fund id is simply "not held": 'invalid', never named). `suggestedIds` is the default choice, the
+ * `max` largest holdings by current value (candidates arrive sorted that way).
+ */
+export function resolveFundSelection(args: { candidates: readonly FundChoiceCandidate[]; chosen: readonly string[] | null; max: number }): { problem?: 'needed' | 'invalid'; includedIds: string[]; suggestedIds: string[] } {
+  const all = args.candidates.map((c) => c.instrumentId);
+  const suggestedIds = all.slice(0, args.max);
+  if (args.chosen === null) return all.length > args.max ? { problem: 'needed', includedIds: [], suggestedIds } : { includedIds: all, suggestedIds };
+  const held = new Set(all);
+  const bad = args.chosen.length === 0 || args.chosen.length > args.max || new Set(args.chosen).size !== args.chosen.length || args.chosen.some((id) => !held.has(id));
+  return bad ? { problem: 'invalid', includedIds: [], suggestedIds } : { includedIds: [...args.chosen], suggestedIds };
+}
+
 export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promise<FundAnalyticsLoadResult> {
   const policy = args.policy ?? NAV2_POLICY;
   const warnings: string[] = [];
@@ -197,10 +236,36 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
   const { data: smData } = await admin.from('ii_scheme_master').select('instrument_id, sub_category, category_header_raw').in('instrument_id', ids).is('effective_to', null);
   const sm = new Map(((smData ?? []) as Array<{ instrument_id: string; sub_category: string | null; category_header_raw: string | null }>).map((r) => [r.instrument_id, r]));
 
-  const fundSchemes = ds.schemes.filter((s) => inst.get(s.instrumentId)?.instrument_class === 'mutual_fund' && (inst.get(s.instrumentId)?.base_currency ?? 'INR') === 'INR');
-  baseScope.otherInstrumentsExcluded = ds.schemes.length - fundSchemes.length;
-  const fundIds = fundSchemes.map((s) => s.instrumentId);
-  if (fundIds.length === 0) return { input: { asOfDate: args.asOfDate, displayCurrency: args.displayCurrency, policy, spec: reportAnalysisSpec(args.asOfDate, policy, args.periodChoice), periodChoice: args.periodChoice, riskFree: rf.supply, schemes: [], scope: baseScope }, warnings, riskFreeUnavailableReason: rf.unavailableReason };
+  const allFundSchemes = ds.schemes.filter((s) => inst.get(s.instrumentId)?.instrument_class === 'mutual_fund' && (inst.get(s.instrumentId)?.base_currency ?? 'INR') === 'INR');
+  baseScope.otherInstrumentsExcluded = ds.schemes.length - allFundSchemes.length;
+
+  // ---- the user's OWN SHARE of jointly held funds (PO decision 06-10-2026); unchanged when every folio is held by one household member ----
+  const shares = !ownerCtx ? { special: false, byInstrument: new Map<string, { investor: InvestorExperienceInput | null; ownership: OwnershipShare }>() } : await loadOwnershipShares(
+    { sessionClient: args.sessionClient as unknown as SupabaseClient, userId: args.userId, ctx: ownerCtx },
+    {
+      loadDataset: async (c) => (await loadAnalyticsDataset(c, args.userId, { asOfDate: new Date(`${args.asOfDate}T00:00:00.000Z`), benchmarkAccessNeed: 'export' })).dataset ?? null,
+      investorInputFor: (sd) => investorInputFor(sd, args.asOfDate),
+    }
+  );
+
+  // ---- which funds this report covers (one report covers at most `max`) ----------------------------------------------
+  const valueOf = (sd: SchemeDataset): number | null => {
+    const v = shares.special && shares.byInstrument.has(sd.instrumentId) ? shares.byInstrument.get(sd.instrumentId)!.investor?.valuation.marketValue ?? null : sd.valuation?.marketValue ?? sd.currentValue;
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  };
+  const candidates: FundChoiceCandidate[] = allFundSchemes
+    .map((sd) => ({ instrumentId: sd.instrumentId, schemeName: inst.get(sd.instrumentId)?.instrument_name ?? 'A fund you hold', currentValue: valueOf(sd) }))
+    .sort((x, y) => (y.currentValue ?? -1) - (x.currentValue ?? -1) || x.schemeName.localeCompare(y.schemeName) || (x.instrumentId < y.instrumentId ? -1 : 1));
+  const max = args.selection?.max ?? candidates.length;
+  const resolved = resolveFundSelection({ candidates, chosen: args.selection?.chosen ?? null, max });
+  const choice: FundChoice = { candidates, max, suggestedIds: resolved.suggestedIds };
+  const emptyInput = (schemes: HeldSchemeInput[]): FundAnalyticsInput => ({ asOfDate: args.asOfDate, displayCurrency: args.displayCurrency, policy, spec: reportAnalysisSpec(args.asOfDate, policy, args.periodChoice), periodChoice: args.periodChoice, riskFree: rf.supply, schemes, scope: baseScope });
+  if (resolved.problem) return { input: null, warnings, riskFreeUnavailableReason: rf.unavailableReason, selectionProblem: resolved.problem, choice };
+  const chosenSet = new Set(resolved.includedIds);
+  const chosenAny = args.selection?.chosen != null;
+  const fundSchemes = allFundSchemes.filter((sd) => chosenSet.has(sd.instrumentId));
+  const fundIds = fundSchemes.map((sd) => sd.instrumentId);
+  if (fundIds.length === 0) return { input: emptyInput([]), warnings, riskFreeUnavailableReason: rf.unavailableReason, choice };
 
   // ---- raw NAV rows with lineage + unresolved coverage gaps -------------------------------------------------------
   const navRows = await fetchAllRows<NavRowDb>(() =>
@@ -234,15 +299,6 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
   }
   const hydrating = new Set(args.gate.waiting.map((f) => f.instrumentId));
 
-  // ---- the user's OWN SHARE of jointly held funds (PO decision 06-10-2026); unchanged when every folio is held by one household member ----
-  const shares = !ownerCtx ? { special: false, byInstrument: new Map<string, { investor: InvestorExperienceInput | null; ownership: OwnershipShare }>() } : await loadOwnershipShares(
-    { sessionClient: args.sessionClient as unknown as SupabaseClient, userId: args.userId, ctx: ownerCtx },
-    {
-      loadDataset: async (c) => (await loadAnalyticsDataset(c, args.userId, { asOfDate: new Date(`${args.asOfDate}T00:00:00.000Z`), benchmarkAccessNeed: 'export' })).dataset ?? null,
-      investorInputFor: (sd) => investorInputFor(sd, args.asOfDate),
-    }
-  );
-
   const schemes: HeldSchemeInput[] = fundSchemes.map((s) => {
     const i = inst.get(s.instrumentId)!;
     const master = sm.get(s.instrumentId);
@@ -272,9 +328,12 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
     };
   });
 
+  const coverage = { heldFundCount: allFundSchemes.length, chosenInstrumentIds: fundIds };
   return {
-    input: { asOfDate: args.asOfDate, displayCurrency: args.displayCurrency, policy, spec: reportAnalysisSpec(args.asOfDate, policy, args.periodChoice), periodChoice: args.periodChoice, riskFree: rf.supply, schemes, scope: baseScope },
+    input: { ...emptyInput(schemes), selection: { basis: chosenAny && fundIds.length < allFundSchemes.length ? 'chosen' : 'all_held', heldFundCount: allFundSchemes.length, chosenInstrumentIds: fundIds, max: choice.max } },
     warnings,
     riskFreeUnavailableReason: rf.unavailableReason,
+    choice,
+    coverage,
   };
 }
