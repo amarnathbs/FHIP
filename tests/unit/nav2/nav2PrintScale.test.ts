@@ -7,7 +7,7 @@
 // NAMED NEGATIVE CONTROLS: NC-S1 (the compact comparison fits any number of ranked funds by capping rows), NC-S2 (a long note is clipped),
 // NC-S3 (a sheet taller than the page makes the export choose two pages for the whole report, a short one keeps one).
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -96,9 +96,9 @@ describe('25 funds: built by the real engine', () => {
   });
   it('the engine limit is stated: pairwise correlations are skipped above MAX_SCHEMES_FOR_PAIRS funds, with a sentence (not a silent gap)', () => {
     expect(MAX_SCHEMES_FOR_PAIRS).toBe(20);
-    expect(report.comparison.correlationsSkippedReason).toMatch(/more than the 20 for which pairwise correlations are shown/);
+    expect(report.comparison.correlationsSkippedReason).toMatch(/Correlations are shown for up to 20 funds\. This report has 25 funds, so pairs are not calculated\./);
     expect(report.comparison.correlations.length).toBe(0);
-    expect(text(html)).toContain('more than the 20 for which pairwise correlations are shown');
+    expect(text(html)).toContain('Correlations are shown for up to 20 funds. This report has 25 funds, so pairs are not calculated.');
   });
   it('NC-S1: the compact ranking table lists every ranked fund up to the cap and never more', () => {
     const m = /data-fa-comparison="compact"[\s\S]*?<table[\s\S]*?<\/table>/.exec(html);
@@ -112,6 +112,15 @@ describe('25 funds: built by the real engine', () => {
     expect(count(html, 'data-fa-chart="true"')).toBe(25 - 0);
   });
 }, 120_000);
+
+describe('NC-S4: the generation route declares the longest time the platform honours', () => {
+  it('maxDuration is 28 s (Amplify compute kills every request at 28 s; a larger value is not honoured) and the reason is written next to it', () => {
+    const src = readFileSync(path.join(__dirname, '..', '..', '..', 'app', 'api', 'reports', 'fund-analytics', 'route.ts'), 'utf8');
+    expect(src).toMatch(/export const maxDuration = 28;/);
+    expect(src).toContain('28 s');
+    expect(src).not.toMatch(/export const maxDuration = (?!28;)\d+/);
+  });
+});
 
 // ---- the browser measurement (needs Chromium) ----------------------------------------------------------------------------------------
 function chromiumPresent(): boolean {
