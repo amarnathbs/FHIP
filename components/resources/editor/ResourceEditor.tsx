@@ -89,7 +89,10 @@ export function ResourceEditor({
 
   const [status, setStatus] = useState<ResourceStatus>(initialPost.status);
   const [publishedAt, setPublishedAt] = useState(initialPost.published_at);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(initialPost.updated_at);
+  // The version token lives in a ref, not state: a save that was queued while another was in flight runs from the
+  // closure of the render BEFORE the response arrived, so a state value would be stale and the queued save would be
+  // refused with "updated elsewhere" although nobody else touched the record (walkthrough 07/10/2026, D3).
+  const lastUpdatedAtRef = useRef(initialPost.updated_at);
   const [versions, setVersions] = useState(initialVersions);
   const [workflowHistory, setWorkflowHistory] = useState(initialWorkflowHistory);
 
@@ -217,7 +220,7 @@ export function ResourceEditor({
       setSaveState('saving');
       setSaveError(null);
       try {
-        let expectedUpdatedAt = lastUpdatedAt;
+        let expectedUpdatedAt = lastUpdatedAtRef.current;
         if (!postIdRef.current) {
           const created = await createRecordOnFirstSave('/api/admin/resources/content', { contentType: initialPost.content_type, title: title.trim() });
           if (!created.ok) {
@@ -229,7 +232,7 @@ export function ResourceEditor({
           postIdRef.current = created.id;
           setPostId(created.id);
           expectedUpdatedAt = created.updatedAt;
-          setLastUpdatedAt(created.updatedAt);
+          lastUpdatedAtRef.current = created.updatedAt;
           // The URL now names the real record, so a reload or Back lands on it.
           window.history.replaceState(null, '', `/admin/resources/content/${created.id}/edit`);
         }
@@ -264,7 +267,7 @@ export function ResourceEditor({
           return;
         }
         setFieldErrors({});
-        setLastUpdatedAt(json.data.updated_at);
+        lastUpdatedAtRef.current = json.data.updated_at;
         // Only claim "Saved" if nothing changed while the request was in
         // flight. If it did, the content on screen is genuinely NOT what was
         // just persisted, so the editor stays dirty and queues another save.
@@ -296,7 +299,7 @@ export function ResourceEditor({
         }
       }
     },
-    [buildPatch, buildSnapshot, changeSummary, initialPost.content_type, lastUpdatedAt, meta.categoryIds, meta.tagIds, title]
+    [buildPatch, buildSnapshot, changeSummary, initialPost.content_type, meta.categoryIds, meta.tagIds, title]
   );
 
   // Keeps the queue-drain above pointing at the current closure, so a
@@ -322,7 +325,7 @@ export function ResourceEditor({
     }
     setStatus(json.data.status);
     setPublishedAt(json.data.published_at);
-    setLastUpdatedAt(json.data.updated_at);
+    lastUpdatedAtRef.current = json.data.updated_at;
     router.refresh();
     fetch(`/api/admin/resources/content/${postId}/versions`)
       .then((r) => r.json())

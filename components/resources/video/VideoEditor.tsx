@@ -93,7 +93,10 @@ export function VideoEditor({
   const [channelUrl, setChannelUrl] = useState(video?.youtube_channel_url ?? '');
 
   const [status, setStatus] = useState<ResourceStatus>(initialPost.status);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(initialPost.updated_at);
+  // The version token lives in a ref, not state: a save that was queued while another was in flight runs from the
+  // closure of the render BEFORE the response arrived, so a state value would be stale and the queued save would be
+  // refused with "updated elsewhere" although nobody else touched the record (walkthrough 07/10/2026, D3).
+  const lastUpdatedAtRef = useRef(initialPost.updated_at);
   const [versions, setVersions] = useState(initialVersions);
   const [workflowHistory, setWorkflowHistory] = useState(initialWorkflowHistory);
 
@@ -207,7 +210,7 @@ export function VideoEditor({
             },
             categoryIds: meta.categoryIds,
             tagIds: meta.tagIds,
-            expectedUpdatedAt: lastUpdatedAt,
+            expectedUpdatedAt: lastUpdatedAtRef.current,
             createVersion,
             changeSummary: createVersion ? changeSummary : undefined,
             versionSnapshot: createVersion ? buildSnapshot() : undefined,
@@ -232,7 +235,7 @@ export function VideoEditor({
           return;
         }
         setFieldErrors({});
-        setLastUpdatedAt(json.data.updated_at);
+        lastUpdatedAtRef.current = json.data.updated_at;
         if (changeSeqRef.current === seqAtStart) {
           setDirty(false);
           setSaveState('saved');
@@ -258,7 +261,7 @@ export function VideoEditor({
         }
       }
     },
-    [buildPatch, buildSnapshot, changeSummary, chapters, channelHandle, channelUrl, durationSeconds, embedEnabled, initialPost.id, lastUpdatedAt, meta.categoryIds, meta.tagIds, thumbnailUrl, transcript, youtubePublishedAt]
+    [buildPatch, buildSnapshot, changeSummary, chapters, channelHandle, channelUrl, durationSeconds, embedEnabled, initialPost.id, meta.categoryIds, meta.tagIds, thumbnailUrl, transcript, youtubePublishedAt]
   );
 
   // Assigned in an effect, not during render (react-hooks/refs).
@@ -283,7 +286,7 @@ export function VideoEditor({
       return { ok: false, error: [json.error, fieldMsg].filter(Boolean).join(' ') || 'This workflow action could not be completed.' };
     }
     setStatus(json.data.status);
-    setLastUpdatedAt(json.data.updated_at);
+    lastUpdatedAtRef.current = json.data.updated_at;
     router.refresh();
     fetch(`/api/admin/resources/videos/${initialPost.id}/versions`)
       .then((r) => r.json())

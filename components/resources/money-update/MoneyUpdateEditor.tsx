@@ -95,7 +95,10 @@ export function MoneyUpdateEditor({
   const [meta, setMeta] = useState<MetadataFormState>(() => toMetadataForm(initialPost));
 
   const [status, setStatus] = useState<ResourceStatus>(initialPost.status);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(initialPost.updated_at);
+  // The version token lives in a ref, not state: a save that was queued while another was in flight runs from the
+  // closure of the render BEFORE the response arrived, so a state value would be stale and the queued save would be
+  // refused with "updated elsewhere" although nobody else touched the record (walkthrough 07/10/2026, D3).
+  const lastUpdatedAtRef = useRef(initialPost.updated_at);
   const [versions, setVersions] = useState(initialVersions);
   const [workflowHistory, setWorkflowHistory] = useState(initialWorkflowHistory);
 
@@ -196,7 +199,7 @@ export function MoneyUpdateEditor({
       setSaveState('saving');
       setSaveError(null);
       try {
-        let expectedUpdatedAt = lastUpdatedAt;
+        let expectedUpdatedAt = lastUpdatedAtRef.current;
         if (!postIdRef.current) {
           const created = await createRecordOnFirstSave('/api/admin/resources/money-updates', { contentType: initialPost.content_type, title: title.trim() });
           if (!created.ok) {
@@ -208,7 +211,7 @@ export function MoneyUpdateEditor({
           postIdRef.current = created.id;
           setPostId(created.id);
           expectedUpdatedAt = created.updatedAt;
-          setLastUpdatedAt(created.updatedAt);
+          lastUpdatedAtRef.current = created.updatedAt;
           window.history.replaceState(null, '', `/admin/resources/money-updates/${created.id}/edit`);
         }
         const res = await fetch(`/api/admin/resources/money-updates/${postIdRef.current}`, {
@@ -245,7 +248,7 @@ export function MoneyUpdateEditor({
           return;
         }
         setFieldErrors({});
-        setLastUpdatedAt(json.data.updated_at);
+        lastUpdatedAtRef.current = json.data.updated_at;
         if (changeSeqRef.current === seqAtStart) {
           setDirty(false);
           setSaveState('saved');
@@ -271,7 +274,7 @@ export function MoneyUpdateEditor({
         }
       }
     },
-    [affectedAudience, buildPatch, buildSnapshot, changeSummary, eventDate, initialPost.content_type, lastUpdatedAt, meta.categoryIds, meta.tagIds, sourceIds, title]
+    [affectedAudience, buildPatch, buildSnapshot, changeSummary, eventDate, initialPost.content_type, meta.categoryIds, meta.tagIds, sourceIds, title]
   );
 
   // Assigned in an effect, not during render (react-hooks/refs).
@@ -296,7 +299,7 @@ export function MoneyUpdateEditor({
       return { ok: false, error: [json.error, fieldMsg].filter(Boolean).join(' ') || 'This workflow action could not be completed.' };
     }
     setStatus(json.data.status);
-    setLastUpdatedAt(json.data.updated_at);
+    lastUpdatedAtRef.current = json.data.updated_at;
     router.refresh();
     fetch(`/api/admin/resources/money-updates/${postId}/versions`)
       .then((r) => r.json())

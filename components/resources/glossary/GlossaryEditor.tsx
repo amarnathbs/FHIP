@@ -92,7 +92,10 @@ export function GlossaryEditor({
   const [meta, setMeta] = useState<MetadataFormState>(() => toMetadataForm(initialPost));
 
   const [status, setStatus] = useState<ResourceStatus>(initialPost.status);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(initialPost.updated_at);
+  // The version token lives in a ref, not state: a save that was queued while another was in flight runs from the
+  // closure of the render BEFORE the response arrived, so a state value would be stale and the queued save would be
+  // refused with "updated elsewhere" although nobody else touched the record (walkthrough 07/10/2026, D3).
+  const lastUpdatedAtRef = useRef(initialPost.updated_at);
   const [versions, setVersions] = useState(initialVersions);
   const [workflowHistory, setWorkflowHistory] = useState(initialWorkflowHistory);
 
@@ -222,7 +225,7 @@ export function GlossaryEditor({
       setSaveState('saving');
       setSaveError(null);
       try {
-        let expectedUpdatedAt = lastUpdatedAt;
+        let expectedUpdatedAt = lastUpdatedAtRef.current;
         if (!postIdRef.current) {
           const created = await createRecordOnFirstSave('/api/admin/resources/glossary', { title: title.trim() });
           if (!created.ok) {
@@ -234,7 +237,7 @@ export function GlossaryEditor({
           postIdRef.current = created.id;
           setPostId(created.id);
           expectedUpdatedAt = created.updatedAt;
-          setLastUpdatedAt(created.updatedAt);
+          lastUpdatedAtRef.current = created.updatedAt;
           window.history.replaceState(null, '', `/admin/resources/glossary/${created.id}/edit`);
         }
         const res = await fetch(`/api/admin/resources/glossary/${postIdRef.current}`, {
@@ -270,7 +273,7 @@ export function GlossaryEditor({
           return;
         }
         setFieldErrors({});
-        setLastUpdatedAt(json.data.updated_at);
+        lastUpdatedAtRef.current = json.data.updated_at;
         if (changeSeqRef.current === seqAtStart) {
           setDirty(false);
           setSaveState('saved');
@@ -296,7 +299,7 @@ export function GlossaryEditor({
         }
       }
     },
-    [aliases, buildPatch, buildSnapshot, changeSummary, lastUpdatedAt, meta.categoryIds, meta.tagIds, relatedTermIds, title]
+    [aliases, buildPatch, buildSnapshot, changeSummary, meta.categoryIds, meta.tagIds, relatedTermIds, title]
   );
 
   // Assigned in an effect, not during render (react-hooks/refs).
@@ -321,7 +324,7 @@ export function GlossaryEditor({
       return { ok: false, error: [json.error, fieldMsg].filter(Boolean).join(' ') || 'This workflow action could not be completed.' };
     }
     setStatus(json.data.status);
-    setLastUpdatedAt(json.data.updated_at);
+    lastUpdatedAtRef.current = json.data.updated_at;
     router.refresh();
     fetch(`/api/admin/resources/glossary/${postId}/versions`)
       .then((r) => r.json())
