@@ -1981,7 +1981,7 @@
    "own_read_nav2_fund_analytics_reports",
    "SELECT",
    "{public}",
-   "(auth.uid() = user_id)",
+   "((auth.uid() = user_id) AND nav2_viewer_has_premium())",
    ""
   ],
   [
@@ -2155,8 +2155,8 @@
    "jsonb",
    true,
    "s",
-   "6a3c5af8eccbc9ea71e15188fb1f14f1",
-   "809a0434d83344a272d606fe493c5c27",
+   "7f3455df781ff35f55cbcad34ac89ca9",
+   "e72ec7449e7ca6719ee6c0f0e6241daa",
    false,
    true,
    true
@@ -2182,6 +2182,18 @@
    "b2d89a8573de5a170e1e0576910e2232",
    "7b35dcb6b5beb3f3f09c53c50ae536a1",
    true,
+   true,
+   true
+  ],
+  [
+   "nav2_viewer_has_premium",
+   "",
+   "boolean",
+   true,
+   "s",
+   "d793af37e417628735c1dd38f7c969db",
+   "f3beac05b195823f7b8e9cc905fadf22",
+   false,
    true,
    true
   ],
