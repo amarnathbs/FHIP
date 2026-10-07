@@ -84,3 +84,35 @@ Regression: PGlite 0275 suite 35/35; the 3 existing upload test files and the al
 - Seed names were checked against the DEV dataset names and against the migration ledger replay (71 rows seeded), not against production: if production dataset names differ, fewer rows seed there and the README check query shows it.
 - The live-figure count for target range pairs counts live bands of the metric citing the dataset's source or no source (bands have no dataset column); this is a rule of my choosing, stated in design section 14.6.
 - The production Twin read path was not touched.
+
+---
+
+## 10. Follow-up 07/10/2026: walkthrough findings D1, D2, D3 and the combined production hand-over
+
+Source: `WALKTHROUGH_REPORT_07-10-2026.md` of branch `walkthrough/integration-20261007`. Nothing pushed.
+
+### D1 (medium): a values upload preview said "Bands removed 4" - fixed by migration 0278
+
+- **Cause confirmed.** `pb_removed_band_ids` (0275) matched staged rows to live bands by metric, country, life stage and household type and never looked at the kind of file. A values row has a metric and no tier, so it matched legacy bands with empty attributes and "removed" them. It is the only function that produces the number: the staged counts, the preview list, the batch digest and the `bands_removed` of the activation result all read it. `pb_classify_rows` does not count bands. Activation itself only retires bands for a target ranges batch, so no band was ever wrongly retired; the preview and the stored counts were wrong.
+- **Fix.** Migration `0278_planning_benchmark_removed_bands_target_ranges_only.sql` (number verified free on `origin/main`, every ref in `git log --all` and every worktree; `0276` is the latest on main) re-emits that one function with a condition that the batch is a target ranges batch, so a values or cohorts batch returns an empty set. Additive, idempotent, editor-safe, one statement (no parts needed), no EXECUTE for API roles. It does **not** touch `pb_dataset_readiness` (0277) or any other object.
+- **Effect on staged batches.** A values batch staged before 0278 holds the false count and a digest that contained the false list; Activate recomputes the digest and refuses it as stale. The person discards it and stages the file again. Proven by `NC-B3`.
+- **Proof (PGlite, full ledger 0001 to 0278)** `tests/unit/planningBenchmarkRemovedBandsPglite.test.ts`, 10 tests: a values batch over live bands (four live bands including a legacy one, the DEV shape) reports 0 in the counts, the preview list, the function and the activation result, and leaves every band alone; a target ranges batch with a missing tier still reports exactly that tier, and activation end-dates exactly the previewed band plus the changed tier; a first load and a cohorts batch report 0. Failing first: `NC-B1` runs the same assertion against the 0275 function and goes red (counts.removed is above 0). `NC-B2` removes the new condition and goes red. `NC-B3` stale refusal. `NC-B4` the production check query detects an unapplied 0278.
+
+### Production hand-over v2
+
+`docs/planning-benchmarks/po_apply_upload_PRODUCTION_v2/` (README, the three migrations byte-identical, the 0275 and 0277 parts, two rollback scripts). Order 0275, 0277, 0278, then the permissions; before the first Activate; undo in reverse order; marks the earlier 0275-only production README as superseded. `tests/unit/planningBenchmarkProductionHandoverV2.test.ts` proves the byte identity, the part joins, the order and the lint; the README check queries are executed on PGlite and return the promised values. The re-run order issue is documented in the README and in the 0277 README: re-running 0275 puts back both old functions, so run 0277 and 0278 again after any re-run of 0275.
+
+### D2 (low): Money Update template select widened the page at 390 px
+
+Cherry-picked cleanly from the walkthrough branch: `0e4f07e` (failing test) and `17e128e` (fix `min-w-0` and test regex correction). The test passes (3 of 3).
+
+### D3 (low): "Save failed" and the "updated elsewhere" dialog when editing during the second request of the first Save
+
+- **Cause (found, confirmed by reading the code).** After the first Save creates the record (POST) the editor immediately sends the rest of the form (PATCH): that second request is by design (create on first Save, decision F3), not a duplicate. The optimistic-concurrency token `updated_at` was React state. A Save requested while another is in flight is queued and, when the first finishes, run from `doSaveRef.current`, the callback of the last rendered closure. The response handler calls the state setter and, in `finally` and in the same tick, starts the queued save before React has re-rendered, so the queued save sent the token from before the response. The API compared it with the new `updated_at` and answered 409, which the editor shows as "Save failed" plus "updated elsewhere". Waiting lets the render happen first, hence "Saved". It affects any edit made while a save is in flight, and is longest on the first Save because it is two requests.
+- **Fix (small, safe).** The token is a ref (`lastUpdatedAtRef`) that every response handler writes synchronously (create, save and workflow transition) and the save reads at send time. Applied to the four editors that share the pattern: Glossary, Article/Guide/Explainer (`ResourceEditor`), Money Update, Video. The FAQ editor has no queued save and was not changed. The token was not rendered anywhere, so nothing else moved. No API change.
+- **Proof.** `tests/unit/resourcesEditorVersionTokenQueuedSave.test.ts` (source contract; the repo has no jsdom). It fails on the previous source (4 of 6 red, run against the base files) and passes now; `NC-D3` shows the checker reports the old shape. eslint clean on the four files; the existing editor tests pass.
+- **Not fixed, documented (PO to judge).** A title-only first Save shows red "required" errors for the short definition and the primary category straight after the record is created: that is the PATCH answering 422 for fields the person has not filled yet. It is the visible consequence of create-on-first-Save and is unchanged. **Not browser-verified** (no jsdom, no DEV session in this task): the fix removes the cause by construction, but the original reproduction (edit within the second request on the loaded DEV server) should be repeated once.
+
+### Tests and checks for this follow-up
+
+New: 10 (PGlite 0278) + 6 (handover v2) + 6 (D3 contract) = 22. Regression: PGlite 0275 suite and 0277 suite pass (57 of 57). Typecheck: no new error (one pre-existing in `tests/unit/canonicalCertResidueAllSql.test.ts`).

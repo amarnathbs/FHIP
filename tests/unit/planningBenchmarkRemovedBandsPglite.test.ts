@@ -262,3 +262,31 @@ describe('migration shape', () => {
     }
   });
 });
+
+const V2_README = () => fs.readFileSync(path.resolve(HERE, '..', '..', 'docs', 'planning-benchmarks', 'po_apply_upload_PRODUCTION_v2', 'README.md'), 'utf8');
+const sqlBlocks = () => [...V2_README().matchAll(/```sql\r?\n([\s\S]*?)```/g)].map((m) => m[1]);
+
+describe('the check queries of the PRODUCTION v2 README run on the replayed ledger and return what the README promises', () => {
+  it('step 1, step 2, per-dataset, step 3 and the readiness check', async () => {
+    const blocks = sqlBlocks().filter((b) => b.trimStart().startsWith('select'));
+    expect(blocks).toHaveLength(5);
+    const rows: Array<Array<Record<string, unknown>>> = [];
+    for (const b of blocks) rows.push((await db.query(b)).rows as Array<Record<string, unknown>>);
+    expect(rows[0][0]).toEqual({ tables_ok: true, columns_ok: true, functions_ok: true });
+    expect(rows[1][0]).toEqual({ tables_ok: true, functions_ok: true, trigger_ok: true, no_api_write_ok: true });
+    expect(rows[2].length).toBeGreaterThanOrEqual(11);
+    expect(rows[3][0]).toEqual({ kind_rule_ok: true, anon_blocked: true, authenticated_blocked: true });
+    expect(rows[4][0]).toEqual({ readiness_still_has_mapping_rule: true });
+  });
+
+  it('NC-B4: the step 3 check goes red against the 0275 function (it detects an unapplied 0278)', async () => {
+    const check = sqlBlocks().find((b) => b.includes('kind_rule_ok'))!;
+    await db.exec(OLD_FN);
+    try {
+      expect(((await db.query(check)).rows[0] as Json).kind_rule_ok).toBe(false);
+    } finally {
+      await db.exec(NEW_FN);
+    }
+    expect(((await db.query(check)).rows[0] as Json).kind_rule_ok).toBe(true);
+  });
+});

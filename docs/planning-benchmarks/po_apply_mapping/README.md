@@ -77,3 +77,7 @@ Safe at any time. It removes the mapping, its history and the checks, and puts b
 2. Check: `select to_regclass('public.benchmark_dataset_metrics');` must return an empty value.
 
 After the rollback, uploads behave as they did before `0277`. You can apply `0277` again later.
+
+## Related: migration 0278 (removed bands fix) and the production order
+
+Migration `0278` (walkthrough finding D1) re-emits a **different function** of `0275`, `pb_removed_band_ids`, so that an observed values upload no longer reports target range bands as "removed". It does not touch `pb_dataset_readiness`, which is the function `0277` re-emits, and `0277` does not touch `pb_removed_band_ids`. The two can be applied in either order after `0275`, but both must be in place before the first Activate. Production order, with check queries and the undo order: `docs/planning-benchmarks/po_apply_upload_PRODUCTION_v2/README.md` (0275, then 0277, then 0278). That folder supersedes the earlier production hand-over for 0275 alone.

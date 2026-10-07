@@ -238,3 +238,7 @@ Upload tab, section "Dataset metric mapping" (`PlanningBenchmarkDatasetMetrics`)
 | Database (PGlite, full ledger replay) | RLS and grants, no direct write, append-only, staging refusal (wrong metric, wrong kind, empty dataset), legitimate pair accepted, activation re-check, capability separation, audit rows, live-figure confirmation, idempotent rerun, rollback; negative controls `NC-MAP1` to `NC-MAP5` | `planningBenchmarkDatasetMetricMappingPglite.test.ts` |
 | Validator, lists, fallback, drift guard | `NC-V1`, `NC-V2`, `NC-V3` | `planningBenchmarkDatasetMetricValidation.test.ts` |
 | Route and screen | `NC-R1` to `NC-R4`, section states, wording, day-first text | `planningBenchmarkDatasetMetricRoutesUi.test.ts` |
+
+### 14.8 Follow-up (07/10/2026): migration 0278 and the combined production order
+
+The DEV walkthrough found that the preview of a values upload reported target range bands as removed (D1). The cause is `pb_removed_band_ids` of 0275, which ignored the kind of file. Migration `0278` re-emits that one function for target ranges batches only; it does not touch the readiness function of 0277. Production order is 0275, then 0277, then 0278, all before the first Activate: `po_apply_upload_PRODUCTION_v2/README.md`. Details and proof: `DATASET_METRIC_MAPPING_REPORT.md` section 10.
