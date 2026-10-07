@@ -3,7 +3,7 @@ import { REPORT_PERIOD_LABELS } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport, FundAnalyticsSchemeBlock } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/investorExperience';
 import { navPrice, period, pct, ratio, rupees, showResult, type ShownCell } from '@/lib/engines/nav2/presentation';
-import { FUND_ANALYTICS_CAGR_CONVENTION_NOTE, FUND_ANALYTICS_SAVED_REPORT_SENTENCE, riskFreeLabelOf, versionMadeLine } from '@/lib/engines/nav2/reportWording';
+import { BETA_ALPHA_NO_BENCHMARK_LINE, betaAlphaNoBenchmark, HOW_CALCULATED_HEADING, pricesRunToLine, FUND_ANALYTICS_CAGR_CONVENTION_NOTE, FUND_ANALYTICS_SAVED_REPORT_SENTENCE, riskFreeLabelOf, versionMadeLine } from '@/lib/engines/nav2/reportWording';
 import { ownershipSentence, percentLabel } from '@/lib/engines/nav2/ownershipShare';
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
@@ -168,15 +168,19 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
   const sharpe = riskCell(s.sharpe, (v) => ratio(v.annualisedRatio));
   const sortino = riskCell(s.sortino, (v) => ratio(v.annualisedRatio));
   const dd = riskCell(s.maxDrawdown, (v) => pct(v.maxDrawdown), (v) => (v.status === 'no_drawdown' ? 'no fall' : `peak ${showDate(ctx, v.peakDate)}, low ${showDate(ctx, v.troughDate)}${v.recoveryDate ? `, recovered ${showDate(ctx, v.recoveryDate)}` : ', not yet recovered'}`));
-  const beta = riskCell(s.beta, (v) => ratio(v.beta), (v) => `against ${v.benchmarkLabel}`);
-  const alpha = riskCell(s.alpha, (v) => pct(v.alphaAnnualised), (v) => `against ${v.benchmarkLabel}`);
+  // when no benchmark is linked the two rows are not printed, so their footnote must not be registered either (an orphan footnote)
+  const noBenchmark = betaAlphaNoBenchmark({ beta: s.beta as never, alpha: s.alpha as never });
+  const beta = noBenchmark ? null : riskCell(s.beta, (v) => ratio(v.beta), (v) => `against ${v.benchmarkLabel}`);
+  const alpha = noBenchmark ? null : riskCell(s.alpha, (v) => pct(v.alphaAnnualised), (v) => `against ${v.benchmarkLabel}`);
   const riskRows: Row[] = [
     { key: 'vol', cells: ['Volatility (annualised)', vol.node, vol.basis] },
     { key: 'sharpe', cells: ['Sharpe ratio', sharpe.node, sharpe.basis] },
     { key: 'sortino', cells: ['Sortino ratio', sortino.node, sortino.basis] },
     { key: 'dd', cells: ['Maximum drawdown', dd.node, dd.basis] },
-    { key: 'beta', cells: ['Beta (vs declared benchmark)', beta.node, beta.basis] },
-    { key: 'alpha', cells: ['Jensen’s alpha (a year)', alpha.node, alpha.basis] },
+    ...(beta && alpha ? [
+      { key: 'beta', cells: ['Beta (vs declared benchmark)', beta.node, beta.basis] },
+      { key: 'alpha', cells: ['Jensen’s alpha (a year)', alpha.node, alpha.basis] },
+    ] : []),
   ];
   const trendRows: Row[] = [
     ...s.movingAverages.map((m) => {
@@ -229,6 +233,7 @@ function FundSheets({ block, ctx, riskFreeNote }: { block: FundAnalyticsSchemeBl
         <h3>Risk and risk-adjusted measures</h3>
         <p className="fa-sub">Over the report period, from daily prices.</p>
         <FaTable head={['Measure', 'Value', 'Basis']} widths={[29, 29, 42]} num={[false, true, false]} rows={riskRows} />
+        {noBenchmark && <p className="fa-sub" data-fa-beta-alpha="none">{BETA_ALPHA_NO_BENCHMARK_LINE}</p>}
         <h3>Trend</h3>
         <p className="fa-sub">Latest value of each average, counted in price observations (not calendar days).</p>
         <FaTable head={['Measure', 'Latest', 'As at']} widths={[34, 24, 42]} num={[false, true, false]} rows={trendRows} />
@@ -265,9 +270,10 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
   const ctx: Nav2Context = { policy: NAV2_POLICY, currency: report.displayCurrency };
   const names = new Map(report.schemes.map((s) => [s.instrumentId, s.schemeName]));
   const nm = (id: string) => names.get(id) ?? 'Unknown fund';
-  const riskFreeIdx = report.notes.findIndex((n) => /^Risk-free rate/i.test(n));
+  const riskFreeIdx = report.notes.findIndex((n) => /^(Risk-free rate|Sharpe and Sortino compare)/i.test(n));
   const riskFreeNote = riskFreeIdx >= 0 ? riskFreeIdx + 1 : null;
   const fnCover = new Footnotes();
+  const latestPriceDate = report.schemes.map((b) => b.navSeriesSummary.lastDate).filter((d): d is string => !!d).sort().slice(-1)[0] ?? null;
 
   const summaryRows: Row[] = report.schemes.map((b) => {
     const inv = b.analytics.investor;
@@ -309,14 +315,7 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
               <p className="fa-sub">Where a fund is held jointly, the figures about your own money (value now, gain or loss, your return) are your share of it, as the fund sheet states. Your share of each fund is shown beside its name.</p>
             )}
             <FootnoteList fn={fnCover} />
-            <h3>Price history used</h3>
-            <p className="fa-sub">Every figure for a fund comes from its own published price history. Gaps are never filled in.</p>
-            <FaTable
-              head={['Fund', 'Prices', 'From', 'To', 'Gaps']}
-              widths={[34, 14, 18, 18, 16]}
-              num={[false, true, true, true, true]}
-              rows={report.schemes.map((b) => ({ key: b.instrumentId, cells: [b.schemeName, b.navSeriesSummary.count.toLocaleString('en-IN'), showDate(ctx, b.navSeriesSummary.firstDate), showDate(ctx, b.navSeriesSummary.lastDate), String(b.navSeriesSummary.materialGapCount)] }))}
-            />
+            {latestPriceDate && <p className="fa-text" data-fa-prices-run-to="true">{pricesRunToLine(showDate(ctx, latestPriceDate))}</p>}
           </>
         )}
         {report.notes.length > 0 && (
@@ -337,7 +336,7 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
           <li>{INVESTOR_XIRR_LABEL}</li>
           <li>{FUND_ANALYTICS_CAGR_CONVENTION_NOTE}</li>
           <li>A figure that cannot be worked out is shown as a plain label, never as zero, and a small letter beside it points to the explanation printed once at the foot of that page.</li>
-          <li>Dates are written day first. Prices are published by AMFI; nothing here is a recommendation to buy, sell or switch.</li>
+          <li>Dates are written day first.</li>
         </ul>
       </section>
 
@@ -381,6 +380,14 @@ export default function FundAnalyticsPrintDocument({ report, version }: { report
             <>
               <FaTable head={['Fund A', 'Fund B', 'Correlation', 'Common returns', 'Period']} widths={[22, 22, 11, 16, 29]} num={[false, false, true, true, false]} rows={corrRows(report, ctx, nm)} />
               <p className="fa-sub">A correlation near 1 means the two funds usually rise and fall together; near 0, little relationship; below 0, they tend to move in opposite directions. It describes past returns only.</p>
+            </>
+          )}
+          {report.calculationNotes && report.calculationNotes.length > 0 && (
+            <>
+              <h3>{HOW_CALCULATED_HEADING}</h3>
+              {report.calculationNotes.map((n, i) => (
+                <p key={i} className="fa-sub">{n}</p>
+              ))}
             </>
           )}
         </section>

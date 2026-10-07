@@ -9,7 +9,7 @@ import type { FundAnalyticsReport, FundAnalyticsSchemeBlock } from '@/lib/engine
 import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/investorExperience';
 import { chartRowsWithGaps, navPrice, period, pct, ratio, rupees, showResult, type ShownCell } from '@/lib/engines/nav2/presentation';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
-import { FUND_ANALYTICS_CAGR_CONVENTION_NOTE, riskFreeLabelOf } from '@/lib/engines/nav2/reportWording';
+import { BETA_ALPHA_NO_BENCHMARK_LINE, betaAlphaNoBenchmark, FUND_ANALYTICS_CAGR_CONVENTION_NOTE, HOW_CALCULATED_HEADING, pricesRunToLine, riskFreeLabelOf } from '@/lib/engines/nav2/reportWording';
 import { ownershipSentence } from '@/lib/engines/nav2/ownershipShare';
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
@@ -176,8 +176,12 @@ function SchemeSection({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: N
           [`Sharpe ratio${rfLabel(s.sharpe)}`, showResult(s.sharpe, (v) => ratio(v.annualisedRatio))],
           [`Sortino ratio${rfLabel(s.sortino)}`, showResult(s.sortino, (v) => ratio(v.annualisedRatio))],
           ['Maximum drawdown', showResult(s.maxDrawdown, (v) => `${pct(v.maxDrawdown)} (${v.status === 'no_drawdown' ? 'no fall' : `peak ${showDate(ctx, v.peakDate)}, low ${showDate(ctx, v.troughDate)}${v.recoveryDate ? `, recovered ${showDate(ctx, v.recoveryDate)}` : ', not yet recovered'}`})`)],
-          ['Beta (against the fund’s declared benchmark)', showResult(s.beta, (v) => `${ratio(v.beta)} (${v.benchmarkLabel})`)],
-          [`Jensen’s alpha (a year)${rfLabel(s.alpha)}`, showResult(s.alpha, (v) => `${pct(v.alphaAnnualised)} (${v.benchmarkLabel})`)],
+          ...(betaAlphaNoBenchmark({ beta: s.beta as never, alpha: s.alpha as never })
+            ? []
+            : [
+                ['Beta (against the fund’s declared benchmark)', showResult(s.beta, (v) => `${ratio(v.beta)} (${v.benchmarkLabel})`)],
+                [`Jensen’s alpha (a year)${rfLabel(s.alpha)}`, showResult(s.alpha, (v) => `${pct(v.alphaAnnualised)} (${v.benchmarkLabel})`)],
+              ]),
         ].map(([label, cell]) => (
           <tr key={label as string} className={rowCls}>
             <th scope="row" className="py-2 pr-3 text-left font-medium">{label as string}</th>
@@ -185,6 +189,11 @@ function SchemeSection({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: N
           </tr>
         ))}
       </Table>
+      {betaAlphaNoBenchmark({ beta: s.beta as never, alpha: s.alpha as never }) && (
+        <p className="mt-2 text-sm text-muted" data-testid="beta-alpha-none">
+          {BETA_ALPHA_NO_BENCHMARK_LINE}
+        </p>
+      )}
 
       <h3 className="mt-5 text-base font-semibold text-ink">Trend</h3>
       <Table caption="Latest value of each average, counted in price observations (not calendar days)" head={[{ label: 'Measure' }, { label: 'Latest', num: true }, { label: 'As at' }]}>
@@ -325,6 +334,7 @@ function Comparison({ report, ctx, printMode }: { report: FundAnalyticsReport; c
 
 export default function FundAnalyticsReportView({ report, printMode = false }: { report: FundAnalyticsReport; printMode?: boolean }) {
   const ctx: Nav2Context = { policy: NAV2_POLICY, currency: report.displayCurrency };
+  const latestPriceDate = report.schemes.map((b) => b.navSeriesSummary.lastDate).filter((d): d is string => !!d).sort().slice(-1)[0] ?? null;
   return (
     <div className="space-y-6">
       <SectionCard title="Fund analytics report" description={`As at ${showDate(ctx, report.asOfDate)}. Period: ${REPORT_PERIOD_LABELS[report.periodChoice]}.`}>
@@ -333,12 +343,25 @@ export default function FundAnalyticsReportView({ report, printMode = false }: {
         ) : (
           <p className="text-sm text-ink">{report.schemes.length} fund{report.schemes.length === 1 ? '' : 's'} analysed. The fund&apos;s own growth and your own return are different things and are shown separately for each fund.</p>
         )}
+        {latestPriceDate && (
+          <p className="mt-2 text-sm text-muted" data-testid="prices-run-to">
+            {pricesRunToLine(showDate(ctx, latestPriceDate))}
+          </p>
+        )}
         {report.notes.length > 0 && (
           <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted">
             {report.notes.map((n, i) => (
               <li key={i}>{n}</li>
             ))}
           </ul>
+        )}
+        {report.calculationNotes && report.calculationNotes.length > 0 && (
+          <details className="mt-3 text-sm text-muted" data-testid="how-calculated">
+            <summary className="cursor-pointer font-medium text-ink">{HOW_CALCULATED_HEADING}</summary>
+            {report.calculationNotes.map((n, i) => (
+              <p key={i} className="mt-2">{n}</p>
+            ))}
+          </details>
         )}
       </SectionCard>
       {report.schemes.map((b) => (

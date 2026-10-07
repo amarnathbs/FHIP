@@ -128,7 +128,7 @@ describe('the whole report, rendered', () => {
   it('NC-P3: shows the fixed headline for each unavailable state present, and the scope note', () => {
     expect(text).toContain('History is being prepared');
     expect(text).toContain('Risk-free data unavailable');
-    expect(text).toContain('Benchmark mapping missing');
+    expect(text).toContain('Beta and alpha: not available yet (no benchmark index is linked to this fund).'); // one plain line replaces the two amber rows (07-10-2026); the typed state stays in the data
     expect(text).toMatch(/1 fund is held through a trust, HUF or company/);
     expect(text).toContain('Your held schemes');
   });

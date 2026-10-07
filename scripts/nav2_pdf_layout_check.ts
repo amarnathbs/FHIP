@@ -25,6 +25,8 @@ import { printPageToPdf } from '../lib/services/investment-intelligence/nav2/fun
 
 const ROOT = path.resolve(__dirname, '..');
 export const MAX_BLANK = 0.3;
+/** The cover page alone may be emptier: it is a summary, and a longer one would only repeat the fund sheets. */
+export const COVER_MAX_BLANK = 0.4;
 /** The designed body size is 9 pt; anything outside this band means the page was scaled. */
 export const BODY_PT_MIN = 8.5;
 export const BODY_PT_MAX = 10.5;
@@ -65,7 +67,9 @@ export function judgeLayout(a: LayoutAnalysis, opts: { maxBlank?: number } = {})
   for (const c of a.cell_overflow ?? []) out.push(`a table cell is narrower than its text and runs into its neighbour ("${c}")`);
   a.pages.forEach((p, i) => {
     const isLast = i === a.pages.length - 1;
-    if (!isLast && p.blank_ratio > maxBlank) out.push(`page ${p.page}: ${(p.blank_ratio * 100).toFixed(0)}% blank below its last content (limit ${(maxBlank * 100).toFixed(0)}%)`);
+    // The cover is a short summary page (no long table since the price-history table was removed, 07-10-2026): it may be up to 40% empty at the foot.
+    const pageMax = i === 0 ? Math.max(maxBlank, COVER_MAX_BLANK) : maxBlank;
+    if (!isLast && p.blank_ratio > pageMax) out.push(`page ${p.page}: ${(p.blank_ratio * 100).toFixed(0)}% blank below its last content (limit ${(pageMax * 100).toFixed(0)}%)`);
     const l = p.last_line;
     if (!isLast && l && l.bold && l.size >= 10.5) out.push(`page ${p.page}: ends with a heading ("${l.text}") stranded from what follows it`);
     const cover = i === 0;
@@ -101,7 +105,7 @@ export function printAnalysis(pdfPath: string, analysis: LayoutAnalysis): void {
 async function main() {
   const args = process.argv.slice(2);
   const arg = (k: string, d: string) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
-  const reportPath = path.resolve(ROOT, arg('--report', 'tests/fixtures/nav2/fund_analytics_report_v5.json'));
+  const reportPath = path.resolve(ROOT, arg('--report', 'tests/fixtures/nav2/fund_analytics_report_v10.json'));
   const out = path.resolve(ROOT, arg('--out', 'test-artifacts/nav2_pdf_layout_check'));
   const version = { versionNumber: Number(arg('--version', '5')), createdAt: arg('--made', '2026-10-05T09:30:00.000Z') };
   mkdirSync(out, { recursive: true });

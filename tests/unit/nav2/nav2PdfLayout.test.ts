@@ -24,7 +24,7 @@ import { judgeLayout, type LayoutAnalysis, type PageReport } from '../../../scri
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), 'utf8');
-const report = JSON.parse(read('tests/fixtures/nav2/fund_analytics_report_v5.json'));
+const report = JSON.parse(read('tests/fixtures/nav2/fund_analytics_report_v10.json'));
 const version = { versionNumber: 5, createdAt: '2026-10-05T03:00:00.000Z' };
 const html = renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report, version }));
 const count = (hay: string, needle: string | RegExp) => (typeof needle === 'string' ? hay.split(needle).length - 1 : (hay.match(needle) ?? []).length);
@@ -200,6 +200,12 @@ describe('the layout judge (NAMED NEGATIVE CONTROLS: each rule fails on a bad la
     expect(v.some((x) => x.includes('page 1') && x.includes('blank'))).toBe(true);
     expect(v.some((x) => x.includes('page 2'))).toBe(false);
   });
+  it('NC-L1b: the cover may be up to 40% empty, every other page still only 30%', () => {
+    expect(judgeLayout(doc([page(1, { blank_ratio: 0.35 }), page(2, { blank_ratio: 0.1 }), page(3)])).length).toBe(0);
+    expect(judgeLayout(doc([page(1, { blank_ratio: 0.1 }), page(2, { blank_ratio: 0.35 }), page(3)])).some((x) => x.includes('page 2'))).toBe(true);
+    expect(judgeLayout(doc([page(1, { blank_ratio: 0.45 }), page(2), page(3)])).some((x) => x.includes('page 1'))).toBe(true);
+  });
+
   it('NC-L2: a page that ends with a heading (stranded from its table) fails', () => {
     const v = judgeLayout(doc([page(1, { last_line: { text: 'Risk and risk-adjusted measures', size: 12, bold: true } }), page(2)]));
     expect(v.some((x) => x.includes('ends with a heading'))).toBe(true);

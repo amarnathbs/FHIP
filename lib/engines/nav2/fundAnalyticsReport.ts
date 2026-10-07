@@ -21,6 +21,7 @@ import { buildResultCacheKey, bundleDefinitionVersion, metricRegistryDigest, pol
 import type { Nav2BenchmarkInput } from './benchmarkGate';
 import { rankHeldSchemes, type HeldRankingValue, type RankingCandidate } from './heldRanking';
 import type { OwnershipShare } from './ownershipShare';
+import { figuresAsAtNote, riskFreeShortNote } from './reportWording';
 import { computeInvestorExperience, SCHEME_VS_INVESTOR_EXPLANATION, type InvestorExperienceInput } from './investorExperience';
 import type { RiskFreeSupply } from './riskFree';
 import { correlationBetweenHeldSchemes, type CorrelationValue } from './schemeRisk';
@@ -126,6 +127,8 @@ export interface FundAnalyticsReport {
   scope: ReportScopeNotes;
   /** Plain sentences stated once for the whole report (scope, risk-free series used, benchmark basis). */
   notes: string[];
+  /** The long explanations (the risk-free formula and the dates of the rates used): kept with the report and shown collapsed on the page. Absent in reports made before 07-10-2026. */
+  calculationNotes?: string[];
   stateCounts: Record<string, number>;
 }
 
@@ -143,10 +146,13 @@ export interface FundAnalyticsManifest {
   /** When the calculation ran (ISO). null only for a manifest built without a clock (tests). */
   calculatedAt: string | null;
   periodChoice: ReportPeriodChoice;
+  /** The full risk-free formula text and the dates of the rates used (the report body prints one plain sentence). */
+  calculationNotes: string[];
   riskFree: { seriesId: string; seriesLabel: string; datasetVersion: string; retrievedOn: string; termsReviewStatus: string; verifiedThroughDate: string | null; enabled: boolean } | null;
   schemes: Array<{
     instrumentId: string;
-    navSeries: { checksum: string; firstDate: string | null; lastDate: string | null; count: number };
+    /** The price-history audit figures (no longer printed in the report body): checksum, first and last date, number of prices, number of material gaps. */
+    navSeries: { checksum: string; firstDate: string | null; lastDate: string | null; count: number; materialGapCount: number };
     /** The NAV range the figures rest on, for the retention pin. */
     navRange: { from: string | null; to: string | null };
     benchmark: { benchmarkId: string; datasetVersion: string | null; basis: string } | null;
@@ -331,10 +337,14 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
   if (input.scope.statementLinesAwaitingReview > 0) notes.push(`${input.scope.statementLinesAwaitingReview} statement line${input.scope.statementLinesAwaitingReview === 1 ? ' is' : 's are'} waiting for a review decision and ${input.scope.statementLinesAwaitingReview === 1 ? 'is' : 'are'} not shown here yet.`);
   for (const u of input.scope.priceHistoryUnavailable) notes.push(`Price history for ${u.schemeName} could not be loaded (${u.reason}); its figures are marked not available.`);
   const firstRf = blocks.flatMap((b) => [b.analytics.scheme.sharpe, b.analytics.scheme.sortino, b.analytics.scheme.alpha]).find((r) => r && r.state === 'available');
-  if (firstRf && firstRf.state === 'available' && firstRf.provenance.riskFree) notes.push(firstRf.provenance.riskFree.disclosureText);
+  const calculationNotes: string[] = [];
+  if (firstRf && firstRf.state === 'available' && firstRf.provenance.riskFree) {
+    notes.push(riskFreeShortNote(firstRf.provenance.riskFree));
+    calculationNotes.push(firstRf.provenance.riskFree.disclosureText);
+  }
   const bench = blocks.flatMap((b) => [b.analytics.scheme.beta, b.analytics.scheme.alpha]).find((r) => r && r.state === 'available' && r.provenance.benchmark);
   if (bench && bench.state === 'available' && bench.provenance.benchmark) notes.push(`Beta and alpha use ${bench.provenance.benchmark.label} (${bench.provenance.benchmark.basisLabel}) where a declared benchmark is available.`);
-  notes.push(`Figures are as at ${showDate(ctx, input.asOfDate)}. Prices are published by AMFI; nothing here is a recommendation to buy, sell or switch.`);
+  notes.push(figuresAsAtNote(showDate(ctx, input.asOfDate)));
 
   const report: FundAnalyticsReport = {
     reportVersion: FUND_ANALYTICS_REPORT_VERSION,
@@ -348,6 +358,7 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
     comparison: { label: 'Your held schemes', rankings, correlations, correlationsSkippedReason: skipped },
     scope: input.scope,
     notes,
+    ...(calculationNotes.length > 0 ? { calculationNotes } : {}),
     stateCounts: {},
   };
   report.stateCounts = sortedObject(countStates(report));
@@ -365,6 +376,7 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
     metricRegistryDigest: metricRegistryDigest(NAV2_METRICS),
     calculatedAt: input.calculatedAt ?? null,
     periodChoice: input.periodChoice,
+    calculationNotes,
     riskFree: supply ? { seriesId: supply.seriesId, seriesLabel: RISK_FREE_SERIES_LABELS[supply.seriesId as RiskFreeSeriesId] ?? supply.seriesName, datasetVersion: rfProv?.datasetVersion ?? supply.datasetVersion, retrievedOn: supply.retrievedOn, termsReviewStatus: supply.termsReviewStatus, verifiedThroughDate: supply.verifiedThroughDate, enabled: supply.enabled } : null,
     schemes: schemes.map((h) => {
       const b = blocks.find((x) => x.instrumentId === h.instrumentId)!;
@@ -372,7 +384,7 @@ export function buildFundAnalyticsReport(input: FundAnalyticsInput): { report: F
       const bp = betaR && betaR.state === 'available' ? betaR.provenance.benchmark : undefined;
       return {
         instrumentId: h.instrumentId,
-        navSeries: { checksum: h.series.checksum, firstDate: h.series.firstDate, lastDate: h.series.lastDate, count: h.series.count },
+        navSeries: { checksum: h.series.checksum, firstDate: h.series.firstDate, lastDate: h.series.lastDate, count: h.series.count, materialGapCount: h.series.gaps.length },
         navRange: { from: h.series.firstDate, to: h.series.lastDate },
         benchmark: bp ? { benchmarkId: bp.benchmarkId, datasetVersion: bp.datasetVersion, basis: bp.basis } : null,
         benchmarks: h.benchmarks.map((x) => ({ benchmarkId: x.benchmarkId, datasetVersion: x.datasetVersion ?? null, basis: x.basis ?? 'declared' })),
