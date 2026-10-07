@@ -370,7 +370,7 @@ describe('documentation: one section per item and no stale claim', () => {
   it('the PO hand-over README exists with the apply order, the verify queries and the secrets list', () => {
     const readme = read('docs/admin/po_apply_promo_hardening_release/README.md');
     for (const m of ['0264', '0265', '0266', '0267', '0268']) expect(readme).toContain(m);
-    for (const t of ['Apply order', 'Verify after each part', 'Secrets the PO must generate', 'Reversal']) expect(readme).toContain(t);
+    for (const t of ['DEV steps, in this order', 'checks/V0264_after_0264.sql', 'Secrets (DEV is done by me', 'If something goes wrong', 'rollback/R2_undo_0264_to_0268.sql']) expect(readme).toContain(t);
     for (const f of ['parts/0264a.sql', 'parts/0268b.sql']) expect(fs.existsSync(path.join(REPO_ROOT, 'docs/admin/po_apply_promo_hardening_release', f))).toBe(true);
   });
 });

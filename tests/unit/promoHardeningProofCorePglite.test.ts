@@ -255,3 +255,59 @@ describe('the DEV proof, stage FINAL (0279 applied, old shapes gone)', () => {
     expect(failing(r)).toEqual([]);
   }, 120_000);
 });
+
+describe('the DEV-only residue cleanup (docs/admin/po_apply_promo_hardening_release/cleanup/DEV_ONLY_residue_cleanup.sql)', () => {
+  const sql = fs.readFileSync(path.join(MIG_DIR, '..', '..', 'docs', 'admin', 'po_apply_promo_hardening_release', 'cleanup', 'DEV_ONLY_residue_cleanup.sql'), 'utf8');
+  const count = async (q: string) => ((await db.query(q)).rows[0] as { n: number }).n;
+  const PROOF_NOTES = `('promo hardening proof, safe to disable', 'DEV proof code', 'DEV proof default', 'old shape proof', 'browser certification code, safe to disable')`;
+
+  it('refuses on a database that carries the production marker, and changes nothing', async () => {
+    const before = await count(`select count(*)::int n from promo_codes`);
+    await db.exec(`insert into platform_deployment_environment(environment) values ('production')`);
+    let message = '';
+    try {
+      await db.exec(sql);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    await db.exec(`delete from platform_deployment_environment`);
+    expect(message).toContain('REFUSED');
+    expect(await count(`select count(*)::int n from promo_codes`)).toBe(before);
+    expect(await count(`select count(*)::int n from pg_trigger where tgrelid = 'public.promo_code_events'::regclass and not tgisinternal and tgenabled = 'O'`), 'append-only protection still on').toBe(2);
+  });
+
+  it('removes what the proofs left behind and nothing else, and the append-only protection is back on afterwards', async () => {
+    // things that must SURVIVE: a code whose note is not a proof note, and a grant of a user who still exists
+    const keeperAdmin = 'eeeeeeee-0000-0000-0000-000000000001';
+    const keeperUser = 'eeeeeeee-0000-0000-0000-000000000002';
+    await db.exec(`insert into auth.users(id,email,email_confirmed_at) values ('${keeperAdmin}','keeper-admin@keep.test',now()),('${keeperUser}','keeper-user@keep.test',now());
+                   insert into admin_users(user_id, can_manage_promo_codes, can_manage_premium_entitlements) values ('${keeperAdmin}', true, true);`);
+    const keeper = client(keeperAdmin, 'authenticated');
+    const made = await keeper.rpc('admin_create_promo_code', { p_code_digest: 'a'.repeat(64), p_code_hint: 'KE******PR', p_digest_version: 1, p_duration_days: 30, p_max_redemptions: 1, p_unlimited: false, p_expires_on: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10), p_no_expiry: false, p_note: 'the operator real code' });
+    expect(made.error).toBeNull();
+    const grant = await keeper.rpc('admin_manage_premium_entitlement', { p_action: 'grant', p_target_user_id: keeperUser, p_ends_on: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10), p_reason: 'A real grant that must survive', p_override: false });
+    expect(grant.error).toBeNull();
+
+    // the proof users are deleted, as the fixture cleanup and the proof do on DEV
+    await db.exec(`delete from auth.users where email like '%@promo-proof.invalid' or email like 'fx-%@pg.test' or email like 'u%@promo-proof.invalid'`);
+    expect(await count(`select count(*)::int n from promo_codes where note in ${PROOF_NOTES}`), 'the proofs left probe codes').toBeGreaterThan(5);
+
+    await db.exec(sql);
+
+    expect(await count(`select count(*)::int n from promo_codes where note in ${PROOF_NOTES}`), 'probe codes are gone').toBe(0);
+    expect(await count(`select count(*)::int n from promo_codes where note = 'the operator real code'`), 'the real code survives').toBe(1);
+    expect(await count(`select count(*)::int n from admin_entitlement_events where target_user_id = '${keeperUser}'`), 'the real grant audit row survives').toBe(1);
+    expect(await count(`select count(*)::int n from admin_entitlement_events where not exists (select 1 from auth.users u where u.id = target_user_id) and not exists (select 1 from auth.users u where u.id = actor_user_id)`), 'no orphaned proof audit row is left').toBe(0);
+    expect(await count(`select count(*)::int n from admin_monitoring_events`)).toBe(0);
+    expect(await count(`select count(*)::int n from premium_entitlement_overrides`)).toBe(0);
+    expect(await count(`select count(*)::int n from pg_trigger where tgrelid = 'public.promo_code_events'::regclass and not tgisinternal and tgenabled = 'O'`), 'append-only protection is back on').toBe(2);
+    // and the protection really works again
+    await expect(db.exec(`update promo_code_events set code_hint = code_hint`)).rejects.toThrow(/append-only/);
+    await expect(db.exec(`delete from promo_codes where note = 'the operator real code'`)).rejects.toThrow(/never deleted/);
+  }, 120_000);
+
+  it('is safe to repeat', async () => {
+    await db.exec(sql);
+    expect(await count(`select count(*)::int n from promo_codes where note = 'the operator real code'`)).toBe(1);
+  });
+});

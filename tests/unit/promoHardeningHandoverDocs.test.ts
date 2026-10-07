@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROMO_SECRET_ENV } from '@/lib/services/promoSecrets';
 import { MIGRATIONS } from '../../scripts/promo_hardening_build_migrations.mjs';
+import { ROLLBACK_FILES } from '../../scripts/promo_hardening_build_rollback.mjs';
+import { CHECK_FILES } from '../../scripts/promo_hardening_build_checks.mjs';
 import { expectNamedFailure, REPO_ROOT } from './support/promoTestHelpers';
 
 const PACK = path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_promo_hardening_release');
@@ -49,6 +51,21 @@ describe('every file the documents mention exists', () => {
     const at = order.map(pos);
     expect(at.every((p) => p >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+});
+
+describe('generated files equal what their generators write (nobody edited a generated file by hand)', () => {
+  it('rollback R1 and R2', () => {
+    for (const r of ROLLBACK_FILES) expect(read(`rollback/${r.file}`), r.file).toBe(r.build());
+  });
+  it('the detection pack D1', () => {
+    for (const c of CHECK_FILES) expect(read(`checks/${c.file}`), c.file).toBe(c.build());
+  });
+  it('the migrations equal their parts', () => {
+    for (const m of MIGRATIONS) {
+      const joined = Buffer.concat(m.parts.map((p) => fs.readFileSync(path.join(PACK, 'parts', `${p}.sql`))));
+      expect(joined.equals(fs.readFileSync(path.join(REPO_ROOT, 'supabase', 'migrations', m.file))), m.file).toBe(true);
+    }
   });
 });
 

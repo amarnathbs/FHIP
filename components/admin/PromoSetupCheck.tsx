@@ -153,6 +153,7 @@ export function PromoSetupCheck() {
             </div>
           )}
 
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Server secrets and their state">
           <table className="min-w-full text-sm">
             <caption className="sr-only">The four dedicated server secrets and whether each is set</caption>
             <thead className="text-left text-xs uppercase text-muted">
@@ -172,6 +173,7 @@ export function PromoSetupCheck() {
               ))}
             </tbody>
           </table>
+          </div>
           {broken.length > 0 && <p className="text-xs text-muted">Values are never shown here, only whether they are set.</p>}
           <p className="text-sm text-muted">
             E-mailing codes is currently <strong>{health.emailSwitchOn ? 'switched on' : 'switched off'}</strong> (the PREMIUM_PROMO_EMAIL_ENABLED setting).
