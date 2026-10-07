@@ -39,6 +39,7 @@ After my DEV proof passes I report back and ask you to continue. DEV has no depl
 | 8 | me | redeem an existing DEV test code with a test account: it must still work | none | the account shows Premium from a promo code |
 | 9 | you | the finalise. It removes the stored code text for good (on production you make a backup first). Paste and run: `select public.promo_codes_finalise_hash_only(false);` | `checks/V_after_finalise.sql` | all `ok` true |
 | 10 | you | `supabase/migrations/0279_promo_hardening_legacy_cleanup.sql` (parts `0279a`, `0279b`). It refuses with `PROMO_CLEANUP_BLOCKED` until step 9 is done. That refusal is correct, not a fault. | `checks/V0279_after_0279.sql` | all `ok` true |
+| 11 | you, last, DEV only | `cleanup/DEV_ONLY_residue_cleanup.sql` removes the probe codes, alerts and audit rows my proofs left on DEV (they cannot be deleted by the application on purpose). It refuses on a database that looks like production. | its own result table | every count `0`, and the last row `2` |
 
 ## 3. What to paste back to me
 
@@ -74,6 +75,7 @@ The four names, each with its own value, none shared: `PROMO_CODE_DIGEST_SECRET`
 | `checks/` | one read only detection file (D1) and one verification file per step (V...) |
 | `rollback/` | R1 and R2, generated from the original migrations |
 | `emergency/` | STOP and RESUME for promo e-mails |
+| `cleanup/` | the DEV only residue cleanup (step 11) |
 | `PRODUCTION_RUNBOOK.md` | the production order, the failure behaviour of every step, the checks after the deploy |
 | `resend_sample_body.txt` | the sample message of the e-mail test (a test keeps it equal to the real message) |
 
