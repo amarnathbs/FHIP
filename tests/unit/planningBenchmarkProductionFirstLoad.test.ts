@@ -23,6 +23,10 @@ import { parseCsv } from '../../scripts/planning-benchmarks/firstLoadLib.mjs';
 import {
   PLAN,
   SKIPPED,
+  LOCATOR_CAVEATS,
+  LOCATOR_MAX,
+  PO_DEVIATIONS,
+  locatorSuffix,
   SOURCE_DIR,
   OUTPUT_DIR,
   REPO_ROOT,
@@ -33,8 +37,9 @@ import {
   type BuiltFile,
 } from '../../scripts/planning-benchmarks/buildProductionFirstLoad';
 import { checkBytes, readShippedFile, runNegativeControls, withCohortsActivated } from '../../scripts/planning-benchmarks/productionFirstLoadValidate';
-import { ACTIVATOR, BOTH, UPLOADER, allowedAs, createReplicaDb, runOneFile, sessionClient, stateSnapshot, todayOf } from '../../scripts/planning-benchmarks/productionFirstLoadPglite';
+import { ACTIVATOR, BOTH, UPLOADER, allowedAs, createReplicaDb, runOneFile, sessionClient, stateSnapshot, todayOf, twinClient } from '../../scripts/planning-benchmarks/productionFirstLoadPglite';
 import { stagePlanningBenchmarkUpload } from '../../lib/planning-benchmarks/uploadService';
+import { loadPeerBenchmark } from '../../lib/services/twinBenchmarkRetrieval';
 import { TEMPLATE_VERSION, columnNames, UPLOAD_KINDS } from '../../lib/planning-benchmarks/uploadSchema';
 
 const RUNBOOK = fs.readFileSync(path.join(OUTPUT_DIR, 'PRODUCTION_RUNBOOK.md'), 'utf8');
@@ -45,6 +50,12 @@ const built = buildProductionFirstLoad();
 const byOrder = (n: number): BuiltFile => built.files.find((f) => f.order === n)!;
 
 // ------------------------------------------------------------------------------ source-vs-output comparison ---
+
+/** The caveat the generator appends to source_locator for a file (and metric), as the register's population note in plain words. */
+function caveatFor(order: number, metric: string): string {
+  const c = LOCATOR_CAVEATS.find((x) => x.order === order && (x.metric === undefined || x.metric === metric));
+  return c ? locatorSuffix(c.text) : '';
+}
 
 /** Compares every output row with its source row, column by column. Returns the list of differences (empty = identical). */
 function compareToSource(f: BuiltFile): string[] {
@@ -60,14 +71,18 @@ function compareToSource(f: BuiltFile): string[] {
       if (a !== b) diffs.push(`${f.fileName} row ${i + 2} ${col}: source "${a.slice(0, 40)}" output "${b.slice(0, 40)}"`);
     };
     if (f.kind === 'values') {
-      for (const c of ['dataset_name', 'dataset_version', 'cohort_code', 'metric_code', 'statistic_type', 'value_numeric', 'unit', 'original_currency', 'is_derived', 'derivation_method', 'confidence_score']) same(c, s[c], o[c]);
+      for (const c of ['dataset_name', 'dataset_version', 'cohort_code', 'metric_code', 'value_numeric', 'unit', 'original_currency', 'is_derived', 'derivation_method', 'confidence_score']) same(c, s[c], o[c]);
+      // The one PO-approved deviation (07/10/2026): property_concentration "share" -> "mean". Every other statistic is as approved.
+      const deviated = f.order === 2 && s.metric_code === 'property_concentration';
+      same('statistic_type', deviated ? 'mean' : s.statistic_type, o.statistic_type);
+      if (deviated && s.statistic_type !== 'share') diffs.push('the approved source no longer says share for the deviated row');
       same('base_date', s.base_date, iso(o.base_date));
       same('effective_from', s.effective_from, iso(o.effective_from));
       same('source_release', s.x_release, o.source_release);
       same('observation_period_start', s.x_obs_period_start, iso(o.observation_period_start));
       same('observation_period_end', s.x_obs_period_end, iso(o.observation_period_end));
       same('source_file', s.x_source_file, o.source_file);
-      same('source_locator', s.x_source_locator, o.source_locator);
+      same('source_locator', s.x_source_locator + caveatFor(f.order, s.metric_code), o.source_locator);
       same('retrieval_date', s.x_retrieval_date, iso(o.retrieval_date));
       // No rounding: the number a person reads equals the number in the approved file, digit for digit.
       if (Number(o.value_numeric) !== Number(s.value_numeric)) diffs.push(`${f.fileName} row ${i + 2}: numeric value differs`);
@@ -77,7 +92,7 @@ function compareToSource(f: BuiltFile): string[] {
       same('source_release', s.x_release, o.source_release);
       same('observation_period_start', s.x_obs_period_start, iso(o.observation_period_start));
       same('source_file', s.x_source_file, o.source_file);
-      same('source_locator', s.x_source_locator, o.source_locator);
+      same('source_locator', s.x_source_locator + caveatFor(f.order, s.metric_code), o.source_locator);
       same('retrieval_date', s.x_retrieval_date, iso(o.retrieval_date));
     } else {
       for (const c of columnNames('cohorts')) if (!['template_version', 'source_release', 'source_file', 'source_locator'].includes(c)) same(c, s[c], o[c]);
@@ -178,6 +193,58 @@ describe('generator: deterministic, complete and faithful to the approved files'
     expect(() => toDayFirst('2026-13-45', 'x')).toThrow();
   });
 
+  it('PO decision A (07/10/2026): property_concentration is written as statistic "mean" (not "share"), the figure is unchanged, and the deviation is recorded', () => {
+    const asset = byOrder(2).rows;
+    const prop = asset.find((r) => r.metric_code === 'property_concentration')!;
+    expect([prop.statistic_type, prop.value_numeric, prop.unit, prop.is_derived]).toEqual(['mean', '55.7661', 'percentage', 'true']);
+    expect(srcRecords('02_au_household_asset_composition.values.csv').find((r) => r.metric_code === 'property_concentration')!.statistic_type).toBe('share');
+    expect(asset.find((r) => r.metric_code === 'total_assets')!.statistic_type).toBe('mean');
+    // No other row of any file deviates from the approved statistic.
+    for (const f of built.files.filter((x) => x.kind === 'values')) {
+      const src = srcRecords(PLAN.find((e) => e.order === f.order)!.sourceFile);
+      f.rows.forEach((r, i) => {
+        if (!(f.order === 2 && r.metric_code === 'property_concentration')) expect(r.statistic_type, `${f.fileName} row ${i + 2}`).toBe(src[i].statistic_type);
+      });
+    }
+    expect(PO_DEVIATIONS.map((d) => [d.id, d.from, d.to, d.approvedOn])).toEqual([['PO-DEV-A', 'share', 'mean', '07/10/2026']]);
+    const json = JSON.parse(fs.readFileSync(path.join(OUTPUT_DIR, 'MANIFEST.json'), 'utf8'));
+    expect(json.poApprovedDeviations).toHaveLength(1);
+    expect(json.poApprovedDeviations[0]).toMatchObject({ id: 'PO-DEV-A', metric: 'property_concentration', from: 'share', to: 'mean' });
+    expect(json.poApprovedDeviations[0].reason).toMatch(/never "share"/);
+    const trace = (parseCsv(fs.readFileSync(path.join(OUTPUT_DIR, 'TRACE_rows_to_source_observations.csv'), 'utf8')) as { records: Array<Record<string, string>> }).records;
+    expect(trace.filter((t) => t.po_approved_deviation !== '')).toHaveLength(1);
+    // The mapping is by metric, not by statistic (DATASET_METRIC_MAPPING.md s1, s5): the pair is permitted whatever the statistic.
+    expect(MAPPING_DOC).toContain('| AU household asset composition | 1.0 | property_concentration | percentage | values |');
+    expect(MAPPING_DOC).toMatch(/Allowed statistic types are \*\*not\*\* constrained per pair/);
+  });
+
+  it('PO decision D (07/10/2026): each row with a register population caveat carries it, in plain words, appended to source_locator, within 300 characters', () => {
+    const expectText: Array<[number, string, RegExp]> = [
+      [2, 'total_assets', /Caveat: all private households; the 2019-20 survey went online during COVID-19/],
+      [3, 'net_worth', /Caveat: all private households/],
+      [4, 'net_worth', /Caveat: ABS age band as published \(youngest is 15-24, not the app 18-24\)/],
+      [5, 'debt_to_income', /Caveat: the 6x is a limit on each lender \(20% of its new lending per cohort\), not a personal borrowing rule/],
+      [6, 'retirement_balance', /Caveat: per INDIVIDUAL \(balances summed across accounts by TFN\), not per household/],
+      [7, 'total_assets', /Caveat: average per household, as at 30\/06\/2018 \(survey year 2019\)/],
+      [7, 'debt_to_asset_ratio', /Caveat: as at 30\/06\/2018 \(survey year 2019\); one decimal/],
+      [8, 'retirement_contribution_rate', /Caveat: of BASIC WAGES up to the ceiling/],
+      [9, 'retirement_balance', /Caveat: ASFA copyright/],
+    ];
+    for (const [order, metric, re] of expectText) {
+      const rows = byOrder(order).rows.filter((r) => r.metric_code === metric);
+      expect(rows.length, `${order} ${metric}`).toBeGreaterThan(0);
+      for (const r of rows) expect(r.source_locator, `${order} ${metric}`).toMatch(re);
+    }
+    for (const f of built.files) for (const r of f.rows) if (r.source_locator !== undefined) expect(r.source_locator.length, f.fileName).toBeLessThanOrEqual(LOCATOR_MAX);
+    // The register's own locator is kept, in front, untouched.
+    const dti = byOrder(5).rows[0].source_locator;
+    expect(dti.startsWith(srcRecords('05_au_high_dti_mortgage_threshold.values.csv')[0].x_source_locator)).toBe(true);
+    // The cohort file has the caveat in its description already and no locator suffix.
+    expect(byOrder(1).rows[0].source_locator).toBe(srcRecords('04_au_net_worth_income_by_age.cohorts.csv')[0].x_source_locator);
+    // Every values file row has a caveat (no register population note is left behind).
+    for (const f of built.files.filter((x) => x.kind === 'values')) for (const r of f.rows) expect(r.source_locator, f.fileName).toContain(' | Caveat: ');
+  });
+
   it('the datasets the register says are not loadable are absent, and so are the refused seed metrics', () => {
     const names = new Set(built.files.flatMap((f) => f.rows.map((r) => r.dataset_name)));
     for (const n of ['AU household debt context', 'FHIP dependant-band household benchmark model', 'FHIP Planning Benchmarks v1.0', 'India household consumption expenditure (rural/urban)']) expect(names.has(n), n).toBe(false);
@@ -240,6 +307,12 @@ describe('generator: deterministic, complete and faithful to the approved files'
     const i = text.rows.findIndex((r) => r.is_derived === 'true');
     text.rows[i].derivation_method = text.rows[i].derivation_method + ' (edited)';
     expect(compareToSource(text).some((d) => d.includes('derivation_method'))).toBe(true);
+    const nocav = structuredClone(f);
+    nocav.rows[0].source_locator = nocav.rows[0].source_locator.split(' | Caveat: ')[0];
+    expect(compareToSource(nocav).some((d) => d.includes('source_locator'))).toBe(true);
+    const stat = structuredClone(byOrder(2));
+    stat.rows.find((r) => r.metric_code === 'property_concentration')!.statistic_type = 'share';
+    expect(compareToSource(stat).some((d) => d.includes('statistic_type'))).toBe(true);
   });
 
   it('NC-G2 and NC-G3: an unknown source column, or a plan entry naming a draft dataset file, stops the build', () => {
@@ -267,7 +340,7 @@ describe('generator: deterministic, complete and faithful to the approved files'
 type Json = Record<string, unknown>;
 const EXPECTED_PREVIEW: Record<number, { new: number; changed: number; unchanged: number; conflict: number; removed: number; inserted: number; endDated: number }> = {
   1: { new: 1, changed: 0, unchanged: 0, conflict: 0, removed: 0, inserted: 1, endDated: 0 },
-  2: { new: 2, changed: 0, unchanged: 0, conflict: 0, removed: 0, inserted: 2, endDated: 0 },
+  2: { new: 1, changed: 1, unchanged: 0, conflict: 0, removed: 0, inserted: 2, endDated: 1 },
   3: { new: 2, changed: 2, unchanged: 2, conflict: 0, removed: 0, inserted: 4, endDated: 2 },
   4: { new: 16, changed: 10, unchanged: 2, conflict: 0, removed: 0, inserted: 26, endDated: 10 },
   5: { new: 0, changed: 0, unchanged: 1, conflict: 0, removed: 0, inserted: 0, endDated: 0 },
@@ -345,6 +418,30 @@ describe('rehearsal on the real migration ledger (PGlite)', () => {
     expect(await q(runbookSql('b1'))).toHaveLength(224);
     expect(await q(runbookSql('b2'))).toHaveLength(200);
     expect(await q(runbookSql('b3'))).toHaveLength(39);
+    // Block t1 (what the Twin reads) before the load: the seed figures, mean-based, with the property_concentration seed 56.2.
+    const t1 = await q<{ cohort: string; metric_code: string; headline_statistic: string; headline_value: string }>(runbookSql('t1'));
+    expect(t1).toHaveLength(23);
+    const hv = (cohort: string, metric: string) => t1.find((r) => r.cohort === cohort && r.metric_code === metric)!;
+    expect([hv('(country-wide)', 'property_concentration').headline_statistic, Number(hv('(country-wide)', 'property_concentration').headline_value)]).toEqual(['mean', 56.2]);
+    expect([hv('AU_AGE_25_34', 'net_worth').headline_statistic, Number(hv('AU_AGE_25_34', 'net_worth').headline_value)]).toEqual(['mean', 242000]);
+    expect([hv('(country-wide)', 'net_worth').headline_statistic, Number(hv('(country-wide)', 'net_worth').headline_value)]).toEqual(['median', 579200]);
+  });
+
+  // What the Financial Twin reads, through the REAL loadPeerBenchmark (lib/services/twinBenchmarkRetrieval.ts) on the replica.
+  const twinRead = async (metric: string, cohort: string | null, country = 'AU') => {
+    const m = (await q<{ id: string }>(`select id from benchmark_metric_definitions where metric_code = '${metric}'`))[0].id;
+    const c = cohort ? (await q<{ id: string }>(`select id from benchmark_cohorts where cohort_code = '${cohort}'`))[0].id : null;
+    const r = await loadPeerBenchmark(twinClient(db) as never, m, c, country);
+    return r ? { statistic: r.statisticType, value: r.value, distribution: r.distribution } : null;
+  };
+
+  it('Twin read BEFORE the load (real loadPeerBenchmark): the seed figures are what the Twin serves today', async () => {
+    expect(await twinRead('property_concentration', null)).toMatchObject({ statistic: 'mean', value: 56.2 });
+    expect(await twinRead('net_worth', 'AU_AGE_25_34')).toMatchObject({ statistic: 'mean', value: 242000 });
+    expect(await twinRead('net_worth', 'AU_AGE_18_24')).toMatchObject({ statistic: 'mean', value: 129000 });
+    expect(await twinRead('retirement_balance', null)).toMatchObject({ statistic: 'mean', value: 183000 });
+    expect(await twinRead('net_worth', null)).toMatchObject({ statistic: 'median', value: 579200 });
+    expect(await twinRead('retirement_contribution_rate', null, 'IN')).toMatchObject({ statistic: 'rate', value: 24 });
   });
 
   it('runbook Part C: the grant statements each update exactly one person, and the switch-off statement undoes them', async () => {
@@ -460,22 +557,23 @@ describe('rehearsal on the real migration ledger (PGlite)', () => {
   it('after the load: totals, history, audit rows and the three spot checks are exactly what the runbook Part E says', async () => {
     const post = await stateSnapshot(db);
     expect(post.allValues).toBe(261);
-    expect(post.endDatedValues).toBe(14);
+    expect(post.endDatedValues).toBe(15);
     expect(post.liveBands).toBe(200);
     expect(post.cohorts).toBe(40);
     expect(post.liveValuesByDataset).toMatchObject({
-      'AU ASFA retirement standard': 0, 'AU average superannuation balance': 2, 'AU high-DTI mortgage threshold': 1, 'AU household asset composition': 3, 'AU household debt context': 0,
+      'AU ASFA retirement standard': 0, 'AU average superannuation balance': 2, 'AU high-DTI mortgage threshold': 1, 'AU household asset composition': 2, 'AU household debt context': 0,
       'AU household wealth distribution': 6, 'AU net worth and income by age band': 30, 'FHIP dependant-band household benchmark model': 198, 'FHIP Planning Benchmarks v1.0': 0,
       'India EPF/EPS contribution structure': 1, 'India household assets and debt (rural/urban)': 6, 'India household consumption expenditure (rural/urban)': 0,
     });
     const e1 = await q<{ dataset_name: string; live_values: number }>(runbookSql('e1'));
     expect(Object.fromEntries(e1.map((r) => [r.dataset_name, Number(r.live_values)]))).toEqual(post.liveValuesByDataset);
-    expect((await q<Record<string, number>>(runbookSql('e2')))[0]).toMatchObject({ all_value_rows: 261, end_dated_value_rows: 14, live_value_rows: 247, live_bands: 200, cohorts: 40, new_cohort_present: 1 });
+    expect((await q<Record<string, number>>(runbookSql('e2')))[0]).toMatchObject({ all_value_rows: 261, end_dated_value_rows: 15, live_value_rows: 246, live_bands: 200, cohorts: 40, new_cohort_present: 1 });
     const e3 = await q<{ old_value: string; new_value: string; metric_code: string; statistic_type: string; cohort: string }>(runbookSql('e3'));
-    expect(e3).toHaveLength(14);
+    expect(e3).toHaveLength(15);
     expect(e3.every((r) => r.new_value !== null)).toBe(true);
     expect(e3.map((r) => `${r.cohort}|${r.metric_code}|${r.statistic_type}|${Number(r.old_value)}|${Number(r.new_value)}`)).toEqual(
       expect.arrayContaining([
+        '(country-wide)|property_concentration|mean|56.2|55.7661',
         '(country-wide)|net_worth|mean|1040000|1042000',
         '(country-wide)|net_worth|p80|1400000|1447800',
         '(country-wide)|retirement_balance|mean|183000|182781',
@@ -500,6 +598,33 @@ describe('rehearsal on the real migration ledger (PGlite)', () => {
     for (const r of e7) expect(Number(r.live_value), r.check_name).toBe(Number(r.expected));
     expect(new Date(e7[1].effective_from as string).toISOString().slice(0, 10)).toBe('2026-02-01');
     expect(await q(runbookSql('e8'))).toEqual([]);
+  });
+
+  it('Twin read AFTER the load (real loadPeerBenchmark): property_concentration is the sourced 55.7661; PO decision B: age bands and average super now read the median', async () => {
+    // PO decision A: the sourced figure replaced the seed, and it is the one the Twin reads (mean, never share).
+    expect(await twinRead('property_concentration', null)).toMatchObject({ statistic: 'mean', value: 55.7661 });
+    // PO decision B: the Twin switches from mean to median (seed 242,000 mean -> sourced 175,700 median, and so on).
+    const age: Array<[string, number, number]> = [
+      ['AU_AGE_25_34', 242000, 175700], ['AU_AGE_35_44', 555000, 401000], ['AU_AGE_45_54', 1055000, 799600], ['AU_AGE_55_64', 1453000, 999900], ['AU_AGE_65_74', 1835000, 926700], ['AU_AGE_75_PLUS', 1167000, 725100],
+    ];
+    for (const [cohort, , median] of age) expect(await twinRead('net_worth', cohort), cohort).toMatchObject({ statistic: 'median', value: median });
+    expect(await twinRead('gross_household_income', 'AU_AGE_25_34')).toMatchObject({ statistic: 'median', value: 112944 });
+    expect(await twinRead('net_worth', 'AU_AGE_15_24')).toMatchObject({ statistic: 'median', value: 34600 });
+    expect(await twinRead('retirement_balance', null)).toMatchObject({ statistic: 'median', value: 63339 });
+    // PO decision C: the seed rows no file touches are still served.
+    expect(await twinRead('net_worth', 'AU_AGE_18_24')).toMatchObject({ statistic: 'mean', value: 129000 });
+    expect(await twinRead('liquid_asset_share', 'IN_RURAL_ALL')).toMatchObject({ statistic: 'mean', value: 4.6 });
+    // Unchanged where the figure was already right.
+    expect(await twinRead('net_worth', null)).toMatchObject({ statistic: 'median', value: 579200, distribution: expect.objectContaining({ p10: 36900, p20: 113400, p80: 1447800, p90: 2257700 }) });
+    expect(await twinRead('debt_to_income', null)).toMatchObject({ statistic: 'threshold', value: 6 });
+    // The runbook's own "what the Twin reads" query (block t1, run before and after) says the same.
+    const e9 = await q<{ cohort: string; metric_code: string; headline_statistic: string; headline_value: string }>(runbookSql('t1'));
+    expect(e9).toHaveLength(28);
+    const get = (cohort: string, metric: string) => e9.find((r) => r.cohort === cohort && r.metric_code === metric)!;
+    expect([get('(country-wide)', 'property_concentration').headline_statistic, Number(get('(country-wide)', 'property_concentration').headline_value)]).toEqual(['mean', 55.7661]);
+    expect([get('AU_AGE_25_34', 'net_worth').headline_statistic, Number(get('AU_AGE_25_34', 'net_worth').headline_value)]).toEqual(['median', 175700]);
+    expect([get('(country-wide)', 'retirement_balance').headline_statistic, Number(get('(country-wide)', 'retirement_balance').headline_value)]).toEqual(['median', 63339]);
+    expect(get('AU_AGE_18_24', 'net_worth').headline_statistic).toBe('mean');
   });
 
   it('NC-E8: the duplicate-key check of the runbook really bites - with a second live row planted it returns that key, and nothing once removed', async () => {
@@ -532,7 +657,7 @@ describe('rehearsal on the real migration ledger (PGlite)', () => {
       const results = await db.exec(sql);
       const out = results.flatMap((r) => r.rows as Array<{ new_figures_taken_out_of_service: number; earlier_figures_restored: number }>).find((r) => 'new_figures_taken_out_of_service' in r)!;
       const expectFor: Record<string, [number, number]> = {
-        '02': [2, 0], '03': [4, 2], '04': [26, 10], '05': [0, 0], '06': [2, 1], '07': [2, 0], '08': [1, 1],
+        '02': [2, 1], '03': [4, 2], '04': [26, 10], '05': [0, 0], '06': [2, 1], '07': [2, 0], '08': [1, 1],
       };
       const [n, o] = expectFor[b.file_name.slice(0, 2)];
       expect([Number(out.new_figures_taken_out_of_service), Number(out.earlier_figures_restored)], b.file_name).toEqual([n, o]);

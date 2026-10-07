@@ -138,6 +138,58 @@ const MUST_BE_EMPTY: Record<UploadKind, readonly string[]> = {
   cohorts: [],
 };
 
+// ------------------------------------------------------------------------- PO decisions of 07/10/2026 ---
+
+export interface PoDeviation {
+  id: string;
+  /** Plan order of the file the deviation applies to. */
+  order: number;
+  metric: string;
+  column: string;
+  from: string;
+  to: string;
+  approvedOn: string;
+  reason: string;
+}
+
+/**
+ * Deviations from the register that the Product Owner approved ("go as per the recommendation", 07/10/2026). Each is asserted
+ * against the source value, so a changed source cannot be altered silently, and each is recorded in MANIFEST.json and the trace.
+ */
+export const PO_DEVIATIONS: readonly PoDeviation[] = Object.freeze([
+  {
+    id: 'PO-DEV-A',
+    order: 2,
+    metric: 'property_concentration',
+    column: 'statistic_type',
+    from: 'share',
+    to: 'mean',
+    approvedOn: '07/10/2026',
+    reason:
+      'The register file says statistic "share"; the Twin reads median, then mean, then rate, then threshold, never "share", and the live seed row is "mean". With "mean" the sourced 55.7661 replaces the seed 56.2 instead of sitting unused beside it. The upload mapping is by metric, not by statistic, so property_concentration is permitted with "mean". The figure itself is unchanged.',
+  },
+] as PoDeviation[]);
+
+export const LOCATOR_MAX = 300;
+export const locatorSuffix = (text: string): string => ` | Caveat: ${text}`;
+
+/**
+ * The population caveats of the register that the values and target-range templates have no field for. They are appended to
+ * source_locator (limit 300 characters), in plain language, after the locator the register gave. First match wins; a
+ * metric-specific entry must come before a generic one for the same file.
+ */
+export const LOCATOR_CAVEATS: ReadonlyArray<{ order: number; metric?: string; text: string }> = Object.freeze([
+  { order: 2, text: 'all private households; the 2019-20 survey went online during COVID-19 and may not compare directly with earlier years' },
+  { order: 3, text: 'all private households; the 2019-20 survey went online during COVID-19 and may not compare directly with earlier years' },
+  { order: 4, text: 'ABS age band as published (youngest is 15-24, not the app 18-24); gross household income; 2019-20 survey may not compare directly with earlier years' },
+  { order: 5, text: 'the 6x is a limit on each lender (20% of its new lending per cohort), not a personal borrowing rule' },
+  { order: 6, text: 'per INDIVIDUAL (balances summed across accounts by TFN), not per household' },
+  { order: 7, metric: 'total_assets', text: 'average per household, as at 30/06/2018 (survey year 2019)' },
+  { order: 7, metric: 'debt_to_asset_ratio', text: 'as at 30/06/2018 (survey year 2019); one decimal, copied from the MoSPI portal table' },
+  { order: 8, text: 'of BASIC WAGES up to the ceiling; PIB restatement (EPFO blocked)' },
+  { order: 9, text: 'ASFA copyright: reuse beyond fair dealing needs ASFA permission' },
+] as Array<{ order: number; metric?: string; text: string }>);
+
 // ----------------------------------------------------------------------------------------------- helpers ---
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -193,7 +245,7 @@ export interface BuiltFile {
   sourceSha256: string;
   sourceRows: number;
   /** One entry per output row: the source observation id and the population note the template has no field for. */
-  trace: Array<{ rowNumber: number; observationId: string; droppedNote: string }>;
+  trace: Array<{ rowNumber: number; observationId: string; droppedNote: string; caveat: string; deviation: string }>;
 }
 
 export interface BuildResult {
@@ -246,9 +298,25 @@ function convert(e: PlanEntry, retarget: Readonly<Record<string, string>>, match
       out.dataset_version = retarget[out.dataset_name];
       matched.add(out.dataset_name);
     }
+    // PO-approved deviations from the register (explicit, asserted against the source value, recorded in the manifest).
+    const deviationIds: string[] = [];
+    for (const d of PO_DEVIATIONS) {
+      if (d.order !== e.order || out.metric_code !== d.metric) continue;
+      if (out[d.column] !== d.from) throw new Error(`${where}: deviation ${d.id} expects ${d.column} "${d.from}" but the source says "${out[d.column]}"`);
+      out[d.column] = d.to;
+      deviationIds.push(d.id);
+    }
+    // Short plain-language population caveat appended to source_locator (the template has no notes column).
+    const cav = LOCATOR_CAVEATS.find((c) => c.order === e.order && (c.metric === undefined || c.metric === out.metric_code));
+    let caveat = '';
+    if (cav && out.source_locator !== undefined) {
+      caveat = locatorSuffix(cav.text);
+      out.source_locator = out.source_locator + caveat;
+      if (out.source_locator.length > LOCATOR_MAX) throw new Error(`${where}: source_locator is ${out.source_locator.length} characters after the caveat (limit ${LOCATOR_MAX})`);
+    }
     rows.push(out);
     const note = kind === 'values' ? (rec.value_text ?? '').split(' | ').slice(-1)[0] : '';
-    trace.push({ rowNumber: i + 2, observationId: rec.x_obs_id ?? '', droppedNote: note });
+    trace.push({ rowNumber: i + 2, observationId: rec.x_obs_id ?? '', droppedNote: note, caveat, deviation: deviationIds.join(' ') });
   });
 
   // 2. Serialise: header row 1, CRLF, the same quoting as the downloadable templates. No cell is changed by the
@@ -329,6 +397,7 @@ function manifestJson(b: BuildResult): string {
         sourceFolder: 'docs/planning-benchmarks/first_load',
         totals: { values: b.totals.values, target_ranges: b.totals.target_ranges, cohorts: b.totals.cohorts, files: b.files.length },
         files: b.files.map((f) => ({ order: f.order, file: f.fileName, datasetNo: f.sourceDataset, dataset: f.datasetName, version: f.datasetVersion, kind: f.kind, rows: f.rows.length, bytes: f.bytes, sha256: f.sha256, templateVersion: TEMPLATE_VERSION[f.kind], sourceFile: f.sourceFile, sourceSha256: f.sourceSha256 })),
+        poApprovedDeviations: PO_DEVIATIONS.map((d) => ({ id: d.id, file: PLAN.find((e) => e.order === d.order)!.sourceFile, metric: d.metric, column: d.column, from: d.from, to: d.to, approvedOn: d.approvedOn, reason: d.reason })),
         ...(Object.keys(b.retarget).length > 0 ? { retargeted: b.retarget } : {}),
         skipped: b.skipped.map((s) => ({ datasetNo: s.sourceDataset, name: s.name, reason: s.reason })),
       },
@@ -339,8 +408,8 @@ function manifestJson(b: BuildResult): string {
 }
 
 function traceCsv(b: BuildResult): string {
-  const lines = ['file,row,source_observation_id,population_note_not_carried_by_the_template'];
-  for (const f of b.files) for (const t of f.trace) lines.push([f.fileName, String(t.rowNumber), t.observationId, t.droppedNote].map(csvQuote).join(','));
+  const lines = ['file,row,source_observation_id,register_population_note,caveat_appended_to_source_locator,po_approved_deviation'];
+  for (const f of b.files) for (const t of f.trace) lines.push([f.fileName, String(t.rowNumber), t.observationId, t.droppedNote, t.caveat.replace(/^ \| /, ''), t.deviation].map(csvQuote).join(','));
   return lines.join(CRLF) + CRLF;
 }
 

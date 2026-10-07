@@ -26,11 +26,14 @@ Totals: **44 observed values, 4 planning target ranges, 1 cohort.** The earlier 
 
 Upload a file exactly as it is. Do not open it in Excel and save it (Excel can change dates and numbers). If anything needs to change, send me the message and I regenerate the files.
 
-## Read this first: three things that will look odd
+**Two PO decisions of 07/10/2026 are built into the files.** (A) In file 02 the `property_concentration` row carries statistic `mean`, not the register's `share`: a PO-approved deviation from the register. Reason: the Twin reads the median, then the mean, then the rate, then the threshold, and never `share`, and the live seed row is `mean`; with `mean` the sourced 55.7661 replaces the seed 56.2 instead of sitting unused beside it. The figure itself is unchanged, and the dataset and metric mapping is by metric, not by statistic, so it is permitted. It is recorded in `MANIFEST.json` (`poApprovedDeviations`) and in the trace file. (D) Every values row, and the four ASFA bands, carries a short plain-language caveat at the end of `source_locator` (after ` | Caveat: `), for example "per INDIVIDUAL (balances summed across accounts by TFN), not per household" on average super, "the 6x is a limit on each lender ... not a personal borrowing rule" on the DTI row, "of BASIC WAGES up to the ceiling" on EPF, "as at 30/06/2018 (survey year 2019)" on the India rows. The register's own locator is kept in front, untouched, and every locator stays under the 300-character limit. The stored provenance line of each live figure therefore carries the caveat.
+
+## Read this first: four things that will look odd
 
 1. **Files 05 and 09 are expected to say "Same as live" for every row.** The database already holds the same figure (DTI 6, the four ASFA bands). There is nothing new to publish. Discard those two uploads, or activate them (harmless, it only leaves an audit entry). Either is correct.
-2. **The Financial Twin will start preferring the median over the mean** for the age bands and for average super (the Twin picks the median first, then the mean). That follows from adding the median rows you approved in the register (decision D6). The figures it shows for those people will therefore change.
-3. **`property_concentration`: the approved figure is stored with statistic `share`, but the seed row that is already live uses `mean`.** The upload leaves the seed row (56.2) live and adds the sourced row (55.7661) beside it. The Twin reads the `mean` first, so it will keep showing 56.2 and not use the new one. This is decision A in the report: say if you want the file changed to `mean` so the sourced figure replaces the seed.
+2. **The Financial Twin will switch from the mean to the median** for the seven age bands (net worth and income) and for average super (PO decision B, 07/10/2026). The Twin picks the median first, then the mean, and the files add the median rows you approved in the register (decision D6). Figures it shows will therefore change, and some change a lot because the seed figures differ from the published ones: for example 25 to 34 net worth 242,000 (seed mean) becomes 175,700 (sourced median); average super 183,000 becomes 63,339. The full before and after list is in Part E (E7), with a SQL check and a check on the Twin itself.
+3. **`property_concentration` is a replacement, not an addition** (PO decision A). File 02 will say 1 New (`total_assets`) and **1 Replaced** (`property_concentration` mean 56.2 to 55.7661).
+4. **Four seed rows stay live and are not touched by any file** (PO decision C): the two `AU_AGE_18_24` rows (net worth mean 129,000 and income mean 46,748: the ABS youngest band is 15 to 24, so the app's 18 to 24 households keep the seed figure, register decision D3), and the two India `liquid_asset_share` rows (4.6 rural, 9.3 urban: the register refused that metric for this dataset because financial assets are not liquid assets). Nothing in an upload can retire them; they are documented here on purpose.
 
 ## Part A. Read-only pre-check on production (before anything else)
 
@@ -208,6 +211,34 @@ select c.*, d.dataset_name, d.version as dataset_version
  order by c.cohort_code;
 ```
 
+**B4. What the Financial Twin reads today (save this result too; you run the same block again in Part E).** For every metric and cohort of the seven datasets, it shows the one figure the Twin uses as its headline: the median if there is one, else the mean, else the rate, else the threshold (the same order as the Twin's own code, `loadPeerBenchmark`).
+
+<!-- sql:t1 -->
+```sql
+with live as (
+  select m.metric_code, coalesce(c.cohort_code, '(country-wide)') as cohort, v.statistic_type, v.value_numeric, d.dataset_name
+    from public.benchmark_values v
+    join public.benchmark_datasets d on d.id = v.dataset_id
+    join public.benchmark_metric_definitions m on m.id = v.metric_definition_id
+    left join public.benchmark_cohorts c on c.id = v.cohort_id
+   where (v.effective_to is null or v.effective_to > current_date)
+     and d.dataset_name in ('AU household asset composition', 'AU household wealth distribution', 'AU net worth and income by age band', 'AU high-DTI mortgage threshold',
+                            'AU average superannuation balance', 'India household assets and debt (rural/urban)', 'India EPF/EPS contribution structure')
+), ranked as (
+  select live.*, row_number() over (
+           partition by metric_code, cohort
+           order by case statistic_type when 'median' then 1 when 'mean' then 2 when 'rate' then 3 when 'threshold' then 4 else 5 end, statistic_type
+         ) as rn
+    from live
+)
+select dataset_name, cohort, metric_code, statistic_type as headline_statistic, value_numeric as headline_value
+  from ranked
+ where rn = 1
+ order by dataset_name, cohort, metric_code;
+```
+
+Expected before the load: 23 rows (28 after the load). For example `property_concentration` (country-wide) mean 56.2; `net_worth` 25 to 34 mean 242,000; `net_worth` country-wide median 579,200; `retirement_balance` mean 183,000.
+
 Expected row counts: values 224 (the editor may show 1,000 at most; 224 is below that), target ranges 200, cohorts 39. If a count is higher than 1,000 or lower than expected, stop and send me.
 
 ## Part C. Give the two permissions to two different people
@@ -260,7 +291,7 @@ What each preview should say, on a production database in the expected state of 
 | Order | File | New | Replaced | Same as live | Conflicts | Bands removed | What it does |
 |---|---|---|---|---|---|---|---|
 | 1 | Cohorts: AU_AGE_15_24 | 1 | 0 | 0 | 0 | 0 | Adds the cohort. **Activate.** |
-| 2 | Asset composition | 2 | 0 | 0 | 0 | 0 | Adds `total_assets` 1,245,200 and `property_concentration` (share) 55.7661. The seed `property_concentration` (mean 56.2) stays live. **Activate.** |
+| 2 | Asset composition | 1 | 1 | 0 | 0 | 0 | New: `total_assets` 1,245,200. Replaced: `property_concentration` mean 56.2 by 55.7661 (PO decision A: the file says `mean`, so the sourced figure replaces the seed). **Activate.** |
 | 3 | Wealth distribution | 2 | 2 | 2 | 0 | 0 | New: p10 36,900 and p90 2,257,700. Replaced: mean 1,040,000 by 1,042,000; p80 1,400,000 by 1,447,800. Same: median 579,200 and p20 113,400. **Activate.** |
 | 4 | Age bands | 16 | 10 | 2 | 0 | 0 | New: all 4 rows of `AU_AGE_15_24` and every median (12). Replaced: the mean net worth and mean income of 25-34, 35-44, 45-54, 55-64 and 65-74 (10). Same: 75 and over mean net worth 1,167,000 and mean income 54,340. The two seed rows of `AU_AGE_18_24` are not touched and stay live. **Activate.** |
 | 5 | DTI threshold | 0 | 0 | 1 | 0 | 0 | Nothing to publish. Discard or activate. |
@@ -269,7 +300,7 @@ What each preview should say, on a production database in the expected state of 
 | 8 | India EPF/EPS | 0 | 1 | 0 | 0 | 0 | "Replaces" the seed 24 with the sourced 24: the number is the same, the as-at date and provenance are the sourced ones (17/09/2026, PIB). Both sides of the preview row show 24. **Activate.** |
 | 9 | ASFA target ranges | 0 | 0 | 4 | 0 | 0 | Nothing to publish (the four bands are already live). Discard or activate. |
 
-After activation of everything (rehearsal result): 37 new figures added, 14 earlier figures end-dated and kept as history, 1 cohort added, no band changed.
+After activation of everything (rehearsal result): 37 new figures added, 15 earlier figures end-dated and kept as history, 1 cohort added, no band changed.
 
 **When to Discard instead of Activate:** the counts differ from the table (for example "Replaced" is bigger than expected, or "Conflicts" is not 0); a warning appears; the preview shows a number you do not recognise; or you simply have a doubt. Discarding is always safe (see Part F). Send me the preview (a screenshot or the counts) and the A2 and A5 results.
 
@@ -290,7 +321,7 @@ select d.dataset_name, count(v.id) as live_values
  order by d.dataset_name;
 ```
 
-Expected (if A2 matched): AU ASFA retirement standard 0, AU average superannuation balance **2**, AU high-DTI mortgage threshold **1**, AU household asset composition **3**, AU household debt context 0, AU household wealth distribution **6**, AU net worth and income by age band **30**, FHIP dependant-band household benchmark model 198, FHIP Planning Benchmarks v1.0 0, India EPF/EPS contribution structure **1**, India household assets and debt **6**, India household consumption 0. (The ASFA bands are bands, not values.)
+Expected (if A2 matched): AU ASFA retirement standard 0, AU average superannuation balance **2**, AU high-DTI mortgage threshold **1**, AU household asset composition **2**, AU household debt context 0, AU household wealth distribution **6**, AU net worth and income by age band **30**, FHIP dependant-band household benchmark model 198, FHIP Planning Benchmarks v1.0 0, India EPF/EPS contribution structure **1**, India household assets and debt **6**, India household consumption 0. (The ASFA bands are bands, not values.)
 
 ### E2. Row totals, history and cohorts
 
@@ -305,9 +336,9 @@ select
   (select count(*) from public.benchmark_cohorts where cohort_code = 'AU_AGE_15_24' and age_band = 'AGE_15_24') as new_cohort_present;
 ```
 
-Expected: `all_value_rows` 261 (224 + 37), `end_dated_value_rows` 14, `live_value_rows` 247, `live_bands` 200, `cohorts` 40, `new_cohort_present` 1.
+Expected: `all_value_rows` 261 (224 + 37), `end_dated_value_rows` 15, `live_value_rows` 246, `live_bands` 200, `cohorts` 40, `new_cohort_present` 1.
 
-### E3. The replaced figures are kept as history (14 rows, end-dated today)
+### E3. The replaced figures are kept as history (15 rows, end-dated today)
 
 <!-- sql:e3 -->
 ```sql
@@ -324,7 +355,7 @@ select d.dataset_name, coalesce(c.cohort_code, '(country-wide)') as cohort, m.me
  order by d.dataset_name, c.cohort_code nulls first, m.metric_code, v.statistic_type;
 ```
 
-Expected: 14 rows: wealth mean (1,040,000 to 1,042,000) and p80 (1,400,000 to 1,447,800); the ten age-band means; super mean (183,000 to 182,781); EPF rate (24 to 24). Every row has a `new_value`.
+Expected: 15 rows: `property_concentration` mean (56.2 to 55.7661); wealth mean (1,040,000 to 1,042,000) and p80 (1,400,000 to 1,447,800); the ten age-band means; super mean (183,000 to 182,781); EPF rate (24 to 24). Every row has a `new_value`.
 
 ### E4. Audit rows (who staged, who activated, what changed)
 
@@ -408,6 +439,35 @@ having count(*) > 1;
 
 Expected: no rows. If a row appears, stop and send it to me before anyone relies on the figures.
 
+### E7. What the Financial Twin reads now (median switch, PO decision B) and `property_concentration` (PO decision A)
+
+Run block **t1** from Part B again (the SQL is the same) and put it next to the result you saved before the load. Expected: 28 rows (23 before). The headline figure changes like this (seed on the left, sourced on the right; the Twin picks the median first, then the mean):
+
+| Metric and cohort | Before (seed, mean) | After (sourced) |
+|---|---|---|
+| `property_concentration`, country-wide | 56.2 (mean) | **55.7661 (mean)**: the sourced figure replaced the seed |
+| `net_worth`, 25 to 34 | 242,000 | 175,700 (median) |
+| `net_worth`, 35 to 44 | 555,000 | 401,000 (median) |
+| `net_worth`, 45 to 54 | 1,055,000 | 799,600 (median) |
+| `net_worth`, 55 to 64 | 1,453,000 | 999,900 (median) |
+| `net_worth`, 65 to 74 | 1,835,000 | 926,700 (median) |
+| `net_worth`, 75 and over | 1,167,000 | 725,100 (median) |
+| `gross_household_income`, 25 to 34 | 119,808 | 112,944 (median) |
+| `gross_household_income`, 35 to 44 | 153,972 | 122,044 (median) |
+| `gross_household_income`, 45 to 54 | 158,964 | 127,400 (median) |
+| `gross_household_income`, 55 to 64 | 146,744 | 96,096 (median) |
+| `gross_household_income`, 65 to 74 | 81,328 | 50,700 (median) |
+| `gross_household_income`, 75 and over | 54,340 | 40,716 (median) |
+| `retirement_balance`, country-wide (average super) | 183,000 (mean) | 63,339 (median); the mean 182,781 stays stored |
+| `net_worth`, country-wide | 579,200 (median) | 579,200 (median), with the p10, p20, p80, p90 points now 36,900, 113,400, 1,447,800, 2,257,700 |
+| `net_worth` and `gross_household_income`, 18 to 24 | 129,000 and 46,748 (mean) | unchanged: no file touches them (PO decision C) |
+| `liquid_asset_share`, India rural and urban | 4.6 and 9.3 | unchanged: no file touches them (PO decision C) |
+| `debt_to_income` | 6 (threshold) | 6 (threshold) |
+
+New cohort rows (15 to 24: net worth median 34,600, income median 79,872) exist but no household matches that cohort: the app's youngest band is 18 to 24 (register decision D3).
+
+**Then check the Twin itself, as a person would see it.** Open the Financial Twin (peer comparison) for a household you know in the 25 to 34 band, and one in the 55 to 64 band. The peer figure for net worth and for income should now read the sourced median in the table (175,700 and 112,944; 999,900 and 96,096), and the property share of assets should read about 55.8. A Twin run made before the load is immutable history and keeps the figure it used; run it again after the load. If the Twin shows a different number (it uses the household's best matching cohort, and falls back to country-wide), send me the household's age band and what you see; I compare it with t1. This is a read of the same data the Twin uses, so a mismatch means the Twin picked a different cohort, not that a figure is wrong.
+
 ## Part F. Rollback and correction
 
 **Before Activate (nothing is live yet).** A staged upload is only a preview. Press **Discard this upload** (optionally write a reason). Nothing was ever live, no live figure changes, the discard is recorded in the event log. A staged upload also expires by itself after 14 days (it can no longer be activated; discard it). To retry, stage the file again. Staging the identical file while a staged copy exists returns that copy; after a discard you can stage it again.
@@ -454,6 +514,21 @@ Expected output for, say, file 6: 2 and 1. If either number surprises you, run `
 - Do not map or unmap a dataset and metric pair during the load.
 - Do not run Part F's SQL without telling me first.
 
-## If production shows other dataset versions
+## Retarget: if the pre-check shows a dataset version or status that differs from DEV
 
-Send me A2. I run `npx tsx scripts/planning-benchmarks/buildProductionFirstLoad.ts --retarget "<dataset name>=<version>" --out <folder>`; the manifest of that folder records the change and every file is re-validated before you get it. Names are matched exactly and an unknown name stops the build.
+No hand edits, ever. If A2 shows that production holds a dataset under a **different version** than the file names (for example `AU household wealth distribution` version `2.0` instead of `1.0`), send me the A2 result and I regenerate the files for production's versions with one command per change, run from the repository root:
+
+```
+npx tsx scripts/planning-benchmarks/buildProductionFirstLoad.ts --out docs/planning-benchmarks/production_first_load_retargeted --retarget "AU household wealth distribution=2.0" --retarget "AU net worth and income by age band=2.0"
+```
+
+- `--retarget "<dataset name>=<version>"` may be repeated, once per dataset. The name must match the dataset name exactly (it is the name in A2). It changes the `dataset_version` of every row of every file for that dataset (for the age-band dataset that is both file 01, the cohort, and file 04). An unknown name stops the build.
+- `--out` is required with `--retarget`: the committed folder always holds the approved versions and is never overwritten.
+- The new folder gets its own `MANIFEST.csv` and `MANIFEST.json` (new SHA-256 values; `MANIFEST.json` lists what was retargeted). Upload from that folder only, and tell me before you do, so I can re-run the checks (the DEV validator, the PGlite rehearsal) on those files.
+- The mapping must also hold for that version: re-run A3 for it (the mapping is per dataset row, so a second version of a dataset has its own pairs, or none).
+
+What retargeting does **not** fix, and what to do instead:
+- **A dataset that is `suspended`, `archived` or `superseded`**, or a dataset the files name that is missing: an upload cannot go to it and a version change will not help. Stop and send me A2. Reopening or creating a dataset is a separate decision (an upload never creates a dataset).
+- **A source that is not `approved` or `active`**: Activate refuses it. Stop and send me A2.
+- **A different live figure count or different seed figures** (A5): the previews below will differ. Stop and send me A5 before you stage anything.
+- **A renamed dataset** (a different name, not a different version): stop and send me A2; I will say whether it is the same dataset.

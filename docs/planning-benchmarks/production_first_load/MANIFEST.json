@@ -30,8 +30,8 @@
       "version": "1.0",
       "kind": "values",
       "rows": 2,
-      "bytes": 1348,
-      "sha256": "f4096730ff2e685fa756037b308287bc915555128b8e9f19bf950ec24b7e4fbe",
+      "bytes": 1605,
+      "sha256": "a971ff47bca520bf17d8b9ad97e8b521889c0ddd7577a228a174735264356470",
       "templateVersion": "FHIP-PB-VALUES-1",
       "sourceFile": "02_au_household_asset_composition.values.csv",
       "sourceSha256": "85c08a76c549414bb860f8c30c5a015301df9678b81dd6ae7a1a1cb533d18a49"
@@ -44,8 +44,8 @@
       "version": "1.0",
       "kind": "values",
       "rows": 6,
-      "bytes": 2392,
-      "sha256": "4c2b9a5bd1123872a0d4a73cbe59e8b962183be3889436496227487a4c9c3799",
+      "bytes": 3166,
+      "sha256": "200c6ac08dcae00825ee31fa4742064e2ba3d8b00ff41f5d31b21566133bfded",
       "templateVersion": "FHIP-PB-VALUES-1",
       "sourceFile": "03_au_household_wealth_distribution.values.csv",
       "sourceSha256": "5ca02e0c52e42e461bf064d785528d798ba789b4e747bb57569b1af196b277b1"
@@ -58,8 +58,8 @@
       "version": "1.0",
       "kind": "values",
       "rows": 28,
-      "bytes": 12335,
-      "sha256": "8719578fcc9ef9af37e0cfe2b142262236bd14fd62ce83934d9c74cfb745f1bb",
+      "bytes": 16787,
+      "sha256": "f76360ff1290f1fbe01f719c3907df1ef674468a372fb99fab14b71666b5df2b",
       "templateVersion": "FHIP-PB-VALUES-1",
       "sourceFile": "04_au_net_worth_income_by_age.values.csv",
       "sourceSha256": "e42d77f2757f335149534e1494f27a0ef46bdff1c8e4c51fc90a5a0c994fdda0"
@@ -72,8 +72,8 @@
       "version": "1.0",
       "kind": "values",
       "rows": 1,
-      "bytes": 762,
-      "sha256": "bb7f55c3dc0f8d91a8b0b3c43847b0b4f8d901be9f414c8e7b5f0ed814e4f5ea",
+      "bytes": 872,
+      "sha256": "e4892164a2867e7cfc0fd581c183587cf11d45a54aff71323db5eaf1622de9dd",
       "templateVersion": "FHIP-PB-VALUES-1",
       "sourceFile": "05_au_high_dti_mortgage_threshold.values.csv",
       "sourceSha256": "81f3c032cc65ed75f9a0f0d415c8bb7dd17e5572ae5b04d0548e06f2f7f26341"
@@ -86,8 +86,8 @@
       "version": "1.0",
       "kind": "values",
       "rows": 2,
-      "bytes": 1006,
-      "sha256": "ea211155f08a6f6af371be7ce07d40eb028c270d56c83b9482d2a157f868fd80",
+      "bytes": 1176,
+      "sha256": "c7f7a59f20e28bb50ad9cfe4d6b56828565b2198faafdbad4e1fa6b1b2b94e76",
       "templateVersion": "FHIP-PB-VALUES-1",
       "sourceFile": "06_au_average_super_balance.values.csv",
       "sourceSha256": "b487571bc412f4b860fd3243240bf3a45d369a7fffd320cd1674d3cd63da85cd"
@@ -100,8 +100,8 @@
       "version": "1.0",
       "kind": "values",
       "rows": 4,
-      "bytes": 1915,
-      "sha256": "f3db400fc956bb77c8c1c546a73bb4ea6751a678cb73bcc0deaa860e8d52c9d9",
+      "bytes": 2243,
+      "sha256": "e39123b99bd7e7886f54d9e45479bf3de559f54a5f5808d952c811630bf78966",
       "templateVersion": "FHIP-PB-VALUES-1",
       "sourceFile": "09_india_household_assets_debt_rural_urban.values.csv",
       "sourceSha256": "a538ae7aabc6630b1a76f7278cd7a573851a8b357ebd4ee13fb6bfb33ddd30a8"
@@ -114,8 +114,8 @@
       "version": "1.0",
       "kind": "values",
       "rows": 1,
-      "bytes": 1124,
-      "sha256": "1a36c08181160d534d0b70cbb6121964f1c45f35d83a618d474d67380fed8234",
+      "bytes": 1199,
+      "sha256": "df14f3eae719ea01fd6e554cc83dc28e389c220ad52b01841245b22eaca3dc92",
       "templateVersion": "FHIP-PB-VALUES-1",
       "sourceFile": "10_india_epf_eps_contribution_structure.values.csv",
       "sourceSha256": "68b3b7a9a2e2cd6db5cf8bf46f6f4a64c4670c877da3c452c9f494e5b76df463"
@@ -128,11 +128,23 @@
       "version": "1.0",
       "kind": "target_ranges",
       "rows": 4,
-      "bytes": 3070,
-      "sha256": "b1d0f78f6df936ec265f6f36d4134e9803e4a8aef3dd600036ec068f7a65d501",
+      "bytes": 3366,
+      "sha256": "acaf5a95cabceb8ff35e156420f807f917f1228bf0c18fff6811d8864b20950e",
       "templateVersion": "FHIP-PB-RANGES-1",
       "sourceFile": "12_au_asfa_retirement_standard.target_ranges.csv",
       "sourceSha256": "c8dd8fbfca5a6b71fe4db124d53ec60087b7f155671a29cd945a0c2cc505d0a5"
+    }
+  ],
+  "poApprovedDeviations": [
+    {
+      "id": "PO-DEV-A",
+      "file": "02_au_household_asset_composition.values.csv",
+      "metric": "property_concentration",
+      "column": "statistic_type",
+      "from": "share",
+      "to": "mean",
+      "approvedOn": "07/10/2026",
+      "reason": "The register file says statistic \"share\"; the Twin reads median, then mean, then rate, then threshold, never \"share\", and the live seed row is \"mean\". With \"mean\" the sourced 55.7661 replaces the seed 56.2 instead of sitting unused beside it. The upload mapping is by metric, not by statistic, so property_concentration is permitted with \"mean\". The figure itself is unchanged."
     }
   ],
   "skipped": [

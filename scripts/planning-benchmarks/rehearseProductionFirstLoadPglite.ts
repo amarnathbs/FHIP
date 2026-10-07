@@ -4,7 +4,8 @@
 //
 // Run:  npx tsx scripts/planning-benchmarks/rehearseProductionFirstLoadPglite.ts
 import { buildProductionFirstLoad } from './buildProductionFirstLoad';
-import { createReplicaDb, readShipped, runOneFile, stateSnapshot } from './productionFirstLoadPglite';
+import { createReplicaDb, readShipped, runOneFile, stateSnapshot, twinClient } from './productionFirstLoadPglite';
+import { loadPeerBenchmark } from '../../lib/services/twinBenchmarkRetrieval';
 
 type Row = Record<string, string | null>;
 
@@ -14,6 +15,21 @@ async function main() {
   const t0 = Date.now();
   const db = await createReplicaDb();
   console.log(`Replica ready (migrations 0001 to 0278 + seed) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  // What the Financial Twin reads, through the REAL loadPeerBenchmark, for the figures the load changes.
+  const twinLines = async (label: string) => {
+    console.log(`\nTWIN READ ${label} (real loadPeerBenchmark)`);
+    const probes: Array<[string, string | null, string]> = [
+      ['property_concentration', null, 'AU'], ['net_worth', 'AU_AGE_25_34', 'AU'], ['net_worth', 'AU_AGE_55_64', 'AU'], ['gross_household_income', 'AU_AGE_25_34', 'AU'],
+      ['net_worth', 'AU_AGE_18_24', 'AU'], ['net_worth', null, 'AU'], ['retirement_balance', null, 'AU'], ['debt_to_income', null, 'AU'], ['liquid_asset_share', 'IN_RURAL_ALL', 'IN'], ['retirement_contribution_rate', null, 'IN'],
+    ];
+    for (const [metric, cohort, country] of probes) {
+      const m = ((await db.query(`select id from benchmark_metric_definitions where metric_code = '${metric}'`)).rows[0] as { id: string }).id;
+      const c = cohort ? ((await db.query(`select id from benchmark_cohorts where cohort_code = '${cohort}'`)).rows[0] as { id: string }).id : null;
+      const r = await loadPeerBenchmark(twinClient(db) as never, m, c, country);
+      console.log(`   ${metric} / ${cohort ?? '(country-wide)'}: ${r ? `${r.statisticType} ${r.value}` : 'none'}`);
+    }
+  };
+  await twinLines('BEFORE');
   console.log('PRE-STATE ' + JSON.stringify(await stateSnapshot(db)));
   const built = buildProductionFirstLoad();
   for (const f of built.files) {
@@ -32,6 +48,7 @@ async function main() {
     console.log(`   activated: ${res.rows_inserted} added, ${res.rows_end_dated} replaced and kept as history, ${res.bands_removed} bands removed, dataset ${res.dataset_status}`);
   }
   console.log('\nPOST-STATE ' + JSON.stringify(await stateSnapshot(db)));
+  await twinLines('AFTER');
   await db.close();
 }
 main().catch((e) => {

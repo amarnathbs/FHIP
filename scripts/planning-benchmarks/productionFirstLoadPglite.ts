@@ -159,6 +159,73 @@ export async function allowedAs(db: PGlite, uid: string) {
 
 export { readShippedFile as readShipped } from './productionFirstLoadValidate';
 
+/**
+ * A minimal stand-in for the one query shape loadPeerBenchmark (lib/services/twinBenchmarkRetrieval.ts) sends, so the REAL
+ * function can be run against the replica: benchmark_values filtered by metric, live window and cohort, with the dataset and
+ * source embedded. It supports only the calls that function makes (select, eq, is, or) and fails loudly on anything else.
+ */
+export function twinClient(db: PGlite) {
+  return {
+    from(table: string) {
+      if (table !== 'benchmark_values') throw new Error(`twinClient: unsupported table ${table}`);
+      const f: { metric?: string; cohort?: string | null; today?: string } = {};
+      const b: Record<string, unknown> = {
+        select: () => b,
+        eq: (c: string, v: string) => {
+          if (c === 'metric_definition_id') f.metric = v;
+          else if (c === 'cohort_id') f.cohort = v;
+          else throw new Error(`twinClient: unsupported eq ${c}`);
+          return b;
+        },
+        is: (c: string, v: null) => {
+          if (c !== 'cohort_id' || v !== null) throw new Error(`twinClient: unsupported is ${c}`);
+          f.cohort = null;
+          return b;
+        },
+        or: (s: string) => {
+          const m = /^effective_to\.is\.null,effective_to\.gt\.(\d{4}-\d{2}-\d{2})$/.exec(s);
+          if (!m) throw new Error(`twinClient: unsupported or ${s}`);
+          f.today = m[1];
+          return b;
+        },
+        then: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => {
+          (async () => {
+            const r = await db.query(
+              `select v.id, v.statistic_type, v.value_numeric::text as value_numeric, v.is_derived, v.derivation_method, v.base_date::text as base_date, v.confidence_score, v.dataset_id,
+                      d.benchmark_class, d.evidence_level, d.is_indicative, d.benchmark_source_id, s.citation_text, s.country_code, s.publication_date::text as publication_date
+                 from public.benchmark_values v
+                 join public.benchmark_datasets d on d.id = v.dataset_id
+                 join public.benchmark_sources s on s.id = d.benchmark_source_id
+                where v.metric_definition_id = $1 and (v.effective_to is null or v.effective_to > $2::date)
+                  and (($3::uuid is null and v.cohort_id is null) or v.cohort_id = $3::uuid)`,
+              [f.metric, f.today, f.cohort ?? null]
+            );
+            const data = (r.rows as Json[]).map((x) => ({
+              id: x.id,
+              statistic_type: x.statistic_type,
+              value_numeric: x.value_numeric,
+              is_derived: x.is_derived,
+              derivation_method: x.derivation_method,
+              base_date: x.base_date,
+              confidence_score: x.confidence_score,
+              dataset_id: x.dataset_id,
+              benchmark_datasets: {
+                benchmark_class: x.benchmark_class,
+                evidence_level: x.evidence_level,
+                is_indicative: x.is_indicative,
+                benchmark_source_id: x.benchmark_source_id,
+                benchmark_sources: { citation_text: x.citation_text, country_code: x.country_code, publication_date: x.publication_date },
+              },
+            }));
+            return { data, error: null };
+          })().then(resolve, reject);
+        },
+      };
+      return b;
+    },
+  };
+}
+
 /** Counts a person would check before and after the load (the same figures the runbook's SQL returns). */
 export async function stateSnapshot(db: PGlite): Promise<Json> {
   const one = async (sql: string) => (await db.query(sql)).rows as Json[];
