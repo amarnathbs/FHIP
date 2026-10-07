@@ -282,7 +282,7 @@ describe('POST /api/premium/cron/expiry-reminders', () => {
     vi.resetModules();
     vi.doMock('@/lib/supabase/admin', () => ({ createAdminClient: () => db }));
     vi.doMock('@/lib/services/premiumReminderMailer', () => ({ createResendMailer: () => mailer }));
-    process.env.CRON_SECRET = 'cron-secret-for-tests';
+    process.env.CRON_SECRET = 'cron-secret-for-tests-0123456789abcdef0123456789';
     const { POST } = await import('@/app/api/premium/cron/expiry-reminders/route');
     const res = await POST(new Request('http://x', { method: 'POST', headers }));
     return { res, calls, sent };
@@ -298,7 +298,7 @@ describe('POST /api/premium/cron/expiry-reminders', () => {
   });
 
   it('with the kill switch OFF (the shipped default) an authorised call is a no-op that sends nothing', async () => {
-    const { res, calls, sent } = await callRoute({ 'x-cron-secret': 'cron-secret-for-tests' }, { control: { data: { enabled: false }, error: null }, claim: [claimed()] });
+    const { res, calls, sent } = await callRoute({ 'x-cron-secret': 'cron-secret-for-tests-0123456789abcdef0123456789' }, { control: { data: { enabled: false }, error: null }, claim: [claimed()] });
     expect(res.status).toBe(200);
     expect((await res.json()).data).toEqual({ status: 'disabled', claimed: 0, sent: 0, failed: 0 });
     expect(calls).toHaveLength(0);
@@ -306,7 +306,7 @@ describe('POST /api/premium/cron/expiry-reminders', () => {
   });
 
   it('enabled: sends through the (injected) mailer and reports counts only — no address or body in the response', async () => {
-    const { res, sent } = await callRoute({ 'x-cron-secret': 'cron-secret-for-tests' }, { claim: [claimed({ email: 'someone@example.test' })] });
+    const { res, sent } = await callRoute({ 'x-cron-secret': 'cron-secret-for-tests-0123456789abcdef0123456789' }, { claim: [claimed({ email: 'someone@example.test' })] });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toEqual({ status: 'ran', claimed: 1, sent: 1, failed: 0 });

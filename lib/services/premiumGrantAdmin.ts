@@ -10,7 +10,8 @@
 // date picker is a convenience, not the control.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ENTITLEMENT_GRANT_MAX_DAYS, addDaysIso, isValidIsoDate } from '@/lib/services/entitlementWindow';
+import { ENTITLEMENT_GRANT_MAX_DAYS, accessEndDate, isValidIsoDate } from '@/lib/services/entitlementWindow';
+import { formatDateShort } from '@/lib/engines/date';
 
 export const MANAGE_ACTIONS = ['grant', 'extend', 'revoke'] as const;
 export type ManageAction = (typeof MANAGE_ACTIONS)[number];
@@ -24,6 +25,15 @@ export type ManageAction = (typeof MANAGE_ACTIONS)[number];
  */
 export const MAX_EXTENSIONS_PER_GRANT = 5;
 
+/**
+ * Lifetime ceiling (hardening 0264 item 3): the most admin grant + extend actions ONE user can ever receive,
+ * counted across revoke and re-grant. SQL single source: premium_grant_lifetime_ceiling(); a test asserts they agree.
+ * Going past it (or past the per grant cap) needs the separate override capability.
+ */
+export const PREMIUM_GRANT_LIFETIME_CEILING = 10;
+/** An override of either limit needs a longer reason than an ordinary action. */
+export const OVERRIDE_REASON_MIN_LENGTH = 20;
+
 export const REASON_MIN_LENGTH = 10;
 export const REASON_MAX_LENGTH = 1000;
 
@@ -33,6 +43,8 @@ export interface ManageRequest {
   /** YYYY-MM-DD; null for revoke. */
   endsOn: string | null;
   reason: string;
+  /** True only for the exceptional override of the per grant cap or the lifetime ceiling. */
+  override: boolean;
 }
 
 export interface RouteError {
@@ -56,17 +68,18 @@ function fail(code: string, message: string, status = 422): ParseManageResult {
  */
 export function checkEndDate(endsOn: unknown, today: string, maxDays: number = ENTITLEMENT_GRANT_MAX_DAYS): RouteError | null {
   if (!isValidIsoDate(endsOn)) {
-    return { status: 422, code: 'ENTITLEMENT_END_DATE_REQUIRED', message: 'endsOn must be a valid date.' };
+    return { status: 422, code: 'ENTITLEMENT_END_DATE_REQUIRED', message: 'The end date must be a real calendar date typed day first, for example 31-10-2026.' };
   }
   if (endsOn < today) {
     return { status: 422, code: 'ENTITLEMENT_END_DATE_IN_PAST', message: 'The end date cannot be in the past.' };
   }
-  const latest = addDaysIso(today, maxDays);
+  // Inclusive window: a grant of maxDays days that starts today ends on today + maxDays - 1.
+  const latest = accessEndDate(today, maxDays);
   if (endsOn > latest) {
     return {
       status: 422,
       code: 'ENTITLEMENT_END_DATE_EXCEEDS_MAX',
-      message: `The end date cannot be more than ${maxDays} days after today (latest allowed: ${latest}).`,
+      message: `A grant can give at most ${maxDays} days counting today (latest allowed end date: ${formatDateShort(latest, 'AUD')}).`,
     };
   }
   return null;
@@ -95,13 +108,21 @@ export function parseManageRequest(body: unknown, today: string): ParseManageRes
     return fail('ENTITLEMENT_REASON_TOO_LONG', `The reason must be at most ${REASON_MAX_LENGTH} characters.`);
   }
 
+  const override = b.override === true;
+  if (override) {
+    if (action === 'revoke') return fail('ENTITLEMENT_ACTION_INVALID', 'An override applies only to a grant or an extension.');
+    if (reason.length < OVERRIDE_REASON_MIN_LENGTH) {
+      return fail('ENTITLEMENT_OVERRIDE_REASON_REQUIRED', `An override needs a reason of at least ${OVERRIDE_REASON_MIN_LENGTH} characters.`);
+    }
+  }
+
   if (action === 'revoke') {
-    return { ok: true, value: { action, userId: b.userId.toLowerCase(), endsOn: null, reason } };
+    return { ok: true, value: { action, userId: b.userId.toLowerCase(), endsOn: null, reason, override: false } };
   }
 
   const dateError = checkEndDate(b.endsOn, today);
   if (dateError) return { ok: false, ...dateError };
-  return { ok: true, value: { action, userId: b.userId.toLowerCase(), endsOn: b.endsOn as string, reason } };
+  return { ok: true, value: { action, userId: b.userId.toLowerCase(), endsOn: b.endsOn as string, reason, override } };
 }
 
 // Stable database message codes -> HTTP status + administrator-facing text.
@@ -116,7 +137,7 @@ const RPC_ERRORS: Record<string, { status: number; message: string }> = {
   ENTITLEMENT_END_DATE_IN_PAST: { status: 422, message: 'The end date cannot be in the past.' },
   ENTITLEMENT_END_DATE_EXCEEDS_MAX: {
     status: 422,
-    message: `The end date cannot be more than ${ENTITLEMENT_GRANT_MAX_DAYS} days after today.`,
+    message: `A grant can give at most ${ENTITLEMENT_GRANT_MAX_DAYS} days counting today.`,
   },
   ENTITLEMENT_QUERY_TOO_SHORT: { status: 422, message: 'Enter at least 3 characters of an email, or a full user id.' },
   ENTITLEMENT_FILTER_INVALID: { status: 422, message: 'filter/source is not one of the allowed values.' },
@@ -131,8 +152,15 @@ const RPC_ERRORS: Record<string, { status: number; message: string }> = {
   ENTITLEMENT_NO_ADMIN_GRANT: { status: 409, message: 'This user has no admin grant to extend or revoke. Use Grant.' },
   ENTITLEMENT_EXTENSION_LIMIT_REACHED: {
     status: 409,
-    message: `This grant has already been extended ${MAX_EXTENSIONS_PER_GRANT} times, which is the limit. To give further access, Revoke it and then Grant again (both actions are audited).`,
+    message: `This grant has already been extended ${MAX_EXTENSIONS_PER_GRANT} times, which is the limit. A revoke and a new grant do not reset the lifetime limit of ${PREMIUM_GRANT_LIFETIME_CEILING} admin grants and extensions per user. Going further needs an operator who holds the override capability.`,
   },
+  ENTITLEMENT_LIFETIME_LIMIT_REACHED: {
+    status: 409,
+    message: `This user has already received ${PREMIUM_GRANT_LIFETIME_CEILING} admin grants and extensions, which is the lifetime limit. Revoking and granting again does not reset it. Going further needs an operator who holds the override capability.`,
+  },
+  ENTITLEMENT_OVERRIDE_NOT_ALLOWED: { status: 403, message: 'Overriding the grant limits needs a separate capability that your account does not hold.' },
+  ENTITLEMENT_OVERRIDE_REASON_REQUIRED: { status: 422, message: `An override needs a reason of at least ${OVERRIDE_REASON_MIN_LENGTH} characters.` },
+  ENTITLEMENT_OVERRIDE_NOT_NEEDED: { status: 409, message: 'No limit has been reached for this user, so an override is not needed. Repeat the action without the override.' },
   ENTITLEMENT_EXTENSION_NOT_LATER: {
     status: 422,
     message: 'An extension must set an end date later than the current end date. To end access sooner, use Revoke.',
@@ -184,6 +212,9 @@ export interface ManageResult {
   admin_grant_ends_on: string | null;
   extension_count?: number;
   extensions_remaining?: number;
+  lifetime_units?: number;
+  lifetime_remaining?: number;
+  override?: boolean;
 }
 
 /**
@@ -196,6 +227,7 @@ export function callManageEntitlement(client: RpcClient, req: ManageRequest) {
     p_target_user_id: req.userId,
     p_ends_on: req.endsOn,
     p_reason: req.reason,
+    p_override: req.override,
   });
 }
 

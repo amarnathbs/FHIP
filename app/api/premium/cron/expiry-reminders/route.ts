@@ -2,6 +2,9 @@ import { ok, bad } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createResendMailer } from '@/lib/services/premiumReminderMailer';
 import { runPremiumExpiryReminders, type ReminderDb } from '@/lib/services/premiumExpiryReminderRunner';
+import { cronSecretMatches } from '@/lib/services/premiumCronAuth';
+import { promoSecretProblems } from '@/lib/services/promoSecrets';
+import { premiumExpiryEmailThresholds } from '@/lib/services/premiumExpiryReminderEmail';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +21,14 @@ export const dynamic = 'force-dynamic';
  * The response carries counts only: never an address, a body or a code.
  */
 export async function POST(req: Request) {
-  const secret = req.headers.get('x-cron-secret');
-  if (!secret || secret !== process.env.CRON_SECRET) {
+  // CRON_SECRET is mandatory and dedicated (no fallback). If it is missing, too short or reused the route refuses explicitly
+  // (503) instead of comparing against an empty value; a wrong or absent header is a plain 401 in constant time.
+  const problems = promoSecretProblems('cron');
+  if (problems.missing.length > 0 || problems.reused.length > 0) {
+    console.error('premium expiry reminders refused: server secrets not configured', { missing: problems.missing, reused: problems.reused });
+    return bad('Scheduled job not configured', 503);
+  }
+  if (!cronSecretMatches(req.headers.get('x-cron-secret'))) {
     return bad('Unauthorized', 401);
   }
 
@@ -29,6 +38,7 @@ export async function POST(req: Request) {
       db: createAdminClient() as unknown as ReminderDb,
       mailer: createResendMailer(),
       baseUrl,
+      thresholds: premiumExpiryEmailThresholds(),
     });
     return ok(summary);
   } catch (e) {

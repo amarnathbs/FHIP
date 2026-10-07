@@ -13,7 +13,9 @@ import { useEffect, useState } from 'react';
 import { ENTITLEMENT_GRANT_MAX_DAYS, maxGrantEndDate, utcToday } from '@/lib/services/entitlementWindow';
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 import { DATE_INPUT_HINT, DATE_INPUT_PLACEHOLDER, formatDateInput, parseDateInput } from '@/lib/engines/dateInput';
-import { REASON_MIN_LENGTH } from '@/lib/services/premiumGrantAdmin';
+import { OVERRIDE_REASON_MIN_LENGTH, PREMIUM_GRANT_LIFETIME_CEILING, REASON_MIN_LENGTH } from '@/lib/services/premiumGrantAdmin';
+import { AdminActionStatus, type AdminActionOutcome } from '@/components/admin/AdminActionStatus';
+import { parseAdminCapabilities } from '@/lib/admin/adminNav';
 
 interface UserRow {
   user_id: string;
@@ -84,12 +86,24 @@ interface HistoryRow {
 
 type GrantFilter = 'expiring' | 'active' | 'lapsed';
 
+/** Carries the stable error code so the screen can tell a limit refusal from any other refusal. */
+class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null
+  ) {
+    super(message);
+  }
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.message ?? json.error ?? 'Request failed');
+  if (!res.ok) throw new ApiError(json.message ?? json.error ?? 'Request failed', typeof json.error === 'string' ? json.error : null);
   return json.data as T;
 }
+
+const LIMIT_CODES = ['ENTITLEMENT_LIFETIME_LIMIT_REACHED', 'ENTITLEMENT_EXTENSION_LIMIT_REACHED'];
 
 // Day-first through the canonical formatter (PO rule, Document2 findings #8/#19):
 // this admin page has no single country, so it uses the AU shape dd/mm/yyyy.
@@ -150,6 +164,27 @@ export function PremiumEntitlementsClient() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  // The separate override capability (read from /api/admin/me, never assumed) and the override form.
+  const [canOverride, setCanOverride] = useState(false);
+  const [limitHit, setLimitHit] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const outcome: AdminActionOutcome = actionError ? { kind: 'failure', message: actionError } : notice ? { kind: 'success', message: notice } : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/me');
+        const json = await res.json().catch(() => null);
+        if (!cancelled) setCanOverride(res.ok && parseAdminCapabilities(json).entitlementOverride);
+      } catch {
+        if (!cancelled) setCanOverride(false); // fail closed: no override control
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -210,25 +245,34 @@ export function PremiumEntitlementsClient() {
     }
   }
 
-  async function submit(action: 'grant' | 'extend' | 'revoke') {
+  async function submit(action: 'grant' | 'extend' | 'revoke', override = false) {
     if (!selected) return;
     setBusy(true);
     setActionError(null);
     setNotice(null);
+    setLimitHit(null);
     try {
       await fetchJson('/api/admin/entitlements/grants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, userId: selected.user_id, endsOn: action === 'revoke' ? undefined : (endsIso ?? endsOn), reason }),
+        body: JSON.stringify({
+          action,
+          userId: selected.user_id,
+          endsOn: action === 'revoke' ? undefined : (endsIso ?? endsOn),
+          reason: override ? overrideReason : reason,
+          ...(override ? { override: true } : {}),
+        }),
       });
       setNotice(action === 'grant' ? 'Premium granted.' : action === 'extend' ? 'Grant extended.' : 'Grant revoked.');
       setReason('');
+      setOverrideReason('');
       setConfirmRevoke(false);
       await selectUser(selected.user_id);
       setNotice(action === 'grant' ? 'Premium granted.' : action === 'extend' ? 'Grant extended.' : 'Grant revoked.');
       setGrantsReload((k) => k + 1);
       setSummaryReload((k) => k + 1);
     } catch (e) {
+      if (e instanceof ApiError && e.code && LIMIT_CODES.includes(e.code)) setLimitHit(e.code);
       setActionError(e instanceof Error ? e.message : 'The change was refused.');
     } finally {
       setBusy(false);
@@ -236,6 +280,7 @@ export function PremiumEntitlementsClient() {
   }
 
   const reasonOk = reason.trim().length >= REASON_MIN_LENGTH;
+  const overrideReasonOk = overrideReason.trim().length >= OVERRIDE_REASON_MIN_LENGTH;
   const endsIso = parseDateInput(endsOn);
   const dateOk = endsIso !== null && endsIso >= today && endsIso <= maxEnd;
   // "Managed" = an admin grant OR a promo-code entitlement (both are time-limited and admin-extendable).
@@ -248,9 +293,10 @@ export function PremiumEntitlementsClient() {
       <div>
         <h1 className="text-2xl font-semibold text-trust">Premium Access (admin grants)</h1>
         <p className="mt-1 text-muted">
-          Allocate Premium to a user who has not paid online. A grant lasts at most {ENTITLEMENT_GRANT_MAX_DAYS} days from the day you
-          allocate it, and can be extended later (each extension is again capped at {ENTITLEMENT_GRANT_MAX_DAYS} days from the day of the
-          extension). Every change needs a reason and is recorded in an audit trail.
+          Allocate Premium to a user who has not paid online. A grant lasts at most {ENTITLEMENT_GRANT_MAX_DAYS} days counting the day you
+          allocate it, and can be extended later (each extension is again capped at {ENTITLEMENT_GRANT_MAX_DAYS} days counting the day of the
+          extension). One user can receive at most {PREMIUM_GRANT_LIFETIME_CEILING} admin grants and extensions in their lifetime; revoking and granting again does not
+          reset that. Every change needs a reason and is recorded in an audit trail.
         </p>
       </div>
 
@@ -474,7 +520,7 @@ export function PremiumEntitlementsClient() {
                   className="mt-1 rounded border px-3 py-2 text-sm"
                 />
                 <p id="ent-ends-hint" className="mt-1 text-xs text-muted">
-                  {DATE_INPUT_HINT} Latest allowed: {fmt(maxEnd)} ({ENTITLEMENT_GRANT_MAX_DAYS} days from today). Enforced by the server.
+                  {DATE_INPUT_HINT} Latest allowed: {fmt(maxEnd)} ({ENTITLEMENT_GRANT_MAX_DAYS} days counting today). Enforced by the server.
                 </p>
                 {endsOn.trim() !== '' && endsIso === null ? (
                   <p role="alert" className="mt-1 text-xs text-risk">
@@ -496,7 +542,7 @@ export function PremiumEntitlementsClient() {
               </div>
               {extensionsExhausted && (
                 <p className="text-sm text-risk">
-                  This grant has reached the extension limit. To give further access, Revoke it and then Grant again (both actions are audited).
+                  This grant has reached the extension limit. Revoking and granting again does not reset the lifetime limit of {PREMIUM_GRANT_LIFETIME_CEILING} grants and extensions per user, and going further needs an operator with the override capability.
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-3">
@@ -550,8 +596,37 @@ export function PremiumEntitlementsClient() {
             </div>
           )}
 
-          {notice && <p role="status" className="text-sm text-trust">{notice}</p>}
-          {actionError && <p role="alert" className="text-sm text-risk">{actionError}</p>}
+          <AdminActionStatus outcome={outcome} />
+
+          {(limitHit || extensionsExhausted) && canOverride && selected && !protectedPaid && (
+            <div className="space-y-2 rounded border border-risk/40 p-3" role="group" aria-labelledby="override-heading">
+              <h3 id="override-heading" className="text-sm font-medium text-risk">
+                Exceptional override of the grant limits
+              </h3>
+              <p className="text-xs text-muted">
+                A limit was reached. You hold the separate override capability, so you may go past it once, with a reason of at least {OVERRIDE_REASON_MIN_LENGTH} characters.
+                Every override raises an alert and leaves its own audit row.
+              </p>
+              <label htmlFor="ent-override-reason" className="block text-xs font-medium text-muted">
+                Override reason (at least {OVERRIDE_REASON_MIN_LENGTH} characters)
+              </label>
+              <textarea
+                id="ent-override-reason"
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                rows={3}
+                className="w-full max-w-xl rounded border px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                disabled={busy || !overrideReasonOk || !dateOk}
+                onClick={() => void submit(isAdminGrant ? 'extend' : 'grant', true)}
+                className="rounded bg-risk px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {busy ? 'Working…' : isAdminGrant ? 'Override the limit and extend' : 'Override the limit and grant'}
+              </button>
+            </div>
+          )}
 
           <div>
             <h3 className="text-sm font-medium text-ink">History</h3>

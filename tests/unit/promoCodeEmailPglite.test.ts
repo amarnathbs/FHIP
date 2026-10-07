@@ -12,30 +12,16 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SUPABASE_ROOT = path.resolve(HERE, '..', '..', 'supabase');
-const MIG_DIR = path.join(SUPABASE_ROOT, 'migrations');
-const SHIM = path.join(SUPABASE_ROOT, '..', 'scripts', 'db-rebuild-check', 'shim.sql');
-const NAME = fs.readdirSync(MIG_DIR).find((f) => f.endsWith('_promo_code_email_send.sql'));
-if (!NAME) throw new Error('promo code e-mail migration not found');
-const MIGRATION = fs.readFileSync(path.join(MIG_DIR, NAME), 'utf8');
+import { digestsFor, latestFunctionSql, makeCode, replayAll } from './support/promoTestHelpers';
 
 type Json = Record<string, unknown>;
 let db: PGlite;
 let counter = 0;
 
-function extractFn(name: string): string {
-  const m = MIGRATION.match(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?\\n\\$fn\\$;`));
-  if (!m) throw new Error(`could not extract ${name}`);
-  return m[0];
-}
-const REDEEM_FN = extractFn('redeem_promo_code_for_user');
-const BEGIN_FN = extractFn('admin_promo_email_begin');
-const RECORD_FN = extractFn('admin_promo_email_record');
+// The hardening migrations (0265, 0266) replace redeem and begin, so the negative controls mutate and restore the NEWEST definitions.
+const REDEEM_FN = latestFunctionSql('redeem_promo_code_for_user');
+const BEGIN_FN = latestFunctionSql('admin_promo_email_begin');
+const RECORD_FN = latestFunctionSql('admin_promo_email_record');
 
 const PROMO_ADMIN = 'aaaaaaaa-0000-0000-0000-00000000d001';
 const PROMO_ADMIN_2 = 'aaaaaaaa-0000-0000-0000-00000000d002';
@@ -49,7 +35,7 @@ const UNUSABLE = { ok: false, code: 'PROMO_CODE_UNUSABLE' };
 async function newUser(label = 'u'): Promise<string> {
   counter += 1;
   const id = `bbbbbbbb-3000-0000-0000-${String(counter).padStart(12, '0')}`;
-  await db.exec(`insert into auth.users(id,email) values ('${id}','${label}${counter}@pg.test');`);
+  await db.exec(`insert into auth.users(id,email,email_confirmed_at) values ('${id}','${label}${counter}@pg.test', now());`);
   return id;
 }
 
@@ -76,32 +62,34 @@ async function expectCode(p: Promise<unknown>, code: string) {
 
 const addDays = async (n: number) => ((await db.query(`select (current_date + $1::int)::text d`, [n])).rows[0] as { d: string }).d;
 
-async function createPromo(actor: string, o: { max?: number | null; unlimited?: boolean; hash?: string | null; recipients?: number; legacy?: boolean } = {}): Promise<Json> {
+async function createPromo(actor: string, o: { max?: number | null; unlimited?: boolean; hash?: string | null; recipients?: number } = {}): Promise<Json> {
   const exp = await addDays(60);
-  return as(actor, 'authenticated', async () => {
-    const legacy = o.legacy ?? (o.hash === undefined && o.recipients === undefined);
-    const sql = legacy
-      ? `select public.admin_create_promo_code(null,30,$1,$2,$3,false,null) v`
-      : `select public.admin_create_promo_code(null,30,$1,$2,$3,false,null,$4,$5) v`;
-    const params = legacy
-      ? [o.unlimited ? null : o.max === undefined ? 5 : o.max, o.unlimited ?? false, exp]
-      : [o.unlimited ? null : o.max === undefined ? 5 : o.max, o.unlimited ?? false, exp, o.hash ?? null, o.recipients ?? 0];
-    return ((await db.query(sql, params)).rows[0] as { v: Json }).v;
+  const made = makeCode();
+  const v = await as(actor, 'authenticated', async () => {
+    const { rows } = await db.query(`select public.admin_create_promo_code($1,$2,$3,30,$4,$5,$6,false,null,$7,$8) v`, [
+      made.digest,
+      made.hint,
+      made.version,
+      o.unlimited ? null : o.max === undefined ? 5 : o.max,
+      o.unlimited ?? false,
+      exp,
+      o.hash ?? null,
+      o.recipients ?? 0,
+    ]);
+    return (rows[0] as { v: Json }).v;
   });
+  return { ...v, code: made.plain };
 }
 
-async function redeem(user: string, code: string, emailHash?: string | null): Promise<Json> {
+async function redeem(user: string, code: string, emailHash: string | null = null): Promise<Json> {
   return as(null, 'service_role', async () => {
-    const q =
-      emailHash === undefined
-        ? await db.query(`select public.redeem_promo_code_for_user($1,$2,null) v`, [user, code]) // the OLD 3-argument call shape
-        : await db.query(`select public.redeem_promo_code_for_user($1,$2,null,$3) v`, [user, code, emailHash]);
+    const q = await db.query(`select public.redeem_promo_code_for_user($1,$2::text[],null,$3) v`, [user, digestsFor(code), emailHash]);
     return (q.rows[0] as { v: Json }).v;
   });
 }
 
 const begin = (actor: string, key: string, count = 1, bound = false) =>
-  as(actor, 'authenticated', async () => ((await db.query(`select public.admin_promo_email_begin($1,$2,$3) v`, [key, count, bound])).rows[0] as { v: Json }).v);
+  as(actor, 'authenticated', async () => ((await db.query(`select public.admin_promo_email_begin($1,$2,$3,'create','Pilot cohort welcome codes',null) v`, [key, count, bound])).rows[0] as { v: Json }).v);
 const record = (actor: string, key: string, codeId: unknown, hash: string, status: string, attempts = 1, msg: string | null = null, err: string | null = null) =>
   as(actor, 'authenticated', async () => ((await db.query(`select public.admin_promo_email_record($1,$2,$3,$4,$5,$6,$7) r`, [key, codeId, hash, status, attempts, msg, err])).rows[0] as { r: boolean }).r);
 
@@ -130,12 +118,7 @@ async function expectAssertionFails(assertion: () => Promise<void>, named: strin
 
 beforeAll(async () => {
   db = await PGlite.create();
-  await db.exec(fs.readFileSync(SHIM, 'utf8'));
-  const seed = fs.readFileSync(path.join(SUPABASE_ROOT, 'seed.sql'), 'utf8');
-  for (const f of fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort()) {
-    await db.exec(fs.readFileSync(path.join(MIG_DIR, f), 'utf8').replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, ''));
-    if (f.startsWith('0001')) await db.exec(seed);
-  }
+  await replayAll(db);
   await db.exec(
     `insert into auth.users(id,email) values ('${PROMO_ADMIN}','pa1@pg.test'),('${PROMO_ADMIN_2}','pa2@pg.test'),('${ENT_ONLY_ADMIN}','ea@pg.test'),('${PLAIN}','plain@pg.test');
      insert into admin_users(user_id) values ('${PROMO_ADMIN}'),('${PROMO_ADMIN_2}'),('${ENT_ONLY_ADMIN}');
@@ -148,12 +131,13 @@ afterAll(async () => {
   await db?.close();
 });
 
-describe('old call shapes still work (deploy-order safety)', () => {
-  it('the previous 7-argument create call and 3-argument redeem call are unchanged in behaviour', async () => {
-    const c = await createPromo(PROMO_ADMIN, { legacy: true });
-    expect(c).toMatchObject({ duration_days: 30, bound: false });
-    const u = await newUser('legacy');
-    expect((await redeem(u, c.code as string)).ok).toBe(true);
+describe('the previous call shapes are GONE (hash only storage): no overload of the old signatures remains', () => {
+  it('the old 9-argument create, the old 4-argument redeem and the old 3-argument begin no longer exist, and each function exists exactly once', async () => {
+    for (const name of ['admin_create_promo_code', 'redeem_promo_code_for_user', 'admin_promo_email_begin', 'admin_list_promo_codes']) {
+      expect(((await db.query(`select count(*)::int n from pg_proc where proname=$1`, [name])).rows[0] as { n: number }).n, name).toBe(1);
+    }
+    await expect(db.query(`select public.admin_create_promo_code(null,30,5,false,null,false,null,null,0)`)).rejects.toThrow(/does not exist/);
+    await expect(db.query(`select public.redeem_promo_code_for_user($1,'ABCDEFGHJK',null,null)`, [PLAIN]), 'the old plain code call can no longer be made').rejects.toThrow(/malformed array literal|does not exist/);
   });
 });
 
@@ -182,7 +166,6 @@ describe('address binding (keyed hash only)', () => {
     for (const [label, v] of [
       ['a different hash', await redeem(stranger, code, HASH_B)],
       ['no hash', await redeem(stranger, code, null)],
-      ['the legacy 3-argument call', await redeem(stranger, code)],
     ] as const) {
       expect(v, `a bound code must not be redeemable by any other account (${label})`).toEqual(UNUSABLE);
       expect(v, 'and must read exactly like a code that does not exist').toEqual(missing);
@@ -199,7 +182,11 @@ describe('address binding (keyed hash only)', () => {
   it('NEGATIVE CONTROL — with the binding clause removed any account can redeem a bound code (assertion "a bound code must not be redeemable by any other account" goes red)', async () => {
     await withMutation(
       REDEEM_FN,
-      (s) => s.replace("     or (v_promo.bound_email_hash is not null and v_promo.bound_email_hash is distinct from p_email_hash)\n", ''),
+      (s) =>
+        s.replace(
+          /     or \(v_promo\.bound_email_hash is not null\n         and \(p_email_hash is null or coalesce\(v_verified, false\) = false or v_promo\.bound_email_hash is distinct from p_email_hash\)\)\n/,
+          ''
+        ),
       async () => {
         await expectAssertionFails(assertBinding, 'a bound code must not be redeemable by any other account');
       }
@@ -243,7 +230,7 @@ describe('dispatch request: capability, idempotency key, per-admin rate limit', 
   async function assertIdempotent(): Promise<void> {
     const key = `idem-${counter++}-${Math.random().toString(36).slice(2, 10)}`;
     const first = await begin(PROMO_ADMIN, key, 2, false);
-    expect(first).toEqual({ new: true });
+    expect(first).toMatchObject({ new: true });
     const again = await begin(PROMO_ADMIN, key, 2, false).catch((e: Error) => ({ thrown: e.message }));
     expect(again, 'a repeated request key must be reported as NOT new').toEqual({ new: false });
     const n = (await db.query(`select count(*)::int c from promo_email_requests where request_key=$1`, [key])).rows[0] as { c: number };
@@ -251,8 +238,8 @@ describe('dispatch request: capability, idempotency key, per-admin rate limit', 
   }
   it('the same (admin, key) is new once and a duplicate afterwards; another admin may reuse the same key text', async () => {
     await assertIdempotent();
-    expect(await begin(PROMO_ADMIN_2, 'shared-key-0001')).toEqual({ new: true });
-    expect(await begin(PROMO_ADMIN, 'shared-key-0001')).toEqual({ new: true });
+    expect(await begin(PROMO_ADMIN_2, 'shared-key-0001')).toMatchObject({ new: true });
+    expect(await begin(PROMO_ADMIN, 'shared-key-0001')).toMatchObject({ new: true });
   });
   it('NEGATIVE CONTROL — without the duplicate handling a repeated key is not reported as a duplicate (assertion "a repeated request key must be reported as NOT new" goes red; the UNIQUE key fires by name)', async () => {
     await withMutation(
@@ -275,7 +262,7 @@ describe('dispatch request: capability, idempotency key, per-admin rate limit', 
     for (let i = 0; i < 10; i += 1) await begin(admin, `rl-${counter}-${i}-aaaa`);
     await expectCode(begin(admin, `rl-${counter}-11-aaaa`), 'PROMO_EMAIL_RATE_LIMITED');
     // per-admin: another admin is unaffected
-    expect(await begin(PROMO_ADMIN, `rl-other-${counter}-aaaa`), 'another admin is not limited by this one').toEqual({ new: true });
+    expect(await begin(PROMO_ADMIN, `rl-other-${counter}-aaaa`), 'another admin is not limited by this one').toMatchObject({ new: true });
   }
   it('10 requests per rolling hour per admin; the 11th is refused; another admin is unaffected', async () => {
     counter += 1;

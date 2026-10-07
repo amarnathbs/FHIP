@@ -36,6 +36,9 @@ export interface Mailer {
 
 const DEFAULT_FROM = `FHIP <${DEFAULT_FROM_ADDRESS}>`;
 
+/** A provider call that has not answered in this long is a failure (hardening mission, item 11): a hung provider must never hang an admin request or a cron run. */
+export const PREMIUM_MAIL_TIMEOUT_MS = 10_000;
+
 export function createResendMailer(env: Record<string, string | undefined> = process.env, fetchImpl: typeof fetch = fetch): Mailer {
   const apiKey = env.RESEND_API_KEY;
   return {
@@ -55,12 +58,14 @@ export function createResendMailer(env: Record<string, string | undefined> = pro
             'Idempotency-Key': mail.idempotencyKey,
           },
           body: JSON.stringify({ from: mail.from, to: [mail.to], subject: mail.subject, text: mail.text }),
+          signal: AbortSignal.timeout(PREMIUM_MAIL_TIMEOUT_MS),
         });
         if (!res.ok) return { ok: false, error: `resend_http_${res.status}` };
         const json = (await res.json().catch(() => null)) as { id?: unknown } | null;
         return { ok: true, messageId: typeof json?.id === 'string' ? json.id : undefined };
-      } catch {
-        return { ok: false, error: 'resend_network_error' };
+      } catch (e) {
+        const name = e instanceof Error ? e.name : '';
+        return { ok: false, error: name === 'TimeoutError' || name === 'AbortError' ? 'resend_timeout' : 'resend_network_error' };
       }
     },
   };

@@ -5,7 +5,8 @@
 // generated code with the same settings, then e-mails the new code once (same rules as creating with
 // "Email to": idempotent per request key, bounded retries, kill switch, optional address binding, the code
 // returned to the admin only if the e-mail was not delivered). The old code is left as it is; the admin can
-// disable it separately.
+// disable it separately. A replacement is ALWAYS a new code: the old plain code does not exist anywhere to be re-sent
+// (hash only storage, hardening 0264), and the number of replacements per code per day is limited (0266).
 //
 // Capability: requirePromoCodeAdmin() (can_manage_promo_codes) — no new capability. The plaintext code never
 // appears in a URL, a log or an error message.
@@ -14,6 +15,8 @@ import { adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { requirePromoCodeAdmin } from '@/lib/services/promoCodeAdmin';
 import { mapPromoRpcError } from '@/lib/services/promoCodes';
 import { createAndEmailPromoCodes, parseEmailDispatch } from '@/lib/services/promoCodeEmail';
+import { dispatchFailureResponse } from '@/lib/services/promoDispatchResponse';
+import { createCircuitBreaker } from '@/lib/services/promoEmailBreaker';
 import { createResendMailer } from '@/lib/services/premiumReminderMailer';
 import { createClient } from '@/lib/supabase/server';
 import { ok, bad } from '@/lib/api';
@@ -70,12 +73,15 @@ export const POST = adminRoute(async (req: Request, { params }: { params: Promis
       note: old.note,
     },
     request: dispatch.value,
+    kind: 'replace',
+    replacesPromoCodeId: old.id,
     mailer: createResendMailer(),
+    breaker: createCircuitBreaker(),
     baseUrl,
   });
   if (!result.ok) {
     if ('rpcError' in result) return safeDbError(result.rpcError, 'admin promo codes replace+email');
-    return bad(result.message, result.status, result.code);
+    return dispatchFailureResponse(result);
   }
   return ok(result);
 });

@@ -187,6 +187,11 @@ export interface AdminCapabilities {
    * Backed by admin_users.can_activate_planning_benchmarks. Separately named from the upload capability.
    */
   planningBenchmarkActivate: boolean;
+   * Hardening 0264 item 3 — override of the Premium grant limits (per grant extension cap and lifetime ceiling). Backed
+   * by admin_users.can_override_entitlement_limits and is_entitlement_override_admin(). NOT implied by `isAdmin`, by
+   * `entitlementManagement` or by `promoCodeManagement`. Used only together with `entitlementManagement`.
+   */
+  entitlementOverride: boolean;
 }
 
 /**
@@ -213,6 +218,7 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   promoCodeManagement: false,
   planningBenchmarkUpload: false,
   planningBenchmarkActivate: false,
+  entitlementOverride: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -254,6 +260,7 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     promoCodeManagement: readBooleanField(source, 'promoCodeManagement'),
     planningBenchmarkUpload: readBooleanField(source, 'planningBenchmarkUpload'),
     planningBenchmarkActivate: readBooleanField(source, 'planningBenchmarkActivate'),
+    entitlementOverride: readBooleanField(source, 'entitlementOverride'),
   };
 }
 
