@@ -104,7 +104,7 @@ async function expectCode(p: Promise<unknown>, code: string) {
 
 async function manage(actor: string, action: string, target: string, endsOn: string | null, reason = 'Pilot customer, invoice pending'): Promise<Json> {
   return as(actor, 'authenticated', async () => {
-    const { rows } = await db.query(`select public.admin_manage_premium_entitlement($1,$2,$3,$4) v`, [action, target, endsOn, reason]);
+    const { rows } = await db.query(`select public.admin_manage_premium_entitlement($1,$2,$3,$4,false) v`, [action, target, endsOn, reason]);
     return (rows[0] as { v: Json }).v;
   });
 }
@@ -315,7 +315,7 @@ describe('promo capability separation (Standard §3) and database-layer authoris
     await expectCode(createPromo(ENT_ADMIN, {}), 'PROMO_ADMIN_REQUIRED');
     await expectCode(manage(PROMO_ADMIN, 'grant', t, await addDays(10)), 'ENTITLEMENT_ADMIN_REQUIRED');
     for (const who of [PLAIN, NO_CAP_ADMIN]) await expectCode(createPromo(who, {}), 'PROMO_ADMIN_REQUIRED');
-    await expect(as(null, 'anon', () => db.query(`select public.admin_list_promo_codes()`))).rejects.toThrow(/permission denied/i);
+    await expect(as(null, 'anon', () => db.query(`select public.admin_list_promo_codes_v2()`))).rejects.toThrow(/permission denied/i);
     expect((await createPromo(PROMO_ADMIN, {})).id).toBeTruthy();
   });
 

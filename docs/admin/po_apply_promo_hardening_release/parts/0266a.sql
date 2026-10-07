@@ -1,8 +1,9 @@
 -- 0266 promo e-mail abuse controls and reconcilable dispatch (part A of D)
 -- =============================================================================
--- NEW migration on top of 0265 (apply 0264 and 0265 first). 0242 is NOT edited. The functions it created
--- are dropped and recreated here with the same security mode, the same empty search_path and the same
--- grants (authenticated for the admin functions).
+-- NEW migration on top of 0265 (apply 0264 and 0265 first). 0242 is NOT edited. ADDITIVE: the new begin
+-- function is a new overload with the same security mode, the same empty search_path and the same grants. It
+-- has no default values, so a three argument call reaches only the old function and a six argument call only
+-- this one. The old begin function is removed by 0279, after the new release is verified.
 --
 -- WHAT THIS ADDS (items 8 and 9 of the hardening mission)
 --   * a purpose, a kind (create or replace) and the replaced code on every dispatch request, so each

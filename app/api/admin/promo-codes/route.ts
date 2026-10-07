@@ -27,7 +27,7 @@ export const GET = adminRoute(async () => {
   const { forbidden } = await requirePromoCodeAdmin();
   if (forbidden) return forbidden;
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('admin_list_promo_codes');
+  const { data, error } = await supabase.rpc('admin_list_promo_codes_v2');
   if (error) {
     const mapped = mapPromoRpcError(error);
     if (mapped) return bad(mapped.message, mapped.status, mapped.code);

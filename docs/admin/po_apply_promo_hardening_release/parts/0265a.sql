@@ -1,23 +1,28 @@
 -- 0265 promo and premium hardening, functions (part A of F)
 -- =============================================================================
 -- NEW migration on top of 0264 (apply 0264 first). The applied migrations 0231, 0237, 0238 and 0242 are
--- NOT edited. Functions they created are dropped and recreated here with the SAME owner (the migration
--- role), the SAME security mode (security definer), the SAME search_path (empty) and the SAME grants
--- (authenticated for the admin functions, service_role only for the redeem function).
+-- NOT edited. ADDITIVE: every function this file adds is a NEW overload or a NEW name, with the SAME owner
+-- (the migration role), the SAME security mode (security definer), the SAME search_path (empty) and the
+-- SAME grants as the function it stands beside. The old functions are NOT dropped here. They stay in place,
+-- unchanged, so the release that is live today keeps working while this migration and the new application
+-- release overlap in time (the deploy safety rule). A later migration, 0279, removes the old ones after the
+-- PO has verified the new release.
 --
 -- WHAT THIS MIGRATION CHANGES
 --   A  admin_create_promo_code: takes a keyed digest and a masked hint computed by the application. The
 --      plain code is never seen by the database and never stored. Returns the id and the settings only.
---   B  admin_list_promo_codes: no code column any more.
+--   B  admin_list_promo_codes_v2: a new list function with no code column (the old list stays for now).
 --   C  redeem_promo_code_for_user: looks the code up by digest (current and previous key version), takes
 --      the verified address hash, and ends a window of D days on the day redeemed plus D minus 1.
 --   D  the digest backfill and finalise functions (service role only).
---   E  admin_manage_premium_entitlement: shared window definition, lifetime ceiling, override path.
+--   E  admin_manage_premium_entitlement: a new five argument form (the override flag has NO default, so a
+--      four argument call can only ever reach the old function): shared window definition, lifetime ceiling, override path.
 --   F  premium_reminder_claim: window length measured by the shared definition.
 --
--- OLD SIGNATURES ARE DROPPED. The application in this release calls only the new ones. Apply 0264 and
--- 0265 BEFORE deploying the application (the old application would find its create and redeem calls
--- gone and would show the explicit unavailable message until the new release is live).
+-- OLD SIGNATURES ARE KEPT. The application in this release calls only the new ones. Apply 0264 to 0268 BEFORE
+-- deploying the application. The old application keeps using the old functions until the deploy completes
+-- (create, list, redeem, grant and e-mail begin all still work), and the new application, if it ever ran against a
+-- database without this migration, refuses with an explicit unavailable message and changes nothing.
 --
 -- EDITOR SAFETY. ASCII only. No comment and no string contains one of the three statement words followed
 -- by a name. Hand-run parts A to F in order. Their concatenation is byte-equal to this file.
@@ -36,8 +41,6 @@ comment on function public.promo_attempts_retention_days() is
   'Hardening 0265 item 7: days a redemption attempt row is kept. Used by redeem_promo_code_for_user and seeded as the retention policy value for promo_redemption_attempts.';
 revoke all on function public.promo_attempts_retention_days() from public, anon;
 grant execute on function public.promo_attempts_retention_days() to authenticated, service_role;
-
-drop function if exists public.admin_create_promo_code(text, int, int, boolean, date, boolean, text, text, int);
 
 create or replace function public.admin_create_promo_code(
   p_code_digest text, p_code_hint text, p_digest_version int,

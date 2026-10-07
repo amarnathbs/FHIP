@@ -6,8 +6,6 @@
 -- legacy row that has no digest yet (before the backfill). p_email_hash: the keyed hash of the session
 -- user address, supplied by the application only when that address is verified. Never a browser value.
 
-drop function if exists public.redeem_promo_code_for_user(uuid, text, text, text);
-
 create or replace function public.redeem_promo_code_for_user(
   p_user_id uuid, p_digests text[], p_ip_hash text, p_email_hash text default null, p_legacy_code text default null
 )

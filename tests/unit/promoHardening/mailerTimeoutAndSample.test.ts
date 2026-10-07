@@ -69,7 +69,7 @@ describe('mailer timeout', () => {
 });
 
 describe('the real-send certification sample', () => {
-  const FILE = path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_hardening', 'resend_sample_body.txt');
+  const FILE = path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_promo_hardening_release', 'resend_sample_body.txt');
   const sample = () =>
     composePromoCodeEmail({ code: 'ZZZZZZZZZZ', durationDays: 30, expiresOn: '2026-10-31', maxRedemptions: 1, bound: false, baseUrl: 'https://app.financialhealthplatform.com' });
 

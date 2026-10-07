@@ -79,6 +79,44 @@ export function clientIpFromHeaders(headers: Pick<Headers, 'get'>, env: Env = pr
   return ip;
 }
 
+export interface NetworkCheck {
+  /** The trusted hop count in force, or null when the setting is invalid. */
+  configuredHops: number | null;
+  /** The X-Forwarded-For entries as received (sanitised, at most 10, each at most 45 characters), left to right. */
+  entries: string[];
+  /** 1 = the last entry. null when no entry would be used. */
+  chosenFromRight: number | null;
+  /** The entry that would be used for the per-network limit, or null. It is the CALLER'S OWN address when the hop count is right. */
+  chosenAddress: string | null;
+  /** Why no address would be used (so the per-network limit would be off and only the per-user limit applies), or null. */
+  reason: 'invalid_setting' | 'no_header' | 'shorter_than_hops' | 'not_an_address' | 'not_public' | null;
+}
+
+/**
+ * Operator probe for the trusted hop count (hardening item 6). Pure: reports what hashClientIp WOULD use for this request and
+ * why not, without hashing, storing or logging anything. Shown only to a promo administrator, about their own request.
+ * It runs the same selection as clientIpFromHeaders, so what it shows is what redemption would do.
+ */
+export function describeNetworkCheck(headers: Pick<Headers, 'get'>, env: Env = process.env): NetworkCheck {
+  const hops = trustedProxyHops(env);
+  const raw = headers.get('x-forwarded-for') ?? '';
+  const entries = raw
+    .split(',')
+    .map((e) => e.trim())
+    .filter((e) => e !== '')
+    .slice(0, 10)
+    .map((e) => e.replace(/[^0-9a-fA-F:.[\]]/g, '').slice(0, 45));
+  const base = { configuredHops: hops, entries, chosenFromRight: null, chosenAddress: null };
+  if (hops === null) return { ...base, reason: 'invalid_setting' };
+  if (!raw) return { ...base, reason: 'no_header' };
+  const all = raw.split(',').map((e) => e.trim()).filter((e) => e !== '');
+  if (all.length < hops) return { ...base, reason: 'shorter_than_hops' };
+  const ip = cleanIp(all[all.length - hops]);
+  if (!ip) return { ...base, reason: 'not_an_address' };
+  if (isNonPublicAddress(ip)) return { ...base, reason: 'not_public' };
+  return { ...base, chosenFromRight: hops, chosenAddress: ip, reason: null };
+}
+
 /** Keyed hash of the trusted client address, or null (then only the per-user limit applies). */
 export function hashClientIp(headers: Pick<Headers, 'get'>, env: Env = process.env): string | null {
   const secret = readPromoSecret('ip', env);

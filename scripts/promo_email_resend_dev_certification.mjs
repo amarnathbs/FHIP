@@ -12,7 +12,7 @@
 // SAFETY (all enforced below, and unit tested in tests/unit/promoHardening/operatorScripts.test.ts):
 //   * --send needs --confirm-owned-mailboxes and at least one --to, at most five;
 //   * --send refuses unless NEXT_PUBLIC_SUPABASE_URL is the DEV project (so a production environment can never be used);
-//   * the body is docs/admin/po_apply_hardening/resend_sample_body.txt with the sample code ZZZZZ-ZZZZZ, which no admin ever created and
+//   * the body is docs/admin/po_apply_promo_hardening_release/resend_sample_body.txt with the sample code ZZZZZ-ZZZZZ, which no admin ever created and
 //     which cannot be redeemed; a test keeps the file equal to the real message;
 //   * it never prints the API key, never prints a code other than the sample, and prints addresses only as given on the command line.
 
@@ -23,7 +23,7 @@ import dns from 'node:dns/promises';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEV_REF = 'vqycarelcoijzwlpkpcz';
-const SAMPLE_BODY = path.join(HERE, '..', 'docs', 'admin', 'po_apply_hardening', 'resend_sample_body.txt');
+const SAMPLE_BODY = path.join(HERE, '..', 'docs', 'admin', 'po_apply_promo_hardening_release', 'resend_sample_body.txt');
 const SUBJECT = 'Your FHIP Premium access code';
 const MAX_TO = 5;
 

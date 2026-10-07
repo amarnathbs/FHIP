@@ -227,7 +227,7 @@ export function callManageEntitlement(client: RpcClient, req: ManageRequest) {
     p_target_user_id: req.userId,
     p_ends_on: req.endsOn,
     p_reason: req.reason,
-    p_override: req.override,
+    p_override: req.override === true, // always an explicit boolean: a four-argument call would reach only the OLD function
   });
 }
 

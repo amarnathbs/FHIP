@@ -47,7 +47,7 @@ export const POST = adminRoute(async (req: Request, { params }: { params: Promis
   if (dispatch.kind === 'none') return bad('Enter at least one e-mail address to send the replacement code to.', 422, 'PROMO_RECIPIENTS_INVALID');
 
   const supabase = await createClient();
-  const listed = await supabase.rpc('admin_list_promo_codes');
+  const listed = await supabase.rpc('admin_list_promo_codes_v2');
   if (listed.error) {
     const mapped = mapPromoRpcError(listed.error);
     if (mapped) return bad(mapped.message, mapped.status, mapped.code);

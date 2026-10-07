@@ -1,23 +1,28 @@
 -- 0265 promo and premium hardening, functions (part A of F)
 -- =============================================================================
 -- NEW migration on top of 0264 (apply 0264 first). The applied migrations 0231, 0237, 0238 and 0242 are
--- NOT edited. Functions they created are dropped and recreated here with the SAME owner (the migration
--- role), the SAME security mode (security definer), the SAME search_path (empty) and the SAME grants
--- (authenticated for the admin functions, service_role only for the redeem function).
+-- NOT edited. ADDITIVE: every function this file adds is a NEW overload or a NEW name, with the SAME owner
+-- (the migration role), the SAME security mode (security definer), the SAME search_path (empty) and the
+-- SAME grants as the function it stands beside. The old functions are NOT dropped here. They stay in place,
+-- unchanged, so the release that is live today keeps working while this migration and the new application
+-- release overlap in time (the deploy safety rule). A later migration, 0279, removes the old ones after the
+-- PO has verified the new release.
 --
 -- WHAT THIS MIGRATION CHANGES
 --   A  admin_create_promo_code: takes a keyed digest and a masked hint computed by the application. The
 --      plain code is never seen by the database and never stored. Returns the id and the settings only.
---   B  admin_list_promo_codes: no code column any more.
+--   B  admin_list_promo_codes_v2: a new list function with no code column (the old list stays for now).
 --   C  redeem_promo_code_for_user: looks the code up by digest (current and previous key version), takes
 --      the verified address hash, and ends a window of D days on the day redeemed plus D minus 1.
 --   D  the digest backfill and finalise functions (service role only).
---   E  admin_manage_premium_entitlement: shared window definition, lifetime ceiling, override path.
+--   E  admin_manage_premium_entitlement: a new five argument form (the override flag has NO default, so a
+--      four argument call can only ever reach the old function): shared window definition, lifetime ceiling, override path.
 --   F  premium_reminder_claim: window length measured by the shared definition.
 --
--- OLD SIGNATURES ARE DROPPED. The application in this release calls only the new ones. Apply 0264 and
--- 0265 BEFORE deploying the application (the old application would find its create and redeem calls
--- gone and would show the explicit unavailable message until the new release is live).
+-- OLD SIGNATURES ARE KEPT. The application in this release calls only the new ones. Apply 0264 to 0268 BEFORE
+-- deploying the application. The old application keeps using the old functions until the deploy completes
+-- (create, list, redeem, grant and e-mail begin all still work), and the new application, if it ever ran against a
+-- database without this migration, refuses with an explicit unavailable message and changes nothing.
 --
 -- EDITOR SAFETY. ASCII only. No comment and no string contains one of the three statement words followed
 -- by a name. Hand-run parts A to F in order. Their concatenation is byte-equal to this file.
@@ -36,8 +41,6 @@ comment on function public.promo_attempts_retention_days() is
   'Hardening 0265 item 7: days a redemption attempt row is kept. Used by redeem_promo_code_for_user and seeded as the retention policy value for promo_redemption_attempts.';
 revoke all on function public.promo_attempts_retention_days() from public, anon;
 grant execute on function public.promo_attempts_retention_days() to authenticated, service_role;
-
-drop function if exists public.admin_create_promo_code(text, int, int, boolean, date, boolean, text, text, int);
 
 create or replace function public.admin_create_promo_code(
   p_code_digest text, p_code_hint text, p_digest_version int,
@@ -115,12 +118,10 @@ $fn$;
 revoke all on function public.admin_create_promo_code(text, text, int, int, int, boolean, date, boolean, text, text, int) from public, anon;
 grant execute on function public.admin_create_promo_code(text, text, int, int, int, boolean, date, boolean, text, text, int) to authenticated;
 -- ---------------------------------------------------------------------------
--- PART B starts here: the list no longer returns any code value
+-- PART B starts here: a new list function that returns no code value (the old list is kept for now)
 -- ---------------------------------------------------------------------------
 
-drop function if exists public.admin_list_promo_codes();
-
-create or replace function public.admin_list_promo_codes()
+create or replace function public.admin_list_promo_codes_v2()
 returns table (
   id uuid, code_hint text, duration_days int, max_redemptions int, redemption_count int,
   expires_on date, note text, status text, state text, created_at timestamptz, created_by_email text,
@@ -144,8 +145,8 @@ begin
 end;
 $fn$;
 
-revoke all on function public.admin_list_promo_codes() from public, anon;
-grant execute on function public.admin_list_promo_codes() to authenticated;
+revoke all on function public.admin_list_promo_codes_v2() from public, anon;
+grant execute on function public.admin_list_promo_codes_v2() to authenticated;
 -- ---------------------------------------------------------------------------
 -- PART C starts here: redeem by digest, verified address hash, shared window definition
 -- ---------------------------------------------------------------------------
@@ -153,8 +154,6 @@ grant execute on function public.admin_list_promo_codes() to authenticated;
 -- the previous one (at most 3 values). p_legacy_code: the normalised entered code, used ONLY to find a
 -- legacy row that has no digest yet (before the backfill). p_email_hash: the keyed hash of the session
 -- user address, supplied by the application only when that address is verified. Never a browser value.
-
-drop function if exists public.redeem_promo_code_for_user(uuid, text, text, text);
 
 create or replace function public.redeem_promo_code_for_user(
   p_user_id uuid, p_digests text[], p_ip_hash text, p_email_hash text default null, p_legacy_code text default null
@@ -267,8 +266,9 @@ grant execute on function public.redeem_promo_code_for_user(uuid, text[], text, 
 -- PART D starts here: digest backfill and finalise (service role only)
 -- ---------------------------------------------------------------------------
 -- Run order for existing plain codes (the runbook has the full procedure):
---   1. scripts/promo_code_digest_backfill.mjs (dry run, then real) reads the pending rows, computes each
---      digest with the application secret, stores it, then asks the database to verify the copy.
+--   1. The Admin button Prepare existing codes on the Promo Codes page (or the operator script
+--      scripts/promo_code_digest_backfill.mjs) reads the pending rows, computes each digest with the
+--      application secret, stores it, then asks the database to verify the copy. Safe to repeat.
 --   2. promo_codes_finalise_hash_only(true) reports the counts. Only when every plain row is verified does
 --      promo_codes_finalise_hash_only(false) blank the plain values. It is all or nothing.
 -- A point in time backup before the real finalise is the reversal plan: after the blanking the plain
@@ -344,10 +344,42 @@ end;
 $fn$;
 revoke all on function public.promo_codes_finalise_hash_only(boolean) from public, anon, authenticated;
 grant execute on function public.promo_codes_finalise_hash_only(boolean) to service_role;
+
+
+-- Counts only, for the Admin setup card on the Promo Codes page. Promo capability. No code, no digest.
+create or replace function public.admin_promo_codes_hash_status()
+returns jsonb
+language plpgsql stable security definer set search_path = '' as $fn$
+begin
+  if auth.uid() is null then raise exception 'PROMO_UNAUTHENTICATED' using errcode = '42501'; end if;
+  if not public.is_promo_code_admin() then raise exception 'PROMO_ADMIN_REQUIRED' using errcode = '42501'; end if;
+  return jsonb_build_object(
+    'rows_total', (select count(*) from public.promo_codes),
+    'rows_with_plain_value', (select count(*) from public.promo_codes where code is not null),
+    'rows_plain_without_verified_digest', (select count(*) from public.promo_codes where code is not null and code_digest_verified_at is null),
+    'rows_with_digest', (select count(*) from public.promo_codes where code_digest is not null));
+end;
+$fn$;
+revoke all on function public.admin_promo_codes_hash_status() from public, anon;
+grant execute on function public.admin_promo_codes_hash_status() to authenticated;
+
+-- One evidence row for each run of the Admin backfill button (counts only). Service role only.
+create or replace function public.promo_codes_backfill_record(p_actor uuid, p_rows_seen int, p_rows_verified int)
+returns void
+language plpgsql security definer set search_path = '' as $fn$
+begin
+  insert into public.admin_monitoring_events (event_type, severity, actor_user_id, details)
+  values ('promo_codes_digest_backfill', 'info', p_actor,
+          jsonb_build_object('rows_seen', coalesce(p_rows_seen, 0), 'rows_verified', coalesce(p_rows_verified, 0)));
+end;
+$fn$;
+revoke all on function public.promo_codes_backfill_record(uuid, int, int) from public, anon, authenticated;
+grant execute on function public.promo_codes_backfill_record(uuid, int, int) to service_role;
 -- ---------------------------------------------------------------------------
 -- PART E starts here: grant, extend and revoke with the shared window, the lifetime ceiling and the override
 -- ---------------------------------------------------------------------------
--- Changes against 0237 (same name, one new trailing parameter, so the old four argument form is dropped):
+-- Changes against 0237. Same name, one new trailing parameter WITHOUT a default, so a four argument call reaches
+-- only the old function and a five argument call reaches only this one. The old form is removed by 0279.
 --   * the latest end date is the shared definition: access_end_date(today, 365), so a 365 day grant ends on
 --     today plus 364 and never more than 365 calendar days are given at once.
 --   * every successful grant and extend adds one to the user lifetime counter, a revoke never lowers it.
@@ -357,10 +389,8 @@ grant execute on function public.promo_codes_finalise_hash_only(boolean) to serv
 -- New error codes: ENTITLEMENT_LIFETIME_LIMIT_REACHED, ENTITLEMENT_OVERRIDE_NOT_ALLOWED,
 -- ENTITLEMENT_OVERRIDE_REASON_REQUIRED, ENTITLEMENT_OVERRIDE_NOT_NEEDED.
 
-drop function if exists public.admin_manage_premium_entitlement(text, uuid, date, text);
-
 create or replace function public.admin_manage_premium_entitlement(
-  p_action text, p_target_user_id uuid, p_ends_on date, p_reason text, p_override boolean default false
+  p_action text, p_target_user_id uuid, p_ends_on date, p_reason text, p_override boolean
 ) returns jsonb
 language plpgsql security definer set search_path = '' as $fn$
 declare

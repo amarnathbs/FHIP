@@ -103,10 +103,8 @@ async function redeem(user: string, plain: string, o: { ip?: string | null; emai
 
 async function manage(actor: string, action: string, target: string, endsOn: string | null, reason = 'Pilot customer, invoice pending', override?: boolean): Promise<Json> {
   return as(actor, 'authenticated', async () => {
-    const { rows } =
-      override === undefined
-        ? await db.query(`select public.admin_manage_premium_entitlement($1,$2,$3,$4) v`, [action, target, endsOn, reason])
-        : await db.query(`select public.admin_manage_premium_entitlement($1,$2,$3,$4,$5) v`, [action, target, endsOn, reason, override]);
+    // Always the five argument form: a four argument call would reach the OLD function (kept until 0279) and skip the new rules.
+    const { rows } = await db.query(`select public.admin_manage_premium_entitlement($1,$2,$3,$4,$5) v`, [action, target, endsOn, reason, override ?? false]);
     return (rows[0] as { v: Json }).v;
   });
 }
@@ -237,7 +235,7 @@ describe('item 1 — hash only promo codes', () => {
 
   it('the admin list returns no code column and no digest (only the masked hint)', async () => {
     const { made } = await createPromo(PROMO_ADMIN);
-    const rows = await as(PROMO_ADMIN, 'authenticated', async () => (await db.query(`select * from public.admin_list_promo_codes()`)).rows as Json[]);
+    const rows = await as(PROMO_ADMIN, 'authenticated', async () => (await db.query(`select * from public.admin_list_promo_codes_v2()`)).rows as Json[]);
     expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) {
       expect(Object.keys(r)).not.toContain('code');
@@ -866,7 +864,7 @@ describe('item 7 — retention and scheduled cleanup', () => {
   });
 
   it('the scheduled job is registered ONLY with the production marker, and does not exist in a database without pg_cron', async () => {
-    const partD = fs.readFileSync(path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_hardening', 'parts', '0267d.sql'), 'utf8');
+    const partD = fs.readFileSync(path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_promo_hardening_release', 'parts', '0267d.sql'), 'utf8');
     await db.exec(`delete from cron.job; delete from platform_deployment_environment;`);
     await db.exec(partD);
     expect(((await db.query(`select count(*)::int n from cron.job`)).rows[0] as Json).n, 'no marker: nothing registered').toBe(0);
@@ -897,7 +895,7 @@ describe('item 10 — production marker and scheduled job verification', () => {
   });
 
   it('part A refuses to run over a table that already holds more than one row (the operator must decide which is true)', async () => {
-    const partA = fs.readFileSync(path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_hardening', 'parts', '0268a.sql'), 'utf8');
+    const partA = fs.readFileSync(path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_promo_hardening_release', 'parts', '0268a.sql'), 'utf8');
     await db.exec(`drop index uq_platform_deployment_environment_single; alter table platform_deployment_environment drop constraint platform_deployment_environment_value_check;`);
     await db.exec(`insert into platform_deployment_environment(environment) values ('production'),('development')`);
     await expectCode(db.exec(partA), 'MARKER_MORE_THAN_ONE_ROW');

@@ -18,7 +18,7 @@
 //   node scripts/promo_code_digest_backfill.mjs --finalise --i-have-a-backup
 //
 // Environment (names only here): NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PROMO_CODE_DIGEST_SECRET,
-// optional PROMO_CODE_DIGEST_VERSION (default 1). Reversal plan: docs/admin/po_apply_hardening/README.md section 6.
+// optional PROMO_CODE_DIGEST_VERSION (default 1). Reversal plan: docs/admin/po_apply_promo_hardening_release/README.md section 6.
 
 import { createHmac } from 'node:crypto';
 

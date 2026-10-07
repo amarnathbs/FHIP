@@ -1,7 +1,8 @@
 -- ---------------------------------------------------------------------------
 -- PART E starts here: grant, extend and revoke with the shared window, the lifetime ceiling and the override
 -- ---------------------------------------------------------------------------
--- Changes against 0237 (same name, one new trailing parameter, so the old four argument form is dropped):
+-- Changes against 0237. Same name, one new trailing parameter WITHOUT a default, so a four argument call reaches
+-- only the old function and a five argument call reaches only this one. The old form is removed by 0279.
 --   * the latest end date is the shared definition: access_end_date(today, 365), so a 365 day grant ends on
 --     today plus 364 and never more than 365 calendar days are given at once.
 --   * every successful grant and extend adds one to the user lifetime counter, a revoke never lowers it.
@@ -11,10 +12,8 @@
 -- New error codes: ENTITLEMENT_LIFETIME_LIMIT_REACHED, ENTITLEMENT_OVERRIDE_NOT_ALLOWED,
 -- ENTITLEMENT_OVERRIDE_REASON_REQUIRED, ENTITLEMENT_OVERRIDE_NOT_NEEDED.
 
-drop function if exists public.admin_manage_premium_entitlement(text, uuid, date, text);
-
 create or replace function public.admin_manage_premium_entitlement(
-  p_action text, p_target_user_id uuid, p_ends_on date, p_reason text, p_override boolean default false
+  p_action text, p_target_user_id uuid, p_ends_on date, p_reason text, p_override boolean
 ) returns jsonb
 language plpgsql security definer set search_path = '' as $fn$
 declare

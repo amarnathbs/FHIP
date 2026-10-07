@@ -79,6 +79,22 @@ export function promoSecretProblems(feature: PromoFeature, env: Env = process.en
   return { missing, reused: [...reused].filter((n) => mine.has(n)).sort() };
 }
 
+export type PromoSecretStatus = 'ok' | 'missing' | 'too_short' | 'reused';
+
+/**
+ * One secret's state for the Admin setup card. Names and states only, never a value or a length. 'missing' = not set
+ * (or blank), 'too_short' = set but under the minimum, 'reused' = the same value is also used for another dedicated secret.
+ */
+export function promoSecretStatus(key: PromoSecretKey, env: Env = process.env): PromoSecretStatus {
+  const own = (env[PROMO_SECRET_ENV[key]] ?? '').trim();
+  if (!own) return 'missing';
+  if (own.length < PROMO_SECRET_MIN_LENGTH) return 'too_short';
+  for (const other of Object.keys(PROMO_SECRET_ENV) as PromoSecretKey[]) {
+    if (other !== key && (env[PROMO_SECRET_ENV[other]] ?? '').trim() === own) return 'reused';
+  }
+  return 'ok';
+}
+
 export function promoFeatureAvailable(feature: PromoFeature, env: Env = process.env): boolean {
   const p = promoSecretProblems(feature, env);
   return p.missing.length === 0 && p.reused.length === 0;

@@ -2,11 +2,9 @@
 -- PART B starts here: begin a dispatch request (purpose, daily limits, replacement limit, alerts)
 -- ---------------------------------------------------------------------------
 
-drop function if exists public.admin_promo_email_begin(text, int, boolean);
-
 create or replace function public.admin_promo_email_begin(
   p_request_key text, p_recipient_count int, p_bound boolean,
-  p_kind text default 'create', p_purpose text default null, p_replaces uuid default null
+  p_kind text, p_purpose text, p_replaces uuid
 )
 returns jsonb
 language plpgsql security definer set search_path = '' as $fn$

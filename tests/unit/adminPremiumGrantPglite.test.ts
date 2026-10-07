@@ -81,7 +81,7 @@ const asAdmin = <T>(fn: () => Promise<T>) => as(ADMIN, 'authenticated', fn);
 
 async function manage(actor: string, action: string, target: string, endsOn: string | null, reason = 'Pilot customer, invoice pending'): Promise<Json> {
   return as(actor, 'authenticated', async () => {
-    const { rows } = await db.query(`select public.admin_manage_premium_entitlement($1,$2,$3,$4) v`, [action, target, endsOn, reason]);
+    const { rows } = await db.query(`select public.admin_manage_premium_entitlement($1,$2,$3,$4,false) v`, [action, target, endsOn, reason]);
     return (rows[0] as { v: Json }).v;
   });
 }
@@ -197,9 +197,9 @@ describe('authorisation (Standard §2/§4) — capability enforced in the DATABA
     await expectCode(manage(PLAIN, 'grant', t, end), 'ENTITLEMENT_ADMIN_REQUIRED');
     await expectCode(manage(ADMIN_NOCAP, 'grant', t, end), 'ENTITLEMENT_ADMIN_REQUIRED');
     // anon has no EXECUTE at all (permission denied).
-    await expect(as(null, 'anon', () => db.query(`select public.admin_manage_premium_entitlement('grant',$1,$2,'some valid reason')`, [t, end]))).rejects.toThrow(/permission denied/i);
+    await expect(as(null, 'anon', () => db.query(`select public.admin_manage_premium_entitlement('grant',$1,$2,'some valid reason',false)`, [t, end]))).rejects.toThrow(/permission denied/i);
     // service_role may hold EXECUTE through platform default privileges, but auth.uid() is null for it, so the function itself refuses.
-    await expect(as(null, 'service_role', () => db.query(`select public.admin_manage_premium_entitlement('grant',$1,$2,'some valid reason')`, [t, end]))).rejects.toThrow(/permission denied|ENTITLEMENT_UNAUTHENTICATED/i);
+    await expect(as(null, 'service_role', () => db.query(`select public.admin_manage_premium_entitlement('grant',$1,$2,'some valid reason',false)`, [t, end]))).rejects.toThrow(/permission denied|ENTITLEMENT_UNAUTHENTICATED/i);
     expect((await ent(t)).plan_tier).toBe('free');
     expect(await eventCount()).toBe(before);
   });

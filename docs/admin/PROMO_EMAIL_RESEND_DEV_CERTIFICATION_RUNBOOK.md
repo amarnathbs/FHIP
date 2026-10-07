@@ -25,7 +25,7 @@ If any check fails, stop. Fix the DNS first. The names above are the standard on
 
 ## 2. The messages
 
-Three messages per mailbox, all sent by the script with a **sample code that no admin created and that cannot be redeemed** (`ZZZZZ-ZZZZZ`). The body is the file `docs/admin/po_apply_hardening/resend_sample_body.txt`, which a test keeps equal to the real message produced by `composePromoCodeEmail`. So the certification certifies the real text.
+Three messages per mailbox, all sent by the script with a **sample code that no admin created and that cannot be redeemed** (`ZZZZZ-ZZZZZ`). The body is the file `docs/admin/po_apply_promo_hardening_release/resend_sample_body.txt`, which a test keeps equal to the real message produced by `composePromoCodeEmail`. So the certification certifies the real text.
 
 | # | Message | What it proves |
 |---|---|---|

@@ -1,7 +1,7 @@
 -- 0264 promo and premium hardening, foundations (part A of D)
 -- =============================================================================
 -- NEW migration on top of 0263. The applied migrations 0231, 0237, 0238, 0242, 0250, 0251 and 0252 are
--- NOT edited. Every change to an object they created is a new object or a drop and recreate here.
+-- NOT edited. Every change to an object they created is a new object or a new overload here (nothing they created is dropped by 0264 to 0268).
 --
 -- WHAT THIS MIGRATION ADDS (item numbers refer to the hardening mission)
 --   Item 2  access_end_date() and access_window_days(): one shared definition of an access window whose

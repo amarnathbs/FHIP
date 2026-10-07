@@ -131,11 +131,12 @@ afterAll(async () => {
   await db?.close();
 });
 
-describe('the previous call shapes are GONE (hash only storage): no overload of the old signatures remains', () => {
+describe('the previous call shapes are GONE once the cleanup 0279 has run (hash only storage): no overload of the old signatures remains', () => {
   it('the old 9-argument create, the old 4-argument redeem and the old 3-argument begin no longer exist, and each function exists exactly once', async () => {
-    for (const name of ['admin_create_promo_code', 'redeem_promo_code_for_user', 'admin_promo_email_begin', 'admin_list_promo_codes']) {
+    for (const name of ['admin_create_promo_code', 'redeem_promo_code_for_user', 'admin_promo_email_begin', 'admin_list_promo_codes_v2']) {
       expect(((await db.query(`select count(*)::int n from pg_proc where proname=$1`, [name])).rows[0] as { n: number }).n, name).toBe(1);
     }
+    expect(((await db.query(`select count(*)::int n from pg_proc where proname='admin_list_promo_codes'`)).rows[0] as { n: number }).n, 'the old list (it returned the plain code) is gone').toBe(0);
     await expect(db.query(`select public.admin_create_promo_code(null,30,5,false,null,false,null,null,0)`)).rejects.toThrow(/does not exist/);
     await expect(db.query(`select public.redeem_promo_code_for_user($1,'ABCDEFGHJK',null,null)`, [PLAIN]), 'the old plain code call can no longer be made').rejects.toThrow(/malformed array literal|does not exist/);
   });
@@ -195,7 +196,7 @@ describe('address binding (keyed hash only)', () => {
 
   it('the admin list shows THAT a code is bound but never exposes the hash', async () => {
     await createPromo(PROMO_ADMIN, { max: 1, hash: HASH_B, recipients: 1 });
-    const rows = await as(PROMO_ADMIN, 'authenticated', async () => (await db.query(`select * from public.admin_list_promo_codes()`)).rows as Json[]);
+    const rows = await as(PROMO_ADMIN, 'authenticated', async () => (await db.query(`select * from public.admin_list_promo_codes_v2()`)).rows as Json[]);
     expect(rows.some((r) => r.bound === true)).toBe(true);
     expect(rows.every((r) => !('bound_email_hash' in r))).toBe(true);
     expect(JSON.stringify(rows)).not.toContain(HASH_B);
@@ -216,8 +217,8 @@ describe('dispatch request: capability, idempotency key, per-admin rate limit', 
   it('only a promo-code admin may begin a request (plain user, entitlement-only admin, anon refused)', async () => {
     await expectCode(begin(PLAIN, 'key-plain-0001'), 'PROMO_ADMIN_REQUIRED');
     await expectCode(begin(ENT_ONLY_ADMIN, 'key-ent-0001'), 'PROMO_ADMIN_REQUIRED');
-    await expect(as(null, 'anon', () => db.query(`select public.admin_promo_email_begin('key-anon-0001',1,false)`))).rejects.toThrow(/permission denied/i);
-    await expect(as(null, 'service_role', () => db.query(`select public.admin_promo_email_begin('key-svc-00001',1,false)`))).rejects.toThrow(/PROMO_UNAUTHENTICATED/);
+    await expect(as(null, 'anon', () => db.query(`select public.admin_promo_email_begin('key-anon-0001',1,false,'create','Pilot cohort welcome codes',null)`))).rejects.toThrow(/permission denied/i);
+    await expect(as(null, 'service_role', () => db.query(`select public.admin_promo_email_begin('key-svc-00001',1,false,'create','Pilot cohort welcome codes',null)`))).rejects.toThrow(/PROMO_UNAUTHENTICATED/);
   });
 
   it('keys must be 8..100 characters and recipient counts 1..20', async () => {

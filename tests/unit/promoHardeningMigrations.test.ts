@@ -19,7 +19,7 @@ import { hazards } from '../../scripts/migration_editor_safety_lint.mjs';
 import { MIGRATIONS } from '../../scripts/promo_hardening_build_migrations.mjs';
 import { MIG_DIR, REPO_ROOT, expectNamedFailure } from './support/promoTestHelpers';
 
-const PARTS_DIR = path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_hardening', 'parts');
+const PARTS_DIR = path.join(REPO_ROOT, 'docs', 'admin', 'po_apply_promo_hardening_release', 'parts');
 const part = (name: string) => fs.readFileSync(path.join(PARTS_DIR, `${name}.sql`));
 const wholeOf = (file: string) => fs.readFileSync(path.join(MIG_DIR, file));
 const text = (b: Buffer) => b.toString('utf8');
@@ -147,7 +147,7 @@ describe('NC-L1 and NC-L2 lineage: the applied migrations are untouched, the num
   it('the applied ancestors exist and sort before the new migrations, in the order they were applied', () => {
     const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
     const idx = (prefix: string) => files.findIndex((f) => f.startsWith(prefix));
-    for (const [a, b] of [['0231_', '0237_'], ['0237_', '0238_'], ['0238_', '0242_'], ['0242_', '0264_'], ['0252_', '0264_'], ['0264_', '0265_'], ['0265_', '0266_'], ['0266_', '0267_'], ['0267_', '0268_']]) {
+    for (const [a, b] of [['0231_', '0237_'], ['0237_', '0238_'], ['0238_', '0242_'], ['0242_', '0264_'], ['0252_', '0264_'], ['0264_', '0265_'], ['0265_', '0266_'], ['0266_', '0267_'], ['0267_', '0268_'], ['0268_', '0279_'], ['0278_', '0279_']]) {
       expect(idx(a), a).toBeGreaterThanOrEqual(0);
       expect(idx(b), b).toBeGreaterThan(idx(a));
     }
@@ -157,24 +157,49 @@ describe('NC-L1 and NC-L2 lineage: the applied migrations are untouched, the num
     const files = fs.readdirSync(MIG_DIR).filter((f) => /^\d{4}_.*\.sql$/.test(f));
     const numbers = files.map((f) => Number(f.slice(0, 4)));
     expect(new Set(numbers).size, 'no two migrations share a number').toBe(numbers.length);
-    expect(MIGRATIONS.map((m) => Number(m.file.slice(0, 4)))).toEqual([264, 265, 266, 267, 268]);
-    for (const m of MIGRATIONS) expect(Number(m.file.slice(0, 4))).toBeGreaterThan(HIGHEST_FOUND_ELSEWHERE);
+    expect(MIGRATIONS.map((m) => Number(m.file.slice(0, 4)))).toEqual([264, 265, 266, 267, 268, 279]);
+    // The five additive ones sit above 0263 (NAV2, the highest when they were written). The cleanup, 0279, sits above 0278
+    // (Planning Benchmarks, the highest on main when it was added): nothing on any ref or worktree uses 0279 or above.
+    for (const m of MIGRATIONS.slice(0, 5)) expect(Number(m.file.slice(0, 4))).toBeGreaterThan(HIGHEST_FOUND_ELSEWHERE);
+    expect(Number(MIGRATIONS[5].file.slice(0, 4))).toBeGreaterThan(278);
     expect(Math.max(...numbers.filter((n) => n < 264))).toBeLessThan(263);
   });
 
-  it('every function the new migrations DROP was created by an earlier migration (no phantom drop) and is recreated here', () => {
+  // DEPLOY SAFETY (the crux): 0264 to 0268 must be ADDITIVE. The release that is live today calls the old function shapes,
+  // so none of them may be dropped until the PO runs the separate cleanup, 0279, after the new release is verified.
+  it('NC-A1: 0264 to 0268 DROP no function at all (additive: the live release keeps working while the database and the application overlap)', () => {
+    for (const m of MIGRATIONS.slice(0, 5)) {
+      const code = text(wholeOf(m.file)).split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+      expect(/drop function/i.test(code), `${m.file} drops a function`).toBe(false);
+    }
+  });
+
+  it('NC-A1: the control is real: a drop of an old function inside an additive migration is detected', async () => {
+    const bad = 'drop function if exists public.redeem_promo_code_for_user(uuid, text, text, text);';
+    await expectNamedFailure(() => expect(/drop function/i.test(bad), 'an additive migration drops a function').toBe(false), 'an additive migration drops a function');
+  });
+
+  it('every function the cleanup (0279) drops was created by an earlier migration (no phantom drop), and has a live successor created by an earlier hardening migration', () => {
     const earlier = fs
       .readdirSync(MIG_DIR)
       .filter((f) => /^\d{4}_.*\.sql$/.test(f) && Number(f.slice(0, 4)) < 264)
       .map((f) => text(wholeOf(f)))
       .join('\n');
     const created = new Set([...earlier.matchAll(/create (?:or replace )?function (?:public\.)?(\w+)\s*\(/g)].map((m) => m[1]));
-    for (const m of MIGRATIONS) {
-      const sql = text(wholeOf(m.file));
-      for (const d of sql.matchAll(/drop function if exists public\.(\w+)\(/g)) {
-        expect(created.has(d[1]), `${m.file} drops ${d[1]}, which no earlier migration created`).toBe(true);
-        expect(new RegExp(`create or replace function public\\.${d[1]}\\s*\\(`).test(sql), `${m.file} drops ${d[1]} but does not recreate it`).toBe(true);
-      }
+    const hardening = MIGRATIONS.slice(0, 5).map((m) => text(wholeOf(m.file))).join('\n');
+    const successor: Record<string, string> = {
+      admin_create_promo_code: 'admin_create_promo_code',
+      admin_list_promo_codes: 'admin_list_promo_codes_v2',
+      redeem_promo_code_for_user: 'redeem_promo_code_for_user',
+      admin_manage_premium_entitlement: 'admin_manage_premium_entitlement',
+      admin_promo_email_begin: 'admin_promo_email_begin',
+    };
+    const sql = text(wholeOf(MIGRATIONS[5].file));
+    const dropped = [...sql.matchAll(/drop function if exists public\.(\w+)\(/g)].map((d) => d[1]);
+    expect(dropped.sort()).toEqual(Object.keys(successor).sort());
+    for (const name of dropped) {
+      expect(created.has(name), `0279 drops ${name}, which no earlier migration created`).toBe(true);
+      expect(new RegExp(`create or replace function public\\.${successor[name]}\\s*\\(`).test(hardening), `0279 drops ${name} but ${successor[name]} is not created by 0264 to 0268`).toBe(true);
     }
   });
 

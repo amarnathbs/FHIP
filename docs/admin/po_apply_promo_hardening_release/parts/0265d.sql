@@ -2,8 +2,9 @@
 -- PART D starts here: digest backfill and finalise (service role only)
 -- ---------------------------------------------------------------------------
 -- Run order for existing plain codes (the runbook has the full procedure):
---   1. scripts/promo_code_digest_backfill.mjs (dry run, then real) reads the pending rows, computes each
---      digest with the application secret, stores it, then asks the database to verify the copy.
+--   1. The Admin button Prepare existing codes on the Promo Codes page (or the operator script
+--      scripts/promo_code_digest_backfill.mjs) reads the pending rows, computes each digest with the
+--      application secret, stores it, then asks the database to verify the copy. Safe to repeat.
 --   2. promo_codes_finalise_hash_only(true) reports the counts. Only when every plain row is verified does
 --      promo_codes_finalise_hash_only(false) blank the plain values. It is all or nothing.
 -- A point in time backup before the real finalise is the reversal plan: after the blanking the plain
@@ -79,3 +80,34 @@ end;
 $fn$;
 revoke all on function public.promo_codes_finalise_hash_only(boolean) from public, anon, authenticated;
 grant execute on function public.promo_codes_finalise_hash_only(boolean) to service_role;
+
+
+-- Counts only, for the Admin setup card on the Promo Codes page. Promo capability. No code, no digest.
+create or replace function public.admin_promo_codes_hash_status()
+returns jsonb
+language plpgsql stable security definer set search_path = '' as $fn$
+begin
+  if auth.uid() is null then raise exception 'PROMO_UNAUTHENTICATED' using errcode = '42501'; end if;
+  if not public.is_promo_code_admin() then raise exception 'PROMO_ADMIN_REQUIRED' using errcode = '42501'; end if;
+  return jsonb_build_object(
+    'rows_total', (select count(*) from public.promo_codes),
+    'rows_with_plain_value', (select count(*) from public.promo_codes where code is not null),
+    'rows_plain_without_verified_digest', (select count(*) from public.promo_codes where code is not null and code_digest_verified_at is null),
+    'rows_with_digest', (select count(*) from public.promo_codes where code_digest is not null));
+end;
+$fn$;
+revoke all on function public.admin_promo_codes_hash_status() from public, anon;
+grant execute on function public.admin_promo_codes_hash_status() to authenticated;
+
+-- One evidence row for each run of the Admin backfill button (counts only). Service role only.
+create or replace function public.promo_codes_backfill_record(p_actor uuid, p_rows_seen int, p_rows_verified int)
+returns void
+language plpgsql security definer set search_path = '' as $fn$
+begin
+  insert into public.admin_monitoring_events (event_type, severity, actor_user_id, details)
+  values ('promo_codes_digest_backfill', 'info', p_actor,
+          jsonb_build_object('rows_seen', coalesce(p_rows_seen, 0), 'rows_verified', coalesce(p_rows_verified, 0)));
+end;
+$fn$;
+revoke all on function public.promo_codes_backfill_record(uuid, int, int) from public, anon, authenticated;
+grant execute on function public.promo_codes_backfill_record(uuid, int, int) to service_role;

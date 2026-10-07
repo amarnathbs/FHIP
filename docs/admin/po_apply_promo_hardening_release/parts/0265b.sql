@@ -1,10 +1,8 @@
 -- ---------------------------------------------------------------------------
--- PART B starts here: the list no longer returns any code value
+-- PART B starts here: a new list function that returns no code value (the old list is kept for now)
 -- ---------------------------------------------------------------------------
 
-drop function if exists public.admin_list_promo_codes();
-
-create or replace function public.admin_list_promo_codes()
+create or replace function public.admin_list_promo_codes_v2()
 returns table (
   id uuid, code_hint text, duration_days int, max_redemptions int, redemption_count int,
   expires_on date, note text, status text, state text, created_at timestamptz, created_by_email text,
@@ -28,5 +26,5 @@ begin
 end;
 $fn$;
 
-revoke all on function public.admin_list_promo_codes() from public, anon;
-grant execute on function public.admin_list_promo_codes() to authenticated;
+revoke all on function public.admin_list_promo_codes_v2() from public, anon;
+grant execute on function public.admin_list_promo_codes_v2() to authenticated;

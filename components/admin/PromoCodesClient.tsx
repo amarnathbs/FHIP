@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { accessEndDate, addDaysIso, utcToday } from '@/lib/services/entitlementWindow';
 import { AdminActionStatus, type AdminActionOutcome } from '@/components/admin/AdminActionStatus';
+import { PromoSetupCheck } from '@/components/admin/PromoSetupCheck';
 import { PROMO_EMAIL_PURPOSE_MAX, PROMO_EMAIL_PURPOSE_MIN } from '@/lib/services/promoEmailAbuse';
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 import { DATE_INPUT_HINT, DATE_INPUT_PLACEHOLDER, formatDateInput, parseDateInput } from '@/lib/engines/dateInput';
@@ -293,6 +294,8 @@ export function PromoCodesClient() {
           counting the day they redeem it). A code is shown to you once, when it is created. It cannot be retrieved afterwards: the list keeps only a masked hint. A code cannot be applied on top of a paid subscription. Creating and disabling codes is audited.
         </p>
       </div>
+
+      <PromoSetupCheck />
 
       <section aria-labelledby="create-heading" className="space-y-3 rounded-card border p-4">
         <h2 id="create-heading" className="text-lg font-medium text-ink">

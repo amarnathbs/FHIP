@@ -409,7 +409,7 @@ After the production test the promo e-mail arrived from "FHIP Contact Form <no-r
 
 ## 18. Hardening mission (2026-10-05): independent review, 14 items
 
-Branch `feat/promo-premium-hardening-20261005`, cut from `origin/main` b105cf4. Migrations **0264 to 0268** (NAV2 owns 0260 to 0263; the highest number found on every ref and every worktree was 0263). Nothing is pushed, merged or applied. Nothing is switched on. The PO hand-over (apply order, verify queries, secrets, decisions, reversal) is `docs/admin/po_apply_hardening/README.md`.
+Branch `feat/promo-premium-hardening-20261005`, cut from `origin/main` b105cf4. Migrations **0264 to 0268** (NAV2 owns 0260 to 0263; the highest number found on every ref and every worktree was 0263). Nothing is pushed, merged or applied. Nothing is switched on. The PO hand-over (apply order, verify queries, secrets, decisions, reversal) is `docs/admin/po_apply_promo_hardening_release/README.md`.
 
 Evidence labels used below: **PGlite** = proven on an isolated real-Postgres replay of the whole ledger with named negative controls; **unit** = hermetic application tests with injected mailer, clock and random source; **source contract** = tests that read the source; **DEV** = needs a run against the DEV project (not done, listed in item 14); **UNVERIFIED** = cannot be proven from this repository.
 
