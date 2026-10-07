@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { canViewPremiumReport } from '@/lib/services/entitlements';
 import { REPORT_PERIOD_CHOICES } from '@/lib/engines/nav2/analysisSpec';
-import { FUND_ANALYTICS_PREMIUM_MESSAGE, generateFundAnalyticsReport, listFundAnalyticsReports } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService';
+import { FUND_ANALYTICS_DISABLED_MESSAGE, FUND_ANALYTICS_PREMIUM_MESSAGE, generateFundAnalyticsReport, listFundAnalyticsReports } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService';
+import { isNav2FlagOn, NAV2_JOB_KEYS } from '@/lib/services/investment-intelligence/nav2/nav2Flags';
 
 // The Fund analytics report (NAV2) -- list the caller's pinned versions, or generate the next one.
 //
@@ -21,6 +22,15 @@ export async function GET() {
   if (!user) return unauthenticated!;
   const supabase = await createClient();
   if (!(await canViewPremiumReport(user.id, supabase))) return bad(FUND_ANALYTICS_PREMIUM_MESSAGE, 403);
+  // DEPLOY ORDER SAFETY: the switch row is created by migration 0260 part e and ships OFF. Without the migrations, or with the switch off, the
+  // list answers the same plain 404 as generate (never a 500 from a table that does not exist yet). Fails closed: an unreadable switch is OFF.
+  let on = false;
+  try {
+    on = await isNav2FlagOn(createAdminClient(), NAV2_JOB_KEYS.fundAnalytics);
+  } catch {
+    on = false;
+  }
+  if (!on) return bad(FUND_ANALYTICS_DISABLED_MESSAGE, 404);
   try {
     return ok(await listFundAnalyticsReports(supabase, user.id));
   } catch {

@@ -21,6 +21,7 @@ const mockCanView = vi.fn();
 const mockCanExport = vi.fn();
 const mockGenerate = vi.fn();
 const mockList = vi.fn();
+const mockFlag = vi.fn();
 const mockGet = vi.fn();
 const mockRender = vi.fn();
 const mockResolveToken = vi.fn();
@@ -43,6 +44,10 @@ vi.mock('@/lib/api', async (orig) => {
       return data.user ? { user: data.user, unauthenticated: null } : { user: null, unauthenticated: actual.bad('unauthenticated', 401) };
     },
   };
+});
+vi.mock('@/lib/services/investment-intelligence/nav2/nav2Flags', async (orig) => {
+  const actual = await orig<typeof import('@/lib/services/investment-intelligence/nav2/nav2Flags')>();
+  return { ...actual, isNav2FlagOn: (...a: unknown[]) => mockFlag(...a) };
 });
 vi.mock('@/lib/services/entitlements', () => ({ canViewPremiumReport: (...a: unknown[]) => mockCanView(...a), canExportReports: (...a: unknown[]) => mockCanExport(...a) }));
 vi.mock('@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService', async (orig) => {
@@ -74,6 +79,7 @@ beforeEach(() => {
   mockCanView.mockResolvedValue(true);
   mockCanExport.mockResolvedValue(true);
   mockList.mockResolvedValue([found.summary]);
+  mockFlag.mockResolvedValue(true);
   mockGet.mockResolvedValue(found);
   mockRender.mockResolvedValue(Buffer.from('%PDF-1.7 synthetic'));
   mockGenerate.mockResolvedValue({ status: 'ready', report: found.summary, cache: { hits: 0, computed: 2, stored: 2 } });
@@ -123,6 +129,25 @@ describe('authorisation comes BEFORE body validation on generate (Stage 3 fix 4)
   it('a Premium user with a bad body still gets the 422 / 400 (validation is not removed)', async () => {
     expect((await generatePOST(post({ period: 'forever' }))).status).toBe(422);
     expect((await generatePOST(post('{not json'))).status).toBe(400);
+  });
+});
+
+describe('deploy order safety: the list answers a plain 404, never a 500, while the schema or the switch is not there', () => {
+  it('NC-F7: switch off, switch unreadable (table or row missing) and a missing service key all answer 404 with the unavailable sentence; the database is not asked for reports', async () => {
+    mockFlag.mockResolvedValue(false);
+    let res = await listGET();
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(await res.json())).toMatch(/not available yet/i);
+    mockFlag.mockRejectedValue(new Error('relation ii_reference_job_control does not exist'));
+    res = await listGET();
+    expect(res.status).toBe(404);
+    expect(mockList).not.toHaveBeenCalled();
+  });
+  it('NC-F7: a FREE user is still refused with the 403 Premium sentence first (the switch never reveals more than the Premium check)', async () => {
+    mockCanView.mockResolvedValue(false);
+    mockFlag.mockResolvedValue(false);
+    expect((await listGET()).status).toBe(403);
+    expect(mockFlag).not.toHaveBeenCalled();
   });
 });
 
@@ -302,7 +327,7 @@ describe('static contract', () => {
     }
   });
   it('the Reports menu and the nav capability map list the new page; the page states the Premium rule and the switch rule', () => {
-    expect(fs.readFileSync(path.join(ROOT, 'components/ui/AppShell.tsx'), 'utf8')).toMatch(/label: 'Fund Analytics', href: '\/reports\/fund-analytics'/);
+    expect(fs.readFileSync(path.join(ROOT, 'lib/nav/appNavGroups.ts'), 'utf8')).toMatch(/label: 'Fund Analytics', href: '\/reports\/fund-analytics'/);
     expect(fs.readFileSync(path.join(ROOT, 'lib/nav/appNavCapability.ts'), 'utf8')).toMatch(/'\/reports\/fund-analytics': 'REPORTS'/);
     const page = fs.readFileSync(path.join(ROOT, 'app/(app)/reports/fund-analytics/page.tsx'), 'utf8');
     expect(page).toMatch(/FUND_ANALYTICS_PREMIUM_MESSAGE/);

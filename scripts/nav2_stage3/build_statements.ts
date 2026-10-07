@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- DEV-only journey script that builds synthetic statements around the parser's loosely typed output */
 // NAV2 Stage 3: builds the SYNTHETIC genuine-format CAMS folio statements used by the journeys (the format the repo's own
 // nav1-p4 fixture uses, parsed by the real camsFolioStatementParser). Every NAV is the real AMFI NAV stored on DEV for that date;
 // the investor, PAN (never-real "PCQAL" prefix), folios and references are synthetic (prefix NAV2S3-). DEV read only.
