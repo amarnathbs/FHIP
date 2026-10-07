@@ -96,7 +96,7 @@ export function MoneyUpdateNewChooser({ canCreate }: { canCreate: boolean }) {
             <label htmlFor="template-select" className="sr-only">
               Choose a template
             </label>
-            <select id="template-select" value={selectedTemplate} onChange={(e) => setSelectedTemplate(e.target.value)} className="rounded border border-line bg-white px-3 py-2 text-sm text-ink">
+            <select id="template-select" value={selectedTemplate} onChange={(e) => setSelectedTemplate(e.target.value)} className="min-w-0 max-w-full rounded border border-line bg-white px-3 py-2 text-sm text-ink">
               <option value="">Choose a template…</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>

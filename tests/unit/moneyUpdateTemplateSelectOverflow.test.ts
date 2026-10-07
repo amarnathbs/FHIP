@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const src = fs.readFileSync(path.resolve(__dirname, '../../components/resources/money-update/MoneyUpdateNewChooser.tsx'), 'utf8');
-const selectTag = src.match(/<select id="template-select"[^>]*>/)?.[0] ?? '';
+const selectTag = src.match(/<select id="template-select"[\s\S]*?className="[^"]*"/)?.[0] ?? '';
 
 describe('Money Update template chooser at phone width', () => {
   it('finds the template select', () => {
