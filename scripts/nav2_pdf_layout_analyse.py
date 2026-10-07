@@ -66,7 +66,8 @@ def main() -> None:
                 (bx0, by0, bx1, by1), bt = spans[n]
                 oy = min(ay1, by1) - max(ay0, by0)
                 ox = min(ax1, bx1) - max(ax0, bx0)
-                if oy > 0.5 * min(ay1 - ay0, by1 - by0) and ox > 1.0:
+                # a raised footnote mark is small: its box may overlap the line above by only 2-3 pt and still sit on the number (the PO scan: '33.1490 /' and 'c'), so an overlap of more than 1.5 pt counts too
+                if (oy > 0.5 * min(ay1 - ay0, by1 - by0) or oy > 1.5) and ox > 1.0:
                     overlaps.append(f'{at[:30]} / {bt[:30]}')
         lowest = max([l['y1'] for l in lines], default=area_top)
         for d in page.get_drawings():

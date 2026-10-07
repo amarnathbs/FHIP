@@ -14,7 +14,8 @@
 //   4. the REAL render: headless Chromium prints the document through the export route's own printPageToPdf, PyMuPDF measures every page.
 //      Runs when Chromium and PyMuPDF are present (skipped, with the reason, otherwise); it takes about a minute.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -376,6 +377,32 @@ describe('the real PDF: rendered by Chromium through the export route\'s printPa
       expect(analysis.pages[analysis.pages.length - 1].first_line?.text).toBe('Comparing your funds');
     },
     300_000
+  );
+  // PO scan of Version 11: on every fund page the raised footnote mark "c" sat 3 pt into the number it follows ('33.1490 /' [445,600,478,611]
+  // against 'c' [474,608,478,618]); the judge's old rule (overlap over half the smaller box) let it through.
+  it.skipIf(skip !== null)(
+    'NC-L7b: the analysis reports a raised footnote mark whose box reaches 3 pt into the number above it, and nothing for a clear one',
+    () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'fa-overlap-'));
+      const make = (markTop: number) => {
+        const pdf = path.join(dir, `m${markTop}.pdf`);
+        const script = [
+          'import sys, pymupdf',
+          'd = pymupdf.open(); pg = d.new_page()',
+          "pg.insert_text((100, 300), '33.1490 /', fontsize=8)",
+          `pg.insert_text((130, ${markTop}), 'c', fontsize=7.6)`,
+          'd.save(sys.argv[1])',
+        ].join(';');
+        expect(spawnSync('python3', ['-c', script, pdf]).status).toBe(0);
+        const names = path.join(dir, 'names.json');
+        writeFileSync(names, JSON.stringify({ names: [], cells: [] }));
+        const out = execFileSync('python3', [path.join(ROOT, 'scripts', 'nav2_pdf_layout_analyse.py'), pdf, path.join(dir, `png${markTop}`), names], { encoding: 'utf8' });
+        return (JSON.parse(out) as LayoutAnalysis).pages[0].overlaps ?? [];
+      };
+      expect(make(303).length).toBeGreaterThan(0); // the mark's box reaches into the number: fails
+      expect(make(318)).toEqual([]); // clear of it
+    },
+    60_000
   );
   it('records why the real render was skipped, if it was', () => {
     if (skip) console.warn(`PDF layout render skipped: ${skip}`);
