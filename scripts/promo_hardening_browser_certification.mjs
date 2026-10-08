@@ -242,7 +242,7 @@ try {
     check('creating a code shows it ONCE, in the day-first message, with the 30 day wording', Boolean(code) && /counting the day of redemption/.test(noticeText) && !ISO_DATE.test(noticeText), noticeText.slice(0, 120));
     await shot(page, 'promo-code-created');
     const hint = code ? `${code.replace('-', '').slice(0, 2)}******${code.replace('-', '').slice(-2)}` : '?';
-    await page.waitForTimeout(1500);
+    await page.waitForFunction((h) => document.body.innerText.includes(h), hint, { timeout: 30_000 }).catch(() => undefined);
     const bodyAfter = await page.locator('body').innerText();
     check('the list shows only the masked hint of the new code (the full code is not in the list)', bodyAfter.includes(hint) && (bodyAfter.match(new RegExp((code ?? 'x').replace('-', '-?'), 'g')) ?? []).length === 1, hint);
     await page.reload({ waitUntil: 'domcontentloaded' });
