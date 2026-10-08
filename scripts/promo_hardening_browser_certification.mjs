@@ -278,7 +278,7 @@ try {
     }
 
     if (code) {
-      const { context: uctx, page: upage } = await signedInContext('user1');
+      const { context: uctx, page: upage } = await signedInContext('user4');
       await upage.goto(`${base}/profile`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
       const field = upage.getByLabel('Promo code');
       await field.waitFor({ timeout: 120_000 });
@@ -297,7 +297,8 @@ try {
       await upage.waitForTimeout(2000);
       check('using the same code again is refused with a clear message', /already used|cannot be used/.test(await upage.locator('body').innerText()));
       // Only the plan and promo panel is in scope: the Profile form above it has two unlabeled controls that are not part of this release (reported as a finding).
-      await pageHealth(upage, 'Profile (plan and promo panel)', 'desktop', 'div.space-y-6:has(#promo-code-helper)');
+      await upage.evaluate(() => { const r = document.querySelector('#promo-code-helper')?.closest('.space-y-6'); if (r) r.setAttribute('data-axe-scope', '1'); });
+      await pageHealth(upage, 'Profile (plan and promo panel)', 'desktop', '[data-axe-scope]');
       await uctx.close();
     }
   }
