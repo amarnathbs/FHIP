@@ -63,12 +63,12 @@ describe('single and multi shapes', () => {
 });
 
 describe('registered provider layouts', () => {
-  it('every registry entry is labelled UNVERIFIED and self-consistent', () => {
-    expect(Object.keys(PROVIDER_LAYOUTS).sort()).toEqual(['bse_price_export', 'nse_ind_close_all', 'nse_price_export', 'nse_tri_export']);
+  it('every registry entry is self-consistent; only layouts checked against a real download are not labelled UNVERIFIED', () => {
+    expect(Object.keys(PROVIDER_LAYOUTS).sort()).toEqual(['bse_price_export', 'bse_sensex_download', 'nse_ind_close_all', 'nse_price_export', 'nse_tri_export']);
     for (const [id, l] of Object.entries(PROVIDER_LAYOUTS)) {
       expect(l.id).toBe(id);
-      expect(l.unverified).toBe(true);
-      expect(l.note).toContain('UNVERIFIED');
+      expect(l.unverified).toBe(!['nse_price_export', 'bse_sensex_download'].includes(id));
+      expect(l.note).toContain(l.unverified ? 'UNVERIFIED' : 'matches a real download of 08-10-2026');
       expect(l.requiredHeaders).toContain(l.dateColumn);
       expect(l.requiredHeaders).toContain(l.valueColumn);
     }

@@ -23,7 +23,7 @@ import type {
   PublishResponse,
   StageUploadRequestParams,
 } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
-import { PROVIDER_LAYOUTS } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest/layouts';
+import { PROVIDER_LAYOUTS, matchRegisteredLayouts } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest/layouts';
 import { isSafeServerMessage } from '@/lib/resources/admin/resultState';
 import { formatDateShort } from '@/lib/engines/date';
 import { DATE_INPUT_PLACEHOLDER, formatDateInput, parseDateInput } from '@/lib/engines/dateInput';
@@ -114,7 +114,7 @@ export const DATE_FORMAT_OPTIONS: ReadonlyArray<{ value: DateFormatId; label: st
   { value: 'DD/MM/YYYY', label: 'Day/month/year (DD/MM/YYYY)', example: '31/01/2024' },
   { value: 'MM/DD/YYYY', label: 'Month first, US style (month, day, year)', example: '' },
   { value: 'DD-MM-YYYY', label: 'Day-month-year (DD-MM-YYYY)', example: '31-01-2024' },
-  { value: 'DD-MMM-YYYY', label: 'Day-Mon-year (DD-MMM-YYYY)', example: '31-Jan-2024' },
+  { value: 'DD-MMM-YYYY', label: 'Day-Mon-year (DD-MMM-YYYY)', example: '31-Jan-2024 or 1-January-2024' },
   { value: 'DD MMM YYYY', label: 'Day Mon year (DD MMM YYYY)', example: '31 Jan 2024' },
   { value: 'excel_1900', label: 'Excel date number (1900 date system)', example: '45322' },
   { value: 'excel_1904', label: 'Excel date number (1904 date system)', example: '43860' },
@@ -677,6 +677,59 @@ export function sheetDisclosure(inspect: InspectState | null, sheetName: string,
     chosenIsHidden: chosen.state !== 'visible',
     hiddenRowsText: includeHiddenRows ? 'Rows hidden in the spreadsheet WILL be processed, and you will be asked to confirm that.' : 'Rows hidden in the spreadsheet will be skipped, and the preview lists which rows were skipped.',
   };
+}
+
+/** Provider-layout choice text: layouts checked against a real download say so; the rest do not claim it. */
+export function providerLayoutOptionLabel(l: { label: string; unverified: boolean }): string {
+  return l.unverified ? l.label : `${l.label} - matches a real download of 08-10-2026`;
+}
+
+export interface RecognisedLayoutNotice {
+  layoutId: string;
+  label: string;
+  unverified: boolean;
+  /** Header columns of THIS file that will not be loaded (listed, never mapped). */
+  ignoredColumns: string[];
+  /** The multi-benchmark shape cannot take a one-index layout; the sentence says what to choose instead. */
+  problem: string | null;
+}
+
+/**
+ * Before the file is checked: does its header EXACTLY match one registered layout (the same
+ * matching the server uses, no arbitrary extra columns)? The server recognises it whichever
+ * shape is selected; this only tells the operator so. Null when the header is a plain
+ * date,value / benchmark_key,date,value header, matches nothing, or matches more than one.
+ */
+export function recognisedLayoutNotice(header: readonly string[] | null | undefined, shape: UploadFormState['shape']): RecognisedLayoutNotice | null {
+  if (!header || header.length === 0 || shape === '') return null;
+  const plain = shape === 'multi' ? ['benchmark_key', 'date', 'value'] : ['date', 'value'];
+  const norm = header.map((h) => h.trim().toLowerCase());
+  if (shape !== 'provider_export' && norm.every((h) => plain.includes(h))) return null;
+  const matches = matchRegisteredLayouts(header, { allowArbitraryExtras: shape === 'provider_export' });
+  if (matches.length !== 1) return null;
+  const l = matches[0];
+  const read = new Set([l.dateColumn, l.valueColumn, l.indexNameColumn].filter((x): x is string => !!x).map((x) => x.trim().toLowerCase()));
+  return {
+    layoutId: l.id,
+    label: l.label,
+    unverified: l.unverified,
+    ignoredColumns: header.filter((h) => h.trim() !== '' && !read.has(h.trim().toLowerCase())),
+    problem:
+      shape === 'multi'
+        ? `This layout holds one index and does not say which benchmark it is. Choose the file shape "Single benchmark" (or "Supported provider export") and pick the benchmark.`
+        : null,
+  };
+}
+
+/** The preview's layout lines (pure). Older stored previews carry no layout fields: then nothing is claimed. */
+export function describeLayoutDisclosure(d: JobPreview['disclosure']): { layoutLine: string | null; ignoredLine: string | null } {
+  if (!d.layoutLabel) return { layoutLine: null, ignoredLine: null };
+  const how = d.layoutMatchedBy === 'header' ? 'matched by its exact header' : d.layoutMatchedBy === 'chosen' ? 'chosen by you' : null;
+  const verified = d.layoutUnverified ? 'header set not yet checked against a real download' : 'header set matches a real download of 08-10-2026';
+  const layoutLine = `${d.layoutMatchedBy === 'header' ? 'Recognised file layout' : 'File layout'}: ${d.layoutLabel}${how ? ` (${how})` : ''}; ${verified}.`;
+  const ignored = d.ignoredColumns ?? [];
+  const ignoredLine = ignored.length > 0 ? `Columns in the file that were not loaded: ${ignored.join(', ')}.` : null;
+  return { layoutLine, ignoredLine };
 }
 
 export function sheetStateLabel(state: SheetOption['state']): string {

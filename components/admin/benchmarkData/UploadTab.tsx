@@ -33,6 +33,8 @@ import {
   identityMismatch,
   involvedBenchmarkKeys,
   limitsText,
+  providerLayoutOptionLabel,
+  recognisedLayoutNotice,
   sheetDisclosure,
   sheetStateLabel,
   stepIssues,
@@ -209,6 +211,7 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
   }
 
   const headerChoices = (csvHeader ?? inspect?.header ?? []).map((h) => ({ value: h, label: h }));
+  const recognised = recognisedLayoutNotice(csvHeader ?? inspect?.header ?? null, form.shape);
   const disclosure = sheetDisclosure(inspect, form.sheetName, form.includeHiddenRows);
 
   return (
@@ -318,6 +321,16 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
               {inspectBusy ? <p role="status" className="mt-1 text-sm text-muted">Reading the file...</p> : null}
               {inspectError ? <p role="alert" className="mt-1 text-sm text-risk">{inspectError}</p> : null}
               {inspect && inspect.problems.length > 0 ? <IssueList issues={inspect.problems.map((p) => p.message)} /> : null}
+              {recognised ? (
+                recognised.problem ? (
+                  <Notice tone="warn" title={`This file is the registered layout "${recognised.label}"`}>{recognised.problem}</Notice>
+                ) : (
+                  <Notice tone="info" title="Recognised file layout">
+                    <p>The header of this file exactly matches the registered layout &quot;{recognised.label}&quot;, so it is read as that layout whichever file shape is selected.{recognised.unverified ? ' This header set has not been checked against a real download.' : ''}</p>
+                    {recognised.ignoredColumns.length > 0 ? <p>Not loaded (ignored): {recognised.ignoredColumns.join(', ')}.</p> : null}
+                  </Notice>
+                )
+              ) : null}
             </div>
 
             {kind === 'xlsx' && inspect && inspect.sheets.length > 0 ? (
@@ -344,7 +357,7 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
               <div className="space-y-3 rounded-compact border border-line p-3">
                 <RadioGroup legend="How are the columns identified?" name="colchoice" value={form.columnChoice} onChange={(v) => set({ columnChoice: v as UploadFormState['columnChoice'] })} options={[{ value: 'layout', label: 'A known provider layout' }, { value: 'explicit', label: 'I will name the date and value columns myself' }]} />
                 {form.columnChoice === 'layout' ? (
-                  <SelectField label="Provider layout" required value={form.providerLayoutId} onChange={(v) => set({ providerLayoutId: v })} options={PROVIDER_LAYOUT_OPTIONS.map((l) => ({ value: l.id, label: l.label }))} error={fb.errors.providerLayoutId} fieldKey="providerLayoutId" hint="These header sets come from public export conventions and have not been checked against a live download; a mismatch is reported, never guessed around." />
+                  <SelectField label="Provider layout" required value={form.providerLayoutId} onChange={(v) => set({ providerLayoutId: v })} options={PROVIDER_LAYOUT_OPTIONS.map((l) => ({ value: l.id, label: providerLayoutOptionLabel(l) }))} error={fb.errors.providerLayoutId} fieldKey="providerLayoutId" hint="A layout marked as matching a real download was compared with that download. The others come from public export conventions and have not been checked against a live download; a mismatch is reported, never guessed around." />
                 ) : null}
                 {form.columnChoice === 'explicit' ? (
                   headerChoices.length > 0 ? (

@@ -123,6 +123,14 @@ export interface ValidationResult {
     headerRow: number;
     layoutId: string;
     columnMapping: Record<string, string>;
+    /** Human name of the layout the header was read as (absent in previews stored before this field existed). */
+    layoutLabel?: string;
+    /** true = the layout's header set was never compared with a real download. */
+    layoutUnverified?: boolean;
+    /** How the layout was decided (absent in older stored previews). */
+    layoutMatchedBy?: 'header' | 'chosen' | 'fixed' | 'column_map';
+    /** Header columns that were NOT loaded (exact header text). Absent in older stored previews. */
+    ignoredColumns?: string[];
   };
 }
 
@@ -293,6 +301,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
   };
 
   /** Result for a file-level hard stop: no row is evaluated, none is valid. */
+  let layoutExtras: Pick<ValidationResult['disclosure'], 'layoutLabel' | 'layoutUnverified' | 'layoutMatchedBy' | 'ignoredColumns'> = {};
   const stop = (layoutId: string, columnMapping: Record<string, string>): ValidationResult => ({
     validatorVersion: VALIDATOR_VERSION,
     rowsTotal: dataRows.length,
@@ -305,7 +314,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
     hardErrorCount: issues.filter((i) => i.severity === 'error').length,
     perBenchmark: [],
     requiredAcknowledgements: [],
-    disclosure: { ...disclosureBase, layoutId, columnMapping },
+    disclosure: { ...disclosureBase, layoutId, columnMapping, ...layoutExtras },
   });
 
   for (const p of table.sourceProblems) push('error', p.rowNumber ?? null, p.code, p.message);
@@ -337,6 +346,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
   const columnMapping: Record<string, string> = { date: mapping.dateColumn, value: mapping.valueColumn };
   if (mapping.keyColumn) columnMapping.benchmark_key = mapping.keyColumn;
   if (mapping.indexNameColumn) columnMapping.index_name = mapping.indexNameColumn;
+  if (resolution.layout.matchedBy === 'header' || resolution.layout.matchedBy === 'chosen') layoutExtras = { layoutLabel: resolution.layout.label, layoutUnverified: resolution.layout.unverified, layoutMatchedBy: resolution.layout.matchedBy, ignoredColumns: resolution.ignoredColumns };
 
   if (table.sourceKind === 'xlsx' && table.date1904 !== undefined) {
     if (params.dateFormat === 'excel_1900' && table.date1904) {
@@ -829,6 +839,6 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
     hardErrorCount: issues.filter((i) => i.severity === 'error').length,
     perBenchmark,
     requiredAcknowledgements: order.filter((a) => acks.has(a)),
-    disclosure: { ...disclosureBase, layoutId, columnMapping },
+    disclosure: { ...disclosureBase, layoutId, columnMapping, ...layoutExtras },
   };
 }
