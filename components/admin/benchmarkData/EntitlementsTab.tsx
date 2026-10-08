@@ -30,6 +30,8 @@ import {
   type EntitlementFormState,
   type OpenPanelKey,
 } from './benchmarkDataUiLogic';
+import { ClampText } from '@/components/ui/ClampText';
+import { DateRange } from '@/components/ui/DataTable';
 import { Btn, CheckField, Chip, EmptyState, Notice, Panel, ScrollTable, SelectField, Td, DateField, TextAreaField, TextField, Th } from './ui';
 
 const PROPOSE_SPEC: FormSpec = { order: ENTITLEMENT_FIELD_ORDER, labels: ENTITLEMENT_FIELD_LABELS, map: ENTITLEMENT_FIELD_MAP, dateKeys: ENTITLEMENT_DATE_KEYS };
@@ -165,34 +167,42 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
           groups.map((g) => (
             <div key={g.catalogue.benchmarkKey} className="mt-3">
               <h3 className="mb-1 text-sm font-semibold text-ink">{g.catalogue.label} <span className="font-mono text-xs text-muted">{g.catalogue.benchmarkKey}</span></h3>
-              <ScrollTable label={`Entitlements for ${g.catalogue.label}`} minWidth="min-w-[980px]">
+              <ScrollTable label={`Entitlements for ${g.catalogue.label}`}>
                 <thead>
-                  <tr><Th>Status</Th><Th>Kind</Th>{ENTITLEMENT_RIGHT_INFO.map((r) => <Th key={r.key}>{r.short}</Th>)}<Th>Term</Th><Th>Data range</Th><Th>After expiry</Th><Th>Evidence</Th><Th>Actions</Th></tr>
+                  <tr>
+                    <Th>Status and kind</Th>
+                    {ENTITLEMENT_RIGHT_INFO.map((r) => <Th key={r.key} kind="status" title={r.label}><span aria-hidden="true">{r.compact}</span><span className="sr-only">{r.short}: {r.label}</span></Th>)}
+                    <Th>Term</Th>
+                    <Th>Data range</Th>
+                  </tr>
                 </thead>
-                <tbody>
-                  {g.entitlements.map((e) => {
-                    const chip = entitlementStatusChip(e.status);
-                    const acts = entitlementActions(e, caps);
-                    const link = safeExternalUrl(e.evidenceUrl);
-                    return (
-                      <tr key={e.entitlementId}>
-                        <Td><Chip label={chip.label} tone={chip.tone} /></Td>
-                        <Td>{entitlementKindLabel(e.kind)}</Td>
-                        {ENTITLEMENT_RIGHT_INFO.map((r) => <Td key={r.key}>{e.rights[r.key] ? 'Yes' : 'No'}</Td>)}
-                        <Td>{formatDate(e.validFrom)} to {e.validTo ? formatDate(e.validTo) : 'open'}</Td>
-                        <Td>{e.dataFrom ? formatDate(e.dataFrom) : 'any start'} to {e.dataTo ? formatDate(e.dataTo) : 'any end'}</Td>
-                        <Td>{postExpiryLabel(e.postExpiryStorage)}</Td>
-                        <Td>{e.evidenceReference}{link ? <> <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-trust underline">Document (opens in a new tab)</a></> : null}</Td>
-                        <Td>
-                          <div className="flex flex-wrap gap-1">
-                            {acts.canApprove ? <Btn kind="secondary" onClick={() => { setAction({ kind: 'approve', e, label: g.catalogue.label }); setNote(''); setSelfAck(false); setPressTick((t) => t + 1); }}>{`Approve ${e.entitlementId.slice(0, 6)}`}</Btn> : null}
-                            {acts.canRevoke ? <Btn kind="danger" onClick={() => { setAction({ kind: 'revoke', e, label: g.catalogue.label }); setNote(''); setPressTick((t) => t + 1); }}>{`Revoke ${e.entitlementId.slice(0, 6)}`}</Btn> : null}
+                {g.entitlements.map((e) => {
+                  const chip = entitlementStatusChip(e.status);
+                  const acts = entitlementActions(e, caps);
+                  const link = safeExternalUrl(e.evidenceUrl);
+                  return (
+                    // One entitlement = two rows in one row group: the rights and dates on the first (compact, so it fits 1024 px),
+                    // the long text (after expiry, evidence) and the actions on the second, never off to the right.
+                    <tbody key={e.entitlementId}>
+                      <tr>
+                        <Td kind="status"><Chip label={chip.label} tone={chip.tone} /><span className="mt-1 block text-xs text-muted">{entitlementKindLabel(e.kind)}</span></Td>
+                        {ENTITLEMENT_RIGHT_INFO.map((r) => <Td key={r.key} kind="status">{e.rights[r.key] ? 'Yes' : 'No'}</Td>)}
+                        <Td><DateRange from={formatDate(e.validFrom)} to={e.validTo ? formatDate(e.validTo) : 'open'} /></Td>
+                        <Td><DateRange from={e.dataFrom ? formatDate(e.dataFrom) : 'any start'} to={e.dataTo ? formatDate(e.dataTo) : 'any end'} /></Td>
+                      </tr>
+                      <tr>
+                        <Td colSpan={3} className="border-t-0 pt-0"><ClampText><span className="text-xs font-semibold text-muted">After expiry: </span>{postExpiryLabel(e.postExpiryStorage)}</ClampText></Td>
+                        <Td colSpan={4} className="border-t-0 pt-0"><ClampText><span className="text-xs font-semibold text-muted">Evidence: </span>{e.evidenceReference}{link ? <> <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-trust underline">Document (opens in a new tab)</a></> : null}</ClampText></Td>
+                        <Td kind="action" colSpan={2} className="border-t-0 pt-0">
+                          <div className="flex flex-wrap justify-end gap-1">
+                            {acts.canApprove ? <Btn kind="secondary" nowrap onClick={() => { setAction({ kind: 'approve', e, label: g.catalogue.label }); setNote(''); setSelfAck(false); setPressTick((t) => t + 1); }}>{`Approve ${e.entitlementId.slice(0, 6)}`}</Btn> : null}
+                            {acts.canRevoke ? <Btn kind="danger" nowrap onClick={() => { setAction({ kind: 'revoke', e, label: g.catalogue.label }); setNote(''); setPressTick((t) => t + 1); }}>{`Revoke ${e.entitlementId.slice(0, 6)}`}</Btn> : null}
                           </div>
                         </Td>
                       </tr>
-                    );
-                  })}
-                </tbody>
+                    </tbody>
+                  );
+                })}
               </ScrollTable>
             </div>
           ))
