@@ -1,6 +1,6 @@
 # Premium and promo code hardening: PRODUCTION RUNBOOK
 
-Branch `feat/promo-hardening-release-20261007`. **Do not start this until the DEV certification (`../PROMO_PREMIUM_HARDENING_CERTIFICATION.md`) says PASS and you have read this page.** Dates are written day first. Nothing here has been run on production. Evidence labels: **PGlite-proven** (real Postgres on a copy of today's database), **unit-tested**, **DEV-verified** (filled in by the certification), **UNVERIFIED** (cannot be known from the repository).
+Branch `feat/promo-hardening-release-20261007`, merged with origin/main d7ccc2c on 08-10-2026 (no migration in that merge; 0279 stays free; the migration files 0264 to 0268 and 0279 are unchanged since the PO applied them on DEV). **Do not start this until the DEV certification (`../PROMO_PREMIUM_HARDENING_CERTIFICATION.md`) says PASS and you have read this page.** Dates are written day first. Nothing here has been run on production. Evidence labels: **PGlite-proven** (real Postgres on a copy of today's database), **unit-tested**, **DEV-verified** (filled in by the certification), **UNVERIFIED** (cannot be known from the repository).
 
 You decided on 07-10-2026 to KEEP `PREMIUM_PROMO_EMAIL_ENABLED=true` in production. This runbook keeps it on and gives you an instant stop (section 7).
 
@@ -51,7 +51,7 @@ Add `'PREMIUM_PROMO_EMAIL_BIND_SECRET'` to the list in the quotes only if you de
 
 Use `README.md` section 1 to run files. Order and checks:
 
-1. Run `checks/D1_before_detect.sql` first (step 1). Section B compares the five old functions with the repository text. A difference means production is not in the state this release was tested on: **stop and send me the table**.
+1. Run `checks/D1_before_detect.sql` first (step 1). Section B compares the five old functions with the repository text after ignoring layout and comments (DEV was red with the first, byte-exact version of this check and green with this one, so a layout difference alone is normal). If section B is still not ok, run `checks/D2_old_function_definitions.sql` and **stop and send me both results**: the bodies then differ in wording, not only in layout.
 2. `0264` then `checks/V0264_after_0264.sql`; `0265` then `V0265`; `0266` then `V0266`; `0267` then `V0267`; `0268` then `V0268`. All `ok` true after each.
 3. Before `0268`: D1 section E must show at most one environment marker row. If it shows two, stop (the migration refuses by design, with `MARKER_MORE_THAN_ONE_ROW`, and changes nothing).
 
