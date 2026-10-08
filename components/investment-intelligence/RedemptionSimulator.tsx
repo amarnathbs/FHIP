@@ -12,6 +12,7 @@ import {
   type SimulatorFormState,
   type SimulatorLot,
 } from './taxSimulatorLogic';
+import { DataTable } from '@/components/ui/DataTable';
 
 // Tax & Cost "Redemption simulator" (R6-FINAL, spec Section 27).
 //
@@ -156,30 +157,28 @@ export function RedemptionSimulator({ lots }: { lots: ReadonlyArray<SimulatorLot
             Estimated exit load: <span className="font-medium">{fmtInr(simResult.totalExitLoadAmount as number)}</span>
           </p>
           {simulationLotRows(simResult.lotBreakdown as SimulationLotInput[] | undefined).length > 0 && (
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[480px] text-left text-xs" data-testid="sim-lot-rows">
-                <thead>
-                  <tr className="border-b border-line text-muted">
-                    <th className="py-1 pr-2">Acquired</th>
-                    <th className="py-1 pr-2 text-right">Units</th>
-                    <th className="py-1 pr-2">Classification</th>
-                    <th className="py-1 pr-2">Gain type</th>
-                    <th className="py-1 pr-2 text-right">Estimated taxable gain</th>
+            <DataTable label="Lots used by the redemption simulation" wrapperClassName="mt-2" className="w-full min-w-[480px] text-left text-xs" data-testid="sim-lot-rows">
+              <thead>
+                <tr className="border-b border-line text-muted">
+                  <th className="py-1 pr-2">Acquired</th>
+                  <th className="py-1 pr-2 text-right">Units</th>
+                  <th className="py-1 pr-2">Classification</th>
+                  <th className="py-1 pr-2">Gain type</th>
+                  <th className="py-1 pr-2 text-right">Estimated taxable gain</th>
+                </tr>
+              </thead>
+              <tbody>
+                {simulationLotRows(simResult.lotBreakdown as SimulationLotInput[] | undefined).map((r, i) => (
+                  <tr key={i} className="border-b border-line/50">
+                    <td className="py-1 pr-2">{r.acquired}</td>
+                    <td className="py-1 pr-2 text-right">{r.units}</td>
+                    <td className="py-1 pr-2 capitalize">{r.classification}</td>
+                    <td className="py-1 pr-2 uppercase">{r.gainType}</td>
+                    <td className="py-1 pr-2 text-right">{r.taxableGain === null ? <span className="text-slate-500">Unresolved</span> : fmtInr(r.taxableGain)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {simulationLotRows(simResult.lotBreakdown as SimulationLotInput[] | undefined).map((r, i) => (
-                    <tr key={i} className="border-b border-line/50">
-                      <td className="py-1 pr-2">{r.acquired}</td>
-                      <td className="py-1 pr-2 text-right">{r.units}</td>
-                      <td className="py-1 pr-2 capitalize">{r.classification}</td>
-                      <td className="py-1 pr-2 uppercase">{r.gainType}</td>
-                      <td className="py-1 pr-2 text-right">{r.taxableGain === null ? <span className="text-slate-500">Unresolved</span> : fmtInr(r.taxableGain)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </DataTable>
           )}
           <p className="mt-2 text-xs text-muted">{simResult.disclaimer as string}</p>
         </div>

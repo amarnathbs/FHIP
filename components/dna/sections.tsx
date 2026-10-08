@@ -5,6 +5,7 @@ import type { DnaDriver, DnaTrait } from '@/lib/engines/financialDna';
 import type { Archetype, DnaHistoryPoint } from '@/lib/services/financialDnaData';
 import { formatDateShort } from '@/lib/engines/date';
 import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
+import { DataTable } from '@/components/ui/DataTable';
 
 const LEVEL_COLOR: Record<DnaTrait['level'], string> = {
   low: '#C7362F',
@@ -208,7 +209,7 @@ export function HistoryTimeline({ history, archetypes }: { history: DnaHistoryPo
       {history.length === 0 ? (
         <p className="text-sm text-gray-500">Not enough history yet — check back after a few months of data.</p>
       ) : (
-        <table className="w-full text-sm">
+        <DataTable label="Financial DNA history by month" className="w-full">
           <thead className="text-left text-xs uppercase text-gray-500">
             <tr>
               <th className="py-1">Month</th>
@@ -232,7 +233,7 @@ export function HistoryTimeline({ history, archetypes }: { history: DnaHistoryPo
                 </tr>
               ))}
           </tbody>
-        </table>
+        </DataTable>
       )}
     </SectionCard>
   );

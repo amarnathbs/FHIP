@@ -27,6 +27,7 @@ import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } fro
 import { actionFailureMessage, failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { CTA_DESTINATION_TYPE_LABELS } from '@/lib/resources/cta/types';
 import type { CtaRow, CtaDestinationType } from '@/lib/resources/cta/types';
+import { DataTable } from '@/components/ui/DataTable';
 
 export function CtaListClient({ canManage }: { canManage: boolean }) {
   const router = useRouter();
@@ -190,52 +191,50 @@ export function CtaListClient({ canManage }: { canManage: boolean }) {
             <>
               {/* `relative` — the sr-only caption and "Actions" heading are
                   position:absolute; see ResourceContentTable. */}
-              <div className="relative hidden overflow-x-auto sm:block">
-                <table className="w-full text-left text-sm">
-                  <caption className="sr-only">Calls to action, their destinations and whether they are currently active</caption>
-                  <thead>
-                    <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-                      <th scope="col" className="py-2 pr-3 font-semibold">
-                        Label
+              <DataTable label="Calls to action, their destinations and whether they are currently active" wrapperClassName="relative hidden sm:block" className="w-full text-left">
+                <caption className="sr-only">Calls to action, their destinations and whether they are currently active</caption>
+                <thead>
+                  <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+                    <th scope="col" className="py-2 pr-3 font-semibold">
+                      Label
+                    </th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">
+                      Destination Type
+                    </th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">
+                      Destination
+                    </th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">
+                      Active
+                    </th>
+                    <th scope="col" className="py-2 pl-3 font-semibold">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((cta) => (
+                    <tr key={cta.id} className="border-b border-line/60 hover:bg-gray-50">
+                      <th scope="row" className="max-w-[220px] py-2.5 pr-3 text-left font-normal">
+                        {canManage ? (
+                          <Link href={`/admin/resources/ctas/${cta.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
+                            {cta.label}
+                          </Link>
+                        ) : (
+                          <span className="font-medium text-ink">{cta.label}</span>
+                        )}
+                        <span className="block text-xs text-muted">{cta.name}</span>
                       </th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">
-                        Destination Type
-                      </th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">
-                        Destination
-                      </th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">
-                        Active
-                      </th>
-                      <th scope="col" className="py-2 pl-3 font-semibold">
-                        <span className="sr-only">Actions</span>
-                      </th>
+                      <td className="py-2.5 pr-3 text-muted">{CTA_DESTINATION_TYPE_LABELS[cta.destination_type as CtaDestinationType]}</td>
+                      <td className="max-w-[240px] truncate py-2.5 pr-3 text-muted" title={cta.destination_url}>
+                        {cta.destination_url}
+                      </td>
+                      <td className="py-2.5 pr-3">{activeBadge(cta)}</td>
+                      <td className="py-2.5 pl-3 text-right">{toggleButton(cta)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((cta) => (
-                      <tr key={cta.id} className="border-b border-line/60 hover:bg-gray-50">
-                        <th scope="row" className="max-w-[220px] py-2.5 pr-3 text-left font-normal">
-                          {canManage ? (
-                            <Link href={`/admin/resources/ctas/${cta.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
-                              {cta.label}
-                            </Link>
-                          ) : (
-                            <span className="font-medium text-ink">{cta.label}</span>
-                          )}
-                          <span className="block text-xs text-muted">{cta.name}</span>
-                        </th>
-                        <td className="py-2.5 pr-3 text-muted">{CTA_DESTINATION_TYPE_LABELS[cta.destination_type as CtaDestinationType]}</td>
-                        <td className="max-w-[240px] truncate py-2.5 pr-3 text-muted" title={cta.destination_url}>
-                          {cta.destination_url}
-                        </td>
-                        <td className="py-2.5 pr-3">{activeBadge(cta)}</td>
-                        <td className="py-2.5 pl-3 text-right">{toggleButton(cta)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
 
               <ul className="space-y-2 sm:hidden">
                 {items.map((cta) => (

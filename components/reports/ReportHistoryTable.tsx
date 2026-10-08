@@ -2,16 +2,17 @@ import Link from 'next/link';
 import type { ReportRow } from '@/lib/services/reportsData';
 import { formatDateShort } from '@/lib/engines/date';
 import { localeForReportingCurrency } from '@/lib/engines/money';
+import { DataTable } from '@/components/ui/DataTable';
 
 const STATUS_COLOR: Record<string, string> = {
   ready: '#198754',
   published: '#2563EB',
-  revised: '#B7791F',
-  superseded: '#9CA3AF',
+  revised: '#8A5A0F',
+  superseded: '#6B7280',
   failed: '#C7362F',
-  archived: '#9CA3AF',
-  draft: '#9CA3AF',
-  generating: '#B7791F',
+  archived: '#6B7280',
+  draft: '#6B7280',
+  generating: '#8A5A0F',
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -26,7 +27,7 @@ export function ReportHistoryTable({ reports, currency }: { reports: ReportRow[]
     return <p className="text-sm text-gray-500">No reports generated yet.</p>;
   }
   return (
-    <table className="w-full text-sm">
+    <DataTable label="Generated reports" className="w-full">
       <thead className="text-left text-xs uppercase text-gray-500">
         <tr>
           <th className="py-1">Report Period</th>
@@ -42,11 +43,11 @@ export function ReportHistoryTable({ reports, currency }: { reports: ReportRow[]
           <tr key={r.id} className="border-t">
             <td className="py-2">{new Date(r.report_month).toLocaleDateString(localeForReportingCurrency(currency), { month: 'long', year: 'numeric' })}</td>
             <td className="py-2">{TYPE_LABELS[r.report_type_code] ?? r.report_type_code}</td>
-            <td className="py-2">{r.generated_at ? formatDateShort(r.generated_at, currency) : '—'}</td>
+            <td className="py-2 whitespace-nowrap">{r.generated_at ? formatDateShort(r.generated_at, currency) : '—'}</td>
             <td className="py-2">
               <span
                 className="rounded-full px-2 py-0.5 text-xs font-semibold text-white"
-                style={{ background: STATUS_COLOR[r.status] ?? '#9CA3AF' }}
+                style={{ background: STATUS_COLOR[r.status] ?? '#6B7280' }}
               >
                 {r.status}
               </span>
@@ -60,6 +61,6 @@ export function ReportHistoryTable({ reports, currency }: { reports: ReportRow[]
           </tr>
         ))}
       </tbody>
-    </table>
+    </DataTable>
   );
 }

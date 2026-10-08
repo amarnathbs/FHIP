@@ -36,6 +36,7 @@ import {
   type WaitingImport,
 } from '@/components/financial-data-hub/WaitingImports';
 import { needsSecurityMatch } from '@/lib/investment-import-bridge/auLineRules';
+import { DataTable } from '@/components/ui/DataTable';
 
 // 'ai_fallback_review' (2026-09-23, AIE unified document fallback): the native
 // CSV extractor could not read this layout and an AI read a DRAFT off the same
@@ -958,37 +959,35 @@ export function AuInvestmentStatementImportPanel({
                 {aiDraft.holdings.length} holding{aiDraft.holdings.length === 1 ? '' : 's'} read. Remove any line that
                 is wrong or is not really a holding.
               </p>
-              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Holdings read from this statement by AI, awaiting your confirmation</caption>
-                  <thead className="sticky top-0 bg-gray-50 text-left">
-                    <tr>
-                      <th scope="col" className="px-3 py-2">Security</th>
-                      <th scope="col" className="px-3 py-2">Code</th>
-                      <th scope="col" className="px-3 py-2 text-right">Units</th>
-                      <th scope="col" className="px-3 py-2 text-right">Value</th>
-                      <th scope="col" className="px-3 py-2">As at</th>
-                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+              <DataTable wrapperClassName="max-h-72 rounded border border-gray-200" label="Holdings read from this statement by AI, awaiting your confirmation" className="w-full">
+                <caption className="sr-only">Holdings read from this statement by AI, awaiting your confirmation</caption>
+                <thead className="sticky top-0 bg-gray-50 text-left">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Security</th>
+                    <th scope="col" className="px-3 py-2">Code</th>
+                    <th scope="col" className="px-3 py-2 text-right">Units</th>
+                    <th scope="col" className="px-3 py-2 text-right">Value</th>
+                    <th scope="col" className="px-3 py-2">As at</th>
+                    <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiDraft.holdings.map((h, i) => (
+                    <tr key={`${h.securityNameRaw}-${i}`} className="border-t border-gray-100">
+                      <td className="px-3 py-2">{h.securityNameRaw}</td>
+                      <td className="px-3 py-2">{h.tickerRaw ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{h.quantity}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{h.marketValue ?? '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(h.valuationDate, 'AUD')}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={() => removeAiDraftHolding(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                          Remove<span className="sr-only"> the {h.securityNameRaw} holding</span>
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {aiDraft.holdings.map((h, i) => (
-                      <tr key={`${h.securityNameRaw}-${i}`} className="border-t border-gray-100">
-                        <td className="px-3 py-2">{h.securityNameRaw}</td>
-                        <td className="px-3 py-2">{h.tickerRaw ?? '—'}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{h.quantity}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{h.marketValue ?? '—'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(h.valuationDate, 'AUD')}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => removeAiDraftHolding(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-                            Remove<span className="sr-only"> the {h.securityNameRaw} holding</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
             </div>
           )}
 
@@ -998,37 +997,35 @@ export function AuInvestmentStatementImportPanel({
                 {aiDraft.activities.length} transaction{aiDraft.activities.length === 1 ? '' : 's'} read. Remove any
                 line that is wrong or is not really a transaction.
               </p>
-              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Transactions read from this statement by AI, awaiting your confirmation</caption>
-                  <thead className="sticky top-0 bg-gray-50 text-left">
-                    <tr>
-                      <th scope="col" className="px-3 py-2">Date</th>
-                      <th scope="col" className="px-3 py-2">Type</th>
-                      <th scope="col" className="px-3 py-2">Security</th>
-                      <th scope="col" className="px-3 py-2 text-right">Units</th>
-                      <th scope="col" className="px-3 py-2 text-right">Amount</th>
-                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+              <DataTable wrapperClassName="max-h-72 rounded border border-gray-200" label="Transactions read from this statement by AI, awaiting your confirmation" className="w-full">
+                <caption className="sr-only">Transactions read from this statement by AI, awaiting your confirmation</caption>
+                <thead className="sticky top-0 bg-gray-50 text-left">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Date</th>
+                    <th scope="col" className="px-3 py-2">Type</th>
+                    <th scope="col" className="px-3 py-2">Security</th>
+                    <th scope="col" className="px-3 py-2 text-right">Units</th>
+                    <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                    <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiDraft.activities.map((a, i) => (
+                    <tr key={`${a.transactionType}-${i}`} className="border-t border-gray-100">
+                      <td className="px-3 py-2 whitespace-nowrap">{a.tradeDate ?? '—'}</td>
+                      <td className="px-3 py-2">{a.transactionType}</td>
+                      <td className="px-3 py-2">{a.securityNameRaw ?? a.tickerRaw ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{a.quantity ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{a.amount}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={() => removeAiDraftActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                          Remove<span className="sr-only"> the {a.transactionType} line on {a.tradeDate ?? 'an unknown date'}</span>
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {aiDraft.activities.map((a, i) => (
-                      <tr key={`${a.transactionType}-${i}`} className="border-t border-gray-100">
-                        <td className="px-3 py-2 whitespace-nowrap">{a.tradeDate ?? '—'}</td>
-                        <td className="px-3 py-2">{a.transactionType}</td>
-                        <td className="px-3 py-2">{a.securityNameRaw ?? a.tickerRaw ?? '—'}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{a.quantity ?? '—'}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{a.amount}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => removeAiDraftActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-                            Remove<span className="sr-only"> the {a.transactionType} line on {a.tradeDate ?? 'an unknown date'}</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
             </div>
           )}
 
@@ -1275,7 +1272,7 @@ export function AuInvestmentStatementImportPanel({
               <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">This statement evidence has been approved. Nothing has been added to your Investments yet.</p>
               {/* INV-G11: what changes, shown BEFORE Apply. */}
               {compareRows && compareRows.length > 0 && (
-                <table className="w-full text-sm">
+                <DataTable label="Current holding vs this statement" className="w-full">
                   <caption className="text-left text-sm font-medium">Current holding vs this statement</caption>
                   <thead className="text-left text-muted">
                     <tr>
@@ -1293,7 +1290,7 @@ export function AuInvestmentStatementImportPanel({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
               )}
               <button type="button" onClick={handleApply} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
                 Apply to Investment Intelligence

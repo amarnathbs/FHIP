@@ -7,6 +7,8 @@
 // muted, risk, positive, attention), 44px touch targets, visible focus rings,
 // tables inside horizontal scroll containers, aria-live announcements.
 import { useId, type ReactNode, type Ref } from 'react';
+import { DataTable, DataTd } from '@/components/ui/DataTable';
+import { headerClass, type CellKind } from '@/lib/ui/dataTable';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import type { PendingImportTask } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { DATE_INPUT_HINT, DATE_INPUT_PLACEHOLDER } from '@/lib/engines/dateInput';
@@ -25,11 +27,13 @@ export { NUM_CELL_CLASS, NUM_HEADER_CLASS };
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust';
 
 const TONE_CLASS: Record<Tone, string> = {
-  ok: 'border-positive/30 bg-positive/10 text-positive',
-  warn: 'border-attention/40 bg-attention/10 text-attention',
+  // Text colours are the darker shades of the tone colours so chip and notice text meets WCAG AA (4.5:1) on its tinted background
+  // (axe-core measured 3.98, 3.27 and 4.48 with the plain tone colours).
+  ok: 'border-positive/30 bg-positive/10 text-[#146C43]',
+  warn: 'border-attention/40 bg-attention/10 text-[#7A4F12]',
   bad: 'border-risk/30 bg-risk/10 text-risk',
   neutral: 'border-line bg-app text-muted',
-  info: 'border-trust/30 bg-trust/10 text-trust',
+  info: 'border-trust/30 bg-trust/10 text-trust-700',
 };
 
 /** Status chip: the label is always TEXT (never colour alone). */
@@ -91,28 +95,40 @@ export function LinkBtn({ children, onClick }: { children: ReactNode; onClick: (
   );
 }
 
-/** Horizontal scroll container for a wide table: the PAGE never scrolls sideways. */
-export function ScrollTable({ label, children, minWidth = 'min-w-[720px]' }: { label: string; children: ReactNode; minWidth?: string }) {
+/**
+ * A table in this Admin area. It is the shared <DataTable> (components/ui/DataTable.tsx): one labelled, keyboard-focusable
+ * region that fits the visible width where the columns can fit and scrolls INSIDE itself only when they genuinely cannot, so the
+ * PAGE never scrolls sideways. `minWidth` is kept for call sites that pass it and is deliberately not applied: a fixed minimum is
+ * what forced the sideways scroll at laptop widths (Product Owner 08-10-2026).
+ */
+export function ScrollTable({ label, children }: { label: string; children: ReactNode; minWidth?: string }) {
   return (
-    <div role="region" aria-label={label} tabIndex={0} className={`overflow-x-auto rounded-card border border-line bg-white ${FOCUS}`}>
-      <table className={`w-full ${minWidth} text-left text-sm`}>
-        <caption className="sr-only">{label}</caption>
-        {children}
-      </table>
-    </div>
+    <DataTable label={label} wrapperClassName="rounded-card border border-line bg-white" className="text-left">
+      <caption className="sr-only">{label}</caption>
+      {children}
+    </DataTable>
   );
 }
 
-export function Th({ children, num, className = '' }: { children: ReactNode; num?: boolean; className?: string }) {
+export function Th({ children, num, kind, className = '', title }: { children: ReactNode; num?: boolean; kind?: CellKind; className?: string; title?: string }) {
+  const k: CellKind = kind ?? (num ? 'num' : 'text');
   return (
-    <th scope="col" className={`whitespace-nowrap bg-gray-50 px-3 py-2 text-xs font-semibold text-muted ${num ? NUM_HEADER_CLASS : ''} ${className}`}>
+    <th scope="col" title={title} className={`whitespace-nowrap bg-gray-50 px-1.5 py-2 text-xs font-semibold text-muted ${headerClass(k)} ${className}`}>
       {children}
     </th>
   );
 }
-
-export function Td({ children, num, className = '' }: { children?: ReactNode; num?: boolean; className?: string }) {
-  return <td className={`border-t border-line px-3 py-2 align-top ${num ? NUM_CELL_CLASS : ''} ${className}`}>{children}</td>;
+/**
+ * A body cell. `kind`: `clamp` = descriptive text, two lines then an accessible "Show more"; `num`, `date`, `status`, `action` =
+ * single-line and never clamped (components/ui/DataTable.tsx). `num` is the same as passing `kind="num"`.
+ */
+export function Td({ children, num, kind, className = '', colSpan, lines, minCh, maxCh }: { children?: ReactNode; num?: boolean; kind?: CellKind; className?: string; colSpan?: number; lines?: number; minCh?: number; maxCh?: number }) {
+  const k: CellKind = kind ?? (num ? 'num' : 'text');
+  return (
+    <DataTd kind={k} colSpan={colSpan} lines={lines} minCh={minCh} maxCh={maxCh} className={`border-t border-line px-1.5 py-2 align-top ${num ? NUM_CELL_CLASS : ''} ${className}`}>
+      {children}
+    </DataTd>
+  );
 }
 
 export function LoadingPanel({ what }: { what: string }) {

@@ -4,6 +4,7 @@ import { formatDateShort } from '@/lib/engines/date';
 import { useEffect, useState } from 'react';
 import { MARKET_INDEX_KEY_LIST, MARKET_INDEX_LABELS, type MarketIndexKey } from '@/lib/config/investment-intelligence/marketIndexConfig';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 // Market Index Data admin screen. Two sections: upload (preview first, then an
 // attested commit) and status (latest close per index, upload ledger, the
@@ -160,7 +161,7 @@ export default function MarketIndexDataClient() {
         )}
         {status?.state === 'ok' && (
           <>
-            <table style={{ width: '100%', marginTop: '0.5rem' }}>
+            <DataTable label="Status" style={{ width: '100%', marginTop: '0.5rem' }}>
               <thead>
                 <tr style={{ textAlign: 'left' }}>
                   <th>Index</th>
@@ -183,7 +184,7 @@ export default function MarketIndexDataClient() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
             {status.dailyFeed && (
               <div style={{ marginTop: '1rem', padding: '0.75rem', border: '1px solid #d4d4d8', borderRadius: 6 }}>
                 <strong>Daily feed: {status.dailyFeed.effectivelyEnabled ? 'ON' : 'OFF'}</strong>
@@ -327,7 +328,7 @@ export default function MarketIndexDataClient() {
           {status.recentBatches.length === 0 ? (
             <p>No upload or feed run has been recorded yet.</p>
           ) : (
-            <table style={{ width: '100%' }}>
+            <DataTable label="Recent uploads and feed runs" style={{ width: '100%' }}>
               <thead>
                 <tr style={{ textAlign: 'left' }}>
                   <th>When</th>
@@ -356,7 +357,7 @@ export default function MarketIndexDataClient() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
           )}
         </section>
       )}

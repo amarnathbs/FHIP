@@ -20,6 +20,7 @@ import { MAPPING_NOT_INSTALLED_LINE } from '@/lib/planning-benchmarks/allowedVal
 import { formatDayFirstDateTime } from '@/lib/planning-benchmarks/dayFirst';
 import { formatCount, formatFigure, type FigureContext } from '@/lib/planning-benchmarks/figureFormat';
 import { KIND_LABEL, UPLOAD_KINDS, XLSX_DATA_SHEET, type UploadKind } from '@/lib/planning-benchmarks/uploadSchema';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface KindInfo {
   kind: UploadKind;
@@ -488,7 +489,7 @@ export function PlanningBenchmarkUpload() {
             )}
             {stageResult.issues.length > 0 && (
               <div className="mt-2 overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <DataTable label="Problems found in the file" className="w-full text-left text-xs">
                   <caption className="sr-only">Problems found in the file</caption>
                   <thead className="text-muted">
                     <tr>
@@ -509,7 +510,7 @@ export function PlanningBenchmarkUpload() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
                 {stageResult.issuesTruncated && <p className="mt-1 text-xs text-muted">Only the first {stageResult.issues.length} are shown. Fix these and check again to see the rest.</p>}
               </div>
             )}
@@ -594,51 +595,49 @@ export function PlanningBenchmarkUpload() {
               {shownRows.length} row(s) shown{preview.rows_truncated ? ' (the first 1,000 only)' : ''}.
             </span>
           </div>
-          <div className="relative mt-2 overflow-x-auto rounded border border-line">
-            <table className="w-full text-left text-xs">
-              <caption className="sr-only">Staged rows compared with the live figures</caption>
-              <thead className="bg-gray-50 text-muted">
+          <DataTable label="Staged rows compared with the live figures" wrapperClassName="relative mt-2 rounded border border-line" className="w-full text-left text-xs">
+            <caption className="sr-only">Staged rows compared with the live figures</caption>
+            <thead className="bg-gray-50 text-muted">
+              <tr>
+                <th scope="col" className="whitespace-nowrap px-3 py-2">Row</th>
+                <th scope="col" className="whitespace-nowrap px-3 py-2">What</th>
+                <th scope="col" className="whitespace-nowrap px-3 py-2">Result</th>
+                <th scope="col" className="whitespace-nowrap px-3 py-2">Live now</th>
+                <th scope="col" className="whitespace-nowrap px-3 py-2">In this file</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shownRows.length === 0 && (
                 <tr>
-                  <th scope="col" className="whitespace-nowrap px-3 py-2">Row</th>
-                  <th scope="col" className="whitespace-nowrap px-3 py-2">What</th>
-                  <th scope="col" className="whitespace-nowrap px-3 py-2">Result</th>
-                  <th scope="col" className="whitespace-nowrap px-3 py-2">Live now</th>
-                  <th scope="col" className="whitespace-nowrap px-3 py-2">In this file</th>
+                  <td colSpan={5} className="px-3 py-4 text-center text-muted">No rows match this filter.</td>
                 </tr>
-              </thead>
-              <tbody>
-                {shownRows.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-4 text-center text-muted">No rows match this filter.</td>
-                  </tr>
-                )}
-                {shownRows.map((r) => (
-                  <tr key={r.row_no} className="border-t border-line align-top">
-                    <td className="px-3 py-2">{r.row_no}</td>
-                    <td className="px-3 py-2">
-                      {preview.batch.kind === 'values' && `${r.metric_code} / ${r.statistic_type}${r.cohort_code ? ` / ${r.cohort_code}` : ' / country-wide'}`}
-                      {preview.batch.kind === 'target_ranges' && `${r.metric_code} / tier ${r.band_tier} ${r.band_label}`}
-                      {preview.batch.kind === 'cohorts' && `${r.cohort_code} (tier ${r.cohort_tier})`}
-                    </td>
-                    <td className="px-3 py-2">
-                      {CLASS_LABEL[r.classification]}
-                      {r.detail ? <span className="block text-muted">{r.detail}</span> : null}
-                    </td>
-                    <td className="px-3 py-2">
-                      {preview.batch.kind === 'values' && (r.live_value === null ? 'nothing' : num(r.live_value, rowCtx(preview.batch.kind, r, 'live')))}
-                      {preview.batch.kind === 'target_ranges' && (r.live_lower === null && r.live_upper === null && r.classification === 'new' ? 'nothing' : `${num(r.live_lower, rowCtx(preview.batch.kind, r, 'live'))} to ${num(r.live_upper, rowCtx(preview.batch.kind, r, 'live'))}`)}
-                      {preview.batch.kind === 'cohorts' && (r.classification === 'new' ? 'nothing' : 'exists')}
-                    </td>
-                    <td className="px-3 py-2">
-                      {preview.batch.kind === 'values' && num(r.new_value, rowCtx(preview.batch.kind, r, 'new'))}
-                      {preview.batch.kind === 'target_ranges' && `${num(r.new_lower, rowCtx(preview.batch.kind, r, 'new'))} to ${num(r.new_upper, rowCtx(preview.batch.kind, r, 'new'))}`}
-                      {preview.batch.kind === 'cohorts' && (r.cohort_description ?? '')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              )}
+              {shownRows.map((r) => (
+                <tr key={r.row_no} className="border-t border-line align-top">
+                  <td className="px-3 py-2">{r.row_no}</td>
+                  <td className="px-3 py-2">
+                    {preview.batch.kind === 'values' && `${r.metric_code} / ${r.statistic_type}${r.cohort_code ? ` / ${r.cohort_code}` : ' / country-wide'}`}
+                    {preview.batch.kind === 'target_ranges' && `${r.metric_code} / tier ${r.band_tier} ${r.band_label}`}
+                    {preview.batch.kind === 'cohorts' && `${r.cohort_code} (tier ${r.cohort_tier})`}
+                  </td>
+                  <td className="px-3 py-2">
+                    {CLASS_LABEL[r.classification]}
+                    {r.detail ? <span className="block text-muted">{r.detail}</span> : null}
+                  </td>
+                  <td className="px-3 py-2">
+                    {preview.batch.kind === 'values' && (r.live_value === null ? 'nothing' : num(r.live_value, rowCtx(preview.batch.kind, r, 'live')))}
+                    {preview.batch.kind === 'target_ranges' && (r.live_lower === null && r.live_upper === null && r.classification === 'new' ? 'nothing' : `${num(r.live_lower, rowCtx(preview.batch.kind, r, 'live'))} to ${num(r.live_upper, rowCtx(preview.batch.kind, r, 'live'))}`)}
+                    {preview.batch.kind === 'cohorts' && (r.classification === 'new' ? 'nothing' : 'exists')}
+                  </td>
+                  <td className="px-3 py-2">
+                    {preview.batch.kind === 'values' && num(r.new_value, rowCtx(preview.batch.kind, r, 'new'))}
+                    {preview.batch.kind === 'target_ranges' && `${num(r.new_lower, rowCtx(preview.batch.kind, r, 'new'))} to ${num(r.new_upper, rowCtx(preview.batch.kind, r, 'new'))}`}
+                    {preview.batch.kind === 'cohorts' && (r.cohort_description ?? '')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
 
           {preview.batch.status === 'staged' && (
             <div className="mt-4 space-y-3">
@@ -690,49 +689,47 @@ export function PlanningBenchmarkUpload() {
         {(status.batches ?? []).length === 0 ? (
           <p className="mt-2 text-sm text-muted">No upload has been staged yet.</p>
         ) : (
-          <div className="relative mt-2 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <caption className="sr-only">Planning benchmark uploads, newest first</caption>
-              <thead className="bg-gray-50 text-muted">
-                <tr>
-                  <th scope="col" className="px-3 py-2">When</th>
-                  <th scope="col" className="px-3 py-2">Kind</th>
-                  <th scope="col" className="px-3 py-2">Dataset</th>
-                  <th scope="col" className="px-3 py-2">File</th>
-                  <th scope="col" className="px-3 py-2">Rows</th>
-                  <th scope="col" className="px-3 py-2">Status</th>
-                  <th scope="col" className="px-3 py-2">By</th>
-                  <th scope="col" className="px-3 py-2">Open</th>
+          <DataTable label="Planning benchmark uploads, newest first" wrapperClassName="relative mt-2" className="w-full text-left text-xs">
+            <caption className="sr-only">Planning benchmark uploads, newest first</caption>
+            <thead className="bg-gray-50 text-muted">
+              <tr>
+                <th scope="col" className="px-3 py-2">When</th>
+                <th scope="col" className="px-3 py-2">Kind</th>
+                <th scope="col" className="px-3 py-2">Dataset</th>
+                <th scope="col" className="px-3 py-2">File</th>
+                <th scope="col" className="px-3 py-2">Rows</th>
+                <th scope="col" className="px-3 py-2">Status</th>
+                <th scope="col" className="px-3 py-2">By</th>
+                <th scope="col" className="px-3 py-2">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(status.batches ?? []).map((b) => (
+                <tr key={b.id} className="border-t border-line align-top">
+                  <td className="whitespace-nowrap px-3 py-2">{formatDayFirstDateTime(b.staged_at)}</td>
+                  <td className="px-3 py-2">{KIND_LABEL[b.kind]}</td>
+                  <td className="px-3 py-2">
+                    {b.dataset_name} {b.dataset_version}
+                  </td>
+                  <td className="max-w-xs truncate px-3 py-2" title={b.file_name}>
+                    {b.file_name}
+                  </td>
+                  <td className="px-3 py-2">{b.row_count}</td>
+                  <td className="px-3 py-2">
+                    {STATUS_LABEL[b.status]}
+                    {b.status === 'staged' && new Date(b.expires_at).getTime() <= renderedAtMs ? ' - expired' : ''}
+                    {b.status === 'activated' ? ` ${formatDayFirstDateTime(b.activated_at)}${b.self_activated ? ', self-activated' : ''}` : ''}
+                  </td>
+                  <td className="px-3 py-2">{b.stagedByMe ? 'you' : 'another admin'}</td>
+                  <td className="px-3 py-2">
+                    <button type="button" onClick={() => void loadPreview(b.id)} aria-label={`Open the preview of ${b.file_name}`} className="min-h-11 min-w-11 rounded border border-line px-2 hover:bg-gray-50">
+                      Preview
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {(status.batches ?? []).map((b) => (
-                  <tr key={b.id} className="border-t border-line align-top">
-                    <td className="whitespace-nowrap px-3 py-2">{formatDayFirstDateTime(b.staged_at)}</td>
-                    <td className="px-3 py-2">{KIND_LABEL[b.kind]}</td>
-                    <td className="px-3 py-2">
-                      {b.dataset_name} {b.dataset_version}
-                    </td>
-                    <td className="max-w-xs truncate px-3 py-2" title={b.file_name}>
-                      {b.file_name}
-                    </td>
-                    <td className="px-3 py-2">{b.row_count}</td>
-                    <td className="px-3 py-2">
-                      {STATUS_LABEL[b.status]}
-                      {b.status === 'staged' && new Date(b.expires_at).getTime() <= renderedAtMs ? ' - expired' : ''}
-                      {b.status === 'activated' ? ` ${formatDayFirstDateTime(b.activated_at)}${b.self_activated ? ', self-activated' : ''}` : ''}
-                    </td>
-                    <td className="px-3 py-2">{b.stagedByMe ? 'you' : 'another admin'}</td>
-                    <td className="px-3 py-2">
-                      <button type="button" onClick={() => void loadPreview(b.id)} aria-label={`Open the preview of ${b.file_name}`} className="min-h-11 min-w-11 rounded border border-line px-2 hover:bg-gray-50">
-                        Preview
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </section>
     </div>

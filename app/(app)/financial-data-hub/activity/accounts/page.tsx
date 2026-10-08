@@ -7,6 +7,7 @@ import { formatMoney } from '@/lib/engines/money';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { ResourceEmptyState, ResourceErrorState } from '@/components/resources/admin/ResourceStates';
 import { resolveActivityParams, type RawSearchParams } from '../_lib/searchParams';
+import { DataTable } from '@/components/ui/DataTable';
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   transaction: 'Transaction account',
@@ -100,63 +101,61 @@ async function FinancialActivityAccountsPageContent({
       </SectionCard>
 
       <SectionCard title="Accounts" description="Never shows a full account number — only the masked identifier on file.">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Per-account approved activity for this period</caption>
-            <thead>
-              <tr className="border-b border-line text-xs text-muted">
-                <th scope="col" className="py-2 pr-2 font-medium">Account</th>
-                <th scope="col" className="py-2 pr-2 font-medium">Type</th>
-                <th scope="col" className="py-2 pr-2 text-right font-medium">Income</th>
-                <th scope="col" className="py-2 pr-2 text-right font-medium">Expenses</th>
-                <th scope="col" className="py-2 pr-2 text-right font-medium">Net</th>
-                <th scope="col" className="py-2 pr-2 text-right font-medium">Transfers</th>
-                <th scope="col" className="py-2 text-right font-medium">Transactions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((account) => {
-                const rows = activity.perAccount.filter((p) => p.accountId === account.id);
-                if (rows.length === 0) {
-                  return (
-                    <tr key={account.id} className="border-b border-line/60">
-                      <td className="py-2 pr-2 text-ink">
-                        <Link href={`/financial-data-hub/activity/transactions?account_id=${account.id}`} className="font-medium text-trust hover:underline">
-                          {account.display_name}
-                          {account.masked_identifier ? ` (${account.masked_identifier})` : ''}
-                        </Link>
-                      </td>
-                      <td className="py-2 pr-2 text-muted">{ACCOUNT_TYPE_LABELS[account.account_type] ?? account.account_type}</td>
-                      <td className="py-2 pr-2 text-right text-muted" colSpan={4}>
-                        No approved activity this period
-                      </td>
-                      <td className="py-2 text-right tabular-nums text-muted">0</td>
-                    </tr>
-                  );
-                }
-                return rows.map((row) => {
-                  const currency = row.currencyCode as 'AUD' | 'INR';
-                  return (
-                    <tr key={`${account.id}-${row.currencyCode}`} className="border-b border-line/60">
-                      <td className="py-2 pr-2 text-ink">
-                        <Link href={`/financial-data-hub/activity/transactions?account_id=${account.id}`} className="font-medium text-trust hover:underline">
-                          {account.display_name}
-                          {account.masked_identifier ? ` (${account.masked_identifier})` : ''}
-                        </Link>
-                      </td>
-                      <td className="py-2 pr-2 text-muted">{ACCOUNT_TYPE_LABELS[account.account_type] ?? account.account_type}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(row.incomeTotal, currency)}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(row.expenseTotal, currency)}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(row.netCashFlow, currency)}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-muted">{formatMoney(row.transferTotal, currency)}</td>
-                      <td className="py-2 text-right tabular-nums text-muted">{row.transactionCount}</td>
-                    </tr>
-                  );
-                });
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable label="Per-account approved activity for this period" className="w-full text-left">
+          <caption className="sr-only">Per-account approved activity for this period</caption>
+          <thead>
+            <tr className="border-b border-line text-xs text-muted">
+              <th scope="col" className="py-2 pr-2 font-medium">Account</th>
+              <th scope="col" className="py-2 pr-2 font-medium">Type</th>
+              <th scope="col" className="py-2 pr-2 text-right font-medium">Income</th>
+              <th scope="col" className="py-2 pr-2 text-right font-medium">Expenses</th>
+              <th scope="col" className="py-2 pr-2 text-right font-medium">Net</th>
+              <th scope="col" className="py-2 pr-2 text-right font-medium">Transfers</th>
+              <th scope="col" className="py-2 text-right font-medium">Transactions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map((account) => {
+              const rows = activity.perAccount.filter((p) => p.accountId === account.id);
+              if (rows.length === 0) {
+                return (
+                  <tr key={account.id} className="border-b border-line/60">
+                    <td className="py-2 pr-2 text-ink">
+                      <Link href={`/financial-data-hub/activity/transactions?account_id=${account.id}`} className="font-medium text-trust hover:underline">
+                        {account.display_name}
+                        {account.masked_identifier ? ` (${account.masked_identifier})` : ''}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-2 text-muted">{ACCOUNT_TYPE_LABELS[account.account_type] ?? account.account_type}</td>
+                    <td className="py-2 pr-2 text-right text-muted" colSpan={4}>
+                      No approved activity this period
+                    </td>
+                    <td className="py-2 text-right tabular-nums text-muted">0</td>
+                  </tr>
+                );
+              }
+              return rows.map((row) => {
+                const currency = row.currencyCode as 'AUD' | 'INR';
+                return (
+                  <tr key={`${account.id}-${row.currencyCode}`} className="border-b border-line/60">
+                    <td className="py-2 pr-2 text-ink">
+                      <Link href={`/financial-data-hub/activity/transactions?account_id=${account.id}`} className="font-medium text-trust hover:underline">
+                        {account.display_name}
+                        {account.masked_identifier ? ` (${account.masked_identifier})` : ''}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-2 text-muted">{ACCOUNT_TYPE_LABELS[account.account_type] ?? account.account_type}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(row.incomeTotal, currency)}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(row.expenseTotal, currency)}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(row.netCashFlow, currency)}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-muted">{formatMoney(row.transferTotal, currency)}</td>
+                    <td className="py-2 text-right tabular-nums text-muted">{row.transactionCount}</td>
+                  </tr>
+                );
+              });
+            })}
+          </tbody>
+        </DataTable>
       </SectionCard>
     </div>
   );

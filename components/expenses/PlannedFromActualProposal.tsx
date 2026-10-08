@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import { formatMoneyWhole } from '@/lib/engines/money';
 import type { PlannedFromActualsDto, PlannedFromActualsResponse } from '@/lib/import-bridge/populationProposalDto';
+import { DataTable } from '@/components/ui/DataTable';
 
 const money = (v: number, c: string) => formatMoneyWhole(v, c === 'INR' ? 'INR' : 'AUD');
 
@@ -101,36 +102,34 @@ export function PlannedFromActualProposal({ onApplied, disabled = false }: { onA
 
       {review && (
         <div className="space-y-3">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="planned-from-actual-review">
-              <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-3 py-2"></th>
-                  <th className="px-3 py-2">Planned item</th>
-                  <th className="px-3 py-2 text-right">Your plan / month</th>
-                  <th className="px-3 py-2 text-right">Actual average / month</th>
-                  <th className="px-3 py-2">Suggestion</th>
+          <DataTable label="Update your planned expenses from your actual spending" className="w-full" data-testid="planned-from-actual-review">
+            <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-3 py-2"></th>
+                <th className="px-3 py-2">Planned item</th>
+                <th className="px-3 py-2 text-right">Your plan / month</th>
+                <th className="px-3 py-2 text-right">Actual average / month</th>
+                <th className="px-3 py-2">Suggestion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {review.items.map((i) => (
+                <tr key={i.masterItemKey} className="border-b last:border-0">
+                  <td className="px-3 py-2">
+                    {i.proposalId ? (
+                      <input type="checkbox" aria-label={`Update ${i.label}`} checked={Boolean(ticked[i.masterItemKey])} onChange={(e) => setTicked((t) => ({ ...t, [i.masterItemKey]: e.target.checked }))} />
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2">{i.label} <span className="text-xs text-muted">({i.groupLabel})</span></td>
+                  <td className="px-3 py-2 text-right">{i.existing ? (i.existing.monthlyReporting === null ? `${i.existing.currency} ${i.existing.amount}` : money(i.existing.monthlyReporting, cur)) : '—'}</td>
+                  <td className="px-3 py-2 text-right">{money(i.actualMonthly, cur)}</td>
+                  <td className="px-3 py-2 text-xs">
+                    {i.recommended === 'add_new' ? 'Add to your plan' : i.recommended === 'update_existing' ? 'Update your plan' : 'Already matches — keep'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {review.items.map((i) => (
-                  <tr key={i.masterItemKey} className="border-b last:border-0">
-                    <td className="px-3 py-2">
-                      {i.proposalId ? (
-                        <input type="checkbox" aria-label={`Update ${i.label}`} checked={Boolean(ticked[i.masterItemKey])} onChange={(e) => setTicked((t) => ({ ...t, [i.masterItemKey]: e.target.checked }))} />
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2">{i.label} <span className="text-xs text-muted">({i.groupLabel})</span></td>
-                    <td className="px-3 py-2 text-right">{i.existing ? (i.existing.monthlyReporting === null ? `${i.existing.currency} ${i.existing.amount}` : money(i.existing.monthlyReporting, cur)) : '—'}</td>
-                    <td className="px-3 py-2 text-right">{money(i.actualMonthly, cur)}</td>
-                    <td className="px-3 py-2 text-xs">
-                      {i.recommended === 'add_new' ? 'Add to your plan' : i.recommended === 'update_existing' ? 'Update your plan' : 'Already matches — keep'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
           <div className="flex items-center gap-3">
             <button type="button" onClick={() => void applySelected()} disabled={busy || disabled} className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
               {busy ? 'Applying…' : 'Apply selected'}

@@ -24,6 +24,7 @@ import { failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailu
 import { JURISDICTION_LABELS, JURISDICTION_VALUES, COMPLIANCE_LABELS, COMPLIANCE_VALUES, STATUS_LABELS, STATUS_VALUES, formatAdminDate } from '@/lib/resources/admin/labels';
 import { buildYouTubeThumbnailUrl } from '@/lib/resources/video/youtube';
 import type { VideoListItem } from '@/lib/resources/video/queries';
+import { DataTable } from '@/components/ui/DataTable';
 
 function formatDuration(seconds: number | null): string {
   if (seconds == null) return '—';
@@ -158,65 +159,63 @@ export function VideoListClient({ canCreate, canLink = false }: { canCreate: boo
               {/* `relative` prevents the sr-only "Actions" heading (position:
                   absolute) escaping this scroll container and creating a
                   page-level horizontal scrollbar — see ResourceContentTable. */}
-              <div className="relative hidden overflow-x-auto sm:block">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-                      <th scope="col" className="py-2 pr-3 font-semibold">Thumbnail</th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">Title</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">YouTube ID</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Duration</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold xl:table-cell">Category</th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">Compliance</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
-                      <th scope="col" className="py-2 pl-3 font-semibold"><span className="sr-only">Actions</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((v) => {
-                      const thumb = v.thumbnail_url || buildYouTubeThumbnailUrl(v.youtube_video_id);
-                      return (
-                        <tr key={v.id} className="border-b border-line/60 hover:bg-gray-50">
-                          <td className="py-2.5 pr-3">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            {thumb ? <img src={thumb} alt="" className="h-10 w-16 rounded object-cover" /> : <span className="text-xs text-muted">—</span>}
-                          </td>
-                          <td className="max-w-[240px] py-2.5 pr-3">
-                            <Link href={`/admin/resources/videos/${v.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
-                              {v.title}
+              <DataTable label="Videos" wrapperClassName="relative hidden sm:block" className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+                    <th scope="col" className="py-2 pr-3 font-semibold">Thumbnail</th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">Title</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">YouTube ID</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Duration</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold xl:table-cell">Category</th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">Compliance</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
+                    <th scope="col" className="py-2 pl-3 font-semibold"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((v) => {
+                    const thumb = v.thumbnail_url || buildYouTubeThumbnailUrl(v.youtube_video_id);
+                    return (
+                      <tr key={v.id} className="border-b border-line/60 hover:bg-gray-50">
+                        <td className="py-2.5 pr-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {thumb ? <img src={thumb} alt="" className="h-10 w-16 rounded object-cover" /> : <span className="text-xs text-muted">—</span>}
+                        </td>
+                        <td className="max-w-[240px] py-2.5 pr-3">
+                          <Link href={`/admin/resources/videos/${v.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
+                            {v.title}
+                          </Link>
+                        </td>
+                        <td className="hidden py-2.5 pr-3 text-muted md:table-cell">
+                          {v.youtube_video_id || (
+                            <Link href={`/admin/resources/videos/${v.id}/edit`} className="font-semibold text-attention hover:underline">
+                              Needs YouTube details
                             </Link>
-                          </td>
-                          <td className="hidden py-2.5 pr-3 text-muted md:table-cell">
-                            {v.youtube_video_id || (
-                              <Link href={`/admin/resources/videos/${v.id}/edit`} className="font-semibold text-attention hover:underline">
-                                Needs YouTube details
-                              </Link>
-                            )}
-                          </td>
-                          <td className="hidden py-2.5 pr-3 text-muted lg:table-cell">{formatDuration(v.duration_seconds)}</td>
-                          <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={v.jurisdiction} /></td>
-                          <td className="hidden py-2.5 pr-3 text-muted xl:table-cell">{v.primary_category?.name ?? '—'}</td>
-                          <td className="py-2.5 pr-3"><ResourceStatusBadge status={v.status} /></td>
-                          <td className="py-2.5 pr-3"><ResourceComplianceBadge compliance={v.compliance_classification} /></td>
-                          <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(v.updated_at)}</td>
-                          <td className="py-2.5 pl-3 text-right">
-                            <Link href={`/admin/resources/videos/${v.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${v.title}"`}>
-                              Edit
+                          )}
+                        </td>
+                        <td className="hidden py-2.5 pr-3 text-muted lg:table-cell">{formatDuration(v.duration_seconds)}</td>
+                        <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={v.jurisdiction} /></td>
+                        <td className="hidden py-2.5 pr-3 text-muted xl:table-cell">{v.primary_category?.name ?? '—'}</td>
+                        <td className="py-2.5 pr-3"><ResourceStatusBadge status={v.status} /></td>
+                        <td className="py-2.5 pr-3"><ResourceComplianceBadge compliance={v.compliance_classification} /></td>
+                        <td className="hidden py-2.5 pr-3 text-muted sm:table-cell whitespace-nowrap">{formatAdminDate(v.updated_at)}</td>
+                        <td className="py-2.5 pl-3 text-right">
+                          <Link href={`/admin/resources/videos/${v.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${v.title}"`}>
+                            Edit
+                          </Link>
+                          {canLink && (
+                            <Link href={`/admin/resources/videos/${v.id}/edit#linked-content`} className="ml-3 inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Link "${v.title}" to content`}>
+                              Link to content
                             </Link>
-                            {canLink && (
-                              <Link href={`/admin/resources/videos/${v.id}/edit#linked-content`} className="ml-3 inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Link "${v.title}" to content`}>
-                                Link to content
-                              </Link>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </DataTable>
 
               <ul className="space-y-2 sm:hidden">
                 {items.map((v) => (

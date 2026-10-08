@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import type { RetirementPlanningContext } from '@/lib/services/retirementMemberData';
+import { DataTable } from '@/components/ui/DataTable';
 
 // Retirement Member UI — Self/Spouse Target Retirement Age (spec s.6-9,
 // s.35-39). Sits above the retirement accounts/contributions grid on the
@@ -117,35 +118,33 @@ export function RetirementPlanningSection() {
       className="mb-6"
     >
       {/* Desktop/tablet: compact Member/Current Age/Target Age table (spec s.37). */}
-      <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-muted">
-              <th className="pb-2 pr-4 font-medium">Member</th>
-              <th className="pb-2 pr-4 font-medium">Current Age</th>
-              <th className="pb-2 font-medium">Target Retirement Age</th>
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable label="Retirement ages by member" wrapperClassName="hidden sm:block" className="w-full">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-muted">
+            <th className="pb-2 pr-4 font-medium">Member</th>
+            <th className="pb-2 pr-4 font-medium">Current Age</th>
+            <th className="pb-2 font-medium">Target Retirement Age</th>
+          </tr>
+        </thead>
+        <tbody>
+          <MemberRow
+            label="Self"
+            currentAge={context.selfCurrentAge}
+            form={selfForm}
+            onChange={(value) => setSelfForm((s) => ({ ...s, value }))}
+            countryDefault={context.countryDefaultRetirementAge}
+          />
+          {context.spouseApplicable && (
             <MemberRow
-              label="Self"
-              currentAge={context.selfCurrentAge}
-              form={selfForm}
-              onChange={(value) => setSelfForm((s) => ({ ...s, value }))}
+              label="Spouse/Partner"
+              currentAge={null}
+              form={spouseForm}
+              onChange={(value) => setSpouseForm((s) => ({ ...s, value }))}
               countryDefault={context.countryDefaultRetirementAge}
             />
-            {context.spouseApplicable && (
-              <MemberRow
-                label="Spouse/Partner"
-                currentAge={null}
-                form={spouseForm}
-                onChange={(value) => setSpouseForm((s) => ({ ...s, value }))}
-                countryDefault={context.countryDefaultRetirementAge}
-              />
-            )}
-          </tbody>
-        </table>
-      </div>
+          )}
+        </tbody>
+      </DataTable>
 
       {/* Mobile: stacked cards, same fields (spec s.37). */}
       <div className="space-y-3 sm:hidden">

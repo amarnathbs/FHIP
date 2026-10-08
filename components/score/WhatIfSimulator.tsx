@@ -5,6 +5,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import { SCENARIO_LABELS, type ScenarioType } from '@/lib/engines/whatIf';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface ScenarioSummary {
   score: number;
@@ -68,7 +69,7 @@ export function WhatIfSimulator({ currency }: { currency: 'AUD' | 'INR' }) {
       </div>
       {error && <p className="mt-3 text-sm text-risk">{error}</p>}
       {result && (
-        <table className="mt-4 w-full text-sm">
+        <DataTable label="Score what-if: current against scenario" className="mt-4 w-full">
           <thead className="text-left text-xs uppercase text-gray-500">
             <tr>
               <th className="py-1">Measure</th>
@@ -103,7 +104,7 @@ export function WhatIfSimulator({ currency }: { currency: 'AUD' | 'INR' }) {
               <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{formatMoney(result.after.monthlySurplus, currency)}</td>
             </tr>
           </tbody>
-        </table>
+        </DataTable>
       )}
     </SectionCard>
   );

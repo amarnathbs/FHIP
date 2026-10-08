@@ -14,6 +14,7 @@ import { ENTITLEMENT_GRANT_MAX_DAYS, maxGrantEndDate, utcToday } from '@/lib/ser
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 import { DATE_INPUT_HINT, DATE_INPUT_PLACEHOLDER, formatDateInput, parseDateInput } from '@/lib/engines/dateInput';
 import { REASON_MIN_LENGTH } from '@/lib/services/premiumGrantAdmin';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface UserRow {
   user_id: string;
@@ -287,36 +288,34 @@ export function PremiumEntitlementsClient() {
         {summary === null && !summaryError && <p className="text-sm text-muted">Loading…</p>}
         {summary !== null && summary.rows.length === 0 && <p className="text-sm text-muted">Nothing expired or expiring this month for this source.</p>}
         {summary !== null && summary.rows.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-3 py-2">Email</th>
-                  <th className="px-3 py-2">Source</th>
-                  <th className="px-3 py-2">Last day</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Extensions left</th>
-                  <th className="px-3 py-2">Action</th>
+          <DataTable label="Premium Access (admin grants)" wrapperClassName="rounded-card border" className="min-w-full">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Source</th>
+                <th className="px-3 py-2">Last day</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Extensions left</th>
+                <th className="px-3 py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.rows.map((r) => (
+                <tr key={r.user_id} className="border-t">
+                  <td className="px-3 py-2">{r.email ?? '(account no longer exists)'}</td>
+                  <td className="px-3 py-2">{SOURCE_LABEL[r.entitlement_source]}</td>
+                  <td className="px-3 py-2">{fmt(r.effective_to)}</td>
+                  <td className="px-3 py-2">{r.bucket === 'expired_this_month' ? 'Expired' : `Expires in ${r.days_remaining} day(s)`}</td>
+                  <td className="px-3 py-2">{r.extensions_remaining}</td>
+                  <td className="px-3 py-2">
+                    <button type="button" onClick={() => void selectUser(r.user_id)} className="text-xs font-medium text-trust hover:underline">
+                      History / Extend
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {summary.rows.map((r) => (
-                  <tr key={r.user_id} className="border-t">
-                    <td className="px-3 py-2">{r.email ?? '(account no longer exists)'}</td>
-                    <td className="px-3 py-2">{SOURCE_LABEL[r.entitlement_source]}</td>
-                    <td className="px-3 py-2">{fmt(r.effective_to)}</td>
-                    <td className="px-3 py-2">{r.bucket === 'expired_this_month' ? 'Expired' : `Expires in ${r.days_remaining} day(s)`}</td>
-                    <td className="px-3 py-2">{r.extensions_remaining}</td>
-                    <td className="px-3 py-2">
-                      <button type="button" onClick={() => void selectUser(r.user_id)} className="text-xs font-medium text-trust hover:underline">
-                        History / Extend
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </section>
 
@@ -348,36 +347,34 @@ export function PremiumEntitlementsClient() {
         {grants === null && !grantsError && <p className="text-sm text-muted">Loading…</p>}
         {grants !== null && grants.length === 0 && <p className="text-sm text-muted">No grants in this list.</p>}
         {grants !== null && grants.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-3 py-2">Email</th>
-                  <th className="px-3 py-2">Source</th>
-                  <th className="px-3 py-2">Ends</th>
-                  <th className="px-3 py-2">Days left</th>
-                  <th className="px-3 py-2">Extensions left</th>
-                  <th className="px-3 py-2">Action</th>
+          <DataTable label="Admin grants" wrapperClassName="rounded-card border" className="min-w-full">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Source</th>
+                <th className="px-3 py-2">Ends</th>
+                <th className="px-3 py-2">Days left</th>
+                <th className="px-3 py-2">Extensions left</th>
+                <th className="px-3 py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grants.map((g) => (
+                <tr key={g.user_id} className="border-t">
+                  <td className="px-3 py-2">{g.email ?? '(account no longer exists)'}</td>
+                  <td className="px-3 py-2">{SOURCE_LABEL[g.entitlement_source]}</td>
+                  <td className="px-3 py-2">{fmt(g.effective_to)}</td>
+                  <td className="px-3 py-2">{g.state === 'lapsed' ? 'Lapsed' : g.days_remaining}</td>
+                  <td className="px-3 py-2">{g.extensions_remaining}</td>
+                  <td className="px-3 py-2">
+                    <button type="button" onClick={() => void selectUser(g.user_id)} className="text-xs font-medium text-trust hover:underline">
+                      Manage
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {grants.map((g) => (
-                  <tr key={g.user_id} className="border-t">
-                    <td className="px-3 py-2">{g.email ?? '(account no longer exists)'}</td>
-                    <td className="px-3 py-2">{SOURCE_LABEL[g.entitlement_source]}</td>
-                    <td className="px-3 py-2">{fmt(g.effective_to)}</td>
-                    <td className="px-3 py-2">{g.state === 'lapsed' ? 'Lapsed' : g.days_remaining}</td>
-                    <td className="px-3 py-2">{g.extensions_remaining}</td>
-                    <td className="px-3 py-2">
-                      <button type="button" onClick={() => void selectUser(g.user_id)} className="text-xs font-medium text-trust hover:underline">
-                        Manage
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </section>
 
@@ -413,30 +410,28 @@ export function PremiumEntitlementsClient() {
         {searchError && <p role="alert" className="text-sm text-risk">{searchError}</p>}
         {results !== null && results.length === 0 && <p className="text-sm text-muted">No matching users.</p>}
         {results !== null && results.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-3 py-2">Email</th>
-                  <th className="px-3 py-2">Plan</th>
-                  <th className="px-3 py-2">Action</th>
+          <DataTable label="Find a user" wrapperClassName="rounded-card border" className="min-w-full">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Plan</th>
+                <th className="px-3 py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((u) => (
+                <tr key={u.user_id} className="border-t">
+                  <td className="px-3 py-2">{u.email ?? '(no email)'}</td>
+                  <td className="px-3 py-2 text-muted">{describeState(u)}</td>
+                  <td className="px-3 py-2">
+                    <button type="button" onClick={() => void selectUser(u.user_id)} className="text-xs font-medium text-trust hover:underline">
+                      Manage
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {results.map((u) => (
-                  <tr key={u.user_id} className="border-t">
-                    <td className="px-3 py-2">{u.email ?? '(no email)'}</td>
-                    <td className="px-3 py-2 text-muted">{describeState(u)}</td>
-                    <td className="px-3 py-2">
-                      <button type="button" onClick={() => void selectUser(u.user_id)} className="text-xs font-medium text-trust hover:underline">
-                        Manage
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </section>
 
@@ -558,38 +553,36 @@ export function PremiumEntitlementsClient() {
             {history === null && <p className="mt-1 text-sm text-muted">Loading…</p>}
             {history !== null && history.length === 0 && <p className="mt-1 text-sm text-muted">No admin changes recorded for this user.</p>}
             {history !== null && history.length > 0 && (
-              <div className="mt-2 overflow-x-auto rounded-card border">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
-                    <tr>
-                      <th className="px-3 py-2">When</th>
-                      <th className="px-3 py-2">Action</th>
-                      <th className="px-3 py-2">By</th>
-                      <th className="px-3 py-2">Change</th>
-                      <th className="px-3 py-2">Reason</th>
+              <DataTable label="History" wrapperClassName="mt-2 rounded-card border" className="min-w-full">
+                <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+                  <tr>
+                    <th className="px-3 py-2">When</th>
+                    <th className="px-3 py-2">Action</th>
+                    <th className="px-3 py-2">By</th>
+                    <th className="px-3 py-2">Change</th>
+                    <th className="px-3 py-2">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr key={h.id} className="border-t align-top">
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDateTimeShort(h.created_at, 'AUD')}</td>
+                      <td className="px-3 py-2 capitalize">{h.action}</td>
+                      <td className="px-3 py-2">{h.actor_email ?? h.actor_user_id}</td>
+                      <td className="px-3 py-2 text-muted">
+                        {h.before_plan_tier ?? '—'}
+                        {h.before_entitlement_source === 'admin_grant' ? ' (grant)' : ''}
+                        {h.before_effective_to ? ` to ${fmt(h.before_effective_to)}` : ''}
+                        {' → '}
+                        {h.after_plan_tier}
+                        {h.after_entitlement_source === 'admin_grant' ? ' (grant)' : ''}
+                        {h.after_effective_to && h.after_plan_tier === 'premium' ? ` to ${fmt(h.after_effective_to)}` : ''}
+                      </td>
+                      <td className="px-3 py-2">{h.reason}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((h) => (
-                      <tr key={h.id} className="border-t align-top">
-                        <td className="px-3 py-2">{formatDateTimeShort(h.created_at, 'AUD')}</td>
-                        <td className="px-3 py-2 capitalize">{h.action}</td>
-                        <td className="px-3 py-2">{h.actor_email ?? h.actor_user_id}</td>
-                        <td className="px-3 py-2 text-muted">
-                          {h.before_plan_tier ?? '—'}
-                          {h.before_entitlement_source === 'admin_grant' ? ' (grant)' : ''}
-                          {h.before_effective_to ? ` to ${fmt(h.before_effective_to)}` : ''}
-                          {' → '}
-                          {h.after_plan_tier}
-                          {h.after_entitlement_source === 'admin_grant' ? ' (grant)' : ''}
-                          {h.after_effective_to && h.after_plan_tier === 'premium' ? ` to ${fmt(h.after_effective_to)}` : ''}
-                        </td>
-                        <td className="px-3 py-2">{h.reason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
             )}
           </div>
         </section>

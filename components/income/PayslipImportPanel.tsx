@@ -36,6 +36,7 @@ import {
   SCANNING_MESSAGE,
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
+import { DataTable } from '@/components/ui/DataTable';
 
 type Phase =
   | 'form'
@@ -1327,53 +1328,51 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
               </button>
             </div>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] border-collapse text-sm">
-              <caption className="sr-only">Comparison of current income to the proposed payslip values</caption>
-              <thead>
-                <tr className="border-b border-gray-200 text-left">
-                  <th scope="col" className="py-2 pr-2">
-                    Field
-                  </th>
-                  <th scope="col" className="py-2 pr-2">
-                    Current
-                  </th>
-                  <th scope="col" className="py-2 pr-2">
-                    Proposed
-                  </th>
-                  <th scope="col" className="py-2">
-                    Apply this field
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map((f) => {
-                  const changed = f.proposedValue !== f.existingValue;
-                  return (
-                    <tr key={f.fieldName} className="border-b border-gray-100">
-                      <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">
-                        {FIELD_LABELS[f.fieldName] ?? f.fieldName}
-                        {fieldReasonText(f.reasonCode) && <span className="block text-xs">{fieldReasonText(f.reasonCode)}</span>}
-                      </th>
-                      <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind)}</td>
-                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind)}</td>
-                      <td className="py-2">
-                        <label className="inline-flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(f.fieldName)}
-                            onChange={() => toggleField(f.fieldName)}
-                            aria-label={`Apply ${FIELD_LABELS[f.fieldName] ?? f.fieldName}`}
-                          />
-                          {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
-                        </label>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable label="Comparison of current income to the proposed payslip values" className="w-full min-w-[420px] border-collapse">
+            <caption className="sr-only">Comparison of current income to the proposed payslip values</caption>
+            <thead>
+              <tr className="border-b border-gray-200 text-left">
+                <th scope="col" className="py-2 pr-2">
+                  Field
+                </th>
+                <th scope="col" className="py-2 pr-2">
+                  Current
+                </th>
+                <th scope="col" className="py-2 pr-2">
+                  Proposed
+                </th>
+                <th scope="col" className="py-2">
+                  Apply this field
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {fields.map((f) => {
+                const changed = f.proposedValue !== f.existingValue;
+                return (
+                  <tr key={f.fieldName} className="border-b border-gray-100">
+                    <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">
+                      {FIELD_LABELS[f.fieldName] ?? f.fieldName}
+                      {fieldReasonText(f.reasonCode) && <span className="block text-xs">{fieldReasonText(f.reasonCode)}</span>}
+                    </th>
+                    <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind)}</td>
+                    <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind)}</td>
+                    <td className="py-2">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(f.fieldName)}
+                          onChange={() => toggleField(f.fieldName)}
+                          aria-label={`Apply ${FIELD_LABELS[f.fieldName] ?? f.fieldName}`}
+                        />
+                        {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
+                      </label>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
 
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">What would you like to do?</legend>

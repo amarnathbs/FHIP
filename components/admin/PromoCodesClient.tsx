@@ -19,6 +19,7 @@ import {
   PROMO_MAX_DURATION_DAYS,
   formatPromoCode,
 } from '@/lib/services/promoCodes';
+import { DataTable, DataTd, DateTimeText, NoWrap } from '@/components/ui/DataTable';
 
 interface PromoRow {
   id: string;
@@ -387,123 +388,119 @@ export function PromoCodesClient() {
         {rows === null && !error && <p className="text-sm text-muted">Loading…</p>}
         {rows !== null && rows.length === 0 && <p className="text-sm text-muted">No promo codes yet.</p>}
         {rows !== null && rows.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-3 py-2">Code</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Days</th>
-                  <th className="px-3 py-2">Redeemed</th>
-                  <th className="px-3 py-2">Redeemable until</th>
-                  <th className="px-3 py-2">Note</th>
-                  <th className="px-3 py-2">Address-bound</th>
-                  <th className="px-3 py-2">Action</th>
+          <DataTable label="Codes" wrapperClassName="rounded-card border" className="min-w-full">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-2 py-2">Code</th>
+                <th className="px-2 py-2">Status</th>
+                <th className="px-2 py-2">Days</th>
+                <th className="px-2 py-2">Redeemed</th>
+                <th className="px-2 py-2">Redeemable until</th>
+                <th className="px-2 py-2">Note</th>
+                                <th className="min-w-44 px-2 py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t align-top">
+                  <td className="min-w-[6rem] px-2 py-2 font-mono">{formatPromoCode(r.code)}</td>
+                  <td className="px-2 py-2"><span className="capitalize">{r.state}</span>{r.bound ? <span className="block whitespace-nowrap text-xs text-muted">Address-bound</span> : null}</td>
+                  <td className="px-2 py-2">{r.duration_days}</td>
+                  <td className="px-2 py-2">
+                    {r.redemption_count} / {r.max_redemptions ?? 'unlimited'}
+                  </td>
+                  <td className="px-2 py-2">{r.expires_on ? <NoWrap>{formatDateShort(r.expires_on, 'AUD')}</NoWrap> : 'no expiry'}</td>
+                  <DataTd kind="clamp" minCh={9} className="px-2 py-2 text-muted">{r.note ?? '—'}</DataTd>
+                    <td className="px-2 py-2">
+                    {r.state === 'active' && replacingId !== r.id && disablingId !== r.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplacingId(r.id);
+                          setReplaceTo('');
+                          setReplaceBind(false);
+                          setReplaceKey(newRequestKey());
+                        }}
+                        className="mb-2 block whitespace-normal rounded border border-trust px-2 py-1 text-left text-xs font-medium text-trust hover:bg-trust/5"
+                      >
+                        Generate a replacement code and email it
+                      </button>
+                    )}
+                    {replacingId === r.id ? (
+                      <div className="space-y-2">
+                        <label htmlFor={`replace-to-${r.id}`} className="block text-xs text-muted">
+                          Email the NEW code to (up to 20 addresses)
+                        </label>
+                        <textarea
+                          id={`replace-to-${r.id}`}
+                          value={replaceTo}
+                          onChange={(e) => setReplaceTo(e.target.value)}
+                          rows={2}
+                          className="w-full min-w-40 max-w-64 rounded border px-2 py-1 text-sm"
+                        />
+                        <label className="flex items-center gap-2 text-xs">
+                          <input type="checkbox" checked={replaceBind} onChange={(e) => setReplaceBind(e.target.checked)} />
+                          Only this email address can redeem
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={busy || replaceTo.trim() === ''}
+                            onClick={() => void replaceAndEmail(r.id)}
+                            className="rounded bg-primary px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
+                          >
+                            {busy ? 'Working…' : 'Generate and email'}
+                          </button>
+                          <button type="button" onClick={() => setReplacingId(null)} className="text-xs text-gray-500 hover:underline">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {r.status === 'disabled' ? (
+                      <span className="text-xs text-muted">Disabled</span>
+                    ) : disablingId === r.id ? (
+                      <div className="space-y-2">
+                        <label htmlFor={`disable-reason-${r.id}`} className="block text-xs text-muted">
+                          Reason (at least {PROMO_DISABLE_REASON_MIN_LENGTH} characters)
+                        </label>
+                        <input
+                          id={`disable-reason-${r.id}`}
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                          className="w-full min-w-40 max-w-64 rounded border px-2 py-1 text-sm"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={busy || reason.trim().length < PROMO_DISABLE_REASON_MIN_LENGTH}
+                            onClick={() => void disable(r.id)}
+                            className="rounded bg-risk px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
+                          >
+                            Confirm disable
+                          </button>
+                          <button type="button" onClick={() => setDisablingId(null)} className="text-xs text-gray-500 hover:underline">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDisablingId(r.id);
+                          setReason('');
+                        }}
+                        className="rounded border border-risk px-2 py-1 text-xs font-medium text-risk hover:bg-risk/5"
+                      >
+                        Disable
+                      </button>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t align-top">
-                    <td className="px-3 py-2 font-mono">{formatPromoCode(r.code)}</td>
-                    <td className="px-3 py-2 capitalize">{r.state}</td>
-                    <td className="px-3 py-2">{r.duration_days}</td>
-                    <td className="px-3 py-2">
-                      {r.redemption_count} / {r.max_redemptions ?? 'unlimited'}
-                    </td>
-                    <td className="px-3 py-2">{r.expires_on ? formatDateShort(r.expires_on, 'AUD') : 'no expiry'}</td>
-                    <td className="px-3 py-2 text-muted">{r.note ?? '—'}</td>
-                    <td className="px-3 py-2 text-muted">{r.bound ? 'Yes' : 'No'}</td>
-                    <td className="px-3 py-2">
-                      {r.state === 'active' && replacingId !== r.id && disablingId !== r.id && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReplacingId(r.id);
-                            setReplaceTo('');
-                            setReplaceBind(false);
-                            setReplaceKey(newRequestKey());
-                          }}
-                          className="mb-2 block rounded border border-trust px-2 py-1 text-xs font-medium text-trust hover:bg-trust/5"
-                        >
-                          Generate a replacement code and email it
-                        </button>
-                      )}
-                      {replacingId === r.id ? (
-                        <div className="space-y-2">
-                          <label htmlFor={`replace-to-${r.id}`} className="block text-xs text-muted">
-                            Email the NEW code to (up to 20 addresses)
-                          </label>
-                          <textarea
-                            id={`replace-to-${r.id}`}
-                            value={replaceTo}
-                            onChange={(e) => setReplaceTo(e.target.value)}
-                            rows={2}
-                            className="w-64 rounded border px-2 py-1 text-sm"
-                          />
-                          <label className="flex items-center gap-2 text-xs">
-                            <input type="checkbox" checked={replaceBind} onChange={(e) => setReplaceBind(e.target.checked)} />
-                            Only this email address can redeem
-                          </label>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={busy || replaceTo.trim() === ''}
-                              onClick={() => void replaceAndEmail(r.id)}
-                              className="rounded bg-primary px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
-                            >
-                              {busy ? 'Working…' : 'Generate and email'}
-                            </button>
-                            <button type="button" onClick={() => setReplacingId(null)} className="text-xs text-gray-500 hover:underline">
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                      {r.status === 'disabled' ? (
-                        <span className="text-xs text-muted">Disabled</span>
-                      ) : disablingId === r.id ? (
-                        <div className="space-y-2">
-                          <label htmlFor={`disable-reason-${r.id}`} className="block text-xs text-muted">
-                            Reason (at least {PROMO_DISABLE_REASON_MIN_LENGTH} characters)
-                          </label>
-                          <input
-                            id={`disable-reason-${r.id}`}
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            className="w-64 rounded border px-2 py-1 text-sm"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={busy || reason.trim().length < PROMO_DISABLE_REASON_MIN_LENGTH}
-                              onClick={() => void disable(r.id)}
-                              className="rounded bg-risk px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
-                            >
-                              Confirm disable
-                            </button>
-                            <button type="button" onClick={() => setDisablingId(null)} className="text-xs text-gray-500 hover:underline">
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDisablingId(r.id);
-                            setReason('');
-                          }}
-                          className="rounded border border-risk px-2 py-1 text-xs font-medium text-risk hover:bg-risk/5"
-                        >
-                          Disable
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </section>
 
@@ -514,30 +511,28 @@ export function PromoCodesClient() {
         <p className="text-xs text-muted">Shows the code id hint only (never a code value). Redemptions are listed with the redeeming account&apos;s email.</p>
         {events !== null && events.length === 0 && <p className="text-sm text-muted">No events yet.</p>}
         {events !== null && events.length > 0 && (
-          <div className="overflow-x-auto rounded-card border">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-3 py-2">When</th>
-                  <th className="px-3 py-2">Event</th>
-                  <th className="px-3 py-2">Code</th>
-                  <th className="px-3 py-2">By</th>
-                  <th className="px-3 py-2">Reason</th>
+          <DataTable label="Audit trail" wrapperClassName="rounded-card border" className="min-w-full">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-2 py-2">When</th>
+                <th className="px-2 py-2">Event</th>
+                <th className="px-2 py-2">Code</th>
+                <th className="px-2 py-2">By</th>
+                <th className="px-2 py-2">Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((ev) => (
+                <tr key={ev.id} className="border-t">
+                  <td className="px-2 py-2"><DateTimeText value={formatDateTimeShort(ev.created_at, 'AUD')} /></td>
+                  <td className="whitespace-nowrap px-2 py-2 capitalize">{ev.event_type}</td>
+                  <td className="px-2 py-2 font-mono">{ev.code_hint}</td>
+                  <DataTd kind="clamp" minCh={14} className="px-2 py-2">{ev.actor_email ?? '(account no longer exists)'}</DataTd>
+                  <DataTd kind="clamp" minCh={14} className="px-2 py-2">{ev.reason ?? '—'}</DataTd>
                 </tr>
-              </thead>
-              <tbody>
-                {events.map((ev) => (
-                  <tr key={ev.id} className="border-t">
-                    <td className="px-3 py-2">{formatDateTimeShort(ev.created_at, 'AUD')}</td>
-                    <td className="px-3 py-2 capitalize">{ev.event_type}</td>
-                    <td className="px-3 py-2 font-mono">{ev.code_hint}</td>
-                    <td className="px-3 py-2">{ev.actor_email ?? '(account no longer exists)'}</td>
-                    <td className="px-3 py-2">{ev.reason ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </section>
     </div>

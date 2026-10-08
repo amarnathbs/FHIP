@@ -6,6 +6,7 @@ import { OwnerClassBar } from './OwnerClassBar';
 import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { RedemptionSimulator } from './RedemptionSimulator';
+import { DataTable } from '@/components/ui/DataTable';
 
 // R6-FINAL — India Tax & Cost Intelligence UX (spec Section 27).
 //
@@ -253,41 +254,39 @@ function TaxIntelligenceClientInner({ ownerClass }: { ownerClass: string }) {
         {!summary.disposalResults || summary.disposalResults.length === 0 ? (
           <NotAvailable text="No disposals found for this period." />
         ) : (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-line text-muted">
-                  <th className="py-1 pr-2">Instrument</th>
-                  <th className="py-1 pr-2">Acquired</th>
-                  <th className="py-1 pr-2">Disposed</th>
-                  <th className="py-1 pr-2">Classification</th>
-                  <th className="py-1 pr-2">Gain type</th>
-                  <th className="py-1 pr-2 text-right">Estimated taxable gain</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.disposalResults.map((d, i) => (
-                  <Fragment key={i}>
-                    <tr className={d.note ? 'border-b-0' : 'border-b border-line/50'} data-testid="disposal-row">
-                      <td className="py-1 pr-2">{d.instrumentName}</td>
-                      <td className="py-1 pr-2">{fmtDate(d.acquisitionDate, TAX_CURRENCY)}</td>
-                      <td className="py-1 pr-2">{fmtDate(d.disposalDate, TAX_CURRENCY)}</td>
-                      <td className="py-1 pr-2 capitalize">{d.classification.replace('_', ' ')}</td>
-                      <td className="py-1 pr-2 uppercase">{d.gainType}</td>
-                      <td className="py-1 pr-2 text-right">{d.taxableGain === null ? <span className="text-slate-500">Unresolved</span> : fmtInr(d.taxableGain)}</td>
+          <DataTable label="Realised gains (estimated)" wrapperClassName="mt-2" className="w-full min-w-[720px] text-left">
+            <thead>
+              <tr className="border-b border-line text-muted">
+                <th className="py-1 pr-2">Instrument</th>
+                <th className="py-1 pr-2">Acquired</th>
+                <th className="py-1 pr-2">Disposed</th>
+                <th className="py-1 pr-2">Classification</th>
+                <th className="py-1 pr-2">Gain type</th>
+                <th className="py-1 pr-2 text-right">Estimated taxable gain</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.disposalResults.map((d, i) => (
+                <Fragment key={i}>
+                  <tr className={d.note ? 'border-b-0' : 'border-b border-line/50'} data-testid="disposal-row">
+                    <td className="py-1 pr-2">{d.instrumentName}</td>
+                    <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(d.acquisitionDate, TAX_CURRENCY)}</td>
+                    <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(d.disposalDate, TAX_CURRENCY)}</td>
+                    <td className="py-1 pr-2 capitalize">{d.classification.replace('_', ' ')}</td>
+                    <td className="py-1 pr-2 uppercase">{d.gainType}</td>
+                    <td className="py-1 pr-2 text-right">{d.taxableGain === null ? <span className="text-slate-500">Unresolved</span> : fmtInr(d.taxableGain)}</td>
+                  </tr>
+                  {d.note && (
+                    <tr className="border-b border-line/50" data-testid="disposal-row-note">
+                      <td colSpan={6} className="py-1 pb-2 pr-2 text-xs text-muted">
+                        {d.note}
+                      </td>
                     </tr>
-                    {d.note && (
-                      <tr className="border-b border-line/50" data-testid="disposal-row-note">
-                        <td colSpan={6} className="py-1 pb-2 pr-2 text-xs text-muted">
-                          {d.note}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </section>
 
@@ -297,30 +296,28 @@ function TaxIntelligenceClientInner({ ownerClass }: { ownerClass: string }) {
         {!lots || lots.length === 0 ? (
           <NotAvailable text="No tax lots on record." />
         ) : (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-line text-muted">
-                  <th className="py-1 pr-2">Instrument</th>
-                  <th className="py-1 pr-2">Acquired</th>
-                  <th className="py-1 pr-2 text-right">Units acquired</th>
-                  <th className="py-1 pr-2 text-right">Units remaining</th>
-                  <th className="py-1 pr-2">Status</th>
+          <DataTable label="Tax lots (FIFO)" wrapperClassName="mt-2" className="w-full min-w-[640px] text-left">
+            <thead>
+              <tr className="border-b border-line text-muted">
+                <th className="py-1 pr-2">Instrument</th>
+                <th className="py-1 pr-2">Acquired</th>
+                <th className="py-1 pr-2 text-right">Units acquired</th>
+                <th className="py-1 pr-2 text-right">Units remaining</th>
+                <th className="py-1 pr-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lots.map((l) => (
+                <tr key={l.lotId} className="border-b border-line/50" data-testid="lot-row">
+                  <td className="py-1 pr-2">{l.instrumentName}</td>
+                  <td className="py-1 pr-2 whitespace-nowrap">{fmtDate(l.acquisitionDate, TAX_CURRENCY)}</td>
+                  <td className="py-1 pr-2 text-right">{l.unitsAcquired.toFixed(3)}</td>
+                  <td className="py-1 pr-2 text-right">{l.unitsRemaining.toFixed(3)}</td>
+                  <td className="py-1 pr-2">{l.status.replace('_', ' ')}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {lots.map((l) => (
-                  <tr key={l.lotId} className="border-b border-line/50" data-testid="lot-row">
-                    <td className="py-1 pr-2">{l.instrumentName}</td>
-                    <td className="py-1 pr-2">{fmtDate(l.acquisitionDate, TAX_CURRENCY)}</td>
-                    <td className="py-1 pr-2 text-right">{l.unitsAcquired.toFixed(3)}</td>
-                    <td className="py-1 pr-2 text-right">{l.unitsRemaining.toFixed(3)}</td>
-                    <td className="py-1 pr-2">{l.status.replace('_', ' ')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </section>
 

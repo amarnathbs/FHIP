@@ -6,6 +6,7 @@ import { resolveForecastPageContext, getForecastVariance, type VarianceForecastC
 import { formatMoneyWhole } from '@/lib/engines/money';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 const CATEGORIES: { key: VarianceForecastCategory; label: string }[] = [
   { key: 'net_worth', label: 'Net Worth' },
@@ -75,70 +76,68 @@ async function ForecastVariancePageContent({ searchParams }: { searchParams: Pro
           title="Consolidated Variance"
           description={`Comparison date: ${variances[0]?.comparisonDate ?? '—'}${variances[0]?.dataLastUpdated ? ` (data last updated ${variances[0].dataLastUpdated})` : ' (live data — no recorded snapshot yet)'}. For net worth, retirement, goals and cross-border wealth, a higher actual value is generally favourable; for debt, a lower actual balance is favourable.`}
         >
-          <div className="overflow-x-auto">
-            <table data-testid="forecast-variance-table" className="w-full min-w-[900px] text-sm">
-              {/* App Review 2026-09-15, G2: every amount column is right-aligned
-                  via the shared NUM_HEADER_CLASS/NUM_CELL_CLASS constants
-                  (lib/ui/tableAlign.ts); text columns stay left-aligned. */}
-              <thead className="text-left text-xs uppercase text-muted">
-                <tr>
-                  <th className="py-1 pr-3">Category</th>
-                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Start Value</th>
-                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Forecast Till Date</th>
-                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Actual Till Date</th>
-                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Variance</th>
-                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Variance %</th>
-                  <th className="py-1 pr-3">Result</th>
-                  <th className="py-1 pr-3">Status</th>
-                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Revised Forecast</th>
-                  <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Final Target</th>
-                  <th className={`py-1 ${NUM_HEADER_CLASS}`}>Remaining Gap</th>
-                </tr>
-              </thead>
-              <tbody>
-                {CATEGORIES.map((c, i) => {
-                  const v = variances[i];
-                  return (
-                    <tr key={c.key} data-testid={`variance-row-${c.key}`} className="border-t align-top">
-                      <td className="py-2 pr-3 font-medium text-gray-800">
-                        {c.label}
-                        {/* App Review 2026-09-15, item 6.1: the reviewer could not
-                            find where the Retirement figure came from and the
-                            product offered nothing to check it against. Each row
-                            now names the exact register and column it is summed
-                            from. */}
-                        <span className="mt-1 block max-w-[22rem] whitespace-normal text-xs font-normal text-muted">{v.actualBasis}</span>
-                      </td>
-                      <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(v.startValue, currency)}</td>
-                      <td data-testid="variance-forecast" className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
-                        {fmt(v.forecastTillDate, currency)}
-                        {v.forecastHorizonExceeded ? <sup className="ml-0.5 text-caution">†</sup> : null}
-                      </td>
-                      <td data-testid="variance-actual" className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
-                        {fmt(v.actualTillDate, currency)}
-                      </td>
-                      <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(v.varianceAmount, currency)}</td>
-                      <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
-                        {v.variancePercentage !== null ? `${v.variancePercentage >= 0 ? '+' : ''}${v.variancePercentage.toFixed(1)}%` : '—'}
-                      </td>
-                      <td className="py-2 pr-3 capitalize">{v.result ?? '—'}</td>
-                      <td className="py-2 pr-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[v.status]}`}>{STATUS_LABEL[v.status]}</span>
-                      </td>
-                      <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(v.revisedForecast, currency)}</td>
-                      <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
-                        {fmt(v.finalTarget, currency)}
-                        {v.finalTarget === null ? (
-                          <span className="mt-1 block max-w-[16rem] whitespace-normal text-left text-xs font-normal text-muted">{v.finalTargetBasis}</span>
-                        ) : null}
-                      </td>
-                      <td className={`py-2 ${NUM_CELL_CLASS}`}>{fmt(v.finalTargetGap, currency)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable label="Forecast Variance Report" data-testid="forecast-variance-table" className="w-full min-w-[900px]">
+            {/* App Review 2026-09-15, G2: every amount column is right-aligned
+                via the shared NUM_HEADER_CLASS/NUM_CELL_CLASS constants
+                (lib/ui/tableAlign.ts); text columns stay left-aligned. */}
+            <thead className="text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="py-1 pr-3">Category</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Start Value</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Forecast Till Date</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Actual Till Date</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Variance</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Variance %</th>
+                <th className="py-1 pr-3">Result</th>
+                <th className="py-1 pr-3">Status</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Revised Forecast</th>
+                <th className={`py-1 pr-3 ${NUM_HEADER_CLASS}`}>Final Target</th>
+                <th className={`py-1 ${NUM_HEADER_CLASS}`}>Remaining Gap</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CATEGORIES.map((c, i) => {
+                const v = variances[i];
+                return (
+                  <tr key={c.key} data-testid={`variance-row-${c.key}`} className="border-t align-top">
+                    <td className="py-2 pr-3 font-medium text-gray-800">
+                      {c.label}
+                      {/* App Review 2026-09-15, item 6.1: the reviewer could not
+                          find where the Retirement figure came from and the
+                          product offered nothing to check it against. Each row
+                          now names the exact register and column it is summed
+                          from. */}
+                      <span className="mt-1 block max-w-[22rem] whitespace-normal text-xs font-normal text-muted">{v.actualBasis}</span>
+                    </td>
+                    <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(v.startValue, currency)}</td>
+                    <td data-testid="variance-forecast" className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
+                      {fmt(v.forecastTillDate, currency)}
+                      {v.forecastHorizonExceeded ? <sup className="ml-0.5 text-caution">†</sup> : null}
+                    </td>
+                    <td data-testid="variance-actual" className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
+                      {fmt(v.actualTillDate, currency)}
+                    </td>
+                    <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(v.varianceAmount, currency)}</td>
+                    <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
+                      {v.variancePercentage !== null ? `${v.variancePercentage >= 0 ? '+' : ''}${v.variancePercentage.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className="py-2 pr-3 capitalize">{v.result ?? '—'}</td>
+                    <td className="py-2 pr-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[v.status]}`}>{STATUS_LABEL[v.status]}</span>
+                    </td>
+                    <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{fmt(v.revisedForecast, currency)}</td>
+                    <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
+                      {fmt(v.finalTarget, currency)}
+                      {v.finalTarget === null ? (
+                        <span className="mt-1 block max-w-[16rem] whitespace-normal text-left text-xs font-normal text-muted">{v.finalTargetBasis}</span>
+                      ) : null}
+                    </td>
+                    <td className={`py-2 ${NUM_CELL_CLASS}`}>{fmt(v.finalTargetGap, currency)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
           <p className="mt-4 text-xs text-muted">
             A favourable variance does not automatically mean the final target will be achieved; an unfavourable variance does not
             automatically mean the final target is impossible. Rows with no forecast history yet show &quot;Insufficient Data&quot; —
