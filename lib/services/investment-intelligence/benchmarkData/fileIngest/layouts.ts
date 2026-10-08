@@ -390,7 +390,7 @@ export function resolveLayout(header: string[], params: UploadParams): LayoutRes
   const unused = layout.requiredHeaders.filter((r) => r !== layout!.dateColumn && r !== layout!.valueColumn && r !== layout!.indexNameColumn);
   if (unused.length > 0) notes.push(`Columns present but not used as data: ${unused.join(', ')}.`);
   if (ignored.length > 0) notes.push(`Ignored extra columns: ${ignored.join(', ')}.`);
-  if (params.dateFormat !== layout.defaultDateFormat) {
+  if (params.dateFormat !== undefined && params.dateFormat !== layout.defaultDateFormat) {
     notes.push(`The layout usually uses date format ${layout.defaultDateFormat}; you selected ${params.dateFormat}.`);
   }
   // A layout verified against a real download is verified only for THAT full header: a file that

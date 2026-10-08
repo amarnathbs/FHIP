@@ -33,7 +33,18 @@ import {
   type ValidationResult,
 } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest';
 import { parseIndexCsv } from '@/lib/services/investment-intelligence/marketIndex/indexCsvParser';
-import { DATE_FORMAT_OPTIONS, describeLayoutDisclosure, providerLayoutOptionLabel, recognisedLayoutNotice } from '@/components/admin/benchmarkData/benchmarkDataUiLogic';
+import {
+  DATE_FORMAT_OPTIONS,
+  buildStageParams,
+  describeLayoutDisclosure,
+  emptyUploadForm,
+  layoutSuppliedDateFormat,
+  providerLayoutOptionLabel,
+  recognisedLayoutNotice,
+  stepIssues,
+  type UploadContext,
+  type UploadFormState,
+} from '@/components/admin/benchmarkData/benchmarkDataUiLogic';
 
 const FIX = path.resolve(__dirname, '..', 'fixtures', 'market-index');
 const NIFTY_BYTES = new Uint8Array(fs.readFileSync(path.join(FIX, 'raw_niftyindices_nifty50_download_2026-10-08.csv')));
@@ -288,8 +299,8 @@ describe('negative controls (each names the rule it guards)', () => {
     expect(nifty.staged).toEqual([]);
   });
 
-  it('RULE date format is the operator\'s: the wrong date format is refused row by row, never guessed', () => {
-    const r = run('s.csv', SENSEX_BYTES, sensexParams({ shape: 'single', dateFormat: 'DD MMM YYYY' }));
+  it('RULE date format stays the operator\'s where no layout is recognised: a wrong format on a plain date,value file is refused row by row, never guessed', () => {
+    const r = run('p.csv', utf8('date,value\r\n28-September-2026,72771.72\r\n'), sensexParams({ shape: 'single', dateFormat: 'DD MMM YYYY' }));
     expect(r.staged).toEqual([]);
     expect(errorCodes(r)).toContain('DATE_FORMAT_INVALID');
   });
@@ -387,6 +398,133 @@ describe('preview panel renders the layout lines (server-side render of the real
     expect(html).toContain('07-10-2026');
     expect(html).toContain('Publication is disabled');
     expect(html).toContain('No approved entitlement permits publication');
+  });
+});
+
+// ------------------------------------------------- the date format comes from a recognised layout ---
+const noFormat = (p: UploadParams): UploadParams => {
+  const q = { ...p };
+  delete q.dateFormat;
+  return q;
+};
+
+describe('recognised layouts supply their own date format (the operator is not asked)', () => {
+  it('both raw fixtures load with NO date format supplied, whichever layout route is used', () => {
+    for (const p of [
+      noFormat(niftyParams({ shape: 'single' })),
+      noFormat(niftyParams({ shape: 'provider_export' })),
+      noFormat(niftyParams({ shape: 'provider_export', providerLayoutId: 'nse_price_export' })),
+    ]) {
+      const r = run('n.csv', NIFTY_BYTES, p);
+      expect(r.hardErrorCount, JSON.stringify(p)).toBe(0);
+      expect(r.staged.map((s) => [s.date, s.value])).toEqual(NIFTY_EXPECTED);
+      expect(r.disclosure.dateFormat).toBe('DD MMM YYYY');
+      expect(r.disclosure.dateFormatFrom).toBe('layout');
+    }
+    for (const p of [
+      noFormat(sensexParams({ shape: 'single' })),
+      noFormat(sensexParams({ shape: 'provider_export' })),
+      noFormat(sensexParams({ shape: 'provider_export', providerLayoutId: 'bse_sensex_download' })),
+    ]) {
+      const r = run('s.csv', SENSEX_BYTES, p);
+      expect(r.hardErrorCount, JSON.stringify(p)).toBe(0);
+      expect(r.staged.map((s) => [s.date, s.value])).toEqual(SENSEX_EXPECTED);
+      expect(r.disclosure.dateFormat).toBe('DD-MMM-YYYY');
+      expect(r.issues.filter((i) => i.code === 'DATE_FORMAT_FROM_LAYOUT')).toEqual([]);
+    }
+  });
+
+  it('the production case: a conflicting operator format (DD/MM/YYYY) is NOT applied; the layout\'s is used and a notice says so', () => {
+    const r = run('s.csv', SENSEX_BYTES, sensexParams({ shape: 'single', dateFormat: 'DD/MM/YYYY' }));
+    expect(r.hardErrorCount).toBe(0);
+    expect(r.staged).toHaveLength(5);
+    const notice = r.issues.find((i) => i.code === 'DATE_FORMAT_FROM_LAYOUT');
+    expect(notice?.severity).toBe('warning');
+    expect(notice?.message).toContain('DD-MMM-YYYY');
+    expect(notice?.message).toContain('DD/MM/YYYY');
+    expect(r.requiredAcknowledgements).toEqual([]);
+  });
+
+  it('a non-padded day and abbreviated or full month names all read under the layout formats', () => {
+    expect(parseMarketDate('7 Oct 2026', 'DD MMM YYYY')).toEqual({ ok: true, iso: '2026-10-07' });
+    expect(parseMarketDate('07 Oct 2026', 'DD MMM YYYY')).toEqual({ ok: true, iso: '2026-10-07' });
+    expect(parseMarketDate('7 October 2026', 'DD MMM YYYY')).toEqual({ ok: true, iso: '2026-10-07' });
+    expect(parseMarketDate('1-October-2026', 'DD-MMM-YYYY')).toEqual({ ok: true, iso: '2026-10-01' });
+    expect(parseMarketDate('01-Oct-2026', 'DD-MMM-YYYY')).toEqual({ ok: true, iso: '2026-10-01' });
+  });
+
+  it('NEGATIVE: day-first only; an ambiguous or month-first date is still refused', () => {
+    expect(parseMarketDate('03-04-2024', 'DD-MMM-YYYY').ok).toBe(false);
+    expect(parseMarketDate('10-31-2026', 'DD-MM-YYYY').ok).toBe(false);
+    expect(parseMarketDate('Oct 7 2026', 'DD MMM YYYY').ok).toBe(false);
+  });
+
+  it('NEGATIVE: where no layout is recognised the choice is still required (plain date,value, multi, explicit column map, near-miss header)', () => {
+    const plain = run('p.csv', utf8('date,value\r\n07 Oct 2026,22603.05\r\n'), noFormat(niftyParams({ shape: 'single' })));
+    expect(errorCodes(plain)).toContain('DATE_FORMAT_REQUIRED');
+    expect(plain.staged).toEqual([]);
+    const multi = run('m.csv', utf8(`benchmark_key,date,value\r\n${NIFTY_KEY},07 Oct 2026,22603.05\r\n`), noFormat(niftyParams({ shape: 'multi', benchmarkKey: undefined })));
+    expect(errorCodes(multi)).toContain('DATE_FORMAT_REQUIRED');
+    const mapped = run('x.csv', NIFTY_BYTES, noFormat(niftyParams({ shape: 'provider_export', columnMap: { date: 'Date', value: 'Close', indexName: 'Index Name' } })));
+    expect(errorCodes(mapped)).toContain('DATE_FORMAT_REQUIRED');
+    expect(mapped.staged).toEqual([]);
+    const near = run('n.csv', utf8(NIFTY_TEXT.replace('"Close"', '"Closing"')), noFormat(niftyParams({ shape: 'single' })));
+    expect(near.staged).toEqual([]);
+    expect(near.hardErrorCount).toBeGreaterThan(0);
+  });
+
+  it('an Excel date system chosen by the operator is kept (the layout format would not read Excel date cells)', () => {
+    const r = run('n.csv', NIFTY_BYTES, niftyParams({ shape: 'provider_export', providerLayoutId: 'nse_price_export', dateFormat: 'excel_1900' }));
+    expect(r.disclosure.dateFormatFrom).toBeUndefined();
+    expect(r.staged).toEqual([]);
+    expect(r.hardErrorCount).toBeGreaterThan(0);
+  });
+});
+
+describe('upload form: the Date format field is replaced by a read-only line for recognised layouts only', () => {
+  const file = { name: 'download.csv', size: 500 };
+  const ENT = { entitlementId: '11111111-1111-4111-8111-111111111111', kind: 'commercial_licence', status: 'approved', rights: { ingestManual: true, automation: false, storage: true, calculation: true, customerDisplay: false, reportExport: false }, dataFrom: null, dataTo: null, validFrom: '2025-01-01', validTo: null, postExpiryStorage: 'unknown', evidenceReference: 'Licence 42', evidenceUrl: null, proposedByMe: false, approvedAt: '2025-01-02T00:00:00Z' };
+  const ROW = { catalogue: { benchmarkKey: 'NIFTY50_TRI', label: 'Nifty 50 TRI', returnVariant: 'total_return', currencyCode: 'INR', catalogueStatus: 'verified' }, entitlements: [ENT] };
+  const base = (over: Partial<UploadFormState> = {}): UploadFormState => ({
+    ...emptyUploadForm('NIFTY50_TRI'),
+    shape: 'single', returnVariant: 'total_return', currencyCode: 'INR', historyClass: 'live', numberLocale: 'plain', sourceOwner: 'NSE Indices', sourceReference: 'https://example.org/file', entitlementId: ENT.entitlementId, ...over,
+  });
+  const ctxOf = (form: UploadFormState, header: string[] | null, f: { name: string; size: number } | null = file) =>
+    ({ form, rows: [ROW], caps: { upload: true }, asOfDate: '2026-10-08', file: f, inspect: null, maxBytes: 5_000_000, header }) as unknown as UploadContext;
+  const dateIssue = (c: UploadContext) => stepIssues(3, c).some((m) => /date format/i.test(m));
+
+  it('recognised NIFTY and SENSEX headers: no date format needed, the layout\'s is shown, and none is sent to the server', () => {
+    const n = ctxOf(base(), headerOf(NIFTY_TEXT));
+    expect(layoutSuppliedDateFormat(n)).toMatchObject({ format: 'DD MMM YYYY' });
+    expect(dateIssue(n)).toBe(false);
+    const sent = buildStageParams(n);
+    expect(sent.ok).toBe(true);
+    if (sent.ok) expect(sent.params.dateFormat).toBeUndefined();
+    const s = ctxOf(base(), headerOf(SENSEX_TEXT));
+    expect(layoutSuppliedDateFormat(s)).toMatchObject({ format: 'DD-MMM-YYYY' });
+    expect(dateIssue(s)).toBe(false);
+  });
+
+  it("NEGATIVE: an unrecognised header still sends the operator's explicit choice", () => {
+    const c = ctxOf(base({ dateFormat: 'DD-MM-YYYY' }), ['date', 'value']);
+    const sent = buildStageParams(c);
+    expect(sent.ok).toBe(true);
+    if (sent.ok) expect(sent.params.dateFormat).toBe('DD-MM-YYYY');
+  });
+
+  it('a layout chosen on the provider-export shape also supplies the format', () => {
+    const c = ctxOf(base({ shape: 'provider_export', columnChoice: 'layout', providerLayoutId: 'bse_sensex_download' }), null);
+    expect(layoutSuppliedDateFormat(c)).toMatchObject({ format: 'DD-MMM-YYYY' });
+  });
+
+  it('NEGATIVE: plain header, multi, explicit column map, near miss, no header yet, and .xlsx all still require the choice', () => {
+    expect(dateIssue(ctxOf(base(), ['date', 'value']))).toBe(true);
+    expect(dateIssue(ctxOf(base({ shape: 'multi' }), ['benchmark_key', 'date', 'value']))).toBe(true);
+    expect(dateIssue(ctxOf(base({ shape: 'multi' }), headerOf(NIFTY_TEXT)))).toBe(true);
+    expect(dateIssue(ctxOf(base({ shape: 'provider_export', columnChoice: 'explicit', dateColumn: 'Date', valueColumn: 'Close' }), headerOf(NIFTY_TEXT)))).toBe(true);
+    expect(dateIssue(ctxOf(base(), ['Index Name', 'Date', 'Open', 'High', 'Low', 'Closing']))).toBe(true);
+    expect(dateIssue(ctxOf(base(), null))).toBe(true);
+    expect(layoutSuppliedDateFormat(ctxOf(base(), headerOf(NIFTY_TEXT), { name: 'download.xlsx', size: 500 }))).toBeNull();
   });
 });
 

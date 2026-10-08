@@ -257,8 +257,8 @@ function rangesOf(staged: readonly StagedRow[]): Map<string, { from: string; to:
   return m;
 }
 
-function paramsForPreview(p: UploadParams): JobPreview['params'] {
-  return { shape: p.shape, mode: p.mode, returnVariant: p.returnVariant, currencyCode: p.currencyCode, historyClass: p.historyClass, dateFormat: p.dateFormat, numberLocale: p.numberLocale };
+function paramsForPreview(p: UploadParams, usedDateFormat?: UploadParams['dateFormat']): JobPreview['params'] {
+  return { shape: p.shape, mode: p.mode, returnVariant: p.returnVariant, currencyCode: p.currencyCode, historyClass: p.historyClass, dateFormat: usedDateFormat ?? p.dateFormat, numberLocale: p.numberLocale };
 }
 
 export function buildPreviewIssueSample(issues: readonly ValidationIssue[]): { sample: ValidationIssue[]; truncated: boolean } {
@@ -338,7 +338,7 @@ export async function stageBenchmarkUpload(supabase: SupabaseClient, input: Stag
       return_variant: params.returnVariant,
       currency_code: params.currencyCode,
       history_class: params.historyClass,
-      date_format: params.dateFormat,
+      date_format: validation.disclosure.dateFormat ?? params.dateFormat ?? null,
       number_locale: params.numberLocale,
       data_as_of: meta.dataAsOf ?? null,
       reason: meta.reason ?? null,
@@ -423,7 +423,7 @@ export async function stageBenchmarkUpload(supabase: SupabaseClient, input: Stag
     layoutId: validation.disclosure.layoutId,
     columnMapping: validation.disclosure.columnMapping,
     disclosure: validation.disclosure,
-    params: paramsForPreview(params),
+    params: paramsForPreview(params, validation.disclosure.dateFormat),
     selectedBenchmarks: keys,
     source: { owner: meta.sourceOwner.trim(), reference: meta.sourceReference.trim(), originalFileName: meta.originalFileName ?? input.fileName, dataAsOf: meta.dataAsOf ?? null },
     counts: { rowsTotal: validation.rowsTotal, rowsValid: validation.rowsValid, rowsInvalid: validation.rowsInvalid, rowsExcluded: validation.rowsExcluded, duplicatesCollapsed: validation.duplicatesCollapsed },

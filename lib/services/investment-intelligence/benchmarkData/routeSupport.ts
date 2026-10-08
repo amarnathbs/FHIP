@@ -187,7 +187,7 @@ export const StageParams = z
     returnVariant: VariantSchema,
     currencyCode: z.string().regex(/^[A-Z]{3}$/),
     historyClass: z.enum(['live', 'backtested', 'mixed', 'unknown']),
-    dateFormat: z.enum(['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'DD-MM-YYYY', 'DD-MMM-YYYY', 'DD MMM YYYY', 'excel_1900', 'excel_1904']),
+    dateFormat: z.enum(['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'DD-MM-YYYY', 'DD-MMM-YYYY', 'DD MMM YYYY', 'excel_1900', 'excel_1904']).optional(),
     numberLocale: z.enum(['plain', 'en', 'in', 'eu']),
     sheetName: z.string().max(100).optional(),
     headerRow: z.number().int().min(1).max(1000).optional(),

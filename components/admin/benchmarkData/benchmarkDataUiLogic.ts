@@ -77,6 +77,8 @@ export type ShapeId = StageUploadRequestParams['shape'];
 export type VariantId = NonNullable<CatalogueRowView['returnVariant']>;
 export type HistoryClassId = StageUploadRequestParams['historyClass'];
 export type DateFormatId = StageUploadRequestParams['dateFormat'];
+/** The request params the form builds: the date format is omitted when a recognised file layout supplies it. */
+export type BuiltStageParams = Omit<StageUploadRequestParams, 'dateFormat'> & { dateFormat?: DateFormatId };
 export type NumberLocaleId = StageUploadRequestParams['numberLocale'];
 export type UploadModeId = StageUploadRequestParams['mode'];
 
@@ -692,6 +694,8 @@ export interface RecognisedLayoutNotice {
   ignoredColumns: string[];
   /** The multi-benchmark shape cannot take a one-index layout; the sentence says what to choose instead. */
   problem: string | null;
+  /** The date format the layout itself uses; the operator is not asked for one. */
+  dateFormat: DateFormatId;
 }
 
 /**
@@ -712,6 +716,7 @@ export function recognisedLayoutNotice(header: readonly string[] | null | undefi
   return {
     layoutId: l.id,
     label: l.label,
+    dateFormat: l.defaultDateFormat,
     unverified: l.unverified,
     ignoredColumns: header.filter((h) => h.trim() !== '' && !read.has(h.trim().toLowerCase())),
     problem:
@@ -767,6 +772,33 @@ export interface UploadContext {
   file: UploadFileInfo | null;
   inspect: InspectState | null;
   maxBytes: number | null;
+  /** Column names read from the chosen file, when known (drives layout recognition). */
+  header?: readonly string[] | null;
+}
+
+/**
+ * The date format a RECOGNISED provider layout supplies, so the operator is not asked for one:
+ * the file's header exactly matches a registered layout (or the operator chose that layout on the
+ * provider-export shape). Only for written-date files (.csv): an .xlsx keeps the operator's choice,
+ * because its date cells may be Excel dates. Null everywhere else (plain date,value; multi; explicit
+ * column map; unrecognised header): there the choice stays mandatory and has no default.
+ */
+export function layoutSuppliedDateFormat(ctx: Pick<UploadContext, 'form' | 'file' | 'header'>): { label: string; format: DateFormatId; layoutLabel: string } | null {
+  const kind = ctx.file ? fileKindFromName(ctx.file.name) : null;
+  if (kind === 'xlsx') return null;
+  const f = ctx.form;
+  if (f.shape === 'multi' || f.shape === '') return null;
+  let layout: { label: string; format: DateFormatId } | null = null;
+  if (f.shape === 'provider_export' && f.columnChoice === 'explicit') return null;
+  if (f.shape === 'provider_export' && f.columnChoice === 'layout' && f.providerLayoutId && Object.prototype.hasOwnProperty.call(PROVIDER_LAYOUTS, f.providerLayoutId)) {
+    const l = PROVIDER_LAYOUTS[f.providerLayoutId];
+    layout = { label: l.label, format: l.defaultDateFormat };
+  } else {
+    const n = recognisedLayoutNotice(ctx.header, f.shape);
+    if (n && !n.problem) layout = { label: n.label, format: n.dateFormat };
+  }
+  if (!layout) return null;
+  return { layoutLabel: layout.label, format: layout.format, label: DATE_FORMAT_OPTIONS.find((o) => o.value === layout!.format)?.label ?? layout.format };
 }
 
 function rowFor(ctx: UploadContext, key: string): BenchmarkOverviewRow | undefined {
@@ -824,7 +856,7 @@ export function stepIssues(step: StepNumber, ctx: UploadContext): string[] {
   if (!ctx.caps.upload) out.push('You do not have the upload permission, so you cannot stage a file.');
   const fp = fileProblem(ctx.file, ctx.maxBytes);
   if (fp) out.push(fp);
-  if (!f.dateFormat) out.push('Choose the date format used in the file. It is never guessed, because a date such as 03-04-2024 could be 3 April or 4 March.');
+  if (!f.dateFormat && !layoutSuppliedDateFormat(ctx)) out.push('Choose the date format used in the file. It is never guessed, because a date such as 03-04-2024 could be 3 April or 4 March.');
   if (!f.numberLocale) out.push('Choose how numbers are written in the file (for example 12,345.67 or 12.345,67).');
   const kind = ctx.file ? fileKindFromName(ctx.file.name) : null;
   if (kind === 'csv' && (f.dateFormat === 'excel_1900' || f.dateFormat === 'excel_1904')) out.push('Excel date numbers only apply to .xlsx files. Choose the written date format used in the CSV.');
@@ -854,19 +886,20 @@ export function canStage(ctx: UploadContext): { ok: boolean; reasons: string[] }
 }
 
 /** Builds the exact request params. Returns reasons instead of a body when anything is incomplete: nothing is guessed. */
-export function buildStageParams(ctx: UploadContext): { ok: true; params: StageUploadRequestParams } | { ok: false; reasons: string[] } {
+export function buildStageParams(ctx: UploadContext): { ok: true; params: BuiltStageParams } | { ok: false; reasons: string[] } {
   const gate = canStage(ctx);
   if (!gate.ok) return { ok: false, reasons: gate.reasons };
   const f = ctx.form;
   const keys = involvedBenchmarkKeys(f);
   const kind = ctx.file ? fileKindFromName(ctx.file.name) : null;
-  const params: StageUploadRequestParams = {
+  const params: BuiltStageParams = {
     shape: f.shape as ShapeId,
     mode: f.mode,
     returnVariant: f.returnVariant as VariantId,
     currencyCode: f.currencyCode.trim().toUpperCase(),
     historyClass: f.historyClass as HistoryClassId,
-    dateFormat: f.dateFormat as DateFormatId,
+    // A recognised layout supplies its own date format: none is sent, the server uses the layout's.
+    dateFormat: layoutSuppliedDateFormat(ctx) ? undefined : (f.dateFormat as DateFormatId),
     numberLocale: f.numberLocale as NumberLocaleId,
     sourceOwner: f.sourceOwner.trim(),
     sourceReference: f.sourceReference.trim(),

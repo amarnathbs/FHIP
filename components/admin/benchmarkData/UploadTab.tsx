@@ -32,6 +32,7 @@ import {
   formatDate,
   identityMismatch,
   involvedBenchmarkKeys,
+  layoutSuppliedDateFormat,
   limitsText,
   providerLayoutOptionLabel,
   recognisedLayoutNotice,
@@ -116,7 +117,8 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
   const fb = useFormFeedback(UPLOAD_SPEC);
 
   const set = (patch: Partial<UploadFormState>) => setForm((f) => ({ ...f, ...patch }));
-  const ctx: UploadContext = { form, rows: ov.rows, caps, asOfDate: ov.asOfDate, file: file ? { name: file.name, size: file.size } : null, inspect, maxBytes: ov.limits.maxBytes };
+  const ctx: UploadContext = { form, rows: ov.rows, caps, asOfDate: ov.asOfDate, file: file ? { name: file.name, size: file.size } : null, inspect, maxBytes: ov.limits.maxBytes, header: csvHeader ?? inspect?.header ?? null };
+  const suppliedDate = layoutSuppliedDateFormat(ctx);
   const row = ov.rows.find((r) => r.catalogue.benchmarkKey === form.benchmarkKey);
   const keys = involvedBenchmarkKeys(form);
   const kind = file ? fileKindFromName(file.name) : null;
@@ -348,7 +350,14 @@ export default function UploadTab({ ov, preselect, goTab, onChanged }: { ov: Ove
             ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <SelectField label="Date format used in the file" required value={form.dateFormat} onChange={(v) => set({ dateFormat: v as UploadFormState['dateFormat'] })} options={DATE_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: o.example ? `${o.label} - ${o.example}` : o.label }))} placeholder="Choose the date format" error={fb.errors.dateFormat} fieldKey="dateFormat" hint="Never guessed: a date such as 03-04-2024 could be 3 April or 4 March, depending on the order the file uses." />
+              {suppliedDate ? (
+                <div data-testid="date-format-from-layout" className="text-sm text-ink">
+                  <p className="font-medium">Date format</p>
+                  <p>Detected from the file layout: {suppliedDate.label}.</p>
+                </div>
+              ) : (
+                <SelectField label="Date format used in the file" required value={form.dateFormat} onChange={(v) => set({ dateFormat: v as UploadFormState['dateFormat'] })} options={DATE_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: o.example ? `${o.label} - ${o.example}` : o.label }))} placeholder="Choose the date format" error={fb.errors.dateFormat} fieldKey="dateFormat" hint="Never guessed: a date such as 03-04-2024 could be 3 April or 4 March, depending on the order the file uses." />
+              )}
               <SelectField label="How numbers are written" required value={form.numberLocale} onChange={(v) => set({ numberLocale: v as UploadFormState['numberLocale'] })} options={NUMBER_LOCALE_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} - ${o.example}` }))} placeholder="Choose the number format" error={fb.errors.numberLocale} fieldKey="numberLocale" />
               <TextField label="Header row" type="number" value={form.headerRow} onChange={(v) => set({ headerRow: v })} hint="The row holding the column names (usually 1)." error={fb.errors.headerRow} fieldKey="headerRow" />
             </div>
