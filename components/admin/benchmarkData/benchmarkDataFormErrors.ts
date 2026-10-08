@@ -104,7 +104,7 @@ export function firstInvalidKey(errors: FieldErrors, order: readonly string[]): 
 
 // ---------------------------------------------------------------- per-form maps ---
 
-export const ENTITLEMENT_FIELD_ORDER = ['benchmarkKey', 'kind', 'rights', 'validFrom', 'validTo', 'dataFrom', 'dataTo', 'postExpiryStorage', 'evidenceReference', 'evidenceUrl', 'evidenceDocumentDate', 'evidenceRetrievedAt', 'attributionText', 'notes'] as const;
+export const ENTITLEMENT_FIELD_ORDER = ['benchmarkKey', 'kind', 'rights', 'validFrom', 'validTo', 'dataFrom', 'dataTo', 'postExpiryStorage', 'evidenceReference', 'evidenceUrl', 'evidenceDocumentDate', 'evidenceRetrievedAt', 'attributionText', 'notes', 'revisionReason'] as const;
 export const ENTITLEMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
   benchmarkKey: 'Benchmark',
   kind: 'Kind of permission',
@@ -120,6 +120,7 @@ export const ENTITLEMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
   evidenceRetrievedAt: 'Evidence retrieved on',
   attributionText: 'Attribution wording',
   notes: 'Notes',
+  revisionReason: 'Reason for the change',
 };
 const NO_VARIANT_MESSAGE = 'This benchmark has no declared return type or currency in the catalogue. Complete the catalogue entry first.';
 export const ENTITLEMENT_FIELD_MAP: FieldMap = {
@@ -145,6 +146,8 @@ export const ENTITLEMENT_FIELD_MAP: FieldMap = {
   evidence_retrieved_at: 'evidenceRetrievedAt',
   attribution_text: 'attributionText',
   notes: 'notes',
+  reason: 'revisionReason',
+  revision_reason: 'revisionReason',
 };
 export const ENTITLEMENT_DATE_KEYS: ReadonlySet<string> = new Set(['validFrom', 'validTo', 'dataFrom', 'dataTo', 'evidenceDocumentDate', 'evidenceRetrievedAt']);
 

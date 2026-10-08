@@ -29,6 +29,7 @@ const CONSTRAINT_FAILURES: Record<string, { error: string; fields: Record<string
     error: 'The rights chosen do not fit together. Manual ingestion, automation and calculation need the storage right; customer display needs calculation; report export needs customer display.',
     fields: { rights: 'These rights do not fit together: manual ingestion, automation and calculation each need the storage right.' },
   },
+  ii_benchmark_entitlements_revision_reason: { error: 'A revision needs a reason of at least 10 characters.', fields: { reason: 'A revision needs a reason of at least 10 characters.' } },
   ii_benchmark_entitlements_term: { error: 'The end date cannot be before the start date.', fields: { valid_to: 'The end date cannot be before the start date.' } },
   ii_benchmark_entitlements_data_range: { error: 'The last data date cannot be before the first.', fields: { data_to: 'The last data date cannot be before the first.' } },
 };
@@ -149,6 +150,21 @@ export const EntitlementBody = z.object({
   attribution_text: z.string().max(500).nullish(),
   notes: z.string().max(1000).nullish(),
 });
+
+/** Edit a draft (or an open revision) in place. `expectedEditCount` is the counter the screen was loaded with; a stale screen is refused. */
+export const EntitlementEditBody = EntitlementBody.extend({
+  expectedEditCount: z.number().int().min(0),
+  /** Only meaningful for an open revision. */
+  revision_reason: z.string().min(10).max(500).optional(),
+});
+
+/** Propose ONE revision of an approved record. The reason is required and is kept with the revision. */
+export const EntitlementReviseBody = EntitlementBody.extend({
+  reason: z.string().trim().min(10).max(500),
+});
+
+/** Cancel (by the proposer) or reject (by an approver) an open revision. */
+export const RevisionCloseBody = z.object({ reason: z.string().trim().min(10).max(500) });
 
 export const MappingBody = z.object({
   instrument_id: UuidSchema,
