@@ -5,7 +5,7 @@
 -- It is one block: if anything fails nothing is changed and the append-only protection stays on.
 --
 -- What it removes
---   probe codes (matched by the note text the proofs write), their events and redemptions.
+--   probe codes (matched by the note text the proofs write), their events, redemptions and e-mail send rows (whoever sent them).
 --   Premium grant audit rows and override records where BOTH the administrator and the target no longer exist (the proof users were deleted).
 --   e-mail request and send rows, redemption attempts and alert rows whose person no longer exists.
 --   all alert rows and cleanup run evidence on DEV (they hold only counts).
@@ -22,7 +22,12 @@ begin
     end if;
   end if;
 
+  if exists (select 1 from public.user_entitlements e where e.promo_code_id in (select id from public.promo_codes where note in ('promo hardening proof, safe to disable', 'DEV proof code', 'DEV proof default', 'old shape proof', 'browser certification code, safe to disable'))) then
+    raise exception 'REFUSED: an existing account still holds Premium through a probe code. Delete the fixture users first (node scripts/promo_hardening_dev_fixtures.mjs cleanup) and run this again. Nothing was changed.';
+  end if;
+
   alter table public.promo_codes disable trigger user;
+  alter table public.promo_email_sends disable trigger user;
   alter table public.promo_code_events disable trigger user;
   alter table public.admin_entitlement_events disable trigger user;
   alter table public.premium_entitlement_overrides disable trigger user;
@@ -30,6 +35,8 @@ begin
   alter table public.promo_retention_runs disable trigger user;
 
   delete from public.promo_code_events
+   where promo_code_id in (select id from public.promo_codes where note in ('promo hardening proof, safe to disable', 'DEV proof code', 'DEV proof default', 'old shape proof', 'browser certification code, safe to disable'));
+  delete from public.promo_email_sends
    where promo_code_id in (select id from public.promo_codes where note in ('promo hardening proof, safe to disable', 'DEV proof code', 'DEV proof default', 'old shape proof', 'browser certification code, safe to disable'));
   delete from public.promo_code_redemptions
    where promo_code_id in (select id from public.promo_codes where note in ('promo hardening proof, safe to disable', 'DEV proof code', 'DEV proof default', 'old shape proof', 'browser certification code, safe to disable'));
@@ -55,6 +62,7 @@ begin
   alter table public.premium_entitlement_overrides enable trigger user;
   alter table public.admin_entitlement_events enable trigger user;
   alter table public.promo_code_events enable trigger user;
+  alter table public.promo_email_sends enable trigger user;
   alter table public.promo_codes enable trigger user;
 end $fn$;
 

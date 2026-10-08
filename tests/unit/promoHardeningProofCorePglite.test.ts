@@ -18,7 +18,7 @@ import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { runProofs } from '../../scripts/lib/promoHardeningProofCore.mjs';
-import { MIG_DIR, TEST_ENV, latestFunctionSql, migrationFiles, replayAll } from './support/promoTestHelpers';
+import { MIG_DIR, TEST_ENV, expectNamedFailure, latestFunctionSql, migrationFiles, replayAll } from './support/promoTestHelpers';
 
 type Row = Record<string, unknown>;
 type Res = { data: unknown; error: { message: string; code?: string } | null };
@@ -310,4 +310,56 @@ describe('the DEV-only residue cleanup (docs/admin/po_apply_promo_hardening_rele
     await db.exec(sql);
     expect(await count(`select count(*)::int n from promo_codes where note = 'the operator real code'`)).toBe(1);
   });
+
+  // THE CASE THAT FAILED ON DEV (error 23503): a probe code that has an e-mail SEND row written by an administrator who still exists,
+  // and an existing account that redeemed a probe code.
+  it('a probe code with a send row from a still-existing administrator is removed (the send row goes first), and an existing account that holds Premium through a probe code makes it refuse', async () => {
+    const adminId = 'eeeeeeee-0000-0000-0000-000000000011';
+    const holder = 'eeeeeeee-0000-0000-0000-000000000012';
+    await db.exec(`insert into auth.users(id,email,email_confirmed_at) values ('${adminId}','probe-admin@keep.test',now()),('${holder}','probe-holder@keep.test',now());
+                   insert into admin_users(user_id, can_manage_promo_codes) values ('${adminId}', true);`);
+    const a = client(adminId, 'authenticated');
+    const exp = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    const created = await a.rpc('admin_create_promo_code', { p_code_digest: 'b'.repeat(64), p_code_hint: 'PR******BE', p_digest_version: 1, p_duration_days: 30, p_max_redemptions: 3, p_unlimited: false, p_expires_on: exp, p_no_expiry: false, p_note: 'browser certification code, safe to disable' });
+    expect(created.error).toBeNull();
+    const codeId = (created.data as { id: string }).id;
+    const begin = await a.rpc('admin_promo_email_begin', { p_request_key: 'cleanup-case-0001', p_recipient_count: 1, p_bound: false, p_kind: 'create', p_purpose: 'seeded replica of the DEV failure', p_replaces: null });
+    expect(begin.error).toBeNull();
+    const rec = await a.rpc('admin_promo_email_record', { p_request_key: 'cleanup-case-0001', p_promo_code_id: codeId, p_recipient_hash: 'c'.repeat(64), p_status: 'sent', p_attempts: 1, p_message_id: 'msg-1', p_error: null });
+    expect(rec.error).toBeNull();
+    expect(await count(`select count(*)::int n from promo_email_sends where promo_code_id = '${codeId}'`)).toBe(1);
+
+    // an existing account that redeemed the probe code: the cleanup REFUSES (named), and changes nothing
+    await client(null, 'service_role').rpc('redeem_promo_code_for_user', { p_user_id: holder, p_digests: ['b'.repeat(64)], p_ip_hash: null, p_email_hash: null, p_legacy_code: null });
+    expect(await count(`select count(*)::int n from user_entitlements where promo_code_id = '${codeId}'`), 'the seeded holder redeemed the probe code').toBe(1);
+    let refused = '';
+    try {
+      await db.exec(sql);
+    } catch (e) {
+      refused = (e as Error).message;
+    }
+    expect(refused).toContain('REFUSED');
+    expect(await count(`select count(*)::int n from promo_codes where id = '${codeId}'`), 'a refused cleanup changed nothing').toBe(1);
+    expect(await count(`select count(*)::int n from pg_trigger where tgrelid = 'public.promo_email_sends'::regclass and not tgisinternal and tgenabled <> 'O'`), 'no trigger was left disabled').toBe(0);
+
+    // the holder's account is deleted (the fixture cleanup does this): now the OLD cleanup text, without the send-row step, fails with the DEV error
+    await db.exec(`delete from auth.users where id = '${holder}'`);
+    const withoutSendStep = sql.replace(/  delete from public\.promo_email_sends\n   where promo_code_id in \(select id from public\.promo_codes where note in [^;]*;\n/, '');
+    expect(withoutSendStep, 'the mutation must remove the send step').not.toBe(sql);
+    let fk = '';
+    try {
+      await db.exec(withoutSendStep);
+    } catch (e) {
+      fk = (e as Error).message;
+    }
+    await expectNamedFailure(() => expect(fk, 'a probe code with a send row can be removed').toBe(''), 'a probe code with a send row can be removed');
+    expect(fk).toContain('promo_email_sends_promo_code_id_fkey');
+
+    // the real cleanup removes the probe code AND its send row, and leaves the protection on
+    await db.exec(sql);
+    expect(await count(`select count(*)::int n from promo_codes where id = '${codeId}'`)).toBe(0);
+    expect(await count(`select count(*)::int n from promo_email_sends where promo_code_id = '${codeId}'`)).toBe(0);
+    expect(await count(`select count(*)::int n from pg_trigger where tgrelid = 'public.promo_email_sends'::regclass and not tgisinternal and tgenabled <> 'O'`)).toBe(0);
+    expect(await count(`select count(*)::int n from pg_trigger where tgrelid = 'public.promo_code_events'::regclass and not tgisinternal and tgenabled = 'O'`)).toBe(2);
+  }, 120_000);
 });

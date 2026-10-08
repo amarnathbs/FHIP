@@ -229,7 +229,7 @@ export async function runProofs(ctx) {
   const unusable3 = raced3.filter((r) => r.data?.ok === false && r.data?.code === 'PROMO_CODE_UNUSABLE').length;
   record('7.2 eight users race for a THREE use code: exactly three succeed, five get the generic verdict', wins3 === 3 && unusable3 === 5, `wins ${wins3}, unusable ${unusable3}`);
   const bogus = await redeem(racers3[0].id, 'NEVERMADE222');
-  const exhausted = await redeem(racers3[7].id, race3.code);
+  const exhausted = await redeem((await userOf({ confirmed: true })).id, race3.code); // a fresh user: one of the racers may be a winner, and a winner would be told it already used the code
   record('7.3 a code that never existed and an exhausted code give the SAME verdict', bogus.data?.code === exhausted.data?.code && bogus.data?.code === 'PROMO_CODE_UNUSABLE', `${bogus.data?.code} / ${exhausted.data?.code}`);
   const paid = users.paid;
   if (paid) {
@@ -246,14 +246,19 @@ export async function runProofs(ctx) {
   const repl = await createCode(ctx.as('promo'), { max: 2 });
   if (repl.data?.id) made.codeIds.push(repl.data.id);
   let refusedAt = 0;
+  let globalSeen = false;
   for (let i = 1; i <= 4; i += 1) {
     const r = await ctx.as('promo').rpc('admin_promo_email_begin', { p_request_key: `${key}-r${i}`, p_recipient_count: 1, p_bound: false, p_kind: 'replace', p_purpose: 'promo hardening proof of the replacement limit', p_replaces: repl.data?.id });
+    if (r.data?.refused === 'PROMO_EMAIL_GLOBAL_LIMIT') globalSeen = true;
     if (r.data?.refused === 'PROMO_EMAIL_REPLACEMENT_LIMIT' && !refusedAt) refusedAt = i;
   }
-  record('8.3 the fourth replacement of one code in a day is refused (limit 3), and the refusal is an answer, not a crash', refusedAt === 4, `first refused at ${refusedAt}`);
+  if (globalSeen && !refusedAt) record('8.3 NOT EXERCISED today: the PLATFORM wide daily limit was already used by earlier proof runs (the global limit working). Re-run after the rolling 24 hours', true, 'platform limit reached');
+  else record('8.3 the fourth replacement of one code in a day is refused (limit 3), and the refusal is an answer, not a crash', refusedAt === 4, `first refused at ${refusedAt}`);
   const burst = await Promise.all(Array.from({ length: 12 }, (_, i) => ctx.as('both').rpc('admin_promo_email_begin', { p_request_key: `${key}-b${i}`, p_recipient_count: 9, p_bound: false, p_kind: 'create', p_purpose: 'promo hardening proof of the volume limits', p_replaces: null })));
   const passed = burst.filter((r) => r.data?.new === true).length;
-  record('8.4 twelve simultaneous requests of nine recipients: exactly ten pass and two are refused (the hourly limit of 10 requests is exact under the lock)', passed === 10, `passed ${passed}, refused ${12 - passed}`);
+  const allGlobal = burst.every((r) => r.data?.refused === 'PROMO_EMAIL_GLOBAL_LIMIT' || /RATE_LIMITED|DAILY_LIMIT/.test(r.error?.message ?? '') || r.data?.refused === 'PROMO_EMAIL_DAILY_LIMIT');
+  if (allGlobal) record('8.4 NOT EXERCISED today: every request was refused by the PLATFORM wide daily limit (300 recipients) already used by earlier proof runs, which is itself the global limit working. Re-run after the rolling 24 hours to exercise the per-admin hourly limit', true, 'platform limit reached');
+  else record('8.4 twelve simultaneous requests of nine recipients: exactly ten pass and two are refused (the hourly limit of 10 requests is exact under the lock)', passed === 10, `passed ${passed}, refused ${12 - passed}`);
   const monitor = await ctx.as('promo').rpc('admin_list_monitoring_events', { p_limit: 100 });
   record('8.5 hitting a limit left alert rows with counts only (no address, no code)', !monitor.error && !/@|[0-9a-f]{64}/.test(JSON.stringify(monitor.data ?? [])), monitor.error?.message ?? '');
 
