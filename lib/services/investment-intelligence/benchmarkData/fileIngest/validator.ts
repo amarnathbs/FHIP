@@ -13,7 +13,7 @@ import { formatDateShort } from '@/lib/engines/date';
 import { parseMarketDate } from './dateParsing';
 import { parseLevel } from './numberParsing';
 import { resolveLayout, type ResolvedMapping } from './layouts';
-import { resolveLimits, type Problem, type UploadParams, type ValidationContext } from './types';
+import { resolveLimits, type DateFormatId, type Problem, type UploadParams, type ValidationContext } from './types';
 import type { CsvParseResult } from './csvReader';
 import type { WorksheetResult } from './xlsxReader';
 
@@ -123,6 +123,17 @@ export interface ValidationResult {
     headerRow: number;
     layoutId: string;
     columnMapping: Record<string, string>;
+    /** Human name of the layout the header was read as (absent in previews stored before this field existed). */
+    layoutLabel?: string;
+    /** true = the layout's header set was never compared with a real download. */
+    layoutUnverified?: boolean;
+    /** How the layout was decided (absent in older stored previews). */
+    layoutMatchedBy?: 'header' | 'chosen' | 'fixed' | 'column_map';
+    /** The date format actually used, when it came from the file layout rather than from the operator. */
+    dateFormat?: DateFormatId;
+    dateFormatFrom?: 'layout';
+    /** Header columns that were NOT loaded (exact header text). Absent in older stored previews. */
+    ignoredColumns?: string[];
   };
 }
 
@@ -293,6 +304,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
   };
 
   /** Result for a file-level hard stop: no row is evaluated, none is valid. */
+  let layoutExtras: Pick<ValidationResult['disclosure'], 'layoutLabel' | 'layoutUnverified' | 'layoutMatchedBy' | 'ignoredColumns' | 'dateFormat' | 'dateFormatFrom'> = {};
   const stop = (layoutId: string, columnMapping: Record<string, string>): ValidationResult => ({
     validatorVersion: VALIDATOR_VERSION,
     rowsTotal: dataRows.length,
@@ -305,7 +317,7 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
     hardErrorCount: issues.filter((i) => i.severity === 'error').length,
     perBenchmark: [],
     requiredAcknowledgements: [],
-    disclosure: { ...disclosureBase, layoutId, columnMapping },
+    disclosure: { ...disclosureBase, layoutId, columnMapping, ...layoutExtras },
   });
 
   for (const p of table.sourceProblems) push('error', p.rowNumber ?? null, p.code, p.message);
@@ -337,11 +349,38 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
   const columnMapping: Record<string, string> = { date: mapping.dateColumn, value: mapping.valueColumn };
   if (mapping.keyColumn) columnMapping.benchmark_key = mapping.keyColumn;
   if (mapping.indexNameColumn) columnMapping.index_name = mapping.indexNameColumn;
+  if (resolution.layout.matchedBy === 'header' || resolution.layout.matchedBy === 'chosen') layoutExtras = { layoutLabel: resolution.layout.label, layoutUnverified: resolution.layout.unverified, layoutMatchedBy: resolution.layout.matchedBy, ignoredColumns: resolution.ignoredColumns };
+
+  // DATE FORMAT. For a recognised provider layout (matched by its exact header, or chosen and
+  // checked against it) the layout's own text date format is used: the operator is not asked for it.
+  // If the operator also supplied a DIFFERENT one it is not applied, and a notice says so (decision:
+  // prefer the layout, never silently). An Excel date system chosen for an .xlsx is kept as chosen.
+  // Every other shape needs the operator's explicit choice: it is never guessed.
+  const layoutDateFormat = resolution.layout.matchedBy === 'header' || resolution.layout.matchedBy === 'chosen' ? resolution.layout.defaultDateFormat : null;
+  const operatorChoseExcel = params.dateFormat === 'excel_1900' || params.dateFormat === 'excel_1904';
+  let chosenFormat: DateFormatId | undefined = params.dateFormat;
+  if (layoutDateFormat && !operatorChoseExcel) {
+    if (params.dateFormat !== undefined && params.dateFormat !== layoutDateFormat) {
+      push(
+        'warning',
+        null,
+        'DATE_FORMAT_FROM_LAYOUT',
+        `The file layout "${resolution.layout.label}" has its own date format (${layoutDateFormat}), so that was used; the date format you selected (${params.dateFormat}) was not applied.`,
+      );
+    }
+    chosenFormat = layoutDateFormat;
+    layoutExtras = { ...layoutExtras, dateFormat: layoutDateFormat, dateFormatFrom: 'layout' };
+  }
+  if (chosenFormat === undefined) {
+    push('error', null, 'DATE_FORMAT_REQUIRED', 'Choose the date format used in the file. It is never guessed, because a date such as 03-04-2024 could be 3 April or 4 March.');
+    return stop(layoutId, columnMapping);
+  }
+  const dateFormat: DateFormatId = chosenFormat;
 
   if (table.sourceKind === 'xlsx' && table.date1904 !== undefined) {
-    if (params.dateFormat === 'excel_1900' && table.date1904) {
+    if (dateFormat === 'excel_1900' && table.date1904) {
       push('error', null, 'DATE_SYSTEM_MISMATCH', 'The workbook uses the 1904 date system but the 1900 Excel date system was selected; the dates would be four years and a day off.');
-    } else if (params.dateFormat === 'excel_1904' && !table.date1904) {
+    } else if (dateFormat === 'excel_1904' && !table.date1904) {
       push('error', null, 'DATE_SYSTEM_MISMATCH', 'The workbook uses the 1900 date system but the 1904 Excel date system was selected; the dates would be off by four years and a day.');
     }
   }
@@ -490,13 +529,13 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
         if (c !== null && typeof c === 'object' && 'errorValue' in c) {
           res = { ok: false as const, code: 'DATE_CELL_ERROR', message: `The date cell holds a spreadsheet error (${c.errorValue}).` };
         } else if (c !== null && typeof c === 'object' && 'excelSerial' in c) {
-          res = parseMarketDate({ excelSerial: c.excelSerial }, params.dateFormat, { date1904: table.date1904 });
+          res = parseMarketDate({ excelSerial: c.excelSerial }, dateFormat, { date1904: table.date1904 });
         } else if (c !== null && typeof c === 'object' && 'numberValue' in c) {
           res =
-            params.dateFormat === 'excel_1900' || params.dateFormat === 'excel_1904'
-              ? parseMarketDate({ excelSerial: c.numberValue }, params.dateFormat, { date1904: table.date1904 })
-              : parseMarketDate(c.raw, params.dateFormat, { date1904: table.date1904 });
-        } else res = parseMarketDate(typeof c === 'string' ? c : '', params.dateFormat, { date1904: table.date1904 });
+            dateFormat === 'excel_1900' || dateFormat === 'excel_1904'
+              ? parseMarketDate({ excelSerial: c.numberValue }, dateFormat, { date1904: table.date1904 })
+              : parseMarketDate(c.raw, dateFormat, { date1904: table.date1904 });
+        } else res = parseMarketDate(typeof c === 'string' ? c : '', dateFormat, { date1904: table.date1904 });
         if (!res.ok) push('error', n, res.code, res.message, { column: table.header[dateIdx], raw: cellText(c) });
         else {
           iso = res.iso;
@@ -829,6 +868,6 @@ export function validateUpload(table: UploadTable, params: UploadParams, ctx: Va
     hardErrorCount: issues.filter((i) => i.severity === 'error').length,
     perBenchmark,
     requiredAcknowledgements: order.filter((a) => acks.has(a)),
-    disclosure: { ...disclosureBase, layoutId, columnMapping },
+    disclosure: { ...disclosureBase, layoutId, columnMapping, ...layoutExtras },
   };
 }

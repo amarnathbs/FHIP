@@ -23,7 +23,7 @@ import type {
   PublishResponse,
   StageUploadRequestParams,
 } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
-import { PROVIDER_LAYOUTS } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest/layouts';
+import { PROVIDER_LAYOUTS, matchRegisteredLayouts } from '@/lib/services/investment-intelligence/benchmarkData/fileIngest/layouts';
 import { isSafeServerMessage } from '@/lib/resources/admin/resultState';
 import { formatDateShort } from '@/lib/engines/date';
 import { DATE_INPUT_PLACEHOLDER, formatDateInput, parseDateInput } from '@/lib/engines/dateInput';
@@ -77,6 +77,8 @@ export type ShapeId = StageUploadRequestParams['shape'];
 export type VariantId = NonNullable<CatalogueRowView['returnVariant']>;
 export type HistoryClassId = StageUploadRequestParams['historyClass'];
 export type DateFormatId = StageUploadRequestParams['dateFormat'];
+/** The request params the form builds: the date format is omitted when a recognised file layout supplies it. */
+export type BuiltStageParams = Omit<StageUploadRequestParams, 'dateFormat'> & { dateFormat?: DateFormatId };
 export type NumberLocaleId = StageUploadRequestParams['numberLocale'];
 export type UploadModeId = StageUploadRequestParams['mode'];
 
@@ -114,7 +116,7 @@ export const DATE_FORMAT_OPTIONS: ReadonlyArray<{ value: DateFormatId; label: st
   { value: 'DD/MM/YYYY', label: 'Day/month/year (DD/MM/YYYY)', example: '31/01/2024' },
   { value: 'MM/DD/YYYY', label: 'Month first, US style (month, day, year)', example: '' },
   { value: 'DD-MM-YYYY', label: 'Day-month-year (DD-MM-YYYY)', example: '31-01-2024' },
-  { value: 'DD-MMM-YYYY', label: 'Day-Mon-year (DD-MMM-YYYY)', example: '31-Jan-2024' },
+  { value: 'DD-MMM-YYYY', label: 'Day-Mon-year (DD-MMM-YYYY)', example: '31-Jan-2024 or 1-January-2024' },
   { value: 'DD MMM YYYY', label: 'Day Mon year (DD MMM YYYY)', example: '31 Jan 2024' },
   { value: 'excel_1900', label: 'Excel date number (1900 date system)', example: '45322' },
   { value: 'excel_1904', label: 'Excel date number (1904 date system)', example: '43860' },
@@ -679,6 +681,62 @@ export function sheetDisclosure(inspect: InspectState | null, sheetName: string,
   };
 }
 
+/** Provider-layout choice text: layouts checked against a real download say so; the rest do not claim it. */
+export function providerLayoutOptionLabel(l: { label: string; unverified: boolean }): string {
+  return l.unverified ? l.label : `${l.label} - matches a real download of 08-10-2026`;
+}
+
+export interface RecognisedLayoutNotice {
+  layoutId: string;
+  label: string;
+  unverified: boolean;
+  /** Header columns of THIS file that will not be loaded (listed, never mapped). */
+  ignoredColumns: string[];
+  /** The multi-benchmark shape cannot take a one-index layout; the sentence says what to choose instead. */
+  problem: string | null;
+  /** The date format the layout itself uses; the operator is not asked for one. */
+  dateFormat: DateFormatId;
+}
+
+/**
+ * Before the file is checked: does its header EXACTLY match one registered layout (the same
+ * matching the server uses, no arbitrary extra columns)? The server recognises it whichever
+ * shape is selected; this only tells the operator so. Null when the header is a plain
+ * date,value / benchmark_key,date,value header, matches nothing, or matches more than one.
+ */
+export function recognisedLayoutNotice(header: readonly string[] | null | undefined, shape: UploadFormState['shape']): RecognisedLayoutNotice | null {
+  if (!header || header.length === 0 || shape === '') return null;
+  const plain = shape === 'multi' ? ['benchmark_key', 'date', 'value'] : ['date', 'value'];
+  const norm = header.map((h) => h.trim().toLowerCase());
+  if (shape !== 'provider_export' && norm.every((h) => plain.includes(h))) return null;
+  const matches = matchRegisteredLayouts(header, { allowArbitraryExtras: shape === 'provider_export' });
+  if (matches.length !== 1) return null;
+  const l = matches[0];
+  const read = new Set([l.dateColumn, l.valueColumn, l.indexNameColumn].filter((x): x is string => !!x).map((x) => x.trim().toLowerCase()));
+  return {
+    layoutId: l.id,
+    label: l.label,
+    dateFormat: l.defaultDateFormat,
+    unverified: l.unverified,
+    ignoredColumns: header.filter((h) => h.trim() !== '' && !read.has(h.trim().toLowerCase())),
+    problem:
+      shape === 'multi'
+        ? `This layout holds one index and does not say which benchmark it is. Choose the file shape "Single benchmark" (or "Supported provider export") and pick the benchmark.`
+        : null,
+  };
+}
+
+/** The preview's layout lines (pure). Older stored previews carry no layout fields: then nothing is claimed. */
+export function describeLayoutDisclosure(d: JobPreview['disclosure']): { layoutLine: string | null; ignoredLine: string | null } {
+  if (!d.layoutLabel) return { layoutLine: null, ignoredLine: null };
+  const how = d.layoutMatchedBy === 'header' ? 'matched by its exact header' : d.layoutMatchedBy === 'chosen' ? 'chosen by you' : null;
+  const verified = d.layoutUnverified ? 'header set not yet checked against a real download' : 'header set matches a real download of 08-10-2026';
+  const layoutLine = `${d.layoutMatchedBy === 'header' ? 'Recognised file layout' : 'File layout'}: ${d.layoutLabel}${how ? ` (${how})` : ''}; ${verified}.`;
+  const ignored = d.ignoredColumns ?? [];
+  const ignoredLine = ignored.length > 0 ? `Columns in the file that were not loaded: ${ignored.join(', ')}.` : null;
+  return { layoutLine, ignoredLine };
+}
+
 export function sheetStateLabel(state: SheetOption['state']): string {
   return state === 'visible' ? 'visible' : state === 'hidden' ? 'hidden' : 'very hidden';
 }
@@ -714,6 +772,33 @@ export interface UploadContext {
   file: UploadFileInfo | null;
   inspect: InspectState | null;
   maxBytes: number | null;
+  /** Column names read from the chosen file, when known (drives layout recognition). */
+  header?: readonly string[] | null;
+}
+
+/**
+ * The date format a RECOGNISED provider layout supplies, so the operator is not asked for one:
+ * the file's header exactly matches a registered layout (or the operator chose that layout on the
+ * provider-export shape). Only for written-date files (.csv): an .xlsx keeps the operator's choice,
+ * because its date cells may be Excel dates. Null everywhere else (plain date,value; multi; explicit
+ * column map; unrecognised header): there the choice stays mandatory and has no default.
+ */
+export function layoutSuppliedDateFormat(ctx: Pick<UploadContext, 'form' | 'file' | 'header'>): { label: string; format: DateFormatId; layoutLabel: string } | null {
+  const kind = ctx.file ? fileKindFromName(ctx.file.name) : null;
+  if (kind === 'xlsx') return null;
+  const f = ctx.form;
+  if (f.shape === 'multi' || f.shape === '') return null;
+  let layout: { label: string; format: DateFormatId } | null = null;
+  if (f.shape === 'provider_export' && f.columnChoice === 'explicit') return null;
+  if (f.shape === 'provider_export' && f.columnChoice === 'layout' && f.providerLayoutId && Object.prototype.hasOwnProperty.call(PROVIDER_LAYOUTS, f.providerLayoutId)) {
+    const l = PROVIDER_LAYOUTS[f.providerLayoutId];
+    layout = { label: l.label, format: l.defaultDateFormat };
+  } else {
+    const n = recognisedLayoutNotice(ctx.header, f.shape);
+    if (n && !n.problem) layout = { label: n.label, format: n.dateFormat };
+  }
+  if (!layout) return null;
+  return { layoutLabel: layout.label, format: layout.format, label: DATE_FORMAT_OPTIONS.find((o) => o.value === layout!.format)?.label ?? layout.format };
 }
 
 function rowFor(ctx: UploadContext, key: string): BenchmarkOverviewRow | undefined {
@@ -771,7 +856,7 @@ export function stepIssues(step: StepNumber, ctx: UploadContext): string[] {
   if (!ctx.caps.upload) out.push('You do not have the upload permission, so you cannot stage a file.');
   const fp = fileProblem(ctx.file, ctx.maxBytes);
   if (fp) out.push(fp);
-  if (!f.dateFormat) out.push('Choose the date format used in the file. It is never guessed, because a date such as 03-04-2024 could be 3 April or 4 March.');
+  if (!f.dateFormat && !layoutSuppliedDateFormat(ctx)) out.push('Choose the date format used in the file. It is never guessed, because a date such as 03-04-2024 could be 3 April or 4 March.');
   if (!f.numberLocale) out.push('Choose how numbers are written in the file (for example 12,345.67 or 12.345,67).');
   const kind = ctx.file ? fileKindFromName(ctx.file.name) : null;
   if (kind === 'csv' && (f.dateFormat === 'excel_1900' || f.dateFormat === 'excel_1904')) out.push('Excel date numbers only apply to .xlsx files. Choose the written date format used in the CSV.');
@@ -801,19 +886,20 @@ export function canStage(ctx: UploadContext): { ok: boolean; reasons: string[] }
 }
 
 /** Builds the exact request params. Returns reasons instead of a body when anything is incomplete: nothing is guessed. */
-export function buildStageParams(ctx: UploadContext): { ok: true; params: StageUploadRequestParams } | { ok: false; reasons: string[] } {
+export function buildStageParams(ctx: UploadContext): { ok: true; params: BuiltStageParams } | { ok: false; reasons: string[] } {
   const gate = canStage(ctx);
   if (!gate.ok) return { ok: false, reasons: gate.reasons };
   const f = ctx.form;
   const keys = involvedBenchmarkKeys(f);
   const kind = ctx.file ? fileKindFromName(ctx.file.name) : null;
-  const params: StageUploadRequestParams = {
+  const params: BuiltStageParams = {
     shape: f.shape as ShapeId,
     mode: f.mode,
     returnVariant: f.returnVariant as VariantId,
     currencyCode: f.currencyCode.trim().toUpperCase(),
     historyClass: f.historyClass as HistoryClassId,
-    dateFormat: f.dateFormat as DateFormatId,
+    // A recognised layout supplies its own date format: none is sent, the server uses the layout's.
+    dateFormat: layoutSuppliedDateFormat(ctx) ? undefined : (f.dateFormat as DateFormatId),
     numberLocale: f.numberLocale as NumberLocaleId,
     sourceOwner: f.sourceOwner.trim(),
     sourceReference: f.sourceReference.trim(),

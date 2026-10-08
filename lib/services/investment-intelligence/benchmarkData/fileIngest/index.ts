@@ -10,7 +10,7 @@ export { parseMarketDate } from './dateParsing';
 export type { DateParseResult } from './dateParsing';
 export { parseLevel, MAX_DECIMALS, MAX_LEVEL_EXCLUSIVE } from './numberParsing';
 export type { LevelParseResult } from './numberParsing';
-export { PROVIDER_LAYOUTS, resolveLayout, normaliseHeaderName } from './layouts';
+export { PROVIDER_LAYOUTS, resolveLayout, matchRegisteredLayouts, nearestLayouts, normaliseHeaderName } from './layouts';
 export type { ProviderLayout, ResolvedLayout, ResolvedMapping, LayoutResolution } from './layouts';
 export {
   validateUpload,
