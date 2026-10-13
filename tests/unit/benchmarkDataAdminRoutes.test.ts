@@ -603,6 +603,9 @@ describe('entitlement EDIT (migration 0280): separation of duties, validation an
     mockRpc.mockResolvedValue({ data: null, error: null });
     await approvePOST(json({ note: 'approved after review', expectedEditCount: 4 }), params);
     expect(mockRpc.mock.calls[0]).toEqual(['approve_benchmark_entitlement', { p_id: ID, p_note: 'approved after review', p_self_approval_ack: false, p_expected_edit_count: 4 }]);
+    mockRpc.mockClear();
+    await approvePOST(json({ note: 'approved after review' }), params);
+    expect(mockRpc.mock.calls[0], 'without a counter the 4th argument is not sent, so the route also works against the 0241 function').toEqual(['approve_benchmark_entitlement', { p_id: ID, p_note: 'approved after review', p_self_approval_ack: false }]);
     expect(adminClientUsed).not.toHaveBeenCalled();
   });
 

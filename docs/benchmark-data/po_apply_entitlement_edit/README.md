@@ -22,9 +22,9 @@ How a replaced record is stored: the status list of the table is **not** widened
 
 1. Project: Supabase **DEV**. Check the project reference is `vqycarelcoijzwlpkpcz` (browser address bar of the Supabase dashboard, and Project Settings, General). **If it is anything else, stop.** Do not run this on production yet.
 2. Migration `0241` (benchmark data governance) must already be applied on DEV. If it is missing, part a stops with a clear message and changes nothing.
-3. Apply the **SQL first, then deploy the branch**. If the branch is deployed first the screen simply hides the Edit controls (it detects the missing columns) and nothing breaks.
+3. Apply the **SQL first, then deploy the branch** (the evidence for this order is in "PRODUCTION: release order" below).
 4. **Do not run `0241` again after `0280`.** `0241` would put back the older three-argument approve function and the older revoke function. If that ever happens, run `0280` again (it is safe to run twice and repairs both).
-5. Migration number: `0280`. I scanned every branch, tag and worktree on this machine (872 refs, 180 worktree folders); the highest number found is `0279` (promo hardening release). `0260-0263` and `0269-0271` are NAV2, `0272-0274` are the bulk upload branch. One remote ref could not be fetched ("doclife"), so please tell me if you know of another branch holding a migration above `0279`.
+5. Migration number: `0280`. Re-scanned on 14-10-2026 after merging origin/main (b94724d): 878 branch, remote and tag refs and 183 worktree folders. The highest number anywhere is `0280`, found only in this branch and in your DEV integration worktree (a byte-identical copy of this file). `0279` is the promo hardening release, `0260-0263` and `0269-0271` are NAV2, `0272-0274` are the bulk upload branch. The remote called `doclife` still cannot be fetched (it points at a local folder, `worktrees/doc-lifecycle`, that is not a git repository root), but its previously fetched branches were scanned, and that folder has no migrations of its own; nothing above `0279`.
 
 ## Apply (Supabase SQL editor, DEV)
 
@@ -75,3 +75,44 @@ You can apply `0280` again later.
 - **Exceptions requested:** none.
 - **Audit:** the existing append-only governance event log (`ii_benchmark_governance_events`). It has only a length check on the event type, no list, so the new event types needed no widening of any shared constraint. New types: `entitlement_draft_edited`, `entitlement_revision_proposed`, `entitlement_revision_edited`, `entitlement_revision_approved`, `entitlement_superseded`, `entitlement_revision_cancelled`, `entitlement_revision_rejected`, `entitlement_revision_closed`.
 - **Not changed:** the shared audit events table and its delta chain; the status list of the entitlement table; the 0241 rights evaluator, entitled-actions function, calc-readable function and the series read policy (they already ignore revoked records).
+
+## PRODUCTION: release order, precheck, backup (decided 14-10-2026)
+
+State: 0280 was applied on DEV by you and `verify.sql` returned 12/12 PASS; you tested Edit, Review, Reject and Cancel revision there. This section is for production. Production has **no managed backups** (Free plan), so the backup step below is not optional.
+
+### Decision: SQL first, then push
+
+**Recommended order: backup, precheck, SQL 0280 (parts a, b, c), `verify.sql`, then the push.** Both orders were examined with evidence; this one has no known harmful window, and if the SQL step fails nothing was deployed.
+
+**If the SQL is applied BEFORE the new app is deployed (the recommended order): what breaks for the OLD app? Nothing known.**
+- The old app calls `approve_benchmark_entitlement` by argument name with three arguments (`p_id`, `p_note`, `p_self_approval_ack`). 0280 replaces that function by one with a fourth, optional argument, so the old call still resolves. Evidence (PGlite, test "RELEASE ORDER, SQL first"): the old three-name call approves a draft, approves a revision correctly (the original is closed as replaced), and revoke by name still works; every column the old overview reads still exists.
+- The old app has no screen that creates a revision, so no revision can exist before the new app is live. The old screen therefore never sees a state it cannot show.
+- How long: until the deploy finishes (Amplify, a few minutes). Not harmful for any length of time.
+- Not verified here: PostgREST's own schema cache. Supabase reloads it automatically after DDL (seconds). A named call resolves inside Postgres, so a stale cache should not matter, but I could not exercise PostgREST. So: **do not approve or revoke an entitlement while part c is running and for one minute after it.**
+
+**If the push goes BEFORE 0280: what does the NEW app do against the OLD database?**
+- The overview first reads the 0280 columns; Postgres answers "column does not exist" (code 42703); the app repeats the read with the older columns and reports edit as unsupported. **Edit, Show history and History are hidden** and the tab behaves as before (unit tests of the fallback, including the rule that any other error is shown as an error and never as an empty list).
+- The approve route would have failed here: it used to always send the 4th argument, and the old function has no such argument (PGlite: SQLSTATE 42883, "function does not exist"), which would have blocked **every** approval until the SQL was applied. **This is fixed on this branch**: the route sends the 4th argument only when the screen has an edit counter, and the screen has one only when the database reported the 0280 columns. Evidence: route test "without a counter the 4th argument is not sent" and the PGlite test of the old database accepting the three-name call and refusing the four-name call.
+- So push-first is also safe after that fix, but it leaves a period with no Edit button, which looks like a failed release. That is why SQL first is recommended.
+
+**What not to do during the release**
+1. Do not run `0241` (or `scripts/bench1_phase2_po_apply_0241.sql`) again after 0280. It puts back the older approve and revoke functions. If it happens, run 0280 again.
+2. Do not approve, revoke or propose entitlements while part c runs and for one minute after.
+3. Do not paste part b or c before part a, and do not apply anything before the backup file is saved.
+4. Do not run `rollback.sql` after anyone has created a revision unless you accept that it closes every open revision (it says so in its header). Approved and already-replaced records are not touched.
+
+### Production steps, in this order
+1. **Backup.** Run `production_backup.sql` on production (it only reads), press Export to CSV, and keep the file outside the project. It holds every entitlement record.
+2. **Precheck.** Run `production_precheck.sql`. It only reads. It must return 10 rows, every `result` PASS, including row 8 (two approved records) and row 6 (one approve function with three arguments). If any row says FAIL, stop and send me the rows.
+3. **SQL.** Run `parts/0280a.sql`, `0280b.sql`, `0280c.sql`, one at a time, each pasted completely, each answering "Success. No rows returned".
+4. **Verify.** Run `verify.sql`: 12 rows, all PASS. Also run the precheck again: it must now show FAIL on rows 2 to 6, which is correct and proves 0280 is in.
+5. **Push** the merge commit (the exact command is in the release note I gave you). Amplify deploys.
+6. **Smoke** on production once the deploy shows Deployed: open Market Index Data, Entitlements; you should see the two approved records, the "Show history" box, and Edit (needs approval) on each with your catalogue permission. Do not save a revision on a real benchmark unless you intend it; to see the flow without changing anything, open Edit and press Cancel.
+
+### If something goes wrong
+- SQL failed part way: send me the exact error text. Every part is safe to run twice.
+- The screen misbehaves after the deploy: the previous deploy can be re-run from Amplify, and the old app works with the new database (evidence above), so the SQL does not need to be rolled back.
+- Need to undo the SQL: `rollback.sql` (it keeps the new columns, which do no harm). The new app then simply hides Edit.
+- Last resort: restore from the CSV backup. It contains every column, so the records can be re-inserted.
+
+Evidence for this section is in `tests/unit/benchmarkEntitlementEditRevisionPglite.test.ts` and `tests/unit/benchmarkEntitlementEditProductionPrecheckPglite.test.ts`. PGlite-verified, not run on production.

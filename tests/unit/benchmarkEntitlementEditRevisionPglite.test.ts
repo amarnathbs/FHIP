@@ -278,6 +278,24 @@ describe('migration 0280 - shape, idempotency, grants', () => {
     await assertRevokeClosesOpenRevision();
   });
 
+  it('RELEASE ORDER, SQL first: the OLD app (calls by name with the three older arguments, reads the 0241 columns) keeps working on the 0280 database, including approving a revision', async () => {
+    // PostgREST calls an RPC by argument NAME. These are exactly the calls the previous application version makes.
+    const bid = await newBenchmark();
+    const d = await propose(CAT, body(bid));
+    await as(APP, 'authenticated', () => db.query(`select approve_benchmark_entitlement(p_id => $1::uuid, p_note => $2, p_self_approval_ack => $3::boolean)`, [d, 'approved by the old application', false]));
+    expect((await row(d)).status).toBe('approved');
+    // the old overview selects only the 0241 columns: they all still exist
+    const old = await as(VIEW, 'authenticated', () => db.query(`select id, benchmark_id, entitlement_kind, status, allow_manual_ingest, allow_automation, allow_storage, allow_calculation, allow_customer_display, allow_report_export, data_from, data_to, valid_from, valid_to, post_expiry_storage, evidence_reference, evidence_url, created_by, approved_at from ii_benchmark_entitlements where benchmark_id = $1`, [bid]));
+    expect(old.rows).toHaveLength(1);
+    // a revision (only the NEW application can create one) approved through the OLD approve call is handled by the database: the original is superseded
+    const r = await revise(CAT, d, body(bid, { allow_report_export: true }));
+    await as(APP, 'authenticated', () => db.query(`select approve_benchmark_entitlement(p_id => $1::uuid, p_note => $2, p_self_approval_ack => $3::boolean)`, [r, 'approved by the old application', false]));
+    expect(await grantingRows(bid, 'calculation')).toBe(1);
+    expect((await row(d)).superseded_by).toBe(r);
+    await as(APP, 'authenticated', () => db.query(`select revoke_benchmark_entitlement(p_id => $1::uuid, p_reason => $2)`, [r, 'revoked by the old application']));
+    expect(await grantingRows(bid, 'calculation')).toBe(0);
+  });
+
   it('adds columns, four new checks and two unique indexes, and does NOT touch the existing status check or any 0241 constraint', async () => {
     const cols = (await q<{ column_name: string }>(`select column_name from information_schema.columns where table_name = 'ii_benchmark_entitlements' and column_name in ('supersedes_entitlement_id','superseded_by','superseded_at','revision_reason','edit_count','last_edited_at')`)).map((c) => c.column_name);
     expect(cols.sort()).toEqual(['edit_count', 'last_edited_at', 'revision_reason', 'superseded_at', 'superseded_by', 'supersedes_entitlement_id']);
@@ -904,6 +922,11 @@ describe('rollback restores the previous behaviour and the migration can be appl
     expect((await row(o)).status).toBe('approved');
     expect((await row(o3)).status, 'a superseded record stays closed').toBe('revoked');
     expect(await grantingRows(bid3, 'calculation')).toBe(1);
+    // RELEASE ORDER, push first: the NEW application omits the 4th argument unless the screen has a counter; with the older function the named 4-argument call does not exist
+    const d0 = await propose(CAT, body(await newBenchmark()));
+    expect(await codeOf(as(APP, 'authenticated', () => db.query(`select approve_benchmark_entitlement(p_id => $1::uuid, p_note => $2, p_self_approval_ack => $3::boolean, p_expected_edit_count => $4::integer)`, [d0, 'x approved', false, null])))).toBe('42883');
+    await as(APP, 'authenticated', () => db.query(`select approve_benchmark_entitlement(p_id => $1::uuid, p_note => $2, p_self_approval_ack => $3::boolean)`, [d0, 'approved without a counter', false]));
+    expect((await row(d0)).status).toBe('approved');
     // old behaviour: three-argument approve and revoke
     const d = await propose(CAT, body(await newBenchmark()));
     await callAs(APP, `select approve_benchmark_entitlement($1::uuid, $2, false)`, [d, 'approved after the rollback']);

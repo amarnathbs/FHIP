@@ -18,7 +18,11 @@ export const POST = adminRoute(async (req: Request, { params }: { params: Promis
   if (!id.ok) return id.response;
   const body = await parseBody(req, z.object({ note: z.string().min(5).max(500), selfApprovalAck: z.boolean().optional(), expectedEditCount: z.number().int().min(0).optional() }));
   if (!body.ok) return body.response;
-  const { error } = await g.supabase.rpc('approve_benchmark_entitlement', { p_id: id.id, p_note: body.data.note, p_self_approval_ack: body.data.selfApprovalAck === true, p_expected_edit_count: body.data.expectedEditCount ?? null });
+  // The 4th argument exists only once migration 0280 is applied. It is sent only when the screen has one (the screen has one only
+  // when the database reported the edit columns), so this route also works against a database that still has the 0241 function.
+  const args: Record<string, unknown> = { p_id: id.id, p_note: body.data.note, p_self_approval_ack: body.data.selfApprovalAck === true };
+  if (body.data.expectedEditCount !== undefined) args.p_expected_edit_count = body.data.expectedEditCount;
+  const { error } = await g.supabase.rpc('approve_benchmark_entitlement', args);
   if (error) return rpcFailureResponse(error);
   return ok({ approved: true });
 });
