@@ -49,21 +49,24 @@ describe('buildShareLinks', () => {
   });
 });
 
-describe('Share button never hands straight off to the OS share sheet', () => {
+describe('Share button only hands straight to the OS share sheet on touch devices', () => {
   // Regression: on Windows Edge/Chrome navigator.share exists, so the button used
   // to open the OS sheet (dead targets) and never showed the working web links.
+  // 2026-10-13: phones now go straight to the native sheet (see
+  // resourceShareJourney.test.ts), but ONLY when prefersNativeShare() says so.
   it('detects native share only as an optional extra', () => {
     expect(canUseNativeShare({ share: () => Promise.resolve() })).toBe(true);
     expect(canUseNativeShare({})).toBe(false);
     expect(canUseNativeShare(undefined)).toBe(false);
   });
 
-  it('the click handler only toggles the dropdown; navigator.share is reachable only from the "More options" item', async () => {
+  it('the click handler gates the native sheet behind prefersNativeShare; the desktop "More options" item is the only other caller', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync('components/resources/public/ShareButton.tsx', 'utf8').split('\r\n').join('\n');
-    const clickHandler = src.slice(src.indexOf('function handleShareClick'), src.indexOf('async function handleNativeShare'));
-    expect(clickHandler).toContain('setMenuOpen');
-    expect(clickHandler).not.toContain('navigator.share');
-    expect(src.match(/navigator\.share\(/g)).toHaveLength(1);
+    const clickHandler = src.slice(src.indexOf('function handleShareClick'), src.indexOf('async function handleMoreOptions'));
+    expect(clickHandler).toContain('prefersNativeShare');
+    expect(clickHandler).toContain('shareNatively');
+    expect(clickHandler).toContain('setOpen(true)');
+    expect(src.match(/shareViaNavigator\(/g)).toHaveLength(1);
   });
 });
