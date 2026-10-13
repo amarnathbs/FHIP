@@ -82,7 +82,11 @@ async function ResourceDetailPageContent({ params }: { params: Promise<Params> }
     getUseInFhipActionsForPost(supabase, post.id),
   ]);
 
-  const canonicalUrl = buildResourceCanonicalUrl(slug);
+  // Built from the STORED slug (what generateMetadata's canonical and the
+  // JSON-LD also use), not the raw route param, so canonical, og:url,
+  // structured data and the Share button are one and the same URL and a
+  // percent-encoded request path can never be encoded a second time.
+  const canonicalUrl = buildResourceCanonicalUrl(post.slug ?? slug);
   const breadcrumbItems = [
     { label: 'Home', href: '/' },
     { label: 'Resources', href: '/resources' },

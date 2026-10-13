@@ -3,6 +3,8 @@
 Branch: `feat/admin-premium-grant-20261001` (from `origin/main` 35956a7). Not pushed, not merged.
 Migration: `supabase/migrations/0231_admin_premium_entitlement_grants.sql` — **NOT applied to DEV or production.**
 
+> **Update (2026-10-05, hardening migrations 0264 to 0268; see `ADMIN_PROMO_CODES_AND_REMINDERS_REPORT.md` section 18).** The "365 days from allocation" cap below is now an INCLUSIVE window: the latest end date is today plus 364 (a 365 day grant counting today). A lifetime ceiling of 10 admin grants and extensions per user now applies across revoke and re-grant, with a separately gated override. Statements below that say the cap is "today plus 365" or that a revoke and a new grant resets the allowance are **SUPERSEDED** by those items.
+
 ## 0. Evidence labels (read this first)
 
 | Claim | Label |

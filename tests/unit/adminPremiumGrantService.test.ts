@@ -80,7 +80,7 @@ const dayOffset = (n: number) => {
 const validBody = (over: Record<string, unknown> = {}) => ({
   action: 'grant',
   userId: TARGET_ID,
-  endsOn: dayOffset(365),
+  endsOn: dayOffset(364),
   reason: 'Pilot customer, invoice pending',
   ...over,
 });
@@ -196,15 +196,15 @@ describe('server-side request validation (before the database) — the cap and t
   }
 
   async function assertCapRoute(action: 'grant' | 'extend'): Promise<void> {
-    const over = await post(validBody({ action, endsOn: dayOffset(366) }));
-    expect(over.res.status, `${action} with 366 days must be rejected`).toBe(422);
+    const over = await post(validBody({ action, endsOn: dayOffset(365) }));
+    expect(over.res.status, `${action} with a 366 day grant (end date today plus 365) must be rejected`).toBe(422);
     expect((await over.res.json()).error).toBe('ENTITLEMENT_END_DATE_EXCEEDS_MAX');
     expect(over.fake.rpcCalls, `a rejected ${action} must not reach the database`).toHaveLength(0);
-    const exact = await post(validBody({ action, endsOn: dayOffset(365) }));
+    const exact = await post(validBody({ action, endsOn: dayOffset(364) }));
     expect(exact.res.status, `${action} with exactly 365 days must be accepted`).toBe(200);
     // (an extend first reads the user's extension count for the route-level cap check, then writes)
     const write = exact.fake.rpcCalls.find((c) => c.name === 'admin_manage_premium_entitlement');
-    expect(write?.args).toMatchObject({ p_action: action, p_ends_on: dayOffset(365) });
+    expect(write?.args).toMatchObject({ p_action: action, p_ends_on: dayOffset(364) });
   }
 
   it('grant: 366 days rejected, exactly 365 accepted', async () => {
@@ -214,14 +214,14 @@ describe('server-side request validation (before the database) — the cap and t
     await assertCapRoute('extend');
   });
 
-  it('NEGATIVE CONTROL — a weakened cap (400 days) accepts 366 (assertion "366 days must be rejected" goes red)', async () => {
+  it('NEGATIVE CONTROL — a weakened cap (400 days) accepts a 366 day grant (assertion "a 366 day grant (end date today plus 365) must be rejected" goes red)', async () => {
     const { checkEndDate } = await import('@/lib/services/premiumGrantAdmin');
-    const real = () => expect(checkEndDate(dayOffset(366), TODAY)?.code, '366 days must be rejected').toBe('ENTITLEMENT_END_DATE_EXCEEDS_MAX');
-    const weakened = () => expect(checkEndDate(dayOffset(366), TODAY, 400)?.code, '366 days must be rejected').toBe('ENTITLEMENT_END_DATE_EXCEEDS_MAX');
+    const real = () => expect(checkEndDate(dayOffset(365), TODAY)?.code, 'a 366 day grant (end date today plus 365) must be rejected').toBe('ENTITLEMENT_END_DATE_EXCEEDS_MAX');
+    const weakened = () => expect(checkEndDate(dayOffset(365), TODAY, 400)?.code, 'a 366 day grant (end date today plus 365) must be rejected').toBe('ENTITLEMENT_END_DATE_EXCEEDS_MAX');
     expect(real).not.toThrow();
-    expect(weakened).toThrow(/366 days must be rejected/);
+    expect(weakened).toThrow(/366 day grant .* must be rejected/);
     // And the boundary itself: 365 is allowed by the real rule.
-    expect(checkEndDate(dayOffset(365), TODAY)).toBeNull();
+    expect(checkEndDate(dayOffset(364), TODAY)).toBeNull();
   });
 
   async function assertReasonRoute(): Promise<void> {
@@ -257,7 +257,7 @@ describe('server-side request validation (before the database) — the cap and t
   it('passes the caller-supplied values to the RPC exactly (action, target, end date, trimmed reason) and nothing else', async () => {
     const r = await post(validBody({ reason: '  Pilot customer, invoice pending  ' }));
     expect(r.fake.rpcCalls).toEqual([
-      { name: 'admin_manage_premium_entitlement', args: { p_action: 'grant', p_target_user_id: TARGET_ID, p_ends_on: dayOffset(365), p_reason: 'Pilot customer, invoice pending' } },
+      { name: 'admin_manage_premium_entitlement', args: { p_action: 'grant', p_target_user_id: TARGET_ID, p_ends_on: dayOffset(364), p_reason: 'Pilot customer, invoice pending', p_override: false } },
     ]);
   });
 

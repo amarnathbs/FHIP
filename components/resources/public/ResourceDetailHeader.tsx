@@ -60,7 +60,7 @@ export function ResourceDetailHeader({
           <JurisdictionLabel jurisdiction={jurisdiction} className="text-xs text-muted" />
           {difficulty && <span className="text-xs text-muted">{DIFFICULTY_LABELS[difficulty as ResourceDifficulty] ?? difficulty}</span>}
         </div>
-        {shareUrl && <ShareButton url={shareUrl} title={title} />}
+        {shareUrl && <ShareButton url={shareUrl} title={title} excerpt={excerpt} />}
       </div>
       <h1 className="text-3xl font-bold leading-tight text-ink sm:text-4xl">{title}</h1>
       {excerpt && <p className="text-lg leading-relaxed text-muted">{excerpt}</p>}
