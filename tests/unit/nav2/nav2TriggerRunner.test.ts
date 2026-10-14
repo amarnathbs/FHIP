@@ -39,6 +39,17 @@ describe('switch OFF (NC-T1, matrix 43)', () => {
   });
 });
 
+describe('B2: the existing fetch can be restricted to chosen funds', () => {
+  it('switch OFF with a fund choice: the legacy runner is handed exactly those ids; without a choice it is called as before (no second argument)', async () => {
+    const { legacy, deps } = mk(false);
+    await runUserNavHistoryForKick('u1', deps, { kind: 'report_period_requested' }, '3y', ['f1', 'f2']);
+    expect(legacy).toHaveBeenCalledWith('u1', ['f1', 'f2']);
+    legacy.mockClear();
+    await runUserNavHistoryForKick('u1', deps);
+    expect(legacy).toHaveBeenCalledWith('u1');
+  });
+});
+
 describe('switch ON (NC-T2, NC-T3, matrix 62, 63)', () => {
   it('plans with the trigger and the period and does NOT call the legacy runner', async () => {
     const { legacy, planned, deps } = mk(true);
@@ -76,6 +87,7 @@ describe('NC-T4: the default kick runner goes through this runner (static)', () 
   });
   it('the legacy runner the switch-off path calls is still the live batch (unchanged)', () => {
     const t = fs.readFileSync(path.resolve(__dirname, '..', '..', '..', 'lib/services/investment-intelligence/nav2/nav2TriggerRunner.ts'), 'utf8');
-    expect(t).toMatch(/legacy: \(userId\) => runLiveUserNavHistoryBatch\(userId\)/);
+    // B2: with no fund choice it is still exactly runLiveUserNavHistoryBatch(userId); with a choice it is the same live batch restricted to those funds
+    expect(t).toMatch(/legacy: \(userId, onlyInstrumentIds\) => \(onlyInstrumentIds && onlyInstrumentIds\.length > 0 \? runLiveUserNavHistoryBatch\(userId, \{ onlyInstrumentIds \}\) : runLiveUserNavHistoryBatch\(userId\)\)/);
   });
 });

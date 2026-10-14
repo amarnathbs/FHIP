@@ -193,30 +193,35 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
 
   const loaded = await loadAnalyticsDataset(client as unknown as SupabaseClient, args.userId, { asOfDate: new Date(`${args.asOfDate}T00:00:00.000Z`), benchmarkAccessNeed: 'export' });
   warnings.push(...loaded.warnings.map((w) => w.detail));
-  const rf = await loadRiskFreeSupply(args.adminClient);
+  // RELEASE CANDIDATE (B3): these four reads do not depend on each other, so they run together (a development machine on a slow link made every sequential
+  // round trip visible: a report took 71 to 160 round trips, most of them one after the other). The results are exactly what the sequential reads gave.
+  const countAwaiting = async (): Promise<number> => {
+    try {
+      const { count } = await (args.sessionClient as unknown as SupabaseClient)
+        .from('ii_reconciliation_cases')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', args.userId)
+        .in('status', ['open', 'user_reviewing']);
+      return count ?? 0;
+    } catch {
+      return 0;
+    }
+  };
+  const [rf, allTruth, scopedTruth, awaiting] = await Promise.all([
+    loadRiskFreeSupply(args.adminClient),
+    fetchAllRows<{ instrument_id: string; id: string }>(() =>
+      (args.sessionClient as unknown as SupabaseClient).from('ii_portfolio_truth_status').select('instrument_id, id').eq('user_id', args.userId).order('id', { ascending: true })
+    ).catch(() => [] as Array<{ instrument_id: string; id: string }>),
+    fetchAllRows<{ instrument_id: string; id: string }>(() =>
+      (client as unknown as SupabaseClient).from('ii_portfolio_truth_status').select('instrument_id, id').eq('user_id', args.userId).order('id', { ascending: true })
+    ).catch(() => [] as Array<{ instrument_id: string; id: string }>),
+    countAwaiting(),
+  ]);
 
   // ---- scope notes: entity-held funds excluded, non-fund holdings, items awaiting review -------------------------
   const personalIds = new Set<string>();
-  const allTruth = await fetchAllRows<{ instrument_id: string; id: string }>(() =>
-    (args.sessionClient as unknown as SupabaseClient).from('ii_portfolio_truth_status').select('instrument_id, id').eq('user_id', args.userId).order('id', { ascending: true })
-  ).catch(() => [] as Array<{ instrument_id: string; id: string }>);
-  const scopedTruth = await fetchAllRows<{ instrument_id: string; id: string }>(() =>
-    (client as unknown as SupabaseClient).from('ii_portfolio_truth_status').select('instrument_id, id').eq('user_id', args.userId).order('id', { ascending: true })
-  ).catch(() => [] as Array<{ instrument_id: string; id: string }>);
   for (const r of scopedTruth) personalIds.add(r.instrument_id);
   const entityOnly = new Set(allTruth.map((r) => r.instrument_id).filter((id) => !personalIds.has(id)));
-
-  let awaiting = 0;
-  try {
-    const { count } = await (args.sessionClient as unknown as SupabaseClient)
-      .from('ii_reconciliation_cases')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', args.userId)
-      .in('status', ['open', 'user_reviewing']);
-    awaiting = count ?? 0;
-  } catch {
-    awaiting = 0;
-  }
 
   const baseScope: ReportScopeNotes = {
     entityHeldSchemesExcluded: entityOnly.size,
@@ -231,9 +236,11 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
   // ---- instrument facts: class, plan, option, category ------------------------------------------------------------
   const ids = ds.schemes.map((s) => s.instrumentId);
   const admin = args.adminClient;
-  const { data: instData } = await admin.from('ii_instruments').select('id, instrument_name, instrument_class, base_currency, plan_type, option_type').in('id', ids);
+  const [{ data: instData }, { data: smData }] = await Promise.all([
+    admin.from('ii_instruments').select('id, instrument_name, instrument_class, base_currency, plan_type, option_type').in('id', ids),
+    admin.from('ii_scheme_master').select('instrument_id, sub_category, category_header_raw').in('instrument_id', ids).is('effective_to', null),
+  ]);
   const inst = new Map(((instData ?? []) as InstrumentRow[]).map((i) => [i.id, i]));
-  const { data: smData } = await admin.from('ii_scheme_master').select('instrument_id, sub_category, category_header_raw').in('instrument_id', ids).is('effective_to', null);
   const sm = new Map(((smData ?? []) as Array<{ instrument_id: string; sub_category: string | null; category_header_raw: string | null }>).map((r) => [r.instrument_id, r]));
 
   const allFundSchemes = ds.schemes.filter((s) => inst.get(s.instrumentId)?.instrument_class === 'mutual_fund' && (inst.get(s.instrumentId)?.base_currency ?? 'INR') === 'INR');
@@ -268,15 +275,33 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
   if (fundIds.length === 0) return { input: emptyInput([]), warnings, riskFreeUnavailableReason: rf.unavailableReason, choice };
 
   // ---- raw NAV rows with lineage + unresolved coverage gaps -------------------------------------------------------
-  const navRows = await fetchAllRows<NavRowDb>(() =>
-    admin
-      .from('ii_prices_nav')
-      .select('id, instrument_id, price_date, price, currency_code, quality_status, superseded_by_id, correction_of_id, record_checksum, source_id, data_version')
-      .in('instrument_id', fundIds)
-      .lte('price_date', args.asOfDate)
-      .order('price_date', { ascending: true })
-      .order('id', { ascending: true })
-  );
+  // One read per fund, ten funds at a time: each fund's pages stay in order, and the funds no longer queue behind each other's pages (one shared read paged
+  // through every fund's rows one page after another; for 20 funds that was about 5 s of waiting on a 170 ms link). The rows each fund gets are identical.
+  const readNavRows = async (): Promise<NavRowDb[]> => {
+    const all: NavRowDb[] = [];
+    for (let i = 0; i < fundIds.length; i += 10) {
+      const group = fundIds.slice(i, i + 10);
+      const parts = await Promise.all(
+        group.map((fundId) =>
+          fetchAllRows<NavRowDb>(() =>
+            admin
+              .from('ii_prices_nav')
+              .select('id, instrument_id, price_date, price, currency_code, quality_status, superseded_by_id, correction_of_id, record_checksum, source_id, data_version')
+              .eq('instrument_id', fundId)
+              .lte('price_date', args.asOfDate)
+              .order('price_date', { ascending: true })
+              .order('id', { ascending: true })
+          )
+        )
+      );
+      for (const p of parts) all.push(...p);
+    }
+    return all;
+  };
+  const [navRows, { data: gapData }] = await Promise.all([
+    readNavRows(),
+    admin.from('ii_nav_source_coverage_gaps').select('instrument_id, gap_from, gap_to, reason_code').in('instrument_id', fundIds).is('resolved_at', null),
+  ]);
   const sourceIds = [...new Set(navRows.map((r) => r.source_id).filter((x): x is string => !!x))];
   const providerById = new Map<string, string>();
   if (sourceIds.length > 0) {
@@ -290,7 +315,6 @@ export async function loadFundAnalyticsInput(args: FundAnalyticsLoadArgs): Promi
     list.push(toRaw(r, providerById));
     navBy.set(r.instrument_id, list);
   }
-  const { data: gapData } = await admin.from('ii_nav_source_coverage_gaps').select('instrument_id, gap_from, gap_to, reason_code').in('instrument_id', fundIds).is('resolved_at', null);
   const gapsBy = new Map<string, CoverageGapInput[]>();
   for (const g of (gapData ?? []) as Array<{ instrument_id: string; gap_from: string; gap_to: string; reason_code: string }>) {
     const list = gapsBy.get(g.instrument_id) ?? [];

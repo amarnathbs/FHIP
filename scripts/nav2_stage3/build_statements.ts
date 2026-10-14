@@ -41,6 +41,8 @@ async function mfapiNav(amfi: string, onOrBefore: string): Promise<{ date: strin
 async function navOn(db: any, instrumentId: string, onOrBefore: string, amfi?: string): Promise<{ date: string; nav: number }> {
   if (amfi && instrumentId === FUNDS.E.instrumentId) return mfapiNav(amfi, onOrBefore); // short stored history on DEV: AMFI's published NAV via mfapi.in
   const { data, error } = await db.from('ii_prices_nav').select('price_date, price').eq('instrument_id', instrumentId).lte('price_date', onOrBefore).order('price_date', { ascending: false }).limit(1);
+  // release candidate: a fund with NO stored history on DEV (the large-report journeys) takes AMFI's published NAV via mfapi.in, exactly as fund E does
+  if ((error || !data?.length) && amfi) return mfapiNav(amfi, onOrBefore);
   if (error || !data?.length) throw new Error(`no NAV for ${instrumentId} on or before ${onOrBefore}`);
   return { date: String(data[0].price_date).slice(0, 10), nav: Number(data[0].price) };
 }

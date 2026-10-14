@@ -17,6 +17,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+const kickSpy = vi.fn().mockReturnValue(true);
+vi.mock('@/lib/services/investment-intelligence/nav2/nav2TriggerRunner', async (orig) => {
+  const actual = await orig<typeof import('@/lib/services/investment-intelligence/nav2/nav2TriggerRunner')>();
+  return { ...actual, kickNav2ReportPeriod: (...a: unknown[]) => kickSpy(...a) };
+});
 let currentDb: InMemoryDb;
 // the gate's first-hold anchor is an audit event: write it to the in-memory database so the test can count it
 vi.mock('@/lib/services/investment-intelligence/audit', () => ({
@@ -29,7 +34,7 @@ vi.mock('@/lib/services/investment-intelligence/audit', () => ({
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
 import { reportAnalysisSpec } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsInput, HeldSchemeInput } from '@/lib/engines/nav2/fundAnalyticsReport';
-import { generateFundAnalyticsReport, type FundAnalyticsDeps } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService';
+import { gateKickFor, generateFundAnalyticsReport, type FundAnalyticsDeps } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService';
 import { planUserNav2Windows } from '@/lib/services/investment-intelligence/nav2/windowPlannerService';
 import { checkReportNavHistoryGate } from '@/lib/services/investment-intelligence/pc6/reportNavHistoryGate';
 import { createInMemoryDb, type InMemoryDb, type Row } from '../support/inMemorySupabase';
@@ -272,5 +277,18 @@ describe('NC-R6: the service (30 held, 20 selected)', () => {
     const r = await generateFundAnalyticsReport({ userId: USER, sessionClient: db.client as never, adminClient: db.client as unknown as SupabaseClient, periodChoice: 'since_first_held', fundIds: [id(1), id(99)], asOfDate: AS_OF, deps });
     expect(r).toEqual({ status: 'invalid_selection', message: 'Choose between 1 and 20 of the funds you hold.' });
     expect(db.tables.nav2_fund_analytics_reports).toHaveLength(0);
+  });
+});
+
+describe('NC-R8: what the gate starts when a selected fund is missing history', () => {
+  it('with a choice the fetch is for THOSE funds only (and the chosen period); with no choice it is the previous full-user kick', () => {
+    kickSpy.mockClear();
+    const kick = gateKickFor([id(1), id(2)], '3y');
+    expect(kick('u1')).toBe(true);
+    expect(kickSpy).toHaveBeenCalledWith('u1', '3y', {}, [id(1), id(2)]);
+    kickSpy.mockClear();
+    gateKickFor(null, '3y')('u1'); // the existing kick (a different function, not the NAV2 period kick)
+    gateKickFor([], '3y')('u1');
+    expect(kickSpy).not.toHaveBeenCalled();
   });
 });

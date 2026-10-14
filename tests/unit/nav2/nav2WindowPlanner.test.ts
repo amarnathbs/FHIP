@@ -197,6 +197,20 @@ describe('planFetches reuses the existing gap / cooldown / fair-order / chunk ru
     expect(plan.deferred).toEqual(['b', 'a']);
     // one failing scheme (c) did not take a budget slot from the others
   });
+
+  it('LIVELOCK GUARD: a fund whose fetch failed 3 times in a row is left alone even after its cooldown (the gate rule), so a report is never held for ever; 2 failures are still retried', () => {
+    const attempt = (n: number, outcome = 'fetch_failed') => ({ lastAttemptedAt: '2026-10-02T09:00:00.000Z', lastOutcome: outcome, consecutiveFailures: n, attemptsTotal: n, lastSuccessAt: null }); // long ago: cooldown over
+    const plan = planFetches({
+      windows: ['x', 'y', 'z', 'u'].map((id) => win(id, '2022-01-01')),
+      coverage: new Map(['x', 'y', 'z', 'u'].map((id) => [id, cov('2026-09-21')])),
+      attempts: new Map([['x', attempt(3)], ['y', attempt(2)], ['z', attempt(5, 'unresolvable_identifier')], ['u', attempt(3, 'hydrated')]]),
+      today: TODAY,
+      nowIso: NOW,
+      budget: 5,
+    });
+    expect(plan.inCooldown).toEqual(['x', 'z']);
+    expect(plan.toFetch.map((f) => f.instrumentId).sort()).toEqual(['u', 'y']); // y has failed twice only; u's last outcome was a success
+  });
 });
 
 // ---------------------------------------------------------------------------

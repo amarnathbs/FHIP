@@ -235,10 +235,17 @@ export async function loadCoverage(db: Db, instrumentIds: string[]): Promise<Map
   const out = new Map<string, SchemeCoverage>();
   const { data: floors } = instrumentIds.length ? await db.from('ii_nav_history_floors').select('instrument_id, floor_date').in('instrument_id', instrumentIds) : { data: [] };
   const floorBy = new Map(((floors ?? []) as unknown as Array<{ instrument_id: string; floor_date: string }>).map((f) => [f.instrument_id, f.floor_date]));
-  for (const id of instrumentIds) {
-    const { data, error } = await db.from('ii_prices_nav').select('price_date').eq('instrument_id', id).order('price_date', { ascending: true }).limit(1).maybeSingle();
-    if (error) throw new Error(`ii_prices_nav: ${error.message}`);
-    out.set(id, { earliestNav: (data as { price_date?: string } | null)?.price_date ?? null, historyFloor: floorBy.get(id) ?? null });
+  // One small read per fund, run in groups of 10 at a time instead of one after another: for 20 funds that is 2 round trips deep, not 20 (measured on DEV:
+  // 20 funds cost about 4 s in sequence, on a link with a 170 ms round trip, and the gate and the planner each did it). The result is identical.
+  const GROUP = 10;
+  for (let i = 0; i < instrumentIds.length; i += GROUP) {
+    const group = instrumentIds.slice(i, i + GROUP);
+    const reads = await Promise.all(group.map((id) => db.from('ii_prices_nav').select('price_date').eq('instrument_id', id).order('price_date', { ascending: true }).limit(1).maybeSingle()));
+    group.forEach((id, k) => {
+      const { data, error } = reads[k];
+      if (error) throw new Error(`ii_prices_nav: ${error.message}`);
+      out.set(id, { earliestNav: (data as { price_date?: string } | null)?.price_date ?? null, historyFloor: floorBy.get(id) ?? null });
+    });
   }
   return out;
 }

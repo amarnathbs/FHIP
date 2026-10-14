@@ -35,7 +35,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isReportPeriodChoice, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
 import { buildFundAnalyticsReport, compactSchemeFamily, manifestChecksum, schemeBundleCacheKey, schemeBundleCacheParts, type FundAnalyticsInput, type FundAnalyticsManifest, type FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
 import { createHash } from 'node:crypto';
-import { ENGINE_MS_PER_UNCACHED_FUND, FUND_ANALYTICS_MAX_FUNDS, GENERATION_BUDGET_MS, MIN_PERSIST_MS, REQUEST_DEADLINE_MS } from '@/lib/config/nav2/reportLimits';
+import { CACHE_WRITE_RESERVE_MS, ENGINE_MS_PER_UNCACHED_FUND, FUND_ANALYTICS_MAX_FUNDS, GENERATION_BUDGET_MS, MIN_PERSIST_MS, REQUEST_DEADLINE_MS } from '@/lib/config/nav2/reportLimits';
 import { invalidSelectionMessage, largeReportStepsMessage, tooManyFundsMessage } from '@/lib/engines/nav2/reportWording';
 import { getPlanTier } from '@/lib/services/entitlements';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
@@ -84,7 +84,7 @@ export function requestFingerprint(period: ReportPeriodChoice, fundIds: readonly
 export interface FundAnalyticsDeps {
   isFlagOn: (admin: SupabaseClient) => Promise<boolean>;
   isPremium: (userId: string, admin: SupabaseClient) => Promise<boolean>;
-  gate: (args: { admin: SupabaseClient; userId: string; today: string; onlyInstrumentIds?: readonly string[] | null; skipIfMoreHeldThan?: number }) => Promise<ReportNavGate>;
+  gate: (args: { admin: SupabaseClient; userId: string; today: string; period?: ReportPeriodChoice; onlyInstrumentIds?: readonly string[] | null; skipIfMoreHeldThan?: number }) => Promise<ReportNavGate>;
   load: (args: Parameters<typeof loadFundAnalyticsInput>[0]) => Promise<FundAnalyticsLoadResult>;
   nowIso: () => string;
   /** Milliseconds clock for the time budget (injectable so a test can make a generation slow). */
@@ -104,10 +104,20 @@ export interface FundAnalyticsDeps {
   fetchingEnabled: (admin: SupabaseClient) => Promise<boolean>;
 }
 
+/**
+ * What the gate starts when a fund the report needs is still missing history (B2). With a choice of funds the fetch is for THOSE funds only (through the NAV2 plan
+ * when its switch is on, through the existing user-scoped fetch restricted to them otherwise); with no choice it is the previous behaviour for every fund held.
+ * The background held-scheme planner (after a statement is accepted) is separate and still plans every fund held.
+ */
+export function gateKickFor(onlyInstrumentIds: readonly string[] | null | undefined, period: ReportPeriodChoice | undefined): (userId: string) => boolean {
+  if (!onlyInstrumentIds || onlyInstrumentIds.length === 0) return kickUserNavHistory;
+  return (userId) => kickNav2ReportPeriod(userId, period ?? 'since_first_held', {}, onlyInstrumentIds);
+}
+
 const defaultDeps: FundAnalyticsDeps = {
   isFlagOn: (admin) => isNav2FlagOn(admin, NAV2_JOB_KEYS.fundAnalytics),
   isPremium: async (userId, admin) => (await getPlanTier(userId, admin as unknown as SupabaseServerClient)) === 'premium',
-  gate: ({ admin, userId, today, onlyInstrumentIds, skipIfMoreHeldThan }) => checkReportNavHistoryGate({ db: admin as never, userId, today, createAnchor: true, kick: kickUserNavHistory, onlyInstrumentIds, skipIfMoreHeldThan }),
+  gate: ({ admin, userId, today, period, onlyInstrumentIds, skipIfMoreHeldThan }) => checkReportNavHistoryGate({ db: admin as never, userId, today, createAnchor: true, kick: gateKickFor(onlyInstrumentIds, period), onlyInstrumentIds, skipIfMoreHeldThan }),
   load: loadFundAnalyticsInput,
   nowIso: () => new Date().toISOString(),
   nowMs: () => Date.now(),
@@ -193,11 +203,11 @@ export async function generateFundAnalyticsReport(args: {
   }
 
   // ---- the price-history gate and the planner look ONLY at the funds this report covers (B2) -------------------------
-  const gate = await deps.gate({ admin, userId: args.userId, today: asOfDate, onlyInstrumentIds: requested, skipIfMoreHeldThan: requested === null ? FUND_ANALYTICS_MAX_FUNDS : undefined });
+  const gate = await deps.gate({ admin, userId: args.userId, today: asOfDate, period: periodChoice, onlyInstrumentIds: requested, skipIfMoreHeldThan: requested === null ? FUND_ANALYTICS_MAX_FUNDS : undefined });
   if (gate.hold) return { status: 'preparing', message: gate.headline ?? 'Price history is being prepared.', waiting: waitingBody(gate) };
 
   if (!gate.skippedForChoice && (await deps.plannerOn(admin))) {
-    const preparing = await planCoveredFunds({ deps, admin, userId: args.userId, periodChoice, asOfDate, instrumentIds: requested });
+    const preparing = await planCoveredFunds({ deps, admin, userId: args.userId, periodChoice, asOfDate, instrumentIds: requested, giveUpIds: (gate.unavailable ?? []).map((f) => f.instrumentId) });
     if (preparing) return preparing;
   }
 
@@ -213,10 +223,10 @@ export async function generateFundAnalyticsReport(args: {
   // cap in the end (some holdings are not personal funds). Gate the funds the report really covers now, and only then build.
   if (gate.skippedForChoice) {
     const covered = loaded.input.schemes.map((h) => h.instrumentId);
-    const scoped = await deps.gate({ admin, userId: args.userId, today: asOfDate, onlyInstrumentIds: covered });
+    const scoped = await deps.gate({ admin, userId: args.userId, today: asOfDate, period: periodChoice, onlyInstrumentIds: covered });
     if (scoped.hold) return { status: 'preparing', message: scoped.headline ?? 'Price history is being prepared.', waiting: waitingBody(scoped) };
     if (await deps.plannerOn(admin)) {
-      const preparing = await planCoveredFunds({ deps, admin, userId: args.userId, periodChoice, asOfDate, instrumentIds: covered });
+      const preparing = await planCoveredFunds({ deps, admin, userId: args.userId, periodChoice, asOfDate, instrumentIds: covered, giveUpIds: (scoped.unavailable ?? []).map((f) => f.instrumentId) });
       if (preparing) return preparing;
     }
     loaded = await deps.load({ userId: args.userId, sessionClient: args.sessionClient, adminClient: admin, asOfDate, displayCurrency: 'INR', periodChoice, gate: scoped, selection: { max: FUND_ANALYTICS_MAX_FUNDS, chosen: covered } });
@@ -229,9 +239,14 @@ export async function generateFundAnalyticsReport(args: {
   const cached = await readCachedBundles(admin, keyed.map((k) => k.key));
   // ---- time budget: never start engine work the platform would kill --------------------------------------------------
   const uncachedKeyed = keyed.filter((k) => !cached.has(k.key));
-  const affordable = Math.max(0, Math.floor((GENERATION_BUDGET_MS - (deps.nowMs() - startedMs)) / ENGINE_MS_PER_UNCACHED_FUND));
+  const elapsedMs = deps.nowMs() - startedMs;
+  const affordable = Math.max(0, Math.floor((GENERATION_BUDGET_MS - elapsedMs) / ENGINE_MS_PER_UNCACHED_FUND));
   if (uncachedKeyed.length > affordable) {
-    const slice = uncachedKeyed.slice(0, affordable);
+    // This call will NOT issue the report, so no 2 MB persist follows, only a small cache write: engine work may run until the deadline minus that write.
+    // PROGRESS GUARANTEE: on a slow database the reads before the engine can use most of the budget (measured on DEV from a development machine: 17 to 19 s).
+    // Without this a call would start nothing and the report would never converge; with it every call prepares at least one fund whenever one fits at all.
+    const stepRoom = Math.max(0, Math.floor((REQUEST_DEADLINE_MS - CACHE_WRITE_RESERVE_MS - elapsedMs) / ENGINE_MS_PER_UNCACHED_FUND));
+    const slice = uncachedKeyed.slice(0, Math.max(affordable, stepRoom));
     if (slice.length > 0) {
       // the engine's per-fund results do not depend on the other funds, so a report of just this slice yields exactly the entries a full report would
       const partial = buildFundAnalyticsReport({ ...base, selection: undefined, calculatedAt: deps.nowIso(), schemes: slice.map(({ h }) => ({ ...h, cachedScheme: null })) });
@@ -268,14 +283,20 @@ export async function generateFundAnalyticsReport(args: {
 }
 
 /** Step 3b: when the planner switch is ON, plan the history the period needs for the funds this report covers; 'preparing' when a fetch was started. */
-async function planCoveredFunds(a: { deps: FundAnalyticsDeps; admin: SupabaseClient; userId: string; periodChoice: ReportPeriodChoice; asOfDate: string; instrumentIds: readonly string[] | null }): Promise<GenerateResult | null> {
+async function planCoveredFunds(a: { deps: FundAnalyticsDeps; admin: SupabaseClient; userId: string; periodChoice: ReportPeriodChoice; asOfDate: string; instrumentIds: readonly string[] | null; giveUpIds?: readonly string[] }): Promise<GenerateResult | null> {
   let plan: Nav2WindowPlan | null = null;
   try {
     plan = await a.deps.planPeriod({ admin: a.admin, userId: a.userId, period: a.periodChoice, today: a.asOfDate, onlyInstrumentIds: a.instrumentIds });
   } catch {
     plan = null; // a planning problem never blocks the report: it proceeds and says honestly what history it has
   }
-  if (plan && plan.fetch.toFetch.length > 0 && (await a.deps.fetchingEnabled(a.admin)) && a.deps.kickPeriod(a.userId, a.periodChoice, a.instrumentIds)) {
+  // LIVELOCK GUARD (found on DEV with a source that kept timing out): a fund the price-history gate has already given up on (retry window over, attempts used,
+  // identifier unresolvable, known coverage gap) is not waited for here either. The report is issued and marks that fund's figures not available, exactly as the
+  // gate says. Without this the planner kept asking for the same failing fetch and the person's report never came.
+  const giveUp = new Set(a.giveUpIds ?? []);
+  if (plan && giveUp.size > 0) plan = { ...plan, fetch: { ...plan.fetch, toFetch: plan.fetch.toFetch.filter((f) => !giveUp.has(f.instrumentId)), deferred: plan.fetch.deferred.filter((id) => !giveUp.has(id)) } };
+  const kickIds = giveUp.size > 0 && plan ? (a.instrumentIds ?? plan.windows.map((w) => w.instrumentId)).filter((id) => !giveUp.has(id)) : a.instrumentIds;
+  if (plan && plan.fetch.toFetch.length > 0 && (await a.deps.fetchingEnabled(a.admin)) && a.deps.kickPeriod(a.userId, a.periodChoice, kickIds)) {
     const ids = plan.fetch.toFetch.map((f) => f.instrumentId);
     const { data: named } = await a.admin.from('ii_instruments').select('id, instrument_name').in('id', ids);
     const names = new Map(((named ?? []) as Array<{ id: string; instrument_name: string }>).map((r) => [r.id, r.instrument_name]));

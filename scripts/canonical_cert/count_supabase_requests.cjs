@@ -29,6 +29,10 @@ if (typeof original === 'function' && !globalThis.__sbCountInstalled) {
     const t = Date.now();
     try { return await original.call(this, input, init); } finally {
       state.inFlight -= 1; state.waitMs += Date.now() - t;
+      // SB_TRACE=1: one line per request (start, end, method, the path WITHOUT its query string) so the sequential depth of one app request can be read off. No data, no headers.
+      if (process.env.SB_TRACE === '1') {
+        try { const u = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url); fs.appendFileSync(path.resolve(process.cwd(), '.canonical-cert', `sb-trace-${process.pid}.log`), `${t},${Date.now()},${(init && init.method) || 'GET'},${u.pathname}\n`); } catch { /* best effort */ }
+      }
       if (!timer) timer = setTimeout(flush, 50);
     }
   };

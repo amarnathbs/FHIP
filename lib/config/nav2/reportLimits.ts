@@ -17,6 +17,8 @@ export const FUND_ANALYTICS_MAX_FUNDS = 20;
 export const REQUEST_DEADLINE_MS = 22_000;
 /** Reserved for persisting the report (up to about 2 MB of JSON, the dependency rows) and building the response. */
 export const PERSIST_AND_RESPONSE_RESERVE_MS = 4_000;
+/** Reserved for the small cache write that ends a call which prepares funds but does not issue the report. */
+export const CACHE_WRITE_RESERVE_MS = 2_000;
 /** The least time the persist step is given: when the engine ends with less than this left, the report is issued by the next call instead. */
 export const MIN_PERSIST_MS = 1_500;
 /** The time engine work may END by (from route entry): no engine work is started that is estimated to finish after this. */

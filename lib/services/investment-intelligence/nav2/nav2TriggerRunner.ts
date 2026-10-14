@@ -26,7 +26,8 @@ const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 export interface TriggerRunnerDeps {
   isPlannerOn: () => Promise<boolean>;
-  legacy: (userId: string) => Promise<unknown>;
+  /** The existing user-scoped fetch. `onlyInstrumentIds` (B2) restricts it to the funds a report covers; absent = every fund held (the previous behaviour). */
+  legacy: (userId: string, onlyInstrumentIds?: readonly string[]) => Promise<unknown>;
   planned: (userId: string, trigger: Nav2Trigger, period: ReportPeriodChoice, onlyInstrumentIds?: readonly string[] | null) => Promise<Nav2TriggerOutcome>;
 }
 
@@ -38,7 +39,7 @@ const liveDeps: TriggerRunnerDeps = {
       return false;
     }
   },
-  legacy: (userId) => runLiveUserNavHistoryBatch(userId),
+  legacy: (userId, onlyInstrumentIds) => (onlyInstrumentIds && onlyInstrumentIds.length > 0 ? runLiveUserNavHistoryBatch(userId, { onlyInstrumentIds }) : runLiveUserNavHistoryBatch(userId)),
   planned: async (userId, trigger, period, onlyInstrumentIds) => {
     const runtime = createLiveUserNavHistoryRuntime();
     const today = todayIso();
@@ -61,12 +62,12 @@ const liveDeps: TriggerRunnerDeps = {
  */
 export async function runUserNavHistoryForKick(userId: string, deps: Partial<TriggerRunnerDeps> = {}, trigger: Nav2Trigger = { kind: 'statement_accepted' }, period: ReportPeriodChoice = 'all_history', onlyInstrumentIds: readonly string[] | null = null): Promise<unknown> {
   const d = { ...liveDeps, ...deps };
-  if (!(await d.isPlannerOn())) return d.legacy(userId);
+  if (!(await d.isPlannerOn())) return onlyInstrumentIds && onlyInstrumentIds.length > 0 ? d.legacy(userId, onlyInstrumentIds) : d.legacy(userId);
   try {
     return await d.planned(userId, trigger, period, onlyInstrumentIds);
   } catch (e) {
     console.error('[nav2] planned fetch failed; using the existing fetch', e instanceof Error ? e.message : e);
-    return d.legacy(userId);
+    return onlyInstrumentIds && onlyInstrumentIds.length > 0 ? d.legacy(userId, onlyInstrumentIds) : d.legacy(userId);
   }
 }
 

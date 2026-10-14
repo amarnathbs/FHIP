@@ -57,6 +57,7 @@ import {
   type UserNavHistoryBatchResult,
   type RequiredFromOverrides,
 } from '../pc6/userNavHistory';
+import { REPORT_NAV_MAX_FAILED_ATTEMPTS } from '../pc6/reportNavHistoryGate';
 import { MAX_FETCH_WINDOW_DAYS, chunkDateWindow, orderHydrationWork, type HydrationAttemptRecord } from '../pc6/selectiveHistoricalHydrationJob';
 
 type Db = Pick<SupabaseClient, 'from'>;
@@ -102,6 +103,14 @@ export function planFetches(input: PlanFetchesInput): FetchPlan {
     const gap = planSchemeGap({ requiredFrom: w.requiredFrom }, coverage, input.today);
     if (gap.state === 'complete') {
       alreadyCovered.push(w.instrumentId);
+      continue;
+    }
+    // LIVELOCK GUARD (found on DEV, source timing out): a fund whose fetch has failed REPORT_NAV_MAX_FAILED_ATTEMPTS times in a row is left alone, the same
+    // rule the price-history gate applies ("attempts exhausted"). Without it the plan asked for the same failing fetch after every cooldown and a report that
+    // names these funds could never be issued. The report says honestly that the fund's longer history is not available.
+    const tried = input.attempts.get(w.instrumentId) ?? null;
+    if (tried && (tried.lastOutcome === 'fetch_failed' || tried.lastOutcome === 'unresolvable_identifier') && tried.consecutiveFailures >= REPORT_NAV_MAX_FAILED_ATTEMPTS) {
+      inCooldown.push(w.instrumentId);
       continue;
     }
     if (inFailureCooldown(input.attempts.get(w.instrumentId) ?? null, input.nowIso)) {

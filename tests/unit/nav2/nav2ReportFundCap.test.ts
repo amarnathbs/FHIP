@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ENGINE_MS_PER_UNCACHED_FUND, FUND_ANALYTICS_MAX_FUNDS, GENERATION_BUDGET_MS } from '@/lib/config/nav2/reportLimits';
+import { CACHE_WRITE_RESERVE_MS, ENGINE_MS_PER_UNCACHED_FUND, FUND_ANALYTICS_MAX_FUNDS, GENERATION_BUDGET_MS, REQUEST_DEADLINE_MS } from '@/lib/config/nav2/reportLimits';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
 import { reportAnalysisSpec } from '@/lib/engines/nav2/analysisSpec';
 import { buildFundAnalyticsReport, MAX_SCHEMES_FOR_PAIRS, manifestChecksum, schemeBundleCacheKey, type FundAnalyticsInput, type HeldSchemeInput, type ReportSelection } from '@/lib/engines/nav2/fundAnalyticsReport';
@@ -183,8 +183,8 @@ describe('NC-F4: the time budget', () => {
   it('work that would not fit is not started: the funds that fit are cached, the answer is "in steps", no report is stored; the next generation finishes from the cache', async () => {
     const schemes = Array.from({ length: 4 }, (_, i) => scheme(i));
     const load = vi.fn(async () => ({ input: baseInput(schemes), warnings: [], riskFreeUnavailableReason: null }));
-    // the load used 17.5 s of the 20 s budget: room for 2 funds (1 s each), 4 are not cached
-    const clock = vi.fn().mockReturnValueOnce(0).mockReturnValue(GENERATION_BUDGET_MS - 2 * ENGINE_MS_PER_UNCACHED_FUND - 500);
+    // the reads used so much of the request that there is room for exactly 2 funds before the deadline minus the cache write; 4 are not cached
+    const clock = vi.fn().mockReturnValueOnce(0).mockReturnValue(REQUEST_DEADLINE_MS - CACHE_WRITE_RESERVE_MS - 2 * ENGINE_MS_PER_UNCACHED_FUND - 100);
     const { db, call } = setup(load, { nowMs: clock });
     const first = await call();
     expect(first.status).toBe('in_steps');
@@ -207,7 +207,7 @@ describe('NC-F4: the time budget', () => {
   it('when no time is left at all nothing is computed, and the message still says to try again', async () => {
     const schemes = Array.from({ length: 2 }, (_, i) => scheme(i));
     const load = vi.fn(async () => ({ input: baseInput(schemes), warnings: [], riskFreeUnavailableReason: null }));
-    const clock = vi.fn().mockReturnValueOnce(0).mockReturnValue(GENERATION_BUDGET_MS + 1000);
+    const clock = vi.fn().mockReturnValueOnce(0).mockReturnValue(REQUEST_DEADLINE_MS);
     const { db, call } = setup(load, { nowMs: clock });
     const r = await call();
     expect(r).toMatchObject({ status: 'in_steps', ready: 0, total: 2 });

@@ -211,17 +211,28 @@ export async function loadAnalyticsDataset(
     quality_status: string | null;
     currency_code: string | null;
   }
-  const navRows = await fetchAllRows<NavRow>(() =>
-    supabase
-      .from('ii_prices_nav')
-      .select('instrument_id, price_date, price, data_version, quality_status, currency_code')
-      .in('instrument_id', instrumentIds)
-      // Secondary order on id: price_date alone is not unique once several
-      // instruments are queried together, so a tie needs a deterministic
-      // sort to page reliably.
-      .order('price_date', { ascending: true })
-      .order('id', { ascending: true })
-  );
+  // NAV2 RELEASE CANDIDATE (B3): one paged read per instrument, ten instruments at a time, instead of ONE read that pages through every instrument's rows
+  // one page after another (a person holding 22 funds with 13 years of prices waited for about 75 pages in sequence). The rows are then put back in the
+  // order the single read returned them (price_date, then id), so every consumer below sees exactly what it saw before, including which row is "last".
+  const navRowsById: Array<NavRow & { id: string }> = [];
+  for (let g = 0; g < instrumentIds.length; g += 10) {
+    const parts = await Promise.all(
+      instrumentIds.slice(g, g + 10).map((instrumentId) =>
+        fetchAllRows<NavRow & { id: string }>(() =>
+          supabase
+            .from('ii_prices_nav')
+            .select('id, instrument_id, price_date, price, data_version, quality_status, currency_code')
+            .eq('instrument_id', instrumentId)
+            // Secondary order on id: price_date alone is not unique, so a tie
+            // needs a deterministic sort to page reliably.
+            .order('price_date', { ascending: true })
+            .order('id', { ascending: true })
+        )
+      )
+    );
+    for (const p of parts) navRowsById.push(...p);
+  }
+  const navRows: NavRow[] = navRowsById.sort((a, b) => (a.price_date < b.price_date ? -1 : a.price_date > b.price_date ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const navByInstrument = new Map<string, SeriesPoint[]>();
   // Document2 Finding #5: every NAV row (any quality, any currency) as a

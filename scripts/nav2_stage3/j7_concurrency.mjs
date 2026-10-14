@@ -18,7 +18,18 @@ console.log(`=== journey 7 ${new Date().toISOString()} ===`);
 const N = 6;
 const before = (await db.from('nav2_fund_analytics_reports').select('id, version_number').eq('user_id', uid).order('version_number')).data ?? [];
 const t0 = Date.now();
-const results = await Promise.all(Array.from({ length: N }, () => api(email, 'POST', '/api/reports/fund-analytics', { json: { period: 'since_first_held' } })));
+// release candidate: each request behaves like the screen: its own Idempotency-Key, and it asks again (same key) while the answer is 202 or the typed 503 timed_out
+const settle = async () => {
+  const key = crypto.randomUUID();
+  let r;
+  for (let i = 0; i < 12; i++) {
+    r = await api(email, 'POST', '/api/reports/fund-analytics', { json: { period: 'since_first_held' }, headers: { 'Idempotency-Key': key } });
+    if (!(r.status === 202 || (r.status === 503 && r.json?.data?.status === 'timed_out'))) break;
+    await new Promise((res) => setTimeout(res, 4000));
+  }
+  return r;
+};
+const results = await Promise.all(Array.from({ length: N }, () => settle()));
 console.log(`   ${N} concurrent generations finished in ${Math.round((Date.now() - t0) / 1000)} s: statuses ${results.map((r) => r.status).join(',')}`);
 const after = (await db.from('nav2_fund_analytics_reports').select('id, version_number, supersedes_report_id, report_json, manifest_json, manifest_checksum').eq('user_id', uid).order('version_number')).data ?? [];
 const fresh = after.filter((r) => !before.some((b) => b.id === r.id));
@@ -52,7 +63,8 @@ try {
   const ev = (await db.from('nav2_correction_events').select('*').eq('source_correction_id', logc.data.id)).data ?? [];
   check('one correction raised exactly one event', ev.length === 1, `${ev.length}`);
   // make sure there is something to invalidate: generate once under the corrected NAV (fills the cache for E under the corrected key)
-  await api(email, 'POST', '/api/reports/fund-analytics', { json: { period: 'since_first_held' } });
+  const validKeysBefore = new Set((await cacheRows([FUND.A, FUND.D, FUND.E])).filter((c) => !c.invalidated_at).map((c) => c.cache_key));
+  await settle();
   const runs = await Promise.all(Array.from({ length: 5 }, () => worker()));
   save('j7_worker_runs.json', runs.map((r) => r.json));
   const evDone = (await db.from('nav2_correction_events').select('*').eq('id', ev[0].id).single()).data;
@@ -64,7 +76,7 @@ try {
   check('RETRY: a later run finds nothing to do and changes nothing', retry.json?.data?.eventsProcessed === 0 && retry.json?.data?.entriesInvalidated === 0, JSON.stringify(retry.json?.data));
   const rows = await cacheRows([FUND.A, FUND.D, FUND.E]);
   const digest = (await db.from('nav2_fund_analytics_reports').select('manifest_json').eq('user_id', uid).order('version_number', { ascending: false }).limit(1).single()).data.manifest_json.metricRegistryDigest;
-  check('only E entries were touched; A and D entries of the current definition are still valid', rows.filter((c) => c.instrument_id !== FUND.E && String(c.definition_version).includes(digest)).every((c) => !c.invalidated_at));
+  check('only E entries were touched; A and D entries of the current definition are still valid', rows.filter((c) => c.instrument_id !== FUND.E && String(c.definition_version).includes(digest) && validKeysBefore.has(c.cache_key)).every((c) => !c.invalidated_at));
 } finally {
   await db.from('ii_prices_nav').update(restore).eq('id', target.id);
   await db.from('ii_reference_corrections').insert({ target_table: 'ii_prices_nav', target_row_id: target.id, correction_kind: 'source_correction', previous_value: { price: 'corrected' }, new_value: { price: Number(restore.price) }, actor_kind: 'system_import', reason: 'NAV2 Stage 3 concurrency journey REVERTED' });

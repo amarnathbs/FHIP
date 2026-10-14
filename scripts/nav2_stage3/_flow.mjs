@@ -1,4 +1,5 @@
 // Shared journey steps (DEV, real routes on the app server): upload + accept a synthetic statement, generate a report, read it back.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { api, db, OUT, USERS, userIdOf } from './_lib.mjs';
@@ -20,14 +21,17 @@ export async function uploadAndAccept(email, statementId, { documentType = 'cas_
   return { ok: proc.status === 200, step: 'process', status: proc.status, docId, memberId, deduplicated: up.json?.data?.deduplicated === true };
 }
 
-export async function generate(email, period = 'since_first_held', maxTries = 6) {
+export async function generate(email, period = 'since_first_held', maxTries = 10) {
+  // RELEASE CANDIDATE: behaves like the screen. ONE Idempotency-Key per intended report, kept across the "ask again" answers (202 preparing / in steps, and the
+  // typed 503 timed_out), so the server issues ONE report however many times the request is repeated (once migration 0281 is on the database).
+  const key = crypto.randomUUID();
   let g;
   for (let i = 0; i < maxTries; i++) {
-    g = await api(email, 'POST', '/api/reports/fund-analytics', { json: { period } });
-    if (g.status !== 202) break;
-    await new Promise((r) => setTimeout(r, 8000));
+    g = await api(email, 'POST', '/api/reports/fund-analytics', { json: { period }, headers: { 'Idempotency-Key': key } });
+    if (g.status !== 202 && !(g.status === 503 && g.json?.data?.status === 'timed_out')) break;
+    await new Promise((r) => setTimeout(r, g.status === 503 ? 5000 : 8000));
   }
-  return { status: g.status, id: g.json?.data?.report?.id ?? null, summary: g.json?.data?.report ?? null, body: g.text.slice(0, 300) };
+  return { status: g.status, id: g.json?.data?.report?.id ?? null, summary: g.json?.data?.report ?? null, body: g.text.slice(0, 300), key };
 }
 
 export async function readReport(email, id) {

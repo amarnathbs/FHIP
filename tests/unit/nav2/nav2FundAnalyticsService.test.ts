@@ -262,6 +262,25 @@ describe('the NAV2 planner step (only with nav2_trigger_planner ON) (NC-S7)', ()
     const b = setup({ plannerOn: async () => true, planPeriod: async () => { throw new Error('planner exploded'); }, kickPeriod: () => true });
     expect((await b.call()).status).toBe('ready');
   });
+
+  it('NC-S10 (livelock found on DEV): a fund the gate has given up on is not waited for by the planner either; the report is issued, and the control still holds', async () => {
+    const kickPeriod = vi.fn(() => true);
+    const given = { ...openGate, unavailable: [{ instrumentId: ID_A, schemeName: 'Alpha Fund', state: 'unavailable', reason: 'retry_window_elapsed' }] } as never;
+    const a = setup({ gate: async () => given, plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod, fetchingEnabled: async () => true });
+    expect((await a.call()).status).toBe('ready');
+    expect(kickPeriod).not.toHaveBeenCalled();
+    // control: the same plan for a fund the gate has NOT given up on still holds and kicks
+    const b = setup({ plannerOn: async () => true, planPeriod: async () => plan([ID_A]), kickPeriod, fetchingEnabled: async () => true });
+    b.db.tables.ii_instruments = [{ id: ID_A, instrument_name: 'Alpha Fund' }];
+    expect((await b.call()).status).toBe('preparing');
+    expect(kickPeriod).toHaveBeenCalledTimes(1);
+    // a fund the gate gave up on does not stop the OTHER fund's wait, and the kick no longer names the given-up fund
+    const kick2 = vi.fn(() => true);
+    const c = setup({ gate: async () => given, plannerOn: async () => true, planPeriod: async () => plan([ID_A, ID_B]), kickPeriod: kick2, fetchingEnabled: async () => true });
+    c.db.tables.ii_instruments = [{ id: ID_B, instrument_name: 'Beta Fund' }];
+    expect((await c.call()).status).toBe('preparing');
+    expect(kick2).toHaveBeenCalledWith(USER, expect.anything(), [ID_B]);
+  });
 });
 
 describe('simultaneous generations for one user (NC-S9, Stage 3 finding: 4 of 6 concurrent requests answered 500)', () => {

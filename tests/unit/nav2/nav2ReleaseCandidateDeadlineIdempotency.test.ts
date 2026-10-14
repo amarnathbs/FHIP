@@ -21,7 +21,7 @@
 //          Retry-After; a failure is a typed retryable 500; two concurrent identical requests through the route issue one report.
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ENGINE_MS_PER_UNCACHED_FUND, GENERATION_BUDGET_MS, MIN_PERSIST_MS, PERSIST_AND_RESPONSE_RESERVE_MS, REQUEST_DEADLINE_MS } from '@/lib/config/nav2/reportLimits';
+import { CACHE_WRITE_RESERVE_MS, ENGINE_MS_PER_UNCACHED_FUND, GENERATION_BUDGET_MS, MIN_PERSIST_MS, PERSIST_AND_RESPONSE_RESERVE_MS, REQUEST_DEADLINE_MS } from '@/lib/config/nav2/reportLimits';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
 import { reportAnalysisSpec } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsInput, HeldSchemeInput } from '@/lib/engines/nav2/fundAnalyticsReport';
@@ -200,19 +200,34 @@ describe('NC-T1 / NC-T2: one key, one issued report', () => {
 
 describe('NC-T3 / NC-T4 / NC-T5: one clock, nothing partial, resumable and monotonic', () => {
   it('time already spent before the service starts shrinks what the engine may start', async () => {
-    // 6 cold funds; sign-in and the reads have already used all but room for 4 funds of the engine budget
+    // 12 cold funds. A call that will NOT issue the report may use the engine until the deadline minus the small cache write; the less is left, the fewer start.
+    const room = (elapsed: number) => Math.floor((REQUEST_DEADLINE_MS - CACHE_WRITE_RESERVE_MS - elapsed) / ENGINE_MS_PER_UNCACHED_FUND);
     const elapsed = GENERATION_BUDGET_MS - 4 * ENGINE_MS_PER_UNCACHED_FUND - 1;
-    const { call, rows } = setup(6, { nowMs: () => elapsed });
+    const { call, rows } = setup(12, { nowMs: () => elapsed });
     const r = await call({ requestStartedMs: 0 });
-    expect(r).toMatchObject({ status: 'in_steps', ready: 4, total: 6 });
+    expect(r).toMatchObject({ status: 'in_steps', ready: room(elapsed), total: 12 });
     expect(rows()).toHaveLength(0);
     // the same request with an earlier start (more time already gone) may start fewer
-    const later = setup(6, { nowMs: () => elapsed });
-    expect(await later.call({ requestStartedMs: -2 * ENGINE_MS_PER_UNCACHED_FUND })).toMatchObject({ status: 'in_steps', ready: 2, total: 6 });
+    const later = setup(12, { nowMs: () => elapsed });
+    const gone = 2 * ENGINE_MS_PER_UNCACHED_FUND;
+    expect(await later.call({ requestStartedMs: -gone })).toMatchObject({ status: 'in_steps', ready: room(elapsed + gone), total: 12 });
+    expect(room(elapsed + gone)).toBeLessThan(room(elapsed));
   });
 
-  it('with the whole budget gone nothing is started and nothing is stored, but the answer is still the typed in-steps state', async () => {
-    const { call, rows, db } = setup(5, { nowMs: () => GENERATION_BUDGET_MS + 1 });
+  it('PROGRESS GUARANTEE: when the reads before the engine used nearly the whole budget, a call still prepares at least one fund (it never livelocks at 0 ready)', async () => {
+    const elapsed = GENERATION_BUDGET_MS + 500; // already past the issue budget
+    const { call, db } = setup(5, { nowMs: () => elapsed });
+    const r = await call({ requestStartedMs: 0 });
+    expect(r.status).toBe('in_steps');
+    if (r.status === 'in_steps') expect(r.ready).toBeGreaterThanOrEqual(1);
+    expect(db.tables.nav2_result_cache.length).toBeGreaterThanOrEqual(1);
+    // and with truly no room left (past the deadline minus the write) nothing starts
+    const none = setup(5, { nowMs: () => REQUEST_DEADLINE_MS });
+    expect(await none.call({ requestStartedMs: 0 })).toMatchObject({ status: 'in_steps', ready: 0, total: 5 });
+  });
+
+  it('with the whole deadline gone nothing is started and nothing is stored, but the answer is still the typed in-steps state', async () => {
+    const { call, rows, db } = setup(5, { nowMs: () => REQUEST_DEADLINE_MS });
     const r = await call({ requestStartedMs: 0 });
     expect(r).toMatchObject({ status: 'in_steps', ready: 0, total: 5 });
     expect(rows()).toHaveLength(0);
@@ -246,7 +261,7 @@ describe('NC-T3 / NC-T4 / NC-T5: one clock, nothing partial, resumable and monot
       progress.push(last.ready);
       last = await call({ key: KEY, requestStartedMs: 0 });
     }
-    expect(progress).toEqual([4, 8]); // 4 funds fit per call at this clock; the third call has 4 left and issues the report
+    expect(progress).toEqual([7, 12]); // 7 funds start in the first call (the extended room of a call that cannot issue), the second finishes the other 5, the third issues
     expect(progress.every((v, i) => i === 0 || v > progress[i - 1])).toBe(true);
     expect(last.status).toBe('ready');
     expect(rows()).toHaveLength(1);

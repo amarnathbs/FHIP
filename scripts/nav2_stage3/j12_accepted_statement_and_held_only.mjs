@@ -130,12 +130,19 @@ try {
   save('j12_counts_after_accept.json', after1);
 
   // ---- 6. analytics + report -----------------------------------------------------------------------------------------------------
-  let gen;
-  for (let i = 0; i < 12; i++) {
-    gen = await api(holderEmail, 'POST', '/api/reports/fund-analytics', { json: { period: 'since_first_held' } });
-    if (gen.status !== 202) break;
-    await new Promise((r) => setTimeout(r, 5000));
-  }
+  // release candidate: like the screen, ONE Idempotency-Key per intended report, kept while the answer is "ask again" (202 or the typed 503 timed_out)
+  const askAgain = (r) => r.status === 202 || (r.status === 503 && r.json?.data?.status === 'timed_out');
+  const generateOnce = async () => {
+    const key = crypto.randomUUID();
+    let r;
+    for (let i = 0; i < 12; i++) {
+      r = await api(holderEmail, 'POST', '/api/reports/fund-analytics', { json: { period: 'since_first_held' }, headers: { 'Idempotency-Key': key } });
+      if (!askAgain(r)) break;
+      await new Promise((res) => setTimeout(res, 5000));
+    }
+    return r;
+  };
+  const gen = await generateOnce();
   const reportId = gen.json?.data?.report?.id;
   check('the report is generated (201 ready) from the accepted statement', gen.status === 201 && !!reportId, `status ${gen.status} ${gen.text.slice(0, 120)}`);
   const got = await api(holderEmail, 'GET', `/api/reports/fund-analytics/${reportId}`);
@@ -210,7 +217,7 @@ try {
   const afterPlan = await counts();
   check('JOURNEY 2: planner invocations changed no table (global and per-instrument counts identical)', JSON.stringify(afterPlan.global) === JSON.stringify(afterReproc.global) && JSON.stringify(afterPlan.perInstrument) === JSON.stringify(afterReproc.perInstrument));
 
-  const gen2 = await api(holderEmail, 'POST', '/api/reports/fund-analytics', { json: { period: 'since_first_held' } });
+  const gen2 = await generateOnce();
   const afterGen = await counts();
   check('JOURNEY 2: generating again creates a NEW report version (immutable history) but no duplicate account, investment or hold', gen2.status === 201 && afterGen.user.nav2_reports === afterPlan.user.nav2_reports + 1 && same(afterPlan, afterGen, ['ii_accounts', 'ii_transactions', 'ii_holding_snapshots', 'investments']) && JSON.stringify(afterGen.perInstrument) === JSON.stringify(afterPlan.perInstrument), `reports ${afterPlan.user.nav2_reports} -> ${afterGen.user.nav2_reports}`);
 
