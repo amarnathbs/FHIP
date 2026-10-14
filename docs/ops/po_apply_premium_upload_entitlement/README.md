@@ -37,3 +37,17 @@ the app's own delete; if you choose to clean up anything by SQL instead, take a 
 | `synthetic_probe.js` | Browser-console probe: 28 requests that cannot create data; run once as Free and once as Premium |
 | `EVIDENCE_TEMPLATE.md` | The form to fill in and attach |
 | `rollback.md` | Code rollback; no data impact |
+
+## Merge note: the AI-access branch (`feat/ai-premium-wide-access-20261014`)
+
+A trial merge of this branch with that branch at `541a56a` (done in a throwaway worktree, since removed) has **no textual conflicts**, and a type-check of the merged tree is
+clean apart from one error that also exists on `af2d330`. One test of theirs needs one line when the two meet: `tests/unit/aiePremiumAccessRoutes.test.ts` exercises the four AIE intake
+routes with a session mock that has no entitlement row, and this branch's upload guard runs first (authenticate, then Premium upload check, then their AI gate), so under that mock
+the guard answers 503. Add this directly after the `vitest` import in that file, and both suites pass together (241 tests in that file plus `premiumUploadRoutes`):
+
+```ts
+vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) =>
+  (await import('../support/premiumImportEntitlementMock')).withPremiumImportEntitlement(await importOriginal()));
+```
+
+Either merge order works. The two checks are different questions: this branch decides whether a user may START a new import at all; theirs decides whether a chargeable AI call may happen.
