@@ -22,7 +22,7 @@ export function aiFallbackRefusalFromReason(reason: string | null | undefined): 
 
 export const AI_FALLBACK_REFUSAL_NOTE: Record<AiFallbackRefusal, string> = {
   premium_required:
-    'FHIP could not read this file automatically. AI-assisted reading is a Premium feature: you can upgrade to Premium to have it read for you, or enter this information manually.',
+    'FHIP could not read this file automatically. AI-assisted reading is a Premium feature: upgrade to Premium and upload the file again to have it read for you, or enter this information manually.',
   entitlement_unavailable:
     'FHIP could not read this file automatically, and we could not confirm your plan just now, so AI-assisted reading was not attempted. Please try again in a moment, or enter this information manually.',
 };

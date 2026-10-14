@@ -74,8 +74,10 @@ vi.mock('@/lib/aie/adapters/payslip', () => ({
 }));
 
 import { attemptAiPayslipFallback } from '@/lib/financial-data-hub/services/payslipProcessingService';
+import { requestPayslipAiExtraction } from '@/lib/aie/adapters/payslip';
 
 beforeEach(() => {
+  vi.mocked(requestPayslipAiExtraction).mockClear();
   auditEvents.length = 0;
   flagState.adapterEnabled = false;
   flagState.globalEnabled = false;
@@ -106,6 +108,8 @@ describe('attemptAiPayslipFallback', () => {
     premiumAi.setTier('user-1', 'free');
     const result = await attemptAiPayslipFallback('user-1', 'doc-1', 'raw text', 'AU');
     expect(result).toEqual({ ok: false, reason: 'premium_required' });
+    expect(requestPayslipAiExtraction).not.toHaveBeenCalled(); // no provider call, so nothing to charge
+    expect(auditEvents.map((e) => e.eventType)).not.toContain('payslip_ai_fallback_attempted');
   });
 
   it('refuses an expired Premium entitlement, and an unreadable one (fail closed)', async () => {
@@ -115,6 +119,17 @@ describe('attemptAiPayslipFallback', () => {
     expect(await attemptAiPayslipFallback('user-1', 'doc-1', 'raw text', 'AU')).toEqual({ ok: false, reason: 'premium_required' });
     premiumAi.setTier('user-1', 'unavailable');
     expect(await attemptAiPayslipFallback('user-1', 'doc-1', 'raw text', 'AU')).toEqual({ ok: false, reason: 'entitlement_unavailable' });
+    expect(requestPayslipAiExtraction).not.toHaveBeenCalled();
+  });
+
+  it('PREMIUM, never on any pilot list: reaches the provider exactly once and gets a draft (negative control for the refusals above)', async () => {
+    flagState.adapterEnabled = true;
+    flagState.globalEnabled = true;
+    premiumAi.setTier('brand-new-premium-user', 'premium');
+    const result = await attemptAiPayslipFallback('brand-new-premium-user', 'doc-9', 'raw text', 'AU');
+    expect(result.ok).toBe(true);
+    expect(requestPayslipAiExtraction).toHaveBeenCalledTimes(1);
+    expect(premiumAi.asked).toEqual(['brand-new-premium-user']);
   });
 
   it('checks the kill switches BEFORE the entitlement (a disabled adapter never reads the plan)', async () => {

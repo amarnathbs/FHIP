@@ -70,6 +70,7 @@ import {
 } from '@/lib/aie/adapters/bankStatement';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraft';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
@@ -1061,7 +1062,12 @@ export type AiBankStatementFallbackOutcome = { ok: true; draft: BankStatementAiF
  * Exported so it is independently unit-testable with a faked provider, and so
  * the live-DEV proof can exercise it directly.
  */
-export async function attemptAiBankStatementFallback(userId: string, documentId: string, extractedText: string): Promise<AiBankStatementFallbackOutcome> {
+export function attemptAiBankStatementFallback(userId: string, documentId: string, extractedText: string): Promise<AiBankStatementFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`bank_statement:${userId}:${documentId}`, () => attemptAiBankStatementFallbackOnce(userId, documentId, extractedText));
+}
+
+async function attemptAiBankStatementFallbackOnce(userId: string, documentId: string, extractedText: string): Promise<AiBankStatementFallbackOutcome> {
   const gate = await evaluateAiFallbackGate({
     userId,
     adapterEnabled: isAieBankStatementAiFallbackEnabled(),

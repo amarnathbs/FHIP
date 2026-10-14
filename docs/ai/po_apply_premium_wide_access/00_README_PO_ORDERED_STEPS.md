@@ -19,6 +19,13 @@ pack are not on `main` yet.
 (`AIE_REAL_MALWARE_SCAN_ENABLED=true`). Before, "scan off" was accepted as "not required" for any document. You told me the
 production scanner is live; if it is not, nothing breaks, the AI reading simply refuses with a clear reason.
 
+**A defect found and fixed on the way.** On DEV, five identical `/process` requests sent at the same instant for one document
+made four metered provider calls and left the document in conflicting states. Concurrent identical requests now share one
+reading per server instance (`lib/ai/access/singleFlight.ts`). Two requests that land on two different serverless instances at
+the same instant are still protected only by the atomic ledger and the one-pending-draft index (a duplicate costs a fraction of
+a cent and cannot create two accepted results); a database claim would close that and needs a migration, so it is listed as a
+follow-up rather than added unasked.
+
 ## Ordered steps
 
 ### Step 1: read-only checks on production (5 minutes, writes nothing)

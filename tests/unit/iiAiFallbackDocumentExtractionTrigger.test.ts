@@ -7,6 +7,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { documentAiFallbackTriggerReason } from '@/lib/services/investment-intelligence/aiFallbackDocumentExtraction';
 
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
+
 const { tables } = vi.hoisted(() => ({ tables: { current: {} as Record<string, Record<string, unknown>[]> } }));
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => makeFakeAdmin(tables.current),

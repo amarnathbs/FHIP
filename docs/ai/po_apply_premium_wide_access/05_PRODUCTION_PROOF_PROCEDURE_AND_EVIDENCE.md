@@ -44,7 +44,7 @@ generated with a unique tag, so repeating the run creates new, distinct document
 | 7 | F1 | Enter the same figures by hand | Manual entry works | Screenshot |
 | 8 | E1 (after revoke) | A NEW unreadable document | Refused as in 5. A draft created while Premium (if any) is still reviewable and acceptable | `V01` reason `premium_required` |
 | 9 | A1 (Admin, no Premium) | Same document | Refused as in 5 | `V01` |
-| 10 | F1, then upgrade F1 to Premium | Same document again | Works after the grant, with no sign-out needed (the plan is read on every request) | `V01` |
+| 10 | F1, then upgrade F1 to Premium | Upload the same file again (a refused document is closed; the screen tells the person to upload again) | Works after the grant, with no sign-out needed (the plan is read on every request) | `V01` |
 | 11 | P1 | Liability CSV, retirement CSV, AU investment CSV, payslip, one Investment Intelligence statement | Each ends in its review screen and, once accepted, its canonical result | One row each |
 | 12 | Any | Set `AIE_BANK_STATEMENT_AI_FALLBACK_ENABLED=false`, build, repeat 1 | No AI call, normal rejection, manual entry intact; then set it back | Time, `V01` reason `adapter_disabled` |
 

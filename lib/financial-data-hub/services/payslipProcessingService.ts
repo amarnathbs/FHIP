@@ -42,6 +42,7 @@
 
 import { resolvePremiumAiAccess } from '@/lib/ai/access/premiumAiAccess';
 import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -556,7 +557,17 @@ export type AiPayslipFallbackOutcome = { ok: true; extraction: PayrollExtraction
  * type's own processing service can call the identical shape for its own
  * fields, per this design's "any new document type" requirement.
  */
-export async function attemptAiPayslipFallback(
+export function attemptAiPayslipFallback(
+  userId: string,
+  documentId: string,
+  extractedText: string,
+  country: 'AU' | 'IN',
+): Promise<AiPayslipFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`payslip:${userId}:${documentId}`, () => attemptAiPayslipFallbackOnce(userId, documentId, extractedText, country));
+}
+
+async function attemptAiPayslipFallbackOnce(
   userId: string,
   documentId: string,
   extractedText: string,

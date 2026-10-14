@@ -35,6 +35,7 @@ import { decodeCsvBytes } from '../bank-csv/csv';
 import { roundToMoneyScale } from '../bank-csv/amount';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { AIE_LIABILITY_FACTS_SCHEMA_NAME, AIE_LIABILITY_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/liability/schema';
@@ -779,7 +780,12 @@ export type AiLiabilityFallbackOutcome = { ok: true; draft: LiabilityStatementAi
  * Exported so it is independently unit-testable with a faked provider, and so
  * a live-DEV proof can exercise it directly.
  */
-export async function attemptAiLiabilityFallback(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
+export function attemptAiLiabilityFallback(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`liability_statement:${userId}:${documentId}`, () => attemptAiLiabilityFallbackOnce(userId, documentId, extractedText));
+}
+
+async function attemptAiLiabilityFallbackOnce(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
   const gate = await evaluateAiFallbackGate({
     userId,
     adapterEnabled: isAieLiabilityAiFallbackEnabled(),

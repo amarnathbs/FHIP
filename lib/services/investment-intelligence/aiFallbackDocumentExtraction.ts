@@ -41,6 +41,7 @@ import { randomUUID } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAiFallbackEnabled } from './aiFallbackFeatureFlag';
 import { resolvePremiumAiAccess, type PremiumAiAccessDeps } from '@/lib/ai/access/premiumAiAccess';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { isAiEgressMalwarePreconditionMet } from '@/lib/aie/malware/aiEgressPrecondition';
 import { unitDeltaForTransaction } from './reconciliation';
 import { computeCostValue, type CostBasisTransaction } from './costBasis';
@@ -353,7 +354,12 @@ function hasUsableData(result: AieDocumentExtractionResult): boolean {
  * WRITES NO CANONICAL ROW. It stages an ii_ai_extraction_reviews row and
  * stops; the user accepts or rejects it through the review panel.
  */
-export async function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentContext): Promise<AiFallbackDocumentOutcome> {
+export function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentContext): Promise<AiFallbackDocumentOutcome> {
+  // Concurrent identical requests share ONE lookup + gate + provider call + review write (see singleFlight.ts).
+  return singleFlight(`ii_document:${ctx.userId}:${ctx.sourceDocumentId}`, () => getAiFallbackDocumentExtractionOnce(ctx));
+}
+
+async function getAiFallbackDocumentExtractionOnce(ctx: AiFallbackDocumentContext): Promise<AiFallbackDocumentOutcome> {
   if (!isAiFallbackEnabled()) return { outcome: 'disabled' };
 
   const admin = createAdminClient();

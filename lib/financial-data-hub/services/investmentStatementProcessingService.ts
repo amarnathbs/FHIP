@@ -63,6 +63,7 @@ import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME, AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/auInvestment/schema';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
@@ -632,7 +633,17 @@ export type AiAuInvestmentFallbackOutcome = { ok: true; draft: AuInvestmentState
  * Exported so it is independently unit-testable with a faked provider, and so
  * a live-DEV proof can exercise it directly.
  */
-export async function attemptAiAuInvestmentFallback(
+export function attemptAiAuInvestmentFallback(
+  userId: string,
+  documentId: string,
+  extractedText: string,
+  context: AuInvestmentMappingContext,
+): Promise<AiAuInvestmentFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`investment_statement:${userId}:${documentId}`, () => attemptAiAuInvestmentFallbackOnce(userId, documentId, extractedText, context));
+}
+
+async function attemptAiAuInvestmentFallbackOnce(
   userId: string,
   documentId: string,
   extractedText: string,

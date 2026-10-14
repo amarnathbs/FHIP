@@ -71,6 +71,7 @@ import {
 } from '@/lib/aie/adapters/retirement';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
 import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { reviewableMaskedIdentifier, figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { AIE_RETIREMENT_FACTS_SCHEMA_NAME, AIE_RETIREMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/retirement/schema';
@@ -571,7 +572,17 @@ export type AiRetirementFallbackOutcome = { ok: true; extraction: RetirementAiDr
  *
  * Exported so it is independently unit-testable with a faked provider.
  */
-export async function attemptAiRetirementFallback(
+export function attemptAiRetirementFallback(
+  userId: string,
+  documentId: string,
+  bytes: Uint8Array,
+  context: { jurisdiction: RetirementJurisdiction; currencyCode: string; statementType: RetirementStatementType; accountType: RetirementAccountType },
+): Promise<AiRetirementFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`retirement_statement:${userId}:${documentId}`, () => attemptAiRetirementFallbackOnce(userId, documentId, bytes, context));
+}
+
+async function attemptAiRetirementFallbackOnce(
   userId: string,
   documentId: string,
   bytes: Uint8Array,
