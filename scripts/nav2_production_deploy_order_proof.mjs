@@ -2,7 +2,7 @@
 // Evidence label: PGlite-verified. NOT DEV evidence and NOT production evidence. No network, no database outside this process.
 //
 // What it proves
-//   A. a "production like" database (every migration of this tree EXCEPT the NAV2 ones: 0260-0263 and 0269-0271) behaves in a recorded way on
+//   A. a "production like" database (every migration of this tree EXCEPT the NAV2 ones: 0260-0263, 0269-0271 and 0281-0282) behaves in a recorded way on
 //      the OLD paths (corrections, retention predicate, job control list, admin_users, entitlements, instrument delete);
 //   B. what the NEW code sees on that database BEFORE the NAV2 migrations (the exact errors and empty answers its fail-closed paths rely on);
 //   C. the pack (docs/nav2/po_apply_production/sql): every pre-check returns what the README promises, every migration step (0260 parts a-e,
@@ -29,7 +29,7 @@ const REPO = path.resolve(HERE, '..');
 const MIG = path.join(REPO, 'supabase', 'migrations');
 const PACK = path.join(REPO, 'docs', 'nav2', 'po_apply_production', 'sql');
 const strip = (s) => s.replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, '');
-const NAV2_NUMBERS = new Set(['0260', '0261', '0262', '0263', '0269', '0270', '0271']);
+const NAV2_NUMBERS = new Set(['0260', '0261', '0262', '0263', '0269', '0270', '0271', '0281', '0282']);
 const files = fs.readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort();
 const prodLike = files.filter((f) => !NAV2_NUMBERS.has(f.slice(0, 4)));
 const pack = (rel) => fs.readFileSync(path.join(PACK, rel), 'utf8');
@@ -41,7 +41,7 @@ for (const f of prodLike) {
   await db.exec(strip(fs.readFileSync(path.join(MIG, f), 'utf8')));
   if (f.startsWith('0001')) await db.exec(fs.readFileSync(path.join(REPO, 'supabase', 'seed.sql'), 'utf8'));
 }
-console.log(`production-like ledger replayed: ${prodLike.length} migrations, highest ${prodLike.at(-1)} (NAV2 0260-0263 and 0269-0271 NOT applied)\n`);
+console.log(`production-like ledger replayed: ${prodLike.length} migrations, highest ${prodLike.at(-1)} (NAV2 0260-0263, 0269-0271 and 0281-0282 NOT applied)\n`);
 
 let pass = 0, fail = 0, seq = 0;
 const check = (label, cond, detail = '') => {
@@ -148,6 +148,12 @@ for (const f of ['P3b_retention_function_text.sql', 'P4_size.sql', 'P6a_admin_an
   const e = await err(strip(pack(`prechecks/${f}`)));
   check(`B11 pack ${f} runs without error`, e === null, e?.message);
 }
+const p3c = await runPack('prechecks/P3c_retention_function_identity.sql');
+check('B11b pack P3c: the live retention function is the 0219 text by NORMALIZED checksum, not the 0261 text, arguments and result type as expected, service role only', p3c.is_0219 === true && p3c.is_0261 === false && p3c.identity_arguments === 'p_instrument_id uuid, p_price_date date, p_changeover_date date' && p3c.result_type === 'boolean' && p3c.anon_can_execute === false && p3c.authenticated_can_execute === false && p3c.service_role_can_execute === true, JSON.stringify(p3c));
+const p3d = await runPack('prechecks/P3d_retention_function_behaviour.sql');
+const expectBehaviour = { held_answer_expect_false: false, held_by_hold_answer_expect_false: false, report_pinned_answer_expect_false: false, fund_analytics_pinned_answer_expect_false: false, gap_protected_answer_expect_false: false, after_changeover_answer_expect_false: false, unprotected_old_row_answer_expect_true: true, null_input_answer_expect_false: false };
+const behaviourBad = Object.entries(expectBehaviour).filter(([k, v]) => p3d[k] !== null && p3d[k] !== undefined && p3d[k] !== v).map(([k]) => k);
+check('B11c pack P3d: every answer the function gives on real rows equals its expected value (a case without a sample is null, not a failure)', behaviourBad.length === 0 && p3d.null_input_answer_expect_false === false, JSON.stringify(p3d));
 const p4 = await runPack('prechecks/P4_size.sql');
 check('B12 pack P4 returns the four columns', ['database_size', 'price_table_total_size', 'price_rows_estimate', 'held_funds_now'].every((k) => k in p4));
 const p6 = await runPack('prechecks/P6a_admin_and_premium_counts.sql');
@@ -175,6 +181,7 @@ const step = async (label, rel, checkRel, early = null) => {
 const NAMES = {
   '0261': 'migrations/0261_nav2_fund_analytics_reports_cache_and_pinning.sql', '0262': 'migrations/0262_nav2_correction_events_and_monitoring.sql', '0263': 'migrations/0263_nav2_risk_free_refresh_attempts.sql',
   '0269': 'migrations/0269_nav2_reports_premium_only_read.sql', '0270': 'migrations/0270_nav2_monitoring_snapshot_bounded_cost.sql', '0271': 'migrations/0271_nav2_monitoring_snapshot_row_estimate.sql',
+  '0281': 'migrations/0281_nav2_report_idempotency_key.sql', '0282': 'migrations/0282_nav2_ambiguity_case_summary.sql',
 };
 await step('0260 part a', 'parts/0260a.sql', 'checks/C0260a.sql', true);
 await step('0260 part b', 'parts/0260b.sql', 'checks/C0260b.sql', true);
@@ -182,6 +189,8 @@ await step('0260 part c', 'parts/0260c.sql', 'checks/C0260c.sql', true);
 await step('0260 part d', 'parts/0260d.sql', 'checks/C0260d.sql', true);
 await step('0260 part e', 'parts/0260e.sql', 'checks/C0260e.sql', true);
 await step('0261', NAMES['0261'], 'checks/C0261.sql', true);
+const p3cAfter = await runPack('prechecks/P3c_retention_function_identity.sql');
+check('C0 pack P3c after 0261: the function is now the 0261 text (normalized), still service role only', p3cAfter.is_0261 === true && p3cAfter.is_0219 === false && p3cAfter.service_role_can_execute === true && p3cAfter.anon_can_execute === false && p3cAfter.authenticated_can_execute === false, JSON.stringify(p3cAfter));
 const p3after261 = (await db.query(strip(p3file))).rows[0];
 check('C1 pack P3 is now FALSE for body_is_0219 (the fingerprint check bites: 0261 changed the function, so it would have caught a different live version before)', p3after261.body_is_0219 === false);
 await step('0262', NAMES['0262'], 'checks/C0262.sql', true);
@@ -197,6 +206,8 @@ const e271 = await err(strip(pack(NAMES['0271'])));
 check('C4 0271 runs without error', e271 === null, e271?.message);
 const c271 = (await db.query(strip(pack('checks/C0270_0271.sql')))).rows[0];
 check('C5 after 0271 the monitoring check is all true', allTrue(c271), falseKeys(c271));
+await step('0281', NAMES['0281'], 'checks/C0281.sql', true);
+await step('0282', NAMES['0282'], 'checks/C0282.sql', true);
 const fin = (await db.query(strip(pack('checks/C_final_all.sql')))).rows[0];
 check('C6 the final check is all true', allTrue(fin), falseKeys(fin));
 const sw = (await db.query(`select job_key, enabled from ii_reference_job_control where job_key like 'nav2\\_%' escape '\\' order by job_key`)).rows;
@@ -261,7 +272,7 @@ console.log('\nF. Re-applying everything a second time');
 let reErr = null;
 try {
   for (const l of ['a', 'b', 'c', 'd', 'e']) await apply(`parts/0260${l}.sql`);
-  for (const n of ['0261', '0262', '0263', '0269', '0270', '0271']) await apply(NAMES[n]);
+  for (const n of ['0261', '0262', '0263', '0269', '0270', '0271', '0281', '0282']) await apply(NAMES[n]);
 } catch (e) { reErr = e.message; }
 check('F1 every part and file can be run a second time without an error', reErr === null, reErr ?? '');
 const fin2 = (await db.query(strip(pack('checks/C_final_all.sql')))).rows[0];
@@ -273,6 +284,10 @@ check('F3 the final check differs only where data was loaded (no_rates_loaded_ye
 // ---------------------------------------------------------------------------------------------------------------------------------
 console.log('\nE. Rollbacks in reverse order');
 check('E0 P1 is false while NAV2 is present (the pre-check bites)', !allTrue(await runPack('prechecks/P1_nav2_not_yet_applied.sql')));
+await db.exec(strip(pack('rollback/rollback_0282.sql')));
+check('E0b rollback 0282 drops the held-back count function', (await one(`select to_regprocedure('public.nav2_ambiguity_case_summary()') is null v`)).v === true);
+await db.exec(strip(pack('rollback/rollback_0281.sql')));
+check('E0c rollback 0281 drops the idempotency key columns, the shape constraint and the unique index', (await one(`select count(*)::int c from information_schema.columns where table_name = 'nav2_fund_analytics_reports' and column_name in ('idempotency_key', 'request_fingerprint')`)).c === 0 && (await one(`select count(*)::int c from pg_indexes where indexname = 'uidx_nav2_reports_user_idempotency'`)).c === 0);
 // rollback of the monitoring pair: run the previous definition again (0262 file), as the README says
 await db.exec(strip(pack(NAMES['0262'])));
 check('E1 re-running 0262 puts the first monitoring function back (no row estimate)', (await runPack('checks/C0270_0271.sql')).monitoring_uses_the_row_estimate === false);
@@ -296,7 +311,7 @@ check('E8 the old paths answer exactly as at the start', same(BASE, BACK), `${JS
 let again = null;
 try {
   for (const l of ['a', 'b', 'c', 'd', 'e']) await apply(`parts/0260${l}.sql`);
-  for (const n of ['0261', '0262', '0263', '0269', '0270', '0271']) await apply(NAMES[n]);
+  for (const n of ['0261', '0262', '0263', '0269', '0270', '0271', '0281', '0282']) await apply(NAMES[n]);
 } catch (e) { again = e.message; }
 const fin3 = (await db.query(strip(pack('checks/C_final_all.sql')))).rows[0];
 check('E9 after a full rollback the pack applies again and the final check is all true (the rollback leaves nothing behind that blocks a re-run)', again === null && allTrue(fin3), (again ?? '') + falseKeys(fin3));

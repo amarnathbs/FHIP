@@ -156,8 +156,12 @@ export async function planUserNav2Windows(args: {
   today: string;
   nowIso?: string;
   budget?: number;
+  /** B2: plan only these funds (the ones the report covers). null / undefined = every fund the caller holds. */
+  onlyInstrumentIds?: readonly string[] | null;
 }): Promise<Nav2WindowPlan> {
-  const held = await loadUserHeldFundDates(args.db, args.userId);
+  const allHeld = await loadUserHeldFundDates(args.db, args.userId);
+  const only = args.onlyInstrumentIds ? new Set(args.onlyInstrumentIds) : null;
+  const held = only ? allHeld.filter((h) => only.has(h.instrumentId)) : allHeld;
   const windows = consolidateWindows(
     held.map((h) =>
       computeRequiredWindow({ instrumentId: h.instrumentId, earliestHeldDate: h.earliestDate, earliestHeldKind: heldDateKind(h.reason), spec: args.spec, policy: args.policy, today: args.today })
@@ -193,12 +197,14 @@ export async function handleNav2Trigger(args: {
   nowIso?: string;
   budget?: number;
   runBatch?: Nav2RunBatch;
+  /** B2: restrict the plan to these funds (a report-period trigger for the funds one report covers). */
+  onlyInstrumentIds?: readonly string[] | null;
 }): Promise<Nav2TriggerOutcome> {
   const action: TriggerAction = classifyTrigger(args.trigger);
   switch (action.action) {
     case 'plan_held_windows': {
       if (!args.userId) return { action: 'ignore', reason: 'No user was named for a per-user trigger, so nothing was planned.' };
-      const plan = await planUserNav2Windows({ db: args.db, userId: args.userId, spec: args.spec, policy: args.policy, today: args.today, nowIso: args.nowIso, budget: args.budget });
+      const plan = await planUserNav2Windows({ db: args.db, userId: args.userId, spec: args.spec, policy: args.policy, today: args.today, nowIso: args.nowIso, budget: args.budget, onlyInstrumentIds: args.onlyInstrumentIds });
       const executed =
         args.runBatch && plan.fetch.toFetch.length > 0
           ? await args.runBatch({ userId: args.userId, onlyInstrumentIds: plan.fetch.toFetch.map((f) => f.instrumentId), requiredFromOverrides: plan.requiredFromOverrides })

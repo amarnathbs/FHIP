@@ -1361,6 +1361,17 @@
   ],
   [
    "nav2_fund_analytics_reports",
+   "idempotency_key",
+   "text",
+   "YES",
+   "",
+   0,
+   0,
+   0,
+   "NO"
+  ],
+  [
+   "nav2_fund_analytics_reports",
    "manifest_checksum",
    "text",
    "NO",
@@ -1408,6 +1419,17 @@
    "reporting_currency",
    "text",
    "NO",
+   "",
+   0,
+   0,
+   0,
+   "NO"
+  ],
+  [
+   "nav2_fund_analytics_reports",
+   "request_fingerprint",
+   "text",
+   "YES",
    "",
    0,
    0,
@@ -1864,6 +1886,11 @@
    "CREATE UNIQUE INDEX nav2_fund_analytics_reports_user_version ON public.nav2_fund_analytics_reports USING btree (user_id, version_number)"
   ],
   [
+   "nav2_fund_analytics_reports",
+   "uidx_nav2_reports_user_idempotency",
+   "CREATE UNIQUE INDEX uidx_nav2_reports_user_idempotency ON public.nav2_fund_analytics_reports USING btree (user_id, idempotency_key) WHERE (idempotency_key IS NOT NULL)"
+  ],
+  [
    "nav2_report_nav_dependencies",
    "idx_nav2_report_nav_dep_instrument",
    "CREATE INDEX idx_nav2_report_nav_dep_instrument ON public.nav2_report_nav_dependencies USING btree (instrument_id, nav_date_to)"
@@ -2109,6 +2136,18 @@
    "s",
    "fb9defd1ed68e1d4909bcf6a52af06b2",
    "b8711b2faa5ddfd78f4daf7cb892a15e",
+   false,
+   true,
+   true
+  ],
+  [
+   "nav2_ambiguity_case_summary",
+   "",
+   "jsonb",
+   true,
+   "s",
+   "53cc4d31dc948cd3f5b2691d99e04281",
+   "00149137fb1430b51e872606d65b46eb",
    false,
    true,
    true
@@ -3002,6 +3041,12 @@
    "nav2_fund_analytics_reports_version_number_not_null",
    "n",
    "NOT NULL version_number"
+  ],
+  [
+   "nav2_fund_analytics_reports",
+   "nav2_reports_idempotency_shape",
+   "c",
+   "CHECK ((((idempotency_key IS NULL) AND (request_fingerprint IS NULL)) OR ((idempotency_key IS NOT NULL) AND (request_fingerprint IS NOT NULL) AND (idempotency_key ~ '^[A-Za-z0-9_-]{16,64}$'::text) AND (request_fingerprint ~ '^[0-9a-f]{64}$'::text))))"
   ],
   [
    "nav2_report_nav_dependencies",

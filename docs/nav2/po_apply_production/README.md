@@ -2,7 +2,7 @@
 
 Written 07-10-2026 for the Product Owner. **Nothing in this folder has been run on production.** Every SQL file here was replayed on an isolated in-memory Postgres (PGlite) on top of the whole migration ledger up to 0278, in the order below, with its check, its rollback and a second run (`scripts/nav2_production_deploy_order_proof.mjs`, results in section 12). That is not production evidence: your pasted answers are.
 
-Release in one sentence: you apply seven small database files (all new tables and functions, nothing existing is changed except two columns on `admin_users`, four rows in the switch table, one hook on the price correction ledger and one retention function that gets one more protection), then you push the code, then you check, then you switch the report on for Premium people when you are ready. All four NAV2 job switches stay OFF at release.
+Release in one sentence: you apply nine small database files (all new tables and functions, nothing existing is changed except two columns on `admin_users`, four rows in the switch table, one hook on the price correction ledger and one retention function that gets one more protection), then you push the code, then you check, then you switch the report on for Premium people when you are ready. All four NAV2 job switches stay OFF at release.
 
 ## 0. Rules for every step
 
@@ -11,14 +11,14 @@ Release in one sentence: you apply seven small database files (all new tables an
 3. Every file can be run twice safely. If a paste stops halfway, run the same file again from its start.
 4. If the editor shows an error, stop and send me the error text exactly as shown, and the name of the file. Do not edit the SQL by hand. (If you ever write SQL yourself for this release: never write the words into, from or join followed by a word inside a comment or a string. The editor mistook such words for statements on DEV. The files here are checked for that by a test.)
 5. Never paste an e-mail address, key or password back to me. The only values I ask for are the check rows.
-6. The migration files here are byte-identical copies of `supabase/migrations/0260` to `0263` and `0269` to `0271` (a test proves it). The five parts of 0260 are exact slices of the 0260 file.
+6. The migration files here are byte-identical copies of `supabase/migrations/0260` to `0263`, `0269` to `0271` and `0281` to `0282` (a test proves it). The five parts of 0260 are exact slices of the 0260 file.
 
 ## 1. The order, and why
 
 | Step | What | Where it runs | Needs the new code? |
 |---|---|---|---|
 | 1 | Read-only pre-checks P1 to P7 | SQL editor, production | no |
-| 2 | Migrations: 0260 parts a to e, 0261, 0262, 0263, 0269, 0270, 0271, final check | SQL editor, production | no |
+| 2 | Migrations: 0260 parts a to e, 0261, 0262, 0263, 0269, 0270, 0271, 0281, 0282, final check | SQL editor, production | no |
 | 3 | Push the code and wait for the deploy | your machine, then Amplify | n/a |
 | 4 | Smoke checks with every NAV2 switch OFF | browser | yes |
 | 5 | Permissions: upload and series switch to DIFFERENT people | SQL editor | yes (to use them) |
@@ -42,15 +42,17 @@ Run each file from `sql/prechecks/`.
 | `P2_foundations_exist.sql` | one row, six values, all `true` | the row |
 | `P3_retention_function_fingerprint.sql` | one row: `body_is_0219` true and `service_only` true | the row (including `body_md5`) |
 | `P3b_retention_function_text.sql` | only if `body_is_0219` is false: the live function text | the text |
+| `P3c_retention_function_identity.sql` | one row: the function's arguments, result type, owner, execute rights and the NORMALIZED checksum (comments and white space ignored). `is_0219` or `is_0261` must be true | the row |
+| `P3d_retention_function_behaviour.sql` | one row: the function's answers on real rows (held, held by a hold, report pinned, gap protected, after the changeover, unprotected, null). Every answer present must equal its expected value | the row |
 | `P4_size.sql` | one row: database size, price table size, price rows (estimate), held funds | the row |
 | `P5_ledger.sql` | the ledger rows from 0250 up, or an error that the table does not exist (acceptable: hand applied migrations are often not recorded) | whatever it shows |
 | `P6a_admin_and_premium_counts.sql` | one row: number of administrators, number of Premium people today | the row |
 | `P6b_administrator_list.sql` | the administrators with their addresses (for your choice of who gets which permission) | **nothing, keep it to yourself** |
 | `P7_switch_state.sql` | the existing switch rows (including the price fetch switch) | the rows |
 
-**Stop rules.** P1 not all true: wrong database or NAV2 partly there, stop. P2 any false: a migration NAV2 depends on is missing, stop. **P3 `body_is_0219` false: stop.** Migration 0261 redefines the retention function `pc6_nav_row_is_candidate` and was written against the 0219 text. If production carries any other text, 0261 would silently replace it. Send me the P3 row and P3b output and I will compare.
+**Stop rules.** P1 not all true: wrong database or NAV2 partly there, stop. P2 any false: a migration NAV2 depends on is missing, stop. **P3 `body_is_0219` false, and P3c `is_0219` false: stop.** Migration 0261 redefines the retention function `pc6_nav_row_is_candidate` and was written against the 0219 text. 0261 now carries its own guard: its first statement compares the live function (normalized checksum, so formatting does not matter) with the 0219 text and the 0261 text and STOPS the whole file with nothing changed if it is neither. A raw-text difference alone (P3 false, P3c `is_0219` true) is a formatting difference and is not a stop. Send me the P3, P3c and P3b output and I will compare.
 
-Disk space: NAV2 adds twelve small empty tables and sixteen functions. It adds no price rows. A report is stored as one row of about 0.09 MB per fund (0.35 MB for four funds, 2.1 MB for 25). The free space is read in the Supabase dashboard (Reports, Database), not by SQL; the P4 sizes are for the record.
+Disk space: NAV2 adds twelve small empty tables and seventeen functions. It adds no price rows. A report is stored as one row of about 0.09 MB per fund (0.35 MB for four funds, 2.1 MB for 25). The free space is read in the Supabase dashboard (Reports, Database), not by SQL; the P4 sizes are for the record.
 
 ## 3. Step 2: the migrations (database first)
 
@@ -69,7 +71,9 @@ For each line: paste the file, Run, expect "Success. No rows returned", then run
 | 2.9 | `sql/migrations/0269_nav2_reports_premium_only_read.sql` | `sql/checks/C0269.sql` | a report can be read only while its owner is Premium (found in Stage 3) |
 | 2.10 | `sql/migrations/0270_nav2_monitoring_snapshot_bounded_cost.sql` | (checked together with 0271) | monitoring function, first speed fix |
 | 2.11 | `sql/migrations/0271_nav2_monitoring_snapshot_row_estimate.sql` | `sql/checks/C0270_0271.sql` | monitoring function, final form (reads the price table row estimate, never a full count) |
-| 2.12 | | `sql/checks/C_final_all.sql` | final check: 12 tables, 16 functions, 8 policies, 4 switches all OFF, nobody holds the new permissions, two series enabled, no rates, no reports. **Expect all eight values true.** |
+| 2.12 | `sql/migrations/0281_nav2_report_idempotency_key.sql` | `sql/checks/C0281.sql` | an idempotency key on a generated report (two empty columns and one unique index): a repeated click or a retried request issues ONE report |
+| 2.13 | `sql/migrations/0282_nav2_ambiguity_case_summary.sql` | `sql/checks/C0282.sql` | one read-only function: how many statement lines were held back for review because their ISIN and AMFI code point at two different funds (shown on Fund Analytics Health) |
+| 2.14 | | `sql/checks/C_final_all.sql` | final check: 12 tables, 17 functions, 8 policies, 4 switches all OFF, nobody holds the new permissions, two series enabled, no rates, no reports. **Expect all eight values true.** |
 
 Notes:
 
@@ -79,17 +83,17 @@ Notes:
 - Lock note: part a changes `admin_users` (adds two boolean columns with a default: a brief lock on a tiny table). 0262 adds a trigger to `ii_reference_corrections` (a brief lock on a small ledger). 0261 replaces one function. Nothing here rewrites or scans the price table.
 
 **Rollback per step** (reverse order, each file only touches NAV2 objects; section 10 has the table):
-2.11 and 2.10: paste `sql/migrations/0262_...sql` again (restores the first monitoring function). 2.9: `sql/rollback/rollback_0269.sql`. 2.8: `rollback_0263.sql`. 2.7: `rollback_0262.sql`. 2.6: `rollback_0261_restore_0219_function.sql` FIRST, then `rollback_0261_drop_tables.sql` (this discards issued reports). 2.1 to 2.5: `rollback_0260.sql` (this discards loaded RBI rates).
+2.13: `sql/rollback/rollback_0282.sql`. 2.12: `sql/rollback/rollback_0281.sql`. 2.11 and 2.10: paste `sql/migrations/0262_...sql` again (restores the first monitoring function). 2.9: `sql/rollback/rollback_0269.sql`. 2.8: `rollback_0263.sql`. 2.7: `rollback_0262.sql`. 2.6: `rollback_0261_restore_0219_function.sql` FIRST, then `rollback_0261_drop_tables.sql` (this discards issued reports). 2.1 to 2.5: `rollback_0260.sql` (this discards loaded RBI rates).
 
 ### 3.1 Schema reconciliation against the expected shape (recommended, read-only)
 
 `sql/migrations` gives the files; `inventory/nav2_catalog_inventory.sql` returns ONE jsonb value describing every NAV2 column, constraint, index, policy, grant, trigger and function as the database really holds it. Run it on production after 2.12, save the value as `actual.json` and give it to me; I run `node scripts/nav2_schema_inventory.mjs compare actual.json` against `inventory/expected_inventory.json` (derived by replaying the migrations, never typed by hand). Differences in function body comments only are reported separately and are not failures.
 
-Honest state of the DEV side of this comparison: the read-only REST comparison of DEV (13 tables, 134 columns, 11 functions) matched; the full catalog comparison on DEV (constraints, indexes, policies, grants, function bodies) was **not run** because it needs SQL access to DEV. Running the same query on DEV as well gives a direct DEV-versus-production comparison of the two answers.
+The same query runs on DEV (`docs/nav2/po_apply_dev_release_candidate/`, step C1). Running it on DEV and on production gives a direct DEV-versus-production comparison of the two answers; both are compared with the expected inventory, which now includes 0281 and 0282 (136 columns, 154 constraints, 29 indexes, 18 functions).
 
 ## 4. Step 3: the push
 
-After step 2.12 is all true.
+After step 2.14 is all true.
 
 1. In your own clone: `git fetch origin`
 2. `git rev-parse origin/main` must still be the base recorded in the release plan (or a later commit that only touches files outside this release). If it moved, tell me before pushing: I re-verify.
@@ -128,7 +132,7 @@ Sign in as the person who holds the upload permission. Open Admin, Risk-free Rat
 2. Same series, file `RBI_91DAY_TBILL_GAP_ROWS.csv`. Preview expects 13 usable rows (5 `no_accepted_bids`, 8 `no_row_in_source`), no conflicts, no warnings. Commit. (A gap row means "no cut-off exists for that date". It is never used as a rate.)
 3. Series `RBI_POLICY_REPO_RATE`, file `RBI_POLICY_REPO_RATE_HISTORY.csv`, **Verified through** `02-10-2026` (type it day first), Preview expects 61 rows, 26-10-2005 to 05-12-2025. Commit.
 
-**The attestation text** shown beside the tick box (the screen stores it verbatim in the ledger; read it before ticking): "I confirm that these values were read from the Reserve Bank of India publication named in each row and have not been altered, and that the Product Owner's decision of 03-10-2026 on RBI's terms (attribution kept, no scraping by the app) covers storing them in FHIP." The decision it names is yours: RBI states "All Rights Reserved" and published no reuse licence; you accepted that risk and the terms status of both series is `po_accepted_2026-10-03`, never "confirmed in writing". Written confirmation from RBI has not been received (as of 03-10-2026).
+**The attestation text** shown beside the tick box (the screen stores it verbatim in the ledger; read it before ticking): "I confirm that these values were read from the Reserve Bank of India publication named in each row and have not been altered, and that the Product Owner's decision of 03-10-2026 on RBI's terms (attribution kept, reuse risk accepted) covers storing them in FHIP." The decision it names is yours: RBI states "All Rights Reserved" and published no reuse licence; you accepted that risk and the terms status of both series is `po_accepted_2026-10-03`, never "confirmed in writing". Written confirmation from RBI is not required by Product Owner decision.
 
 **Activation.** The two series are seeded **enabled** with that terms status (check C0260a). There is no separate activation step: once rates are loaded, Sharpe and Sortino use the primary series (the 91-day T-bill cut-off yield, described in words in the report: "Sharpe and Sortino compare each fund with the RBI 91-day Treasury bill rate (source: Reserve Bank of India)"). A series is switched off (reason of 20 characters or more, logged) on the same screen by the person with the switch permission.
 
@@ -172,7 +176,7 @@ Paste both results back. After the load, if you are the only administrator, run 
 - **Stage A, nothing to do:** leave `nav2_trigger_planner`, `nav2_correction_worker` and the weekly refresh OFF for at least one week of pilot use. Read `Fund Analytics Health` daily: held funds without any price, stale prices, reports in the last 30 days, correction lag.
 - **Stage B, planner:** only if pilot users hit "not enough history" for funds the platform could fetch. Turn on `nav2_trigger_planner` (`switch_on_trigger_planner.sql`) with the existing fetch switch ON, then have one Premium account upload a statement and check that exactly the held funds are fetched (monitoring: price rows total should move by one fund only). Off again if more is fetched. DEV proof of this path: Stage 3 journey 2b (19 checks).
 - **Stage C, correction worker:** only when you plan price or rate corrections. Needs a cron schedule (pattern in `docs/investment-intelligence/PC6_OPERATOR_RUNBOOK.md`). Switch on (`switch_on_correction_worker.sql`), run once with a corrected price on a non-held fund, read the monitoring lag figure.
-- **Stage D, weekly RBI refresh:** **blocked** until RBI confirms reuse in writing (the attestation you accept says the app does not scrape). Never switch on (`switch_on_weekly_refresh.sql`) without that. If you do later: dry run first (body `{}` writes nothing), compare with the RBI pages by eye, then `"dryRun": false`.
+- **Stage D, weekly RBI refresh:** Written RBI confirmation is not required by Product Owner decision. Historical manual loading and automated refresh are permitted subject to technical validation, attribution, monitoring and the documented accepted reuse risk. The switch stays OFF until the final-build dry run has passed (a technical activation gate, not a permission gate): dry run first (body `{}` writes nothing), compare with the RBI pages by eye, check the cron configuration, failure alerting and idempotency, then switch on (`switch_on_weekly_refresh.sql`) and watch the first run (`"dryRun": false`).
 
 ## 10. Rollback table
 
@@ -183,6 +187,8 @@ Paste both results back. After the load, if you are the only administrator, run 
 | A series is wrong | Admin screen, series state (reason 20 characters or more) | Sharpe, Sortino, alpha report the rate as unavailable; nothing deleted |
 | A rate was loaded wrongly | Admin screen, "Correct one published value" | audited correction with old and new value; never a delete |
 | Code deploy must go back | revert the commit and push, or Amplify redeploy of the previous build | the database stays; old code ignores NAV2 objects (proved, group D) |
+| Step 2.13 | `sql/rollback/rollback_0282.sql` | the held-back count is gone from Fund Analytics Health (it then says not available) |
+| Step 2.12 | `sql/rollback/rollback_0281.sql` | no idempotency key: a repeated click can issue a second report again; issued reports untouched |
 | Step 2.11/2.10 | paste the 0262 migration file again | first monitoring function back |
 | Step 2.9 | `sql/rollback/rollback_0269.sql` | reports readable by owner regardless of Premium again |
 | Step 2.8 | `rollback_0263.sql` | attempt log gone |
@@ -206,10 +212,10 @@ The rollbacks were run on PGlite in reverse order after a full apply and returne
 ## 13. What stays NOT activated
 
 - **Beta, alpha, benchmark returns:** licensed index data is not available. They show as typed "unavailable" states, never as zero.
-- **Weekly RBI refresh:** blocked on RBI written confirmation (stage D).
+- **Weekly RBI refresh:** OFF until its final-build dry run has passed (stage D; a technical gate, RBI's written confirmation is not required by Product Owner decision).
 - **Planner and correction worker:** off until staged (B, C).
 - **Dual control and re-authentication for series switches:** not built (`CAPABILITY_SEGREGATION.md`).
 
 ## 14. What to paste back, in short
 
-P1 to P4, P6a, P7 (and P5 if it answers), the check row of each of steps 2.1 to 2.12, the two load verification results, "smoke 1 to 4 ok" after the push, `check_grants.sql`, and after the pilot the `S1_after_first_reports.sql` row. Any error text exactly as shown.
+P1 to P4, P6a, P7 (and P5 if it answers), the check row of each of steps 2.1 to 2.13 and the final check, the two load verification results, "smoke 1 to 4 ok" after the push, `check_grants.sql`, and after the pilot the `S1_after_first_reports.sql` row. Any error text exactly as shown.

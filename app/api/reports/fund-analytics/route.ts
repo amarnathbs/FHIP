@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { canViewPremiumReport } from '@/lib/services/entitlements';
 import { REPORT_PERIOD_CHOICES } from '@/lib/engines/nav2/analysisSpec';
-import { FUND_ANALYTICS_DISABLED_MESSAGE, FUND_ANALYTICS_PREMIUM_MESSAGE, generateFundAnalyticsReport, listFundAnalyticsReports } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService';
+import { FUND_ANALYTICS_DISABLED_MESSAGE, FUND_ANALYTICS_PREMIUM_MESSAGE, generateFundAnalyticsReport, IDEMPOTENCY_KEY_PATTERN, listFundAnalyticsReports } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService';
+import { raceDeadline } from '@/lib/services/investment-intelligence/nav2/requestDeadline';
+import { REQUEST_DEADLINE_MS } from '@/lib/config/nav2/reportLimits';
 import { isNav2FlagOn, NAV2_JOB_KEYS } from '@/lib/services/investment-intelligence/nav2/nav2Flags';
 
 // The Fund analytics report (NAV2) -- list the caller's pinned versions, or generate the next one.
@@ -46,7 +48,14 @@ export async function GET() {
   }
 }
 
+// The typed states a screen or client can rely on (HTTP status in brackets):
+//   ready (201 new, 200 replay of the same Idempotency-Key) | preparing, in_steps (202, ask again with the same key) | timed_out (503, Retry-After)
+//   | failed (500, retryable) | select_funds (409) | idempotency_conflict (409) | invalid_selection (422) | no_funds (200) | disabled (404) | forbidden (403)
+const RETRY_BODY = { retryable: true } as const;
+
 export async function POST(req: Request) {
+  // ONE CLOCK: everything below, sign-in included, counts against REQUEST_DEADLINE_MS (22 s; the platform kills at 28 s).
+  const requestStartedMs = Date.now();
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   // AUTHORISATION BEFORE VALIDATION: a free user gets the plain 403 for any body, never a 422 that confirms what the endpoint accepts.
@@ -61,9 +70,20 @@ export async function POST(req: Request) {
   }
   const parsed = generateBody.safeParse(json);
   if (!parsed.success) return badValidation(parsed.error);
+  // The key identifies ONE intended report: the same key sent again returns the report already issued for it instead of making another.
+  const rawKey = req.headers.get('idempotency-key');
+  if (rawKey !== null && !IDEMPOTENCY_KEY_PATTERN.test(rawKey)) return bad('The Idempotency-Key header must be 16 to 64 letters, digits, underscores or hyphens.', 422);
 
   try {
-    const result = await generateFundAnalyticsReport({ userId: user.id, sessionClient: supabase, adminClient: createAdminClient(), periodChoice: parsed.data.period, fundIds: parsed.data.funds ?? null });
+    const work = generateFundAnalyticsReport({ userId: user.id, sessionClient: supabase, adminClient: createAdminClient(), periodChoice: parsed.data.period, fundIds: parsed.data.funds ?? null, idempotencyKey: rawKey, requestStartedMs });
+    const raced = await raceDeadline(work, REQUEST_DEADLINE_MS - (Date.now() - requestStartedMs));
+    if (raced.timedOut) {
+      return Response.json(
+        { error: 'The report is taking longer than expected. Nothing was lost: ask again and it carries on where it stopped.', data: { status: 'timed_out', retryAfterSeconds: 5, ...RETRY_BODY } },
+        { status: 503, headers: { 'Retry-After': '5' } }
+      );
+    }
+    const result = raced.value;
     switch (result.status) {
       case 'disabled':
         return bad(result.message, 404);
@@ -78,16 +98,19 @@ export async function POST(req: Request) {
         return Response.json({ error: result.message, data: { status: 'select_funds', message: result.message, max: result.max, heldFundCount: result.heldFundCount, candidates: result.candidates, suggestedIds: result.suggestedIds } }, { status: 409 });
       case 'invalid_selection':
         return bad(result.message, 422);
+      case 'idempotency_conflict':
+        return Response.json({ error: result.message, data: { status: 'idempotency_conflict', message: result.message } }, { status: 409 });
       case 'in_steps':
         return Response.json(
           { data: { status: 'in_steps', message: result.message, headline: result.message, loaded: result.ready, total: result.total, waitingFunds: [], unavailableFunds: [], retryAfterSeconds: result.retryAfterSeconds } },
           { status: 202, headers: { 'Retry-After': String(result.retryAfterSeconds) } }
         );
       case 'ready':
-        return Response.json({ data: { status: 'ready', report: result.report } }, { status: 201 });
+        // 201 = this request issued the report; 200 = the same Idempotency-Key had already issued it (nothing new was made)
+        return Response.json({ data: { status: 'ready', report: result.report, ...(result.replayed ? { replayed: true } : {}) } }, { status: result.replayed ? 200 : 201 });
     }
   } catch (e) {
     console.error('[fund-analytics] generate failed', e instanceof Error ? e.message : e);
-    return bad('The report could not be generated. Please try again.', 500);
+    return Response.json({ error: 'The report could not be generated. Please try again.', data: { status: 'failed', ...RETRY_BODY } }, { status: 500 });
   }
 }

@@ -23,6 +23,8 @@ export const dynamic = 'force-dynamic';
 
 const UNAVAILABLE_0262 = 'Migration 0262 has not been applied to this database, so the monitoring snapshot does not exist yet. This is reported as unavailable rather than as a healthy empty state.';
 
+const UNAVAILABLE_0282 = 'Migration 0282 has not been applied to this database, so the count of statement lines held back for review (ISIN and AMFI code disagree) does not exist yet. This is reported as unavailable rather than as zero.';
+
 const UNAVAILABLE_0263 = 'Migration 0263 has not been applied to this database, so the weekly refresh attempt summary does not exist yet. This is reported as unavailable rather than as zero.';
 
 export const GET = adminRoute(async () => {
@@ -46,5 +48,14 @@ export const GET = adminRoute(async () => {
     if (code === '42501') return bad('Reference-data admin access required', 403);
     refreshAttempts = { state: 'unavailable', reason: UNAVAILABLE_0263 };
   } else refreshAttempts = { state: 'ok', value: attempts.data };
-  return ok({ state: 'ok', snapshot: data, refreshAttempts });
+  // NAV2-F1 monitoring (migration 0282): new review questions opened because a statement line's ISIN and AMFI code point at different funds.
+  // Aggregate-only, every figure suppressed below 5 inside the function. A missing function is `unavailable`, never a healthy zero.
+  const ambiguity = await supabase.rpc('nav2_ambiguity_case_summary');
+  let identifierConflicts: { state: 'ok'; value: unknown } | { state: 'unavailable'; reason: string };
+  if (ambiguity.error) {
+    const code = (ambiguity.error as { code?: string }).code ?? '';
+    if (code === '42501') return bad('Reference-data admin access required', 403);
+    identifierConflicts = { state: 'unavailable', reason: UNAVAILABLE_0282 };
+  } else identifierConflicts = { state: 'ok', value: ambiguity.data };
+  return ok({ state: 'ok', snapshot: data, refreshAttempts, identifierConflicts });
 });

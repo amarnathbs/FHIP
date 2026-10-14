@@ -303,11 +303,27 @@ describe('monitoring route', () => {
     const attempts = { runs_last_90_days: 4, robots_unavailable_continued_last_90_days: 3, blocked_by_source_last_90_days: 0, last_blocked_at: null, last_attempt_at: '2026-10-02T03:00:00Z', last_robots_outcome: 'robots_unavailable_continued', last_source_status: 'ok' };
     mockRpc.mockResolvedValueOnce({ data: snapshot, error: null });
     mockRpc.mockResolvedValueOnce({ data: attempts, error: null });
+    const conflicts = { opened_last_7_days: { state: 'suppressed', value: null, label: 'Insufficient data to display safely.' }, still_open: { state: 'ok', value: 7 } };
+    mockRpc.mockResolvedValueOnce({ data: conflicts, error: null });
     const res = await monitoringGET();
     expect(res.status).toBe(200);
-    expect((await res.json()).data).toEqual({ state: 'ok', snapshot, refreshAttempts: { state: 'ok', value: attempts } });
+    expect((await res.json()).data).toEqual({ state: 'ok', snapshot, refreshAttempts: { state: 'ok', value: attempts }, identifierConflicts: { state: 'ok', value: conflicts } });
     expect(mockRpc).toHaveBeenCalledWith('nav2_monitoring_snapshot');
     expect(mockRpc).toHaveBeenCalledWith('nav2_refresh_attempt_summary');
+    expect(mockRpc).toHaveBeenCalledWith('nav2_ambiguity_case_summary');
+  });
+  it('migration 0282 not applied: the held-back count is unavailable with a reason (never a zero); a database refusal on it is a 403', async () => {
+    adminRowResult = { data: PC6, error: null };
+    mockRpc.mockResolvedValueOnce({ data: { cache_entries: { state: 'ok', value: 1 } }, error: null });
+    mockRpc.mockResolvedValueOnce({ data: { runs_last_90_days: 0 }, error: null });
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: '42883', message: 'function nav2_ambiguity_case_summary() does not exist' } });
+    const d = (await (await monitoringGET()).json()).data;
+    expect(d.state).toBe('ok');
+    expect(d.identifierConflicts).toMatchObject({ state: 'unavailable', reason: expect.stringContaining('0282') });
+    mockRpc.mockResolvedValueOnce({ data: { cache_entries: { state: 'ok', value: 1 } }, error: null });
+    mockRpc.mockResolvedValueOnce({ data: { runs_last_90_days: 0 }, error: null });
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'nav2 ambiguity summary: not authorised' } });
+    expect((await monitoringGET()).status).toBe(403);
   });
   it('migration 0263 not applied: the refresh-attempt panel is unavailable with a reason (never a zero) and the snapshot is still served', async () => {
     adminRowResult = { data: PC6, error: null };

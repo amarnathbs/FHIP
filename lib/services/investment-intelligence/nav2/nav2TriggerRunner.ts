@@ -27,7 +27,7 @@ const todayIso = (): string => new Date().toISOString().slice(0, 10);
 export interface TriggerRunnerDeps {
   isPlannerOn: () => Promise<boolean>;
   legacy: (userId: string) => Promise<unknown>;
-  planned: (userId: string, trigger: Nav2Trigger, period: ReportPeriodChoice) => Promise<Nav2TriggerOutcome>;
+  planned: (userId: string, trigger: Nav2Trigger, period: ReportPeriodChoice, onlyInstrumentIds?: readonly string[] | null) => Promise<Nav2TriggerOutcome>;
 }
 
 const liveDeps: TriggerRunnerDeps = {
@@ -39,7 +39,7 @@ const liveDeps: TriggerRunnerDeps = {
     }
   },
   legacy: (userId) => runLiveUserNavHistoryBatch(userId),
-  planned: async (userId, trigger, period) => {
+  planned: async (userId, trigger, period, onlyInstrumentIds) => {
     const runtime = createLiveUserNavHistoryRuntime();
     const today = todayIso();
     return handleNav2Trigger({
@@ -49,6 +49,7 @@ const liveDeps: TriggerRunnerDeps = {
       spec: reportAnalysisSpec(today, NAV2_POLICY, period),
       policy: NAV2_POLICY,
       today,
+      onlyInstrumentIds,
       runBatch: ({ userId: u, onlyInstrumentIds, requiredFromOverrides }) => runUserNavHistoryBatch({ userId: u, today, runtime, onlyInstrumentIds, requiredFromOverrides }),
     });
   },
@@ -58,11 +59,11 @@ const liveDeps: TriggerRunnerDeps = {
  * What kickUserNavHistory runs by default. Switch off = the existing path, untouched. Switch on = the NAV2 plan, falling back to
  * the existing path if planning itself fails. A trigger that creates no requirement (nothing planned) is not an error.
  */
-export async function runUserNavHistoryForKick(userId: string, deps: Partial<TriggerRunnerDeps> = {}, trigger: Nav2Trigger = { kind: 'statement_accepted' }, period: ReportPeriodChoice = 'all_history'): Promise<unknown> {
+export async function runUserNavHistoryForKick(userId: string, deps: Partial<TriggerRunnerDeps> = {}, trigger: Nav2Trigger = { kind: 'statement_accepted' }, period: ReportPeriodChoice = 'all_history', onlyInstrumentIds: readonly string[] | null = null): Promise<unknown> {
   const d = { ...liveDeps, ...deps };
   if (!(await d.isPlannerOn())) return d.legacy(userId);
   try {
-    return await d.planned(userId, trigger, period);
+    return await d.planned(userId, trigger, period, onlyInstrumentIds);
   } catch (e) {
     console.error('[nav2] planned fetch failed; using the existing fetch', e instanceof Error ? e.message : e);
     return d.legacy(userId);
@@ -74,11 +75,11 @@ export async function runUserNavHistoryForKick(userId: string, deps: Partial<Tri
  * work was scheduled (the report holds and the screen checks again), false when it could not be (the report then proceeds and
  * says honestly what history it has; it never waits for work that was not started). Never throws.
  */
-export function kickNav2ReportPeriod(userId: string, period: ReportPeriodChoice, deps: Partial<TriggerRunnerDeps> = {}): boolean {
+export function kickNav2ReportPeriod(userId: string, period: ReportPeriodChoice, deps: Partial<TriggerRunnerDeps> = {}, onlyInstrumentIds: readonly string[] | null = null): boolean {
   try {
     after(async () => {
       try {
-        await runUserNavHistoryForKick(userId, deps, { kind: 'report_period_requested' }, period);
+        await runUserNavHistoryForKick(userId, deps, { kind: 'report_period_requested' }, period, onlyInstrumentIds);
       } catch (e) {
         console.error('[nav2] report-period fetch failed', e instanceof Error ? e.message : e);
       }
@@ -90,6 +91,6 @@ export function kickNav2ReportPeriod(userId: string, period: ReportPeriodChoice,
 }
 
 /** Read-only: the plan a report period needs for this user (nothing is fetched or written). */
-export async function planForReportPeriod(admin: SupabaseClient, userId: string, period: ReportPeriodChoice, today: string = todayIso()): Promise<Nav2WindowPlan> {
-  return planUserNav2Windows({ db: admin, userId, spec: reportAnalysisSpec(today, NAV2_POLICY, period), policy: NAV2_POLICY, today });
+export async function planForReportPeriod(admin: SupabaseClient, userId: string, period: ReportPeriodChoice, today: string = todayIso(), onlyInstrumentIds: readonly string[] | null = null): Promise<Nav2WindowPlan> {
+  return planUserNav2Windows({ db: admin, userId, spec: reportAnalysisSpec(today, NAV2_POLICY, period), policy: NAV2_POLICY, today, onlyInstrumentIds });
 }

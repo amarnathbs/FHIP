@@ -91,7 +91,7 @@ Stage 1 delivers the contracts and the publication gate (`lib/engines/nav2/riskF
 2. Whether beta / alpha may be shown on the category-reference benchmark while that table is UNVERIFIED and no licensed series exists.
 3. Whether the risk-free `enabled` flag and terms status should be admin-switchable in Stage 2 (recommended) or stay a config change.
 4. The plausible-band width (0.5 percentage points week on week) and the AI second-opinion cost / model for the weekly run (one short call a week).
-5. The two same-day instructions on ingestion ("admin upload only, no scraping" and "automate weekly") conflict; this branch follows the later one (automation, default off, admin upload retained). Please confirm.
+5. The two same-day instructions on ingestion ("admin upload only, no scraping" and "automate weekly") conflict; this branch follows the later one (automation, default off, admin upload retained). CONFIRMED by the Product Owner (14-10-2026 restatement): written RBI confirmation is not required; historical manual loading and automated refresh are permitted subject to technical validation, attribution, monitoring and the documented accepted reuse risk. The weekly job stays OFF until its final-build dry run passes (a technical activation gate, not a permission gate).
 
 ## 7. Stage 2 build status (what exists now)
 

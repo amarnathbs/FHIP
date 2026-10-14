@@ -53,6 +53,20 @@ interface RefreshAttempts {
   reason?: string;
 }
 
+interface IdentifierConflicts {
+  state: 'ok' | 'unavailable';
+  value?: Record<string, Cell | string>;
+  reason?: string;
+}
+
+const CONFLICT_ROWS: Array<[string, string]> = [
+  ['opened_last_7_days', 'Opened in the last 7 days'],
+  ['opened_last_30_days', 'Opened in the last 30 days'],
+  ['opened_last_90_days', 'Opened in the last 90 days'],
+  ['still_open', 'Still waiting for a decision'],
+  ['people_affected_last_90_days', 'People affected, last 90 days'],
+];
+
 export function show(c: Cell | undefined): string {
   if (!c) return 'Not available.';
   if (c.state === 'ok') {
@@ -67,6 +81,7 @@ export default function Nav2MonitoringClient() {
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [refresh, setRefresh] = useState<RefreshAttempts | null>(null);
+  const [conflicts, setConflicts] = useState<IdentifierConflicts | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async (isRefresh: boolean) => {
@@ -84,6 +99,7 @@ export default function Nav2MonitoringClient() {
         setUnavailable(null);
         setSnap(j.data.snapshot);
         setRefresh((j.data.refreshAttempts as RefreshAttempts | undefined) ?? null);
+        setConflicts((j.data.identifierConflicts as IdentifierConflicts | undefined) ?? null);
         setMessage(isRefresh ? { kind: 'ok', text: 'The figures were refreshed.' } : null);
       }
     } catch {
@@ -200,6 +216,30 @@ export default function Nav2MonitoringClient() {
                   </tbody>
                 </ScrollTable>
               </>
+            )}
+          </Panel>
+          <Panel title="Statement lines held back for review" description="Since this release, a statement line whose ISIN and AMFI code point at two different funds is no longer matched silently: it opens one review question. Counts only, nothing identifying; a figure below 5 is withheld.">
+            {!conflicts || conflicts.state === 'unavailable' || !conflicts.value ? (
+              <Notice tone="warn" title="Not available">
+                {conflicts?.reason ?? 'The count could not be read.'}
+              </Notice>
+            ) : (
+              <ScrollTable label="Statement lines held back for review" minWidth="min-w-[480px]">
+                <thead>
+                  <tr>
+                    <Th>Measure</Th>
+                    <Th num>Value</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CONFLICT_ROWS.map(([k, label]) => (
+                    <tr key={k}>
+                      <Td>{label}</Td>
+                      <Td num>{show(conflicts.value?.[k] as Cell | undefined)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ScrollTable>
             )}
           </Panel>
           <Panel title="Risk-free rate series">

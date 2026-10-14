@@ -3,7 +3,14 @@
 // Order of checks in generateFundAnalyticsReport (each one fails CLOSED and stops):
 //   1. the feature switch (job-control row nav2_fund_analytics; OFF unless the row exists and is enabled)  -> 'disabled'
 //   2. Premium (getPlanTier on the service client, honouring the entitlement validity window)             -> 'forbidden'
+//   2b. IDEMPOTENCY (release candidate B3): a request that carries a key already used by this person returns the report issued for that key
+//      ('ready', replayed) and does nothing else; the same key with a DIFFERENT request is 'idempotency_conflict'. The key is stored with the
+//      report (migration 0281, unique per person), so repeated clicks, a screen that asks again while a report is prepared in steps and a
+//      retried request all end with ONE issued report.
 //   3. the report NAV gate (price history still being prepared; starts the bounded retry + the user fetch) -> 'preparing'
+//      SCOPE (B2): the gate and the planner look only at the funds THIS report covers. With a choice (fundIds) they look at exactly those
+//      funds, so a fund the person holds but did not select can never keep the selected report in 'preparing'. With no choice a person who holds
+//      more than one report covers is not gated yet (they must choose first); a person at or under the cap is gated on every fund held.
 //   3b. ONLY when the nav2_trigger_planner switch is ON: the history the CHOSEN PERIOD needs (the NAV2 required window per
 //      held scheme) is planned read-only; if some of it is missing and its fetch could be started, the answer is 'preparing'
 //      (a failed attempt goes into the existing cooldown, so this cannot hold forever; a fetch that could not be scheduled
@@ -13,8 +20,10 @@
 //      suggested choice: the 20 largest holdings); a choice that is empty, longer than the cap, repeats a fund or names a fund the person does not hold
 //      is 'invalid_selection' (one message for all of them, so another household's fund ids can never be probed). The choice is stored in the manifest.
 //   4. the household holds at least one Indian mutual fund this report covers                              -> 'no_funds'
-//   5. TIME BUDGET: engine work that would not finish inside GENERATION_BUDGET_MS is not started; the funds that fit are prepared into the shared
-//      cache and the answer is 'in_steps' (retry; the next generation carries on where this one stopped).
+//   5. TIME BUDGET (one clock for the whole request, from route entry, see lib/config/nav2/reportLimits.ts): engine work that would not finish
+//      inside GENERATION_BUDGET_MS is not started; the funds that fit are prepared into the shared cache and the answer is 'in_steps' (retry; the
+//      next generation carries on where this one stopped). If the engine ends too late to persist inside REQUEST_DEADLINE_MS the finished
+//      bundles are already cached and the answer is 'in_steps' with every fund ready, so the next call only persists. Nothing partial is ever issued.
 //   6. build the report (pure), reuse the shared scheme-performance cache, persist the pinned row.
 //
 // The persisted row is IMMUTABLE (migration 0261): a regenerated report is a NEW version
@@ -25,7 +34,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isReportPeriodChoice, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
 import { buildFundAnalyticsReport, compactSchemeFamily, manifestChecksum, schemeBundleCacheKey, schemeBundleCacheParts, type FundAnalyticsInput, type FundAnalyticsManifest, type FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
-import { ENGINE_MS_PER_UNCACHED_FUND, FUND_ANALYTICS_MAX_FUNDS, GENERATION_BUDGET_MS } from '@/lib/config/nav2/reportLimits';
+import { createHash } from 'node:crypto';
+import { ENGINE_MS_PER_UNCACHED_FUND, FUND_ANALYTICS_MAX_FUNDS, GENERATION_BUDGET_MS, MIN_PERSIST_MS, REQUEST_DEADLINE_MS } from '@/lib/config/nav2/reportLimits';
 import { invalidSelectionMessage, largeReportStepsMessage, tooManyFundsMessage } from '@/lib/engines/nav2/reportWording';
 import { getPlanTier } from '@/lib/services/entitlements';
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
@@ -58,12 +68,23 @@ export type GenerateResult =
   | { status: 'select_funds'; message: string; max: number; heldFundCount: number; candidates: FundChoiceCandidate[]; suggestedIds: string[] }
   | { status: 'invalid_selection'; message: string }
   | { status: 'in_steps'; message: string; ready: number; total: number; retryAfterSeconds: number }
-  | { status: 'ready'; report: StoredReportSummary; cache: { hits: number; computed: number; stored: number } };
+  | { status: 'idempotency_conflict'; message: string }
+  | { status: 'ready'; report: StoredReportSummary; cache: { hits: number; computed: number; stored: number }; replayed?: boolean };
+
+/** The idempotency key a client may send (a UUID fits): 16 to 64 letters, digits, underscore or hyphen. Anything else is refused before any work. */
+export const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
+export const IDEMPOTENCY_CONFLICT_MESSAGE = 'This request key was already used for a different report request. Start a new request.';
+
+/** SHA-256 of what the person asked for: the period and the sorted fund choice (null = every fund held). Two requests with one key must have one fingerprint. */
+export function requestFingerprint(period: ReportPeriodChoice, fundIds: readonly string[] | null): string {
+  const ids = fundIds === null ? null : [...fundIds].sort();
+  return createHash('sha256').update(JSON.stringify({ period, funds: ids }), 'utf8').digest('hex');
+}
 
 export interface FundAnalyticsDeps {
   isFlagOn: (admin: SupabaseClient) => Promise<boolean>;
   isPremium: (userId: string, admin: SupabaseClient) => Promise<boolean>;
-  gate: (args: { admin: SupabaseClient; userId: string; today: string }) => Promise<ReportNavGate>;
+  gate: (args: { admin: SupabaseClient; userId: string; today: string; onlyInstrumentIds?: readonly string[] | null; skipIfMoreHeldThan?: number }) => Promise<ReportNavGate>;
   load: (args: Parameters<typeof loadFundAnalyticsInput>[0]) => Promise<FundAnalyticsLoadResult>;
   nowIso: () => string;
   /** Milliseconds clock for the time budget (injectable so a test can make a generation slow). */
@@ -71,9 +92,11 @@ export interface FundAnalyticsDeps {
   /** The nav2_trigger_planner switch (OFF unless its row exists and is enabled). */
   plannerOn: (admin: SupabaseClient) => Promise<boolean>;
   /** Read-only: the NAV2 window plan the chosen period needs for this user. */
-  planPeriod: (args: { admin: SupabaseClient; userId: string; period: ReportPeriodChoice; today: string }) => Promise<Nav2WindowPlan>;
-  /** Start the planned fetch after the response; false when it could not be scheduled. */
-  kickPeriod: (userId: string, period: ReportPeriodChoice) => boolean;
+  planPeriod: (args: { admin: SupabaseClient; userId: string; period: ReportPeriodChoice; today: string; onlyInstrumentIds?: readonly string[] | null }) => Promise<Nav2WindowPlan>;
+  /** Start the planned fetch after the response (only for the funds the report covers when `onlyInstrumentIds` is given); false when it could not be scheduled. */
+  kickPeriod: (userId: string, period: ReportPeriodChoice, onlyInstrumentIds?: readonly string[] | null) => boolean;
+  /** The report already issued for this person and key, or null (idempotency). */
+  findByKey: (admin: SupabaseClient, userId: string, key: string) => Promise<{ summary: StoredReportSummary; fingerprint: string | null } | null>;
   /**
    * Whether the NAV fetch kill switch (pc6_selective_historical_hydration) is ON. With it OFF the planned fetch can never run and leaves no attempt
    * record, so no cooldown would ever release the report: holding for it would hold FOREVER (found on DEV, Stage 3). Anything but a clean "ON" is OFF.
@@ -84,13 +107,14 @@ export interface FundAnalyticsDeps {
 const defaultDeps: FundAnalyticsDeps = {
   isFlagOn: (admin) => isNav2FlagOn(admin, NAV2_JOB_KEYS.fundAnalytics),
   isPremium: async (userId, admin) => (await getPlanTier(userId, admin as unknown as SupabaseServerClient)) === 'premium',
-  gate: ({ admin, userId, today }) => checkReportNavHistoryGate({ db: admin as never, userId, today, createAnchor: true, kick: kickUserNavHistory }),
+  gate: ({ admin, userId, today, onlyInstrumentIds, skipIfMoreHeldThan }) => checkReportNavHistoryGate({ db: admin as never, userId, today, createAnchor: true, kick: kickUserNavHistory, onlyInstrumentIds, skipIfMoreHeldThan }),
   load: loadFundAnalyticsInput,
   nowIso: () => new Date().toISOString(),
   nowMs: () => Date.now(),
   plannerOn: (admin) => isNav2FlagOn(admin, NAV2_JOB_KEYS.triggerPlanner),
-  planPeriod: ({ admin, userId, period, today }) => planForReportPeriod(admin, userId, period, today),
-  kickPeriod: (userId, period) => kickNav2ReportPeriod(userId, period),
+  planPeriod: ({ admin, userId, period, today, onlyInstrumentIds }) => planForReportPeriod(admin, userId, period, today, onlyInstrumentIds ?? null),
+  kickPeriod: (userId, period, onlyInstrumentIds) => kickNav2ReportPeriod(userId, period, {}, onlyInstrumentIds ?? null),
+  findByKey: findReportByIdempotencyKey,
   fetchingEnabled: async (admin) => {
     try {
       const { data, error } = await admin.from('ii_reference_job_control').select('enabled').eq('job_key', NAV_FETCH_KILL_SWITCH_JOB_KEY).maybeSingle();
@@ -133,10 +157,17 @@ export async function generateFundAnalyticsReport(args: {
   fundIds?: readonly string[] | null;
   /** ISO date; defaults to today (UTC). */
   asOfDate?: string;
+  /**
+   * The client's idempotency key for ONE intended report (already validated against IDEMPOTENCY_KEY_PATTERN by the route). Absent = no
+   * replay protection, exactly the previous behaviour for an older client.
+   */
+  idempotencyKey?: string | null;
+  /** When the REQUEST began (route entry, milliseconds). Defaults to now. Every time budget in this function is measured from it. */
+  requestStartedMs?: number;
   deps?: Partial<FundAnalyticsDeps>;
 }): Promise<GenerateResult> {
   const deps = { ...defaultDeps, ...(args.deps ?? {}) };
-  const startedMs = deps.nowMs();
+  const startedMs = args.requestStartedMs ?? deps.nowMs();
   const admin = args.adminClient;
   if (!(await deps.isFlagOn(admin))) return { status: 'disabled', message: FUND_ANALYTICS_DISABLED_MESSAGE };
   if (!(await deps.isPremium(args.userId, admin))) return { status: 'forbidden', message: FUND_ANALYTICS_PREMIUM_MESSAGE };
@@ -151,38 +182,46 @@ export async function generateFundAnalyticsReport(args: {
   const asOfDate = args.asOfDate ?? nowIso.slice(0, 10);
   const periodChoice = parsePeriodChoice(args.periodChoice);
 
-  const gate = await deps.gate({ admin, userId: args.userId, today: asOfDate });
-  if (gate.hold) return { status: 'preparing', message: gate.headline ?? 'Price history is being prepared.', waiting: waitingBody(gate) };
-
-  if (await deps.plannerOn(admin)) {
-    let plan: Nav2WindowPlan | null = null;
-    try {
-      plan = await deps.planPeriod({ admin, userId: args.userId, period: periodChoice, today: asOfDate });
-    } catch {
-      plan = null; // a planning problem never blocks the report: it proceeds and says honestly what history it has
-    }
-    if (plan && plan.fetch.toFetch.length > 0 && (await deps.fetchingEnabled(admin)) && deps.kickPeriod(args.userId, periodChoice)) {
-      const ids = plan.fetch.toFetch.map((f) => f.instrumentId);
-      const { data: named } = await admin.from('ii_instruments').select('id, instrument_name').in('id', ids);
-      const names = new Map(((named ?? []) as Array<{ id: string; instrument_name: string }>).map((r) => [r.id, r.instrument_name]));
-      const total = plan.windows.length;
-      const loadedCount = total - plan.fetch.toFetch.length - plan.fetch.deferred.length - plan.fetch.inCooldown.length;
-      const headline = `Price history for the period you chose is being prepared (${Math.max(0, loadedCount)} of ${total} ${total === 1 ? 'fund' : 'funds'} ready)`;
-      return {
-        status: 'preparing',
-        message: headline,
-        waiting: { waiting: true, headline, loaded: Math.max(0, loadedCount), total, waitingFunds: ids.map((id) => names.get(id) ?? 'A fund you hold'), unavailableFunds: [], retryWindowMinutes: REPORT_NAV_RETRY_WINDOW_MINUTES },
-      };
+  // ---- idempotency: one key, one issued report ---------------------------------------------------------------------
+  const idem = args.idempotencyKey ? { key: args.idempotencyKey, fingerprint: requestFingerprint(periodChoice, requested) } : null;
+  if (idem) {
+    const prior = await deps.findByKey(admin, args.userId, idem.key);
+    if (prior) {
+      if (prior.fingerprint !== idem.fingerprint) return { status: 'idempotency_conflict', message: IDEMPOTENCY_CONFLICT_MESSAGE };
+      return { status: 'ready', report: prior.summary, cache: { hits: 0, computed: 0, stored: 0 }, replayed: true };
     }
   }
 
-  const loaded = await deps.load({ userId: args.userId, sessionClient: args.sessionClient, adminClient: admin, asOfDate, displayCurrency: 'INR', periodChoice, gate, selection: { max: FUND_ANALYTICS_MAX_FUNDS, chosen: requested } });
+  // ---- the price-history gate and the planner look ONLY at the funds this report covers (B2) -------------------------
+  const gate = await deps.gate({ admin, userId: args.userId, today: asOfDate, onlyInstrumentIds: requested, skipIfMoreHeldThan: requested === null ? FUND_ANALYTICS_MAX_FUNDS : undefined });
+  if (gate.hold) return { status: 'preparing', message: gate.headline ?? 'Price history is being prepared.', waiting: waitingBody(gate) };
+
+  if (!gate.skippedForChoice && (await deps.plannerOn(admin))) {
+    const preparing = await planCoveredFunds({ deps, admin, userId: args.userId, periodChoice, asOfDate, instrumentIds: requested });
+    if (preparing) return preparing;
+  }
+
+  let loaded = await deps.load({ userId: args.userId, sessionClient: args.sessionClient, adminClient: admin, asOfDate, displayCurrency: 'INR', periodChoice, gate, selection: { max: FUND_ANALYTICS_MAX_FUNDS, chosen: requested } });
   if (loaded.selectionProblem === 'invalid') return { status: 'invalid_selection', message: invalidSelectionMessage(FUND_ANALYTICS_MAX_FUNDS) };
   if (loaded.selectionProblem === 'needed' && loaded.choice) {
     const held = loaded.choice.candidates.length;
     return { status: 'select_funds', message: tooManyFundsMessage(held, FUND_ANALYTICS_MAX_FUNDS), max: FUND_ANALYTICS_MAX_FUNDS, heldFundCount: held, candidates: loaded.choice.candidates, suggestedIds: loaded.choice.suggestedIds };
   }
   if (!loaded.input || loaded.input.schemes.length === 0) return { status: 'no_funds', message: FUND_ANALYTICS_NO_FUNDS_MESSAGE };
+
+  // The gate was skipped because the person holds more funds than one report covers and had not chosen, but the report covers at most the
+  // cap in the end (some holdings are not personal funds). Gate the funds the report really covers now, and only then build.
+  if (gate.skippedForChoice) {
+    const covered = loaded.input.schemes.map((h) => h.instrumentId);
+    const scoped = await deps.gate({ admin, userId: args.userId, today: asOfDate, onlyInstrumentIds: covered });
+    if (scoped.hold) return { status: 'preparing', message: scoped.headline ?? 'Price history is being prepared.', waiting: waitingBody(scoped) };
+    if (await deps.plannerOn(admin)) {
+      const preparing = await planCoveredFunds({ deps, admin, userId: args.userId, periodChoice, asOfDate, instrumentIds: covered });
+      if (preparing) return preparing;
+    }
+    loaded = await deps.load({ userId: args.userId, sessionClient: args.sessionClient, adminClient: admin, asOfDate, displayCurrency: 'INR', periodChoice, gate: scoped, selection: { max: FUND_ANALYTICS_MAX_FUNDS, chosen: covered } });
+    if (!loaded.input || loaded.input.schemes.length === 0) return { status: 'no_funds', message: FUND_ANALYTICS_NO_FUNDS_MESSAGE };
+  }
 
   // ---- reuse the shared per-scheme cache --------------------------------------------------------------------------
   const base: FundAnalyticsInput = loaded.input;
@@ -215,17 +254,68 @@ export async function generateFundAnalyticsReport(args: {
     const block = report.schemes.find((b) => b.instrumentId === h.instrumentId);
     if (block) writes.push({ key, parts: schemeBundleCacheParts(base, h), payload: compactSchemeFamily(block.analytics.scheme) });
   }
+  // the finished bundles are saved FIRST: whatever happens next, this work is never lost and the next call resumes from it
   const stored = writes.length ? await writeCachedBundles(admin, writes) : 0;
 
-  const summary = await persistReport({ admin, userId: args.userId, report, manifest, nowIso });
-  return { status: 'ready', report: summary, cache: { hits: cached.size, computed: writes.length, stored } };
+  // The engine ended too late to persist a 2 MB report before the deadline: do not start a write the platform may cut. Nothing is issued; every
+  // fund is ready in the cache, so the next call (same key) only persists.
+  if (deps.nowMs() - startedMs > REQUEST_DEADLINE_MS - MIN_PERSIST_MS) {
+    return { status: 'in_steps', message: largeReportStepsMessage(keyed.length, keyed.length), ready: keyed.length, total: keyed.length, retryAfterSeconds: 2 };
+  }
+
+  const persisted = await persistReport({ admin, userId: args.userId, report, manifest, nowIso, idempotency: idem });
+  return { status: 'ready', report: persisted.report, cache: { hits: cached.size, computed: writes.length, stored }, ...(persisted.replayed ? { replayed: true } : {}) };
+}
+
+/** Step 3b: when the planner switch is ON, plan the history the period needs for the funds this report covers; 'preparing' when a fetch was started. */
+async function planCoveredFunds(a: { deps: FundAnalyticsDeps; admin: SupabaseClient; userId: string; periodChoice: ReportPeriodChoice; asOfDate: string; instrumentIds: readonly string[] | null }): Promise<GenerateResult | null> {
+  let plan: Nav2WindowPlan | null = null;
+  try {
+    plan = await a.deps.planPeriod({ admin: a.admin, userId: a.userId, period: a.periodChoice, today: a.asOfDate, onlyInstrumentIds: a.instrumentIds });
+  } catch {
+    plan = null; // a planning problem never blocks the report: it proceeds and says honestly what history it has
+  }
+  if (plan && plan.fetch.toFetch.length > 0 && (await a.deps.fetchingEnabled(a.admin)) && a.deps.kickPeriod(a.userId, a.periodChoice, a.instrumentIds)) {
+    const ids = plan.fetch.toFetch.map((f) => f.instrumentId);
+    const { data: named } = await a.admin.from('ii_instruments').select('id, instrument_name').in('id', ids);
+    const names = new Map(((named ?? []) as Array<{ id: string; instrument_name: string }>).map((r) => [r.id, r.instrument_name]));
+    const total = plan.windows.length;
+    const loadedCount = total - plan.fetch.toFetch.length - plan.fetch.deferred.length - plan.fetch.inCooldown.length;
+    const headline = `Price history for the period you chose is being prepared (${Math.max(0, loadedCount)} of ${total} ${total === 1 ? 'fund' : 'funds'} ready)`;
+    return {
+      status: 'preparing',
+      message: headline,
+      waiting: { waiting: true, headline, loaded: Math.max(0, loadedCount), total, waitingFunds: ids.map((id) => names.get(id) ?? 'A fund you hold'), unavailableFunds: [], retryWindowMinutes: REPORT_NAV_RETRY_WINDOW_MINUTES },
+    };
+  }
+  return null;
+}
+
+/** The report already issued for this person and key (idempotency), with the fingerprint of the request it answered. Null when none. */
+export async function findReportByIdempotencyKey(admin: SupabaseClient, userId: string, key: string): Promise<{ summary: StoredReportSummary; fingerprint: string | null } | null> {
+  const { data, error } = await admin
+    .from('nav2_fund_analytics_reports')
+    .select('id, version_number, as_of_date, scheme_count, created_at, request_fingerprint, period_choice:report_json->>periodChoice')
+    .eq('user_id', userId)
+    .eq('idempotency_key', key)
+    .maybeSingle();
+  // An error (for example the column does not exist because migration 0281 is not applied) means no key can have been stored: no replay to find.
+  if (error || !data) return null;
+  const r = data as unknown as ReportRow & { request_fingerprint: string | null; period_choice: string | null };
+  return { summary: toSummary({ ...r, report_json: { periodChoice: r.period_choice ?? undefined } }), fingerprint: r.request_fingerprint ?? null };
 }
 
 /** How many times a generation tries to take the next version number when other generations for the same user take it first. */
 export const PERSIST_VERSION_ATTEMPTS = 10;
 
-/** Persists the next version of the pinned report and its NAV dependency manifest. Retries on a version race (several simultaneous generations). */
-export async function persistReport(args: { admin: SupabaseClient; userId: string; report: FundAnalyticsReport; manifest: FundAnalyticsManifest; nowIso: string }): Promise<StoredReportSummary> {
+/**
+ * Persists the next version of the pinned report and its NAV dependency manifest. Retries on a version race (several simultaneous generations).
+ *
+ * IDEMPOTENCY (migration 0281): with a key, a unique violation on (person, key) means another request with the same key already issued the
+ * report: that report is returned (`replayed`) and no second one exists. NO PARTIAL ISSUE: if the NAV range of any fund cannot be pinned the
+ * report row just inserted is deleted again (it is this call's own row, children cascade), so nothing that looks final but is unprotected stays.
+ */
+export async function persistReport(args: { admin: SupabaseClient; userId: string; report: FundAnalyticsReport; manifest: FundAnalyticsManifest; nowIso: string; idempotency?: { key: string; fingerprint: string } | null }): Promise<{ report: StoredReportSummary; replayed: boolean }> {
   const { admin, userId, report, manifest } = args;
   for (let attempt = 0; attempt < PERSIST_VERSION_ATTEMPTS; attempt++) {
     const { data: prev, error: perr } = await admin
@@ -251,9 +341,25 @@ export async function persistReport(args: { admin: SupabaseClient; userId: strin
       manifest_json: manifest,
       manifest_checksum: manifestChecksum(manifest),
       state_counts: report.stateCounts,
+      ...(args.idempotency ? { idempotency_key: args.idempotency.key, request_fingerprint: args.idempotency.fingerprint } : {}),
     };
-    const { data: ins, error: ierr } = await admin.from('nav2_fund_analytics_reports').insert(row).select('id, version_number, as_of_date, scheme_count, created_at').single();
+    let { data: ins, error: ierr } = await admin.from('nav2_fund_analytics_reports').insert(row).select('id, version_number, as_of_date, scheme_count, created_at').single();
+    if (ierr && args.idempotency && ['42703', 'PGRST204'].includes(String((ierr as { code?: string }).code ?? ''))) {
+      // DEPLOY ORDER: this code ran before migration 0281 (the key columns do not exist yet). The report is still issued, without replay protection,
+      // exactly as an older client would get it; the release order (database first) means this is a transient state, never the intended one.
+      console.warn('[fund-analytics] idempotency columns missing (migration 0281 not applied): issuing the report without a key');
+      const plain: Record<string, unknown> = { ...row };
+      delete plain.idempotency_key;
+      delete plain.request_fingerprint;
+      ({ data: ins, error: ierr } = await admin.from('nav2_fund_analytics_reports').insert(plain).select('id, version_number, as_of_date, scheme_count, created_at').single());
+    }
     if (ierr) {
+      // 23505 on the idempotency index: the same key already issued a report (a repeated click, a retry, a racing request). Return THAT report.
+      if ((ierr as { code?: string }).code === '23505' && args.idempotency && /idempotency/i.test(String((ierr as { message?: string }).message ?? '') + String((ierr as { details?: string }).details ?? ''))) {
+        const winner = await findReportByIdempotencyKey(admin, userId, args.idempotency.key);
+        if (winner) return { report: winner.summary, replayed: true };
+        throw new Error('The report could not be saved.');
+      }
       // 23505 = another generation took this version number first: read again and take the next one.
       if ((ierr as { code?: string }).code === '23505' && attempt < PERSIST_VERSION_ATTEMPTS - 1) {
         await new Promise((r) => setTimeout(r, 15 + Math.floor(Math.random() * 60))); // a little jitter so the racers do not collide again in step
@@ -267,10 +373,14 @@ export async function persistReport(args: { admin: SupabaseClient; userId: strin
       .map((s) => ({ report_id: saved.id, instrument_id: s.instrumentId, nav_date_from: s.navRange.from, nav_date_to: s.navRange.to as string, series_checksum: s.navSeries.checksum }));
     if (deps.length) {
       const { error: derr } = await admin.from('nav2_report_nav_dependencies').insert(deps);
-      // A report whose NAV range could not be pinned must not be left looking final.
-      if (derr) throw new Error('The report could not be saved (price history could not be protected).');
+      // A report whose NAV range could not be pinned must not be left looking final: remove the row this call just inserted (nothing can have read it
+      // as a pinned report, and the dependency rows that did not insert cascade away with it).
+      if (derr) {
+        await admin.from('nav2_fund_analytics_reports').delete().eq('id', saved.id).eq('user_id', userId);
+        throw new Error('The report could not be saved (price history could not be protected).');
+      }
     }
-    return toSummary({ ...saved, report_json: { periodChoice: report.periodChoice } });
+    return { report: toSummary({ ...saved, report_json: { periodChoice: report.periodChoice } }), replayed: false };
   }
   throw new Error('The report could not be saved.');
 }

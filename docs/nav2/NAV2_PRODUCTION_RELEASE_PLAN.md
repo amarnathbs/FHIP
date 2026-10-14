@@ -10,7 +10,7 @@ Prepared 07-10-2026 on the integration branch `integrate/nav2-production-2026100
 - **Two things to know before you push** (section 4.1): migration 0261 replaces the retention function `pc6_nav_row_is_candidate` assuming production holds the 0219 text (pre-check P3 verifies it and stops the release if not); and this release also changes, for every user, how a statement line is matched when its ISIN and its AMFI code point at two different funds (it now opens a review question instead of silently choosing the ISIN's fund).
 - **Menu entry added:** Reports, Fund Analytics, shown only to a Premium person while the Fund analytics switch is ON; free people never see a dead link.
 - **Limits** (section 6): generation is synchronous inside one web request that Amplify ends at 28 seconds; a report covers at most 20 funds (a person with more chooses); a larger report is prepared in steps.
-- **Not verified / not activated:** sections 7 and 8. Beta and alpha stay NOT ACTIVATED (no licensed benchmark data); the weekly RBI refresh stays blocked on RBI's written confirmation; the PDF export on the Amplify runtime has not been exercised anywhere for NAV2; the DEV Stage 3 verdict is CONDITIONAL PASS and production has never run any of this.
+- **Not verified / not activated:** sections 7 and 8. Beta and alpha stay NOT ACTIVATED (no licensed benchmark data); the weekly RBI refresh stays OFF until its final-build dry run passes (Product Owner decision: RBI's written confirmation is not required); the PDF export on the Amplify runtime has not been exercised anywhere for NAV2; the DEV Stage 3 verdict is CONDITIONAL PASS and production has never run any of this.
 
 ## 1. The integration branch
 
@@ -149,7 +149,7 @@ Everything is in `docs/nav2/po_apply_production/README.md`; this is the short fo
 5. Grant the upload permission and (to a different person) the series switch permission; with one administrator, grant upload only and revoke it after the load.
 6. Load the two RBI files and the gap file through Risk-free Rate Data; read the attestation text.
 7. Switch Fund analytics ON (pilot) while you are present, test with your own Premium account (generate, PDF, Fund Analytics Health), keep it ON or switch it OFF.
-8. Later and separately: planner, correction worker (stages B and C); the weekly RBI refresh only after RBI confirms in writing (stage D).
+8. Later and separately: planner, correction worker (stages B and C); the weekly RBI refresh once its final-build dry run has passed (stage D; RBI's written confirmation is not required by Product Owner decision).
 
 ## 6. Limits of the report and what users see
 
@@ -166,7 +166,7 @@ Everything is in `docs/nav2/po_apply_production/README.md`; this is the short fo
 | 1 | Migration 0261 overwrites `pc6_nav_row_is_candidate` | production holds a text other than 0219 | P3 checks the md5 of the function source. If false, do not apply 0261 |
 | 2 | The correction hook (0262) runs inside every price correction insert | a future change that makes the events table reject a row would abort corrections | none today (proved); the hook only inserts `on conflict do nothing`. Rollback `rollback_0262.sql` |
 | 3 | Statement matching changes for everyone (NAV2-F1, your decision of 04-10-2026) | any upload whose ISIN and AMFI code disagree now opens a reconciliation question | watch open ambiguous instrument cases for a week; DEV has seven such incoherent instruments, production unknown |
-| 4 | RBI reuse terms | RBI states "All Rights Reserved"; you accepted the risk (terms status `po_accepted_2026-10-03`); no written confirmation | keep the weekly refresh OFF, keep "Source: Reserve Bank of India" (already in the report), ask RBI in writing |
+| 4 | RBI reuse terms | RBI states "All Rights Reserved"; you accepted the risk (terms status `po_accepted_2026-10-03`); written RBI confirmation is not required | keep "Source: Reserve Bank of India" (already in the report), keep the weekly refresh OFF until its final-build dry run passes |
 | 5 | Single operator | one administrator can hold both permissions: logical segregation only, no re-authentication, no preview of a series switch | grant upload only, revoke after the load; do not call it dual control |
 | 6 | PDF export on the Amplify runtime | needs headless Chromium (installed in the Amplify build step, the same pattern as the Monthly Report and Forecast PDFs). Never exercised from Amplify for NAV2 | first smoke check of the pilot is "View PDF"; if it fails, the on-screen report still works |
 | 7 | Large reports meet the 28 second limit | 20 funds with a cold cache | the 20 second budget and "prepared in steps" handle it; a person with many funds may need a second click |

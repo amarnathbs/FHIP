@@ -38,6 +38,15 @@ interface FundPick {
   chosen: string[];
 }
 
+/** An opaque key for one intended report: a UUID (the server accepts 16 to 64 letters, digits, underscores or hyphens). */
+function newAttemptKey(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}${Math.random().toString(36).slice(2, 12)}`;
+  }
+}
+
 export default function FundAnalyticsReportClient() {
   const [versions, setVersions] = useState<Summary[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -52,6 +61,11 @@ export default function FundAnalyticsReportClient() {
   const fundIds = useRef<string[] | null>(null);
   // when a second report is wanted for the funds the last one left out, these are ticked first
   const preselect = useRef<string[] | null>(null);
+  // ONE KEY PER INTENDED REPORT (release candidate B3). A click that starts a report makes a key; the screen's own re-checks while the report is
+  // prepared in steps, a second click while one is running and a retry after a timeout all send the SAME key, so the server issues ONE report.
+  // The key is dropped once the report is issued or the request ends in an answer that is not "ask again".
+  const attemptKey = useRef<string | null>(null);
+  const inFlight = useRef(false);
   const [exporting, setExporting] = useState<'download' | 'view' | null>(null);
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
   const polls = useRef(0);
@@ -96,13 +110,26 @@ export default function FundAnalyticsReportClient() {
   }, [loadList]);
 
   const generate = useCallback(async (funds?: string[] | null) => {
-    if (funds !== undefined) fundIds.current = funds;
+    // a second click while a request is running does nothing (and could not make a second report anyway: it would carry the same key)
+    if (inFlight.current) return;
+    inFlight.current = true;
+    // a click (funds given) starts a new intended report; the screen's own re-check (no argument) continues the current one
+    if (funds !== undefined) {
+      fundIds.current = funds;
+      attemptKey.current = null;
+    }
+    if (!attemptKey.current) attemptKey.current = newAttemptKey();
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const r = await fetch('/api/reports/fund-analytics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period, ...(fundIds.current ? { funds: fundIds.current } : {}) }) });
+      const r = await fetch('/api/reports/fund-analytics', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': attemptKey.current }, body: JSON.stringify({ period, ...(fundIds.current ? { funds: fundIds.current } : {}) }) });
       const j = await r.json().catch(() => null);
+      if (r.status === 503 && j?.data?.status === 'timed_out') {
+        // the request ran out of its own time: nothing was lost, so say so and ask again by itself with the same key
+        setWaiting({ headline: j.error as string, loaded: 0, total: 0, waitingFunds: [], unavailableFunds: [] });
+        return;
+      }
       if (r.status === 409 && j?.data?.status === 'select_funds') {
         // more funds held than one report covers: show the plain message and let the person choose (the largest holdings are ticked first)
         const d = j.data as { message: string; max: number; heldFundCount: number; candidates: FundPick['candidates']; suggestedIds: string[] };
@@ -121,19 +148,23 @@ export default function FundAnalyticsReportClient() {
       }
       setWaiting(null);
       if (!r.ok) {
+        attemptKey.current = null; // an answer that is not "ask again": the next click is a new intended report
         setError(j?.error ?? `The report could not be generated (${r.status}).`);
         return;
       }
       if (j.data.status === 'no_funds') {
+        attemptKey.current = null;
         setNotice(j.data.message as string);
         return;
       }
+      attemptKey.current = null; // issued: the next click makes a NEW report
       setPick(null);
       await loadList(false);
       await loadReport(j.data.report.id as string);
     } catch {
       setError('The report could not be generated.');
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }, [period, loadList, loadReport]);

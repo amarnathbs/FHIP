@@ -1,4 +1,4 @@
-// NAV2 migrations 0260 (parts a-e, or the whole file), 0261, 0262, 0263, 0269, 0270, 0271: the EXPECTED database shape, proven in an in-process Postgres
+// NAV2 migrations 0260 (parts a-e, or the whole file), 0261, 0262, 0263, 0269, 0270, 0271, 0281, 0282: the EXPECTED database shape, proven in an in-process Postgres
 // (PGlite) from empty, from partial and from complete state and on re-run, and a READ-ONLY comparison with DEV.
 //
 //   node scripts/nav2_schema_inventory.mjs prove                 replay the chain, apply in four ways, prove identical, write expected_inventory.json
@@ -27,7 +27,7 @@ const DEV_REF = 'vqycarelcoijzwlpkpcz';
 const strip = (s) => s.replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, '');
 const files = fs.readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort();
 const F = (p) => files.find((f) => f.startsWith(p));
-const NAV2_FILES = [F('0260_'), F('0261_'), F('0262_'), F('0263_'), F('0269_'), F('0270_'), F('0271_')];
+const NAV2_FILES = [F('0260_'), F('0261_'), F('0262_'), F('0263_'), F('0269_'), F('0270_'), F('0271_'), F('0281_'), F('0282_')];
 const partFiles = ['a', 'b', 'c', 'd', 'e'].map((l) => path.join(PARTS, `0260${l}.sql`));
 const read = (f) => strip(fs.readFileSync(f, 'utf8'));
 
@@ -137,7 +137,7 @@ async function prove() {
   console.log(`\nidentical inventory in all four states: ${same ? 'YES' : 'NO'}; second apply raised no error: ${noErr ? 'YES' : 'NO'}`);
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUT_DIR, 'expected_inventory.json'), JSON.stringify(results[0].inv, null, 1));
-  fs.writeFileSync(path.join(OUT_DIR, 'nav2_catalog_inventory.sql'), `-- Read-only. Paste into the Supabase SQL editor of the DEV project and run it. It returns ONE jsonb value named inventory.\n-- Save that value as actual.json and run:  node scripts/nav2_schema_inventory.mjs compare actual.json\n${catalogSql()};\n`);
+  fs.writeFileSync(path.join(OUT_DIR, 'nav2_catalog_inventory.sql'), `-- Read only. Run it in the Supabase SQL editor of the project you are checking (DEV or production). It returns ONE jsonb value named inventory.\n-- Save that value as actual.json, then the agent runs the compare command of scripts/nav2_schema_inventory.mjs on it.\n${catalogSql()};\n`);
   console.log(`wrote ${path.relative(REPO, path.join(OUT_DIR, 'expected_inventory.json'))} and nav2_catalog_inventory.sql`);
   if (!same || !noErr) process.exit(1);
 }

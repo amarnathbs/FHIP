@@ -32,13 +32,21 @@ export function addDaysIso(iso: string, days: number): string {
  * (31 March minus 1 month is 28/29 February). This is the "t - horizon" of a rolling window (spec 8.5).
  */
 export function subtractMonthsIso(iso: string, n: number): string {
+  // remembered (a rolling window asks for the same date and horizon once per fund): same answer, bounded memory (see toUtc in the R5 date module)
+  const key = `${iso}|${n}`;
+  const hit = SUBTRACT_CACHE.get(key);
+  if (hit !== undefined) return hit;
   const [y, m, d] = iso.split('-').map(Number);
   const total = y * 12 + (m - 1) - n;
   const ty = Math.floor(total / 12);
   const tm = total - ty * 12; // 0-based month
   const lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(ty, tm, Math.min(d, lastDay))).toISOString().slice(0, 10);
+  const out = new Date(Date.UTC(ty, tm, Math.min(d, lastDay))).toISOString().slice(0, 10);
+  if (SUBTRACT_CACHE.size >= 100_000) SUBTRACT_CACHE.clear();
+  SUBTRACT_CACHE.set(key, out);
+  return out;
 }
+const SUBTRACT_CACHE = new Map<string, string>();
 
 /** Monday to Friday days in [from, to], inclusive. A coverage yardstick only (it knows no market holidays). */
 export function weekdayCount(from: string, to: string): number {

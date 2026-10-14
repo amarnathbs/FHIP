@@ -173,12 +173,12 @@ Repo series:
 - Checked on 03-10-2026 (section 2.3a): the latest monetary policy statement, 05-08-2026, kept the repo rate at 5.25; no later change found. A decision announced after 03-10-2026 is not covered.
 - The 2010 edition omits the 05-01-2009 change, handled as described in 2.3.
 
-## 6. Terms status: pending written confirmation from RBI
+## 6. Terms status: PO-accepted reuse risk (written RBI confirmation not required)
 
-- The PO is proceeding with attribution while written confirmation is pending. RBI states "All Rights Reserved" on these pages and its disclaimer restricts caching, linking and framing without written permission; no explicit licence for reuse of these tables was found on any page I read.
-- This data was gathered by ordinary page views for a one-off first load. Do not automate retrieval of rbi.org.in or rbidocs.rbi.org.in from FHIP code, and do not cache or frame RBI pages, until RBI confirms in writing. The rbidocs host showed a human-verification page to scripted downloads.
+- Written RBI confirmation is not required by Product Owner decision. Historical manual loading and automated refresh are permitted subject to technical validation, attribution, monitoring and the documented accepted reuse risk. The PO proceeds with attribution. RBI states "All Rights Reserved" on these pages and its disclaimer restricts caching, linking and framing without written permission; no explicit licence for reuse of these tables was found on any page I read.
+- This data was gathered by ordinary page views for a one-off first load. Automated weekly retrieval is permitted by the PO decision above and is implemented as a polite, HTML-only reader (rbi.org.in only, no documents, robots.txt honoured, nothing retried or worked around when RBI refuses a content page). FHIP does not frame RBI pages. The rbidocs host showed a human-verification page to scripted downloads, which is why documents are never requested.
 - Suggested attribution wording to show next to the rate in reports: "Source: Reserve Bank of India" (the wording RBI prints on its own tables), plus the date of the rate.
-- Status of that written confirmation: not received as of 03-10-2026.
+- Written RBI confirmation: not required by Product Owner decision (03-10-2026, restated 14-10-2026); none was received.
 
 ## 7. Delivered versus not obtained
 
@@ -189,5 +189,5 @@ Repo series:
 | Monthly averages | Not produced (weekly data available) | Not needed |
 | RBI's own downloadable XLSX/PDF of the tables | No | Blocked by a human-verification page for scripted download; values read from RBI's HTML view of the same tables |
 | RBI DBIE time-series download | No | Page not readable by my tools; no undocumented interface used |
-| Written RBI permission | No | Pending, see section 6 |
+| Written RBI permission | No | Not required by Product Owner decision, see section 6 |
 | Third-party mirrors | Not used at all | n/a |

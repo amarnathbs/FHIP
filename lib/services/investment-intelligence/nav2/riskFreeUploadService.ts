@@ -22,7 +22,7 @@ export const RISK_FREE_UPLOAD_SERVICE_VERSION = 'risk-free-upload-v1';
 
 /** The exact statement the operator attests to. Stored verbatim in the append-only batch ledger. */
 export const RISK_FREE_ATTESTATION_TEXT =
-  "I confirm that these values were read from the Reserve Bank of India publication named in each row and have not been altered, and that the Product Owner's decision of 03-10-2026 on RBI's terms (attribution kept, no scraping by the app) covers storing them in FHIP.";
+  "I confirm that these values were read from the Reserve Bank of India publication named in each row and have not been altered, and that the Product Owner's decision of 03-10-2026 on RBI's terms (attribution kept, reuse risk accepted) covers storing them in FHIP.";
 
 export interface RiskFreeSeriesInfo {
   seriesId: string;

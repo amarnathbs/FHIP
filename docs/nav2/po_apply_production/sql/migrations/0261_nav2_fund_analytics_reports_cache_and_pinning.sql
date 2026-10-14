@@ -19,6 +19,28 @@
 -- auth.users, retention is a separate policy).
 
 -- ---------------------------------------------------------------------------
+-- 0. PRECONDITION GUARD (release candidate, C2 and C3). This file replaces pc6_nav_row_is_candidate() in section 5. It must NEVER overwrite a text it was
+--    not written against. The guard runs FIRST, before any change, and stops the whole file with nothing changed unless the live function is
+--    absent, the 0219 text (the production predecessor), or the 0261 text (a second run of this file).
+--    The comparison is on a NORMALIZED checksum: comments and white space removed, lower case, then md5. It survives re-formatting and comment edits,
+--    which a raw text hash does not. The two accepted values were computed by scripts/nav2_rc/retention_fn_checksums.mjs, one for each text.
+--    If the guard stops this file: do not edit the checksums. Send the live definition (pg_get_functiondef) and reconcile it with the 0219 text first.
+-- ---------------------------------------------------------------------------
+do $guard$
+declare
+  v_oid oid := to_regprocedure('public.pc6_nav_row_is_candidate(uuid, date, date)');
+  v_norm text;
+begin
+  if v_oid is not null then
+    select md5(lower(regexp_replace(regexp_replace(p.prosrc, '--[^\n]*', '', 'g'), '\s+', '', 'g'))) into v_norm
+      from pg_proc p where p.oid = v_oid;
+    if v_norm is distinct from 'f76a895dc95c047b62bf11b7935ebd1f' and v_norm is distinct from 'f5721ba038f67b2b985cd55b8aa8c97e' then
+      raise exception 'nav2 0261 stopped. The live retention function is neither the 0219 text nor the 0261 text. Nothing was changed. Reconcile it first.' using errcode = 'P0001';
+    end if;
+  end if;
+end $guard$;
+
+-- ---------------------------------------------------------------------------
 -- 1. The pinned report
 -- ---------------------------------------------------------------------------
 create table if not exists nav2_fund_analytics_reports (

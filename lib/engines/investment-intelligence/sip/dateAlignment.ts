@@ -61,8 +61,20 @@ export interface AlignmentResult {
   method: typeof SIP_DATE_ALIGNMENT_VERSION;
 }
 
+// PERFORMANCE (NAV2 release candidate, B3): this function is called millions of times in one Fund analytics report (every daily return, every rolling
+// endpoint and every pair of funds goes through daysBetween), and parsing the same few thousand distinct date strings over and over was half of the
+// engine time of a 20 fund report (measured with a CPU profile: 8.3 s of 17 s). A date string always parses to the same instant, so the result is
+// remembered. The cache holds only yyyy-mm-dd strings, is bounded, and returns exactly what Date.parse returned (including NaN for a bad date), so no
+// answer changes: tests/unit/nav2/nav2ReleaseCandidateDateCache.test.ts proves equality against the uncached parse.
+const UTC_CACHE = new Map<string, number>();
+const UTC_CACHE_MAX = 100_000;
 function toUtc(iso: string): number {
-  const t = Date.parse(iso.length === 10 ? `${iso}T00:00:00.000Z` : iso);
+  if (iso.length !== 10) return Date.parse(iso);
+  const hit = UTC_CACHE.get(iso);
+  if (hit !== undefined) return hit;
+  const t = Date.parse(`${iso}T00:00:00.000Z`);
+  if (UTC_CACHE.size >= UTC_CACHE_MAX) UTC_CACHE.clear();
+  UTC_CACHE.set(iso, t);
   return t;
 }
 

@@ -87,7 +87,7 @@ describe('the feature switch (NC-S1)', () => {
     expect(await isNav2FlagOn(errored, NAV2_JOB_KEYS.fundAnalytics)).toBe(false); // a read error is OFF even if data came back
     const broken = { from: () => { throw new Error('relation does not exist'); } } as unknown as SupabaseClient;
     expect(await isNav2FlagOn(broken, NAV2_JOB_KEYS.fundAnalytics)).toBe(false);
-  });
+  }, 60_000); // the first strict-schema database of the file reads every migration (about 300 files)
 
   it('switch off: nothing is loaded, written or deleted (matrix 43)', async () => {
     const { db, load, call } = setup({ isFlagOn: async () => false });
@@ -227,7 +227,7 @@ describe('the NAV2 planner step (only with nav2_trigger_planner ON) (NC-S7)', ()
       expect(r.waiting).toMatchObject({ waiting: true, total: 2, waitingFunds: ['Alpha Fund'] });
       expect(r.message).toMatch(/period you chose/);
     }
-    expect(kickPeriod).toHaveBeenCalledWith(USER, '5y');
+    expect(kickPeriod).toHaveBeenCalledWith(USER, '5y', null); // null = no fund choice, every fund held (B2 added the third argument)
     expect(load).not.toHaveBeenCalled();
     expect(db.writes.filter((w) => w.table === 'nav2_fund_analytics_reports')).toEqual([]);
   });

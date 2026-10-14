@@ -44,13 +44,18 @@ describe('switch ON (NC-T2, NC-T3, matrix 62, 63)', () => {
     const { legacy, planned, deps } = mk(true);
     const trigger: Nav2Trigger = { kind: 'report_period_requested' };
     expect(await runUserNavHistoryForKick('u1', deps, trigger, '3y')).toBe(outcome);
-    expect(planned).toHaveBeenCalledWith('u1', trigger, '3y');
+    expect(planned).toHaveBeenCalledWith('u1', trigger, '3y', null); // no fund scope: every fund held (B2 added the optional 4th argument)
     expect(legacy).not.toHaveBeenCalled();
+  });
+  it('B2: a report-period kick for chosen funds hands exactly those fund ids to the plan', async () => {
+    const { planned, deps } = mk(true);
+    await runUserNavHistoryForKick('u1', deps, { kind: 'report_period_requested' }, '3y', ['f1', 'f2']);
+    expect(planned).toHaveBeenCalledWith('u1', { kind: 'report_period_requested' }, '3y', ['f1', 'f2']);
   });
   it('defaults to the statement-accepted trigger and the widest period', async () => {
     const { planned, deps } = mk(true);
     await runUserNavHistoryForKick('u1', deps);
-    expect(planned).toHaveBeenCalledWith('u1', { kind: 'statement_accepted' }, 'all_history');
+    expect(planned).toHaveBeenCalledWith('u1', { kind: 'statement_accepted' }, 'all_history', null);
   });
   it('NC-T3: a planning failure falls back to the legacy runner and is not rethrown', async () => {
     const { legacy, deps } = mk(true, async () => { throw new Error('planner exploded'); });

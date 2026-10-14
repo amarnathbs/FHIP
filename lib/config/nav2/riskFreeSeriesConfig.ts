@@ -14,7 +14,7 @@
 // lib/engines/nav2/riskFree.ts) loaded from storage; storage, the admin upload and the
 // weekly refresh job are Stage 2.
 //
-// TERMS (PO decision 03-10-2026, superseding "pending written confirmation"): RBI
+// TERMS (PO decision 03-10-2026, which superseded the earlier pending-confirmation status): RBI
 // publishes no explicit reuse licence (its pages say "All Rights Reserved" and its
 // disclaimer restricts caching, linking and framing without written permission). The PO
 // has ACCEPTED that risk and written confirmation from RBI is NOT required. That is

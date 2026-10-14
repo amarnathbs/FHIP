@@ -24,6 +24,8 @@ const NAV2_MIGRATIONS = [
   '0269_nav2_reports_premium_only_read.sql',
   '0270_nav2_monitoring_snapshot_bounded_cost.sql',
   '0271_nav2_monitoring_snapshot_row_estimate.sql',
+  '0281_nav2_report_idempotency_key.sql',
+  '0282_nav2_ambiguity_case_summary.sql',
 ];
 
 function listSql(dir: string): string[] {
@@ -38,7 +40,7 @@ const ALL_SQL = listSql('sql');
 const HAND_WRITTEN = ALL_SQL.filter((f) => !f.startsWith('sql/migrations/') && !f.startsWith('sql/parts/'));
 
 describe('production hand-over pack: the migrations', () => {
-  it('the seven migration copies are byte-identical to supabase/migrations', () => {
+  it('the nine migration copies are byte-identical to supabase/migrations', () => {
     for (const n of NAV2_MIGRATIONS) expect(readPack(`sql/migrations/${n}`).equals(fs.readFileSync(path.join(MIG, n))), n).toBe(true);
   });
 
@@ -56,8 +58,8 @@ describe('production hand-over pack: the migrations', () => {
 
   it('the migration numbers are the NAV2 numbers and nothing else in the tree uses them', () => {
     const names = fs.readdirSync(MIG);
-    for (const n of ['0260', '0261', '0262', '0263', '0269', '0270', '0271']) expect(names.filter((x) => x.startsWith(n + '_')), n).toHaveLength(1);
-    expect(names.filter((x) => /^02(6[0-3]|69|7[01])_/.test(x)).sort()).toEqual(NAV2_MIGRATIONS);
+    for (const n of ['0260', '0261', '0262', '0263', '0269', '0270', '0271', '0281', '0282']) expect(names.filter((x) => x.startsWith(n + '_')), n).toHaveLength(1);
+    expect(names.filter((x) => /^02(6[0-3]|69|7[01]|8[12])_/.test(x)).sort()).toEqual(NAV2_MIGRATIONS);
   });
 });
 
@@ -65,7 +67,7 @@ describe('production hand-over pack: the hand written SQL', () => {
   it('there is a file for every step the README names', () => {
     for (const f of [
       'sql/prechecks/P1_nav2_not_yet_applied.sql', 'sql/prechecks/P2_foundations_exist.sql', 'sql/prechecks/P3_retention_function_fingerprint.sql', 'sql/prechecks/P4_size.sql',
-      'sql/checks/C0260a.sql', 'sql/checks/C0260e.sql', 'sql/checks/C0261.sql', 'sql/checks/C0262.sql', 'sql/checks/C0263.sql', 'sql/checks/C0269.sql', 'sql/checks/C0270_0271.sql', 'sql/checks/C_final_all.sql',
+      'sql/checks/C0260a.sql', 'sql/checks/C0260e.sql', 'sql/checks/C0261.sql', 'sql/checks/C0262.sql', 'sql/checks/C0263.sql', 'sql/checks/C0269.sql', 'sql/checks/C0270_0271.sql', 'sql/checks/C0281.sql', 'sql/checks/C0282.sql', 'sql/checks/C_final_all.sql', 'sql/prechecks/P3c_retention_function_identity.sql', 'sql/prechecks/P3d_retention_function_behaviour.sql', 'sql/rollback/rollback_0281.sql', 'sql/rollback/rollback_0282.sql',
       'sql/grants/grant_upload.sql', 'sql/grants/grant_switch.sql', 'sql/switches/switch_on_fund_analytics.sql', 'sql/switches/switch_off_all_nav2.sql',
       'sql/rollback/rollback_0260.sql', 'sql/rollback/rollback_0261_restore_0219_function.sql', 'sql/rollback/rollback_0261_drop_tables.sql', 'sql/rollback/rollback_0262.sql', 'sql/rollback/rollback_0263.sql', 'sql/rollback/rollback_0269.sql',
     ]) expect(ALL_SQL, f).toContain(f);
