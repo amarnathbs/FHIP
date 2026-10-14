@@ -160,7 +160,7 @@ async function stageSynthetic(type: 'article' | 'money_update', csv: string, fil
       [type, uploader, fileName, sha, out.rows.length]
     );
     for (let i = 0; i < out.rows.length; i++) {
-      const p = out.rows[i].payload as Json;
+      const p = out.rows[i].payload as unknown as Json;
       await db.query(
         `insert into public.resource_content_import_rows (import_run_id, row_number, external_id, slug, title, normalized_payload, validation_errors) values ($1,$2,$3,$4,$5,$6,'[]')`,
         [run.id, i + 2, p.external_id ?? null, p.slug ?? null, p.title ?? null, JSON.stringify(p)]

@@ -678,11 +678,11 @@ async function main() {
   check('G no N+1: upload database round trips are constant across 1 -> cap rows (rows staged in 50-row chunks only)', qs[0] <= 10 && qs[3] - qs[0] <= Math.ceil(CAP / 50) + 1, JSON.stringify(qs));
 
   // ============================================================ H. regression: manual flows and shared pieces
-  const manualArticle = await api(E, 'POST', '/api/admin/resources/content', { contentType: 'article' });
-  const manualGuide = await api(E, 'POST', '/api/admin/resources/content', { contentType: 'guide' });
-  const manualExpl = await api(E, 'POST', '/api/admin/resources/content', { contentType: 'fhip_explainer' });
-  const manualMu = await api(E, 'POST', '/api/admin/resources/money-updates', { contentType: 'money_update' });
-  const manualTpl = await api(E, 'POST', '/api/admin/resources/money-updates', { contentType: 'money_update_template' });
+  const manualArticle = await api(E, 'POST', '/api/admin/resources/content', { contentType: 'article', title: `${RUN} manual article` });
+  const manualGuide = await api(E, 'POST', '/api/admin/resources/content', { contentType: 'guide', title: `${RUN} manual guide` });
+  const manualExpl = await api(E, 'POST', '/api/admin/resources/content', { contentType: 'fhip_explainer', title: `${RUN} manual fhip_explainer` });
+  const manualMu = await api(E, 'POST', '/api/admin/resources/money-updates', { contentType: 'money_update', title: `${RUN} manual money_update` });
+  const manualTpl = await api(E, 'POST', '/api/admin/resources/money-updates', { contentType: 'money_update_template', title: `${RUN} manual money_update_template` });
   const fromTpl = await api(E, 'POST', '/api/admin/resources/money-updates/from-template', { templateId: manualTpl.json?.data?.id });
   check('H regression: manual Article, Guide, FHIP Explainer, Money Update, Template and Create-from-Template all still work', [manualArticle, manualGuide, manualExpl, manualMu, manualTpl, fromTpl].every((r) => r.status === 200 && r.json?.data?.id), [manualArticle, manualGuide, manualExpl, manualMu, manualTpl, fromTpl].map((r) => r.status).join(','));
   for (const [label, r] of [['Guide', manualGuide], ['FHIP Explainer', manualExpl]] as const) {
