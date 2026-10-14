@@ -1,0 +1,109 @@
+{
+ "latencyNote": "development machine on a home link; see count_post.mjs for the round trip",
+ "rows": [
+  {
+   "funds": 1,
+   "coldRemovedCacheEntries": 1,
+   "cold": {
+    "status": 201,
+    "calls": [
+     "201/ready/15233ms"
+    ],
+    "totalMs": 15233,
+    "worstCallMs": 15233
+   },
+   "warm": {
+    "status": 201,
+    "calls": [
+     "201/ready/12167ms"
+    ],
+    "totalMs": 12167,
+    "worstCallMs": 12167
+   }
+  },
+  {
+   "funds": 4,
+   "coldRemovedCacheEntries": 3,
+   "cold": {
+    "status": 201,
+    "calls": [
+     "201/ready/15147ms"
+    ],
+    "totalMs": 15147,
+    "worstCallMs": 15147
+   },
+   "warm": {
+    "status": 201,
+    "calls": [
+     "201/ready/15613ms"
+    ],
+    "totalMs": 15613,
+    "worstCallMs": 15613
+   }
+  },
+  {
+   "funds": 10,
+   "coldRemovedCacheEntries": 6,
+   "cold": {
+    "status": 201,
+    "calls": [
+     "202/in_steps/14660ms",
+     "201/ready/22091ms"
+    ],
+    "totalMs": 39760,
+    "worstCallMs": 22091
+   },
+   "warm": {
+    "status": 201,
+    "calls": [
+     "201/ready/17023ms"
+    ],
+    "totalMs": 17023,
+    "worstCallMs": 17023
+   }
+  },
+  {
+   "funds": 20,
+   "coldRemovedCacheEntries": 14,
+   "cold": {
+    "status": 503,
+    "calls": [
+     "202/in_steps/17919ms",
+     "202/in_steps/17785ms",
+     "202/in_steps/17440ms",
+     "503/timed_out/22224ms",
+     "503/timed_out/22255ms",
+     "503/timed_out/22483ms",
+     "503/timed_out/22231ms",
+     "503/timed_out/22332ms",
+     "503/timed_out/22292ms",
+     "503/timed_out/22737ms",
+     "503/timed_out/22335ms",
+     "503/timed_out/22392ms",
+     "503/timed_out/22462ms",
+     "503/timed_out/22205ms",
+     "503/timed_out/23901ms",
+     "503/timed_out/22215ms",
+     "503/timed_out/22218ms",
+     "503/timed_out/22311ms",
+     "503/timed_out/23579ms",
+     "503/timed_out/22521ms"
+    ],
+    "totalMs": 496011,
+    "worstCallMs": 23901
+   },
+   "warm": {
+    "status": 201,
+    "calls": [
+     "503/timed_out/22227ms",
+     "503/timed_out/22317ms",
+     "503/timed_out/22201ms",
+     "503/timed_out/22328ms",
+     "201/ready/21846ms"
+    ],
+    "totalMs": 118942,
+    "worstCallMs": 22328
+   }
+  }
+ ]
+}

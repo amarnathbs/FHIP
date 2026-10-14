@@ -1,0 +1,15 @@
+=== journey 9 2026-10-14T19:27:08.008Z ===
+   stored latest T-bill: [["2026-09-30",5.5199],["2026-09-23",5.39],["2026-09-16",5.2801]] | stored latest repo: [["2025-12-05",5.25],["2025-06-06",5.5],["2025-04-09",6]]
+  PASS  with the switch OFF the route makes no request to RBI and answers "skipped" (default dry run is irrelevant)  ("skipped_kill_switch")
+   dry run: {"mode":"dry_run","robots":"robots_unavailable_continued","source":"ok","problem":null,"requests":{"pages":3,"robots":1},"tbill":{"outcome":"review","detail":"Not published: sent to review (nsdp_mismatch).","reasons":["nsdp_mismatch"]},"repo":{"outcome":"confirm_unchanged","detail":"Unchanged: NSDP week ended 2026-10-02 shows 5.25, equal to the stored rate; verified through 02-10-2026."},"wrote":{"tbill":null,"repo":null}}
+  PASS  DRY RUN BY DEFAULT: mode is "dry_run" with no body  (status 200 mode dry_run)
+  PASS  the run reports what robots.txt did and whether RBI blocked a content page (honest monitoring signals)  (robots robots_unavailable_continued; source ok)
+  PASS  the run was polite: a handful of requests, one at a time (page requests <= 4, robots requests <= 1)  ({"pages":3,"robots":1})
+  PASS  A DRY RUN WRITES NOTHING: every risk-free table has exactly the same row count as before  ({"before":{"ii_risk_free_observations":1134,"ii_risk_free_batches":3,"ii_risk_free_review_items":0,"ii_risk_free_corrections":16,"ii_risk_free_refresh_attempts":0},"after":{"ii_risk_free_observations":1134,"ii_risk_free_batches":3,"ii_risk_free_review_items":0,"ii_risk_free_corrections":16,"ii_risk_free_refresh_attempts":0}})
+   T-bill: outcome review - Not published: sent to review (nsdp_mismatch).
+  PASS  the T-bill decision is a defined outcome (noop / publish / record_gap / review / no_release_yet / up_to_date), never an unexplained error  (review: Not published: sent to review (nsdp_mismatch).)
+  PASS  the repo-rate decision is a defined outcome and the stored rate was NOT changed  (confirm_unchanged: Unchanged: NSDP week ended 2026-10-02 shows 5.25, equal to the stored rate; verified through 02-10-2026.)
+  PASS  the attempt ledger got no row from a dry run (only live runs are recorded)
+  PASS  the weekly refresh switch is OFF again
+
+=== journey 9: 9 PASS, 0 FAIL ===

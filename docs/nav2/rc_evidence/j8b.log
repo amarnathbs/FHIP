@@ -1,0 +1,52 @@
+=== journey 8b 2026-10-14T19:25:39.823Z ===
+   report-1280: h1 1, headings 22, interactive 7, tab stops 30, axe 1 violation kinds
+  PASS  report-1280: the page loaded as the intended page (title, no error page)  (title "FHIP | Financial Health"; starts "FHIP YOUR FINANCES Companies & Trusts Sign out Back to Reports Fund ")
+  PASS  report-1280: no horizontal page scroll  (scrollWidth 1280 vs 1280)
+  PASS  report-1280: exactly one h1 and no skipped heading level  (h1 1; skips: )
+  PASS  report-1280: a main landmark exists; every button/link has an accessible name; every input has a label  (main 1; unnamed 0; unlabelled 0)
+  PASS  report-1280: every data table has header cells; every image has alt text  (tables 18 without headers 0; images 1 without alt 0)
+  PASS  report-1280: KEYBOARD: Tab reaches the interactive controls in order and every stop shows a visible focus indicator  (30 stops; without indicator 0; first: Companies & Trusts > Sign out > Back to Reports > Since you first held each fundLast 1 yea > Generate a new version)
+  PASS  report-1280: axe-core finds no serious or critical violation  (1 lower-impact kinds: landmark-unique)
+   report-375: h1 1, headings 22, interactive 6, tab stops 29, axe 1 violation kinds
+  PASS  report-375: the page loaded as the intended page (title, no error page)  (title "FHIP | Financial Health"; starts "FHIP Back to Reports Fund analytics How each Indian mutual fund you h")
+  PASS  report-375: PHONE WIDTH: no horizontal page scroll  (scrollWidth 375 vs 375)
+  PASS  report-375: exactly one h1 and no skipped heading level  (h1 1; skips: )
+  PASS  report-375: a main landmark exists; every button/link has an accessible name; every input has a label  (main 1; unnamed 0; unlabelled 0)
+  PASS  report-375: every data table has header cells; every image has alt text  (tables 18 without headers 0; images 1 without alt 0)
+  PASS  report-375: KEYBOARD: Tab reaches the interactive controls in order and every stop shows a visible focus indicator  (29 stops; without indicator 0; first: Open menu > Back to Reports > Since you first held each fundLast 1 yea > Generate a new version > Version 3 - as at 14-10-2026 (made 15-10)
+  PASS  report-375: axe-core finds no serious or critical violation  (1 lower-impact kinds: landmark-unique)
+   admin-monitoring-1280: h1 1, headings 5, interactive 48, tab stops 40, axe 1 violation kinds
+  PASS  admin-monitoring-1280: the page loaded as the intended page (title, no error page)  (title "FHIP | Financial Health"; starts "FHIP ACCOUNT Profile OVERVIEW Dashboard YOUR FINANCES Income Expen")
+  PASS  admin-monitoring-1280: no horizontal page scroll  (scrollWidth 1280 vs 1280)
+  PASS  admin-monitoring-1280: exactly one h1 and no skipped heading level  (h1 1; skips: )
+  PASS  admin-monitoring-1280: a main landmark exists; every button/link has an accessible name; every input has a label  (main 1; unnamed 0; unlabelled 0)
+  PASS  admin-monitoring-1280: every data table has header cells; every image has alt text  (tables 2 without headers 0; images 1 without alt 0)
+  PASS  admin-monitoring-1280: KEYBOARD: Tab reaches the interactive controls in order and every stop shows a visible focus indicator  (40 stops; without indicator 0; first: Profile > Dashboard > Your finances > Income > Expenses)
+  PASS  admin-monitoring-1280: axe-core finds no serious or critical violation  (1 lower-impact kinds: landmark-unique)
+   admin-monitoring-375: h1 1, headings 5, interactive 3, tab stops 5, axe 1 violation kinds
+  PASS  admin-monitoring-375: the page loaded as the intended page (title, no error page)  (title "FHIP | Financial Health"; starts "FHIP Back to Dashboard Fund analytics health Aggregate counts only. A")
+  PASS  admin-monitoring-375: PHONE WIDTH: no horizontal page scroll  (scrollWidth 375 vs 375)
+  PASS  admin-monitoring-375: exactly one h1 and no skipped heading level  (h1 1; skips: )
+  PASS  admin-monitoring-375: a main landmark exists; every button/link has an accessible name; every input has a label  (main 1; unnamed 0; unlabelled 0)
+  PASS  admin-monitoring-375: every data table has header cells; every image has alt text  (tables 2 without headers 0; images 1 without alt 0)
+  PASS  admin-monitoring-375: KEYBOARD: Tab reaches the interactive controls in order and every stop shows a visible focus indicator  (5 stops; without indicator 0; first: Open menu > Back to Dashboard > Refresh the figures > Price history, corrections, cache and re > Weekly RBI refresh attempts)
+  PASS  admin-monitoring-375: axe-core finds no serious or critical violation  (1 lower-impact kinds: landmark-unique)
+   admin-risk-free-1280: h1 1, headings 15, interactive 52, tab stops 40, axe 0 violation kinds
+  PASS  admin-risk-free-1280: the page loaded as the intended page (title, no error page)  (title "FHIP | Financial Health"; starts "FHIP ACCOUNT Profile OVERVIEW Dashboard YOUR FINANCES Income Expen")
+  PASS  admin-risk-free-1280: no horizontal page scroll  (scrollWidth 1280 vs 1280)
+  PASS  admin-risk-free-1280: exactly one h1 and no skipped heading level  (h1 1; skips: )
+  PASS  admin-risk-free-1280: a main landmark exists; every button/link has an accessible name; every input has a label  (main 1; unnamed 0; unlabelled 0)
+  PASS  admin-risk-free-1280: every data table has header cells; every image has alt text  (tables 2 without headers 0; images 1 without alt 0)
+  PASS  admin-risk-free-1280: KEYBOARD: Tab reaches the interactive controls in order and every stop shows a visible focus indicator  (40 stops; without indicator 0; first: Profile > Dashboard > Your finances > Income > Expenses)
+  PASS  admin-risk-free-1280: axe-core finds no serious or critical violation  (0 lower-impact kinds: )
+   admin-risk-free-375: h1 1, headings 1, interactive 2, tab stops 20, axe 0 violation kinds
+  PASS  admin-risk-free-375: the page loaded as the intended page (title, no error page)  (title "FHIP | Financial Health"; starts "FHIP Back to Dashboard Risk-free Rate Data The Reserve Bank of India ")
+  PASS  admin-risk-free-375: PHONE WIDTH: no horizontal page scroll  (scrollWidth 375 vs 375)
+  PASS  admin-risk-free-375: exactly one h1 and no skipped heading level  (h1 1; skips: )
+  PASS  admin-risk-free-375: a main landmark exists; every button/link has an accessible name; every input has a label  (main 1; unnamed 0; unlabelled 0)
+  PASS  admin-risk-free-375: every data table has header cells; every image has alt text  (tables 0 without headers 0; images 1 without alt 0)
+  PASS  admin-risk-free-375: KEYBOARD: Tab reaches the interactive controls in order and every stop shows a visible focus indicator  (20 stops; without indicator 0; first: Open menu > Back to Dashboard > Risk-free series > RBI_91D_TBILL_CUTOFF_YIELDRBI_POLICY_REP > input)
+  PASS  admin-risk-free-375: axe-core finds no serious or critical violation  (0 lower-impact kinds: )
+  PASS  the temporary admin capabilities were removed again
+
+=== journey 8b: 43 PASS, 0 FAIL ===

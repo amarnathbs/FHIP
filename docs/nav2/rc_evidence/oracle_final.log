@@ -1,0 +1,170 @@
+report 7a7bbd34-0646-44d9-8ed8-6c6fc5d65225  as of 2026-10-14  funds 3  tolerance 1E-9
+
+--- HDFC Corporate Bond Fund (3323 NAV points 2013-01-01 .. 2026-10-13)
+  PASS  series ends on the report's NAV date
+  PASS  1Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  1Y absolute return
+  PASS  1Y actual days
+  PASS  1Y CAGR on actual days / 365.2425
+  PASS  3Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  3Y absolute return
+  PASS  3Y actual days
+  PASS  3Y CAGR on actual days / 365.2425
+  PASS  5Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  5Y absolute return
+  PASS  5Y actual days
+  PASS  5Y CAGR on actual days / 365.2425
+  PASS  observation count in the declared window
+  PASS  volatility returnCount
+  PASS  volatility periodic sample sd
+  PASS  volatility annualised (x sqrt 252)
+  PASS  highest NAV and its earliest date
+  PASS  lowest NAV and its earliest date
+  PASS  mean NAV
+  PASS  median NAV
+  PASS  maximum drawdown
+  PASS  rolling 1M window count
+  PASS  rolling 1M min/max/mean/median/positive share
+  PASS  rolling 3M window count
+  PASS  rolling 3M min/max/mean/median/positive share
+  PASS  rolling 6M window count
+  PASS  rolling 6M min/max/mean/median/positive share
+  PASS  rolling 1Y window count
+  PASS  rolling 1Y min/max/mean/median/positive share
+  PASS  rolling 3Y window count
+  PASS  rolling 3Y min/max/mean/median/positive share
+  PASS  rolling 5Y window count
+  PASS  rolling 5Y min/max/mean/median/positive share
+  PASS  SMA20 latest value
+  PASS  SMA50 latest value
+  PASS  SMA100 latest value
+  PASS  SMA200 latest value
+  PASS  EMA20 latest value
+  PASS  EMA50 latest value
+  PASS  ROC20 latest value
+  PASS  sharpe: risk-free coverage is at least 95 percent and the count matches
+  PASS  sharpe mean excess return
+  PASS  sharpe sample sd of excess
+  PASS  sharpe periodic ratio
+  PASS  sharpe annualised (x sqrt 252)
+  PASS  sortino: risk-free coverage is at least 95 percent and the count matches
+  PASS  sortino periodic ratio (all periods, population denominator)
+  PASS  sortino annualised (x sqrt 252)
+
+--- HDFC Large Cap Fund (3386 NAV points 2013-01-01 .. 2026-10-13)
+  PASS  series ends on the report's NAV date
+  PASS  1Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  1Y absolute return
+  PASS  1Y actual days
+  PASS  1Y CAGR on actual days / 365.2425
+  PASS  3Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  3Y absolute return
+  PASS  3Y actual days
+  PASS  3Y CAGR on actual days / 365.2425
+  PASS  5Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  5Y absolute return
+  PASS  5Y actual days
+  PASS  5Y CAGR on actual days / 365.2425
+  PASS  observation count in the declared window
+  PASS  volatility returnCount
+  PASS  volatility periodic sample sd
+  PASS  volatility annualised (x sqrt 252)
+  PASS  highest NAV and its earliest date
+  PASS  lowest NAV and its earliest date
+  PASS  mean NAV
+  PASS  median NAV
+  PASS  maximum drawdown
+  PASS  rolling 1M window count
+  PASS  rolling 1M min/max/mean/median/positive share
+  PASS  rolling 3M window count
+  PASS  rolling 3M min/max/mean/median/positive share
+  PASS  rolling 6M window count
+  PASS  rolling 6M min/max/mean/median/positive share
+  PASS  rolling 1Y window count
+  PASS  rolling 1Y min/max/mean/median/positive share
+  PASS  rolling 3Y window count
+  PASS  rolling 3Y min/max/mean/median/positive share
+  PASS  rolling 5Y window count
+  PASS  rolling 5Y min/max/mean/median/positive share
+  PASS  SMA20 latest value
+  PASS  SMA50 latest value
+  PASS  SMA100 latest value
+  PASS  SMA200 latest value
+  PASS  EMA20 latest value
+  PASS  EMA50 latest value
+  PASS  ROC20 latest value
+  PASS  sharpe: risk-free coverage is at least 95 percent and the count matches
+  PASS  sharpe mean excess return
+  PASS  sharpe sample sd of excess
+  PASS  sharpe periodic ratio
+  PASS  sharpe annualised (x sqrt 252)
+  PASS  sortino: risk-free coverage is at least 95 percent and the count matches
+  PASS  sortino periodic ratio (all periods, population denominator)
+  PASS  sortino annualised (x sqrt 252)
+
+--- Nippon India Large Cap Fund (3385 NAV points 2013-01-02 .. 2026-10-13)
+  PASS  series ends on the report's NAV date
+  PASS  1Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  1Y absolute return
+  PASS  1Y actual days
+  PASS  1Y CAGR on actual days / 365.2425
+  PASS  3Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  3Y absolute return
+  PASS  3Y actual days
+  PASS  3Y CAGR on actual days / 365.2425
+  PASS  5Y boundaries (latest NAV on or before each requested date, within 10 days)
+  PASS  5Y absolute return
+  PASS  5Y actual days
+  PASS  5Y CAGR on actual days / 365.2425
+  PASS  observation count in the declared window
+  PASS  volatility returnCount
+  PASS  volatility periodic sample sd
+  PASS  volatility annualised (x sqrt 252)
+  PASS  highest NAV and its earliest date
+  PASS  lowest NAV and its earliest date
+  PASS  mean NAV
+  PASS  median NAV
+  PASS  maximum drawdown
+  PASS  rolling 1M window count
+  PASS  rolling 1M min/max/mean/median/positive share
+  PASS  rolling 3M window count
+  PASS  rolling 3M min/max/mean/median/positive share
+  PASS  rolling 6M window count
+  PASS  rolling 6M min/max/mean/median/positive share
+  PASS  rolling 1Y window count
+  PASS  rolling 1Y min/max/mean/median/positive share
+  PASS  rolling 3Y window count
+  PASS  rolling 3Y min/max/mean/median/positive share
+  PASS  rolling 5Y window count
+  PASS  rolling 5Y min/max/mean/median/positive share
+  PASS  SMA20 latest value
+  PASS  SMA50 latest value
+  PASS  SMA100 latest value
+  PASS  SMA200 latest value
+  PASS  EMA20 latest value
+  PASS  EMA50 latest value
+  PASS  ROC20 latest value
+  PASS  sharpe: risk-free coverage is at least 95 percent and the count matches
+  PASS  sharpe mean excess return
+  PASS  sharpe sample sd of excess
+  PASS  sharpe periodic ratio
+  PASS  sharpe annualised (x sqrt 252)
+  PASS  sortino: risk-free coverage is at least 95 percent and the count matches
+  PASS  sortino periodic ratio (all periods, population denominator)
+  PASS  sortino annualised (x sqrt 252)
+
+--- correlations (3 pairs)
+  PASS  correlation count 70c403/575b7d
+  PASS  correlation value 70c403/575b7d
+  PASS  correlation count 70c403/31a05b
+  PASS  correlation value 70c403/31a05b
+  PASS  correlation count 575b7d/31a05b
+  PASS  correlation value 575b7d/31a05b
+  PASS  ranking 1Y large_cap: values are the funds' own CAGR
+  PASS  ranking 1Y large_cap: rank 1 is the highest value, descending
+  PASS  ranking 3Y large_cap: values are the funds' own CAGR
+  PASS  ranking 3Y large_cap: rank 1 is the highest value, descending
+  PASS  ranking 5Y large_cap: values are the funds' own CAGR
+  PASS  ranking 5Y large_cap: rank 1 is the highest value, descending
+
+159 PASS, 0 FAIL

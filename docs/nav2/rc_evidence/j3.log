@@ -1,0 +1,32 @@
+=== journey 3 2026-10-14T19:09:07.964Z port 3981 ===
+  PASS  the user holds A, D and E (certified)  (575b7dc3,2c5322cb,37a3d60e)
+  PASS  two reports generated before the correction  (201/201 {"data":{"status":"ready","report":{"id":"22119d81-d22e-489e-8a74-501f7e73c92d","versionNumber":53,")
+  PASS  the second run is served from the shared cache (no new cache entry was needed)  (cache entries for A, D, E: 52 -> 52)
+  PASS  baseline: E current value equals the independent figure  (40242.29845300001 vs 40242.3)
+  PASS  the worker route refuses a call with no secret and with a wrong secret (401)  (401/401)
+  PASS  the worker kill switch is OFF at the start (workers remain off)
+  PASS  with the switch OFF the worker reads and writes nothing ("skipped_kill_switch")  ({"data":{"status":"skipped_kill_switch","detail":"The NAV2 correction worker is switched off; nothing was read or written."}})
+  PASS  CORRECTION APPLIED on DEV: E NAV on 2026-10-13 2166.943 -> 2210.2819 (+2%)
+  PASS  the correction is recorded on the append-only ledger
+  PASS  the database trigger raised exactly one correction event for it (kind nav_correction, instrument E, that date)  ({"id":39,"kind":"nav_correction","source_correction_id":"6874c867-acd9-4b53-856e-5032a4066b17","instrument_id":"37a3d60e-47db-4fb9-af8b-4a174dfa1f2f","benchmark_id":null,"series_id":null,"event_date":"2026-10-13","created_at":"2026-10-14T19:09:37.736863+00:00","processed_at":null,"entries_invalidated":null})
+  PASS  a report generated after the correction uses the corrected NAV (E current value matches the independent figure on the corrected series)  (41047.1451649 vs oracle 41047.15 (before 40242.3))
+  PASS  NEGATIVE CONTROL: the corrected value is demonstrably different from the pre-correction value  (40242.3 -> 41047.15)
+  PASS  only E needed recomputing: new cache entries appeared for E and none for A or D  (new E entries 12)
+  PASS  UNAFFECTED FUNDS UNCHANGED: A and D blocks are byte-identical to the baseline report  (sha256 of the scheme blocks)
+  PASS  ISSUED REPORT IMMUTABLE: version 1 is byte-identical after the correction
+  PASS  the worker processed the event and reported what it invalidated  ({"status":"completed","eventsProcessed":1,"entriesInvalidated":4,"pinnedReportsAffected":55,"staleDefinitionInvalidated":0,"failed":0})
+  PASS  ONLY E entries of the CURRENT definition were invalidated by the correction (A and D current entries still valid)  (invalidated 4, all E; the worker also reported 0 entries of OLDER definitions invalidated as hygiene (never reachable by a current key))
+  PASS  the event is marked processed with the number of entries invalidated by it  (entries_invalidated 4)
+  PASS  pinned reports are counted but never edited (pinnedReportsAffected >= 1; version 1 still identical)  (pinnedReportsAffected 55)
+  PASS  a second worker run finds nothing left to do for this event (idempotent)  ({"status":"completed","eventsProcessed":0,"entriesInvalidated":0,"pinnedReportsAffected":0,"staleDefinitionInvalidated":0,"failed":0})
+  PASS  after the worker: report generation recomputes only what is not cached and then everything is a hit
+  PASS  REVERT: the NAV row is exactly as it was (price, checksum, data version)  ({"price":2166.943,"record_checksum":null,"data_version":"NAV2RC_FIXTURE:mfapi"})
+  PASS  the revert raised an event and the worker processed it (again only E)  ({"status":"completed","eventsProcessed":1,"entriesInvalidated":1,"pinnedReportsAffected":57,"staleDefinitionInvalidated":0,"failed":0})
+  PASS  a new report after the revert shows the ORIGINAL E value again (equals the pre-correction independent figure)  (40242.29845300001 vs 40242.3)
+  PASS  and E's block equals the baseline block except where the cached bundle is concerned (current value, XIRR identical)
+   E cache entries after revert: valid 1 invalidated 14
+  PASS  after the revert the original E key is cacheable again (a valid entry exists for the current E inputs)  (valid E entries 1)
+  PASS  report versions are all kept: nothing was deleted or edited
+  PASS  the correction worker switch is OFF again
+
+=== journey 3: 28 PASS, 0 FAIL ===
