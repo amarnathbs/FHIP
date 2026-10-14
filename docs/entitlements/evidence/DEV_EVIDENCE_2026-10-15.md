@@ -2,7 +2,7 @@
 
 Evidence class: **DEV-verified** (the real route handlers of this branch, running locally, against the real DEV Supabase project `vqycarelcoijzwlpkpcz`). Not production.
 
-* Branch commit under test: `fadfcd2` (`feat/premium-upload-entitlement-20261014`); later commits touched only tests and documentation.
+* Branch commit under test: `fadfcd2` (`feat/premium-upload-entitlement-20261014`); one later commit (`db80ee4`) moved the AIE service-layer assert into `lib/aie/intakeAdmission.ts` (the route guards DEV tested are unchanged; the move is covered by the unit tests and the production build, and was not re-run on DEV), and the others touched only tests and documentation.
 * Users: two EXISTING DEV fixture accounts from the forecasting fixture set (`forecast.tc065@example.test` Free, `forecast.tc078@example.test` Premium, Premium window ending 30-11-2026). Sessions were minted for them through the admin magic-link flow: no password was typed or created, no user was created, no subscription was changed.
 * Counters were read with the DEV service role before and after. The only rows written were the ones in the end-to-end section, all removed afterwards.
 
