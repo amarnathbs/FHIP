@@ -142,7 +142,9 @@ beforeAll(async () => {
   const seed = fs.readFileSync(path.join(SUPABASE_ROOT, 'seed.sql'), 'utf8');
   const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
   expect(files).toContain(MIG_NAME);
-  expect(files.at(-1), 'a migration numbered above 0280 exists: re-check the number choice').toBe(MIG_NAME);
+  // Number check: 0280 is used once. (This used to demand that 0280 be the LAST migration; that fails as soon as any later migration lands, for example the
+  // NAV2 migrations 0281 and 0282 on the release candidate, although nothing about 0280 changed. Later migrations are applied after it below and may not break it.)
+  expect(files.filter((f) => f.startsWith('0280_')), 'the number 0280 is used by exactly this migration').toEqual([MIG_NAME]);
   for (const f of files) {
     await db.exec(strip(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')));
     if (f.startsWith('0001')) await db.exec(seed);

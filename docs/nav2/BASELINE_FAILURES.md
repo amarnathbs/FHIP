@@ -102,3 +102,20 @@ None of these five touches NAV2 code.
 - Investment/NAV/report group (257 files, 4959 tests, LiveDev/live excluded): together run 4953 pass, 1 fail (`reportNavHistoryGateGenerate` NC-G2, a repo-walking test that times out under parallel load; passes alone, 16/16). Shuffle seed 1: 0 failures. Shuffle seed 2: only 4182 tests ran because 12 suites failed with ENOENT on a vitest SSR temp file (environment, transient) and `heldSchemes` hit a vi.mock error in that run; `heldSchemes` alone passes 43/43 with shuffle seeds 2 and 5.
 - Two real hygiene defects were found and fixed: `nav2ContractAndGuards` (status vocabulary lacked the new row-30 status) and `nav2RefreshAttemptsMigration` (shared rows between tests, 10 s hook limit under load; now order independent).
 - The group-run failures above are load-related flakes recorded here, not shown to be caused by NAV2; they were not reproduced in isolation.
+
+## Release candidate full-suite comparison (15-10-2026, origin/main `af2d330`)
+
+Both runs: `npx vitest run --testTimeout=60000 --hookTimeout=60000` with the JSON reporter, one after the other on the same machine (other work was running on it), `git checkout -- scripts/` afterwards. Baseline = `git archive` of `origin/main` (`af2d330`) in its own folder with `node_modules` linked; release candidate = the branch at `de71bad` plus the two test fixes below.
+
+| | Tests | Passed | Failed | Files with a failure |
+|---|---|---|---|---|
+| origin/main `af2d330` (clean extract) | 13,103 | 13,047 | 38 | 37 |
+| Release candidate `de71bad` | 13,664 | 13,576 | 27 | 36 |
+
+* **Failing on the release candidate and NOT on main: 4 entries, all explained.**
+  * `benchmarkEntitlementEditRevisionPglite` (suite): demanded that migration 0280 be the LAST migration, so it failed as soon as the NAV2 migrations 0281 and 0282 exist. Real, caused by the release candidate's numbering. Fixed in the test: it now demands that 0280 is used once (it passes, 56 of 56).
+  * `promoHardeningMigrations` NC-L2: demanded that nothing below 0264 is above 0262, which is false once the NAV2 migrations 0260 to 0263 are present (0263 is exactly the highest number "elsewhere" the same test names). Real interaction of two workstreams. Fixed in the test (`<=` the named highest, 39 of 39 pass).
+  * `benchmarkDataAdminRoutes`, `benchmarkDataFileCsv` (suite failed to run: ENOENT in the temporary `ssr` folder of the vitest transform): the harness fault that hits a different random set of suites in every full run (24 suites in the baseline run, 25 in the release candidate run, mostly different ones). All 25 of the release candidate's were re-run together with two workers: 1,153 of 1,153 tests pass.
+* **Failing on both** (pre-existing, not touched by NAV2): `adminAnalyticsPhaseAMeRoute` (stale five-key expectations; 17 of 24 fail on both), `aiResidualClosureFailClosed` A4, `countryGateAccessMatrix` MC-15 (an account-deletion route exists), `iiNetWorthNavRemarkPublishFlow` (date dependent), `lr1UploadSecurityRawFileLifecycle`, `m12cServerOnlySecretBoundary`, `promoHardeningProofCorePglite` (3, date dependent), `resourcesR1_1`, and the Resources live-DEV suites.
+* **Failing on the baseline run only** (environment of the extract, not code): `heldSchemes` (module mocking in the extract), `migrationVersionsCrossBranch` (needs `.git`), `resourcesR1_4LiveDev` and two other live-DEV suites.
+* The NAV2 folder alone: 58 files, 851 tests, all pass.
