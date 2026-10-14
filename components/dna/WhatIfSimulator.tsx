@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { SCENARIO_LABELS, type ScenarioType } from '@/lib/engines/whatIf';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface ScenarioSummary {
   primaryProfileCode: string | null;
@@ -57,7 +58,7 @@ export function DnaWhatIfSimulator({ archetypes }: { archetypes: Record<string, 
       </div>
       {error && <p className="mt-3 text-sm text-risk">{error}</p>}
       {result && (
-        <table className="mt-4 w-full text-sm">
+        <DataTable label="What-if result: current against scenario" className="mt-4 w-full">
           <thead className="text-left text-xs uppercase text-gray-500">
             <tr>
               <th className="py-1">Result</th>
@@ -82,7 +83,7 @@ export function DnaWhatIfSimulator({ archetypes }: { archetypes: Record<string, 
               <td className="py-1 font-semibold text-trust">{result.after.confidence.toFixed(0)}%</td>
             </tr>
           </tbody>
-        </table>
+        </DataTable>
       )}
     </SectionCard>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface ScenarioRow {
   id: string;
@@ -54,7 +55,7 @@ export function ScenarioManager({ initialScenarios }: { initialScenarios: Scenar
 
   return (
     <div className="space-y-6">
-      <table className="w-full text-sm">
+      <DataTable label="Forecast scenarios" className="w-full">
         <thead className="text-left text-xs uppercase text-gray-500">
           <tr>
             <th className="py-1">Scenario</th>
@@ -81,7 +82,7 @@ export function ScenarioManager({ initialScenarios }: { initialScenarios: Scenar
             </tr>
           ))}
         </tbody>
-      </table>
+      </DataTable>
 
       <div className="rounded border bg-gray-50 p-4">
         <p className="text-sm font-semibold text-gray-800">Add a scenario</p>

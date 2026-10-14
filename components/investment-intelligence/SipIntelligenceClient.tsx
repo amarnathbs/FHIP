@@ -7,6 +7,7 @@ import { OwnerClassBar } from './OwnerClassBar';
 import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 // R5 — SIP Intelligence UX (spec sections 98-100).
 //
@@ -519,30 +520,28 @@ function SimulationPanel({ data, currency }: { data: Record<string, unknown>; cu
         <NotAvailable detail={(variants[0]?.detail as string) ?? 'This simulation could not be produced over the requested period.'} />
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
-                  <th className="py-2 pr-4">Schedule</th>
-                  <th className="py-2 pr-4">Contributions</th>
-                  <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Total contributed</th>
-                  <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Value at end</th>
-                  <th className="py-2">Return</th>
+          <DataTable label="Groupings that are not clearly recurring" className="min-w-full">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 pr-4">Schedule</th>
+                <th className="py-2 pr-4">Contributions</th>
+                <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Total contributed</th>
+                <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Value at end</th>
+                <th className="py-2">Return</th>
+              </tr>
+            </thead>
+            <tbody>
+              {okVariants.map((v, i) => (
+                <tr key={i} className="border-b border-slate-100">
+                  <td className="py-2 pr-4 font-medium text-ink">{v.label}</td>
+                  <td className="py-2 pr-4">{v.contributionCount}</td>
+                  <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(v.totalContributed, currency)}</td>
+                  <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(v.terminalValue, currency)}</td>
+                  <td className="py-2">{fmtPct(v.xirrRate)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {okVariants.map((v, i) => (
-                  <tr key={i} className="border-b border-slate-100">
-                    <td className="py-2 pr-4 font-medium text-ink">{v.label}</td>
-                    <td className="py-2 pr-4">{v.contributionCount}</td>
-                    <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(v.totalContributed, currency)}</td>
-                    <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(v.terminalValue, currency)}</td>
-                    <td className="py-2">{fmtPct(v.xirrRate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
           {okVariants[0]?.assumptions && (
             <details className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
               <summary className="cursor-pointer font-medium text-ink">Simulation assumptions</summary>

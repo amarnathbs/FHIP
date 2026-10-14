@@ -22,6 +22,7 @@ import {
   LEDGER_DISPOSITION_LABELS,
   describeExtractionWarning,
 } from './liabilityLedgerCopy';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface LiabilityOption { id: string; liability_name: string; source_type: string | null }
 
@@ -132,53 +133,51 @@ export function StatementHistoryTable({ statement }: { statement: HistoryStateme
           {statement.extraction_warnings.map((w, i) => <li key={`${w.code}-${i}`}>{describeExtractionWarning(w)}</li>)}
         </ul>
       )}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] border-collapse text-sm">
-          <caption className="sr-only">Statement lines and how each is counted</caption>
-          <thead>
-            <tr className="border-b border-gray-200 text-left">
-              <th scope="col" className="py-1 pr-2">Date</th>
-              <th scope="col" className="py-1 pr-2">Line</th>
-              <th scope="col" className="py-1 pr-2 text-right">Amount</th>
-              <th scope="col" className="py-1">How it counts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {statement.activities.map((a) => {
-              const outcome = ACTIVITY_LEDGER_OUTCOME[a.activity_type] ?? { label: a.activity_type, counts: 'Not counted' };
-              const disposition = a.ledger_disposition && a.ledger_disposition !== 'ledger_row' ? LEDGER_DISPOSITION_LABELS[a.ledger_disposition] : null;
-              const settlement = settlementText(a);
-              return (
-                <tr key={a.id} className="border-b border-gray-100 align-top">
-                  <td className="py-1 pr-2 whitespace-nowrap">{a.activity_date}</td>
-                  <td className="py-1 pr-2">
-                    <span className="font-medium">{outcome.label}</span>
-                    {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
-                    {a.gst_amount_raw && <span className="block text-xs text-muted">GST shown on statement: {a.gst_amount_raw}</span>}
-                  </td>
-                  <td className="py-1 pr-2 text-right whitespace-nowrap">
-                    {money(a.amount, a.currency_code)}
-                    {a.ledger && a.ledger.allocations.length > 0 && (
-                      <ul className="mt-1 text-xs text-muted">
-                        {a.ledger.allocations.map((al, i) => (
-                          <li key={i}>{ALLOCATION_LABELS[al.economic_transaction_type] ?? al.economic_transaction_type}: {money(al.amount, a.currency_code)}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                  <td className="py-1">
-                    {disposition ?? (a.ledger ? outcome.counts : statement.ledger_status === 'not_applied' ? 'Not recorded yet' : outcome.counts)}
-                    {settlement && a.ledger && <span className="block text-xs text-muted">{settlement}</span>}
-                  </td>
-                </tr>
-              );
-            })}
-            {statement.activities.length === 0 && (
-              <tr><td colSpan={4} className="py-2 text-muted">No lines were read from this statement.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable label="Statement lines and how each is counted" className="w-full min-w-[520px] border-collapse">
+        <caption className="sr-only">Statement lines and how each is counted</caption>
+        <thead>
+          <tr className="border-b border-gray-200 text-left">
+            <th scope="col" className="py-1 pr-2">Date</th>
+            <th scope="col" className="py-1 pr-2">Line</th>
+            <th scope="col" className="py-1 pr-2 text-right">Amount</th>
+            <th scope="col" className="py-1">How it counts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {statement.activities.map((a) => {
+            const outcome = ACTIVITY_LEDGER_OUTCOME[a.activity_type] ?? { label: a.activity_type, counts: 'Not counted' };
+            const disposition = a.ledger_disposition && a.ledger_disposition !== 'ledger_row' ? LEDGER_DISPOSITION_LABELS[a.ledger_disposition] : null;
+            const settlement = settlementText(a);
+            return (
+              <tr key={a.id} className="border-b border-gray-100 align-top">
+                <td className="py-1 pr-2 whitespace-nowrap">{a.activity_date}</td>
+                <td className="py-1 pr-2">
+                  <span className="font-medium">{outcome.label}</span>
+                  {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
+                  {a.gst_amount_raw && <span className="block text-xs text-muted">GST shown on statement: {a.gst_amount_raw}</span>}
+                </td>
+                <td className="py-1 pr-2 text-right whitespace-nowrap">
+                  {money(a.amount, a.currency_code)}
+                  {a.ledger && a.ledger.allocations.length > 0 && (
+                    <ul className="mt-1 text-xs text-muted">
+                      {a.ledger.allocations.map((al, i) => (
+                        <li key={i}>{ALLOCATION_LABELS[al.economic_transaction_type] ?? al.economic_transaction_type}: {money(al.amount, a.currency_code)}</li>
+                      ))}
+                    </ul>
+                  )}
+                </td>
+                <td className="py-1">
+                  {disposition ?? (a.ledger ? outcome.counts : statement.ledger_status === 'not_applied' ? 'Not recorded yet' : outcome.counts)}
+                  {settlement && a.ledger && <span className="block text-xs text-muted">{settlement}</span>}
+                </td>
+              </tr>
+            );
+          })}
+          {statement.activities.length === 0 && (
+            <tr><td colSpan={4} className="py-2 text-muted">No lines were read from this statement.</td></tr>
+          )}
+        </tbody>
+      </DataTable>
     </div>
   );
 }

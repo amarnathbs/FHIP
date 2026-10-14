@@ -77,6 +77,7 @@ import {
 import { StatementDetailsDrawer } from '@/components/financial-data-hub/StatementDetailsDrawer';
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { DataTable } from '@/components/ui/DataTable';
 
 type Phase =
   | 'form'
@@ -834,41 +835,39 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
               {aiDraft.rows.length} transaction{aiDraft.rows.length === 1 ? '' : 's'} read. Remove any line that is
               wrong or is not really a transaction.
             </p>
-            <div className="max-h-80 overflow-y-auto rounded border border-gray-200">
-              <table className="w-full text-sm">
-                <caption className="sr-only">Transactions read from this statement by AI, awaiting your confirmation</caption>
-                <thead className="sticky top-0 bg-gray-50 text-left">
-                  <tr>
-                    <th scope="col" className="px-3 py-2">Date</th>
-                    <th scope="col" className="px-3 py-2">Description</th>
-                    <th scope="col" className="px-3 py-2 text-right">Amount</th>
-                    <th scope="col" className="px-3 py-2">In/Out</th>
-                    <th scope="col" className="px-3 py-2">
-                      <span className="sr-only">Remove</span>
-                    </th>
+            <DataTable wrapperClassName="max-h-80 rounded border border-gray-200" label="Transactions read from this statement by AI, awaiting your confirmation" className="w-full">
+              <caption className="sr-only">Transactions read from this statement by AI, awaiting your confirmation</caption>
+              <thead className="sticky top-0 bg-gray-50 text-left">
+                <tr>
+                  <th scope="col" className="px-3 py-2">Date</th>
+                  <th scope="col" className="px-3 py-2">Description</th>
+                  <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                  <th scope="col" className="px-3 py-2">In/Out</th>
+                  <th scope="col" className="px-3 py-2">
+                    <span className="sr-only">Remove</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {aiDraft.rows.map((row, i) => (
+                  <tr key={`${row.transactionDate}-${i}`} className="border-t border-gray-100">
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(row.transactionDate, currency)}</td>
+                    <td className="px-3 py-2">{row.descriptionRaw}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.amountOriginal.toFixed(2)}</td>
+                    <td className="px-3 py-2">{row.creditDebit === 'credit' ? 'In' : 'Out'}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => removeAiDraftRow(i)}
+                        className="rounded border border-gray-300 px-2 py-1 text-xs"
+                      >
+                        Remove<span className="sr-only"> the {row.descriptionRaw} transaction on {formatDateShort(row.transactionDate, currency)}</span>
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {aiDraft.rows.map((row, i) => (
-                    <tr key={`${row.transactionDate}-${i}`} className="border-t border-gray-100">
-                      <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(row.transactionDate, currency)}</td>
-                      <td className="px-3 py-2">{row.descriptionRaw}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{row.amountOriginal.toFixed(2)}</td>
-                      <td className="px-3 py-2">{row.creditDebit === 'credit' ? 'In' : 'Out'}</td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => removeAiDraftRow(i)}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs"
-                        >
-                          Remove<span className="sr-only"> the {row.descriptionRaw} transaction on {formatDateShort(row.transactionDate, currency)}</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </DataTable>
           </div>
 
           <p className="text-xs text-muted">

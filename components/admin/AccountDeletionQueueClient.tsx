@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatDateShort } from '@/lib/engines/date';
+import { DataTable } from '@/components/ui/DataTable';
 
 type QueueName = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
@@ -105,57 +106,55 @@ export function AccountDeletionQueueClient() {
       {rows !== null && rows.length === 0 && <p className="text-sm text-muted">No requests in this queue.</p>}
 
       {rows !== null && rows.length > 0 && (
-        <div className="overflow-x-auto rounded-card border">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
-              <tr>
-                <th className="px-3 py-2">Email</th>
-                <th className="px-3 py-2">Requested</th>
-                <th className="px-3 py-2">Reason</th>
-                {queue === 'failed' && <th className="px-3 py-2">Failure reason</th>}
-                {queue === 'pending' && <th className="px-3 py-2">Action</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-t">
-                  <td className="px-3 py-2">{row.email ?? '(account no longer exists)'}</td>
-                  <td className="px-3 py-2">{formatDateShort(row.requested_at, 'AUD')}</td>
-                  <td className="px-3 py-2 text-muted">{row.reason ?? '—'}</td>
-                  {queue === 'failed' && <td className="px-3 py-2 text-risk">{row.failure_reason ?? '—'}</td>}
-                  {queue === 'pending' && (
-                    <td className="px-3 py-2">
-                      {confirmingId === row.id ? (
-                        <span className="flex items-center gap-2">
-                          <span className="text-xs text-risk">Permanently delete this account?</span>
-                          <button
-                            type="button"
-                            disabled={executingId === row.id}
-                            onClick={() => void execute(row.id)}
-                            className="rounded bg-risk px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
-                          >
-                            {executingId === row.id ? 'Deleting…' : 'Confirm delete'}
-                          </button>
-                          <button type="button" onClick={() => setConfirmingId(null)} className="text-xs text-gray-500 hover:underline">
-                            Cancel
-                          </button>
-                        </span>
-                      ) : (
+        <DataTable label="Account Deletion Queue" wrapperClassName="rounded-card border" className="min-w-full">
+          <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+            <tr>
+              <th className="px-3 py-2">Email</th>
+              <th className="px-3 py-2">Requested</th>
+              <th className="px-3 py-2">Reason</th>
+              {queue === 'failed' && <th className="px-3 py-2">Failure reason</th>}
+              {queue === 'pending' && <th className="px-3 py-2">Action</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t">
+                <td className="px-3 py-2">{row.email ?? '(account no longer exists)'}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(row.requested_at, 'AUD')}</td>
+                <td className="px-3 py-2 text-muted">{row.reason ?? '—'}</td>
+                {queue === 'failed' && <td className="px-3 py-2 text-risk">{row.failure_reason ?? '—'}</td>}
+                {queue === 'pending' && (
+                  <td className="px-3 py-2">
+                    {confirmingId === row.id ? (
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs text-risk">Permanently delete this account?</span>
                         <button
                           type="button"
-                          onClick={() => setConfirmingId(row.id)}
-                          className="rounded border border-risk px-2 py-1 text-xs font-medium text-risk hover:bg-risk/5"
+                          disabled={executingId === row.id}
+                          onClick={() => void execute(row.id)}
+                          className="rounded bg-risk px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
                         >
-                          Execute deletion
+                          {executingId === row.id ? 'Deleting…' : 'Confirm delete'}
                         </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        <button type="button" onClick={() => setConfirmingId(null)} className="text-xs text-gray-500 hover:underline">
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(row.id)}
+                        className="rounded border border-risk px-2 py-1 text-xs font-medium text-risk hover:bg-risk/5"
+                      >
+                        Execute deletion
+                      </button>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       )}
     </div>
   );

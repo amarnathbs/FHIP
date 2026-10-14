@@ -51,6 +51,7 @@ import {
 } from '@/components/financial-data-hub/WaitingImports';
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { DataTable } from '@/components/ui/DataTable';
 
 type Phase =
   | 'form'
@@ -855,37 +856,35 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
                 {aiDraft.activities.length} activit{aiDraft.activities.length === 1 ? 'y' : 'ies'} read. Remove any line
                 that is wrong, or that is a total of other lines rather than a movement of its own.
               </p>
-              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Activities read from this statement by AI, awaiting your confirmation</caption>
-                  <thead className="sticky top-0 bg-gray-50 text-left">
-                    <tr>
-                      <th scope="col" className="px-3 py-2">Date</th>
-                      <th scope="col" className="px-3 py-2">Type</th>
-                      <th scope="col" className="px-3 py-2 text-right">Amount</th>
-                      <th scope="col" className="px-3 py-2">Total?</th>
-                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+              <DataTable wrapperClassName="max-h-72 rounded border border-gray-200" label="Activities read from this statement by AI, awaiting your confirmation" className="w-full">
+                <caption className="sr-only">Activities read from this statement by AI, awaiting your confirmation</caption>
+                <thead className="sticky top-0 bg-gray-50 text-left">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Date</th>
+                    <th scope="col" className="px-3 py-2">Type</th>
+                    <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                    <th scope="col" className="px-3 py-2">Total?</th>
+                    <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiDraft.activities.map((a, i) => (
+                    <tr key={`${a.activityType}-${i}`} className="border-t border-gray-100">
+                      <td className="px-3 py-2 whitespace-nowrap">{a.activityDate ?? '—'}</td>
+                      <td className="px-3 py-2">{a.activityType}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{money(a.amount, aiDraft.currencyCode)}</td>
+                      <td className="px-3 py-2">
+                        {a.isSummaryTotal ? 'Summary total' : a.isYearToDate ? 'Year to date' : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={() => removeAiActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                          Remove<span className="sr-only"> the {a.activityType} activity</span>
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {aiDraft.activities.map((a, i) => (
-                      <tr key={`${a.activityType}-${i}`} className="border-t border-gray-100">
-                        <td className="px-3 py-2 whitespace-nowrap">{a.activityDate ?? '—'}</td>
-                        <td className="px-3 py-2">{a.activityType}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(a.amount, aiDraft.currencyCode)}</td>
-                        <td className="px-3 py-2">
-                          {a.isSummaryTotal ? 'Summary total' : a.isYearToDate ? 'Year to date' : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => removeAiActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-                            Remove<span className="sr-only"> the {a.activityType} activity</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
             </div>
           )}
 
@@ -1053,42 +1052,40 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
               retirement accounts only if you tick them, and always together with how often they are paid.
             </p>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] border-collapse text-sm">
-              <caption className="sr-only">Comparison of your current retirement account with the statement</caption>
-              <thead>
-                <tr className="border-b border-gray-200 text-left">
-                  <th scope="col" className="py-2 pr-2">Field</th>
-                  <th scope="col" className="py-2 pr-2">Current</th>
-                  <th scope="col" className="py-2 pr-2">Statement</th>
-                  <th scope="col" className="py-2">Apply this field</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map((f) => {
-                  const changed = f.proposedValue !== f.existingValue;
-                  const label = FIELD_LABELS[f.fieldName] ?? f.fieldName;
-                  return (
-                    <tr key={f.fieldName} className="border-b border-gray-100">
-                      <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{label}</th>
-                      <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind, currency)}</td>
-                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind, currency)}</td>
-                      <td className="py-2">
-                        <label className="inline-flex items-center gap-2">
-                          <input
-                            type="checkbox" checked={selected.has(f.fieldName)}
-                            onChange={() => toggleField(f.fieldName)}
-                            aria-label={`Apply ${label}`}
-                          />
-                          {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
-                        </label>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable label="Comparison of your current retirement account with the statement" className="w-full min-w-[420px] border-collapse">
+            <caption className="sr-only">Comparison of your current retirement account with the statement</caption>
+            <thead>
+              <tr className="border-b border-gray-200 text-left">
+                <th scope="col" className="py-2 pr-2">Field</th>
+                <th scope="col" className="py-2 pr-2">Current</th>
+                <th scope="col" className="py-2 pr-2">Statement</th>
+                <th scope="col" className="py-2">Apply this field</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fields.map((f) => {
+                const changed = f.proposedValue !== f.existingValue;
+                const label = FIELD_LABELS[f.fieldName] ?? f.fieldName;
+                return (
+                  <tr key={f.fieldName} className="border-b border-gray-100">
+                    <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{label}</th>
+                    <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind, currency)}</td>
+                    <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind, currency)}</td>
+                    <td className="py-2">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox" checked={selected.has(f.fieldName)}
+                          onChange={() => toggleField(f.fieldName)}
+                          aria-label={`Apply ${label}`}
+                        />
+                        {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
+                      </label>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
 
           {/* spec sections 61, 113: stated to the user, not just enforced. */}
           <p className="text-xs text-muted">

@@ -29,6 +29,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { fdhApi } from '@/lib/import-bridge/fdhRoutes';
+import { DataTable } from '@/components/ui/DataTable';
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case, exactly as the API sends them)
@@ -482,7 +483,7 @@ export function RetirementStatementDetails({ statement, activities, positions, o
         {activities.length === 0 ? (
           <p className="text-sm text-muted">This statement listed no individual activity lines.</p>
         ) : (
-          <table className="w-full min-w-[860px] border-collapse text-sm">
+          <DataTable label="Every activity line on this retirement statement" className="w-full min-w-[860px] border-collapse">
             <caption className="sr-only">Every activity line on this retirement statement</caption>
             <thead>
               <tr className="border-b border-gray-200 text-left">
@@ -526,7 +527,7 @@ export function RetirementStatementDetails({ statement, activities, positions, o
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         )}
       </div>
 
@@ -537,7 +538,7 @@ export function RetirementStatementDetails({ statement, activities, positions, o
             What this fund is invested in, for information only. These holdings are already part of the fund&apos;s balance,
             so they are not added to your Net Worth or your investments a second time.
           </p>
-          <table className="w-full min-w-[720px] border-collapse text-sm">
+          <DataTable label="Investment options held inside this retirement account (not added to Net Worth)" className="w-full min-w-[720px] border-collapse">
             <caption className="sr-only">Investment options held inside this retirement account (not added to Net Worth)</caption>
             <thead>
               <tr className="border-b border-gray-200 text-left">
@@ -565,7 +566,7 @@ export function RetirementStatementDetails({ statement, activities, positions, o
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         </div>
       )}
     </div>

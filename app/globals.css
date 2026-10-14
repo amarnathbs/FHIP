@@ -2,6 +2,126 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global table layout (Product Owner 08-10-2026). Rules: lib/ui/dataTable.ts. Component: components/ui/DataTable.tsx.
+   Every table in the app is rendered by <DataTable> (guard: tests/unit/dataTableGuard.test.ts), so these rules reach all of them.
+   They are in the components layer so a utility class on a table or cell (for example bg-gray-50) still wins. */
+@layer components {
+  /* One labelled, keyboard-focusable region around a table. The table shrinks to it; the sideways scroll appears only when the
+     columns genuinely cannot fit, and stays inside the region. No max-height: the region never adds a vertical scroll area. */
+  .fhip-table-wrap {
+    /* A positioning context, so a visually-hidden caption or label inside the table cannot extend the PAGE's scroll width. */
+    position: relative;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fhip-table-wrap:focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+  /* Table text is one step below body text (13px, never below 12px) so more columns fit; contrast is unchanged. */
+  .fhip-table {
+    width: 100%;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
+  /* Numbers, dates, statuses and action buttons never wrap and are never clamped. Raw cells that already use the shared numeric
+     class (lib/ui/tableAlign.ts) and every button inside a cell get the same treatment. */
+  .fhip-table .fhip-cell-nowrap,
+  .fhip-table td.tabular-nums,
+  .fhip-table th.text-right {
+    white-space: nowrap;
+  }
+  :where(.fhip-table td button) {
+    white-space: nowrap;
+  }
+  /* Descriptive text: clamp to two lines (a client component adds the accessible "Show more" button when text is really cut). */
+  .fhip-clamp-cell {
+    display: block;
+  }
+  .fhip-clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--fhip-clamp-lines, 2);
+    line-clamp: var(--fhip-clamp-lines, 2);
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .fhip-clamp-open {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+  .fhip-clamp-toggle {
+    display: inline-block;
+    min-height: 1.5rem;
+    min-width: 1.5rem;
+    padding: 0 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5rem;
+    color: #1d4ed8;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    white-space: nowrap;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  /* Touch screens: a 44px target, like every other control. */
+  @media (pointer: coarse) {
+    .fhip-clamp-toggle {
+      min-height: 2.75rem;
+      min-width: 2.75rem;
+    }
+  }
+  .fhip-clamp-toggle:focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+  .fhip-table-jump {
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+  }
+  .fhip-table-jump-link {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    color: #1d4ed8;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .fhip-table-jump-link:focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+  /* Below 768 px the region scrolls sideways inside itself; the first column (row identity) and the action column stay in view. */
+  @media (max-width: 767.98px) {
+    .fhip-table[data-sticky-first='true'] :is(th, td):first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background-color: #fff;
+      box-shadow: 1px 0 0 #dde3ea;
+    }
+    .fhip-table[data-sticky-first='true'] thead :is(th, td):first-child {
+      background-color: #f9fafb;
+      z-index: 2;
+    }
+    .fhip-table .fhip-cell-action {
+      position: sticky;
+      right: 0;
+      z-index: 1;
+      background-color: #fff;
+      box-shadow: -1px 0 0 #dde3ea;
+    }
+    .fhip-table thead .fhip-cell-action {
+      background-color: #f9fafb;
+      z-index: 2;
+    }
+  }
+}
+
 /* Print / PDF-ready layout for Module 9 report previews (spec section 15.1).
    Scoped to .report-print-root so it never affects any other page. */
 @media print {
@@ -75,6 +195,15 @@
 
   table {
     break-inside: avoid;
+  }
+
+  /* Printed / PDF tables are not scrolled or sticky: the whole table is laid out on the page. */
+  .fhip-table-wrap {
+    overflow: visible !important;
+  }
+  .fhip-table :is(th, td) {
+    position: static !important;
+    box-shadow: none !important;
   }
 
   /* India Mutual Fund Investment Report: a 16-column table is wider than the

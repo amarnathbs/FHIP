@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import type { StatementDetails } from '@/lib/financial-data-hub/services/statementDetailsService';
+import { DataTable } from '@/components/ui/DataTable';
 
 function money(amount: number | null, currency: string | null): string {
   if (amount === null) return 'Not shown on the statement';
@@ -144,41 +145,39 @@ export function StatementDetailsDrawer({ statementId, buttonLabel = 'Statement d
 
           <div>
             <h3 className="text-sm font-semibold text-ink">Lines ({d.lines.total})</h3>
-            <div className="mt-2 max-h-96 overflow-auto rounded-compact border border-line">
-              <table className="w-full text-xs">
-                <caption className="sr-only">Every line read from this statement, with the dates, reference and running balance the statement prints</caption>
-                <thead className="sticky top-0 bg-gray-50 text-left">
-                  <tr>
-                    <th scope="col" className="px-2 py-1">Date</th>
-                    <th scope="col" className="px-2 py-1">Posted</th>
-                    <th scope="col" className="px-2 py-1">Value date</th>
-                    <th scope="col" className="px-2 py-1">Description</th>
-                    <th scope="col" className="px-2 py-1">Reference</th>
-                    <th scope="col" className="px-2 py-1 text-right">Amount</th>
-                    <th scope="col" className="px-2 py-1 text-right">Balance after</th>
-                    <th scope="col" className="px-2 py-1">Status</th>
+            <DataTable wrapperClassName="mt-2 max-h-96 rounded-compact border border-line" label="Every line read from this statement, with the dates, reference and running balance the statement prints" className="w-full text-xs">
+              <caption className="sr-only">Every line read from this statement, with the dates, reference and running balance the statement prints</caption>
+              <thead className="sticky top-0 bg-gray-50 text-left">
+                <tr>
+                  <th scope="col" className="px-2 py-1">Date</th>
+                  <th scope="col" className="px-2 py-1">Posted</th>
+                  <th scope="col" className="px-2 py-1">Value date</th>
+                  <th scope="col" className="px-2 py-1">Description</th>
+                  <th scope="col" className="px-2 py-1">Reference</th>
+                  <th scope="col" className="px-2 py-1 text-right">Amount</th>
+                  <th scope="col" className="px-2 py-1 text-right">Balance after</th>
+                  <th scope="col" className="px-2 py-1">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.lines.rows.map((row) => (
+                  <tr key={row.id} className="border-t border-line/60">
+                    <td className="px-2 py-1 whitespace-nowrap">{row.transaction_date}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">{row.posting_date ?? '—'}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">{row.value_date ?? '—'}</td>
+                    <td className="px-2 py-1">{row.description ?? '—'}</td>
+                    <td className="px-2 py-1">{row.reference ?? '—'}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{row.credit_debit === 'credit' ? '+' : '−'}{formatMoneyExact(row.amount, row.currency)}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{row.balance_after === null ? '—' : formatMoneyExact(row.balance_after, row.currency)}</td>
+                    <td className="px-2 py-1">
+                      {row.dedup_status === 'user_confirmed_duplicate' || row.dedup_status === 'duplicate_confirmed'
+                        ? 'Removed as a duplicate'
+                        : row.approval_status === 'approved' ? 'Approved' : 'Waiting'}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {d.lines.rows.map((row) => (
-                    <tr key={row.id} className="border-t border-line/60">
-                      <td className="px-2 py-1 whitespace-nowrap">{row.transaction_date}</td>
-                      <td className="px-2 py-1 whitespace-nowrap">{row.posting_date ?? '—'}</td>
-                      <td className="px-2 py-1 whitespace-nowrap">{row.value_date ?? '—'}</td>
-                      <td className="px-2 py-1">{row.description ?? '—'}</td>
-                      <td className="px-2 py-1">{row.reference ?? '—'}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{row.credit_debit === 'credit' ? '+' : '−'}{formatMoneyExact(row.amount, row.currency)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{row.balance_after === null ? '—' : formatMoneyExact(row.balance_after, row.currency)}</td>
-                      <td className="px-2 py-1">
-                        {row.dedup_status === 'user_confirmed_duplicate' || row.dedup_status === 'duplicate_confirmed'
-                          ? 'Removed as a duplicate'
-                          : row.approval_status === 'approved' ? 'Approved' : 'Waiting'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </DataTable>
             {pages > 1 && (
               <div className="mt-2 flex items-center gap-3 text-sm">
                 <button type="button" disabled={page <= 1 || loading} onClick={() => goTo(Math.max(1, page - 1))} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Previous lines</button>

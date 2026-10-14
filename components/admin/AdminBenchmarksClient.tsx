@@ -48,6 +48,7 @@ import {
 import { cell, displayCell, fmt, type Row } from '@/components/admin/adminBenchmarksCells';
 import { PlanningBenchmarkUpload } from '@/components/admin/PlanningBenchmarkUpload';
 import { parseAdminCapabilities } from '@/lib/admin/adminNav';
+import { DataTable } from '@/components/ui/DataTable';
 
 type Tab = 'sources' | 'datasets' | 'cohorts' | 'values' | 'target-ranges' | 'update-runs' | 'upload';
 
@@ -408,121 +409,119 @@ export function AdminBenchmarksClient() {
               would otherwise resolve against the document, extending the
               page's scroll width past the viewport. See
               ResourceContentTable for the full explanation. */}
-          <div className="relative overflow-x-auto rounded-card border border-line bg-white">
-            <table className="w-full text-left text-xs">
-              <caption className="sr-only">{activeTab.label} — {activeTab.purpose}</caption>
-              <thead className="bg-gray-50 text-muted">
-                <tr>
-                  {columns.map((c) => (
-                    <th key={c} scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
-                      {COLUMN_LABELS[c] ?? c}
-                    </th>
-                  ))}
-                  {showActions && (
-                    <th scope="col" className="px-3 py-2 font-medium">
-                      Actions
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={columnCount} className="px-3 py-4 text-center text-muted">
-                      No {activeTab.subject} recorded yet.
-                    </td>
-                  </tr>
+          <DataTable label={activeTab.label} wrapperClassName="relative rounded-card border border-line bg-white" className="w-full text-left text-xs">
+            <caption className="sr-only">{activeTab.label} — {activeTab.purpose}</caption>
+            <thead className="bg-gray-50 text-muted">
+              <tr>
+                {columns.map((c) => (
+                  <th key={c} scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                    {COLUMN_LABELS[c] ?? c}
+                  </th>
+                ))}
+                {showActions && (
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Actions
+                  </th>
                 )}
-                {rows.map((r, i) => (
-                  <tr key={(r.id as string) ?? i} className="border-t border-line">
-                    {columns.map((c) => (
-                      <td key={c} className="max-w-xs truncate px-3 py-2" title={displayCell(r, c)}>
-                        {displayCell(r, c)}
-                      </td>
-                    ))}
-                    {tab === 'datasets' && (
-                      <td className="whitespace-nowrap px-3 py-2">
-                        <div className="flex min-h-11 items-center gap-1.5">
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={columnCount} className="px-3 py-4 text-center text-muted">
+                    No {activeTab.subject} recorded yet.
+                  </td>
+                </tr>
+              )}
+              {rows.map((r, i) => (
+                <tr key={(r.id as string) ?? i} className="border-t border-line">
+                  {columns.map((c) => (
+                    <td key={c} className="max-w-xs truncate px-3 py-2" title={displayCell(r, c)}>
+                      {displayCell(r, c)}
+                    </td>
+                  ))}
+                  {tab === 'datasets' && (
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <div className="flex min-h-11 items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={busyId === r.id}
+                          onClick={() => validate(r.id as string, fmt(cell(r, 'Dataset')))}
+                          aria-label={`Check whether ${fmt(cell(r, 'Dataset'))} is ready to activate`}
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-line px-2 py-1 text-xs hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                        >
+                          Validate
+                        </button>
+                        {r.data_status === 'active' ? (
                           <button
                             type="button"
                             disabled={busyId === r.id}
-                            onClick={() => validate(r.id as string, fmt(cell(r, 'Dataset')))}
-                            aria-label={`Check whether ${fmt(cell(r, 'Dataset'))} is ready to activate`}
-                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-line px-2 py-1 text-xs hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                            onClick={() => setPending({ kind: 'retire', id: r.id as string, name: fmt(cell(r, 'Dataset')) })}
+                            aria-label={`Retire ${fmt(cell(r, 'Dataset'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-gray-200 px-2 py-1 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
                           >
-                            Validate
+                            Retire
                           </button>
-                          {r.data_status === 'active' ? (
-                            <button
-                              type="button"
-                              disabled={busyId === r.id}
-                              onClick={() => setPending({ kind: 'retire', id: r.id as string, name: fmt(cell(r, 'Dataset')) })}
-                              aria-label={`Retire ${fmt(cell(r, 'Dataset'))}`}
-                              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-gray-200 px-2 py-1 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
-                            >
-                              Retire
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={busyId === r.id}
-                              onClick={() => setPending({ kind: 'activate', id: r.id as string, name: fmt(cell(r, 'Dataset')) })}
-                              aria-label={`Activate ${fmt(cell(r, 'Dataset'))}`}
-                              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
-                            >
-                              Activate
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                    {tab === 'sources' && (
-                      <td className="whitespace-nowrap px-3 py-2">
-                        <div className="flex min-h-11 items-center gap-1.5">
-                          {(r.status === 'draft' || r.status === 'under_review') && (
-                            <button
-                              type="button"
-                              disabled={busyId === r.id}
-                              onClick={() => setPending({ kind: 'approve', id: r.id as string, name: fmt(cell(r, 'Source')) })}
-                              aria-label={`Approve ${fmt(cell(r, 'Source'))}`}
-                              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
-                            >
-                              Approve
-                            </button>
-                          )}
-                          {(r.status === 'approved' || r.status === 'active') && (
-                            <button
-                              type="button"
-                              disabled={busyId === r.id}
-                              onClick={() => setPending({ kind: 'suspend', id: r.id as string, name: fmt(cell(r, 'Source')) })}
-                              aria-label={`Suspend ${fmt(cell(r, 'Source'))}`}
-                              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-gray-200 px-2 py-1 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
-                            >
-                              Suspend
-                            </button>
-                          )}
-                          {r.status === 'suspended' && (
-                            <button
-                              type="button"
-                              disabled={busyId === r.id}
-                              onClick={() => setPending({ kind: 'reinstate', id: r.id as string, name: fmt(cell(r, 'Source')) })}
-                              aria-label={`Reinstate ${fmt(cell(r, 'Source'))}`}
-                              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
-                            >
-                              Reinstate
-                            </button>
-                          )}
-                          {!['draft', 'under_review', 'approved', 'active', 'suspended'].includes(String(r.status)) && (
-                            <span className="text-muted">No action available</span>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={busyId === r.id}
+                            onClick={() => setPending({ kind: 'activate', id: r.id as string, name: fmt(cell(r, 'Dataset')) })}
+                            aria-label={`Activate ${fmt(cell(r, 'Dataset'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Activate
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                  {tab === 'sources' && (
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <div className="flex min-h-11 items-center gap-1.5">
+                        {(r.status === 'draft' || r.status === 'under_review') && (
+                          <button
+                            type="button"
+                            disabled={busyId === r.id}
+                            onClick={() => setPending({ kind: 'approve', id: r.id as string, name: fmt(cell(r, 'Source')) })}
+                            aria-label={`Approve ${fmt(cell(r, 'Source'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {(r.status === 'approved' || r.status === 'active') && (
+                          <button
+                            type="button"
+                            disabled={busyId === r.id}
+                            onClick={() => setPending({ kind: 'suspend', id: r.id as string, name: fmt(cell(r, 'Source')) })}
+                            aria-label={`Suspend ${fmt(cell(r, 'Source'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-gray-200 px-2 py-1 text-xs hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Suspend
+                          </button>
+                        )}
+                        {r.status === 'suspended' && (
+                          <button
+                            type="button"
+                            disabled={busyId === r.id}
+                            onClick={() => setPending({ kind: 'reinstate', id: r.id as string, name: fmt(cell(r, 'Source')) })}
+                            aria-label={`Reinstate ${fmt(cell(r, 'Source'))}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded bg-trust px-2 py-1 text-xs text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trust disabled:opacity-50"
+                          >
+                            Reinstate
+                          </button>
+                        )}
+                        {!['draft', 'under_review', 'approved', 'active', 'suspended'].includes(String(r.status)) && (
+                          <span className="text-muted">No action available</span>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
         </>
       )}
     </div>

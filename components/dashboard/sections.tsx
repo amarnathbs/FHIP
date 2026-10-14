@@ -6,6 +6,7 @@ import { TrendLineChart, AllocationPieChart } from './charts';
 import { formatMoney } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import { percentChange, type DashboardSummary, type AllocationBucket } from '@/lib/engines/dashboard';
+import { DataTable } from '@/components/ui/DataTable';
 
 function titleCase(s: string): string {
   return s
@@ -269,7 +270,7 @@ export function AssetAllocationSection({ summary }: { summary: DashboardSummary 
         slices={summary.netWorthAllocation.map((s) => ({ label: BUCKET_LABELS[s.bucket], value: s.value }))}
         currency={summary.currency}
       />
-      <table className="mt-4 w-full text-sm">
+      <DataTable label="Net worth allocation against the guideline" className="mt-4 w-full">
         <thead className="text-left text-xs uppercase text-gray-500">
           <tr>
             <th className="py-1">Bucket</th>
@@ -286,7 +287,7 @@ export function AssetAllocationSection({ summary }: { summary: DashboardSummary 
             </tr>
           ))}
         </tbody>
-      </table>
+      </DataTable>
       <div className="mt-4 grid grid-cols-2 gap-4">
         <Stat label="Diversification Score" value={summary.investmentDiversificationScore !== null ? `${summary.investmentDiversificationScore}/100` : '—'} />
         <Stat

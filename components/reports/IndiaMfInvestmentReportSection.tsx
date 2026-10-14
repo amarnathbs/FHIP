@@ -1,6 +1,7 @@
 import type { IndiaMfReport, OwnerRow, OwnerSection, OwnerTiles, XirrOutcome } from '@/lib/engines/investment-intelligence/indiaMfReport';
 import { formatIsoDateDMY, UNIT_TOLERANCE } from '@/lib/engines/investment-intelligence/indiaMfReport';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 // India Mutual Fund Investment Report — presentational only. Every number is
 // read from the stored section data (the pure module's result); nothing is
@@ -124,7 +125,7 @@ function OwnerTable({ section }: { section: OwnerSection }) {
   }
   return (
     <div className="overflow-x-auto" data-testid="india-mf-table-wrap">
-      <table className="india-mf-table w-full min-w-[1000px] table-fixed border-collapse text-gray-900" data-testid="india-mf-table">
+      <DataTable label="India mutual fund investment report" className="india-mf-table w-full min-w-[1000px] table-fixed border-collapse text-gray-900" data-testid="india-mf-table">
         <colgroup>
           <col style={{ width: '8%' }} />
           <col style={{ width: '15%' }} />
@@ -227,7 +228,7 @@ function OwnerTable({ section }: { section: OwnerSection }) {
             </td>
           </tr>
         </tfoot>
-      </table>
+      </DataTable>
       {naNotes.length > 0 && (
         <ul className="mt-1 list-disc pl-4 text-[9px] text-gray-500" data-testid="india-mf-na-notes">
           {naNotes.map((n, i) => (
