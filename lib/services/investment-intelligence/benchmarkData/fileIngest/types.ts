@@ -44,7 +44,8 @@ export interface UploadParams {
   returnVariant: ReturnVariant;
   currencyCode: string;
   historyClass: HistoryClass;
-  dateFormat: DateFormatId;
+  /** Optional ONLY for a recognised provider layout, whose own date format is then used. Every other shape needs the operator's explicit choice (never guessed). */
+  dateFormat?: DateFormatId;
   numberLocale: NumberLocaleId;
   /** XLSX: the sheet to process (never defaulted silently). */
   sheetName?: string;

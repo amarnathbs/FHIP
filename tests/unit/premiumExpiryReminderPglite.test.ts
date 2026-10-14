@@ -20,6 +20,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
+import { latestFunctionSql } from './support/promoTestHelpers';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +42,8 @@ function extractFn(name: string): string {
   if (!m) throw new Error(`could not extract ${name}`);
   return m[0];
 }
-const CLAIM_FN = extractFn('premium_reminder_claim');
+// The hardening migration (0265) replaces the claim, so the negative controls mutate and restore the NEWEST definition.
+const CLAIM_FN = latestFunctionSql('premium_reminder_claim');
 const RECORD_FN = extractFn('premium_reminder_record');
 const SCHEDULE_BLOCK = (() => {
   const i = MIGRATION.lastIndexOf('do $$');
@@ -214,7 +216,7 @@ describe('who is due — thresholds, source, ownership', () => {
 
   it('a short window is not told "30 days left": a 30-day promo redeemed today is not due at the 30-day mark', async () => {
     const u = await newUser('short');
-    await seed(u, 'promo_code', 30, 0); // started today, 30 days long
+    await seed(u, 'promo_code', 29, 0); // started today and ends on today plus 29: a 30 day window, both ends inclusive
     expect((await claim({ only: u })).length).toBe(0);
     const u2 = await newUser('short');
     await seed(u2, 'promo_code', 6, 24);

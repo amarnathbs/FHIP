@@ -1,0 +1,17 @@
+{
+  "contract": "Trim space, tab, CR and LF at both ends. Lower case ASCII letters A to Z only. No other rewriting: no dot removal, no plus tag removal, no unicode folding, no NBSP trimming. Shared by the TypeScript and the SQL (PGlite) tests.",
+  "vectors": [
+    { "input": "user@example.com", "normalised": "user@example.com" },
+    { "input": "  User@Example.COM  ", "normalised": "user@example.com" },
+    { "input": "\tUSER@EXAMPLE.COM\r\n", "normalised": "user@example.com" },
+    { "input": "first.last+tag@Gmail.com", "normalised": "first.last+tag@gmail.com" },
+    { "input": "F.I.R.S.T@gmail.com", "normalised": "f.i.r.s.t@gmail.com" },
+    { "input": "first.last@googlemail.com", "normalised": "first.last@googlemail.com" },
+    { "input": "Àb@Example.com", "normalised": "Àb@example.com" },
+    { "input": " user@example.com", "normalised": " user@example.com" },
+    { "input": "us er@example.com", "normalised": "us er@example.com" },
+    { "input": "", "normalised": "" },
+    { "input": "   ", "normalised": "" },
+    { "input": "MiXeD@SuB.Example.ORG", "normalised": "mixed@sub.example.org" }
+  ]
+}
