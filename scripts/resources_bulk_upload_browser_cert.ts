@@ -16,7 +16,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { stripUnusedBinContentType } from '../lib/resources/import/xlsx-sanitize';
-import { fixtureSession, maskEmail } from './lib/resourcesBulkFixtureSessions';
+import { fixtureSession, maskEmail, restoreBorrowedProfiles } from './lib/resourcesBulkFixtureSessions';
 import { ARTICLE_SCHEMA } from '../lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '../lib/resources/import/money-update/schema';
 
@@ -291,9 +291,10 @@ async function cleanup() {
   } catch (e) {
     console.error('cleanup error', e);
   }
+  const restoredProfiles = await restoreBorrowedProfiles(admin);
   const c = async (t: string, col: string, pat: string) => (await admin.from(t).select('*', { count: 'exact', head: true }).like(col, pat)).count ?? -1;
   const inWin = async (t: string, col: string) => (ids.length ? ((await admin.from(t).select('*', { count: 'exact', head: true }).in(col, ids).gte('created_at', since)).count ?? -1) : 0);
-  const residue = { posts: await c('resource_posts', 'slug', `${RUN}%`), sources: await c('resource_sources', 'source_name', `${RUN}%`), categories: await c('resource_categories', 'slug', `${RUN}%`), tags: await c('resource_tags', 'slug', `${RUN}%`), authors: await c('resource_authors', 'slug', `${RUN}%`), runs: await inWin('resource_content_import_runs', 'uploaded_by'), postsByFixturesInWindow: await inWin('resource_posts', 'created_by'), auditInWindow: await inWin('resource_audit_log', 'actor_user_id') };
+  const residue = { posts: await c('resource_posts', 'slug', `${RUN}%`), sources: await c('resource_sources', 'source_name', `${RUN}%`), categories: await c('resource_categories', 'slug', `${RUN}%`), tags: await c('resource_tags', 'slug', `${RUN}%`), authors: await c('resource_authors', 'slug', `${RUN}%`), runs: await inWin('resource_content_import_runs', 'uploaded_by'), postsByFixturesInWindow: await inWin('resource_posts', 'created_by'), auditInWindow: await inWin('resource_audit_log', 'actor_user_id'), fixtureProfilesNotRestored: restoredProfiles.stillDifferent };
   check('BROWSER CLEANUP: synthetic posts, sources, categories, tags, authors, import runs, and the audit rows of this run all 0', Object.values(residue).every((v) => v === 0), JSON.stringify(residue));
   evidence.residue = residue;
 }

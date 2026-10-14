@@ -20,7 +20,7 @@ import { ARTICLE_SCHEMA } from '../lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '../lib/resources/import/money-update/schema';
 import { IMPORT_LIMITS } from '../lib/resources/import/types';
 import { stripUnusedBinContentType } from '../lib/resources/import/xlsx-sanitize';
-import { fixtureSession, maskEmail } from './lib/resourcesBulkFixtureSessions';
+import { fixtureSession, maskEmail, restoreBorrowedProfiles } from './lib/resourcesBulkFixtureSessions';
 
 const CAP = IMPORT_LIMITS.maxRows;
 const APP = process.argv[2] ?? 'http://localhost:3993';
@@ -753,6 +753,9 @@ async function cleanup() {
   residue.postsByFixturesInWindow = ids.length ? ((await admin.from('resource_posts').select('*', { count: 'exact', head: true }).in('created_by', ids).gte('created_at', since)).count ?? -1) : 0;
   residue.auditByFixturesInWindow = ids.length ? ((await admin.from('resource_audit_log').select('*', { count: 'exact', head: true }).in('actor_user_id', ids).gte('created_at', since)).count ?? -1) : 0;
   residue.workflowByFixturesInWindow = ids.length ? ((await admin.from('resource_workflow_history').select('*', { count: 'exact', head: true }).in('actor_user_id', ids).gte('created_at', since)).count ?? -1) : 0;
+  const restoredProfiles = await restoreBorrowedProfiles(admin);
+  residue.fixtureProfilesNotRestored = restoredProfiles.stillDifferent;
+  evidence.fixtureProfilesRestored = restoredProfiles.restored;
   const { data: au } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   residue.authUsersCreatedByRun = (au?.users ?? []).filter((u) => (u.email ?? '').startsWith(`${RUN}-`)).length;
   evidence.residue = residue;
