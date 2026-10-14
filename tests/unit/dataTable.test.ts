@@ -4,6 +4,9 @@
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { Btn } from '@/components/admin/benchmarkData/ui';
 import { ClampText, ClampToggle } from '@/components/ui/ClampText';
 import { DataTable, DataTd, DataTh, DateRange, DateTimeText, NoWrap } from '@/components/ui/DataTable';
 import {
@@ -162,5 +165,21 @@ describe('dates never break at their hyphens', () => {
     expect(html).toBe('<span class="whitespace-nowrap">08-10-2026</span> <span class="whitespace-nowrap">02:37 UTC</span>');
     expect(html.replace(/<[^>]+>/g, '')).toBe('08-10-2026 02:37 UTC');
     expect(renderToStaticMarkup(h(DateTimeText, { value: '08-10-2026' }))).toBe('<span class="whitespace-nowrap">08-10-2026</span>');
+  });
+});
+
+describe('touch targets: compact action buttons and the Show more control', () => {
+  it('a compact action button is small on a mouse screen and 44 px on a touch screen; a normal button stays 44 px', () => {
+    const compact = renderToStaticMarkup(h(Btn, { compact: true, kind: 'secondary', ariaLabel: 'Edit revision of record a1b2c3' }, 'Edit revision'));
+    expect(compact).toContain('min-h-8');
+    expect(compact).toContain('[@media(pointer:coarse)]:min-h-11');
+    expect(compact).toContain('aria-label="Edit revision of record a1b2c3"');
+    expect(renderToStaticMarkup(h(Btn, { kind: 'secondary' }, 'Open'))).toContain('min-h-11');
+  });
+
+  it('the Show more control grows to 44 px on a touch screen (CSS), 24 px otherwise (WCAG 2.5.8)', () => {
+    const css = readFileSync(path.resolve(__dirname, '..', '..', 'app', 'globals.css'), 'utf8');
+    expect(css).toMatch(/\.fhip-clamp-toggle \{[^}]*min-height: 1\.5rem/);
+    expect(css).toMatch(/@media \(pointer: coarse\) \{\s*\.fhip-clamp-toggle \{[^}]*min-height: 2\.75rem/);
   });
 });
