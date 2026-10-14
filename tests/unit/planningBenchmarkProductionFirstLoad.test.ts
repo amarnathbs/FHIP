@@ -156,7 +156,7 @@ describe('generator: deterministic, complete and faithful to the approved files'
   });
 
   it('the manifest lists every file with its dataset, kind, row count and the SHA-256 of the bytes on disk', () => {
-    const manifest = parseCsv(fs.readFileSync(path.join(OUTPUT_DIR, 'MANIFEST.csv'), 'utf8')) as { records: Array<Record<string, string>> };
+    const manifest = parseCsv(fs.readFileSync(path.join(OUTPUT_DIR, 'MANIFEST.csv'), 'utf8')) as unknown as { records: Array<Record<string, string>> };
     expect(manifest.records).toHaveLength(9);
     for (const r of manifest.records) {
       const bytes = fs.readFileSync(path.join(OUTPUT_DIR, r.file));
@@ -211,7 +211,7 @@ describe('generator: deterministic, complete and faithful to the approved files'
     expect(json.poApprovedDeviations).toHaveLength(1);
     expect(json.poApprovedDeviations[0]).toMatchObject({ id: 'PO-DEV-A', metric: 'property_concentration', from: 'share', to: 'mean' });
     expect(json.poApprovedDeviations[0].reason).toMatch(/never "share"/);
-    const trace = (parseCsv(fs.readFileSync(path.join(OUTPUT_DIR, 'TRACE_rows_to_source_observations.csv'), 'utf8')) as { records: Array<Record<string, string>> }).records;
+    const trace = (parseCsv(fs.readFileSync(path.join(OUTPUT_DIR, 'TRACE_rows_to_source_observations.csv'), 'utf8')) as unknown as { records: Array<Record<string, string>> }).records;
     expect(trace.filter((t) => t.po_approved_deviation !== '')).toHaveLength(1);
     // The mapping is by metric, not by statistic (DATASET_METRIC_MAPPING.md s1, s5): the pair is permitted whatever the statistic.
     expect(MAPPING_DOC).toContain('| AU household asset composition | 1.0 | property_concentration | percentage | values |');

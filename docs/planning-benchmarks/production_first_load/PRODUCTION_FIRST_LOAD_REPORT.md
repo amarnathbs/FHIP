@@ -88,3 +88,27 @@ Other things the tests prove on the replica: a metric not mapped to its dataset 
 - **Twin filter.** Production main `e829a8b` or later carries the filter that stops serving end-dated figures; the runbook asks you to confirm that before the first Activate that replaces anything.
 - **Date rule.** All text a person reads is day first. The SQL editor prints dates year first; the runbook says so where it matters.
 - **Not covered by this branch.** No change to the mapping, to any migration, to the upload code or to any approved source figure (the one change to an approved row is the PO-approved statistic of decision A; the caveats of decision D only extend source_locator). The old console runner is untouched (the runbook tells you not to use it).
+
+## 6. Production result
+
+Added 14/10/2026 from the verified production run. **Evidence labels: PRODUCTION-VERIFIED for the database state below (runbook checks E1 to E8). NOT VERIFIED for the Financial Twin screen check (runbook E7, second half): nobody has yet looked at the Twin itself after the load.**
+
+- **When:** loaded on 07/10/2026 (UTC), file 01 at 23:46 to file 09 at 23:51, all nine files activated in the runbook order.
+- **Previews and results per file** (New / Replaced / Same as live; Conflicts 0 and Bands removed 0 on every file), exactly as in the production audit and as rehearsed:
+
+| File | New | Replaced | Same as live |
+|---|---|---|---|
+| 1 cohort | 1 | 0 | 0 |
+| 2 asset composition | 1 | 1 | 0 |
+| 3 wealth distribution | 2 | 2 | 2 |
+| 4 age bands | 16 | 10 | 2 |
+| 5 DTI | 0 | 0 | 1 |
+| 6 average super | 1 | 1 | 0 |
+| 7 India assets and debt | 2 | 0 | 2 |
+| 8 India EPF/EPS | 0 | 1 | 0 |
+| 9 ASFA target ranges | 0 | 0 | 4 |
+
+- **E2 totals on production:** 459 value rows, 15 end-dated and kept as history, 444 live, 200 live bands, 40 cohorts. The 459 and 444 include 198 extra copies of the FHIP dependant-band values that already existed on production before this load (see below); without them the figures are the rehearsed 261 rows and 246 live.
+- **Three spot checks:** net worth median 579,200 (ABS Table 7.2 G10); DTI threshold 6 effective 01/02/2026 (APRA); average super mean 182,781 (ATO Chart 12 J211). All three matched.
+- **E8 (never two live figures for the same key):** it returned only the pre-existing dependant-band duplicates (198 keys with two live copies each), none from this load. They were cleaned up separately: the 198 older copies were end-dated and kept as history. After the clean-up: live dependant-band rows 198, duplicate keys 0, all rows 459, live rows 246.
+- **Not verified:** the Financial Twin screen check (peer figures for a 25 to 34 and a 55 to 64 household after the median switch). The database state above is verified; the screen behaviour is the replica result of section 3 until someone checks the Twin.
