@@ -80,6 +80,18 @@ async function axe(page: Page, label: string) {
   check(`A11Y axe (automated, WCAG 2.0/2.1 A+AA): ${label}: no serious or critical violations`, serious.length === 0, scan.violations.map((v) => `${v.id}(${v.impact}) x${v.nodes.length} @ ${v.nodes.slice(0, 2).map((n) => n.target.join(' ')).join(' | ')}`).join('; '));
   return scan.violations.map((v) => `${v.id}(${v.impact}) x${v.nodes.length}`);
 }
+
+/** Admin Standard section 18 (PageBackLink): the shared back link is present, points at the parent, and takes keyboard focus. */
+async function backLink(page: Page, label: string, parentLabel: string, parentHref: string) {
+  const link = page.getByRole('navigation', { name: 'Back navigation' }).getByRole('link', { name: new RegExp('Back to ' + parentLabel) });
+  const present = (await link.count()) === 1 && (await link.getAttribute('href')) === parentHref;
+  let focused = false;
+  if (present) {
+    await link.focus();
+    focused = await page.evaluate(() => (document.activeElement as HTMLAnchorElement | null)?.textContent?.includes('Back to') === true);
+  }
+  check('UI back link on ' + label + ': "Back to ' + parentLabel + '" points at ' + parentHref + ' and takes keyboard focus', present && focused, 'present=' + present + ' focused=' + focused);
+}
 async function noHScroll(page: Page, label: string) {
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   check(`RESPONSIVE ${label}: no horizontal page scroll`, over <= 1, `overflow ${over}px`);
@@ -115,6 +127,7 @@ async function main() {
   await page.setViewportSize({ width: 1440, height: 900 });
   check('UI chooser: heading, both cards, templates', (await page.getByRole('heading', { name: 'What would you like to upload?' }).count()) === 1 && (await page.getByRole('link', { name: 'Upload Articles' }).count()) === 1 && (await page.getByRole('link', { name: 'Upload Money Updates' }).count()) === 1);
   axeLog.chooser = await axe(page, 'chooser');
+  await backLink(page, 'the chooser', 'Resources', '/admin/resources');
 
   // ---- Article uploader
   await page.getByRole('link', { name: 'Upload Articles' }).click();
@@ -126,6 +139,7 @@ async function main() {
   await page.setViewportSize({ width: 1440, height: 900 });
   check('UI uploader: file input has a programmatic label and Upload is disabled until a file is chosen', (await page.getByLabel(/Article upload file/).count()) === 1 && (await page.getByRole('button', { name: 'Upload and preview' }).isDisabled()));
   axeLog.uploader = await axe(page, 'uploader');
+  await backLink(page, 'the uploader', 'Bulk Upload', '/admin/resources/import');
   // client-side rejection
   await page.getByLabel(/Article upload file/).setInputFiles({ name: 'bad.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1') });
   check('UI uploader: a .pdf is rejected in the browser with a clear message (server re-checks anyway)', (await page.locator('[role="alert"]:not(#__next-route-announcer__)').innerText()).includes('Only .csv and .xlsx'));
@@ -172,6 +186,7 @@ async function main() {
   check('UI preview: expanded detail shows quick answer, takeaways, body, example, sources', (await page.getByText('Quick answer 1.').count()) > 0 && (await page.getByText('Sources (1)').count()) > 0);
   await shot(page, 'preview_expanded');
   axeLog.preview = await axe(page, 'preview (expanded row)');
+  await backLink(page, 'the preview', 'Bulk Upload', '/admin/resources/import');
   // confirmation dialog
   await page.getByRole('button', { name: /Create 2 Articles as private drafts/ }).click();
   const dlg = page.getByRole('alertdialog');
@@ -251,6 +266,7 @@ async function main() {
   await page.setViewportSize({ width: 1440, height: 900 });
   check('UI history lists both types with Date, File, Type, Actor, Rows, Result, Status', (await page.getByRole('columnheader').allTextContents()).join(',') === 'Date,File,Type,Actor,Rows,Result,Status' && (await page.getByText('Applied').count()) > 0);
   axeLog.history = await axe(page, 'history');
+  await backLink(page, 'the history page', 'Bulk Upload', '/admin/resources/import');
   await shot(page, 'history');
 
   // ---- denied roles in the browser

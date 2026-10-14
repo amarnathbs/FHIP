@@ -1,6 +1,6 @@
 # Resources Bulk Upload: Articles + Money Updates
 
-One reusable framework for two content types, not two upload systems. Manual creation (New Article, New Money Update, Create Money Update from Template, editing, autosave, preview, workflow, revision history) is unchanged and remains first-class. Bulk upload is additional.
+One reusable framework for two content types, not two upload systems. Manual creation (New Article, New Money Update, Create Money Update from Template, editing with explicit Save, preview, workflow, revision history) is unchanged and remains first-class. Bulk upload is additional.
 
 **Invariants:** upload is not publish. Upload creates a **private draft**. Article upload goes to the existing Article editor; Money Update upload goes to the existing Money Update editor. Finished bodies become canonical `content_blocks`. Sources are `resource_sources`. Category, tag and CTA are the existing relationships. The spreadsheet cannot approve, schedule, publish or bypass the GREEN / AMBER / RED workflow. A failed apply creates nothing. The same file twice creates nothing the second time. An existing human-edited Resource is never overwritten (v1 is create-only).
 
@@ -17,6 +17,7 @@ One reusable framework for two content types, not two upload systems. Manual cre
 | Components | `components/resources/import/**` |
 | Capability | `lib/resources/permissions.ts` `canBulkImportResources` (`resources.content.bulk_import`), `lib/admin/adminNav.ts` field `resourceContentBulkImport` |
 | Database | `supabase/migrations/0272_resource_content_bulk_import.sql` (tables, capability, lookup, purge, apply), `0273_resource_content_bulk_import_apply_as_actor.sql` (private core + server-only twin), `0274_resource_content_bulk_import_faster_apply.sql` (lighter core) |
+| Production hand-over (prepared, not executed) | `docs/resources/po_apply_bulk_upload_production/` (prechecks, the three migrations with a check after each, manual backup, synthetic verification files, exact cleanup, rollback and stop switch; PGlite-proven by `tests/unit/resourcesBulkImportProductionPack.test.ts`) |
 | Template docs (generated) | `ARTICLE_UPLOAD_TEMPLATE_SPEC.md`, `MONEY_UPDATE_UPLOAD_TEMPLATE_SPEC.md` |
 
 ## The flow

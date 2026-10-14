@@ -1,0 +1,120 @@
+{
+  "run": "bulkbrwmv86prle",
+  "app": "http://localhost:3994",
+  "startedAt": "2026-10-14T14:07:51.794Z",
+  "residue": {
+    "posts": 0,
+    "sources": 0,
+    "categories": 0,
+    "tags": 0,
+    "authors": 0,
+    "runs": 0,
+    "postsByFixturesInWindow": 0,
+    "auditInWindow": 0,
+    "fixtureProfilesNotRestored": 0
+  },
+  "checks": [
+    {
+      "name": "RESPONSIVE chooser 390px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE chooser 768px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE chooser 1024px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE chooser 1440px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "UI chooser: heading, both cards, templates",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): chooser: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI back link on the chooser: \"Back to Resources\" points at /admin/resources and takes keyboard focus",
+      "pass": true,
+      "detail": "present=true focused=true"
+    },
+    {
+      "name": "RESPONSIVE article uploader 390px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE article uploader 768px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE article uploader 1024px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "RESPONSIVE article uploader 1440px: no horizontal page scroll",
+      "pass": true,
+      "detail": "overflow 0px"
+    },
+    {
+      "name": "UI uploader: file input has a programmatic label and Upload is disabled until a file is chosen",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): uploader: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI back link on the uploader: \"Back to Bulk Upload\" points at /admin/resources/import and takes keyboard focus",
+      "pass": true,
+      "detail": "present=true focused=true"
+    },
+    {
+      "name": "UI uploader: a .pdf is rejected in the browser with a clear message (server re-checks anyway)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI uploader: for a workbook the sheet picker is shown, labelled, and the template sheet is preselected",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "UI uploader: with no sheet chosen Upload is disabled (the system never picks one)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A11Y axe (automated, WCAG 2.0/2.1 A+AA): uploader with sheet picker: no serious or critical violations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "browser harness completed without a fatal error",
+      "pass": false,
+      "detail": "page.waitForURL: Timeout 120000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n  navigated to \"http://localhost:3994/admin/resources/import/upload?type=article\"\n  navigated to \"http://localhost:3994/admin/resources/import/upload?type=article\"\n============================================================\n    at main (D:\\FHIP\\.claude\\worktrees\\agent-a340d133c189d4dcb\\scripts\\resources_bulk_upload_browser_cert.ts:169:14)\n    at async <ano"
+    },
+    {
+      "name": "BROWSER CLEANUP: synthetic posts, sources, categories, tags, authors, import runs, and the audit rows of this run all 0",
+      "pass": true,
+      "detail": "{\"posts\":0,\"sources\":0,\"categories\":0,\"tags\":0,\"authors\":0,\"runs\":0,\"postsByFixturesInWindow\":0,\"auditInWindow\":0,\"fixtureProfilesNotRestored\":0}"
+    }
+  ],
+  "passed": 19,
+  "failed": 1
+}
