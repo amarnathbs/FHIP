@@ -590,6 +590,12 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // a second copy of that matcher. It reads/writes no FDH table itself;
       // its only other call is the 0211 RPC fdh12_confirm_retirement_bank_leg.
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'retirementBankLegLink.ts'),
+      // Premium Upload Entitlement programme (14-10-2026). Both files only NAME FDH routes as strings; neither imports an FDH
+      // service, repository or table. `lib/entitlements/financialImportInventory.ts` is the plain-data inventory of every
+      // customer upload route (FDH routes among them) that the CI contract checks; `useFinancialImportAccess.ts` reads the
+      // existing GET /api/financial-data-hub/upload-status over HTTP, exactly as the import panels already do.
+      path.join(REPO_ROOT, 'lib', 'entitlements', 'financialImportInventory.ts'),
+      path.join(REPO_ROOT, 'lib', 'entitlements', 'useFinancialImportAccess.ts'),
     ];
     const consumers: string[] = [];
     for (const dir of ['lib', 'app', 'components']) {

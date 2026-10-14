@@ -52,6 +52,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+// Premium Upload Entitlement (14-10-2026): this test is about something else (not the plan), so it runs as an ENTITLED customer, which is the
+// state it was written for. The entitlement itself is proved with the real capability in tests/unit/premiumUpload*.test.ts.
+vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) =>
+  (await import('../support/premiumImportEntitlementMock')).withPremiumImportEntitlement(await importOriginal()));
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import {

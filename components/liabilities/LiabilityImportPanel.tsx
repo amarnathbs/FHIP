@@ -40,6 +40,9 @@ import {
   DUPLICATE_UPLOAD_MESSAGE,
   type WaitingImport,
 } from '@/components/financial-data-hub/WaitingImports';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { DataTable } from '@/components/ui/DataTable';
 
 type StatementType = 'credit_card' | 'loan';
 type Phase =
@@ -459,6 +462,9 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
+  // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
+  const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
   // AIE liability AI-fallback (2026-09-23). Held only for the lifetime of the
   // `ai_fallback_review` phase; cleared by `reset()` and on confirm.
   const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
@@ -812,6 +818,11 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       });
       const { ok, json } = await readJson(res);
       if (!ok) {
+        // Premium Upload Entitlement: the unified refusal switches this panel to the locked state (nothing was stored).
+        if (noteImportResponse(json)) {
+          setPhase('type_select');
+          return;
+        }
         setMessage(json.message ?? json.error ?? 'We could not process this statement.');
         setPhase('unable_to_read');
         return;
@@ -1079,7 +1090,11 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
 
       {phase === 'type_select' && <WaitingImportsList items={waiting} busy={busy} onContinue={(w) => void resumeWaiting(w)} />}
 
-      {uploadEnabled !== false && phase === 'type_select' && (
+      {uploadEnabled !== false && phase === 'type_select' && importAccess?.state !== 'allowed' && (
+        <ImportLockedNotice domain="liabilities" label="Import credit card or loan statement" state={importAccess === null ? 'checking' : importAccess.state} />
+      )}
+
+      {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'type_select' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">What would you like to import?</p>
           <div className="flex gap-3">
@@ -1181,7 +1196,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <button
               type="button"
               onClick={handleUpload}
-              disabled={!file || !uploadOwner || busy || uploadEnabled !== true || statementPeriodError(periodStart, periodEnd) !== null}
+              disabled={!file || !uploadOwner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed' || statementPeriodError(periodStart, periodEnd) !== null}
               className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
             >
               Upload statement
@@ -1260,42 +1275,40 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
               {aiDraft.activities.length} line{aiDraft.activities.length === 1 ? '' : 's'} read. Remove any line that is
               wrong or is not really an activity.
             </p>
-            <div className="max-h-80 overflow-y-auto rounded border border-gray-200">
-              <table className="w-full text-sm">
-                <caption className="sr-only">Statement activity read by AI, awaiting your confirmation</caption>
-                <thead className="sticky top-0 bg-gray-50 text-left">
-                  <tr>
-                    <th scope="col" className="px-3 py-2">Date</th>
-                    <th scope="col" className="px-3 py-2">Type</th>
-                    <th scope="col" className="px-3 py-2">Description</th>
-                    <th scope="col" className="px-3 py-2 text-right">Amount</th>
-                    <th scope="col" className="px-3 py-2">
-                      <span className="sr-only">Remove</span>
-                    </th>
+            <DataTable wrapperClassName="max-h-80 rounded border border-gray-200" label="Statement activity read by AI, awaiting your confirmation" className="w-full">
+              <caption className="sr-only">Statement activity read by AI, awaiting your confirmation</caption>
+              <thead className="sticky top-0 bg-gray-50 text-left">
+                <tr>
+                  <th scope="col" className="px-3 py-2">Date</th>
+                  <th scope="col" className="px-3 py-2">Type</th>
+                  <th scope="col" className="px-3 py-2">Description</th>
+                  <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                  <th scope="col" className="px-3 py-2">
+                    <span className="sr-only">Remove</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {aiDraft.activities.map((a, i) => (
+                  <tr key={`${a.activityDate}-${i}`} className="border-t border-gray-100">
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(a.activityDate, currency)}</td>
+                    <td className="px-3 py-2">{ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType}</td>
+                    <td className="px-3 py-2">{a.descriptionRaw ?? '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{a.amount.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => removeAiDraftActivity(i)}
+                        className="rounded border border-gray-300 px-2 py-1 text-xs"
+                      >
+                        Remove
+                        <span className="sr-only"> the {ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType} line on {formatDateShort(a.activityDate, currency)}</span>
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {aiDraft.activities.map((a, i) => (
-                    <tr key={`${a.activityDate}-${i}`} className="border-t border-gray-100">
-                      <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(a.activityDate, currency)}</td>
-                      <td className="px-3 py-2">{ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType}</td>
-                      <td className="px-3 py-2">{a.descriptionRaw ?? '—'}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{a.amount.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => removeAiDraftActivity(i)}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs"
-                        >
-                          Remove
-                          <span className="sr-only"> the {ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType} line on {formatDateShort(a.activityDate, currency)}</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </DataTable>
           </div>
 
           <p className="text-xs text-muted">
@@ -1593,37 +1606,35 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
         <div className="mt-4 space-y-4">
           <h3 className="font-semibold">Current liability vs statement proposal</h3>
           {phase === 'stale' && message && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</p>}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] border-collapse text-sm">
-              <caption className="sr-only">Comparison of current liability to the proposed statement values</caption>
-              <thead>
-                <tr className="border-b border-gray-200 text-left">
-                  <th scope="col" className="py-2 pr-2">Field</th>
-                  <th scope="col" className="py-2 pr-2">Current</th>
-                  <th scope="col" className="py-2 pr-2">Proposed</th>
-                  <th scope="col" className="py-2">Apply this field</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map((f) => {
-                  const changed = f.proposed_value !== f.existing_value;
-                  return (
-                    <tr key={f.field_name} className="border-b border-gray-100">
-                      <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{FIELD_LABELS[f.field_name] ?? f.field_name}</th>
-                      <td className="py-2 pr-2">{displayValue(f.existing_value, f.value_kind)}</td>
-                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposed_value, f.value_kind)}</td>
-                      <td className="py-2">
-                        <label className="inline-flex items-center gap-2">
-                          <input type="checkbox" checked={selected.has(f.field_name)} onChange={() => toggleField(f.field_name)} aria-label={`Apply ${FIELD_LABELS[f.field_name] ?? f.field_name}`} />
-                          {f.requires_confirmation && <span className="text-xs text-amber-800">please confirm</span>}
-                        </label>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable label="Comparison of current liability to the proposed statement values" className="w-full min-w-[420px] border-collapse">
+            <caption className="sr-only">Comparison of current liability to the proposed statement values</caption>
+            <thead>
+              <tr className="border-b border-gray-200 text-left">
+                <th scope="col" className="py-2 pr-2">Field</th>
+                <th scope="col" className="py-2 pr-2">Current</th>
+                <th scope="col" className="py-2 pr-2">Proposed</th>
+                <th scope="col" className="py-2">Apply this field</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fields.map((f) => {
+                const changed = f.proposed_value !== f.existing_value;
+                return (
+                  <tr key={f.field_name} className="border-b border-gray-100">
+                    <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{FIELD_LABELS[f.field_name] ?? f.field_name}</th>
+                    <td className="py-2 pr-2">{displayValue(f.existing_value, f.value_kind)}</td>
+                    <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposed_value, f.value_kind)}</td>
+                    <td className="py-2">
+                      <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" checked={selected.has(f.field_name)} onChange={() => toggleField(f.field_name)} aria-label={`Apply ${FIELD_LABELS[f.field_name] ?? f.field_name}`} />
+                        {f.requires_confirmation && <span className="text-xs text-amber-800">please confirm</span>}
+                      </label>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
 
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">What would you like to do?</legend>
@@ -1752,54 +1763,52 @@ export function ActivityLedgerPreview(props: {
   return (
     <div>
       <h4 className="text-sm font-medium">Statement lines and how each will count</h4>
-      <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[520px] border-collapse text-sm">
-          <caption className="sr-only">Every line read from this statement and how it will be counted</caption>
-          <thead>
-            <tr className="border-b border-gray-200 text-left">
-              <th scope="col" className="py-1 pr-2">Date</th>
-              <th scope="col" className="py-1 pr-2">Line</th>
-              <th scope="col" className="py-1 pr-2 text-right">Amount</th>
-              <th scope="col" className="py-1">How it will count</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activities.map((a) => {
-              const outcome = ACTIVITY_LEDGER_OUTCOME[a.activity_type] ?? { label: a.activity_type, counts: 'Not counted' };
-              const split = a.activity_type === 'PAYMENT' && (a.principal_component != null || a.interest_component != null || a.fee_component != null);
-              return (
-                <tr key={a.id} className="border-b border-gray-100 align-top">
-                  <td className="py-1 pr-2 whitespace-nowrap">{a.activity_date}</td>
-                  <td className="py-1 pr-2">
-                    <span className="font-medium">{outcome.label}</span>
-                    {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
-                  </td>
-                  <td className="py-1 pr-2 text-right whitespace-nowrap">
-                    {money(a.amount, currency)}
-                    {split && (
-                      <span className="block text-xs text-muted">
-                        Principal {money(a.principal_component ?? 0, currency)} · interest {money(a.interest_component ?? 0, currency)} · fee {money(a.fee_component ?? 0, currency)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1">
-                    {outcome.counts}
-                    {(a.activity_type === 'PAYMENT' || a.activity_type === 'PRINCIPAL') && a.bank_match_status !== 'multiple_candidates' && (
-                      <span className="block text-xs text-muted">{bankMatchLabel[a.bank_match_status]}</span>
-                    )}
-                    {a.bank_match_status === 'multiple_candidates' && (
-                      <span className="block text-xs text-amber-900">Choose the bank payment below the table.</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {activities.length === 0 && (
-              <tr><td colSpan={4} className="py-2 text-muted">No lines were read from this statement.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable label="Every line read from this statement and how it will be counted" wrapperClassName="mt-2" className="w-full min-w-[520px] border-collapse">
+        <caption className="sr-only">Every line read from this statement and how it will be counted</caption>
+        <thead>
+          <tr className="border-b border-gray-200 text-left">
+            <th scope="col" className="py-1 pr-2">Date</th>
+            <th scope="col" className="py-1 pr-2">Line</th>
+            <th scope="col" className="py-1 pr-2 text-right">Amount</th>
+            <th scope="col" className="py-1">How it will count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {activities.map((a) => {
+            const outcome = ACTIVITY_LEDGER_OUTCOME[a.activity_type] ?? { label: a.activity_type, counts: 'Not counted' };
+            const split = a.activity_type === 'PAYMENT' && (a.principal_component != null || a.interest_component != null || a.fee_component != null);
+            return (
+              <tr key={a.id} className="border-b border-gray-100 align-top">
+                <td className="py-1 pr-2 whitespace-nowrap">{a.activity_date}</td>
+                <td className="py-1 pr-2">
+                  <span className="font-medium">{outcome.label}</span>
+                  {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
+                </td>
+                <td className="py-1 pr-2 text-right whitespace-nowrap">
+                  {money(a.amount, currency)}
+                  {split && (
+                    <span className="block text-xs text-muted">
+                      Principal {money(a.principal_component ?? 0, currency)} · interest {money(a.interest_component ?? 0, currency)} · fee {money(a.fee_component ?? 0, currency)}
+                    </span>
+                  )}
+                </td>
+                <td className="py-1">
+                  {outcome.counts}
+                  {(a.activity_type === 'PAYMENT' || a.activity_type === 'PRINCIPAL') && a.bank_match_status !== 'multiple_candidates' && (
+                    <span className="block text-xs text-muted">{bankMatchLabel[a.bank_match_status]}</span>
+                  )}
+                  {a.bank_match_status === 'multiple_candidates' && (
+                    <span className="block text-xs text-amber-900">Choose the bank payment below the table.</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          {activities.length === 0 && (
+            <tr><td colSpan={4} className="py-2 text-muted">No lines were read from this statement.</td></tr>
+          )}
+        </tbody>
+      </DataTable>
       {activities.filter((a) => a.bank_match_status === 'multiple_candidates').map((a) => {
         const candidates = (a.bank_match_candidate_ids ?? []).map((id) => candidateById.get(id)).filter((c): c is BankCandidate => Boolean(c));
         return (

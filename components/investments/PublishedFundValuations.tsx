@@ -16,6 +16,7 @@
 
 import { useEffect, useState } from 'react';
 import { fmtDate } from '@/components/investment-intelligence/dateDisplay';
+import { DataTable } from '@/components/ui/DataTable';
 
 export interface Valuation {
   basis: 'market_nav' | 'statement' | 'redeemed';
@@ -91,36 +92,34 @@ export function PublishedFundValuationsTable({ lines }: { lines: readonly Line[]
         Mutual funds in your Net Worth
       </h2>
       <p className="text-sm text-muted">Each fund is valued at units x the latest NAV on file, with the NAV&apos;s own date. Where no newer NAV exists the statement value is shown and labelled.</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="text-muted">
-            <tr>
-              <th className="py-1 pr-3 font-medium">Fund</th>
-              <th className="py-1 pr-3 text-right font-medium">Units</th>
-              <th className="py-1 pr-3 text-right font-medium">NAV</th>
-              <th className="py-1 pr-3 font-medium">NAV date</th>
-              <th className="py-1 pr-3 text-right font-medium">Value</th>
-              <th className="py-1 font-medium">Basis</th>
+      <DataTable label="Mutual funds in your Net Worth" className="w-full text-left">
+        <thead className="text-muted">
+          <tr>
+            <th className="py-1 pr-3 font-medium">Fund</th>
+            <th className="py-1 pr-3 text-right font-medium">Units</th>
+            <th className="py-1 pr-3 text-right font-medium">NAV</th>
+            <th className="py-1 pr-3 font-medium">NAV date</th>
+            <th className="py-1 pr-3 text-right font-medium">Value</th>
+            <th className="py-1 font-medium">Basis</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l) => (
+            <tr key={l.id} className="border-t border-gray-100">
+              <td className="py-1 pr-3">{l.name}</td>
+              <td className="py-1 pr-3 text-right">{l.valuation.units === null ? '—' : l.valuation.units.toLocaleString('en-IN', { maximumFractionDigits: 3 })}</td>
+              <td className="py-1 pr-3 text-right">{l.valuation.nav === null ? '—' : money(l.valuation.nav, l.currency)}</td>
+              <td className="py-1 pr-3 whitespace-nowrap">{l.valuation.asOf ? fmtDate(l.valuation.asOf, l.currency) : '—'}</td>
+              <td className="py-1 pr-3 text-right font-medium">{money(l.value, l.currency)}</td>
+              <td className="py-1">
+                <span className={`rounded px-2 py-0.5 text-xs ${TAG_CLASS[l.valuation.tag]}`} title={TAG_HINT[l.valuation.tag]}>
+                  {l.valuation.label}
+                </span>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {lines.map((l) => (
-              <tr key={l.id} className="border-t border-gray-100">
-                <td className="py-1 pr-3">{l.name}</td>
-                <td className="py-1 pr-3 text-right">{l.valuation.units === null ? '—' : l.valuation.units.toLocaleString('en-IN', { maximumFractionDigits: 3 })}</td>
-                <td className="py-1 pr-3 text-right">{l.valuation.nav === null ? '—' : money(l.valuation.nav, l.currency)}</td>
-                <td className="py-1 pr-3">{l.valuation.asOf ? fmtDate(l.valuation.asOf, l.currency) : '—'}</td>
-                <td className="py-1 pr-3 text-right font-medium">{money(l.value, l.currency)}</td>
-                <td className="py-1">
-                  <span className={`rounded px-2 py-0.5 text-xs ${TAG_CLASS[l.valuation.tag]}`} title={TAG_HINT[l.valuation.tag]}>
-                    {l.valuation.label}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </DataTable>
     </section>
   );
 }

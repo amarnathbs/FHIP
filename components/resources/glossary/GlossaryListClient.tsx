@@ -22,6 +22,7 @@ import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } fro
 import { failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES, STATUS_LABELS, STATUS_VALUES, formatAdminDate } from '@/lib/resources/admin/labels';
 import type { GlossaryListItem } from '@/lib/resources/glossary/queries';
+import { DataTable } from '@/components/ui/DataTable';
 
 const selectClass = 'rounded border border-line bg-white px-2 py-1.5 text-sm text-ink';
 
@@ -138,44 +139,42 @@ export function GlossaryListClient({ canCreate }: { canCreate: boolean }) {
             <>
               {/* `relative` — see ResourceContentTable for why this is
                   load-bearing rather than cosmetic. */}
-              <div className="relative hidden overflow-x-auto sm:block">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-                      <th scope="col" className="py-2 pr-3 font-semibold">Term</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Short Definition</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Category</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold xl:table-cell">Review Due</th>
-                      <th scope="col" className="py-2 pl-3 font-semibold"><span className="sr-only">Actions</span></th>
+              <DataTable label="Glossary terms" wrapperClassName="relative hidden sm:block" className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+                    <th scope="col" className="py-2 pr-3 font-semibold">Term</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Short Definition</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Category</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold xl:table-cell">Review Due</th>
+                    <th scope="col" className="py-2 pl-3 font-semibold"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((g) => (
+                    <tr key={g.id} className="border-b border-line/60 hover:bg-gray-50">
+                      <td className="max-w-[200px] py-2.5 pr-3">
+                        <Link href={`/admin/resources/glossary/${g.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
+                          {g.title}
+                        </Link>
+                      </td>
+                      <td className="hidden max-w-[280px] truncate py-2.5 pr-3 text-muted md:table-cell">{g.excerpt ?? '—'}</td>
+                      <td className="hidden py-2.5 pr-3 text-muted lg:table-cell">{g.primary_category?.name ?? '—'}</td>
+                      <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={g.jurisdiction} /></td>
+                      <td className="py-2.5 pr-3"><ResourceStatusBadge status={g.status} /></td>
+                      <td className="hidden py-2.5 pr-3 text-muted sm:table-cell whitespace-nowrap">{formatAdminDate(g.updated_at)}</td>
+                      <td className="hidden py-2.5 pr-3 text-muted xl:table-cell whitespace-nowrap">{formatAdminDate(g.next_review_at)}</td>
+                      <td className="py-2.5 pl-3 text-right">
+                        <Link href={`/admin/resources/glossary/${g.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${g.title}"`}>
+                          Edit
+                        </Link>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((g) => (
-                      <tr key={g.id} className="border-b border-line/60 hover:bg-gray-50">
-                        <td className="max-w-[200px] py-2.5 pr-3">
-                          <Link href={`/admin/resources/glossary/${g.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
-                            {g.title}
-                          </Link>
-                        </td>
-                        <td className="hidden max-w-[280px] truncate py-2.5 pr-3 text-muted md:table-cell">{g.excerpt ?? '—'}</td>
-                        <td className="hidden py-2.5 pr-3 text-muted lg:table-cell">{g.primary_category?.name ?? '—'}</td>
-                        <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={g.jurisdiction} /></td>
-                        <td className="py-2.5 pr-3"><ResourceStatusBadge status={g.status} /></td>
-                        <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(g.updated_at)}</td>
-                        <td className="hidden py-2.5 pr-3 text-muted xl:table-cell">{formatAdminDate(g.next_review_at)}</td>
-                        <td className="py-2.5 pl-3 text-right">
-                          <Link href={`/admin/resources/glossary/${g.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${g.title}"`}>
-                            Edit
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
 
               <ul className="space-y-2 sm:hidden">
                 {items.map((g) => (

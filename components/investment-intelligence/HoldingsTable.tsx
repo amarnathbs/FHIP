@@ -6,6 +6,7 @@ import { fmtDate } from './dateDisplay';
 import { TransactionDetailModal } from './TransactionDetailModal';
 import BenchmarkComparisonView from './BenchmarkComparisonView';
 import type { HoldingBenchmarkComparison } from '@/lib/engines/investment-intelligence/holdingBenchmarkComparison';
+import { DataTable, DataTd } from '@/components/ui/DataTable';
 
 // Investment Intelligence — Performance tab Holdings drilldown (2026-09-17).
 //
@@ -106,17 +107,6 @@ function stripSchemeCode(name: string): string {
   return name.replace(/^[A-Z0-9]+-/, '');
 }
 
-// Full scheme names routinely run 60-100+ characters and were wrapping
-// across 5-6 lines per row, making the table unreadable. Truncated for
-// this summary row only — the full name is still shown, untruncated, in
-// the transaction-detail popup's own heading (aria-label below is also
-// left untruncated for the same reason).
-const SCHEME_NAME_MAX_CHARS = 28;
-function truncateSchemeName(name: string): string {
-  const stripped = stripSchemeCode(name);
-  return stripped.length > SCHEME_NAME_MAX_CHARS ? `${stripped.slice(0, SCHEME_NAME_MAX_CHARS).trimEnd()}…` : stripped;
-}
-
 function money(v: number | null, currency: string): string {
   if (v === null || !Number.isFinite(v)) return '—';
   try {
@@ -194,115 +184,118 @@ export function HoldingsTable({ ownerClass = 'all' }: { ownerClass?: string } = 
           columns. Bounding the box keeps both scrollbars reachable together.
           The header is sticky within this same box so column labels stay
           visible while scrolling through rows. */}
-      <div className="max-h-[520px] overflow-auto rounded-card border border-line">
-        <table className="w-full min-w-[960px] text-left text-sm">
-          <thead className="sticky top-0 bg-white">
-            <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-              <th className="py-2 pr-4 font-medium">Scheme</th>
-              <th className="py-2 pr-4 font-medium whitespace-nowrap">Folio</th>
-              <th className="py-2 pr-4 font-medium whitespace-nowrap">ISIN</th>
-              <th className="py-2 pr-4 font-medium whitespace-nowrap">Registrar</th>
-              <th className="py-2 pr-4 font-medium text-right whitespace-nowrap">Cost value</th>
-              <th className="py-2 pr-4 font-medium text-right whitespace-nowrap">Units</th>
-              <th className="py-2 pr-4 font-medium whitespace-nowrap">NAV date</th>
-              <th className="py-2 pr-4 font-medium text-right">NAV</th>
-              <th className="py-2 pr-4 font-medium text-right">Market value</th>
-              <th className="py-2 pr-4 font-medium text-right">Gain/(Loss)</th>
-              <th className="py-2 pr-4 font-medium text-right">Return %</th>
-              <th className="py-2 pr-4 font-medium text-right">XIRR</th>
-              <th className="py-2 pr-4 font-medium whitespace-nowrap">Benchmark</th>
-              <th className="py-2 pr-4 font-medium">Data quality</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payload.holdings.map((h) => {
-              const badge = QUALITY_BADGE[h.dataQuality.status];
-              return (
-                <tr
-                  key={`${h.accountId}:${h.instrumentId}`}
-                  className="cursor-pointer border-b border-line align-top hover:bg-gray-50"
-                  onClick={() => setSelected({ accountId: h.accountId, instrumentId: h.instrumentId })}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`View transaction detail for ${h.schemeName}`}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
+      <DataTable label="Holdings" wrapperClassName="max-h-[520px] rounded-card border border-line" className="text-left">
+        <thead className="sticky top-0 bg-white">
+          <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+            <th className="py-2 pr-2 font-medium">Scheme</th>
+            <th className="py-2 pr-2 font-medium whitespace-nowrap">Folio</th>
+            <th className="py-2 pr-2 font-medium whitespace-nowrap">ISIN</th>
+            <th className="py-2 pr-2 font-medium whitespace-nowrap">Registrar</th>
+            <th className="py-2 pr-2 font-medium text-right whitespace-nowrap">Cost value</th>
+            <th className="py-2 pr-2 font-medium text-right whitespace-nowrap">Units</th>
+            <th className="py-2 pr-2 font-medium whitespace-nowrap">NAV date</th>
+            <th className="py-2 pr-2 font-medium text-right">NAV</th>
+            <th className="py-2 pr-2 font-medium text-right">Market value</th>
+            <th className="py-2 pr-2 font-medium text-right">Gain/(Loss)</th>
+            <th className="py-2 pr-2 font-medium text-right">Return %</th>
+            <th className="py-2 pr-2 font-medium text-right">XIRR</th>
+            <th className="py-2 pr-2 font-medium whitespace-nowrap">Benchmark</th>
+            <th className="py-2 pr-2 font-medium">Data quality</th>
+            <th className="py-2 pr-2 font-medium fhip-cell-nowrap fhip-cell-action">Ledger</th>
+          </tr>
+        </thead>
+        <tbody>
+          {payload.holdings.map((h) => {
+            const badge = QUALITY_BADGE[h.dataQuality.status];
+            return (
+              <tr
+                key={`${h.accountId}:${h.instrumentId}`}
+                className="cursor-pointer border-b border-line align-top hover:bg-gray-50"
+                onClick={() => setSelected({ accountId: h.accountId, instrumentId: h.instrumentId })}
+              >
+                <DataTd kind="clamp" minCh={14} className="py-3 pr-2 font-medium text-ink">
+                  {stripSchemeCode(h.schemeName)}
+                </DataTd>
+                <td className="py-3 pr-2 text-muted whitespace-nowrap">{h.folioNumber ?? '—'}</td>
+                <td className="py-3 pr-2 text-muted whitespace-nowrap">{h.isin ?? '—'}</td>
+                <td className="py-3 pr-2 text-muted whitespace-nowrap">{h.registrar ?? '—'}</td>
+                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{money(h.costValue, h.currencyCode)}</td>
+                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{num(h.unitBalance)}</td>
+                <td className="py-3 pr-2 text-muted whitespace-nowrap" title={h.valuationNote}>
+                  {h.navDate ? fmtDate(h.navDate, h.currencyCode) : '—'}
+                  {/* Document2 Finding #5: say where the NAV came from, so a
+                      statement NAV is never mistaken for the latest market
+                      NAV, and a stale one is never silently presented as
+                      current. The latest market NAV carries no tag — it is
+                      the normal case. */}
+                  {h.valuationBasis === 'statement' && (
+                    <span className="ml-1 inline-block rounded border border-line px-1 text-[10px] font-medium uppercase text-muted">Statement</span>
+                  )}
+                  {h.valuationBasis === 'redeemed' && (
+                    <span className="ml-1 inline-block rounded border border-line px-1 text-[10px] font-medium uppercase text-muted">Redeemed</span>
+                  )}
+                  {h.valuationStale && (
+                    <span className="ml-1 inline-block rounded border border-amber-200 bg-amber-50 px-1 text-[10px] font-medium uppercase text-amber-800">Stale</span>
+                  )}
+                </td>
+                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{num(h.nav, 4)}</td>
+                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{money(h.marketValue, h.currencyCode)}</td>
+                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{money(h.gainLoss, h.currencyCode)}</td>
+                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{pct(h.returnPct)}</td>
+                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">
+                  {h.xirr.status === 'CALCULATED' && h.xirr.value ? pct(h.xirr.value.rate) : '—'}
+                </td>
+                <td className="min-w-[11rem] py-3 pr-2 align-top">
+                  {/* The comparison is over THIS holding's own period and cash flows, money-weighted;
+                      the engine says so in words. Never a bare lump-sum figure, never a number without
+                      a mapping, a verified benchmark and an approved entitlement. */}
+                  <BenchmarkComparisonView comparison={h.benchmarkComparison} />
+                </td>
+                <td className="py-3 pr-2">
+                  <span className={`inline-block whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium ${badge.className}`} title={h.dataQuality.detail ?? undefined}>
+                    {badge.label}
+                  </span>
+                  {/* 2026-09-29 fix (resolution-guidance links): 'unresolved'
+                      previously had no path forward at all — the row click
+                      only opens a read-only ledger, and the badge's tooltip
+                      just repeats the same sentence. The reconciliation
+                      case for this scheme lives against its source
+                      statement, which already has real Resolve/Assign/
+                      Re-evaluate actions (Statements & data) — linked
+                      directly here rather than leaving the person to find
+                      that statement themselves. Not shown for
+                      'ai_corrected': that status is already a resolved
+                      outcome, informational only. stopPropagation so the
+                      link navigates instead of also opening the row's
+                      ledger modal underneath it. */}
+                  {h.dataQuality.status === 'unresolved' && h.sourceDocumentId && (
+                    <Link
+                      href={`/investment-intelligence/data?documentId=${encodeURIComponent(h.sourceDocumentId)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 block whitespace-nowrap text-xs font-medium text-primary hover:underline"
+                    >
+                      Resolve on statement
+                    </Link>
+                  )}
+                </td>
+                <td className="fhip-cell-nowrap fhip-cell-action py-2 pr-2">
+                  <button
+                    type="button"
+                    aria-label={`View transaction detail for ${h.schemeName}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setSelected({ accountId: h.accountId, instrumentId: h.instrumentId });
-                    }
-                  }}
-                >
-                  <td className="py-3 pr-4 font-medium text-ink whitespace-nowrap" title={h.schemeName}>
-                    {truncateSchemeName(h.schemeName)}
-                  </td>
-                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.folioNumber ?? '—'}</td>
-                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.isin ?? '—'}</td>
-                  <td className="py-3 pr-4 text-muted whitespace-nowrap">{h.registrar ?? '—'}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.costValue, h.currencyCode)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{num(h.unitBalance)}</td>
-                  <td className="py-3 pr-4 text-muted whitespace-nowrap" title={h.valuationNote}>
-                    {h.navDate ? fmtDate(h.navDate, h.currencyCode) : '—'}
-                    {/* Document2 Finding #5: say where the NAV came from, so a
-                        statement NAV is never mistaken for the latest market
-                        NAV, and a stale one is never silently presented as
-                        current. The latest market NAV carries no tag — it is
-                        the normal case. */}
-                    {h.valuationBasis === 'statement' && (
-                      <span className="ml-1 inline-block rounded border border-line px-1 text-[10px] font-medium uppercase text-muted">Statement</span>
-                    )}
-                    {h.valuationBasis === 'redeemed' && (
-                      <span className="ml-1 inline-block rounded border border-line px-1 text-[10px] font-medium uppercase text-muted">Redeemed</span>
-                    )}
-                    {h.valuationStale && (
-                      <span className="ml-1 inline-block rounded border border-amber-200 bg-amber-50 px-1 text-[10px] font-medium uppercase text-amber-800">Stale</span>
-                    )}
-                  </td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{num(h.nav, 4)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.marketValue, h.currencyCode)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{money(h.gainLoss, h.currencyCode)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">{pct(h.returnPct)}</td>
-                  <td className="py-3 pr-4 text-right tabular-nums text-ink whitespace-nowrap">
-                    {h.xirr.status === 'CALCULATED' && h.xirr.value ? pct(h.xirr.value.rate) : '—'}
-                  </td>
-                  <td className="min-w-[14rem] py-3 pr-4 align-top">
-                    {/* The comparison is over THIS holding's own period and cash flows, money-weighted;
-                        the engine says so in words. Never a bare lump-sum figure, never a number without
-                        a mapping, a verified benchmark and an approved entitlement. */}
-                    <BenchmarkComparisonView comparison={h.benchmarkComparison} />
-                  </td>
-                  <td className="py-3 pr-4">
-                    <span className={`inline-block rounded border px-2 py-0.5 text-xs font-medium ${badge.className}`} title={h.dataQuality.detail ?? undefined}>
-                      {badge.label}
-                    </span>
-                    {/* 2026-09-29 fix (resolution-guidance links): 'unresolved'
-                        previously had no path forward at all — the row click
-                        only opens a read-only ledger, and the badge's tooltip
-                        just repeats the same sentence. The reconciliation
-                        case for this scheme lives against its source
-                        statement, which already has real Resolve/Assign/
-                        Re-evaluate actions (Statements & data) — linked
-                        directly here rather than leaving the person to find
-                        that statement themselves. Not shown for
-                        'ai_corrected': that status is already a resolved
-                        outcome, informational only. stopPropagation so the
-                        link navigates instead of also opening the row's
-                        ledger modal underneath it. */}
-                    {h.dataQuality.status === 'unresolved' && h.sourceDocumentId && (
-                      <Link
-                        href={`/investment-intelligence/data?documentId=${encodeURIComponent(h.sourceDocumentId)}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1 block text-xs font-medium text-primary hover:underline"
-                      >
-                        Resolve on statement
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    }}
+                    className="min-h-6 rounded border border-line bg-white px-2 text-xs font-semibold text-primary hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  >
+                    Ledger
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
 
       <TransactionDetailModal
         open={selected !== null}

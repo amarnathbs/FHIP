@@ -1,5 +1,6 @@
 import { formatMoneyCode } from '@/lib/engines/money';
 import { ownerClassHeading, type OwnerClassOption } from './ownerClassUi';
+import { DataTable } from '@/components/ui/DataTable';
 
 // Investment Intelligence Overview -- "Holdings by owner class" (2026-10-01, PO decision).
 //
@@ -50,45 +51,43 @@ export function OwnerBreakupTable({ breakup }: { breakup: OwnerBreakupPayload })
       {kinds.map((kind) => (
         <div key={kind} className="mt-5">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{ownerClassHeading(kind)}</h3>
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-line text-xs text-muted">
-                  <th className="py-1 pr-3 font-medium">Owner</th>
-                  <th className="py-1 pr-3 font-medium">Accounts</th>
-                  <th className="py-1 pr-3 font-medium">Positions</th>
-                  <th className="py-1 text-right font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {breakup.classes
-                  .filter((c) => c.info.kind === kind)
-                  .map((c) => (
-                    <tr key={c.info.key} className="border-b border-line align-top">
-                      <td className="py-2 pr-3 text-ink">
-                        {c.info.label}
-                        {c.info.detail && <span className="ml-1 text-xs text-muted">{c.info.detail}</span>}
-                      </td>
-                      <td className="py-2 pr-3 tabular-nums">{c.accountCount}</td>
-                      <td className="py-2 pr-3 tabular-nums">{c.positionCount}</td>
-                      {/* G2: every amount sits in a right-aligned cell. A joint row lists each owner's part under the total, in the same column. */}
-                      <td className="py-2 text-right">
-                        <Values items={c.valueByCurrency} />
-                        {c.ownerAttribution && (
-                          <ul className="mt-1 space-y-0.5 text-xs text-muted tabular-nums" data-testid="owner-attribution">
-                            {c.ownerAttribution.map((o) => (
-                              <li key={o.ownerKey}>
-                                {o.ownerLabel}: {o.valueByCurrency.map((v) => formatMoneyCode(v.totalValue, v.currencyCode)).join(' + ')}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable label="Holdings by owner class" wrapperClassName="mt-2" className="w-full text-left">
+            <thead>
+              <tr className="border-b border-line text-xs text-muted">
+                <th className="py-1 pr-3 font-medium">Owner</th>
+                <th className="py-1 pr-3 font-medium">Accounts</th>
+                <th className="py-1 pr-3 font-medium">Positions</th>
+                <th className="py-1 text-right font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {breakup.classes
+                .filter((c) => c.info.kind === kind)
+                .map((c) => (
+                  <tr key={c.info.key} className="border-b border-line align-top">
+                    <td className="py-2 pr-3 text-ink">
+                      {c.info.label}
+                      {c.info.detail && <span className="ml-1 text-xs text-muted">{c.info.detail}</span>}
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">{c.accountCount}</td>
+                    <td className="py-2 pr-3 tabular-nums">{c.positionCount}</td>
+                    {/* G2: every amount sits in a right-aligned cell. A joint row lists each owner's part under the total, in the same column. */}
+                    <td className="py-2 text-right">
+                      <Values items={c.valueByCurrency} />
+                      {c.ownerAttribution && (
+                        <ul className="mt-1 space-y-0.5 text-xs text-muted tabular-nums" data-testid="owner-attribution">
+                          {c.ownerAttribution.map((o) => (
+                            <li key={o.ownerKey}>
+                              {o.ownerLabel}: {o.valueByCurrency.map((v) => formatMoneyCode(v.totalValue, v.currencyCode)).join(' + ')}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </DataTable>
         </div>
       ))}
 

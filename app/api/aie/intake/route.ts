@@ -5,7 +5,8 @@ import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed } from '@/
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
 import { extractPdfTextLocally } from '@/lib/aie/extraction/textExtraction';
-import { createIntake, updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser, createRun } from '@/lib/aie/db/repository';
+import { updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser, createRun } from '@/lib/aie/db/repository';
+import { admitIntake } from '@/lib/aie/intakeAdmission';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
@@ -16,6 +17,7 @@ import { finalizeDocumentBinaryAfterRun } from '@/lib/aie/services/purge';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
 import type { AieSourceModuleHint } from '@/lib/aie/types';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 const ALLOWED_MODULE_HINTS: readonly (AieSourceModuleHint | null)[] = ['investment_intelligence', 'fdh_bank', 'other', null];
 
@@ -38,6 +40,10 @@ const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'aie.intake.upload');
+  if (importDenied) return importDenied;
 
   if (!isAieDocumentIntakeEnabled()) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
@@ -69,7 +75,7 @@ export async function POST(req: Request) {
   const displayFilename = filename ? filename.replace(/[^\w.\- ]/g, '_').slice(0, 120) : null;
 
   const rlsClient = await createClient();
-  const created = await createIntake(rlsClient, {
+  const created = await admitIntake(rlsClient, {
     userId: user.id,
     declaredMimeType: 'application/pdf',
     byteSize: bytes.byteLength,

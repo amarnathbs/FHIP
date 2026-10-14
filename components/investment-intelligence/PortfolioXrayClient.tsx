@@ -8,6 +8,7 @@ import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { buildAmcPieSlices } from './amcConcentrationChart';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 // R5 — Portfolio X-Ray UX (spec sections 98-99).
 //
@@ -260,33 +261,31 @@ function PortfolioXrayClientInner({ ownerClass }: { ownerClass: string }) {
                 <p className="mt-1 text-xs text-muted">
                   Your effective exposure to each security after looking through every fund. Based on {fmtPct(dq?.effectiveCoverage)} of the portfolio.
                 </p>
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
-                        <th className="py-2 pr-4">Security</th>
-                        <th className="py-2 pr-4">Effective weight</th>
-                        <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Value</th>
-                        <th className="py-2 pr-4">Held via</th>
-                        <th className="py-2">Sector</th>
+                <DataTable label="Largest underlying holdings" wrapperClassName="mt-4" className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
+                      <th className="py-2 pr-4">Security</th>
+                      <th className="py-2 pr-4">Effective weight</th>
+                      <th className={`py-2 pr-4 ${NUM_HEADER_CLASS}`}>Value</th>
+                      <th className="py-2 pr-4">Held via</th>
+                      <th className="py-2">Sector</th>
+                    </tr>
+                  </thead>
+                  <tbody data-testid="top-holdings-body">
+                    {(data.topHoldings ?? []).map((h) => (
+                      <tr key={h.canonicalId} className="border-b border-slate-100">
+                        <td className="py-2 pr-4 font-medium text-ink">{h.name}</td>
+                        <td className="py-2 pr-4">{fmtPct(h.effectiveWeight, 2)}</td>
+                        <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(h.effectiveValue, currency)}</td>
+                        <td className="py-2 pr-4">
+                          {h.schemeCount} scheme{h.schemeCount === 1 ? '' : 's'}
+                          <span className="block text-xs text-muted">{h.contributingFunds.map((f) => f.fundName).join(', ')}</span>
+                        </td>
+                        <td className="py-2 text-xs text-slate-600">{h.sectorCode ?? 'Not classified'}</td>
                       </tr>
-                    </thead>
-                    <tbody data-testid="top-holdings-body">
-                      {(data.topHoldings ?? []).map((h) => (
-                        <tr key={h.canonicalId} className="border-b border-slate-100">
-                          <td className="py-2 pr-4 font-medium text-ink">{h.name}</td>
-                          <td className="py-2 pr-4">{fmtPct(h.effectiveWeight, 2)}</td>
-                          <td className={`py-2 pr-4 ${NUM_CELL_CLASS}`}>{fmtMoney(h.effectiveValue, currency)}</td>
-                          <td className="py-2 pr-4">
-                            {h.schemeCount} scheme{h.schemeCount === 1 ? '' : 's'}
-                            <span className="block text-xs text-muted">{h.contributingFunds.map((f) => f.fundName).join(', ')}</span>
-                          </td>
-                          <td className="py-2 text-xs text-slate-600">{h.sectorCode ?? 'Not classified'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </DataTable>
               </section>
 
               {/* Sector exposure */}
@@ -542,34 +541,32 @@ function OverlapPanel({ overlap }: { overlap: OverlapResponse | null }) {
           Each cell is the shared portion of two funds&apos; portfolios, matched by security identity. A higher figure means more of the two funds is the same
           underlying holdings. This is a description of what the funds hold, not a judgement about them.
         </p>
-        <div className="mt-4 overflow-x-auto">
-          <table className="text-xs" data-testid="overlap-heatmap">
-            <thead>
-              <tr>
-                <th className="p-2" />
-                {fundNames.map((n, i) => (
-                  <th key={i} className="max-w-[7rem] p-2 text-left align-bottom font-medium text-slate-700">
-                    <span className="block truncate" title={n}>{n}</span>
-                  </th>
+        <DataTable label="How much your funds hold in common" wrapperClassName="mt-4" className="text-xs" data-testid="overlap-heatmap">
+          <thead>
+            <tr>
+              <th className="p-2" />
+              {fundNames.map((n, i) => (
+                <th key={i} className="max-w-[7rem] p-2 text-left align-bottom font-medium text-slate-700">
+                  <span className="block truncate" title={n}>{n}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {values.map((row, i) => (
+              <tr key={i}>
+                <th className="max-w-[10rem] p-2 text-left font-medium text-slate-700">
+                  <span className="block truncate" title={fundNames[i]}>{fundNames[i]}</span>
+                </th>
+                {row.map((v, j) => (
+                  <td key={j} className="p-2 text-center" style={{ backgroundColor: i === j ? '#E2E8F0' : shade(v) }} title={`${fundNames[i]} vs ${fundNames[j]}`}>
+                    <span className={v !== null && v > 0.5 ? 'font-medium text-white' : 'text-slate-800'}>{v === null ? '—' : `${(v * 100).toFixed(0)}%`}</span>
+                  </td>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {values.map((row, i) => (
-                <tr key={i}>
-                  <th className="max-w-[10rem] p-2 text-left font-medium text-slate-700">
-                    <span className="block truncate" title={fundNames[i]}>{fundNames[i]}</span>
-                  </th>
-                  {row.map((v, j) => (
-                    <td key={j} className="p-2 text-center" style={{ backgroundColor: i === j ? '#E2E8F0' : shade(v) }} title={`${fundNames[i]} vs ${fundNames[j]}`}>
-                      <span className={v !== null && v > 0.5 ? 'font-medium text-white' : 'text-slate-800'}>{v === null ? '—' : `${(v * 100).toFixed(0)}%`}</span>
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </DataTable>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">

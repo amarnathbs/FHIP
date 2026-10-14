@@ -21,6 +21,7 @@ import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { ProvenanceBadge } from '@/components/grid/ProvenanceBadge';
 import { DateInput } from '@/components/ui/DateInput';
 import { isFieldHiddenOnRow, isImportSourceType } from '@/lib/grid/provenance';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface MasterItem {
   item_key: string;
@@ -1170,61 +1171,59 @@ export function FinancialDataGrid({
           )}
 
           {/* Desktop table */}
-          <div className="hidden overflow-x-auto rounded-card border bg-white md:block">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
+          <DataTable label="Financial items" wrapperClassName="hidden rounded-card border bg-white md:block" className="w-full">
+            <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-3 py-2">Item</th>
+                <th className="px-3 py-2">Owner</th>
+                <th className={`px-3 py-2 ${NUM_HEADER_CLASS}`}>{config.title === 'Income' || config.title === 'Expenses' ? 'Amount' : 'Value'}</th>
+                <th className="px-3 py-2">Currency</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleIncluded.length === 0 && (
                 <tr>
-                  <th className="px-3 py-2">Item</th>
-                  <th className="px-3 py-2">Owner</th>
-                  <th className={`px-3 py-2 ${NUM_HEADER_CLASS}`}>{config.title === 'Income' || config.title === 'Expenses' ? 'Amount' : 'Value'}</th>
-                  <th className="px-3 py-2">Currency</th>
-                  <th className="px-3 py-2"></th>
+                  <td colSpan={5} className="px-3 py-6 text-center text-muted">
+                    {included.length === 0 ? `No ${config.title.toLowerCase()} added yet — use "+ Add" above to get started.` : 'No items match your search.'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {visibleIncluded.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-muted">
-                      {included.length === 0 ? `No ${config.title.toLowerCase()} added yet — use "+ Add" above to get started.` : 'No items match your search.'}
-                    </td>
-                  </tr>
-                )}
-                {visibleIncluded.map((row) => (
-                  <tr key={row.key} className="border-b last:border-0">
-                    <td className="px-3 py-2">
-                      {row.item_label}
-                      <ProvenanceBadge row={row} className="ml-2" />
-                      {warningsByRow.has(row.key) && (
-                        <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{ownerDisplayLabel(row.owner)}</td>
-                    <td className={`px-3 py-2 ${NUM_CELL_CLASS}`}>{formatMoneyWhole(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
-                    <td className="px-3 py-2">{row.currency_code}</td>
-                    <td className="px-3 py-2 text-right">
-                      <button onClick={() => openEditForm(row)} className="text-xs font-medium text-trust hover:underline">
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleRemove(row)}
-                        disabled={isIiPublished(row) || removeUnavailable}
-                        title={
-                          isIiPublished(row)
-                            ? 'Use Unpublish in Investment Intelligence to remove it from net worth.'
-                            : removeUnavailable
-                              ? "Removing isn't available for your country yet"
-                              : undefined
-                        }
-                        className="ml-3 text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              )}
+              {visibleIncluded.map((row) => (
+                <tr key={row.key} className="border-b last:border-0">
+                  <td className="px-3 py-2">
+                    {row.item_label}
+                    <ProvenanceBadge row={row} className="ml-2" />
+                    {warningsByRow.has(row.key) && (
+                      <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">{ownerDisplayLabel(row.owner)}</td>
+                  <td className={`px-3 py-2 ${NUM_CELL_CLASS}`}>{formatMoneyWhole(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
+                  <td className="px-3 py-2">{row.currency_code}</td>
+                  <td className="px-3 py-2 text-right">
+                    <button onClick={() => openEditForm(row)} className="text-xs font-medium text-trust hover:underline">
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleRemove(row)}
+                      disabled={isIiPublished(row) || removeUnavailable}
+                      title={
+                        isIiPublished(row)
+                          ? 'Use Unpublish in Investment Intelligence to remove it from net worth.'
+                          : removeUnavailable
+                            ? "Removing isn't available for your country yet"
+                            : undefined
+                      }
+                      className="ml-3 text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
 
           {/* Mobile cards */}
           <div className="space-y-3 md:hidden">

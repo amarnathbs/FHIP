@@ -6,7 +6,7 @@
 // Edit (migration 0280): a draft is edited in place by the person who proposed it; an approved record is never
 // changed in place - "Edit (needs approval)" proposes ONE revision that waits for approval while the approved record
 // keeps granting. The list shows current records; "Show history" adds replaced and revoked ones.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { EntitlementRightsView, OverviewResponse } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { usePost, type Say } from './api';
 import { FormFeedback, useFormFeedback, type FormSpec } from './formFeedback';
@@ -33,6 +33,8 @@ import {
   type EntitlementFormState,
   type OpenPanelKey,
 } from './benchmarkDataUiLogic';
+import { ClampText } from '@/components/ui/ClampText';
+import { DateRange, NoWrap } from '@/components/ui/DataTable';
 import {
   buildEditBody,
   buildReviseBody,
@@ -316,51 +318,64 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
             <div key={g.catalogue.benchmarkKey} className="mt-3">
               <h3 className="mb-1 text-sm font-semibold text-ink">{g.catalogue.label} <span className="font-mono text-xs text-muted">{g.catalogue.benchmarkKey}</span></h3>
               {listed.length === 0 ? <p className="text-sm text-muted">No current record. Choose Show history to see the earlier ones.</p> : (
-              <ScrollTable label={`Entitlements for ${g.catalogue.label}`} minWidth="min-w-[980px]">
+              <ScrollTable label={`Entitlements for ${g.catalogue.label}`}>
                 <thead>
-                  <tr><Th>Status</Th><Th>Kind</Th>{ENTITLEMENT_RIGHT_INFO.map((r) => <Th key={r.key}>{r.short}</Th>)}<Th>Term</Th><Th>Data range</Th><Th>After expiry</Th><Th>Evidence</Th><Th>Actions</Th></tr>
+                  <tr>
+                    <Th>Status</Th>
+                    {ENTITLEMENT_RIGHT_INFO.map((r) => <Th key={r.key} kind="status" title={r.label}><span aria-hidden="true">{r.compact}</span><span className="sr-only">{r.short}: {r.label}</span></Th>)}
+                    <Th>Term</Th>
+                    <Th>Data range</Th>
+                  </tr>
                 </thead>
-                <tbody>
-                  {listed.map((e) => {
-                    const chip = lifecycleChip(e);
-                    const acts = entitlementActions(e, caps);
-                    const revision = sp.openRevisionOf.get(e.entitlementId);
-                    const editActs = editActionsFor(e, revision, caps, editSupported);
-                    const link = safeExternalUrl(e.evidenceUrl);
-                    const short = e.entitlementId.slice(0, 6);
-                    return (
-                      <tr key={e.entitlementId}>
-                        <Td>
-                          <div className="flex flex-col items-start gap-1">
+                {listed.map((e) => {
+                  const chip = lifecycleChip(e);
+                  const acts = entitlementActions(e, caps);
+                  const revision = sp.openRevisionOf.get(e.entitlementId);
+                  const editActs = editActionsFor(e, revision, caps, editSupported);
+                  const link = safeExternalUrl(e.evidenceUrl);
+                  const short = e.entitlementId.slice(0, 6);
+                  // The action buttons, in the same order and with the same accessible names as before. They sit in one wrapping row of
+                  // small buttons under the record (never stacked in a narrow column).
+                  const buttons: ReactNode[] = [];
+                  if (acts.canApprove) buttons.push(<Btn key="approve" compact kind="secondary" onClick={() => openAction('approve', e, g.catalogue.label)}>{`Approve ${short}`}</Btn>);
+                  if (editActs.editDraft) buttons.push(<Btn key="edit" compact kind="secondary" ariaLabel={`Edit, record ${short}`} onClick={() => startEdit('draft', e, g.catalogue.benchmarkKey, g.catalogue.label)}>Edit</Btn>);
+                  if (editActs.reviseApproved) buttons.push(<Btn key="revise" compact kind="secondary" ariaLabel={`Edit (needs approval), record ${short}`} onClick={() => startEdit('revise', e, g.catalogue.benchmarkKey, g.catalogue.label)}>Edit (needs approval)</Btn>);
+                  if (revision && editActs.editRevision) buttons.push(<Btn key="edit-revision" compact kind="secondary" ariaLabel={`Edit revision of record ${short}`} onClick={() => startEdit('revision', revision, g.catalogue.benchmarkKey, g.catalogue.label)}>Edit revision</Btn>);
+                  if (revision && editActs.approveRevision) buttons.push(<Btn key="review-revision" compact kind="secondary" ariaLabel={`Review revision of record ${short}`} onClick={() => openAction('approve', revision, g.catalogue.label, e)}>Review revision</Btn>);
+                  if (revision && editActs.rejectRevision) buttons.push(<Btn key="reject-revision" compact kind="danger" ariaLabel={`Reject revision of record ${short}`} onClick={() => openAction('reject-revision', revision, g.catalogue.label, e)}>Reject revision</Btn>);
+                  if (revision && editActs.cancelRevision) buttons.push(<Btn key="cancel-revision" compact kind="danger" ariaLabel={`Cancel revision of record ${short}`} onClick={() => openAction('cancel-revision', revision, g.catalogue.label, e)}>Cancel revision</Btn>);
+                  if (acts.canRevoke) buttons.push(<Btn key="revoke" compact kind="danger" onClick={() => openAction('revoke', e, g.catalogue.label)}>{`Revoke ${short}`}</Btn>);
+                  if (editSupported) buttons.push(<Btn key="history" compact kind="secondary" ariaLabel={`History of record ${short}`} onClick={() => { setTimeline({ id: e.entitlementId, title: `History of the ${g.catalogue.label} record ${short}` }); setHistoryTick((t) => t + 1); }}>History</Btn>);
+                  return (
+                    // One entitlement = up to three rows in one row group, so every row fits 1024 px: (1) the status, the open-revision badge,
+                    // the six rights and the dates; (2) kind, after expiry and evidence as clamped text; (3) the actions as one wrapping row.
+                    <tbody key={e.entitlementId}>
+                      <tr>
+                        <Td kind="status">
+                          <div className="flex flex-wrap items-center gap-1">
                             <Chip label={chip.label} tone={chip.tone} />
-                            {revision ? <Chip label="Revision awaiting approval" tone="warn" title="This record keeps granting as shown. A proposed change waits for approval." /> : null}
-                            {e.edit?.endedAt ? <span className="text-xs text-muted">{e.edit.supersededAt ? 'Replaced' : 'Ended'} {formatDate(e.edit.endedAt)}</span> : null}
+                            {revision ? <Chip label="Revision pending" tone="warn" title="Revision awaiting approval. This record keeps granting as shown; a proposed change waits for approval." /> : null}
                           </div>
                         </Td>
-                        <Td>{entitlementKindLabel(e.kind)}</Td>
-                        {ENTITLEMENT_RIGHT_INFO.map((r) => <Td key={r.key}>{e.rights[r.key] ? 'Yes' : 'No'}</Td>)}
-                        <Td>{formatDate(e.validFrom)} to {e.validTo ? formatDate(e.validTo) : 'open'}</Td>
-                        <Td>{e.dataFrom ? formatDate(e.dataFrom) : 'any start'} to {e.dataTo ? formatDate(e.dataTo) : 'any end'}</Td>
-                        <Td>{postExpiryLabel(e.postExpiryStorage)}</Td>
-                        <Td>{e.evidenceReference}{link ? <> <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-trust underline">Document (opens in a new tab)</a></> : null}</Td>
-                        <Td>
-                          <div className="flex flex-wrap gap-1">
-                            {acts.canApprove ? <Btn kind="secondary" onClick={() => openAction('approve', e, g.catalogue.label)}>{`Approve ${short}`}</Btn> : null}
-                            {editActs.editDraft ? <Btn kind="secondary" ariaLabel={`Edit, record ${short}`} onClick={() => startEdit('draft', e, g.catalogue.benchmarkKey, g.catalogue.label)}>Edit</Btn> : null}
-                            {editActs.reviseApproved ? <Btn kind="secondary" ariaLabel={`Edit (needs approval), record ${short}`} onClick={() => startEdit('revise', e, g.catalogue.benchmarkKey, g.catalogue.label)}>Edit (needs approval)</Btn> : null}
-                            {revision && editActs.editRevision ? <Btn kind="secondary" ariaLabel={`Edit revision of record ${short}`} onClick={() => startEdit('revision', revision, g.catalogue.benchmarkKey, g.catalogue.label)}>Edit revision</Btn> : null}
-                            {revision && editActs.approveRevision ? <Btn kind="secondary" ariaLabel={`Review revision of record ${short}`} onClick={() => openAction('approve', revision, g.catalogue.label, e)}>Review revision</Btn> : null}
-                            {revision && editActs.rejectRevision ? <Btn kind="danger" ariaLabel={`Reject revision of record ${short}`} onClick={() => openAction('reject-revision', revision, g.catalogue.label, e)}>Reject revision</Btn> : null}
-                            {revision && editActs.cancelRevision ? <Btn kind="danger" ariaLabel={`Cancel revision of record ${short}`} onClick={() => openAction('cancel-revision', revision, g.catalogue.label, e)}>Cancel revision</Btn> : null}
-                            {acts.canRevoke ? <Btn kind="danger" onClick={() => openAction('revoke', e, g.catalogue.label)}>{`Revoke ${short}`}</Btn> : null}
-                            {editSupported ? <Btn kind="secondary" ariaLabel={`History of record ${short}`} onClick={() => { setTimeline({ id: e.entitlementId, title: `History of the ${g.catalogue.label} record ${short}` }); setHistoryTick((t) => t + 1); }}>History</Btn> : null}
-                          </div>
-                          {editActs.note ? <p className="mt-1 text-xs text-muted">{editActs.note}</p> : null}
-                        </Td>
+                        {ENTITLEMENT_RIGHT_INFO.map((r) => <Td key={r.key} kind="status">{e.rights[r.key] ? 'Yes' : 'No'}</Td>)}
+                        <Td><DateRange from={formatDate(e.validFrom)} to={e.validTo ? formatDate(e.validTo) : 'open'} /></Td>
+                        <Td><DateRange from={e.dataFrom ? formatDate(e.dataFrom) : 'any start'} to={e.dataTo ? formatDate(e.dataTo) : 'any end'} /></Td>
                       </tr>
-                    );
-                  })}
-                </tbody>
+                      <tr>
+                        <Td colSpan={4} className="border-t-0 pt-0"><ClampText><span className="text-xs font-semibold text-muted">Kind: </span>{entitlementKindLabel(e.kind)}. <span className="text-xs font-semibold text-muted">After expiry: </span>{postExpiryLabel(e.postExpiryStorage)}{e.edit?.endedAt ? <>. {e.edit.supersededAt ? 'Replaced' : 'Ended'} <NoWrap>{formatDate(e.edit.endedAt)}</NoWrap></> : null}</ClampText></Td>
+                        <Td colSpan={5} className="border-t-0 pt-0"><ClampText><span className="text-xs font-semibold text-muted">Evidence: </span>{e.evidenceReference}{link ? <> <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-trust underline">Document (opens in a new tab)</a></> : null}</ClampText></Td>
+                      </tr>
+                      {buttons.length > 0 || editActs.note ? (
+                        <tr>
+                          <Td kind="action" colSpan={ENTITLEMENT_RIGHT_INFO.length + 3} className="border-t-0 pt-0">
+                            {buttons.length > 0 ? <div role="group" aria-label={`Actions for record ${short}`} className="flex flex-wrap gap-1">{buttons}</div> : null}
+                            {editActs.note ? <p className="mt-1 text-xs text-muted">{editActs.note}</p> : null}
+                          </Td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  );
+                })}
               </ScrollTable>
               )}
             </div>
@@ -378,7 +393,7 @@ export default function EntitlementsTab({ ov, onChanged, say }: { ov: OverviewRe
               <Notice tone="info">The approved record keeps granting until you approve. On approval the revision replaces it in one step, and the replaced record stays in the history. If you reject the revision, the approved record is unchanged.</Notice>
               {action.e.edit?.revisionReason ? <p className="text-sm text-ink">Reason given for the change: {action.e.edit.revisionReason}</p> : null}
               {comparison.length === 0 ? <p className="text-sm text-muted">No visible field differs from the approved record.</p> : (
-                <ScrollTable label="What the revision changes" minWidth="min-w-[560px]">
+                <ScrollTable label="What the revision changes">
                   <thead><tr><Th>Field</Th><Th>Approved record now</Th><Th>Revision</Th></tr></thead>
                   <tbody>{comparison.map((c) => <tr key={c.label}><Td>{c.label}</Td><Td>{c.current}</Td><Td>{c.proposed}</Td></tr>)}</tbody>
                 </ScrollTable>

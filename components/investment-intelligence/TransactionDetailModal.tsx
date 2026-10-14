@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { fmtDate } from './dateDisplay';
+import { DataTable } from '@/components/ui/DataTable';
 
 // Investment Intelligence — Performance tab Holdings drilldown (2026-09-17).
 //
@@ -195,53 +196,51 @@ export function TransactionDetailModal({
           {error && <p className="rounded-card border border-risk bg-white p-4 text-sm text-risk">{error}</p>}
           {ledger && !loading && !error && (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-line uppercase tracking-wide text-muted">
-                      <th className="py-2 pr-3 font-medium">Date</th>
-                      <th className="py-2 pr-3 font-medium">Transaction details</th>
-                      <th className="py-2 pr-3 font-medium text-right">Amount</th>
-                      <th className="py-2 pr-3 font-medium text-right">Units</th>
-                      <th className="py-2 pr-3 font-medium text-right">NAV/Price</th>
-                      <th className="py-2 pr-3 font-medium text-right">Unit balance</th>
-                      <th className="py-2 pr-3 font-medium text-right">XIRR cash flow</th>
+              <DataTable label="Transaction ledger" className="w-full min-w-[640px] text-left text-xs">
+                <thead>
+                  <tr className="border-b border-line uppercase tracking-wide text-muted">
+                    <th className="py-2 pr-3 font-medium">Date</th>
+                    <th className="py-2 pr-3 font-medium">Transaction details</th>
+                    <th className="py-2 pr-3 font-medium text-right">Amount</th>
+                    <th className="py-2 pr-3 font-medium text-right">Units</th>
+                    <th className="py-2 pr-3 font-medium text-right">NAV/Price</th>
+                    <th className="py-2 pr-3 font-medium text-right">Unit balance</th>
+                    <th className="py-2 pr-3 font-medium text-right">XIRR cash flow</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledger.rows.map((r) => (
+                    <tr key={r.transactionId} className="border-b border-line align-top">
+                      <td className="py-2 pr-3 tabular-nums text-ink whitespace-nowrap">{fmtDate(r.date, ledger.currencyCode)}</td>
+                      <td className="py-2 pr-3 text-ink">
+                        {r.description}
+                        {r.excludedFromXirr && <span className="ml-1 text-muted">(excluded — {r.status.replace(/_/g, ' ')})</span>}
+                      </td>
+                      <td className={`py-2 pr-3 text-right tabular-nums ${moneySigned(r.amount, ledger.currencyCode).negative ? 'text-risk' : 'text-ink'}`}>
+                        {moneySigned(r.amount, ledger.currencyCode).text}
+                      </td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-muted">{r.units === null ? '—' : r.units.toFixed(3)}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-muted">{r.navPrice === null ? '—' : r.navPrice.toFixed(4)}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink">{r.unitBalanceAfter.toFixed(3)}</td>
+                      <td
+                        className={`py-2 pr-3 text-right tabular-nums ${
+                          r.xirrCashFlow !== null && moneySigned(r.xirrCashFlow, ledger.currencyCode).negative ? 'text-risk' : 'text-ink'
+                        }`}
+                      >
+                        {r.xirrCashFlow === null ? '—' : moneySigned(r.xirrCashFlow, ledger.currencyCode).text}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {ledger.rows.map((r) => (
-                      <tr key={r.transactionId} className="border-b border-line align-top">
-                        <td className="py-2 pr-3 tabular-nums text-ink">{fmtDate(r.date, ledger.currencyCode)}</td>
-                        <td className="py-2 pr-3 text-ink">
-                          {r.description}
-                          {r.excludedFromXirr && <span className="ml-1 text-muted">(excluded — {r.status.replace(/_/g, ' ')})</span>}
-                        </td>
-                        <td className={`py-2 pr-3 text-right tabular-nums ${moneySigned(r.amount, ledger.currencyCode).negative ? 'text-risk' : 'text-ink'}`}>
-                          {moneySigned(r.amount, ledger.currencyCode).text}
-                        </td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-muted">{r.units === null ? '—' : r.units.toFixed(3)}</td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-muted">{r.navPrice === null ? '—' : r.navPrice.toFixed(4)}</td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-ink">{r.unitBalanceAfter.toFixed(3)}</td>
-                        <td
-                          className={`py-2 pr-3 text-right tabular-nums ${
-                            r.xirrCashFlow !== null && moneySigned(r.xirrCashFlow, ledger.currencyCode).negative ? 'text-risk' : 'text-ink'
-                          }`}
-                        >
-                          {r.xirrCashFlow === null ? '—' : moneySigned(r.xirrCashFlow, ledger.currencyCode).text}
-                        </td>
-                      </tr>
-                    ))}
-                    {ledger.terminal && (
-                      <tr className="border-b border-line bg-gray-50 font-medium">
-                        <td className="py-2 pr-3 tabular-nums text-ink">{fmtDate(ledger.terminal.date, ledger.currencyCode)}</td>
-                        <td className="py-2 pr-3 text-ink">{ledger.terminal.description}</td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-ink" colSpan={4} />
-                        <td className="py-2 pr-3 text-right tabular-nums text-ink">{money(ledger.terminal.amount, ledger.currencyCode)}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                  {ledger.terminal && (
+                    <tr className="border-b border-line bg-gray-50 font-medium">
+                      <td className="py-2 pr-3 tabular-nums text-ink whitespace-nowrap">{fmtDate(ledger.terminal.date, ledger.currencyCode)}</td>
+                      <td className="py-2 pr-3 text-ink">{ledger.terminal.description}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink" colSpan={4} />
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink">{money(ledger.terminal.amount, ledger.currencyCode)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </DataTable>
 
               <div className="mt-4 rounded-card border border-line bg-gray-50 p-3">
                 <p className="text-sm font-medium text-ink">

@@ -15,6 +15,7 @@ import {
   recordDocumentOwner,
   resolveUploadOwnerFromUrl,
 } from '@/lib/financial-data-hub/services/documentOwnerRequest';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // POST /api/financial-data-hub/retirement-statement/upload
 //
@@ -33,6 +34,10 @@ import {
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'fdh.retirement_statement.upload');
+  if (importDenied) return importDenied;
 
   // LR-4 (2026-09-08): every other FDH-3-descended upload route (Income/
   // Payslip, Liability, AU Investment) calls this same gate; Retirement

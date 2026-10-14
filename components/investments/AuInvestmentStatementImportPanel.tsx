@@ -37,6 +37,9 @@ import {
   type WaitingImport,
 } from '@/components/financial-data-hub/WaitingImports';
 import { needsSecurityMatch } from '@/lib/investment-import-bridge/auLineRules';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { DataTable } from '@/components/ui/DataTable';
 
 // 'ai_fallback_review' (2026-09-23, AIE unified document fallback): the native
 // CSV extractor could not read this layout and an AI read a DRAFT off the same
@@ -291,6 +294,9 @@ export function AuInvestmentStatementImportPanel({
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
+  // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
+  const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
   // AIE AU investment-statement AI-fallback (2026-09-23). Held only for the
   // lifetime of the `ai_fallback_review` phase; cleared by `reset()` and on
   // confirm. Nothing in this draft exists in the database yet.
@@ -537,6 +543,11 @@ export function AuInvestmentStatementImportPanel({
       });
       const { ok, json } = await readJson(res);
       if (!ok) {
+        // Premium Upload Entitlement: the unified refusal switches this panel to the locked state (nothing was stored).
+        if (noteImportResponse(json)) {
+          setPhase('form');
+          return;
+        }
         setMessage(json.message ?? json.error ?? 'We could not process this statement.');
         setPhase('unable_to_read');
         return;
@@ -853,7 +864,11 @@ export function AuInvestmentStatementImportPanel({
 
       {phase === 'form' && <WaitingImportsList items={waiting} busy={busy} onContinue={(w) => void resumeWaiting(w)} />}
 
-      {uploadEnabled !== false && phase === 'form' && (
+      {uploadEnabled !== false && phase === 'form' && importAccess?.state !== 'allowed' && (
+        <ImportLockedNotice domain="investments" label="Import investment statement" state={importAccess === null ? 'checking' : importAccess.state} />
+      )}
+
+      {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
             Upload a transaction-history or portfolio-holdings CSV and FHIP will extract the details for you to review before
@@ -888,7 +903,7 @@ export function AuInvestmentStatementImportPanel({
             <span className="mb-1 block text-muted">Statement file (CSV)</span>
             <input type="file" accept="text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
-          <button type="button" onClick={handleUpload} disabled={!file || !uploadOwner || busy || uploadEnabled !== true} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
+          <button type="button" onClick={handleUpload} disabled={!file || !uploadOwner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed'} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
             Upload statement
           </button>
         </div>
@@ -963,37 +978,35 @@ export function AuInvestmentStatementImportPanel({
                 {aiDraft.holdings.length} holding{aiDraft.holdings.length === 1 ? '' : 's'} read. Remove any line that
                 is wrong or is not really a holding.
               </p>
-              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Holdings read from this statement by AI, awaiting your confirmation</caption>
-                  <thead className="sticky top-0 bg-gray-50 text-left">
-                    <tr>
-                      <th scope="col" className="px-3 py-2">Security</th>
-                      <th scope="col" className="px-3 py-2">Code</th>
-                      <th scope="col" className="px-3 py-2 text-right">Units</th>
-                      <th scope="col" className="px-3 py-2 text-right">Value</th>
-                      <th scope="col" className="px-3 py-2">As at</th>
-                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+              <DataTable wrapperClassName="max-h-72 rounded border border-gray-200" label="Holdings read from this statement by AI, awaiting your confirmation" className="w-full">
+                <caption className="sr-only">Holdings read from this statement by AI, awaiting your confirmation</caption>
+                <thead className="sticky top-0 bg-gray-50 text-left">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Security</th>
+                    <th scope="col" className="px-3 py-2">Code</th>
+                    <th scope="col" className="px-3 py-2 text-right">Units</th>
+                    <th scope="col" className="px-3 py-2 text-right">Value</th>
+                    <th scope="col" className="px-3 py-2">As at</th>
+                    <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiDraft.holdings.map((h, i) => (
+                    <tr key={`${h.securityNameRaw}-${i}`} className="border-t border-gray-100">
+                      <td className="px-3 py-2">{h.securityNameRaw}</td>
+                      <td className="px-3 py-2">{h.tickerRaw ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{h.quantity}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{h.marketValue ?? '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(h.valuationDate, 'AUD')}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={() => removeAiDraftHolding(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                          Remove<span className="sr-only"> the {h.securityNameRaw} holding</span>
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {aiDraft.holdings.map((h, i) => (
-                      <tr key={`${h.securityNameRaw}-${i}`} className="border-t border-gray-100">
-                        <td className="px-3 py-2">{h.securityNameRaw}</td>
-                        <td className="px-3 py-2">{h.tickerRaw ?? '—'}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{h.quantity}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{h.marketValue ?? '—'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(h.valuationDate, 'AUD')}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => removeAiDraftHolding(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-                            Remove<span className="sr-only"> the {h.securityNameRaw} holding</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
             </div>
           )}
 
@@ -1003,37 +1016,35 @@ export function AuInvestmentStatementImportPanel({
                 {aiDraft.activities.length} transaction{aiDraft.activities.length === 1 ? '' : 's'} read. Remove any
                 line that is wrong or is not really a transaction.
               </p>
-              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Transactions read from this statement by AI, awaiting your confirmation</caption>
-                  <thead className="sticky top-0 bg-gray-50 text-left">
-                    <tr>
-                      <th scope="col" className="px-3 py-2">Date</th>
-                      <th scope="col" className="px-3 py-2">Type</th>
-                      <th scope="col" className="px-3 py-2">Security</th>
-                      <th scope="col" className="px-3 py-2 text-right">Units</th>
-                      <th scope="col" className="px-3 py-2 text-right">Amount</th>
-                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+              <DataTable wrapperClassName="max-h-72 rounded border border-gray-200" label="Transactions read from this statement by AI, awaiting your confirmation" className="w-full">
+                <caption className="sr-only">Transactions read from this statement by AI, awaiting your confirmation</caption>
+                <thead className="sticky top-0 bg-gray-50 text-left">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Date</th>
+                    <th scope="col" className="px-3 py-2">Type</th>
+                    <th scope="col" className="px-3 py-2">Security</th>
+                    <th scope="col" className="px-3 py-2 text-right">Units</th>
+                    <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                    <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiDraft.activities.map((a, i) => (
+                    <tr key={`${a.transactionType}-${i}`} className="border-t border-gray-100">
+                      <td className="px-3 py-2 whitespace-nowrap">{a.tradeDate ?? '—'}</td>
+                      <td className="px-3 py-2">{a.transactionType}</td>
+                      <td className="px-3 py-2">{a.securityNameRaw ?? a.tickerRaw ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{a.quantity ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{a.amount}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={() => removeAiDraftActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                          Remove<span className="sr-only"> the {a.transactionType} line on {a.tradeDate ?? 'an unknown date'}</span>
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {aiDraft.activities.map((a, i) => (
-                      <tr key={`${a.transactionType}-${i}`} className="border-t border-gray-100">
-                        <td className="px-3 py-2 whitespace-nowrap">{a.tradeDate ?? '—'}</td>
-                        <td className="px-3 py-2">{a.transactionType}</td>
-                        <td className="px-3 py-2">{a.securityNameRaw ?? a.tickerRaw ?? '—'}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{a.quantity ?? '—'}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{a.amount}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => removeAiDraftActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-                            Remove<span className="sr-only"> the {a.transactionType} line on {a.tradeDate ?? 'an unknown date'}</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
             </div>
           )}
 
@@ -1280,7 +1291,7 @@ export function AuInvestmentStatementImportPanel({
               <p className="rounded bg-green-50 px-3 py-2 text-sm text-green-800">This statement evidence has been approved. Nothing has been added to your Investments yet.</p>
               {/* INV-G11: what changes, shown BEFORE Apply. */}
               {compareRows && compareRows.length > 0 && (
-                <table className="w-full text-sm">
+                <DataTable label="Current holding vs this statement" className="w-full">
                   <caption className="text-left text-sm font-medium">Current holding vs this statement</caption>
                   <thead className="text-left text-muted">
                     <tr>
@@ -1298,7 +1309,7 @@ export function AuInvestmentStatementImportPanel({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
               )}
               <button type="button" onClick={handleApply} disabled={busy} className="rounded bg-trust px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
                 Apply to Investment Intelligence

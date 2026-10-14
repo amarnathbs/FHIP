@@ -23,6 +23,7 @@ import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } fro
 import { failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES, COMPLIANCE_LABELS, COMPLIANCE_VALUES, STATUS_LABELS, STATUS_VALUES, formatAdminDate } from '@/lib/resources/admin/labels';
 import type { MoneyUpdateListItem } from '@/lib/resources/money-update/queries';
+import { DataTable } from '@/components/ui/DataTable';
 
 const selectClass = 'rounded border border-line bg-white px-2 py-1.5 text-sm text-ink';
 
@@ -164,52 +165,50 @@ export function MoneyUpdateListClient({ canCreate }: { canCreate: boolean }) {
             <>
               {/* `relative` — see ResourceContentTable for why this is
                   load-bearing rather than cosmetic. */}
-              <div className="relative hidden overflow-x-auto sm:block">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-                      <th scope="col" className="py-2 pr-3 font-semibold">Title</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Event Date</th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">Compliance</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Review/Expiry</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
-                      <th scope="col" className="py-2 pl-3 font-semibold"><span className="sr-only">Actions</span></th>
+              <DataTable label="Money updates" wrapperClassName="relative hidden sm:block" className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+                    <th scope="col" className="py-2 pr-3 font-semibold">Title</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Event Date</th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">Compliance</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Review/Expiry</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
+                    <th scope="col" className="py-2 pl-3 font-semibold"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((m) => (
+                    <tr key={m.id} className="border-b border-line/60 hover:bg-gray-50">
+                      <td className="max-w-[260px] py-2.5 pr-3">
+                        <Link href={editHref(m)} className="font-medium text-ink hover:text-trust hover:underline">
+                          {m.title}
+                        </Link>
+                        {/* Wave 5 (§8.7): the list mixes Money Updates and
+                            Templates and offers a filter to separate them,
+                            but the row itself said nothing about which kind
+                            it was. */}
+                        {m.content_type === 'money_update_template' && (
+                          <span className="ml-2 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">Template</span>
+                        )}
+                        {isReviewDue(m) && <span className="ml-2 inline-block rounded-full bg-risk/10 px-2 py-0.5 text-xs font-semibold text-risk">Review Due</span>}
+                      </td>
+                      <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={m.jurisdiction} /></td>
+                      <td className="hidden py-2.5 pr-3 text-muted md:table-cell whitespace-nowrap">{formatAdminDate(m.event_date)}</td>
+                      <td className="py-2.5 pr-3"><ResourceStatusBadge status={m.status} /></td>
+                      <td className="py-2.5 pr-3"><ResourceComplianceBadge compliance={m.compliance_classification} /></td>
+                      <td className="hidden py-2.5 pr-3 text-muted sm:table-cell whitespace-nowrap">{formatAdminDate(m.next_review_at ?? m.expires_at)}</td>
+                      <td className="hidden py-2.5 pr-3 text-muted sm:table-cell whitespace-nowrap">{formatAdminDate(m.updated_at)}</td>
+                      <td className="py-2.5 pl-3 text-right">
+                        <Link href={editHref(m)} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${m.title}"`}>
+                          Edit
+                        </Link>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((m) => (
-                      <tr key={m.id} className="border-b border-line/60 hover:bg-gray-50">
-                        <td className="max-w-[260px] py-2.5 pr-3">
-                          <Link href={editHref(m)} className="font-medium text-ink hover:text-trust hover:underline">
-                            {m.title}
-                          </Link>
-                          {/* Wave 5 (§8.7): the list mixes Money Updates and
-                              Templates and offers a filter to separate them,
-                              but the row itself said nothing about which kind
-                              it was. */}
-                          {m.content_type === 'money_update_template' && (
-                            <span className="ml-2 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">Template</span>
-                          )}
-                          {isReviewDue(m) && <span className="ml-2 inline-block rounded-full bg-risk/10 px-2 py-0.5 text-xs font-semibold text-risk">Review Due</span>}
-                        </td>
-                        <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={m.jurisdiction} /></td>
-                        <td className="hidden py-2.5 pr-3 text-muted md:table-cell">{formatAdminDate(m.event_date)}</td>
-                        <td className="py-2.5 pr-3"><ResourceStatusBadge status={m.status} /></td>
-                        <td className="py-2.5 pr-3"><ResourceComplianceBadge compliance={m.compliance_classification} /></td>
-                        <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(m.next_review_at ?? m.expires_at)}</td>
-                        <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(m.updated_at)}</td>
-                        <td className="py-2.5 pl-3 text-right">
-                          <Link href={editHref(m)} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${m.title}"`}>
-                            Edit
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
 
               <ul className="space-y-2 sm:hidden">
                 {items.map((m) => (

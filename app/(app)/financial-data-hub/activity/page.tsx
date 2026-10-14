@@ -13,6 +13,7 @@ import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { TrendLineChart } from '@/components/dashboard/charts';
 import { ResourceEmptyState, ResourceErrorState } from '@/components/resources/admin/ResourceStates';
 import { resolveActivityParams, type RawSearchParams } from './_lib/searchParams';
+import { DataTable } from '@/components/ui/DataTable';
 
 // FDH-8 spec 14 — the Overview landing page for Financial Activity.
 //
@@ -189,29 +190,27 @@ async function FinancialActivityOverviewPageContent({
               />
               {/* Accessibility (spec 102-104): the chart's adjacent text/data
                   summary — a screen-reader user gets the same numbers. */}
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <caption className="sr-only">Monthly net cash flow for {currencyTrend.currencyCode}</caption>
-                  <thead>
-                    <tr className="border-b border-line text-xs text-muted">
-                      <th scope="col" className="py-1 pr-2 font-medium">Month</th>
-                      <th scope="col" className="py-1 pr-2 text-right font-medium">Income</th>
-                      <th scope="col" className="py-1 pr-2 text-right font-medium">Expenses</th>
-                      <th scope="col" className="py-1 text-right font-medium">Net cash flow</th>
+              <DataTable label={`Monthly net cash flow for ${currencyTrend.currencyCode}`} wrapperClassName="mt-3" className="w-full text-left">
+                <caption className="sr-only">Monthly net cash flow for {currencyTrend.currencyCode}</caption>
+                <thead>
+                  <tr className="border-b border-line text-xs text-muted">
+                    <th scope="col" className="py-1 pr-2 font-medium">Month</th>
+                    <th scope="col" className="py-1 pr-2 text-right font-medium">Income</th>
+                    <th scope="col" className="py-1 pr-2 text-right font-medium">Expenses</th>
+                    <th scope="col" className="py-1 text-right font-medium">Net cash flow</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currencyTrend.points.map((p) => (
+                    <tr key={p.monthKey} className="border-b border-line/60">
+                      <td className="py-1 pr-2 text-ink">{p.monthKey}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums text-muted">{formatMoney(p.incomeTotal, currencyTrend.currencyCode as 'AUD' | 'INR')}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums text-muted">{formatMoney(p.expenseTotal, currencyTrend.currencyCode as 'AUD' | 'INR')}</td>
+                      <td className="py-1 text-right tabular-nums text-ink">{formatMoney(p.netCashFlow, currencyTrend.currencyCode as 'AUD' | 'INR')}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {currencyTrend.points.map((p) => (
-                      <tr key={p.monthKey} className="border-b border-line/60">
-                        <td className="py-1 pr-2 text-ink">{p.monthKey}</td>
-                        <td className="py-1 pr-2 text-right tabular-nums text-muted">{formatMoney(p.incomeTotal, currencyTrend.currencyCode as 'AUD' | 'INR')}</td>
-                        <td className="py-1 pr-2 text-right tabular-nums text-muted">{formatMoney(p.expenseTotal, currencyTrend.currencyCode as 'AUD' | 'INR')}</td>
-                        <td className="py-1 text-right tabular-nums text-ink">{formatMoney(p.netCashFlow, currencyTrend.currencyCode as 'AUD' | 'INR')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
             </div>
           ))}
         </SectionCard>

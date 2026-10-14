@@ -37,6 +37,9 @@ import {
   SCANNING_MESSAGE,
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { DataTable } from '@/components/ui/DataTable';
 
 type Phase =
   | 'form'
@@ -343,6 +346,9 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
+  // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
+  const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
   // 2026-09-25: payslips already read and waiting to be added. Before this,
   // closing the panel or reloading the page stranded a proposal -- nothing on
   // screen listed it, and re-uploading only reached the duplicate guard.
@@ -545,7 +551,14 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         }),
       });
       const { ok: sessionOk, json: sessionJson } = await readJson(sessionRes);
-      if (!sessionOk) throw new Error(sessionJson.message ?? sessionJson.error ?? 'Could not start upload');
+      if (!sessionOk) {
+        // Premium Upload Entitlement: the unified refusal switches this panel to the locked state (nothing was stored).
+        if (noteImportResponse(sessionJson)) {
+          setPhase('form');
+          return;
+        }
+        throw new Error(sessionJson.message ?? sessionJson.error ?? 'Could not start upload');
+      }
 
       const completeRes = await fetch(
         `/api/financial-data-hub/documents/upload-sessions/${sessionJson.data.session_id}/complete`,
@@ -899,7 +912,11 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         </section>
       )}
 
-      {uploadEnabled !== false && phase === 'form' && (
+      {uploadEnabled !== false && phase === 'form' && importAccess?.state !== 'allowed' && (
+        <ImportLockedNotice domain="income" label="Import from Payslip" state={importAccess === null ? 'checking' : importAccess.state} />
+      )}
+
+      {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
             Upload a payslip and FHIP will extract your income details for you to review before updating your Income
@@ -931,7 +948,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           <button
             type="button"
             onClick={handleUpload}
-            disabled={!file || !owner || busy || uploadEnabled !== true}
+            disabled={!file || !owner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed'}
             className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Upload payslip
@@ -1332,53 +1349,51 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
               </button>
             </div>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] border-collapse text-sm">
-              <caption className="sr-only">Comparison of current income to the proposed payslip values</caption>
-              <thead>
-                <tr className="border-b border-gray-200 text-left">
-                  <th scope="col" className="py-2 pr-2">
-                    Field
-                  </th>
-                  <th scope="col" className="py-2 pr-2">
-                    Current
-                  </th>
-                  <th scope="col" className="py-2 pr-2">
-                    Proposed
-                  </th>
-                  <th scope="col" className="py-2">
-                    Apply this field
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map((f) => {
-                  const changed = f.proposedValue !== f.existingValue;
-                  return (
-                    <tr key={f.fieldName} className="border-b border-gray-100">
-                      <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">
-                        {FIELD_LABELS[f.fieldName] ?? f.fieldName}
-                        {fieldReasonText(f.reasonCode) && <span className="block text-xs">{fieldReasonText(f.reasonCode)}</span>}
-                      </th>
-                      <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind)}</td>
-                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind)}</td>
-                      <td className="py-2">
-                        <label className="inline-flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(f.fieldName)}
-                            onChange={() => toggleField(f.fieldName)}
-                            aria-label={`Apply ${FIELD_LABELS[f.fieldName] ?? f.fieldName}`}
-                          />
-                          {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
-                        </label>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable label="Comparison of current income to the proposed payslip values" className="w-full min-w-[420px] border-collapse">
+            <caption className="sr-only">Comparison of current income to the proposed payslip values</caption>
+            <thead>
+              <tr className="border-b border-gray-200 text-left">
+                <th scope="col" className="py-2 pr-2">
+                  Field
+                </th>
+                <th scope="col" className="py-2 pr-2">
+                  Current
+                </th>
+                <th scope="col" className="py-2 pr-2">
+                  Proposed
+                </th>
+                <th scope="col" className="py-2">
+                  Apply this field
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {fields.map((f) => {
+                const changed = f.proposedValue !== f.existingValue;
+                return (
+                  <tr key={f.fieldName} className="border-b border-gray-100">
+                    <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">
+                      {FIELD_LABELS[f.fieldName] ?? f.fieldName}
+                      {fieldReasonText(f.reasonCode) && <span className="block text-xs">{fieldReasonText(f.reasonCode)}</span>}
+                    </th>
+                    <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind)}</td>
+                    <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind)}</td>
+                    <td className="py-2">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(f.fieldName)}
+                          onChange={() => toggleField(f.fieldName)}
+                          aria-label={`Apply ${FIELD_LABELS[f.fieldName] ?? f.fieldName}`}
+                        />
+                        {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
+                      </label>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
 
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">What would you like to do?</legend>

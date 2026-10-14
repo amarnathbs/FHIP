@@ -6,6 +6,7 @@ import { FdhUploadLifecycleError } from '@/lib/financial-data-hub/services/uploa
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from '@/lib/financial-data-hub/services/identicalUpload';
 import { bankCsvUploadMetadataSchema } from '@/lib/financial-data-hub/validation/bankCsv';
 import { bankOwnerConflictResponse, resolveBankOwnerFromRequest } from '@/lib/financial-data-hub/services/bankOwnerRequest';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['application/pdf'];
 
@@ -19,6 +20,10 @@ const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['application/pdf'];
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'fdh.bank_pdf.upload');
+  if (importDenied) return importDenied;
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Bank PDF uploads are not currently enabled in this environment.', 403);

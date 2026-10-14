@@ -1,6 +1,7 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { iiManualFixtureSchema } from '@/lib/validation/investment-intelligence';
 import { importManualFixture } from '@/lib/services/investment-intelligence/manualImporter';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // Manual-test-importer-backed in R1, NOT a real parser
 // (R1_IMPLEMENTATION_SPEC.md section 9 — explicitly documented as such).
@@ -12,6 +13,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'ii.source_document.parse_fixture');
+  if (importDenied) return importDenied;
 
   const body = await req.json().catch(() => null);
   const parsed = iiManualFixtureSchema.safeParse(body);
