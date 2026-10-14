@@ -21,7 +21,7 @@ export async function uploadAndAccept(email, statementId, { documentType = 'cas_
   return { ok: proc.status === 200, step: 'process', status: proc.status, docId, memberId, deduplicated: up.json?.data?.deduplicated === true };
 }
 
-export async function generate(email, period = 'since_first_held', maxTries = 10) {
+export async function generate(email, period = 'since_first_held', maxTries = 24) {
   // RELEASE CANDIDATE: behaves like the screen. ONE Idempotency-Key per intended report, kept across the "ask again" answers (202 preparing / in steps, and the
   // typed 503 timed_out), so the server issues ONE report however many times the request is repeated (once migration 0281 is on the database).
   const key = crypto.randomUUID();

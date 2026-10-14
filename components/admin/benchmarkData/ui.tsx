@@ -44,7 +44,8 @@ export function Chip({ label, tone = 'neutral', title }: { label: string; tone?:
 export function Notice({ tone = 'info', title, children, live }: { tone?: Tone; title?: string; children?: ReactNode; live?: 'status' | 'alert' }) {
   return (
     <div role={live} className={`rounded-compact border px-3 py-2 text-sm ${TONE_CLASS[tone]}`}>
-      {title ? <p className="font-semibold">{title}</p> : null}
+      {/* the amber title text on its pale amber background measured 3.27:1 (axe, NAV2 release candidate); the warn title is ink, the border and background still carry the tone */}
+      {title ? <p className={tone === 'warn' ? 'font-semibold text-ink' : 'font-semibold'}>{title}</p> : null}
       {children ? <div className={title ? 'mt-1 text-ink' : 'text-ink'}>{children}</div> : null}
     </div>
   );

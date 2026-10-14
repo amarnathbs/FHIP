@@ -251,6 +251,11 @@ export async function loadAnalyticsDataset(
       sawSuspectNav = true;
       continue; // never feed a flagged NAV point into a certified calculation
     }
+    // NAV2 release candidate (D3, DEV): a price in another currency than the instrument's own is never fed into the series either. The mark-to-market
+    // choice below (selectLatestEligibleNav) has always refused it; the series did not, so on DEV a ten times larger AUD row for an INR fund moved the
+    // Performance total from 188,960 to 852,065 while Holdings, Overview, the Dashboard and Fund analytics stayed put.
+    const ownCurrency = (instrumentById.get(r.instrument_id as string)?.base_currency as string | null | undefined)?.toUpperCase();
+    if (ownCurrency && r.currency_code && String(r.currency_code).toUpperCase() !== ownCurrency) continue;
     const list = navByInstrument.get(r.instrument_id as string) ?? [];
     list.push({ date: toDate(r.price_date as string), value: Number(r.price) });
     navByInstrument.set(r.instrument_id as string, list);

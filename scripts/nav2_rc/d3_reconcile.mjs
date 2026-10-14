@@ -58,7 +58,7 @@ try {
     out.reportOk = g.status === 201;
     if (g.id) {
       const row = await storedRow(g.id);
-      out.report = new Map(row.report_json.schemes.map((s) => [s.instrumentId, { value: s.investor?.valuation?.marketValue ?? null, basis: s.investor?.valuation?.basis ?? null }]));
+      out.report = new Map(row.report_json.schemes.map((s) => [s.instrumentId, { value: s.analytics?.investor?.currentValue?.value?.value ?? null, basis: s.analytics?.investor?.currentValue?.value?.basis ?? null }]));
       out.reportId = g.id;
     }
     return out;
@@ -99,13 +99,13 @@ try {
     if (!row) { console.log(`   (${label}: no free date between the latest NAV ${lastRow.price_date} and today)`); continue; }
     delete row.id;
     const ins = await db.from('ii_prices_nav').insert(row).select('id').single();
-    if (ins.error) { check(`the synthetic ${label} NAV could be inserted for the test`, false, ins.error.message.slice(0, 120)); continue; }
+    if (ins.error) { if (label === 'future-dated' && /forward-dated|future/i.test(ins.error.message)) check('a future-dated NAV is REFUSED at the database (the rule is enforced before any surface is asked)', true, ins.error.message.slice(0, 100)); else check(`the synthetic ${label} NAV could be inserted for the test`, false, ins.error.message.slice(0, 120)); continue; }
     undo.push(async () => db.from('ii_prices_nav').delete().eq('id', ins.data.id));
     check(`a synthetic ${label} NAV (ten times the price) was inserted for fund ${heldFund.slice(0, 8)}`, true);
   }
   const s2 = await surfaces('with the future-dated and wrong-currency NAV present');
   check('EXCLUDED: Holdings value of the fund is unchanged by a future-dated and a wrong-currency NAV', s2.holdings.get(heldFund)?.value === s1.holdings.get(heldFund)?.value, `${s1.holdings.get(heldFund)?.value} -> ${s2.holdings.get(heldFund)?.value}`);
-  check('EXCLUDED: Performance and Overview totals are unchanged', Math.abs((s2.performanceTotal ?? 0) - (s1.performanceTotal ?? 0)) < 0.02 && Math.abs((s2.overviewTotal ?? 0) - (s1.overviewTotal ?? 0)) < 0.02);
+  check('EXCLUDED: Performance and Overview totals are unchanged', Math.abs((s2.performanceTotal ?? 0) - (s1.performanceTotal ?? 0)) < 0.02 && Math.abs((s2.overviewTotal ?? 0) - (s1.overviewTotal ?? 0)) < 0.02, `performance ${s1.performanceTotal} -> ${s2.performanceTotal}; overview ${s1.overviewTotal} -> ${s2.overviewTotal}`);
   check('EXCLUDED: the Fund Analytics value of the fund is unchanged (and a NEW report was made)', s2.reportId !== s1.reportId && s2.report?.get(heldFund)?.value === s1.report?.get(heldFund)?.value, `${s1.report?.get(heldFund)?.value} -> ${s2.report?.get(heldFund)?.value}`);
   check('EXCLUDED: the Dashboard figures are unchanged', JSON.stringify(s2.dashboard) === JSON.stringify(s1.dashboard));
   for (const u of undo.splice(0)) await u();
