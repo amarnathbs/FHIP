@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { canBulkImportResources } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
 // /admin/resources/import -- capability resources.content.bulk_import (Super Admin, Resource Admin, Editor).
 // A caller who holds a Resources role but not this capability is redirected, never shown an empty page
 // (Admin Architecture Standard section 4). The API routes and the database enforce the same capability.
-export default async function BulkUploadPage() {
+async function BulkUploadPageContent() {
   const current = await requireResourceAdminAccess();
   if (!canBulkImportResources(current)) redirect('/admin/resources');
 
@@ -50,5 +51,15 @@ export default async function BulkUploadPage() {
         )}
       </section>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6 (Admin Standard section 18): every page carries the shared back link to its parent (Resources).
+export default function BulkUploadPage() {
+  return (
+    <>
+      <PageBackLink href="/admin/resources" label="Resources" />
+      <BulkUploadPageContent />
+    </>
   );
 }

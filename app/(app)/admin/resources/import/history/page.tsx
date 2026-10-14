@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { canBulkImportResources } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -11,7 +12,7 @@ import { ImportHistoryTable, type HistoryRow } from '@/components/resources/impo
 export const dynamic = 'force-dynamic';
 
 // /admin/resources/import/history -- the shared import history for both types.
-export default async function BulkUploadHistoryPage() {
+async function BulkUploadHistoryPageContent() {
   const current = await requireResourceAdminAccess();
   if (!canBulkImportResources(current)) redirect('/admin/resources');
 
@@ -37,5 +38,15 @@ export default async function BulkUploadHistoryPage() {
       </p>
       {error ? <p role="alert" className="rounded-card border border-line bg-white px-4 py-3 text-sm text-ink">{error}</p> : <ImportHistoryTable rows={rows} />}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6 (Admin Standard section 18): every page carries the shared back link to its parent (Bulk Upload).
+export default function BulkUploadHistoryPage() {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/import" label="Bulk Upload" />
+      <BulkUploadHistoryPageContent />
+    </>
   );
 }

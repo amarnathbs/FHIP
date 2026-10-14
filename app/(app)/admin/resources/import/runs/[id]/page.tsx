@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { canBulkImportResources } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -11,7 +12,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // /admin/resources/import/runs/[id] -- preview (before apply) and result (after). RLS decides visibility: another
 // person's run is a 404 for an Editor, never a page that exists-but-is-empty.
-export default async function ImportRunPage({ params }: { params: Promise<{ id: string }> }) {
+async function ImportRunPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   if (!canBulkImportResources(current)) redirect('/admin/resources');
   const { id } = await params;
@@ -30,5 +31,15 @@ export default async function ImportRunPage({ params }: { params: Promise<{ id: 
       editBase={run.content_type === 'article' ? 'content' : 'money-updates'}
       listHref={adapter.listRoute}
     />
+  );
+}
+
+// PO review 06-10-2026 F6 (Admin Standard section 18): every page carries the shared back link to its parent (Bulk Upload).
+export default function ImportRunPage(props: Parameters<typeof ImportRunPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/import" label="Bulk Upload" />
+      <ImportRunPageContent {...props} />
+    </>
   );
 }
