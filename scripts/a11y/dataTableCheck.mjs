@@ -61,6 +61,8 @@ const fileUrl = 'file:///' + path.join(OUT, 'index.html').replace(/\\/g, '/');
 const PAGES = [
   ['jobs', 'Market Index Data: Recent import jobs', 'Recent import jobs', null],
   ['entitlements', 'Market Index Data: Entitlements', 'Entitlements for NIFTY 50 TRI', null],
+  // Entitlement Edit (migration 0280): an open revision, a draft, Show history ticked, and the History panel open.
+  ['entitlementsEdit', 'Market Index Data: Entitlements with an open revision', 'Entitlements for NIFTY 50 TRI', null],
   // The Mappings tab (held schemes, Factsheet sources) is being reworked on branch fix/market-index-data-layout-20261008: it is rendered here
   // from THIS branch's source to show what the shared mechanism does for it on its own, and is reported, not counted.
   ['mappings', 'Market Index Data: Mappings', 'Held schemes', 'OTHER_BRANCH'],
@@ -91,6 +93,24 @@ for (const [key, title, regionHint, expected] of PAGES) {
     await page.goto(fileUrl);
     await page.getByRole('region', { name: new RegExp(regionHint) }).first().waitFor({ timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(250);
+    if (key === 'entitlementsEdit') {
+      await page.getByRole('checkbox', { name: /Show history/ }).check();
+      await page.getByRole('button', { name: 'History of record a1b2c3' }).click();
+      await page.getByRole('heading', { name: /History of the NIFTY 50 TRI record a1b2c3/ }).waitFor({ timeout: 5000 });
+      await page.waitForTimeout(250);
+      const badge = await page.getByText('Revision pending').count();
+      check(`${key} @${width}: the open-revision badge is shown next to the status`, badge === 1, `${badge}`);
+      for (const n of ['Edit (needs approval), record', 'Edit revision of record a1b2c3', 'Review revision of record a1b2c3', 'Reject revision of record a1b2c3', 'Cancel revision of record a1b2c3', 'Edit, record b2c3d4', 'History of record a1b2c3', 'Revoke a1b2c3']) {
+        const c = await page.getByRole('button', { name: n }).count();
+        // The approved record with an open revision must not offer a second revision; the others must be present exactly once.
+        check(`${key} @${width}: button "${n}" is present with its accessible name`, n.startsWith('Edit (needs approval)') ? c === 0 : c === 1, `${c}`);
+      }
+      const sizes = await page.evaluate(() => [...document.querySelectorAll('.fhip-table button')].map((b) => ({ h: Math.round(b.getBoundingClientRect().height), t: b.textContent.trim() })));
+      const min = Math.min(...sizes.map((x) => x.h));
+      check(`${key} @${width}: every action button is at least 24 px high (WCAG 2.5.8), ${sizes.length} buttons`, min >= 24, `min ${min}`);
+      const rowH = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.fhip-table tbody')].map((t) => t.getBoundingClientRect().height)));
+      check(`${key} @${width}: no record is taller than 260 px (actions are one wrapping row, not a tall stack)`, rowH <= 260, `${Math.round(rowH)} px`);
+    }
 
     check(`${tag}: no script error`, errors.length === 0, errors.join(' | '));
     const sw = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, vw: window.innerWidth }));
@@ -99,6 +119,11 @@ for (const [key, title, regionHint, expected] of PAGES) {
     const tables = await page.evaluate(() => {
       const lineCount = (el, skipButtons = false) => {
         const tops = new Set();
+        const count = () => {
+          // Cluster the vertical centres of the text boxes: boxes of different font sizes on one line sit within a few pixels of each other.
+          const c = [...tops].sort((a, b) => a - b);
+          return c.reduce((n, v, i) => (i === 0 || v - c[i - 1] > 8 ? n + 1 : n), 0);
+        };
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
         let n;
         while ((n = walker.nextNode())) {
@@ -110,9 +135,9 @@ for (const [key, title, regionHint, expected] of PAGES) {
           const clip = n.parentElement.closest('.fhip-clamp');
           const clipBottom = clip ? clip.getBoundingClientRect().bottom : Infinity;
           // Text that the two-line clamp hides is not a visible line.
-          for (const rect of r.getClientRects()) if (rect.width > 0 && rect.height > 0 && rect.top < clipBottom - 1) tops.add(Math.round((rect.top + rect.height / 2) / 10));
+          for (const rect of r.getClientRects()) if (rect.width > 1 && rect.height > 1 && rect.top < clipBottom - 1) tops.add(rect.top + rect.height / 2);
         }
-        return tops.size;
+        return count();
       };
       const brokenDates = [];
       const dateRe = /\b\d{2}-\d{2}-\d{4}\b/g;
@@ -126,8 +151,8 @@ for (const [key, title, regionHint, expected] of PAGES) {
             const r = document.createRange();
             r.setStart(n, m.index);
             r.setEnd(n, m.index + m[0].length);
-            const tops = new Set([...r.getClientRects()].map((q) => Math.round(q.top / 4)));
-            if (tops.size > 1) brokenDates.push(m[0]);
+            const centres = [...r.getClientRects()].filter((q) => q.width > 1).map((q) => q.top + q.height / 2).sort((a, b) => a - b);
+            if (centres.length > 1 && centres[centres.length - 1] - centres[0] > 8) brokenDates.push(m[0]);
           }
         }
       }
@@ -190,7 +215,7 @@ for (const [key, title, regionHint, expected] of PAGES) {
     if (width === 390) {
       const sticky = await page.evaluate(() => {
         const t = document.querySelector('.fhip-table');
-        const td = t.querySelector('tbody td:first-child');
+        const td = document.querySelector('.fhip-table tbody td:first-child');
         return td ? getComputedStyle(td).position : 'none';
       });
       check(`${tag}: the first column is sticky inside the scroll region`, sticky === 'sticky', sticky);

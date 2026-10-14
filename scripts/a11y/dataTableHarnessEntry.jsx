@@ -37,8 +37,30 @@ const catRow = (key, label) => ({
 });
 const ov = { state: 'ok', capabilities: caps, rows: [catRow('nifty_50_tri', 'NIFTY 50 TRI'), catRow('sensex_tri', 'S&P BSE SENSEX TRI')] };
 
+// Entitlement Edit (migration 0280): an approved record with an OPEN REVISION (shows the badge and Review/Reject, Edit revision, Cancel
+// revision), a draft the person proposed (Edit, Approve), a replaced and a revoked record (shown with Show history), edit capability on.
+const E = (o) => ({ proposedByMe: false, approvedAt: null, evidenceUrl: null, dataFrom: null, dataTo: null, validTo: null, postExpiryStorage: 'retain', ...o });
+const editView = (o = {}) => ({ supersedesId: null, supersededById: null, supersededAt: null, revisionReason: null, editCount: 0, createdAt: '2026-10-06T00:00:00.000Z', endedAt: null, endedReason: null, postExpiryCalculation: false, postExpiryDisplay: false, evidenceDocumentDate: null, ...o });
+const allRights = { ingestManual: true, automation: true, storage: true, calculation: true, customerDisplay: true, reportExport: true };
+const editRow = (key, label) => ({
+  ...catRow(key, label),
+  entitlements: [
+    E({ entitlementId: 'a1b2c3d4-aaaa', kind: 'public_use_permission', status: 'approved', rights: { ...allRights, automation: false, reportExport: false }, validFrom: '2026-10-06', validTo: '2036-10-05', evidenceReference: 'NSE Indices written permission, reference NSE-IDX-2026-10-0042, signed by the Head of Index Licensing', evidenceUrl: 'https://www.example.test/permission.pdf', approvedAt: '2026-10-06T00:00:00.000Z', edit: editView() }),
+    E({ entitlementId: 'f6a7b8c9-rrrr', kind: 'public_use_permission', status: 'draft', rights: allRights, validFrom: '2026-10-06', validTo: '2036-10-05', evidenceReference: 'Revised permission after the October review', proposedByMe: true, edit: editView({ supersedesId: 'a1b2c3d4-aaaa', revisionReason: 'Automation was agreed in writing on 12-10-2026', createdAt: '2026-10-12T00:00:00.000Z' }) }),
+    E({ entitlementId: 'b2c3d4e5-bbbb', kind: 'commercial_licence', status: 'draft', rights: allRights, validFrom: '2026-10-08', dataFrom: '2010-04-01', postExpiryStorage: 'delete', evidenceReference: 'Draft licence', proposedByMe: true, edit: editView({ createdAt: '2026-10-08T00:00:00.000Z' }) }),
+    E({ entitlementId: 'c3d4e5f6-cccc', kind: 'public_use_permission', status: 'revoked', rights: { ...allRights, ingestManual: false }, validFrom: '2025-01-01', validTo: '2025-12-31', dataFrom: '2000-01-03', dataTo: '2025-12-31', postExpiryStorage: 'unknown', evidenceReference: 'Old', approvedAt: '2025-01-01T00:00:00.000Z', edit: editView({ endedAt: '2025-12-31T00:00:00.000Z', createdAt: '2025-01-01T00:00:00.000Z' }) }),
+  ],
+});
+const ovEdit = { state: 'ok', entitlementEdit: true, capabilities: caps, rows: [editRow('nifty_50_tri', 'NIFTY 50 TRI')] };
+const historyFx = { entitlementId: 'a1b2c3d4-aaaa', entries: [
+  { at: '2026-10-06T00:00:00.000Z', event: 'approved', summary: 'The record was approved', actor: { kind: 'role', label: 'Entitlement approver' }, about: 'this', reason: null, changes: [] },
+  { at: '2026-10-12T00:00:00.000Z', event: 'revision_proposed', summary: 'A revision was proposed', actor: { kind: 'you', label: 'You' }, about: 'later', reason: 'Automation was agreed in writing on 12-10-2026', changes: [{ field: 'automation', label: 'Automated ingestion', before: false, after: true }] },
+] };
+
 const promoRows = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, code: `ABCDEFGH${i}JKLMNP`, code_hint: 'ABCD', duration_days: 30 + i, max_redemptions: i % 2 ? null : 10, redemption_count: i, expires_on: '2026-12-31', note: i % 2 ? 'Founding members cohort, October 2026 launch event, handed out by the partnerships team at the Sydney meetup' : null, status: 'active', state: i === 5 ? 'expired' : 'active', created_at: '2026-10-01T00:00:00.000Z', created_by_email: 'admin@example.test', bound: i % 3 === 0 }));
 const promoEvents = Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, created_at: '2026-10-0' + (i + 1) + 'T03:04:00.000Z', event_type: i % 2 ? 'redeem' : 'create', actor_email: 'someone.with.a.very.long.email.address@example.test', code_hint: 'ABCD', reason: i === 1 ? 'Disabled because the code was shared outside the intended cohort' : null }));
+
+const promoHealth = { minimumSecretLength: 32, secrets: ['PROMO_CODE_DIGEST_SECRET', 'PROMO_CODE_ENCRYPTION_KEY', 'PROMO_EMAIL_REQUEST_SECRET', 'PROMO_EMAIL_RECIPIENT_SECRET'].map((name, i) => ({ name, purpose: 'Protects the stored promo codes and the e-mails sent with them, so a leaked database cannot be used to redeem them', status: i === 2 ? 'missing' : 'ok' })), features: [{ feature: 'email', label: 'E-mail a code', available: false, blockedBy: ['PROMO_EMAIL_REQUEST_SECRET'] }], emailSwitchOn: true, trustedProxyHops: 1, allAvailable: false, databaseReady: true, existingCodes: null };
 
 const reports = Array.from({ length: 5 }, (_, i) => ({ id: `r${i}`, report_type_code: ['monthly_financial_health', 'net_worth', 'goal_progress'][i % 3], report_month: `2026-0${i + 4}-01`, generated_at: `2026-0${i + 4}-02T01:00:00.000Z`, status: ['ready', 'published', 'revised', 'failed', 'draft'][i], version_number: i + 1 }));
 
@@ -52,12 +74,14 @@ const held = buildHeldSchemeRows(inventory.map((r, i) => ({ instrumentId: r.inst
 const sources = ['approved', 'approved', 'not_reviewed', 'not_reviewed', 'declined', 'not_reviewed'].map((st, i) => ({ id: `src-${i}`, sourceKey: `hdfc_mutual_fund_factsheet_monthly_${i}`, amcName: ['HDFC Mutual Fund', 'SBI Mutual Fund', 'Axis Mutual Fund', 'ICICI Prudential Mutual Fund', 'Nippon India Mutual Fund'][i % 5], documentType: 'amc_factsheet', url: 'https://www.example.test/factsheets/monthly.pdf', host: 'www.example.test', amfiSchemeCodes: i % 2 ? ['103174', '118989'] : [], termsReviewStatus: st, termsReviewedAt: st === 'approved' ? '2026-10-05T09:00:00.000Z' : null, termsReviewNote: st === 'approved' ? 'Terms reviewed by the Product Owner.' : null, enabled: true, lastResult: null }));
 
 const routes = [
+  [/\/entitlements\/[^/]+\/history/, historyFx],
   [/\/jobs/, jobs],
   [/\/mappings\/held/, held],
   [/\/mappings\/unmapped/, { totalSchemeRows: 0, mappedRows: 0, unmappedRows: 0, byCategory: [] }],
   [/\/factsheet\/changes/, { state: 'ok', items: [], readerSwitchedOn: false }],
   [/\/factsheet\/sources/, { state: 'ok', sources }],
   [/\/mappings(\?|$)/, []],
+  [/\/promo-codes\/health/, promoHealth],
   [/\/promo-codes\/events/, promoEvents],
   [/\/promo-codes/, promoRows],
   [/\/investment-intelligence\/holdings/, { holdings, warnings: [], empty: false }],
@@ -71,6 +95,7 @@ function Page() {
   switch (fx.page) {
     case 'jobs': return <JobsTab caps={caps} refreshKey={0} onChanged={() => {}} say={() => {}} />;
     case 'entitlements': return <EntitlementsTab ov={ov} onChanged={() => {}} say={() => {}} />;
+    case 'entitlementsEdit': return <EntitlementsTab ov={ovEdit} onChanged={() => {}} say={() => {}} />;
     case 'mappings': return <MappingsTab ov={ov} refreshKey={0} onChanged={() => {}} say={() => {}} />;
     case 'promo': return <PromoCodesClient />;
     case 'reports': return <ReportHistoryTable reports={reports} currency="INR" />;

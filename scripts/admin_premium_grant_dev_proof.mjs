@@ -42,6 +42,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import { digestOf, hintOf, randomCode } from './lib/promoHardeningProofCore.mjs';
 
 const DEV_REF = 'vqycarelcoijzwlpkpcz';
 const PROD_REF = 'twwpnltizhtjxhamyoxt';
@@ -124,22 +125,22 @@ try {
   const adminC = await sessionClient(admin);
   const targetC = await sessionClient(target);
   const manage = (c, action, endsOn, reason = 'DEV proof: synthetic lifecycle check') =>
-    c.rpc('admin_manage_premium_entitlement', { p_action: action, p_target_user_id: target.id, p_ends_on: endsOn, p_reason: reason });
+    c.rpc('admin_manage_premium_entitlement', { p_override: false, p_action: action, p_target_user_id: target.id, p_ends_on: endsOn, p_reason: reason });
 
   console.log('\n=== authorisation ===');
   const nonAdmin = await manage(targetC, 'grant', day(30));
   check('a non-admin cannot call the RPC', !!nonAdmin.error && /ENTITLEMENT_ADMIN_REQUIRED|permission/i.test(nonAdmin.error.message), `(${nonAdmin.error?.message})`);
 
-  console.log('\n=== cap ===');
-  const tooLong = await manage(adminC, 'grant', day(366));
-  check('366 days is refused', !!tooLong.error && /EXCEEDS_MAX/.test(tooLong.error.message), `(${tooLong.error?.message})`);
+  console.log('\n=== cap (both ends inclusive: the latest last day is today plus 364) ===');
+  const tooLong = await manage(adminC, 'grant', day(365));
+  check('a last day of today plus 365 (366 days counting both ends) is refused', !!tooLong.error && /EXCEEDS_MAX/.test(tooLong.error.message), `(${tooLong.error?.message})`);
 
   console.log('\n=== lifecycle ===');
   const before = await aiState(target.id);
   check('before any grant: premium_required', before.reason === 'premium_required', `(reason=${before.reason})`);
 
-  const g = await manage(adminC, 'grant', day(365));
-  check('grant (365 days) succeeds', !g.error && g.data?.plan_tier === 'premium', `(${g.error?.message ?? 'ok'})`);
+  const g = await manage(adminC, 'grant', day(364));
+  check('grant (365 days counting both ends, last day today plus 364) succeeds', !g.error && g.data?.plan_tier === 'premium', `(${g.error?.message ?? 'ok'})`);
   const afterGrant = await aiState(target.id);
   check('grant -> AI entitlement state is not premium_required', afterGrant.reason !== 'premium_required', `(eligible=${afterGrant.eligible}, reason=${afterGrant.reason})`);
 
@@ -170,41 +171,51 @@ try {
   } else {
     console.log('\n=== extension cap (5 per grant) ===');
     const cap = await mkUser('cap');
-    const capGrant = await adminC.rpc('admin_manage_premium_entitlement', { p_action: 'grant', p_target_user_id: cap.id, p_ends_on: day(10), p_reason: 'DEV proof: extension cap check' });
+    const capGrant = await adminC.rpc('admin_manage_premium_entitlement', { p_override: false, p_action: 'grant', p_target_user_id: cap.id, p_ends_on: day(10), p_reason: 'DEV proof: extension cap check' });
     check('grant for the cap check', !capGrant.error, `(${capGrant.error?.message ?? 'ok'})`);
     let okExt = 0;
     for (let i = 1; i <= 5; i += 1) {
-      const r = await adminC.rpc('admin_manage_premium_entitlement', { p_action: 'extend', p_target_user_id: cap.id, p_ends_on: day(10 + i * 10), p_reason: `DEV proof: extension ${i} of 5` });
+      const r = await adminC.rpc('admin_manage_premium_entitlement', { p_override: false, p_action: 'extend', p_target_user_id: cap.id, p_ends_on: day(10 + i * 10), p_reason: `DEV proof: extension ${i} of 5` });
       if (!r.error) okExt += 1;
     }
     check('five extensions succeed', okExt === 5, `(${okExt})`);
-    const sixth = await adminC.rpc('admin_manage_premium_entitlement', { p_action: 'extend', p_target_user_id: cap.id, p_ends_on: day(200), p_reason: 'DEV proof: sixth extension' });
+    const sixth = await adminC.rpc('admin_manage_premium_entitlement', { p_override: false, p_action: 'extend', p_target_user_id: cap.id, p_ends_on: day(200), p_reason: 'DEV proof: sixth extension' });
     check('the sixth extension is refused', !!sixth.error && /EXTENSION_LIMIT_REACHED/.test(sixth.error.message), `(${sixth.error?.message})`);
 
     console.log('\n=== promo codes ===');
     await svc.from('admin_users').update({ can_manage_promo_codes: true }).eq('user_id', admin.id);
     const promoAdminC = await sessionClient(admin);
-    const made = await promoAdminC.rpc('admin_create_promo_code', {
-      p_code: null, p_duration_days: 365, p_max_redemptions: 3, p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: 'DEV proof code',
-    });
-    check('a promo admin can create a code (generated, 10 chars)', !made.error && typeof made.data?.code === 'string' && made.data.code.length === 10, `(${made.error?.message ?? 'ok'})`);
-    const tooLong = await promoAdminC.rpc('admin_create_promo_code', { p_code: null, p_duration_days: 366, p_max_redemptions: 3, p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: null });
+    // Hash only (hardening): the code is generated HERE and only its keyed digest and masked hint reach the database.
+    const secret = env.PROMO_CODE_DIGEST_SECRET;
+    if (!secret || secret.length < 32) throw new Error('PROMO_CODE_DIGEST_SECRET (at least 32 characters) must be in the environment so this proof can compute keyed digests the way the application does.');
+    const newCode = (c, duration, max, extra = {}) =>
+      c.rpc('admin_create_promo_code', {
+        p_code_digest: digestOf(extra.code, secret), p_code_hint: hintOf(extra.code), p_digest_version: 1, p_duration_days: duration, p_max_redemptions: max,
+        p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: extra.note ?? 'DEV proof code',
+      });
+    const plain = randomCode();
+    const made0 = await newCode(promoAdminC, 365, 3, { code: plain });
+    const made = { ...made0, data: made0.data ? { ...made0.data, code: plain } : made0.data };
+    check('a promo admin can create a code (only the digest and a masked hint are sent; no plain value is stored)', !made.error && typeof made.data?.id === 'string' && made.data.code_hint === hintOf(plain), `(${made.error?.message ?? 'ok'})`);
+    const stored = await svc.from('promo_codes').select('code,code_digest').eq('id', made.data?.id).single();
+    check('the database holds NO plain code for it', stored.data?.code === null && stored.data?.code_digest === digestOf(plain, secret), '');
+    const tooLong = await newCode(promoAdminC, 366, 3, { code: randomCode() });
     check('366-day promo is refused', !!tooLong.error && /DURATION_INVALID/.test(tooLong.error.message), `(${tooLong.error?.message})`);
-    const notPromoAdmin = await targetC.rpc('admin_create_promo_code', { p_code: null, p_duration_days: 30, p_max_redemptions: 3, p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: null });
+    const notPromoAdmin = await newCode(targetC, 30, 3, { code: randomCode() });
     check('a non-admin cannot create a code', !!notPromoAdmin.error);
-    const direct = await targetC.rpc('redeem_promo_code_for_user', { p_user_id: target.id, p_code: made.data?.code, p_ip_hash: null });
+    const direct = await targetC.rpc('redeem_promo_code_for_user', { p_user_id: target.id, p_digests: [digestOf(plain, secret)], p_ip_hash: null, p_email_hash: null, p_legacy_code: null });
     check('a user cannot call the redeem function directly', !!direct.error, `(${direct.error?.message})`);
 
     const redeemers = [];
     for (let i = 0; i < 8; i += 1) redeemers.push(await mkUser(`red${i}`));
-    const results = await Promise.all(redeemers.map((u) => svc.rpc('redeem_promo_code_for_user', { p_user_id: u.id, p_code: made.data.code, p_ip_hash: null })));
+    const results = await Promise.all(redeemers.map((u) => svc.rpc('redeem_promo_code_for_user', { p_user_id: u.id, p_digests: [digestOf(plain, secret)], p_ip_hash: null, p_email_hash: null, p_legacy_code: null })));
     const succeeded = results.filter((r) => r.data?.ok === true).length;
     const refused = results.filter((r) => r.data?.ok === false && r.data?.code === 'PROMO_CODE_UNUSABLE').length;
     check('PARALLEL: exactly 3 of 8 simultaneous redemptions of a max-3 code succeed', succeeded === 3 && refused === 5, `(ok=${succeeded}, unusable=${refused})`);
-    const listed = await promoAdminC.rpc('admin_list_promo_codes');
+    const listed = await promoAdminC.rpc('admin_list_promo_codes_v2');
     const mine = (listed.data ?? []).find((r) => r.id === made.data?.id);
     check('redemption_count never exceeds max_redemptions', mine?.redemption_count === 3, `(count=${mine?.redemption_count})`);
-    const bogus = await svc.rpc('redeem_promo_code_for_user', { p_user_id: redeemers[0].id, p_code: 'NOSUCHCODE22', p_ip_hash: null });
+    const bogus = await svc.rpc('redeem_promo_code_for_user', { p_user_id: redeemers[0].id, p_digests: [digestOf('NEVERMADE222', secret)], p_ip_hash: null, p_email_hash: null, p_legacy_code: null });
     check('a bogus code gets the same generic verdict as an exhausted one', bogus.data?.code === 'PROMO_CODE_UNUSABLE' || bogus.data?.code === 'PROMO_ALREADY_REDEEMED', `(${bogus.data?.code})`);
     const okUser = redeemers[results.findIndex((r) => r.data?.ok === true)];
     const state = await aiState(okUser.id);
@@ -219,8 +230,8 @@ try {
       console.log('\n(part 3 skipped: reminders migration 0238 not applied on DEV)');
     } else {
       console.log('\n=== promo default access length ===');
-      const dflt = await promoAdminC.rpc('admin_create_promo_code', { p_code: null, p_duration_days: null, p_max_redemptions: 1, p_unlimited: false, p_expires_on: day(30), p_no_expiry: false, p_note: 'DEV proof default' });
-      check('a code created without a duration defaults to 30 days', dflt.data?.duration_days === 30 && dflt.data?.ends_if_redeemed_today === day(30), `(${dflt.error?.message ?? JSON.stringify(dflt.data)})`);
+      const dflt = await newCode(promoAdminC, null, 1, { code: randomCode(), note: 'DEV proof default' });
+      check('a code created without a duration defaults to 30 days, and a redemption today would end today plus 29 (both ends inclusive)', dflt.data?.duration_days === 30 && dflt.data?.ends_if_redeemed_today === day(29), `(${dflt.error?.message ?? JSON.stringify(dflt.data)})`);
       if (dflt.data?.id) await promoAdminC.rpc('admin_disable_promo_code', { p_id: dflt.data.id, p_reason: 'DEV proof finished, disabling' });
 
       console.log('\n=== expiry reminders (send-once ledger; nothing is e-mailed) ===');

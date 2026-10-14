@@ -78,10 +78,10 @@ const BTN: Record<BtnKind, string> = {
   danger: 'border border-risk/40 bg-white text-risk hover:bg-risk/10',
 };
 
-export function Btn({ children, onClick, disabled, kind = 'primary', type = 'button', busy, describedBy, ariaLabel, title, nowrap }: { children: ReactNode; onClick?: () => void; disabled?: boolean; kind?: BtnKind; type?: 'button' | 'submit'; busy?: boolean; describedBy?: string; ariaLabel?: string; title?: string; nowrap?: boolean }) {
+export function Btn({ children, onClick, disabled, kind = 'primary', type = 'button', busy, describedBy, ariaLabel, title, nowrap, compact }: { children: ReactNode; onClick?: () => void; disabled?: boolean; kind?: BtnKind; type?: 'button' | 'submit'; busy?: boolean; describedBy?: string; ariaLabel?: string; title?: string; nowrap?: boolean; /** Small button for a row of actions inside a table: 32 px high (44 px on a touch screen), 12 px text. */ compact?: boolean }) {
   const off = disabled === true || busy === true;
   return (
-    <button type={type} onClick={onClick} disabled={off} aria-disabled={off} aria-busy={busy === true} aria-describedby={describedBy} aria-label={ariaLabel} title={title} className={`inline-flex min-h-11 items-center justify-center rounded px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${nowrap ? 'whitespace-nowrap' : ''} ${BTN[kind]} ${FOCUS}`}>
+    <button type={type} onClick={onClick} disabled={off} aria-disabled={off} aria-busy={busy === true} aria-describedby={describedBy} aria-label={ariaLabel} title={title} className={`inline-flex ${compact ? 'min-h-8 px-2 py-1 text-xs [@media(pointer:coarse)]:min-h-11' : 'min-h-11 px-3 py-2 text-sm'} items-center justify-center rounded font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${nowrap ? 'whitespace-nowrap' : ''} ${BTN[kind]} ${FOCUS}`}>
       {busy ? 'Working...' : children}
     </button>
   );

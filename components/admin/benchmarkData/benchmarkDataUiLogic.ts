@@ -52,6 +52,11 @@ export const apiPaths = {
   entitlements: () => `${API_BASE}/entitlements`,
   entitlementApprove: (id: string) => `${API_BASE}/entitlements/${seg(id)}/approve`,
   entitlementRevoke: (id: string) => `${API_BASE}/entitlements/${seg(id)}/revoke`,
+  entitlementEdit: (id: string) => `${API_BASE}/entitlements/${seg(id)}/edit`,
+  entitlementRevise: (id: string) => `${API_BASE}/entitlements/${seg(id)}/revise`,
+  entitlementCancelRevision: (id: string) => `${API_BASE}/entitlements/${seg(id)}/cancel-revision`,
+  entitlementRejectRevision: (id: string) => `${API_BASE}/entitlements/${seg(id)}/reject-revision`,
+  entitlementHistory: (id: string) => `${API_BASE}/entitlements/${seg(id)}/history`,
   mappings: () => `${API_BASE}/mappings`,
   mappingReview: (id: string) => `${API_BASE}/mappings/${seg(id)}/review`,
   unmappedSchemes: () => `${API_BASE}/mappings/unmapped`,
@@ -403,6 +408,8 @@ export interface CapabilityDecisions {
   canCorrect: boolean;
   canManageCatalogue: boolean;
   canProposeEntitlement: boolean;
+  /** Edit a draft in place, or propose a revision of an approved record (the same capability that proposes). */
+  canEditEntitlement: boolean;
   canApproveEntitlement: boolean;
   canReviewMappings: boolean;
   canEditIngestion: boolean;
@@ -420,6 +427,7 @@ export function capabilityDecisions(caps: BenchmarkCapabilityFlags): CapabilityD
     canCorrect: c('correct'),
     canManageCatalogue: c('catalogue'),
     canProposeEntitlement: c('catalogue'),
+    canEditEntitlement: c('catalogue'),
     canApproveEntitlement: c('entitlementApprove'),
     canReviewMappings: c('catalogue'),
     canEditIngestion: c('catalogue'),
@@ -1667,11 +1675,11 @@ export function nextTab(current: TabId, key: string): TabId | null {
 // Pure decisions only; the component performs the scroll/focus.
 // ---------------------------------------------------------------------------
 
-/** Which action panel is open: null, 'propose', 'approve:<id>' or 'revoke:<id>' (each id is the entitlement's own). */
+/** Which action panel is open: null, 'propose', 'edit:<mode>:<id>', 'approve:<id>', 'revoke:<id>' and so on (each id is the entitlement's own). */
 export type OpenPanelKey = string | null;
 
-export function entitlementPanelKeys(form: unknown | null, action: { kind: 'approve' | 'revoke'; e: { entitlementId: string } } | null): { propose: OpenPanelKey; action: OpenPanelKey } {
-  return { propose: form ? 'propose' : null, action: action ? `${action.kind}:${action.e.entitlementId}` : null };
+export function entitlementPanelKeys(form: unknown | null, action: { kind: string; e: { entitlementId: string } } | null, editKey: string | null = null): { propose: OpenPanelKey; action: OpenPanelKey } {
+  return { propose: form ? (editKey ? `edit:${editKey}` : 'propose') : null, action: action ? `${action.kind}:${action.e.entitlementId}` : null };
 }
 
 /**

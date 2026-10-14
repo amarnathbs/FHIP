@@ -68,6 +68,13 @@
     border: 0;
     cursor: pointer;
   }
+  /* Touch screens: a 44px target, like every other control. */
+  @media (pointer: coarse) {
+    .fhip-clamp-toggle {
+      min-height: 2.75rem;
+      min-width: 2.75rem;
+    }
+  }
   .fhip-clamp-toggle:focus-visible {
     outline: 2px solid #1d4ed8;
     outline-offset: 2px;

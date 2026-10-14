@@ -6,45 +6,26 @@ import { ok } from '@/lib/api';
 import { adminRoute, safeDbError } from '@/lib/services/adminAuth';
 import { EntitlementBody, guarded, isMissingRelation, parseBody, rpcFailureResponse } from '@/lib/services/investment-intelligence/benchmarkData/routeSupport';
 import type { EntitlementRightsView } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
+import { mapEntitlementRow, readEntitlements } from '@/lib/services/investment-intelligence/benchmarkData/entitlementView';
 
 export const dynamic = 'force-dynamic';
-
-const COLS =
-  'id, benchmark_id, entitlement_kind, status, allow_manual_ingest, allow_automation, allow_storage, allow_calculation, allow_customer_display, allow_report_export, data_from, data_to, valid_from, valid_to, post_expiry_storage, evidence_reference, evidence_url, created_by, approved_at, ii_benchmarks(benchmark_key)';
 
 export const GET = adminRoute(async () => {
   const g = await guarded('view');
   if (!g.ok) return g.response;
-  const { data, error } = await g.supabase.from('ii_benchmark_entitlements').select(COLS).order('created_at', { ascending: false }).limit(500);
+  const { data, error, editSupported } = await readEntitlements<Array<Record<string, unknown>>>(
+    (cols) =>
+      g.supabase.from('ii_benchmark_entitlements').select(cols).order('created_at', { ascending: false }).limit(500) as unknown as PromiseLike<{ data: Array<Record<string, unknown>> | null; error: { code?: string; message?: string } | null }>,
+    ', ii_benchmarks(benchmark_key)'
+  );
   if (error) {
     if (isMissingRelation(error)) return Response.json({ error: 'Entitlement tables are not available (migration not applied).', code: 'unavailable' }, { status: 503 });
     return safeDbError(error, 'benchmark entitlements');
   }
   const byBenchmark: Record<string, EntitlementRightsView[]> = {};
-  for (const r of (data ?? []) as unknown as Array<Record<string, unknown>>) {
+  for (const r of data ?? []) {
     const key = ((r.ii_benchmarks as { benchmark_key: string } | null)?.benchmark_key) ?? String(r.benchmark_id);
-    (byBenchmark[key] ??= []).push({
-      entitlementId: r.id as string,
-      kind: r.entitlement_kind as EntitlementRightsView['kind'],
-      status: r.status as EntitlementRightsView['status'],
-      rights: {
-        ingestManual: r.allow_manual_ingest === true,
-        automation: r.allow_automation === true,
-        storage: r.allow_storage === true,
-        calculation: r.allow_calculation === true,
-        customerDisplay: r.allow_customer_display === true,
-        reportExport: r.allow_report_export === true,
-      },
-      dataFrom: (r.data_from as string | null) ?? null,
-      dataTo: (r.data_to as string | null) ?? null,
-      validFrom: r.valid_from as string,
-      validTo: (r.valid_to as string | null) ?? null,
-      postExpiryStorage: r.post_expiry_storage as EntitlementRightsView['postExpiryStorage'],
-      evidenceReference: r.evidence_reference as string,
-      evidenceUrl: (r.evidence_url as string | null) ?? null,
-      proposedByMe: r.created_by === g.user.id,
-      approvedAt: (r.approved_at as string | null) ?? null,
-    });
+    (byBenchmark[key] ??= []).push(mapEntitlementRow(r, g.user.id, editSupported));
   }
   return ok(byBenchmark);
 });

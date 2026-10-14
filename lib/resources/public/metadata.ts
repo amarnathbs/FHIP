@@ -16,8 +16,14 @@ export function getPublicSiteBaseUrl(): string {
   return (process.env.APP_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 }
 
+// The single public URL of a Resource. It is used for <link rel="canonical">,
+// og:url, JSON-LD AND the Share button, so all of them always name the same
+// page. Stored slugs are [a-z0-9-] (lib/resources/editor/slug.ts), for which
+// encodeURIComponent is the identity; encoding here (exactly once, from the
+// raw stored slug) keeps a future non-ASCII slug from producing a raw or
+// double-encoded URL.
 export function buildResourceCanonicalUrl(slug: string): string {
-  return `${getPublicSiteBaseUrl()}/resources/${slug}`;
+  return `${getPublicSiteBaseUrl()}/resources/${encodeURIComponent(slug)}`;
 }
 
 export function buildTopicCanonicalUrl(slug: string): string {
