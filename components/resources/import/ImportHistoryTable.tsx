@@ -2,6 +2,7 @@
 // (Date, File, Type, Actor, Rows, Result, Status). Presentational; the page supplies the rows.
 
 import Link from 'next/link';
+import { DataTable, DataTd, DataTh } from '@/components/ui/DataTable';
 import { formatAdminDateTime } from '@/lib/resources/admin/labels';
 import { CONTENT_TYPE_LABELS, type ImportContentType } from '@/lib/resources/import/types';
 
@@ -41,40 +42,38 @@ export function ImportHistoryTable({ rows, emptyText = 'No imports yet.' }: { ro
     return <p className="rounded-card border border-dashed border-line bg-gray-50/50 px-4 py-6 text-center text-sm text-muted">{emptyText}</p>;
   }
   return (
-    <div tabIndex={0} role="region" aria-label="Recent imports (scrollable)" className="overflow-x-auto rounded-card border border-line bg-white">
-      <table className="w-full min-w-[760px] text-left text-sm">
-        <caption className="sr-only">Recent imports</caption>
-        <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
-          <tr>
-            <th scope="col" className="px-3 py-2">Date</th>
-            <th scope="col" className="px-3 py-2">File</th>
-            <th scope="col" className="px-3 py-2">Type</th>
-            <th scope="col" className="px-3 py-2">Actor</th>
-            <th scope="col" className="px-3 py-2">Rows</th>
-            <th scope="col" className="px-3 py-2">Result</th>
-            <th scope="col" className="px-3 py-2">Status</th>
+    <DataTable label="Recent imports (scrollable)" wrapperClassName="rounded-card border border-line bg-white" className="w-full text-left">
+      <caption className="sr-only">Recent imports</caption>
+      <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
+        <tr>
+          <DataTh kind="date" className="px-3 py-2">Date</DataTh>
+          <DataTh className="px-3 py-2">File</DataTh>
+          <DataTh className="px-3 py-2">Type</DataTh>
+          <DataTh className="px-3 py-2">Actor</DataTh>
+          <DataTh kind="num" className="px-3 py-2">Rows</DataTh>
+          <DataTh className="px-3 py-2">Result</DataTh>
+          <DataTh kind="status" className="px-3 py-2">Status</DataTh>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className="border-t border-line align-top">
+            <DataTd kind="date" className="px-3 py-2">{formatAdminDateTime(r.created_at)}</DataTd>
+            <DataTd className="px-3 py-2 break-all">
+              <Link href={`/admin/resources/import/runs/${r.id}`} className="font-semibold text-trust hover:underline">
+                {r.file_name}
+              </Link>
+            </DataTd>
+            <DataTd className="px-3 py-2">{CONTENT_TYPE_LABELS[r.content_type].singular}</DataTd>
+            <DataTd kind="clamp" className="px-3 py-2">{r.actor_label}</DataTd>
+            <DataTd kind="num" className="px-3 py-2">{r.row_count}</DataTd>
+            <DataTd kind="clamp" className="px-3 py-2">{resultText(r)}</DataTd>
+            <DataTd kind="status" className="px-3 py-2">
+              <span className="rounded border border-line px-2 py-0.5 text-xs font-semibold text-ink">{STATUS_LABEL[r.status] ?? r.status}</span>
+            </DataTd>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-t border-line align-top">
-              <td className="px-3 py-2 whitespace-nowrap">{formatAdminDateTime(r.created_at)}</td>
-              <td className="px-3 py-2 break-all">
-                <Link href={`/admin/resources/import/runs/${r.id}`} className="font-semibold text-trust hover:underline">
-                  {r.file_name}
-                </Link>
-              </td>
-              <td className="px-3 py-2">{CONTENT_TYPE_LABELS[r.content_type].singular}</td>
-              <td className="px-3 py-2">{r.actor_label}</td>
-              <td className="px-3 py-2 tabular-nums">{r.row_count}</td>
-              <td className="px-3 py-2">{resultText(r)}</td>
-              <td className="px-3 py-2">
-                <span className="rounded border border-line px-2 py-0.5 text-xs font-semibold text-ink">{STATUS_LABEL[r.status] ?? r.status}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </DataTable>
   );
 }

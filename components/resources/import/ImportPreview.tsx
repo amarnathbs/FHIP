@@ -6,6 +6,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DataTable, DataTd, DataTh } from '@/components/ui/DataTable';
 import { formatDateShort } from '@/lib/engines/date';
 import { CONTENT_TYPE_LABELS, type ImportContentType, type ImportIssue, type NormalisedImportPayload } from '@/lib/resources/import/types';
 import { JURISDICTION_LABELS, COMPLIANCE_LABELS, formatAdminDateTime } from '@/lib/resources/admin/labels';
@@ -402,63 +403,61 @@ export function ImportPreview({ run: initialRun, rows: initialRows, editBase, li
           </div>
           <p role="status" aria-live="polite" className="text-xs text-muted">Showing {visible.length} of {filtered.length} rows.</p>
 
-          <div tabIndex={0} role="region" aria-label="Rows of the import (scrollable)" className="overflow-x-auto rounded-card border border-line bg-white">
-            <table className="w-full min-w-[820px] text-left text-sm">
-              <caption className="sr-only">Rows of the import with their validation status</caption>
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th scope="col" className="px-3 py-2">Row</th>
-                  <th scope="col" className="px-3 py-2">Title</th>
-                  <th scope="col" className="px-3 py-2">Type</th>
-                  <th scope="col" className="px-3 py-2">Jurisdiction</th>
-                  <th scope="col" className="px-3 py-2">Compliance</th>
-                  <th scope="col" className="px-3 py-2">Category</th>
-                  <th scope="col" className="px-3 py-2">Status</th>
-                  <th scope="col" className="px-3 py-2">Issues</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((r) => {
-                  const isOpen = open.has(r.row_number);
-                  const detailId = `row-detail-${r.row_number}`;
-                  const j = r.display.jurisdiction as ResourceJurisdiction | undefined;
-                  const c = r.display.compliance_classification as ComplianceClassification | undefined;
-                  return (
-                    <Fragment key={r.row_number}>
-                      <tr className="border-t border-line align-top">
-                        <td className="px-3 py-2 tabular-nums">{r.row_number}</td>
-                        <td className="px-3 py-2">
-                          <button type="button" aria-expanded={isOpen} aria-controls={detailId} onClick={() => toggle(r.row_number)} className="min-h-11 text-left font-semibold text-trust hover:underline">
-                            <span aria-hidden="true">{isOpen ? '▾ ' : '▸ '}</span>
-                            {r.title || '(no title)'}
-                            <span className="sr-only">{isOpen ? ', hide details' : ', show details'}</span>
-                          </button>
-                        </td>
-                        <td className="px-3 py-2">{label.singular}</td>
-                        <td className="px-3 py-2">{j ? JURISDICTION_LABELS[j] ?? j : 'Not set'}</td>
-                        <td className="px-3 py-2">{c ? COMPLIANCE_LABELS[c] ?? c : 'Not set'}</td>
-                        <td className="px-3 py-2">{r.display.primary_category ?? 'Not set'}</td>
-                        <td className="px-3 py-2"><RowStatus row={r} /></td>
-                        <td className="px-3 py-2 text-xs text-ink">
-                          {r.validation_errors.length > 0 ? `${r.validation_errors.length} error${r.validation_errors.length === 1 ? '' : 's'}` : ''}
-                          {r.validation_errors.length > 0 && r.validation_warnings.length > 0 ? ', ' : ''}
-                          {r.validation_warnings.length > 0 ? `${r.validation_warnings.length} note${r.validation_warnings.length === 1 ? '' : 's'}` : ''}
-                          {r.validation_errors.length === 0 && r.validation_warnings.length === 0 ? 'None' : ''}
+          <DataTable label="Rows of the import (scrollable)" wrapperClassName="rounded-card border border-line bg-white" className="w-full text-left">
+            <caption className="sr-only">Rows of the import with their validation status</caption>
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <DataTh kind="num" className="px-3 py-2">Row</DataTh>
+                <DataTh className="px-3 py-2">Title</DataTh>
+                <DataTh className="px-3 py-2">Type</DataTh>
+                <DataTh className="px-3 py-2">Jurisdiction</DataTh>
+                <DataTh className="px-3 py-2">Compliance</DataTh>
+                <DataTh className="px-3 py-2">Category</DataTh>
+                <DataTh kind="status" className="px-3 py-2">Status</DataTh>
+                <DataTh className="px-3 py-2">Issues</DataTh>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((r) => {
+                const isOpen = open.has(r.row_number);
+                const detailId = `row-detail-${r.row_number}`;
+                const j = r.display.jurisdiction as ResourceJurisdiction | undefined;
+                const c = r.display.compliance_classification as ComplianceClassification | undefined;
+                return (
+                  <Fragment key={r.row_number}>
+                    <tr className="border-t border-line align-top">
+                      <DataTd kind="num" className="px-3 py-2">{r.row_number}</DataTd>
+                      <DataTd className="px-3 py-2">
+                        <button type="button" aria-expanded={isOpen} aria-controls={detailId} onClick={() => toggle(r.row_number)} className="min-h-11 text-left font-semibold text-trust hover:underline">
+                          <span aria-hidden="true">{isOpen ? '▾ ' : '▸ '}</span>
+                          {r.title || '(no title)'}
+                          <span className="sr-only">{isOpen ? ', hide details' : ', show details'}</span>
+                        </button>
+                      </DataTd>
+                      <DataTd className="px-3 py-2">{label.singular}</DataTd>
+                      <DataTd className="px-3 py-2">{j ? JURISDICTION_LABELS[j] ?? j : 'Not set'}</DataTd>
+                      <DataTd className="px-3 py-2">{c ? COMPLIANCE_LABELS[c] ?? c : 'Not set'}</DataTd>
+                      <DataTd kind="clamp" className="px-3 py-2">{r.display.primary_category ?? 'Not set'}</DataTd>
+                      <DataTd kind="status" className="px-3 py-2"><RowStatus row={r} /></DataTd>
+                      <DataTd className="px-3 py-2 text-xs text-ink">
+                        {r.validation_errors.length > 0 ? `${r.validation_errors.length} error${r.validation_errors.length === 1 ? '' : 's'}` : ''}
+                        {r.validation_errors.length > 0 && r.validation_warnings.length > 0 ? ', ' : ''}
+                        {r.validation_warnings.length > 0 ? `${r.validation_warnings.length} note${r.validation_warnings.length === 1 ? '' : 's'}` : ''}
+                        {r.validation_errors.length === 0 && r.validation_warnings.length === 0 ? 'None' : ''}
+                      </DataTd>
+                    </tr>
+                    {isOpen && (
+                      <tr id={detailId} className="border-t border-line bg-gray-50/60">
+                        <td colSpan={8}>
+                          <RowDetail runId={run.id} rowNumber={r.row_number} type={run.content_type} applied={applied} errors={r.validation_errors} warnings={r.validation_warnings} />
                         </td>
                       </tr>
-                      {isOpen && (
-                        <tr id={detailId} className="border-t border-line bg-gray-50/60">
-                          <td colSpan={8}>
-                            <RowDetail runId={run.id} rowNumber={r.row_number} type={run.content_type} applied={applied} errors={r.validation_errors} warnings={r.validation_warnings} />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </DataTable>
 
           {pages > 1 && (
             <div className="flex items-center justify-between text-sm">
