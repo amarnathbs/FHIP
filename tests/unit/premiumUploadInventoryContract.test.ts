@@ -133,7 +133,8 @@ describe('(3) Admin and scheduled-system routes never depend on the consumer pla
   it('every admin upload route is governed by the admin role/capability layer instead', () => {
     const adminUploads = candidates().filter((f) => f.startsWith('app/api/admin/') && detectIngestionSignals(read(f)).length > 0);
     expect(adminUploads.length).toBeGreaterThanOrEqual(3); // benchmarks, market index data (x2) at least -- proves the scan sees them
-    for (const f of adminUploads) expect(/adminRoute|requireAdmin|requireSuperAdmin|[Cc]apabilit/.test(read(f)), `${f} has no admin guard`).toBe(true);
+    // guardBulkImport is the Resources Bulk Upload capability layer (lib/resources/import/access.ts: 401, country gate, 403 unless canBulkImportResources).
+    for (const f of adminUploads) expect(/adminRoute|requireAdmin|requireSuperAdmin|guardBulkImport|[Cc]apabilit/.test(read(f)), `${f} has no admin guard`).toBe(true);
     // Recommendations CSV upload is admin-governed too (it carries its body via text, so check it by name).
     expect(read('app/api/admin/recommendations/upload/route.ts')).toMatch(/requireAdmin/);
   });
