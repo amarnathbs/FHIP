@@ -453,7 +453,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
 
       await handleStatementOutcome(body);
     } finally { setBusy(false); }
-  }, [file, owner, buildStatementMetadataQuery, handleStatementOutcome]);
+  }, [file, owner, buildStatementMetadataQuery, handleStatementOutcome, noteImportResponse]);
 
   const handleMatch = useCallback(async (action: 'auto' | 'resolve' | 'confirm_new') => {
     if (!documentId) return;

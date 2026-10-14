@@ -188,7 +188,9 @@ function runStartRequest(entry: GatedRoute, extraBody: Record<string, unknown> =
 
 // ---- the route table --------------------------------------------------------------------------------------------
 
-const LOADERS: Record<string, () => Promise<{ POST: (req: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response> }>> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- each route has its own params shape; the harness passes whatever the route needs
+type RouteHandler = (req: Request, ctx: any) => Promise<Response>;
+const LOADERS: Record<string, () => Promise<{ POST: RouteHandler }>> = {
   'fdh.upload_session.create': () => import('@/app/api/financial-data-hub/documents/upload-sessions/route'),
   'fdh.upload_session.complete': () => import('@/app/api/financial-data-hub/documents/upload-sessions/[sessionId]/complete/route'),
   'fdh.bank_csv.upload': () => import('@/app/api/financial-data-hub/bank-csv/upload/route'),
