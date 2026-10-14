@@ -92,11 +92,9 @@ import { maskText } from '@/lib/aie/masking/piiMasking';
 const PASSWORD_ATTEMPT_WINDOW_MS = 60 * 60 * 1000;
 
 export interface ProcessSourceDocumentInput {
+  /** The AUTHENTICATED session user's id. The AI fallback re-checks this
+   * user's Premium entitlement itself, immediately before any provider call. */
   userId: string;
-  /** Passed through to the AI-fallback pilot-cohort email allowlist
-   * (2026-09-21 fix) — optional so existing callers/tests that never touch
-   * the cohort gate keep compiling. */
-  userEmail?: string | null;
   sourceDocumentId: string;
   password?: string;
   forceReparse?: boolean;
@@ -143,12 +141,15 @@ export interface ProcessSourceDocumentResult {
  * claims an attempt was made when isAiFallbackEnabled() was simply off. */
 function honestFailureMessage(baseMessage: string, aiOutcome: AiFallbackDocumentOutcome): string {
   switch (aiOutcome.outcome) {
-    case 'cohort_denied':
-      // 2026-09-21 fix: honest about WHY no AI attempt was made, matching
-      // this function's own "never claim an attempt was made when it
-      // wasn't" rule — a cohort denial is a deliberate, disclosed
-      // restriction, not a failed attempt.
-      return `${baseMessage} AI-assisted re-extraction is not yet available for your account.`;
+    case 'premium_required':
+      // Honest about WHY no AI attempt was made, matching this function's own
+      // "never claim an attempt was made when it wasn't" rule -- a plan check
+      // is a disclosed entitlement, not a failed attempt.
+      return `${baseMessage} AI-assisted re-extraction is a Premium feature; you can upgrade to Premium to have this statement read for you.`;
+    case 'malware_scan_not_enforced':
+      return `${baseMessage} AI-assisted re-extraction is not available right now.`;
+    case 'entitlement_unavailable':
+      return `${baseMessage} We could not confirm your plan just now, so AI-assisted re-extraction was not attempted. Please try again in a moment.`;
     case 'unavailable':
       return `${baseMessage} An AI-assisted re-extraction was also attempted and is not available in this deployment.`;
     case 'no_usable_data':
@@ -465,7 +466,6 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     // path first" principle applies.
     const aiOutcome = await getAiFallbackDocumentExtraction({
       userId,
-      userEmail: input.userEmail ?? null,
       sourceDocumentId,
       parseRunId,
       triggerReason: 'format_unrecognized',
@@ -525,7 +525,6 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     // identified but its own validation rejected the result.
     const aiOutcome = await getAiFallbackDocumentExtraction({
       userId,
-      userEmail: input.userEmail ?? null,
       sourceDocumentId,
       parseRunId,
       triggerReason: 'parse_failed',

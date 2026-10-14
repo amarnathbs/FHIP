@@ -27,7 +27,6 @@
  * table (mechanically enforced by `tests/unit/fdh11Isolation.test.ts`).
  */
 
-import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -63,6 +62,8 @@ import type { FdhStatementUpload } from '../domain/types';
 import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME, AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/auInvestment/schema';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
@@ -127,6 +128,13 @@ export interface UploadAuInvestmentStatementResult {
   activitiesExtracted: number;
   /** Populated ONLY when `pipelineStatus === 'ai_fallback_available'`. */
   aiFallbackDraft?: AuInvestmentStatementAiFallbackDraft;
+  /**
+   * Set ONLY when the native reader could not read the file and the AI reading
+   * was not attempted because the person has no active Premium entitlement
+   * ('premium_required') or it could not be confirmed ('entitlement_unavailable').
+   * Lets the screen explain why and offer the upgrade; nothing else changes.
+   */
+  aiFallbackRefusal?: AiFallbackRefusal;
   /** 2026-09-25: set when this upload is a byte-identical copy of an earlier
    * one that already has a result; the caller carries on with THAT upload. */
   duplicateOfDocumentId?: string;
@@ -412,6 +420,7 @@ async function resolveAuInvestmentStatementDocument(
     // That is the same trade-off the no-parking-state divergence forces (see
     // `confirmAiAuInvestmentFallback`'s header) and is bounded by the cost
     // admission ledger rather than by this branch.
+    let aiFallbackRefusal: AiFallbackRefusal | undefined;
     if (AU_INVESTMENT_AI_FALLBACK_ELIGIBLE_KINDS.includes(extraction.kind)) {
       // (A draft already issued for this document was returned above, before
       // the download; that closes the "sequential retry bills again"
@@ -440,6 +449,7 @@ async function resolveAuInvestmentStatementDocument(
           aiFallbackDraft: fallback.draft,
         };
       }
+      aiFallbackRefusal = aiFallbackRefusalFromReason(fallback.reason);
       await recordDocumentAuditEvent({
         userId,
         documentId: document.id,
@@ -451,7 +461,7 @@ async function resolveAuInvestmentStatementDocument(
 
     await admin.from('fdh_statement_uploads').update({ processing_status: 'failed', error_code: 'layout_unsupported', review_status: 'pending' }).eq('id', document.id).eq('user_id', userId);
     await recordDocumentAuditEvent({ userId, documentId: document.id, eventType: 'investment_statement_extraction_failed', actorType: 'system', metadata: { reason: extraction.kind } });
-    return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: extraction.kind, positionsExtracted: 0, activitiesExtracted: 0 };
+    return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: extraction.kind, positionsExtracted: 0, activitiesExtracted: 0, ...(aiFallbackRefusal ? { aiFallbackRefusal } : {}) };
   }
 
   // The canonical write. Extracted verbatim into `persistAuInvestmentEvidence`
@@ -606,7 +616,7 @@ export type AiAuInvestmentFallbackOutcome = { ok: true; draft: AuInvestmentState
  *
  * Every gate — this adapter's own kill switch
  * (`AIE_INVESTMENT_STATEMENT_AI_FALLBACK_ENABLED`, default OFF), the shared
- * global AIE kill switch, the shared AIE-1 pilot cohort, and masking (which
+ * global AIE kill switch, the shared Premium-entitlement check, and masking (which
  * FAILS CLOSED when the masking key is unset) — is evaluated by the shared
  * `evaluateAiFallbackGate`, in that order. The gate returns ONLY masked text
  * on success, so this function has no way to send the raw statement to the
@@ -623,15 +633,24 @@ export type AiAuInvestmentFallbackOutcome = { ok: true; draft: AuInvestmentState
  * Exported so it is independently unit-testable with a faked provider, and so
  * a live-DEV proof can exercise it directly.
  */
-export async function attemptAiAuInvestmentFallback(
+export function attemptAiAuInvestmentFallback(
   userId: string,
   documentId: string,
   extractedText: string,
   context: AuInvestmentMappingContext,
 ): Promise<AiAuInvestmentFallbackOutcome> {
-  const gate = evaluateAiFallbackGate({
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`investment_statement:${userId}:${documentId}`, () => attemptAiAuInvestmentFallbackOnce(userId, documentId, extractedText, context));
+}
+
+async function attemptAiAuInvestmentFallbackOnce(
+  userId: string,
+  documentId: string,
+  extractedText: string,
+  context: AuInvestmentMappingContext,
+): Promise<AiAuInvestmentFallbackOutcome> {
+  const gate = await evaluateAiFallbackGate({
     userId,
-    cohortEmail: await resolveEmailForAiePilotCohort(userId),
     adapterEnabled: isAieInvestmentStatementAiFallbackEnabled(),
     extractedText,
   });

@@ -8,6 +8,8 @@ import { incomeGridConfig } from '@/lib/grid/configs';
 import { PayslipImportPanel } from '@/components/income/PayslipImportPanel';
 import { ImportedIncomeActuals } from '@/components/income/ImportedIncomeActuals';
 import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedLink } from '@/components/entitlements/ImportLockedLink';
 
 // Income tab layout (FDH-9 spec section 22): a header offering the two entry
 // points into Income — manual entry (the existing grid below, unchanged and
@@ -24,6 +26,8 @@ function IncomePageContent() {
   // outside the grid component entirely.
   const { available: writeAvailable, resolved: writeResolved } = useModuleWriteAvailability('INCOME');
   const importDisabled = writeResolved && !writeAvailable;
+  // Premium Upload Entitlement (14-10-2026): presentation only (the server re-checks every upload). Manual entry is untouched.
+  const { access: importAccess } = useFinancialImportAccess();
 
   return (
     <div className="space-y-6">
@@ -31,16 +35,20 @@ function IncomePageContent() {
         <h1 className="text-2xl font-semibold text-trust">Income</h1>
         <p className="mt-1 text-sm text-muted">Manage your household income sources.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowImport((v) => !v)}
-            aria-expanded={showImport}
-            disabled={importDisabled}
-            title={importDisabled ? "Importing isn't available for your country yet" : undefined}
-            className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-          >
-            Import from Payslip
-          </button>
+          {importAccess?.state === 'premium_required' ? (
+            <ImportLockedLink domain="income" label="Import from Payslip" />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowImport((v) => !v)}
+              aria-expanded={showImport}
+              disabled={importDisabled}
+              title={importDisabled ? "Importing isn't available for your country yet" : undefined}
+              className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            >
+              Import from Payslip
+            </button>
+          )}
         </div>
         <p className="mt-2 text-sm text-muted">
           Upload a payslip and FHIP will extract your income details for you to review before updating your Income

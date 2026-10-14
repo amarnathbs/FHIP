@@ -17,6 +17,7 @@
 
 import { parseInlineMarkup } from '@/lib/resources/editor/richtext';
 import { isKnownBlockType, BLOCK_TYPE_LABELS, type AnyBlock, type ParagraphData, type HeadingData, type ListData, type CalloutLikeData, type QuoteData, type TableData } from '@/lib/resources/editor/blocks';
+import { DataTable } from '@/components/ui/DataTable';
 
 export function InlineMarkup({ text }: { text: string }) {
   const segments = parseInlineMarkup(text || '');
@@ -179,32 +180,30 @@ function RenderBlock({ block }: { block: AnyBlock }) {
       const rows = d.rows ?? [];
       if (headers.length === 0 && rows.length === 0) return null;
       return (
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse text-sm">
-            {headers.length > 0 && (
-              <thead>
-                <tr>
-                  {headers.map((h, i) => (
-                    <th key={i} className="border-b border-line px-3 py-2 text-left font-semibold text-ink">
-                      <InlineMarkup text={h} />
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-            )}
-            <tbody>
-              {rows.map((row, ri) => (
-                <tr key={ri}>
-                  {row.map((cell, ci) => (
-                    <td key={ci} className="border-b border-line px-3 py-2 text-ink">
-                      <InlineMarkup text={cell} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable label="Table in the article" className="min-w-full border-collapse">
+          {headers.length > 0 && (
+            <thead>
+              <tr>
+                {headers.map((h, i) => (
+                  <th key={i} className="border-b border-line px-3 py-2 text-left font-semibold text-ink">
+                    <InlineMarkup text={h} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <td key={ci} className="border-b border-line px-3 py-2 text-ink">
+                    <InlineMarkup text={cell} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       );
     }
     default:

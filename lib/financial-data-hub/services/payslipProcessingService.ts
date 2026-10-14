@@ -40,7 +40,9 @@
  * onto the one row already inserted from the payslip itself.
  */
 
-import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
+import { resolvePremiumAiAccess } from '@/lib/ai/access/premiumAiAccess';
+import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -77,7 +79,7 @@ import type { FdhErrorCode } from '../constants/enums';
 // (`lib/services/investment-intelligence/aiFallbackDocumentExtraction.ts`):
 // call the shared AIE gateway directly from inside this native processing
 // service's own failure branch, gated by its own kill switch plus the
-// shared global one plus the shared pilot-cohort gate — never the heavier
+// shared global one plus the shared Premium-entitlement check — never the heavier
 // orchestrator/intake/accept pipeline, which this repo's own AIE-programme
 // design audit found has zero live frontend callers for any of the three
 // adapters that use it today. See
@@ -92,7 +94,8 @@ import {
 } from '@/lib/aie/adapters/payslip';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten } from './aiFallbackDrafts';
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
-import { isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
+import { isAiEgressMalwarePreconditionMet } from '@/lib/aie/malware/aiEgressPrecondition';
 import { maskText, isBelowMaskingPolicy } from '@/lib/aie/masking/piiMasking';
 
 export class PayslipProcessingError extends Error {
@@ -214,6 +217,13 @@ export interface ProcessPayslipResult {
    * ask you to review" — never a silent auto-write of an AI guess).
    */
   aiFallbackDraft?: PayrollExtraction;
+  /**
+   * Set ONLY when the native reader could not read the file and the AI reading
+   * was not attempted because the person has no active Premium entitlement
+   * ('premium_required') or it could not be confirmed ('entitlement_unavailable').
+   * Lets the screen explain why and offer the upgrade; nothing else changes.
+   */
+  aiFallbackRefusal?: AiFallbackRefusal;
 }
 
 /** Failure kinds this adapter will attempt an AI-fallback extraction for.
@@ -439,6 +449,7 @@ export async function processPayslipDocument(userId: string, documentId: string,
         : rawParsed;
 
     if ('error' in parsed) {
+      let aiFallbackRefusal: AiFallbackRefusal | undefined;
       if (AI_FALLBACK_ELIGIBLE_FAILURE_KINDS.includes(parsed.error)) {
         const fallback = await attemptAiPayslipFallback(userId, documentId, text, declaredCountry ?? 'AU');
         if (fallback.ok) {
@@ -448,6 +459,7 @@ export async function processPayslipDocument(userId: string, documentId: string,
           // and confirms via `confirmAiPayslipFallback`.
           return { document, payrollEventId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: fallback.extraction };
         }
+        aiFallbackRefusal = aiFallbackRefusalFromReason(fallback.reason);
         await recordDocumentAuditEvent({
           userId,
           documentId,
@@ -471,7 +483,7 @@ export async function processPayslipDocument(userId: string, documentId: string,
         actorType: 'system',
         metadata: { reason: parsed.error },
       });
-      return { document: (finalDoc ?? document) as FdhStatementUpload, payrollEventId: null, pipelineStatus: parsed.error };
+      return { document: (finalDoc ?? document) as FdhStatementUpload, payrollEventId: null, pipelineStatus: parsed.error, ...(aiFallbackRefusal ? { aiFallbackRefusal } : {}) };
     }
 
     const result = await persistPayrollEvidence(userId, documentId, document, parsed);
@@ -533,10 +545,9 @@ export type AiPayslipFallbackOutcome = { ok: true; extraction: PayrollExtraction
 /**
  * The one call site that reaches the AI provider for a payslip. Gated, in
  * order: this adapter's own kill switch, the SAME global AIE kill switch
- * every AI call in this codebase shares, and the SAME shared AIE-1
- * pilot-cohort allowlist every AIE-gated feature shares (never a cloned
- * adapter-local allowlist — see `lib/aie/adapters/payslip/featureFlags.ts`'s
- * header for why). Masks the already-locally-extracted text before it ever
+ * every AI call in this codebase shares, and the SAME shared Premium
+ * entitlement check every AI fallback shares (never a cloned adapter-local
+ * list -- see `lib/ai/access/premiumAiAccess.ts`). Masks the already-locally-extracted text before it ever
  * leaves this process, exactly like `lib/aie/orchestrator.ts`'s own masking
  * step, including the SAME open item that step discloses (`labelsSeenRaw: []`
  * — see `orchestrator.ts`'s own comment on `isBelowMaskingPolicy`).
@@ -546,7 +557,17 @@ export type AiPayslipFallbackOutcome = { ok: true; extraction: PayrollExtraction
  * type's own processing service can call the identical shape for its own
  * fields, per this design's "any new document type" requirement.
  */
-export async function attemptAiPayslipFallback(
+export function attemptAiPayslipFallback(
+  userId: string,
+  documentId: string,
+  extractedText: string,
+  country: 'AU' | 'IN',
+): Promise<AiPayslipFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`payslip:${userId}:${documentId}`, () => attemptAiPayslipFallbackOnce(userId, documentId, extractedText, country));
+}
+
+async function attemptAiPayslipFallbackOnce(
   userId: string,
   documentId: string,
   extractedText: string,
@@ -554,9 +575,13 @@ export async function attemptAiPayslipFallback(
 ): Promise<AiPayslipFallbackOutcome> {
   if (!isAiePayslipAiFallbackEnabled()) return { ok: false, reason: 'adapter_disabled' };
   if (!isAieAiFallbackEnabled()) return { ok: false, reason: 'global_kill_switch_disabled' };
-  // AIE-1 final completion (2026-09-25): email resolved so an email-only
-  // allowlist (production's configuration) can admit; see pilotCohortEmail.ts.
-  if (!isUserInAiePilotCohort({ userId, email: await resolveEmailForAiePilotCohort(userId) })) return { ok: false, reason: 'cohort_denied' };
+  // Document content leaves this process only where the REAL malware scan is on (see aiEgressPrecondition.ts).
+  if (!isAiEgressMalwarePreconditionMet()) return { ok: false, reason: 'malware_scan_not_enforced' };
+  // 14-10-2026: Premium entitlement replaces the two-e-mail pilot allowlist.
+  // Evaluated here, when a NEW chargeable call is about to start, so a
+  // downgraded / expired / Free user never reaches the provider.
+  const access = await resolvePremiumAiAccess(userId, 'aie_document_fallback');
+  if (!access.allowed) return { ok: false, reason: access.reason };
 
   let masking: ReturnType<typeof maskText>;
   try {

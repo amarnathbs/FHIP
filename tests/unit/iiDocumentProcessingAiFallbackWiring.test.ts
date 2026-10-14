@@ -20,7 +20,10 @@
 // supply plain garbage text directly, without needing a real PDF and
 // without touching pdfExtraction.ts's pdf-parse dependency at all.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { premiumAi } from '../support/premiumAiAccessMock';
 
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/services/investment-intelligence/audit', () => ({ emitAuditEvent: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/lib/services/investment-intelligence/storage', () => ({
   downloadSourceDocumentObject: vi.fn().mockResolvedValue({ bytes: new TextEncoder().encode('completely unrecognizable garbage, not a financial statement of any kind'), error: null }),
@@ -136,6 +139,23 @@ describe('processSourceDocument — generalized AI-fallback wiring (format_unrec
 
     const doc = tables.current.ii_source_documents.find((d) => d.id === DOC_ID);
     expect(doc?.status).toBe('ai_review_pending');
+  }, 20000);
+
+  it('tells a Free user the AI re-extraction is a Premium feature (and never calls the provider)', async () => {
+    process.env.II_AI_FALLBACK_ENABLED = 'true';
+    premiumAi.setTier(USER_ID, 'free');
+    try {
+      const provider = vi.fn();
+      const { processSourceDocument } = await import('@/lib/services/investment-intelligence/documentProcessing');
+      const result = await processSourceDocument({ userId: USER_ID, sourceDocumentId: DOC_ID, aiDocumentProviderOverride: provider });
+      expect(provider).not.toHaveBeenCalled();
+      expect(result.status).not.toBe('ai_review_pending');
+      expect(result.error).toContain('Statement source/format could not be confidently identified.');
+      expect(result.error).toContain('Premium feature');
+      expect(result.error).not.toMatch(/pilot|cohort|not yet available for your account/i);
+    } finally {
+      premiumAi.reset();
+    }
   }, 20000);
 
   it('is honest that BOTH paths were attempted when AI-fallback is enabled but the provider also fails', async () => {

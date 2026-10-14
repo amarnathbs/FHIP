@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface AssumptionRow {
   key: string;
@@ -66,7 +67,7 @@ export function AssumptionsTable({ initialAssumptions, scenarioId }: { initialAs
   return (
     <div>
       {error && <p className="mb-3 text-sm text-risk">{error}</p>}
-      <table className="w-full text-sm">
+      <DataTable label="Forecast assumptions" className="w-full">
         <thead className="text-left text-xs uppercase text-gray-500">
           <tr>
             <th className="py-1">Assumption</th>
@@ -113,7 +114,7 @@ export function AssumptionsTable({ initialAssumptions, scenarioId }: { initialAs
             </tr>
           ))}
         </tbody>
-      </table>
+      </DataTable>
       <p className="mt-4 text-xs text-gray-400">Scenario: {scenarioId}. Edits apply to this forecast profile and override the country/global default for every scenario until changed again.</p>
     </div>
   );

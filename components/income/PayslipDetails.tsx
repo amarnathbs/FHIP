@@ -15,6 +15,7 @@
 import { formatMoneyExact } from '@/lib/engines/money';
 import { buildPayslipDetails } from '@/lib/income/payslipDetails';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 function show(value: string | number | null, kind: 'money' | 'text' | 'date', currency: string): string {
   if (value === null) return 'Not shown on payslip';
@@ -45,7 +46,7 @@ export function PayslipDetails({
       <h4 className="text-sm font-semibold">{heading}</h4>
       {details.groups.map((g) => (
         <div key={g.id} className="overflow-x-auto">
-          <table className="w-full min-w-[420px] border-collapse text-sm">
+          <DataTable label={g.title} className="w-full min-w-[420px] border-collapse">
             <caption className="py-1 text-left text-xs font-medium text-muted">{g.title}</caption>
             <thead className="sr-only">
               <tr>
@@ -66,34 +67,32 @@ export function PayslipDetails({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         </div>
       ))}
       {details.components.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] border-collapse text-sm">
-            <caption className="py-1 text-left text-xs font-medium text-muted">The lines printed on your payslip (evidence only)</caption>
-            <thead>
-              <tr className="border-b border-gray-200 text-left text-xs text-muted">
-                <th scope="col" className="py-1 pr-2 font-normal">Line</th>
-                <th scope="col" className="py-1 pr-2 font-normal">Type</th>
-                <th scope="col" className={`py-1 font-normal ${NUM_HEADER_CLASS}`}>Amount</th>
+        <DataTable label="The lines printed on your payslip (evidence only)" className="w-full min-w-[420px] border-collapse">
+          <caption className="py-1 text-left text-xs font-medium text-muted">The lines printed on your payslip (evidence only)</caption>
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-xs text-muted">
+              <th scope="col" className="py-1 pr-2 font-normal">Line</th>
+              <th scope="col" className="py-1 pr-2 font-normal">Type</th>
+              <th scope="col" className={`py-1 font-normal ${NUM_HEADER_CLASS}`}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {details.components.map((c, i) => (
+              <tr key={`${c.label}-${i}`} className="border-b border-gray-100">
+                <td className="py-1 pr-2">{c.label}</td>
+                <td className="py-1 pr-2 text-xs text-muted">
+                  {SIDE_LABEL[c.side] ?? c.side}
+                  {c.isYearToDate ? ' · year to date' : ''}
+                </td>
+                <td className={`py-1 ${NUM_CELL_CLASS}`}>{formatMoneyExact(c.amount, details.currency)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {details.components.map((c, i) => (
-                <tr key={`${c.label}-${i}`} className="border-b border-gray-100">
-                  <td className="py-1 pr-2">{c.label}</td>
-                  <td className="py-1 pr-2 text-xs text-muted">
-                    {SIDE_LABEL[c.side] ?? c.side}
-                    {c.isYearToDate ? ' · year to date' : ''}
-                  </td>
-                  <td className={`py-1 ${NUM_CELL_CLASS}`}>{formatMoneyExact(c.amount, details.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </DataTable>
       )}
     </section>
   );

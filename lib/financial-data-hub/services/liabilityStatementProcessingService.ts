@@ -28,13 +28,14 @@
  * effect from a file that never became valid evidence).
  */
 
-import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRows } from '../bank-csv/pagination';
 import { decodeCsvBytes } from '../bank-csv/csv';
 import { roundToMoneyScale } from '../bank-csv/amount';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { AIE_LIABILITY_FACTS_SCHEMA_NAME, AIE_LIABILITY_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/liability/schema';
@@ -140,6 +141,13 @@ export interface UploadLiabilityStatementResult {
    * you to review", never a silent auto-write of an AI guess.
    */
   aiFallbackDraft?: LiabilityStatementAiFallbackDraft;
+  /**
+   * Set ONLY when the native reader could not read the file and the AI reading
+   * was not attempted because the person has no active Premium entitlement
+   * ('premium_required') or it could not be confirmed ('entitlement_unavailable').
+   * Lets the screen explain why and offer the upgrade; nothing else changes.
+   */
+  aiFallbackRefusal?: AiFallbackRefusal;
   /** 2026-09-25: set when this upload is a byte-identical copy of an earlier
    * one that already has a result (evidence, or an AI draft awaiting review).
    * The result returned is the ORIGINAL's, and the caller must carry on with
@@ -456,6 +464,7 @@ async function resolveLiabilityStatementDocument(
     // the LAYOUT-specific adapter registry could not map. Ordering is not a
     // preference: the write below sets `error_code` and moves the document to
     // `failed`, and a draft offered after that would have to undo it.
+    let aiFallbackRefusal: AiFallbackRefusal | undefined;
     if (AI_FALLBACK_ELIGIBLE_LIABILITY_FAILURE_KINDS.includes(extraction.kind)) {
       // Liability statements are CSV-only — there is no PDF/OCR stage and so
       // no `extractedText` already in hand at this point, unlike every other
@@ -467,6 +476,7 @@ async function resolveLiabilityStatementDocument(
       // the download.)
       const decoded = decodeCsvBytes(download.bytes).text;
       const fallback = await attemptAiLiabilityFallback(userId, document.id, decoded);
+      aiFallbackRefusal = aiFallbackRefusalFromReason(fallback.ok ? null : fallback.reason);
       if (fallback.ok) {
         // Deliberately NO document status change and NO error code — see
         // `UploadLiabilityStatementResult.aiFallbackDraft`'s own doc comment.
@@ -495,7 +505,7 @@ async function resolveLiabilityStatementDocument(
       actorType: 'system',
       metadata: { reason: extraction.kind },
     });
-    return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: extraction.kind };
+    return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: extraction.kind, ...(aiFallbackRefusal ? { aiFallbackRefusal } : {}) };
   }
 
   const statementId = await persistLiabilityStatementEvidence(userId, document, extraction.extraction.activities, metadata, extraction.extraction.warnings, extraction.extraction.parserName, extraction.extraction.parserVersion, extraction.extraction.extractionConfidence, extraction.extraction.facilityType);
@@ -761,7 +771,7 @@ export type AiLiabilityFallbackOutcome = { ok: true; draft: LiabilityStatementAi
  * The one call site that reaches the AI provider for a liability statement.
  *
  * Every gate — this adapter's own kill switch, the shared global AIE kill
- * switch, the shared AIE-1 pilot cohort, and masking (which FAILS CLOSED when
+ * switch, the shared Premium-entitlement check, and masking (which FAILS CLOSED when
  * the masking key is unset) — is evaluated by the shared
  * `evaluateAiFallbackGate`, in that order. The gate returns ONLY masked text
  * on success, so this function has no way to send the raw statement to the
@@ -770,10 +780,14 @@ export type AiLiabilityFallbackOutcome = { ok: true; draft: LiabilityStatementAi
  * Exported so it is independently unit-testable with a faked provider, and so
  * a live-DEV proof can exercise it directly.
  */
-export async function attemptAiLiabilityFallback(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
-  const gate = evaluateAiFallbackGate({
+export function attemptAiLiabilityFallback(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`liability_statement:${userId}:${documentId}`, () => attemptAiLiabilityFallbackOnce(userId, documentId, extractedText));
+}
+
+async function attemptAiLiabilityFallbackOnce(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
+  const gate = await evaluateAiFallbackGate({
     userId,
-    cohortEmail: await resolveEmailForAiePilotCohort(userId),
     adapterEnabled: isAieLiabilityAiFallbackEnabled(),
     extractedText,
   });

@@ -19,6 +19,7 @@ import { AdminActionStatus, useAdminActionStatus } from '@/components/admin/Admi
 import { MAPPING_NOT_INSTALLED_LINE, UNAVAILABLE_LINE, type AllowedDataset, type AllowedValues, type AllowedValuesOk, type MappedMetric } from '@/lib/planning-benchmarks/allowedValues';
 import type { MappingEvent, MappingEventsResult } from '@/lib/planning-benchmarks/datasetMetricService';
 import { formatDayFirstDateTime } from '@/lib/planning-benchmarks/dayFirst';
+import { DataTable } from '@/components/ui/DataTable';
 
 export const DATASET_METRICS_URL = '/api/admin/benchmarks/upload/dataset-metrics';
 
@@ -71,14 +72,6 @@ export function confirmWording(a: { action: 'set' | 'remove'; dataset: AllowedDa
     destructive: turnedOff > 0,
     live: turnedOff,
   };
-}
-
-function ScrollRegion({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div role="region" aria-label={label} tabIndex={0} className="mt-2 max-h-72 overflow-auto rounded border border-line">
-      {children}
-    </div>
-  );
 }
 
 function eventText(e: MappingEvent): string {
@@ -147,44 +140,42 @@ function MappingLists({ a, p }: { a: AllowedValuesOk; p: MappingViewProps }) {
         </h3>
         {dataset.mappedMetrics.length === 0 && <p className="mt-1 max-w-3xl text-xs text-muted">Nothing can be uploaded to this dataset until at least one metric is added{p.canManage ? ' below' : ' by a holder of the activate permission'}.</p>}
         {dataset.mappedMetrics.length > 0 && (
-          <ScrollRegion label={`Metrics mapped to ${dataset.name}`}>
-            <table className="w-full text-left text-xs">
-              <caption className="sr-only">Metrics mapped to {dataset.name}</caption>
-              <thead className="sticky top-0 bg-gray-50 text-muted">
-                <tr>
-                  <th scope="col" className="px-3 py-2">metric_code</th>
-                  <th scope="col" className="px-3 py-2">Unit</th>
-                  <th scope="col" className="px-3 py-2">Allowed in</th>
-                  <th scope="col" className="px-3 py-2">Live figures</th>
-                  <th scope="col" className="px-3 py-2">Evidence for the pairing</th>
-                  {p.canManage && <th scope="col" className="px-3 py-2">Change</th>}
+          <DataTable label={`Metrics mapped to ${dataset.name}`} wrapperClassName="mt-2 rounded border border-line" className="w-full text-left text-xs">
+            <caption className="sr-only">Metrics mapped to {dataset.name}</caption>
+            <thead className="sticky top-0 bg-gray-50 text-muted">
+              <tr>
+                <th scope="col" className="px-3 py-2">metric_code</th>
+                <th scope="col" className="px-3 py-2">Unit</th>
+                <th scope="col" className="px-3 py-2">Allowed in</th>
+                <th scope="col" className="px-3 py-2">Live figures</th>
+                <th scope="col" className="px-3 py-2">Evidence for the pairing</th>
+                {p.canManage && <th scope="col" className="px-3 py-2">Change</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {dataset.mappedMetrics.map((m) => (
+                <tr key={m.code} className="border-t border-line align-top">
+                  <td className="px-3 py-2 font-medium text-ink">{m.code}</td>
+                  <td className="px-3 py-2">{m.unit}</td>
+                  <td className="px-3 py-2">{kindsText(m)}</td>
+                  <td className="px-3 py-2">{liveText(m)}</td>
+                  <td className="px-3 py-2">{m.evidence ?? ''}</td>
+                  {p.canManage && (
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" disabled={p.busy} onClick={() => p.onEdit(m)} aria-label={`Change the kinds of file for ${m.code}`} className="min-h-11 rounded border border-line px-3 hover:bg-gray-50 disabled:opacity-50">
+                          Change
+                        </button>
+                        <button type="button" disabled={p.busy || !reasonOk} onClick={() => p.onRemove(m)} aria-label={`Remove ${m.code} from ${dataset.name}`} className="min-h-11 rounded border border-risk/40 px-3 text-risk hover:bg-risk/5 disabled:opacity-50">
+                          Remove
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
-              </thead>
-              <tbody>
-                {dataset.mappedMetrics.map((m) => (
-                  <tr key={m.code} className="border-t border-line align-top">
-                    <td className="px-3 py-2 font-medium text-ink">{m.code}</td>
-                    <td className="px-3 py-2">{m.unit}</td>
-                    <td className="px-3 py-2">{kindsText(m)}</td>
-                    <td className="px-3 py-2">{liveText(m)}</td>
-                    <td className="px-3 py-2">{m.evidence ?? ''}</td>
-                    {p.canManage && (
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-2">
-                          <button type="button" disabled={p.busy} onClick={() => p.onEdit(m)} aria-label={`Change the kinds of file for ${m.code}`} className="min-h-11 rounded border border-line px-3 hover:bg-gray-50 disabled:opacity-50">
-                            Change
-                          </button>
-                          <button type="button" disabled={p.busy || !reasonOk} onClick={() => p.onRemove(m)} aria-label={`Remove ${m.code} from ${dataset.name}`} className="min-h-11 rounded border border-risk/40 px-3 text-risk hover:bg-risk/5 disabled:opacity-50">
-                            Remove
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollRegion>
+              ))}
+            </tbody>
+          </DataTable>
         )}
         {dataset.mappedMetrics.length > 0 && p.canManage && !reasonOk && <p className="mt-1 text-xs text-muted">To remove a metric, first type the reason in the box below. Remove stays unavailable until you do.</p>}
       </div>
@@ -233,33 +224,31 @@ function MappingLists({ a, p }: { a: AllowedValuesOk; p: MappingViewProps }) {
         ) : events.length === 0 ? (
           <p className="mt-1 text-xs text-muted">No change has been made through this screen yet. The pairs listed above were seeded by migration 0277.</p>
         ) : (
-          <ScrollRegion label="Recent changes to the dataset and metric mapping">
-            <table className="w-full text-left text-xs">
-              <caption className="sr-only">Recent changes to the dataset and metric mapping</caption>
-              <thead className="sticky top-0 bg-gray-50 text-muted">
-                <tr>
-                  <th scope="col" className="px-3 py-2">When</th>
-                  <th scope="col" className="px-3 py-2">Dataset</th>
-                  <th scope="col" className="px-3 py-2">Metric</th>
-                  <th scope="col" className="px-3 py-2">Change</th>
-                  <th scope="col" className="px-3 py-2">Reason</th>
+          <DataTable label="Recent changes to the dataset and metric mapping" wrapperClassName="mt-2 rounded border border-line" className="w-full text-left text-xs">
+            <caption className="sr-only">Recent changes to the dataset and metric mapping</caption>
+            <thead className="sticky top-0 bg-gray-50 text-muted">
+              <tr>
+                <th scope="col" className="px-3 py-2">When</th>
+                <th scope="col" className="px-3 py-2">Dataset</th>
+                <th scope="col" className="px-3 py-2">Metric</th>
+                <th scope="col" className="px-3 py-2">Change</th>
+                <th scope="col" className="px-3 py-2">Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((e, i) => (
+                <tr key={`${e.at}|${i}`} className="border-t border-line align-top">
+                  <td className="whitespace-nowrap px-3 py-2">{formatDayFirstDateTime(e.at)}</td>
+                  <td className="px-3 py-2">
+                    {e.datasetName} {e.datasetVersion}
+                  </td>
+                  <td className="px-3 py-2">{e.metricCode}</td>
+                  <td className="px-3 py-2">{eventText(e)}</td>
+                  <td className="px-3 py-2">{e.reason}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {events.map((e, i) => (
-                  <tr key={`${e.at}|${i}`} className="border-t border-line align-top">
-                    <td className="whitespace-nowrap px-3 py-2">{formatDayFirstDateTime(e.at)}</td>
-                    <td className="px-3 py-2">
-                      {e.datasetName} {e.datasetVersion}
-                    </td>
-                    <td className="px-3 py-2">{e.metricCode}</td>
-                    <td className="px-3 py-2">{eventText(e)}</td>
-                    <td className="px-3 py-2">{e.reason}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollRegion>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </div>
     </div>

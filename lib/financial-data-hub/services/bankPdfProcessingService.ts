@@ -25,7 +25,6 @@
  * comment).
  */
 
-import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -70,6 +69,8 @@ import {
   type MappedBankStatementDraft,
 } from '@/lib/aie/adapters/bankStatement';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraft';
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
@@ -162,6 +163,13 @@ export interface ProcessBankPdfResult {
    * ask you to review", never a silent auto-write of an AI guess.
    */
   aiFallbackDraft?: BankStatementAiFallbackDraft;
+  /**
+   * Set ONLY when the native reader could not read the file and the AI reading
+   * was not attempted because the person has no active Premium entitlement
+   * ('premium_required') or it could not be confirmed ('entitlement_unavailable').
+   * Lets the screen explain why and offer the upgrade; nothing else changes.
+   */
+  aiFallbackRefusal?: AiFallbackRefusal;
 }
 
 /** What the review UI is shown, and what the confirm route sends back. It is
@@ -421,6 +429,7 @@ export async function processBankPdfDocument(userId: string, documentId: string,
       // preference here: `rejected` is a terminal state with no onward edge
       // (`documentLifecycle.ts`), so a fallback offered after that write
       // could never be confirmed.
+      let aiFallbackRefusal: AiFallbackRefusal | undefined;
       if (AI_FALLBACK_ELIGIBLE_PIPELINE_STATUSES.includes(pipeline.status)) {
         const fallback = await attemptAiBankStatementFallback(userId, documentId, pipeline.extractedText ?? '');
         if (fallback.ok) {
@@ -439,6 +448,7 @@ export async function processBankPdfDocument(userId: string, documentId: string,
             aiFallbackDraft: fallback.draft,
           };
         }
+        aiFallbackRefusal = aiFallbackRefusalFromReason(fallback.reason);
         await recordDocumentAuditEvent({
           userId,
           documentId,
@@ -486,6 +496,7 @@ export async function processBankPdfDocument(userId: string, documentId: string,
         certificationStatus: 'rejected',
         reconciliationStatus: null,
         pipelineStatus: pipeline.status,
+        ...(aiFallbackRefusal ? { aiFallbackRefusal } : {}),
       };
     }
 
@@ -1043,7 +1054,7 @@ export type AiBankStatementFallbackOutcome = { ok: true; draft: BankStatementAiF
  * The one call site that reaches the AI provider for a bank statement.
  *
  * Every gate — this adapter's own kill switch, the shared global AIE kill
- * switch, the shared AIE-1 pilot cohort, and masking (which FAILS CLOSED) —
+ * switch, the shared Premium-entitlement check, and masking (which FAILS CLOSED) —
  * is evaluated by the shared `evaluateAiFallbackGate`, in that order. The
  * gate returns ONLY masked text on success, so this function has no way to
  * send the raw document to the provider even by mistake.
@@ -1051,10 +1062,14 @@ export type AiBankStatementFallbackOutcome = { ok: true; draft: BankStatementAiF
  * Exported so it is independently unit-testable with a faked provider, and so
  * the live-DEV proof can exercise it directly.
  */
-export async function attemptAiBankStatementFallback(userId: string, documentId: string, extractedText: string): Promise<AiBankStatementFallbackOutcome> {
-  const gate = evaluateAiFallbackGate({
+export function attemptAiBankStatementFallback(userId: string, documentId: string, extractedText: string): Promise<AiBankStatementFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`bank_statement:${userId}:${documentId}`, () => attemptAiBankStatementFallbackOnce(userId, documentId, extractedText));
+}
+
+async function attemptAiBankStatementFallbackOnce(userId: string, documentId: string, extractedText: string): Promise<AiBankStatementFallbackOutcome> {
+  const gate = await evaluateAiFallbackGate({
     userId,
-    cohortEmail: await resolveEmailForAiePilotCohort(userId),
     adapterEnabled: isAieBankStatementAiFallbackEnabled(),
     extractedText,
   });

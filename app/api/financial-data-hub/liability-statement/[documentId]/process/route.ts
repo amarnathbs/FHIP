@@ -6,6 +6,8 @@ import {
   LIABILITY_STATEMENT_FAILURE_MESSAGES,
 } from '@/lib/financial-data-hub/services/liabilityStatementProcessingService';
 import { liabilityStatementUploadMetadataSchema } from '@/lib/financial-data-hub/validation/liabilityStatement';
+import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
+import { fdhDocumentRunPosition } from '@/lib/financial-data-hub/services/importRunPosition';
 
 // POST /api/financial-data-hub/liability-statement/{documentId}/process
 //
@@ -19,6 +21,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): starting NEW extraction work (a retry / re-parse) is Premium; the first run of a
+  // document admitted while Premium and the idempotent in-flight lifecycle still complete after a downgrade.
+  const importDenied = await refuseUnlessImportRunMayStart(user.id, 'fdh.liability_statement.process', () => fdhDocumentRunPosition(user.id, documentId));
+  if (importDenied) return importDenied;
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Statement uploads are not currently enabled in this environment.', 403);
@@ -68,6 +74,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       // envelope. A draft returned here (after a malware scan cleared) is no
       // different from one returned at upload time.
       ai_fallback_draft: result.aiFallbackDraft ?? null,
+      // 14-10-2026: present ('premium_required' | 'entitlement_unavailable') only when the file could not be read
+      // natively and the AI reading was NOT attempted for entitlement reasons, so the screen can explain and offer
+      // the upgrade. Null in every other case.
+      ai_fallback_refusal: result.aiFallbackRefusal ?? null,
     });
   } catch (e) {
     if (e instanceof LiabilityStatementProcessingError) {

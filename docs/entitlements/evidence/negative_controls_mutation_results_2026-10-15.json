@@ -1,0 +1,79 @@
+[
+  {
+    "name": "M1 admission guard removed from bank CSV upload route",
+    "tests": "6 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadInventoryContract.test.ts > (1) every listed route calls the central capability, first, and honours its answer > fdh",
+      "tests/unit/premiumUploadRoutes.test.ts > admission routes -- a Free customer can start NO new ingestion through any of them > fdh.bank_csv.u",
+      "tests/unit/premiumUploadRoutes.test.ts > admission routes -- a Free customer can start NO new ingestion through any of them > fdh.bank_csv.u"
+    ]
+  },
+  {
+    "name": "M2 run-start guard removed from payslip process route",
+    "tests": "5 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadInventoryContract.test.ts > (1) every listed route calls the central capability, first, and honours its answer > fdh",
+      "tests/unit/premiumUploadRoutes.test.ts > run-start routes -- the downgrade / in-flight policy, per route > fdh.payslip.process > Free + a do",
+      "tests/unit/premiumUploadRoutes.test.ts > run-start routes -- the downgrade / in-flight policy, per route > fdh.payslip.process > Free + a FA"
+    ]
+  },
+  {
+    "name": "M3 service-layer assert removed from createUploadSession",
+    "tests": "5 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadServices.test.ts > FDH createUploadSession (every FDH pipeline enters here) > Free: refused with the typed error; NO",
+      "tests/unit/premiumUploadServices.test.ts > FDH createUploadSession (every FDH pipeline enters here) > no entitlement row / store down: refus",
+      "tests/unit/premiumUploadServices.test.ts > FDH completeUpload (the step that stores raw bytes) > Premium (NEGATIVE CONTROL): the same call r"
+    ]
+  },
+  {
+    "name": "M4 capability fails OPEN on a read error",
+    "tests": "35 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadCapability.test.ts > resolveFinancialImportAccess -- who may start a new import > a read error => ENTITLEMENT_UNAVAI",
+      "tests/unit/premiumUploadCapability.test.ts > resolveFinancialImportAccess -- who may start a new import > a reader that THROWS => ENTITLEMEN",
+      "tests/unit/premiumUploadCapability.test.ts > the refusal contract (pages 59, 60, 187) > ENTITLEMENT_UNAVAILABLE is HTTP 503 and says retry, "
+    ]
+  },
+  {
+    "name": "M5 capability trusts a missing row as Premium",
+    "tests": "15 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadCapability.test.ts > resolveFinancialImportAccess -- who may start a new import > no entitlement row at all => PREMI",
+      "tests/unit/premiumUploadCapability.test.ts > events are privacy-safe (page 176) > a denial records the surface and the code only -- no user ",
+      "tests/unit/premiumUploadRoutes.test.ts > admission routes -- a Free customer can start NO new ingestion through any of them > fdh.upload_ses"
+    ]
+  },
+  {
+    "name": "M6 Payslip panel draws the form without waiting for the server (flash-of-picker)",
+    "tests": "3 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadUi.test.ts > import PANELS -- no active file picker unless the server said allowed (no fake upload, no flash-of-pick",
+      "tests/unit/premiumUploadUi.test.ts > import PANELS -- no active file picker unless the server said allowed (no fake upload, no flash-of-pick",
+      "tests/unit/premiumUploadUi.test.ts > import PANELS -- no active file picker unless the server said allowed (no fake upload, no flash-of-pick"
+    ]
+  },
+  {
+    "name": "M7 an Admin upload route starts requiring the consumer plan",
+    "tests": "2 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadInventoryContract.test.ts > (3) Admin and scheduled-system routes never depend on the consumer plan > no exempt rout",
+      "tests/unit/premiumUploadInventoryContract.test.ts > (8) no reusable upload credential, no storage write path for customers, canonical data i"
+    ]
+  },
+  {
+    "name": "M8 a manual-entry route starts requiring the consumer plan",
+    "tests": "2 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadInventoryContract.test.ts > (4) manual entry stays Free > no manual-entry route calls the import capability",
+      "tests/unit/premiumUploadInventoryContract.test.ts > (8) no reusable upload credential, no storage write path for customers, canonical data i"
+    ]
+  },
+  {
+    "name": "M9 a NEW ungated customer upload route appears",
+    "tests": "1 ⎯⎯⎯⎯⎯⎯⎯",
+    "sample": [
+      "tests/unit/premiumUploadInventoryContract.test.ts > (2) no customer file-ingestion route exists outside the inventory > discovery over the w"
+    ]
+  }
+]

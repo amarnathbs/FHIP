@@ -7,6 +7,8 @@ import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { liabilityGridConfig } from '@/lib/grid/configs';
 import { LiabilityImportPanel } from '@/components/liabilities/LiabilityImportPanel';
 import { LiabilityStatementHistory } from '@/components/liabilities/LiabilityStatementHistory';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedLink } from '@/components/entitlements/ImportLockedLink';
 
 // Liabilities tab layout (FDH-10 spec section 2): a header offering the two
 // entry points into Liabilities — manual entry (the existing grid below,
@@ -31,6 +33,9 @@ function LiabilitiesPageContent() {
   // to re-navigate from the top. Returning focus to the "Import Statement"
   // toggle that opened it is the same pattern used for dialog-close focus
   // return, even though this is an inline expanding region, not a modal.
+  // Premium Upload Entitlement (14-10-2026): presentation only (the server re-checks every upload). Manual entry is untouched.
+  const { access: importAccess } = useFinancialImportAccess();
+
   function closeImport() {
     setShowImport(false);
     importToggleRef.current?.focus();
@@ -42,15 +47,19 @@ function LiabilitiesPageContent() {
         <h1 className="text-2xl font-semibold text-trust">Liabilities</h1>
         <p className="mt-1 text-sm text-muted">Manage your household&apos;s debts and liabilities.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            ref={importToggleRef}
-            type="button"
-            onClick={() => setShowImport((v) => !v)}
-            aria-expanded={showImport}
-            className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5"
-          >
-            Import Statement
-          </button>
+          {importAccess?.state === 'premium_required' ? (
+            <ImportLockedLink domain="liabilities" label="Import Statement" />
+          ) : (
+            <button
+              ref={importToggleRef}
+              type="button"
+              onClick={() => setShowImport((v) => !v)}
+              aria-expanded={showImport}
+              className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5"
+            >
+              Import Statement
+            </button>
+          )}
         </div>
         <p className="mt-2 text-sm text-muted">
           Upload a credit card or loan statement and FHIP will extract the details for you to review before updating your

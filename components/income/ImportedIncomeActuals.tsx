@@ -22,6 +22,7 @@ import { formatMoneyWhole } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import type { IncomeActualsDto, IncomeActualsOk } from '@/lib/income/importedIncomeActuals';
 import { PayslipDetails } from '@/components/income/PayslipDetails';
+import { DataTable } from '@/components/ui/DataTable';
 
 const money = (value: number, currency: string) => formatMoneyWhole(value, currency === 'INR' ? 'INR' : 'AUD');
 
@@ -121,63 +122,59 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
       )}
 
       {data.actual.lines.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] border-collapse text-sm">
-            <caption className="py-1 text-left text-sm font-medium">Actual income from bank statements</caption>
-            <thead>
-              <tr className="border-b border-gray-200 text-left text-xs text-muted">
-                <th scope="col" className="py-1 pr-2 font-normal">Date</th>
-                <th scope="col" className="py-1 pr-2 font-normal">Description</th>
-                <th scope="col" className={`py-1 pr-2 font-normal ${NUM_HEADER_CLASS}`}>Amount</th>
-                <th scope="col" className="py-1 font-normal">How it counts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.actual.lines.map((l) => (
-                <tr key={l.key} className="border-b border-gray-100" data-treatment={l.treatment}>
-                  <td className="py-1 pr-2">{l.date}</td>
-                  <td className="py-1 pr-2">
-                    {l.description ?? 'Bank deposit'}
-                    <span className="block text-xs text-muted">
-                      {l.sourceLabel}
-                      {l.statementHref && (
-                        <>
-                          {' · '}
-                          <a className="underline" href={l.statementHref}>statement</a>
-                        </>
-                      )}
-                    </span>
-                  </td>
-                  <td className={`py-1 pr-2 ${NUM_CELL_CLASS}`}>{money(l.amount, l.currency)}{l.amountReporting === null && <span className="block text-xs text-caution">not converted — not in totals</span>}</td>
-                  <td className="py-1 text-xs">
-                    {l.treatmentLabel}
-                    {l.representedByName && <span className="block text-muted">Same money as “{l.representedByName}”</span>}
-                    {l.possibleDuplicateOf.length > 0 && (
-                      <span className="block text-caution">Possible duplicate of {l.possibleDuplicateOf.map((d) => `“${d.name}”`).join(', ')} — check it is not the same income</span>
+        <DataTable label="Actual income from bank statements" className="w-full min-w-[520px] border-collapse">
+          <caption className="py-1 text-left text-sm font-medium">Actual income from bank statements</caption>
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-xs text-muted">
+              <th scope="col" className="py-1 pr-2 font-normal">Date</th>
+              <th scope="col" className="py-1 pr-2 font-normal">Description</th>
+              <th scope="col" className={`py-1 pr-2 font-normal ${NUM_HEADER_CLASS}`}>Amount</th>
+              <th scope="col" className="py-1 font-normal">How it counts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.actual.lines.map((l) => (
+              <tr key={l.key} className="border-b border-gray-100" data-treatment={l.treatment}>
+                <td className="py-1 pr-2">{l.date}</td>
+                <td className="py-1 pr-2">
+                  {l.description ?? 'Bank deposit'}
+                  <span className="block text-xs text-muted">
+                    {l.sourceLabel}
+                    {l.statementHref && (
+                      <>
+                        {' · '}
+                        <a className="underline" href={l.statementHref}>statement</a>
+                      </>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </span>
+                </td>
+                <td className={`py-1 pr-2 ${NUM_CELL_CLASS}`}>{money(l.amount, l.currency)}{l.amountReporting === null && <span className="block text-xs text-caution">not converted — not in totals</span>}</td>
+                <td className="py-1 text-xs">
+                  {l.treatmentLabel}
+                  {l.representedByName && <span className="block text-muted">Same money as “{l.representedByName}”</span>}
+                  {l.possibleDuplicateOf.length > 0 && (
+                    <span className="block text-caution">Possible duplicate of {l.possibleDuplicateOf.map((d) => `“${d.name}”`).join(', ')} — check it is not the same income</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       )}
 
       {data.variablePay.lines.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] border-collapse text-sm">
-            <caption className="py-1 text-left text-sm font-medium">One-off pay from your payslips (bonus, overtime, commission)</caption>
-            <tbody>
-              {data.variablePay.lines.map((v) => (
-                <tr key={v.payrollEventId} className="border-b border-gray-100">
-                  <td className="py-1 pr-2">{v.date}</td>
-                  <td className="py-1 pr-2">{v.employerName ?? v.sourceName ?? 'Payslip'}<span className="block text-xs text-muted">Imported from payslip · counted once, on its pay date</span></td>
-                  <td className={`py-1 ${NUM_CELL_CLASS}`}>{money(v.grossNative, v.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable label="One-off pay from your payslips (bonus, overtime, commission)" className="w-full min-w-[420px] border-collapse">
+          <caption className="py-1 text-left text-sm font-medium">One-off pay from your payslips (bonus, overtime, commission)</caption>
+          <tbody>
+            {data.variablePay.lines.map((v) => (
+              <tr key={v.payrollEventId} className="border-b border-gray-100">
+                <td className="py-1 pr-2">{v.date}</td>
+                <td className="py-1 pr-2">{v.employerName ?? v.sourceName ?? 'Payslip'}<span className="block text-xs text-muted">Imported from payslip · counted once, on its pay date</span></td>
+                <td className={`py-1 ${NUM_CELL_CLASS}`}>{money(v.grossNative, v.currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       )}
 
       {imported.length > 0 && (

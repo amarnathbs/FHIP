@@ -63,6 +63,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+// Premium Upload Entitlement (14-10-2026): this test is about something else (not the plan), so it runs as an ENTITLED customer, which is the
+// state it was written for. The entitlement itself is proved with the real capability in tests/unit/premiumUpload*.test.ts.
+vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) =>
+  (await import('../support/premiumImportEntitlementMock')).withPremiumImportEntitlement(await importOriginal()));
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { M12B_INSURANCE_CORPUS, CORPUS_USER_ID, buildStructurallyCorruptPdf, type InsuranceCorpusCase } from '../support/buildM12bInsuranceCorpus';
@@ -179,6 +183,8 @@ function resetState() {
   (globalThis as unknown as Record<string, SharedState>)[STATE_KEY] = freshState();
 }
 
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/services/appCapability', () => ({
   requireModuleCapability: async () => ({ user: { id: CORPUS_USER_ID }, blocked: null, decision: null }),
 }));
@@ -474,7 +480,6 @@ describe('M12B.5 — Insurance accuracy certification against a sealed corpus', 
     process.env.AIE_INSURANCE_ADAPTER_ENABLED = 'true';
     process.env.AIE_DOCUMENT_INTAKE_ENABLED = 'true';
     process.env.AIE_ALLOW_MISSING_SIGNATURE_SCANNER = 'true';
-    process.env.AIE_PILOT_COHORT_USER_IDS = CORPUS_USER_ID;
     process.env.AIE_REVIEW_CANONICAL_ACCEPTANCE_ENABLED = 'true';
     process.env.AIE_INSURANCE_ADAPTER_CANONICAL_WRITE_ENABLED = 'true';
     delete process.env.AIE_AI_FALLBACK_ENABLED;

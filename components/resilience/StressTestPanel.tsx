@@ -5,6 +5,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import type { StressScenarioType } from '@/lib/engines/resilienceStress';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 const SCENARIOS: { value: StressScenarioType; label: string }[] = [
   { value: 'income_stops', label: 'Primary income stops' },
@@ -70,7 +71,7 @@ export function StressTestPanel({ currency }: { currency: 'AUD' | 'INR' }) {
       {error && <p className="mt-3 text-sm text-risk">{error}</p>}
       {result && (
         <div className="mt-4 space-y-4">
-          <table className="w-full text-sm">
+          <DataTable label="Stress test: current against under shock" className="w-full">
             <thead className="text-left text-xs uppercase text-gray-500">
               <tr>
                 <th className="py-1">Measure</th>
@@ -99,7 +100,7 @@ export function StressTestPanel({ currency }: { currency: 'AUD' | 'INR' }) {
                 <td className={`py-1 font-semibold text-trust ${NUM_CELL_CLASS}`}>{formatMoney(result.after.accessibleLiquidResources, currency)}</td>
               </tr>
             </tbody>
-          </table>
+          </DataTable>
           <div className="rounded-card border border-dashed bg-gray-50 p-4 text-sm">
             <p className="font-medium text-gray-800">Shock survival timeline</p>
             {result.survivalMonths === null ? (

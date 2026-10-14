@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from 'react';
 import { formatDateTimeShort } from '@/lib/engines/date';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface RunRow {
   id: string;
@@ -52,7 +53,7 @@ export function ForecastHistoryList({ initialRuns, currency }: { initialRuns: Ru
   }
 
   return (
-    <table className="w-full text-sm">
+    <DataTable label="Forecast runs" className="w-full">
       <thead className="text-left text-xs uppercase text-gray-500">
         <tr>
           <th className="py-1">Run date</th>
@@ -65,7 +66,7 @@ export function ForecastHistoryList({ initialRuns, currency }: { initialRuns: Ru
         {initialRuns.map((run) => (
           <Fragment key={run.id}>
             <tr className="border-t">
-              <td className="py-2">{formatDateTimeShort(run.created_at, currency)}</td>
+              <td className="py-2 whitespace-nowrap">{formatDateTimeShort(run.created_at, currency)}</td>
               <td className="py-2 capitalize">{run.forecast_type.replace(/_/g, ' ')}</td>
               <td className="py-2">
                 {STATUS_LABEL[run.status] ?? run.status}
@@ -104,6 +105,6 @@ export function ForecastHistoryList({ initialRuns, currency }: { initialRuns: Ru
           </Fragment>
         ))}
       </tbody>
-    </table>
+    </DataTable>
   );
 }

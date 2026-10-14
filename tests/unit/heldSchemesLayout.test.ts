@@ -104,8 +104,10 @@ describe('layout contract (source)', () => {
   });
 
   it('the table scrolls horizontally INSIDE its own container (a focusable region), never the page, and the Action column is sticky on the right', () => {
-    expect(ui).toMatch(/overflow-x-auto[^`]*`/); // ScrollTable's container
-    expect(ui).toMatch(/role="region"[^>]*tabIndex=\{0\}/);
+    // ScrollTable is now the shared <DataTable> (components/ui/DataTable.tsx), whose region scrolls sideways inside itself (app/globals.css).
+    expect(ui).toMatch(/<DataTable label=\{label\}/);
+    expect(read('components/ui/DataTable.tsx')).toMatch(/role="region"[^>]*tabIndex=\{0\}/);
+    expect(read('app/globals.css')).toMatch(/\.fhip-table-wrap \{[^}]*overflow-x: auto/);
     expect(HELD_TABLE_LAYOUT.actionSticky).toMatch(/\bsticky\b/);
     expect(HELD_TABLE_LAYOUT.actionSticky).toMatch(/\bright-0\b/);
     expect(table).toMatch(/<Th className=\{`bg-gray-50 \$\{L\.actionSticky\}`\}>Action<\/Th>/);

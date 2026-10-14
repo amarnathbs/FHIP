@@ -7,6 +7,10 @@
  * refusal is the owner check and not an earlier gate.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Premium Upload Entitlement (14-10-2026): this test is about something else (not the plan), so it runs as an ENTITLED customer, which is the
+// state it was written for. The entitlement itself is proved with the real capability in tests/unit/premiumUpload*.test.ts.
+vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) =>
+  (await import('../support/premiumImportEntitlementMock')).withPremiumImportEntitlement(await importOriginal()));
 
 const SELF = 'a1111111-1111-4111-8111-111111111111';
 const TRUST = 'e1111111-1111-4111-8111-111111111111';
@@ -24,6 +28,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ from: () => ({}) }) }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: () => ({}) }) }));
 vi.mock('@/lib/aie/audit', () => ({ recordAieAuditEvent: async () => {} }));
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/aie/db/repository', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/aie/db/repository')>();
   return {
@@ -77,7 +83,6 @@ beforeEach(() => {
   process.env.AIE_II_ADAPTER_ENABLED = 'true';
   process.env.AIE_DOCUMENT_INTAKE_ENABLED = 'true';
   process.env.AIE_ALLOW_MISSING_SIGNATURE_SCANNER = 'true';
-  process.env.AIE_PILOT_COHORT_USER_IDS = 'user-owner-test';
 });
 
 const BANK_PATH = '/api/aie/fdh-bank/intake?country_code=AU&currency_code=AUD&filename=s.pdf';

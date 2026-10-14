@@ -1,12 +1,13 @@
-import { isUserIdInAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
 import { bad, ok } from '@/lib/api';
 import { requireModuleCapability } from '@/lib/services/appCapability';
 import { createClient } from '@/lib/supabase/server';
+import { refuseUnlessPremiumAi } from '@/lib/ai/access/premiumAiAccess';
 import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
 import { extractPdfTextLocally } from '@/lib/aie/extraction/textExtraction';
-import { createIntake, updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser, createRun } from '@/lib/aie/db/repository';
+import { updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser, createRun } from '@/lib/aie/db/repository';
+import { admitIntake } from '@/lib/aie/intakeAdmission';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { finalizeDocumentBinaryAfterRun } from '@/lib/aie/services/purge';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
@@ -24,6 +25,7 @@ import {
   AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_NAME,
   AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION,
 } from '@/lib/aie/adapters/insurance/schema';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // LIVE-DEV VERIFICATION FIX (2026-09-12, AIE_1_LIVE_DEV_VERIFICATION_REPORT.md
 // pass 2): this used to be a bare `import '@/lib/aie/adapters/insurance';`
@@ -81,6 +83,10 @@ const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
 export async function POST(req: Request) {
   const { user, blocked } = await requireModuleCapability('INSURANCE', req);
   if (!user) return blocked!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'aie.insurance.intake');
+  if (importDenied) return importDenied;
 
   if (!isAieInsuranceAdapterEnabled()) {
     return bad('The AIE-fronted Insurance adapter is not currently enabled in this environment.', 403);
@@ -88,17 +94,10 @@ export async function POST(req: Request) {
   if (!isAieDocumentIntakeEnabled()) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
   }
-  // `requireModuleCapability`'s declared return type narrows `user` to
-  // `{ id: string }` only (no `.email`) -- userId-based cohort membership
-  // alone is checked here; an operator using the email-allowlist form of
-  // AIE_PILOT_COHORT_EMAILS should list this route's callers by user id
-  // instead, or this route's own capability layer can be extended to
-  // surface email if that becomes a real operational need.
-  // AIE-1 final completion (2026-09-25): the email is now resolved server-side
-  // (lib/aie/pilotCohortEmail.ts), so an email-only allowlist admits correctly.
-  if (!(await isUserIdInAiePilotCohort(user.id))) {
-    return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
-  }
+  // Premium entitlement (14-10-2026) replaced the pilot allowlist: checked server-side on the session user,
+  // before a byte of the body is read, stored or scanned.
+  const premiumRefusal = await refuseUnlessPremiumAi(user.id, 'aie_intake_insurance');
+  if (premiumRefusal) return premiumRefusal;
 
   // AIE-1.5 note: this route used to also parse `owner`/`master_item_key`
   // query params here, purely to feed its own since-removed self-accept
@@ -123,7 +122,7 @@ export async function POST(req: Request) {
   const displayFilename = filename ? filename.replace(/[^\w.\- ]/g, '_').slice(0, 120) : null;
 
   const rlsClient = await createClient();
-  const created = await createIntake(rlsClient, {
+  const created = await admitIntake(rlsClient, {
     userId: user.id,
     declaredMimeType: 'application/pdf',
     byteSize: bytes.byteLength,

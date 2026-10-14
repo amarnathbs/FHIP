@@ -16,6 +16,10 @@
 // Only the service's write (`confirmAi*Fallback`) is stubbed, to observe what
 // the route passed on.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+// Premium Upload Entitlement (14-10-2026): this test is about something else (not the plan), so it runs as an ENTITLED customer, which is the
+// state it was written for. The entitlement itself is proved with the real capability in tests/unit/premiumUpload*.test.ts.
+vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) =>
+  (await import('../support/premiumImportEntitlementMock')).withPremiumImportEntitlement(await importOriginal()));
 
 const { confirmMocks, facts } = vi.hoisted(() => ({
   confirmMocks: {
@@ -35,7 +39,8 @@ vi.mock('@/lib/financial-data-hub/constants/featureFlags', async (importOriginal
   ...(await importOriginal<object>()),
   isFdhDocumentUploadEnabled: () => true,
 }));
-vi.mock('@/lib/aie/pilotCohortEmail', () => ({ resolveEmailForAiePilotCohort: vi.fn().mockResolvedValue('rt@fhip-test.invalid') }));
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({ recordDocumentAuditEvent: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
   saveAiFallbackDraft: vi.fn().mockResolvedValue({ persisted: true, draftId: 'draft-1' }),
@@ -87,7 +92,6 @@ vi.setConfig({ testTimeout: 60000 });
 
 beforeEach(() => {
   process.env.AIE_AI_FALLBACK_ENABLED = 'true';
-  process.env.AIE_PILOT_COHORT_ENFORCED = 'false';
   process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY = 'c3'.repeat(32);
   process.env.AIE_BANK_STATEMENT_AI_FALLBACK_ENABLED = 'true';
   process.env.AIE_LIABILITY_AI_FALLBACK_ENABLED = 'true';

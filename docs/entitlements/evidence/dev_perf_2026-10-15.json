@@ -1,0 +1,34 @@
+{
+  "entitlement_row_read_ms": {
+    "n": 40,
+    "p50": 161,
+    "p95": 197,
+    "max": 305
+  },
+  "route_ms_warm": {
+    "free_refusal_bank_csv_upload": {
+      "p50": 720,
+      "p95": 1013
+    },
+    "free_refusal_payslip_process": {
+      "p50": 901,
+      "p95": 1001
+    },
+    "premium_admission_validation_422": {
+      "p50": 699,
+      "p95": 760
+    },
+    "premium_runstart_not_found": {
+      "p50": 911,
+      "p95": 1071
+    },
+    "upload_status_free": {
+      "p50": 710,
+      "p95": 957
+    },
+    "upload_status_premium": {
+      "p50": 716,
+      "p95": 788
+    }
+  }
+}

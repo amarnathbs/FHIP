@@ -6,7 +6,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { facts, audit } = vi.hoisted(() => ({ facts: { current: null as unknown }, audit: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('@/lib/aie/pilotCohortEmail', () => ({ resolveEmailForAiePilotCohort: vi.fn().mockResolvedValue('p@fhip-test.invalid') }));
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({ recordDocumentAuditEvent: audit }));
 vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
   saveAiFallbackDraft: vi.fn().mockResolvedValue({ persisted: true, draftId: 'd' }),
@@ -27,7 +28,6 @@ const v = (value: string | null) => ({ value, missingReasonCode: value === null 
 
 beforeEach(() => {
   process.env.AIE_AI_FALLBACK_ENABLED = 'true';
-  process.env.AIE_PILOT_COHORT_ENFORCED = 'false';
   process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY = 'f6'.repeat(32);
   process.env.AIE_LIABILITY_AI_FALLBACK_ENABLED = 'true';
   process.env.AIE_RETIREMENT_STATEMENT_AI_FALLBACK_ENABLED = 'true';

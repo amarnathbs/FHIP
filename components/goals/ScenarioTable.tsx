@@ -2,6 +2,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import type { CategoryForecastResult, ScenarioCode } from '@/lib/engines/goalForecast';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 const SCENARIO_LABEL: Record<ScenarioCode, string> = { conservative: 'Conservative', base: 'Base', optimistic: 'Optimistic' };
 
@@ -18,7 +19,7 @@ export function ScenarioTable({
       title="Scenarios"
       description="Conservative, base and optimistic assumptions — the same plan looked at through three different lenses."
     >
-      <table className="w-full text-sm">
+      <DataTable label="Goal scenarios" className="w-full">
         <thead className="text-left text-xs uppercase text-gray-500">
           <tr>
             <th className="py-1">Scenario</th>
@@ -46,7 +47,7 @@ export function ScenarioTable({
             );
           })}
         </tbody>
-      </table>
+      </DataTable>
       <p className="mt-3 text-xs text-gray-400">
         Based on the assumptions shown for each scenario — these are estimates, not guarantees.
       </p>

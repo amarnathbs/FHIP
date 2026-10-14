@@ -19,6 +19,7 @@ import type { HoldingBenchmarkComparison } from '@/lib/engines/investment-intell
 import { OwnerClassBar } from './OwnerClassBar';
 import { ALL_OWNER_CLASSES, withOwnerClass } from './ownerClassUi';
 import { formatMoneyCode } from '@/lib/engines/money';
+import { DataTable } from '@/components/ui/DataTable';
 
 // R4 — Performance UX (spec sections 60-65).
 //
@@ -497,53 +498,51 @@ function RollingPanel({ p }: { p: PortfolioBlock }) {
   return (
     <div className="mt-6">
       <h3 className="mb-3 text-sm font-medium text-ink">Consistency — rolling returns</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-              <th className="py-2 pr-4 font-medium">Horizon</th>
-              <th className="py-2 pr-4 font-medium">Median</th>
-              <th className="py-2 pr-4 font-medium">Min</th>
-              <th className="py-2 pr-4 font-medium">Max</th>
-              <th className="py-2 pr-4 font-medium">Windows</th>
-              <th className="py-2 pr-4 font-medium">Beat benchmark</th>
-            </tr>
-          </thead>
-          <tbody>
-            {horizons.map((h) => {
-              const ok = h.series.status === 'CALCULATED' && h.series.value;
-              const s = h.series.value;
-              return (
-                <tr key={h.windowYears} className="border-b border-line align-top">
-                  <td className="py-2 pr-4 font-medium text-ink">{h.windowYears}Y</td>
-                  {ok && s ? (
-                    <>
-                      <td className="py-2 pr-4 tabular-nums text-ink">{pct(s.median)}</td>
-                      <td className="py-2 pr-4 tabular-nums text-ink">{pct(s.min)}</td>
-                      <td className="py-2 pr-4 tabular-nums text-ink">{pct(s.max)}</td>
-                      <td className="py-2 pr-4 tabular-nums text-muted">{s.observationCount}</td>
-                    </>
-                  ) : (
-                    <td className="py-2 pr-4 text-xs text-muted" colSpan={4}>
-                      {h.series.detail ?? STATUS_LABEL[h.series.status]}
-                    </td>
-                  )}
-                  <td className="py-2 pr-4 text-ink">
-                    {h.beat.status === 'CALCULATED' && h.beat.value ? (
-                      <span className="tabular-nums">
-                        {pct(h.beat.value.beatPct, 0)}{' '}
-                        <span className="text-xs text-muted">of {h.beat.value.comparableWindows} windows</span>
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted">{h.beat.detail ?? STATUS_LABEL[h.beat.status]}</span>
-                    )}
+      <DataTable label="Consistency — rolling returns" className="w-full min-w-[640px] text-left">
+        <thead>
+          <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+            <th className="py-2 pr-4 font-medium">Horizon</th>
+            <th className="py-2 pr-4 font-medium">Median</th>
+            <th className="py-2 pr-4 font-medium">Min</th>
+            <th className="py-2 pr-4 font-medium">Max</th>
+            <th className="py-2 pr-4 font-medium">Windows</th>
+            <th className="py-2 pr-4 font-medium">Beat benchmark</th>
+          </tr>
+        </thead>
+        <tbody>
+          {horizons.map((h) => {
+            const ok = h.series.status === 'CALCULATED' && h.series.value;
+            const s = h.series.value;
+            return (
+              <tr key={h.windowYears} className="border-b border-line align-top">
+                <td className="py-2 pr-4 font-medium text-ink">{h.windowYears}Y</td>
+                {ok && s ? (
+                  <>
+                    <td className="py-2 pr-4 tabular-nums text-ink">{pct(s.median)}</td>
+                    <td className="py-2 pr-4 tabular-nums text-ink">{pct(s.min)}</td>
+                    <td className="py-2 pr-4 tabular-nums text-ink">{pct(s.max)}</td>
+                    <td className="py-2 pr-4 tabular-nums text-muted">{s.observationCount}</td>
+                  </>
+                ) : (
+                  <td className="py-2 pr-4 text-xs text-muted" colSpan={4}>
+                    {h.series.detail ?? STATUS_LABEL[h.series.status]}
                   </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                )}
+                <td className="py-2 pr-4 text-ink">
+                  {h.beat.status === 'CALCULATED' && h.beat.value ? (
+                    <span className="tabular-nums">
+                      {pct(h.beat.value.beatPct, 0)}{' '}
+                      <span className="text-xs text-muted">of {h.beat.value.comparableWindows} windows</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted">{h.beat.detail ?? STATUS_LABEL[h.beat.status]}</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
     </div>
   );
 }
@@ -635,63 +634,61 @@ function SchemeTable({ schemes }: { schemes: SchemeBlock[] }) {
         Your own return (XIRR) for each holding, with its benchmark comparison. Select a row to see the scheme&apos;s NAV-based returns and any data
         limitations that apply to it.
       </p>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-              <th className="py-2 pr-4 font-medium">Scheme</th>
-              <th className="py-2 pr-4 font-medium">Currency</th>
-              <th className="py-2 pr-4 font-medium">Your return (XIRR)</th>
-              <th className="py-2 pr-4 font-medium">Against its benchmark, over your holding period</th>
-              <th className="py-2 pr-4 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((s) => {
-              const isOpen = expanded === s.instrumentId;
-              return (
-                <tr key={s.instrumentId} className="border-b border-line align-top">
-                  <td className="py-3 pr-4 font-medium text-ink">
-                    {s.instrumentName}
-                    {/* PC4 section 6: every metric on this row (XIRR, active
-                        return) is derived from this scheme's own current
-                        value — disclosed here so it is never mistaken for
-                        today's live value, and so a genuinely stale scheme
-                        is visible even though the portfolio-level date at
-                        the top of the page may be more recent. */}
-                    <p className="mt-0.5 text-xs font-normal text-muted">Value as of {fmtDate(s.currentValueDate, s.currencyCode)}</p>
-                    {isOpen && <SchemeDetail s={s} />}
-                  </td>
-                  <td className="py-3 pr-4 text-muted">{s.currencyCode}</td>
-                  <td className="py-3 pr-4">
-                    {s.investorXirr.status === 'CALCULATED' && s.investorXirr.value ? (
-                      <span className="tabular-nums text-ink">{pct(s.investorXirr.value.rate)}</span>
-                    ) : (
-                      <span className="text-xs text-muted">{STATUS_LABEL[s.investorXirr.status]}</span>
-                    )}
-                  </td>
-                  <td className="min-w-[14rem] py-3 pr-4">
-                    {/* Money-weighted, over THIS investor's own period: their purchases and sales replayed into
-                        the declared benchmark. XIRR vs XIRR from a year, absolute and not annualised below a year.
-                        Never a number without a mapping, a verified benchmark and an approved entitlement. */}
-                    <BenchmarkComparisonView comparison={s.benchmarkComparison} />
-                  </td>
-                  <td className="py-3 pr-4">
-                    <button
-                      type="button"
-                      onClick={() => setExpanded(isOpen ? null : s.instrumentId)}
-                      className="text-xs font-medium text-primary underline"
-                      aria-expanded={isOpen}
-                    >
-                      {isOpen ? 'Hide detail' : 'Show detail'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataTable label="Scheme performance" className="w-full min-w-[720px] text-left">
+        <thead>
+          <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+            <th className="py-2 pr-4 font-medium">Scheme</th>
+            <th className="py-2 pr-4 font-medium">Currency</th>
+            <th className="py-2 pr-4 font-medium">Your return (XIRR)</th>
+            <th className="py-2 pr-4 font-medium">Against its benchmark, over your holding period</th>
+            <th className="py-2 pr-4 font-medium" />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((s) => {
+            const isOpen = expanded === s.instrumentId;
+            return (
+              <tr key={s.instrumentId} className="border-b border-line align-top">
+                <td className="py-3 pr-4 font-medium text-ink">
+                  {s.instrumentName}
+                  {/* PC4 section 6: every metric on this row (XIRR, active
+                      return) is derived from this scheme's own current
+                      value — disclosed here so it is never mistaken for
+                      today's live value, and so a genuinely stale scheme
+                      is visible even though the portfolio-level date at
+                      the top of the page may be more recent. */}
+                  <p className="mt-0.5 text-xs font-normal text-muted">Value as of {fmtDate(s.currentValueDate, s.currencyCode)}</p>
+                  {isOpen && <SchemeDetail s={s} />}
+                </td>
+                <td className="py-3 pr-4 text-muted">{s.currencyCode}</td>
+                <td className="py-3 pr-4">
+                  {s.investorXirr.status === 'CALCULATED' && s.investorXirr.value ? (
+                    <span className="tabular-nums text-ink">{pct(s.investorXirr.value.rate)}</span>
+                  ) : (
+                    <span className="text-xs text-muted">{STATUS_LABEL[s.investorXirr.status]}</span>
+                  )}
+                </td>
+                <td className="min-w-[14rem] py-3 pr-4">
+                  {/* Money-weighted, over THIS investor's own period: their purchases and sales replayed into
+                      the declared benchmark. XIRR vs XIRR from a year, absolute and not annualised below a year.
+                      Never a number without a mapping, a verified benchmark and an approved entitlement. */}
+                  <BenchmarkComparisonView comparison={s.benchmarkComparison} />
+                </td>
+                <td className="py-3 pr-4">
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(isOpen ? null : s.instrumentId)}
+                    className="text-xs font-medium text-primary underline"
+                    aria-expanded={isOpen}
+                  >
+                    {isOpen ? 'Hide detail' : 'Show detail'}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
     </section>
   );
 }

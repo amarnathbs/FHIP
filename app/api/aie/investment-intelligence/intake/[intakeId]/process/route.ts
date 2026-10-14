@@ -1,5 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
-import { isAieDocumentIntakeEnabled, isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { refuseUnlessPremiumAi } from '@/lib/ai/access/premiumAiAccess';
+import { isAieDocumentIntakeEnabled, isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { isAieIiAdapterEnabled } from '@/lib/aie/adapters/investment-intelligence/featureFlags';
 import { getIntakeForUser, listAuditEventsForIntake, updateIntakeStatus } from '@/lib/aie/db/repository';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
@@ -13,6 +14,8 @@ import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmi
 import { dispatchInvestmentDocument } from '@/lib/aie/adapters/investment-intelligence/dispatch';
 import { resolveHouseholdCountryForUser, UnresolvedHouseholdCountryError } from '@/lib/aie/adapters/investment-intelligence/householdContext';
 import { resolveIntakeOwnerForAccept } from '@/lib/aie/intakeOwner';
+import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
+import { aieIntakeRunPosition } from '@/lib/aie/importRunPosition';
 
 /**
  * M3 (Phase 4) — `POST /api/aie/investment-intelligence/intake/{intakeId}/process`
@@ -61,10 +64,17 @@ const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
 export async function POST(req: Request, { params }: { params: Promise<{ intakeId: string }> }) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): starting NEW extraction work (a retry / re-parse) is Premium; the first run of a
+  // document admitted while Premium and the idempotent in-flight lifecycle still complete after a downgrade.
+  const importDenied = await refuseUnlessImportRunMayStart(user.id, 'aie.investment_intelligence.process', async () => aieIntakeRunPosition(user.id, (await params).intakeId));
+  if (importDenied) return importDenied;
 
   if (!isAieIiAdapterEnabled()) return bad('The AIE-fronted Investment Intelligence adapter is not currently enabled in this environment.', 403);
   if (!isAieDocumentIntakeEnabled()) return bad('AIE document intake is not currently enabled in this environment.', 403);
-  if (!isUserInAiePilotCohort({ userId: user.id, email: user.email })) return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
+  // Premium entitlement (14-10-2026) replaced the pilot allowlist: checked server-side on the session user,
+  // before a byte of the body is read, stored or scanned.
+  const premiumRefusal = await refuseUnlessPremiumAi(user.id, 'aie_process_investment_intelligence');
+  if (premiumRefusal) return premiumRefusal;
 
   const { intakeId } = await params;
 

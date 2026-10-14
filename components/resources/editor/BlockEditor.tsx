@@ -28,6 +28,7 @@ import {
   type QuoteData,
   type TableData,
 } from '@/lib/resources/editor/blocks';
+import { DataTable } from '@/components/ui/DataTable';
 
 const RICH_TEXT_HINT = 'You can use **bold**, _italic_, and [link text](https://example.com).';
 
@@ -140,7 +141,7 @@ function BlockBody({ block, onChange }: { block: AnyBlock; onChange: (data: unkn
       const removeRow = (ri: number) => onChange({ ...d, rows: d.rows.filter((_, i) => i !== ri) });
       return (
         <div className="space-y-2 overflow-x-auto">
-          <table className="min-w-full border-collapse text-sm">
+          <DataTable label="Table block editor" className="min-w-full border-collapse">
             <thead>
               <tr>
                 {d.headers.map((h, i) => (
@@ -177,7 +178,7 @@ function BlockBody({ block, onChange }: { block: AnyBlock; onChange: (data: unkn
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
           <div className="flex gap-3">
             <button type="button" onClick={addColumn} className="text-xs font-semibold text-trust hover:underline">
               + Add column

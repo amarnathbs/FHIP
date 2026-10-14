@@ -160,13 +160,13 @@ export function ackInfo(id: string): { label: string; warning: string } {
   return ACK_INFO[id] ?? { label: `I confirm: ${id}`, warning: 'This upload needs an explicit confirmation before it can be published.' };
 }
 
-export const ENTITLEMENT_RIGHT_INFO: ReadonlyArray<{ key: keyof EntitlementRightsView['rights']; short: string; label: string; meaning: string }> = [
-  { key: 'ingestManual', short: 'Ingest', label: 'Manual ingestion', meaning: 'An administrator may load a file of this benchmark by hand.' },
-  { key: 'automation', short: 'Automation', label: 'Automated ingestion', meaning: 'A scheduled job may fetch this benchmark from the provider without a person.' },
-  { key: 'storage', short: 'Storage', label: 'Storage', meaning: 'The levels may be kept in the database.' },
-  { key: 'calculation', short: 'Calculation', label: 'Calculation', meaning: 'The levels may be used inside return calculations. Needs storage.' },
-  { key: 'customerDisplay', short: 'Display', label: 'Customer display', meaning: 'Customers may see comparisons built from the levels. Needs calculation.' },
-  { key: 'reportExport', short: 'Export', label: 'Report and export', meaning: 'Reports and downloads may include the levels or comparisons. Needs customer display.' },
+export const ENTITLEMENT_RIGHT_INFO: ReadonlyArray<{ key: keyof EntitlementRightsView['rights']; short: string; /** Short column header for a narrow table; the full name stays in the accessible text. */ compact: string; label: string; meaning: string }> = [
+  { key: 'ingestManual', short: 'Ingest', compact: 'Ingest', label: 'Manual ingestion', meaning: 'An administrator may load a file of this benchmark by hand.' },
+  { key: 'automation', short: 'Automation', compact: 'Auto', label: 'Automated ingestion', meaning: 'A scheduled job may fetch this benchmark from the provider without a person.' },
+  { key: 'storage', short: 'Storage', compact: 'Store', label: 'Storage', meaning: 'The levels may be kept in the database.' },
+  { key: 'calculation', short: 'Calculation', compact: 'Calc', label: 'Calculation', meaning: 'The levels may be used inside return calculations. Needs storage.' },
+  { key: 'customerDisplay', short: 'Display', compact: 'Show', label: 'Customer display', meaning: 'Customers may see comparisons built from the levels. Needs calculation.' },
+  { key: 'reportExport', short: 'Export', compact: 'Export', label: 'Report and export', meaning: 'Reports and downloads may include the levels or comparisons. Needs customer display.' },
 ];
 
 export const LICENCE_STATUS_EXPLAINER =

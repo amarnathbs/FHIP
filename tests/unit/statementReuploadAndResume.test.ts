@@ -34,7 +34,8 @@ const download = vi.fn(async () => ({ ok: false as const, message: 'the file mus
 vi.mock('@/lib/financial-data-hub/services/storage', () => ({ downloadDocumentObject: () => download() }));
 const aiGate = vi.fn(() => ({ ok: false, reason: 'adapter_disabled' }));
 vi.mock('@/lib/aie/adapters/shared/fallbackGate', () => ({ evaluateAiFallbackGate: () => aiGate() }));
-vi.mock('@/lib/aie/pilotCohortEmail', () => ({ resolveEmailForAiePilotCohort: async () => null }));
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({ recordDocumentAuditEvent: vi.fn(async () => undefined) }));
 vi.mock('@/lib/financial-data-hub/repositories', () => ({
   statementUploadsRepository: {

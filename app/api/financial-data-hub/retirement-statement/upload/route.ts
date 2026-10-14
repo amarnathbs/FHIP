@@ -15,6 +15,7 @@ import {
   recordDocumentOwner,
   resolveUploadOwnerFromUrl,
 } from '@/lib/financial-data-hub/services/documentOwnerRequest';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // POST /api/financial-data-hub/retirement-statement/upload
 //
@@ -33,6 +34,10 @@ import {
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'fdh.retirement_statement.upload');
+  if (importDenied) return importDenied;
 
   // LR-4 (2026-09-08): every other FDH-3-descended upload route (Income/
   // Payslip, Liability, AU Investment) calls this same gate; Retirement
@@ -127,6 +132,10 @@ export async function POST(req: Request) {
       // sibling because a `pending_scan` upload finishes through the other
       // one, and a draft must not be reachable from only one of the two.
       ai_fallback_draft: result.aiFallbackDraft ?? null,
+      // 14-10-2026: present ('premium_required' | 'entitlement_unavailable') only when the file could not be read
+      // natively and the AI reading was NOT attempted for entitlement reasons, so the screen can explain and offer
+      // the upgrade. Null in every other case.
+      ai_fallback_refusal: result.aiFallbackRefusal ?? null,
     });
   } catch (e) {
     const ownerConflict = documentOwnerConflictResponse(e);

@@ -15,6 +15,7 @@ import {
 } from '@/lib/services/investment-intelligence/uploadOwner';
 import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from '@/lib/services/investment-intelligence/realScanAdmission';
 import { computeSourceDocumentCounts, EMPTY_SOURCE_DOCUMENT_COUNTS, type SourceDocumentCounts } from '@/lib/services/investment-intelligence/sourceDocumentEnrichment';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // Real upload path: multipart form-data with a "file" part and a "meta"
 // JSON part. Service-role storage write happens only AFTER an
@@ -78,6 +79,10 @@ export async function GET() {
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'ii.source_document.upload');
+  if (importDenied) return importDenied;
 
   const form = await req.formData().catch(() => null);
   if (!form) return bad('Expected multipart/form-data with "file" and "meta" fields', 422);

@@ -135,6 +135,14 @@ frontend:
         # when unset, so today's production behaviour is unchanged either
         # way; this only makes the switches operable at all.
         #
+        # 14-10-2026 (Product Owner): the AIE and II-fallback pilot allowlists above
+        # (AIE_PILOT_COHORT_*, II_AI_FALLBACK_PILOT_COHORT_*) were REMOVED from the
+        # code. WHO may start an AI document reading is now decided server-side by
+        # the Premium entitlement (lib/ai/access/premiumAiAccess.ts), so the
+        # "kill switch without its allowlist" fail-open warned about above can no
+        # longer occur. The `AIE_` and `II_AI_FALLBACK_` prefixes stay forwarded
+        # unchanged: they still carry the kill switches and per-adapter flags.
+        #
         # Premium promo codes / expiry e-mails (2026-10-01): `PROMO_IP_HASH_SECRET`
         # (the HMAC key for the per-IP redemption rate limit, falls back to
         # CRON_SECRET above) and `PREMIUM_REMINDER_FROM_EMAIL` (optional sender for

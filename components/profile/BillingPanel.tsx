@@ -80,6 +80,10 @@ export function BillingPanel() {
   const [promoCode, setPromoCode] = useState('');
   const [promoBusy, setPromoBusy] = useState(false);
   const [promoResult, setPromoResult] = useState<{ ok: boolean; text: string } | null>(null);
+  // Premium Upload Entitlement (14-10-2026): coming back from the payment provider is NOT proof of payment -- only the verified webhook
+  // upgrades the plan. While the plan is still Free after a successful-checkout return, say so and keep re-reading the server's own
+  // state for a short while (never unlock anything early, never claim Premium).
+  const [activating, setActivating] = useState<'waiting' | 'slow' | null>(null);
 
   async function loadStatus() {
     const data = await fetchJson<PaymentStatus>('/api/payments/status');
@@ -102,6 +106,31 @@ export function BillingPanel() {
       cancelled = true;
     };
   }, []);
+
+  // After a successful-checkout return, keep re-reading the server's own plan state for a short while (see `activating`). The
+  // page is usable meanwhile; this never changes the plan, it only waits for the verified webhook to have done so.
+  useEffect(() => {
+    if (loading) return;
+    if (new URLSearchParams(window.location.search).get('checkout') !== 'success') return;
+    let cancelled = false;
+    (async () => {
+      let tier = (await fetchJson<PaymentStatus>('/api/payments/status').catch(() => null))?.planTier ?? 'free';
+      if (tier !== 'premium' && !cancelled) setActivating('waiting');
+      for (let attempt = 0; tier !== 'premium' && attempt < 20 && !cancelled; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        if (cancelled) break;
+        const fresh = await fetchJson<PaymentStatus>('/api/payments/status').catch(() => null);
+        if (fresh) {
+          tier = fresh.planTier;
+          if (!cancelled) setStatus(fresh);
+        }
+      }
+      if (!cancelled) setActivating(tier === 'premium' ? null : 'slow');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading]);
 
   async function confirmCountry() {
     setCountryBusy(true);
@@ -179,6 +208,13 @@ export function BillingPanel() {
             <span className="ml-2 text-muted">({SUBSCRIPTION_STATUS_LABEL[status.subscriptionStatus] ?? status.subscriptionStatus})</span>
           )}
         </p>
+        {activating && status.planTier !== 'premium' && (
+          <p role="status" aria-live="polite" className="mt-2 rounded border border-ai/30 bg-ai/5 p-3 text-sm text-muted">
+            {activating === 'waiting'
+              ? 'Activating your subscription. Premium features, including statement import, unlock as soon as your payment is confirmed. This usually takes a few seconds.'
+              : 'We have not received confirmation of your payment yet. Premium unlocks as soon as it is confirmed; you do not need to pay again. If this takes more than a few minutes, contact FHIP support.'}
+          </p>
+        )}
         {hasLiveSubscription && status.currentPeriodEnd && (
           <p className="mt-1 text-xs text-muted">
             {status.cancelAtPeriodEnd ? 'Ends' : 'Renews'} {formatDateShort(new Date(status.currentPeriodEnd), status.dateFormat ?? 'AUD')}

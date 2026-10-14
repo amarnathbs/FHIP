@@ -13,13 +13,18 @@
  *   2. the SHARED global `AIE_AI_FALLBACK_ENABLED` kill switch every AI call
  *      in this codebase already shares — so one switch still stops
  *      everything, for every type, at once;
- *   3. the SHARED AIE-1 pilot-cohort allowlist
- *      (`isAiePilotCohortEnforced`/`isUserInAiePilotCohort`), NOT a
- *      per-adapter clone. The design document is explicit that cloning the
- *      cohort — which the Investment Intelligence mechanism did — must not be
- *      repeated: one allowlist and one operator surface for every document
- *      type is a first-class part of "the same path", not just the AI-calling
- *      mechanics;
+ *   2b. the REAL malware scan must be switched on for the deployment
+ *      (`isAiEgressMalwarePreconditionMet`), so AI egress never rests on the
+ *      scan-off structural-validation-only mode;
+ *   3. PREMIUM ENTITLEMENT (`resolvePremiumAiAccess`) -- since 14-10-2026 the
+ *      only "who" check. It replaced the two-e-mail AIE pilot allowlist: any
+ *      signed-in user with an ACTIVE Premium entitlement may have a document
+ *      read by the AI fallback, a Free / expired / unreadable entitlement may
+ *      not, and a former pilot e-mail changes nothing either way. It is
+ *      evaluated here, at the moment a NEW chargeable operation is about to
+ *      start, so queued or replayed work re-checks it rather than relying on
+ *      what was true at upload time. One shared check for every document type;
+ *      no per-adapter clone;
  *   4. MASKING, which fails CLOSED. `maskText` throws when
  *      `AIE_MASK_TOKEN_ENCRYPTION_KEY` is unset, and that throw is caught
  *      here and converted into a refusal — never into an unmasked call.
@@ -35,13 +40,17 @@
  * caller records; this returns a typed reason for it to record.
  */
 
-import { isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
+import { isAiEgressMalwarePreconditionMet } from '@/lib/aie/malware/aiEgressPrecondition';
+import { resolvePremiumAiAccess, type PremiumAiAccessDeps } from '@/lib/ai/access/premiumAiAccess';
 import { maskText, isBelowMaskingPolicy } from '@/lib/aie/masking/piiMasking';
 
 export type AieFallbackGateRefusalReason =
   | 'adapter_disabled'
   | 'global_kill_switch_disabled'
-  | 'cohort_denied'
+  | 'malware_scan_not_enforced'
+  | 'premium_required'
+  | 'entitlement_unavailable'
   | 'no_extracted_text'
   | 'masking_unavailable'
   | 'masking_below_policy';
@@ -62,18 +71,20 @@ const MIN_EXTRACTED_TEXT_CHARS = 40;
  * caller cannot accidentally send the raw text to the provider, because a
  * successful result does not contain it.
  */
-export function evaluateAiFallbackGate(params: {
+export async function evaluateAiFallbackGate(params: {
+  /** The AUTHENTICATED session user's id -- never a caller-supplied value. */
   userId: string;
-  /** AIE-1 final completion (2026-09-25): the caller's email, so an
-   * email-only pilot allowlist can admit (see `lib/aie/pilotCohortEmail.ts`).
-   * Omitted or null can only deny, never admit. */
-  cohortEmail?: string | null;
   adapterEnabled: boolean;
   extractedText: string;
-}): AieFallbackGateResult {
+  /** Test seam for the entitlement read; production never sets it. */
+  entitlementDeps?: PremiumAiAccessDeps;
+}): Promise<AieFallbackGateResult> {
   if (!params.adapterEnabled) return { ok: false, reason: 'adapter_disabled' };
   if (!isAieAiFallbackEnabled()) return { ok: false, reason: 'global_kill_switch_disabled' };
-  if (!isUserInAiePilotCohort({ userId: params.userId, email: params.cohortEmail })) return { ok: false, reason: 'cohort_denied' };
+  // Document content leaves this process only where the REAL malware scan is on (see aiEgressPrecondition.ts).
+  if (!isAiEgressMalwarePreconditionMet()) return { ok: false, reason: 'malware_scan_not_enforced' };
+  const access = await resolvePremiumAiAccess(params.userId, 'aie_document_fallback', params.entitlementDeps);
+  if (!access.allowed) return { ok: false, reason: access.reason };
 
   if (params.extractedText.trim().length < MIN_EXTRACTED_TEXT_CHARS) {
     return { ok: false, reason: 'no_extracted_text' };
