@@ -31,6 +31,7 @@ the app's own delete; if you choose to clean up anything by SQL instead, take a 
 | File | Purpose |
 |---|---|
 | `01_precheck_readonly.sql` | Read-only: plan counts, the entitlement shape, the storage policies, baseline document count |
+| (no `02` file) | There is nothing to apply: the release is code-only |
 | `03_verification_readonly.sql` | Read-only: every document admitted since the release is stamped Premium; plan counts unchanged |
 | `SYNTHETIC_PRODUCTION_TEST.md` | The production test procedure, step by step, with expected results and cleanup |
 | `synthetic_probe.js` | Browser-console probe: 28 requests that cannot create data; run once as Free and once as Premium |
