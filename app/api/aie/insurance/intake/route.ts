@@ -1,7 +1,7 @@
-import { isUserIdInAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
 import { bad, ok } from '@/lib/api';
 import { requireModuleCapability } from '@/lib/services/appCapability';
 import { createClient } from '@/lib/supabase/server';
+import { refuseUnlessPremiumAi } from '@/lib/ai/access/premiumAiAccess';
 import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
@@ -88,17 +88,10 @@ export async function POST(req: Request) {
   if (!isAieDocumentIntakeEnabled()) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
   }
-  // `requireModuleCapability`'s declared return type narrows `user` to
-  // `{ id: string }` only (no `.email`) -- userId-based cohort membership
-  // alone is checked here; an operator using the email-allowlist form of
-  // AIE_PILOT_COHORT_EMAILS should list this route's callers by user id
-  // instead, or this route's own capability layer can be extended to
-  // surface email if that becomes a real operational need.
-  // AIE-1 final completion (2026-09-25): the email is now resolved server-side
-  // (lib/aie/pilotCohortEmail.ts), so an email-only allowlist admits correctly.
-  if (!(await isUserIdInAiePilotCohort(user.id))) {
-    return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
-  }
+  // Premium entitlement (14-10-2026) replaced the pilot allowlist: checked server-side on the session user,
+  // before a byte of the body is read, stored or scanned.
+  const premiumRefusal = await refuseUnlessPremiumAi(user.id, 'aie_intake_insurance');
+  if (premiumRefusal) return premiumRefusal;
 
   // AIE-1.5 note: this route used to also parse `owner`/`master_item_key`
   // query params here, purely to feed its own since-removed self-accept

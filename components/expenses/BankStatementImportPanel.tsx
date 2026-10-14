@@ -1,5 +1,6 @@
 'use client';
 
+import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { formatDateShort } from '@/lib/engines/date';
 import { DateInput } from '@/components/ui/DateInput';
 /**
@@ -425,6 +426,9 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
 
     if (data.error_code) {
       failWith(data.error_code, 'This file could not be processed.');
+      // Free user (or plan could not be confirmed): say why no AI reading was tried, and offer the upgrade.
+      const refusalNote = aiFallbackRefusalNote(data.ai_fallback_refusal);
+      if (refusalNote) setMessage((m) => `${m ?? ''} ${refusalNote}`.trim());
       return;
     }
 

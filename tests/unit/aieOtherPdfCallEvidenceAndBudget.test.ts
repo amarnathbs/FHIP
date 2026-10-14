@@ -27,6 +27,8 @@ vi.mock('@/lib/aie/provider/gateway', () => ({
 }));
 // 2026-09-25: both factories, since main now builds every gateway with the per-call
 // lazy provider (createLazyAieAiProvider) -- a mock without it broke at import.
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/aie/provider/providerFactory', () => ({ createAieAiProvider: () => ({}), createLazyAieAiProvider: () => ({}) }));
 vi.mock('@/lib/aie/cost/costAdmission', () => ({ reserveConservativeAiCost: vi.fn(), settleAiCost: vi.fn() }));
 vi.mock('@/lib/supabase/admin', () => ({
@@ -65,7 +67,6 @@ describe('shared adapter gateway returns call evidence', () => {
 describe('Investment Intelligence whole-document extraction', () => {
   it('asks for the LINE-ITEM output budget, and a billed failure keeps its evidence', async () => {
     process.env.II_AI_FALLBACK_ENABLED = 'true';
-    delete process.env.II_AI_FALLBACK_PILOT_COHORT_ENFORCED;
     nextResult.current = { outcome: 'schema_rejected', providerRequestIds: ['req_synthetic_ii'], inputTokens: 3000, outputTokens: 512 };
     const { getAiFallbackDocumentExtraction } = await import('@/lib/services/investment-intelligence/aiFallbackDocumentExtraction');
     const { getAieAiMaxOutputTokensPerLineItemDocument } = await import('@/lib/aie/config');

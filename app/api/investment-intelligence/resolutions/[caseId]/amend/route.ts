@@ -146,7 +146,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
     let reprocessed = false;
     let reprocessError: string | null = null;
     try {
-      const result = await processSourceDocument({ userId: user.id, userEmail: user.email ?? null, sourceDocumentId, forceReparse: true });
+      const result = await processSourceDocument({ userId: user.id, sourceDocumentId, forceReparse: true });
       reprocessed = result.ok;
       if (!result.ok) reprocessError = result.error ?? 'Reprocessing did not complete successfully.';
     } catch (e) {

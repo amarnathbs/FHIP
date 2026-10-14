@@ -1,5 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
-import { isAieDocumentIntakeEnabled, isAieAiFallbackEnabled, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { refuseUnlessPremiumAi } from '@/lib/ai/access/premiumAiAccess';
+import { isAieDocumentIntakeEnabled, isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { isAieIiAdapterEnabled } from '@/lib/aie/adapters/investment-intelligence/featureFlags';
 import { getIntakeForUser, listAuditEventsForIntake, updateIntakeStatus } from '@/lib/aie/db/repository';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
@@ -64,7 +65,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ intakeI
 
   if (!isAieIiAdapterEnabled()) return bad('The AIE-fronted Investment Intelligence adapter is not currently enabled in this environment.', 403);
   if (!isAieDocumentIntakeEnabled()) return bad('AIE document intake is not currently enabled in this environment.', 403);
-  if (!isUserInAiePilotCohort({ userId: user.id, email: user.email })) return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
+  // Premium entitlement (14-10-2026) replaced the pilot allowlist: checked server-side on the session user,
+  // before a byte of the body is read, stored or scanned.
+  const premiumRefusal = await refuseUnlessPremiumAi(user.id, 'aie_process_investment_intelligence');
+  if (premiumRefusal) return premiumRefusal;
 
   const { intakeId } = await params;
 

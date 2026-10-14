@@ -20,6 +20,8 @@ const { auditMock, applyMock, downloadMock } = vi.hoisted(() => ({
   applyMock: vi.fn().mockResolvedValue({ ok: true, error: null, summary: { accountsFound: 1, schemesFound: 1, newTransactionsCount: 1, duplicateTransactionsLinked: 0, missingTransactionsCount: 0 } }),
   downloadMock: vi.fn(),
 }));
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/services/investment-intelligence/audit', () => ({ emitAuditEvent: auditMock }));
 vi.mock('@/lib/services/investment-intelligence/storage', () => ({ downloadSourceDocumentObject: downloadMock }));
 vi.mock('@/lib/services/investment-intelligence/aiExtractionReviewApply', () => ({ applyAiExtractionReview: applyMock, rejectAiExtractionReview: vi.fn() }));
@@ -90,7 +92,7 @@ function seed() {
 }
 
 const saved: Record<string, string | undefined> = {};
-const KEYS = ['II_AI_FALLBACK_ENABLED', 'II_AI_FALLBACK_PILOT_COHORT_ENFORCED', 'AIE_MASK_TOKEN_ENCRYPTION_KEY'];
+const KEYS = ['II_AI_FALLBACK_ENABLED', 'AIE_MASK_TOKEN_ENCRYPTION_KEY'];
 
 beforeEach(() => {
   for (const k of KEYS) saved[k] = process.env[k];
@@ -99,7 +101,6 @@ beforeEach(() => {
   applyMock.mockClear();
   downloadMock.mockReset();
   downloadMock.mockResolvedValue({ bytes: new TextEncoder().encode(UNRECOGNISED_WITH_PII), error: null });
-  delete process.env.II_AI_FALLBACK_PILOT_COHORT_ENFORCED;
 });
 afterEach(() => {
   for (const k of KEYS) {

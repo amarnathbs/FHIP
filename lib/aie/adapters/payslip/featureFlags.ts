@@ -19,12 +19,9 @@
  * matching `lib/services/investment-intelligence/aiFallbackFeatureFlag.ts`'s
  * own explicit reasoning ("never become two independently-configurable
  * flags that could drift out of sync") — rather than a separate flag per
- * failure-reason. Pilot-cohort gating deliberately reuses AIE-1 core's
- * SHARED `isAiePilotCohortEnforced()`/`isUserInAiePilotCohort()`
- * (`lib/aie/featureFlags.ts`) instead of cloning a third, adapter-local
- * allowlist the way the II mechanism did — one shared pilot mechanism for
- * every document type is exactly what the design doc recommends going
- * forward.
+ * failure-reason. WHO may use it is not decided here: since 14-10-2026 the
+ * two-e-mail pilot allowlist is gone and every AI fallback is gated by the one
+ * shared Premium-entitlement check (`lib/ai/access/premiumAiAccess.ts`).
  */
 
 export function isAiePayslipAiFallbackEnabled(): boolean {

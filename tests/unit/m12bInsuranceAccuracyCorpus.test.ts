@@ -179,6 +179,8 @@ function resetState() {
   (globalThis as unknown as Record<string, SharedState>)[STATE_KEY] = freshState();
 }
 
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/services/appCapability', () => ({
   requireModuleCapability: async () => ({ user: { id: CORPUS_USER_ID }, blocked: null, decision: null }),
 }));
@@ -474,7 +476,6 @@ describe('M12B.5 — Insurance accuracy certification against a sealed corpus', 
     process.env.AIE_INSURANCE_ADAPTER_ENABLED = 'true';
     process.env.AIE_DOCUMENT_INTAKE_ENABLED = 'true';
     process.env.AIE_ALLOW_MISSING_SIGNATURE_SCANNER = 'true';
-    process.env.AIE_PILOT_COHORT_USER_IDS = CORPUS_USER_ID;
     process.env.AIE_REVIEW_CANONICAL_ACCEPTANCE_ENABLED = 'true';
     process.env.AIE_INSURANCE_ADAPTER_CANONICAL_WRITE_ENABLED = 'true';
     delete process.env.AIE_AI_FALLBACK_ENABLED;

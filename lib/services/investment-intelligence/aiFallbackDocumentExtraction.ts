@@ -39,7 +39,9 @@
 
 import { randomUUID } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isAiFallbackEnabled, isUserInIiAiFallbackPilotCohort } from './aiFallbackFeatureFlag';
+import { isAiFallbackEnabled } from './aiFallbackFeatureFlag';
+import { resolvePremiumAiAccess, type PremiumAiAccessDeps } from '@/lib/ai/access/premiumAiAccess';
+import { isAiEgressMalwarePreconditionMet } from '@/lib/aie/malware/aiEgressPrecondition';
 import { unitDeltaForTransaction } from './reconciliation';
 import { computeCostValue, type CostBasisTransaction } from './costBasis';
 import { fromPlainNumber, scaledToDecimalString } from './decimal';
@@ -288,11 +290,16 @@ export async function resolveAieDocumentProvider(): Promise<AieDocumentProvider 
 
 export type AiFallbackDocumentOutcome =
   | { outcome: 'disabled' }
-  // 2026-09-21 fix (M13A finding): this path had no pilot-cohort gate.
-  // Returned when II_AI_FALLBACK_PILOT_COHORT_ENFORCED is on and this user
-  // is not on the allowlist — the provider is never called, matching
-  // 'disabled''s own "no AI call happened" property.
-  | { outcome: 'cohort_denied' }
+  // 14-10-2026: the pilot-cohort gate (II_AI_FALLBACK_PILOT_COHORT_*) was
+  // replaced by the shared Premium-entitlement check. Returned when the user
+  // has no active Premium entitlement -- the provider is never called,
+  // matching 'disabled''s own "no AI call happened" property.
+  | { outcome: 'premium_required' }
+  // The entitlement could not be read: fail closed, no provider call, and no
+  // upgrade prompt (an outage is not something the user can pay to fix).
+  | { outcome: 'entitlement_unavailable' }
+  // The real malware scan is not switched on for this deployment: document content is never sent out (fail closed).
+  | { outcome: 'malware_scan_not_enforced' }
   | { outcome: 'unavailable'; reason: string }
   | { outcome: 'already_pending'; reviewId: string; holdings: AieExtractedHolding[] }
   | { outcome: 'already_decided'; reviewId: string; status: 'accepted' | 'rejected' }
@@ -310,11 +317,8 @@ export type AiFallbackDocumentOutcome =
 
 export interface AiFallbackDocumentContext {
   userId: string;
-  /** Needed for the pilot-cohort email allowlist (2026-09-21 fix) — optional
-   * so existing test call sites that only ever exercised the enabled/
-   * disabled kill switch keep compiling; omitted/null simply means the
-   * email-based half of the allowlist can never match for this call. */
-  userEmail?: string | null;
+  /** Test seam for the Premium-entitlement read; production never sets it. */
+  entitlementDeps?: PremiumAiAccessDeps;
   sourceDocumentId: string;
   parseRunId: string | null;
   triggerReason: AiFallbackTriggerReason;
@@ -352,14 +356,6 @@ function hasUsableData(result: AieDocumentExtractionResult): boolean {
 export async function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentContext): Promise<AiFallbackDocumentOutcome> {
   if (!isAiFallbackEnabled()) return { outcome: 'disabled' };
 
-  // 2026-09-21 fix (M13A finding): checked BEFORE any existing-review lookup
-  // or provider call, same "before a single byte is read/sent" discipline
-  // the AIE intake routes use for their own pilot-cohort check. Fails
-  // closed: see isUserInIiAiFallbackPilotCohort's own header.
-  if (!isUserInIiAiFallbackPilotCohort({ userId: ctx.userId, email: ctx.userEmail ?? null })) {
-    return { outcome: 'cohort_denied' };
-  }
-
   const admin = createAdminClient();
 
   const { data: existing } = await admin
@@ -379,6 +375,16 @@ export async function getAiFallbackDocumentExtraction(ctx: AiFallbackDocumentCon
       return { outcome: 'already_decided', reviewId: existing.id as string, status: existing.status };
     }
   }
+
+  // 14-10-2026: Premium entitlement, checked HERE -- after the lookups above,
+  // which only return what this same user already has (a pending or decided
+  // review: no new chargeable work, so a user who has since been downgraded
+  // does not lose sight of a draft they still have to accept or reject), and
+  // BEFORE the request is built (masking) or the provider is touched. It
+  // replaced the II-specific pilot allowlist. Fails closed.
+  if (!isAiEgressMalwarePreconditionMet()) return { outcome: 'malware_scan_not_enforced' };
+  const access = await resolvePremiumAiAccess(ctx.userId, 'ii_document_fallback', ctx.entitlementDeps);
+  if (!access.allowed) return { outcome: access.reason === 'premium_required' ? 'premium_required' : 'entitlement_unavailable' };
 
   let request: AieDocumentExtractionRequest;
   try {

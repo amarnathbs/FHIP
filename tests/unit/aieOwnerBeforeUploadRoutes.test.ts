@@ -24,6 +24,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ from: () => ({}) }) }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: () => ({}) }) }));
 vi.mock('@/lib/aie/audit', () => ({ recordAieAuditEvent: async () => {} }));
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/aie/db/repository', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/aie/db/repository')>();
   return {
@@ -77,7 +79,6 @@ beforeEach(() => {
   process.env.AIE_II_ADAPTER_ENABLED = 'true';
   process.env.AIE_DOCUMENT_INTAKE_ENABLED = 'true';
   process.env.AIE_ALLOW_MISSING_SIGNATURE_SCANNER = 'true';
-  process.env.AIE_PILOT_COHORT_USER_IDS = 'user-owner-test';
 });
 
 const BANK_PATH = '/api/aie/fdh-bank/intake?country_code=AU&currency_code=AUD&filename=s.pdf';

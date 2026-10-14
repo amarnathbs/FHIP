@@ -40,7 +40,11 @@
  * coverage than exists.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { premiumAi } from '../support/premiumAiAccessMock';
+
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 import { AieDocumentAiGateway } from '@/lib/aie/provider/gateway';
 import { MockAieProvider } from '@/lib/aie/provider/mockAieProvider';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
@@ -60,14 +64,13 @@ beforeAll(() => {
   saved = {
     AIE_MASK_TOKEN_ENCRYPTION_KEY: process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY,
     AIE_AI_FALLBACK_ENABLED: process.env.AIE_AI_FALLBACK_ENABLED,
-    AIE_PILOT_COHORT_ENFORCED: process.env.AIE_PILOT_COHORT_ENFORCED,
   };
   process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY = TEST_MASK_KEY;
   process.env.AIE_AI_FALLBACK_ENABLED = 'true';
-  // Cohort enforcement OFF so the gate's later steps are reachable; the
-  // cohort gate itself is asserted separately below.
-  process.env.AIE_PILOT_COHORT_ENFORCED = 'false';
 });
+
+// Every test starts with the synthetic tenant on an ACTIVE Premium entitlement; the entitlement refusals are asserted below.
+beforeEach(() => premiumAi.reset());
 
 afterAll(() => {
   for (const [k, v] of Object.entries(saved)) {
@@ -209,8 +212,8 @@ const FIXTURES = [
 
 describe('AIE unified fallback — masking at the egress boundary', () => {
   describe.each(FIXTURES)('$name', ({ text, sentinels }) => {
-    it('masks every planted identifier before the gate returns any text', () => {
-      const gate = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: text });
+    it('masks every planted identifier before the gate returns any text', async () => {
+      const gate = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: text });
       expect(gate.ok).toBe(true);
       if (!gate.ok) return;
 
@@ -219,18 +222,18 @@ describe('AIE unified fallback — masking at the egress boundary', () => {
       }
     });
 
-    it('records the masking as having found something (coverage is not silently empty)', () => {
+    it('records the masking as having found something (coverage is not silently empty)', async () => {
       // M12B-F1's own failure mode was a run whose `coverage_by_type` was
       // literally `{}` while PII egressed. An empty coverage map on a
       // document this full of identifiers means the masker did nothing.
-      const gate = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: text });
+      const gate = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: text });
       expect(gate.ok).toBe(true);
       if (!gate.ok) return;
       expect(gate.totalMatches).toBeGreaterThan(0);
       expect(Object.keys(gate.coverageByType).length).toBeGreaterThan(0);
     });
 
-    it('leaves the financial values the adapter exists to read intact', () => {
+    it('leaves the financial values the adapter exists to read intact', async () => {
       // Masking that ate the amounts would be "safe" and useless. This is the
       // other half of correct behaviour and is asserted explicitly.
       const { maskedText } = maskText(text, { tenantKey: TENANT });
@@ -242,7 +245,7 @@ describe('AIE unified fallback — masking at the egress boundary', () => {
   it('bank statement: nothing sensitive reaches the provider through the REAL gateway', async () => {
     registerBankStatementDocumentFactsSchema();
     const { gateway, captured } = capturingGateway();
-    const gate = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
+    const gate = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
     expect(gate.ok).toBe(true);
     if (!gate.ok) return;
 
@@ -266,7 +269,7 @@ describe('AIE unified fallback — masking at the egress boundary', () => {
   it('retirement statement: nothing sensitive reaches the provider through the REAL gateway', async () => {
     registerRetirementDocumentFactsSchema();
     const { gateway, captured } = capturingGateway();
-    const gate = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_RETIREMENT_STATEMENT });
+    const gate = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_RETIREMENT_STATEMENT });
     expect(gate.ok).toBe(true);
     if (!gate.ok) return;
 
@@ -287,7 +290,7 @@ describe('AIE unified fallback — masking at the egress boundary', () => {
     }
   });
 
-  it("the gateway's own independent pre-egress re-scan also passes on every fixture", () => {
+  it("the gateway's own independent pre-egress re-scan also passes on every fixture", async () => {
     // `containsUnmaskedPii` is a SEPARATE guard from `maskText`, reading the
     // same `PII_PATTERNS` array. M12B-F2 was precisely the case where the two
     // asked different questions and the guard rejected fully-masked payloads.
@@ -299,56 +302,96 @@ describe('AIE unified fallback — masking at the egress boundary', () => {
 });
 
 describe('AIE unified fallback — the gate fails closed', () => {
-  it('refuses when the adapter flag is off, before touching the masking key', () => {
-    const r = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: false, extractedText: SYNTHETIC_BANK_STATEMENT });
+  it('refuses when the adapter flag is off, before touching the masking key', async () => {
+    const r = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: false, extractedText: SYNTHETIC_BANK_STATEMENT });
     expect(r).toEqual({ ok: false, reason: 'adapter_disabled' });
   });
 
-  it('refuses when the shared global kill switch is off', () => {
+  it('refuses when the shared global kill switch is off', async () => {
     const prev = process.env.AIE_AI_FALLBACK_ENABLED;
     process.env.AIE_AI_FALLBACK_ENABLED = 'false';
     try {
-      const r = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
+      const r = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
       expect(r).toEqual({ ok: false, reason: 'global_kill_switch_disabled' });
     } finally {
       process.env.AIE_AI_FALLBACK_ENABLED = prev;
     }
   });
 
-  it('refuses a user outside the shared pilot cohort', () => {
-    const prevEnforced = process.env.AIE_PILOT_COHORT_ENFORCED;
-    const prevIds = process.env.AIE_PILOT_COHORT_USER_IDS;
-    process.env.AIE_PILOT_COHORT_ENFORCED = 'true';
-    process.env.AIE_PILOT_COHORT_USER_IDS = 'someone-else';
+  it('AI egress needs the REAL malware scan: with it off (and no DEV override) the gate refuses before any plan read; with it on, it opens', async () => {
+    const prev = { real: process.env.AIE_REAL_MALWARE_SCAN_ENABLED, ovr: process.env.AIE_ALLOW_AI_FALLBACK_WITHOUT_REAL_SCAN };
     try {
-      const r = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
-      expect(r).toEqual({ ok: false, reason: 'cohort_denied' });
+      delete process.env.AIE_ALLOW_AI_FALLBACK_WITHOUT_REAL_SCAN;
+      delete process.env.AIE_REAL_MALWARE_SCAN_ENABLED;
+      expect(await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT })).toEqual({ ok: false, reason: 'malware_scan_not_enforced' });
+      expect(premiumAi.asked).toEqual([]);
+      process.env.AIE_REAL_MALWARE_SCAN_ENABLED = 'false'; // anything but the literal 'true' stays off
+      expect((await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT })).ok).toBe(false);
+      process.env.AIE_REAL_MALWARE_SCAN_ENABLED = 'true';
+      expect((await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT })).ok).toBe(true);
     } finally {
-      if (prevEnforced === undefined) delete process.env.AIE_PILOT_COHORT_ENFORCED;
-      else process.env.AIE_PILOT_COHORT_ENFORCED = prevEnforced;
-      if (prevIds === undefined) delete process.env.AIE_PILOT_COHORT_USER_IDS;
-      else process.env.AIE_PILOT_COHORT_USER_IDS = prevIds;
+      for (const [k, v] of [['AIE_REAL_MALWARE_SCAN_ENABLED', prev.real], ['AIE_ALLOW_AI_FALLBACK_WITHOUT_REAL_SCAN', prev.ovr]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
     }
   });
 
-  it('refuses — never falls back to sending raw text — when the masking key is unset', () => {
+  it('refuses a Free user (premium_required) -- and never reads the document or masks it', async () => {
+    premiumAi.setTier(TENANT, 'free');
+    const r = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
+    expect(r).toEqual({ ok: false, reason: 'premium_required' });
+  });
+
+  it('refuses an expired Premium entitlement, and fails closed (entitlement_unavailable) when the plan cannot be read', async () => {
+    premiumAi.setTier(TENANT, 'expired');
+    expect(await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT })).toEqual({ ok: false, reason: 'premium_required' });
+    premiumAi.setTier(TENANT, 'unavailable');
+    expect(await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT })).toEqual({ ok: false, reason: 'entitlement_unavailable' });
+  });
+
+  it('a former pilot allowlist neither admits a Free user nor blocks a Premium one (the variables are inert)', async () => {
+    const prev = { e: process.env.AIE_PILOT_COHORT_ENFORCED, ids: process.env.AIE_PILOT_COHORT_USER_IDS, em: process.env.AIE_PILOT_COHORT_EMAILS };
+    process.env.AIE_PILOT_COHORT_ENFORCED = 'true';
+    process.env.AIE_PILOT_COHORT_USER_IDS = TENANT; // lists this tenant ...
+    process.env.AIE_PILOT_COHORT_EMAILS = 'someone@example.com';
+    try {
+      premiumAi.setTier(TENANT, 'free'); // ... but they are Free
+      expect(await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT })).toEqual({ ok: false, reason: 'premium_required' });
+      process.env.AIE_PILOT_COHORT_USER_IDS = 'someone-else'; // not listed ...
+      premiumAi.setTier(TENANT, 'premium'); // ... but Premium
+      expect((await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT })).ok).toBe(true);
+    } finally {
+      for (const [k, v] of [['AIE_PILOT_COHORT_ENFORCED', prev.e], ['AIE_PILOT_COHORT_USER_IDS', prev.ids], ['AIE_PILOT_COHORT_EMAILS', prev.em]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  });
+
+  it('the kill switch and the adapter switch are checked BEFORE the plan (no entitlement read when either is off)', async () => {
+    await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: false, extractedText: SYNTHETIC_BANK_STATEMENT });
+    expect(premiumAi.asked).toEqual([]);
+  });
+
+  it('refuses — never falls back to sending raw text — when the masking key is unset', async () => {
     const prev = process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY;
     delete process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY;
     try {
-      const r = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
+      const r = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
       expect(r).toEqual({ ok: false, reason: 'masking_unavailable' });
     } finally {
       process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY = prev;
     }
   });
 
-  it('refuses a document with essentially no text rather than inviting invention', () => {
-    const r = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: '   \n  ' });
+  it('refuses a document with essentially no text rather than inviting invention', async () => {
+    const r = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: '   \n  ' });
     expect(r).toEqual({ ok: false, reason: 'no_extracted_text' });
   });
 
-  it('a successful gate result carries ONLY masked text — the raw text is not reachable from it', () => {
-    const r = evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
+  it('a successful gate result carries ONLY masked text — the raw text is not reachable from it', async () => {
+    const r = await evaluateAiFallbackGate({ userId: TENANT, adapterEnabled: true, extractedText: SYNTHETIC_BANK_STATEMENT });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // There is no `rawText`/`extractedText` field on the success shape, so a
@@ -368,12 +411,12 @@ describe('AIE unified fallback — the gate fails closed', () => {
  * Each was verified by capture during this dispatch, not assumed.
  */
 describe('AIE unified fallback — masking gaps this dispatch found but did NOT close', () => {
-  it('a HYPHENATED TFN is not masked (the rule requires the ATO-standard spaced form)', () => {
+  it('a HYPHENATED TFN is not masked (the rule requires the ATO-standard spaced form)', async () => {
     const { maskedText } = maskText('Tax File Number: 123-456-789', { tenantKey: TENANT });
     expect(maskedText).toContain('123-456-789');
   });
 
-  it('a fund ABN is PARTIALLY masked, and mislabelled as a tax_id', () => {
+  it('a fund ABN is PARTIALLY masked, and mislabelled as a tax_id', async () => {
     // FOUND BY THIS TEST, and it corrected an assumption. The expectation
     // written first was "an ABN is not masked at all", on the reasoning that
     // no rule targets the 2-3-3-3 ABN shape. What actually happens is
@@ -398,7 +441,7 @@ describe('AIE unified fallback — masking gaps this dispatch found but did NOT 
     expect(maskedText).not.toContain('824 753 556');
   });
 
-  it('a super fund USI is not masked — a deliberate decision, not a miss', () => {
+  it('a super fund USI is not masked — a deliberate decision, not a miss', async () => {
     // A USI identifies the FUND, not the member. Masking it would be the same
     // mistake as masking an employer name on a payslip: redacting the very
     // field the adapter exists to read.
@@ -406,7 +449,7 @@ describe('AIE unified fallback — masking gaps this dispatch found but did NOT 
     expect(maskedText).toContain('HST0100AU');
   });
 
-  it('an UNLABELLED postal address is not masked (the address rule is label-anchored by design)', () => {
+  it('an UNLABELLED postal address is not masked (the address rule is label-anchored by design)', async () => {
     // A street address has no reliable shape, so the only dependable signal
     // is the label the document prints. A letterhead address with no label —
     // common on broker statements — is out of reach. Pre-existing and

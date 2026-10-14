@@ -1,5 +1,6 @@
 'use client';
 
+import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { DateInput } from '@/components/ui/DateInput';
 /**
  * FDH-12 — Retirement Statement Intelligence: the Retirement-tab import
@@ -364,7 +365,11 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     }
     if (data.pipeline_status === 'extraction_failed') {
       setPhase('unable_to_read');
-      setMessage(String(data.failure_message ?? 'We could not read this statement.'));
+      setMessage(
+        [String(data.failure_message ?? 'We could not read this statement.'), aiFallbackRefusalNote(data.ai_fallback_refusal)]
+          .filter(Boolean)
+          .join(' '),
+      );
       return;
     }
     if (data.pipeline_status === 'duplicate_statement') {

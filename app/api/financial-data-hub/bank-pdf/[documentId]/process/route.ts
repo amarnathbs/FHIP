@@ -67,6 +67,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       // this for explicit review and then posts it to
       // `.../ai-fallback/confirm`.
       ai_fallback_draft: result.aiFallbackDraft ?? null,
+      // 14-10-2026: present ('premium_required' | 'entitlement_unavailable') only when the file could not be read
+      // natively and the AI reading was NOT attempted for entitlement reasons, so the screen can explain and offer
+      // the upgrade. Null in every other case.
+      ai_fallback_refusal: result.aiFallbackRefusal ?? null,
     });
   } catch (e) {
     if (e instanceof BankPdfProcessingError) {

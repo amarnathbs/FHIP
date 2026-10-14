@@ -1,5 +1,6 @@
 'use client';
 
+import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { formatDateShort } from '@/lib/engines/date';
 import { DateInput } from '@/components/ui/DateInput';
 /**
@@ -675,7 +676,11 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       return;
     }
     if (!data.statement_id) {
-      setMessage((data.error_message as string | undefined) ?? 'We could not read this statement.');
+      setMessage(
+        [(data.error_message as string | undefined) ?? 'We could not read this statement.', aiFallbackRefusalNote(data.ai_fallback_refusal)]
+          .filter(Boolean)
+          .join(' '),
+      );
       setPhase('unable_to_read');
       return;
     }

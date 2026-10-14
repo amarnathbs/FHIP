@@ -24,6 +24,7 @@
  * are already there — see that test's own comment for the precedent.
  */
 
+import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { normaliseProposedFields, type ProposedField } from '@/lib/import-bridge/proposedFieldShape';
@@ -608,7 +609,11 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         return;
       }
       if (processJson.data.error_code) {
-        setMessage(processJson.data.error_message ?? 'We could not read this payslip.');
+        setMessage(
+          [processJson.data.error_message ?? 'We could not read this payslip.', aiFallbackRefusalNote(processJson.data.ai_fallback_refusal)]
+            .filter(Boolean)
+            .join(' '),
+        );
         setPhase('unable_to_read');
         return;
       }

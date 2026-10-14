@@ -1,6 +1,7 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
-import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { refuseUnlessPremiumAi } from '@/lib/ai/access/premiumAiAccess';
+import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed } from '@/lib/aie/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
 import { extractPdfTextLocally } from '@/lib/aie/extraction/textExtraction';
@@ -41,9 +42,10 @@ export async function POST(req: Request) {
   if (!isAieDocumentIntakeEnabled()) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
   }
-  if (!isUserInAiePilotCohort({ userId: user.id, email: user.email })) {
-    return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
-  }
+  // Premium entitlement (14-10-2026) replaced the pilot allowlist: checked server-side on the session user,
+  // before a byte of the body is read, stored or scanned.
+  const premiumRefusal = await refuseUnlessPremiumAi(user.id, 'aie_intake_generic');
+  if (premiumRefusal) return premiumRefusal;
 
   const url = new URL(req.url);
   const filename = url.searchParams.get('filename');

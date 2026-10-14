@@ -165,6 +165,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
   };
 });
 
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ from: () => ({}) }),
 }));
@@ -410,7 +412,6 @@ describe('M12A.3 — FDH-bank intake must never create a canonical FDH record', 
     process.env.AIE_FDH_BANK_ADAPTER_ENABLED = 'true';
     process.env.AIE_DOCUMENT_INTAKE_ENABLED = 'true';
     process.env.AIE_ALLOW_MISSING_SIGNATURE_SCANNER = 'true';
-    process.env.AIE_PILOT_COHORT_USER_IDS = USER_ID;
     // The configuration a production activation of this adapter would run in.
     // Under the OLD code this alone was enough to make intake write.
     process.env.AIE_FDH_BANK_ATOMIC_IMPORT_ENABLED = 'true';
@@ -484,7 +485,6 @@ describe('M12A.3 — the canonical write moved to the shared acceptance gate, it
     process.env.AIE_FDH_BANK_ADAPTER_ENABLED = 'true';
     process.env.AIE_DOCUMENT_INTAKE_ENABLED = 'true';
     process.env.AIE_ALLOW_MISSING_SIGNATURE_SCANNER = 'true';
-    process.env.AIE_PILOT_COHORT_USER_IDS = USER_ID;
     process.env.AIE_FDH_BANK_ATOMIC_IMPORT_ENABLED = 'true';
     process.env.AIE_REVIEW_CANONICAL_ACCEPTANCE_ENABLED = 'true';
   });

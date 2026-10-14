@@ -65,6 +65,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       // confirmation failed with 422. Only the reviewable fields go out now,
       // exactly the confirm route's own vocabulary.
       ai_fallback_draft: result.aiFallbackDraft ? toPayslipAiDraftForReview(result.aiFallbackDraft) : null,
+      // 14-10-2026: present ('premium_required' | 'entitlement_unavailable') only when the file could not be read
+      // natively and the AI reading was NOT attempted for entitlement reasons, so the screen can explain and offer
+      // the upgrade. Null in every other case.
+      ai_fallback_refusal: result.aiFallbackRefusal ?? null,
     });
   } catch (e) {
     if (e instanceof PayslipProcessingError) {

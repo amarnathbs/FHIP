@@ -123,6 +123,10 @@ export async function POST(req: Request) {
       // shows this for review and only its explicit confirm
       // (POST .../ai-fallback/confirm) ever writes anything.
       ai_fallback_draft: result.aiFallbackDraft ?? null,
+      // 14-10-2026: present ('premium_required' | 'entitlement_unavailable') only when the file could not be read
+      // natively and the AI reading was NOT attempted for entitlement reasons, so the screen can explain and offer
+      // the upgrade. Null in every other case.
+      ai_fallback_refusal: result.aiFallbackRefusal ?? null,
     });
   } catch (e) {
     const ownerConflict = documentOwnerConflictResponse(e);
