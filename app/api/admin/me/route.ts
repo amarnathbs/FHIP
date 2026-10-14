@@ -16,6 +16,7 @@ import { PREMIUM_ENTITLEMENT_ADMIN_CAPABILITY } from '@/lib/services/premiumEnti
 import { PROMO_CODE_ADMIN_CAPABILITY } from '@/lib/services/promoCodeAdmin';
 import { PLANNING_BENCHMARK_CAPABILITY_COLUMNS, planningBenchmarkFlagsFromRow, NO_PLANNING_BENCHMARK_CAPABILITIES, type PlanningBenchmarkFlags } from '@/lib/planning-benchmarks/guards';
 import { NO_RISK_FREE_CAPABILITIES, readRiskFreeCapabilityFlags, type RiskFreeCapabilityFlags } from '@/lib/services/investment-intelligence/nav2/riskFreeAdmin';
+import { ENTITLEMENT_OVERRIDE_CAPABILITY } from '@/lib/services/entitlementOverrideAdmin';
 
 /**
  * PC6/N.11. The reference-data capability lives on admin_users, not on
@@ -135,6 +136,26 @@ async function canManagePromoCodes(): Promise<boolean> {
       .eq('user_id', user.id)
       .maybeSingle();
     return data?.[PROMO_CODE_ADMIN_CAPABILITY] === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hardening 0264 item 3 - the override capability. Its own independent read of its own column, NOT derived from
+ * any other capability or from Super Admin (Standard §2/§3). Fails closed (error, no row, missing column = false).
+ */
+async function canOverrideEntitlementLimits(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await supabase
+      .from('admin_users')
+      .select(ENTITLEMENT_OVERRIDE_CAPABILITY)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return data?.[ENTITLEMENT_OVERRIDE_CAPABILITY] === true;
   } catch {
     return false;
   }
@@ -268,6 +289,7 @@ export async function GET() {
       promoCodeManagement: await canManagePromoCodes(),
       planningBenchmarkUpload: planning.upload,
       planningBenchmarkActivate: planning.activate,
+      entitlementOverride: await canOverrideEntitlementLimits(),
     },
   });
 }

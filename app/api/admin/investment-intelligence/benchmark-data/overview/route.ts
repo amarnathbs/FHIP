@@ -11,6 +11,7 @@ import { listImportJobs } from '@/lib/services/investment-intelligence/benchmark
 import { assessPendingImport } from '@/lib/services/investment-intelligence/benchmarkData/ingestion/pending';
 import { addDaysIso } from '@/lib/services/investment-intelligence/benchmarkData/ingestion/calendar';
 import { guarded, isMissingRelation } from '@/lib/services/investment-intelligence/benchmarkData/routeSupport';
+import { mapEntitlementRow, readEntitlements } from '@/lib/services/investment-intelligence/benchmarkData/entitlementView';
 import type { BenchmarkOverviewRow, CoverageView, DemandView, EntitlementRightsView, IngestionView, OverviewResponse } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ export const GET = adminRoute(async () => {
   const [stateRes, demandRes, entRes, switchRes] = await Promise.all([
     sb.from('ii_benchmark_ingestion_state').select('*').in('benchmark_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']),
     sb.from('ii_benchmark_history_demand').select('*').in('benchmark_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']),
-    sb.from('ii_benchmark_entitlements').select('id, benchmark_id, entitlement_kind, status, allow_manual_ingest, allow_automation, allow_storage, allow_calculation, allow_customer_display, allow_report_export, data_from, data_to, valid_from, valid_to, post_expiry_storage, evidence_reference, evidence_url, created_by, approved_at').in('benchmark_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']),
+    readEntitlements<Array<Record<string, unknown>>>((cols) => sb.from('ii_benchmark_entitlements').select(cols).in('benchmark_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']) as unknown as PromiseLike<{ data: Array<Record<string, unknown>> | null; error: { code?: string; message?: string } | null }>),
     sb.from('ii_reference_job_control').select('job_key, enabled').in('job_key', ['benchmark_ingestion_global', 'benchmark_ingestion_write']),
   ]);
   for (const r of [stateRes, demandRes, entRes, switchRes]) {
@@ -55,21 +56,7 @@ export const GET = adminRoute(async () => {
   const entBy = new Map<string, EntitlementRightsView[]>();
   for (const r of (entRes.data ?? []) as Array<Record<string, unknown>>) {
     const list = entBy.get(r.benchmark_id as string) ?? [];
-    list.push({
-      entitlementId: r.id as string,
-      kind: r.entitlement_kind as EntitlementRightsView['kind'],
-      status: r.status as EntitlementRightsView['status'],
-      rights: { ingestManual: r.allow_manual_ingest === true, automation: r.allow_automation === true, storage: r.allow_storage === true, calculation: r.allow_calculation === true, customerDisplay: r.allow_customer_display === true, reportExport: r.allow_report_export === true },
-      dataFrom: (r.data_from as string | null) ?? null,
-      dataTo: (r.data_to as string | null) ?? null,
-      validFrom: r.valid_from as string,
-      validTo: (r.valid_to as string | null) ?? null,
-      postExpiryStorage: r.post_expiry_storage as EntitlementRightsView['postExpiryStorage'],
-      evidenceReference: r.evidence_reference as string,
-      evidenceUrl: (r.evidence_url as string | null) ?? null,
-      proposedByMe: r.created_by === g.user.id,
-      approvedAt: (r.approved_at as string | null) ?? null,
-    });
+    list.push(mapEntitlementRow(r, g.user.id, entRes.editSupported));
     entBy.set(r.benchmark_id as string, list);
   }
   const sw = new Map(((switchRes.data ?? []) as Array<{ job_key: string; enabled: boolean }>).map((r) => [r.job_key, r.enabled === true]));
@@ -170,6 +157,7 @@ export const GET = adminRoute(async () => {
     capabilities: g.flags,
     limits: DEFAULT_LIMITS,
     rows,
+    entitlementEdit: entRes.editSupported,
     recentJobs,
     pendingImports,
     switches: { globalIngestion: globalOn, writeIngestion: writeOn, environmentFlag: envFlag, effectivelyEnabled: globalOn && writeOn && envFlag },

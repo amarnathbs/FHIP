@@ -7,7 +7,8 @@
 // a precise message; it never approves anything the database would refuse.
 //
 // NO CODE VALUE IN LOGS OR AUDIT. Nothing in this module logs a code, and the
-// admin/audit surfaces identify a code by its id and a masked hint.
+// admin/audit surfaces identify a code by its id and a masked hint. Since hardening 0264 the database holds only a
+// keyed digest of a code (lib/services/promoCodeDigest.ts), never the plain value.
 
 import { addDaysIso, isValidIsoDate } from '@/lib/services/entitlementWindow';
 import { FEATURE_UNAVAILABLE, isMissingDbObjectError, type RouteError } from '@/lib/services/premiumGrantAdmin';
@@ -97,7 +98,7 @@ export function parseCreatePromoRequest(body: unknown, today: string, maxDuratio
   if (noExpiry) {
     if (b.expiresOn !== undefined && b.expiresOn !== null) return fail('PROMO_EXPIRY_INVALID', 'Choose either an expiry date or no expiry, not both.');
   } else {
-    if (!isValidIsoDate(b.expiresOn)) return fail('PROMO_EXPIRY_INVALID', 'expiresOn must be a valid date, or choose no expiry explicitly.');
+    if (!isValidIsoDate(b.expiresOn)) return fail('PROMO_EXPIRY_INVALID', 'The code expiry must be a real calendar date typed day first, for example 31-10-2026, or choose no expiry explicitly.');
     if (b.expiresOn < today) return fail('PROMO_EXPIRY_INVALID', 'The code expiry date cannot be in the past.');
     if (b.expiresOn > addDaysIso(today, PROMO_MAX_EXPIRY_DAYS)) return fail('PROMO_EXPIRY_INVALID', 'The code expiry date is too far in the future.');
     expiresOn = b.expiresOn;
@@ -130,6 +131,10 @@ const ADMIN_RPC_ERRORS: Record<string, { status: number; message: string }> = {
   PROMO_EMAIL_KEY_INVALID: { status: 422, message: 'A request key of 8 to 100 letters, digits, "-" or "_" is required when e-mailing a code.' },
   PROMO_EMAIL_RATE_LIMITED: { status: 429, message: 'You have sent too many promo e-mails in the last hour. Please wait and try again, or copy the code and send it yourself.' },
   PROMO_CODE_ALREADY_DISABLED: { status: 409, message: 'This promo code is already disabled.' },
+  PROMO_EMAIL_PURPOSE_REQUIRED: { status: 422, message: 'Say why you are sending this code (10 to 200 characters, no line breaks).' },
+  PROMO_EMAIL_DAILY_LIMIT: { status: 429, message: 'You have reached the daily limit of promo e-mail recipients. Copy the code and send it yourself, or try again tomorrow.' },
+  PROMO_EMAIL_GLOBAL_LIMIT: { status: 429, message: 'The platform-wide daily limit of promo e-mails has been reached. Copy the code and send it yourself, or try again tomorrow.' },
+  PROMO_EMAIL_REPLACEMENT_LIMIT: { status: 429, message: 'This code has already been replaced several times today. Wait until tomorrow, or create a new code with different settings.' },
 };
 
 export function mapPromoRpcError(error: { message?: string; code?: string } | null | undefined): RouteError | null {

@@ -19,6 +19,7 @@ const LOGIC = 'components/admin/benchmarkData/benchmarkDataUiLogic.ts';
 const CONTRACT_PATHS = new Set([
   'overview', 'upload/inspect', 'upload', 'jobs', 'jobs/:id', 'jobs/:id/errors', 'jobs/:id/publish', 'jobs/:id/cancel', 'jobs/:id/rollback',
   'templates/:name', 'help', 'catalogue', 'catalogue/:id/verify', 'entitlements', 'entitlements/:id/approve', 'entitlements/:id/revoke',
+  'entitlements/:id/edit', 'entitlements/:id/revise', 'entitlements/:id/cancel-revision', 'entitlements/:id/reject-revision', 'entitlements/:id/history',
   'mappings', 'mappings/:id/review', 'mappings/unmapped', 'mappings/held', 'factsheet/changes', 'factsheet/changes/:id/review', 'factsheet/sources', 'factsheet/sources/:id/terms', 'ingestion/:id/mode',
 ]);
 
