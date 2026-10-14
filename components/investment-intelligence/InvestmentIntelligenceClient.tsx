@@ -9,6 +9,8 @@ import { OwnerSelector } from '@/components/ownership/OwnerSelector';
 import { OwnerConflictPanel } from './OwnerConflictPanel';
 import { FullStatementHelp } from './FullStatementHelp';
 import { ownerSelectionToMeta, type OwnerSelection } from '@/lib/ownership/ownerSelection';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -234,6 +236,9 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   const [sourceKey, setSourceKey] = useState<'cams' | 'kfintech'>('cams');
   const [countryCode] = useState<'IN'>('IN');
   const [uploading, setUploading] = useState(false);
+  // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call. Until it is
+  // known no file picker is drawn, so a Free user never sees a working picker flash up.
+  const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
   // Owner-before-upload (Phase 1): who the statement belongs to, chosen BEFORE
   // the file is sent (no default). The Upload button stays disabled until set.
   const [owner, setOwner] = useState<OwnerSelection | null>(null);
@@ -444,7 +449,11 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       const json = await res.json();
       // `bad(msg, status, code)` answers `{ error: code, message }` -- show the
       // human message (e.g. a blocked malware scan), never the bare code.
-      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Upload failed');
+      if (!res.ok) {
+        // Premium Upload Entitlement: the unified refusal switches this section to the locked state (nothing was stored).
+        if (noteImportResponse(json)) return;
+        throw new Error(json.message ?? json.error ?? 'Upload failed');
+      }
       setFile(null);
       await loadDocuments();
       // M12C §11 (`CG-10`): say so, rather than silently selecting a different
@@ -816,6 +825,9 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       {/* Step 1: Upload */}
       <section className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-gray-900">Step 1 — Upload a statement</h2>
+        {importAccess?.state !== 'allowed' ? (
+          <ImportLockedNotice domain="investments" label="Upload a statement" state={importAccess === null ? 'checking' : importAccess.state} />
+        ) : (
         <form onSubmit={handleUpload} className="mt-3 flex flex-wrap items-end gap-3">
           <div className="w-full max-w-xl">
             <OwnerSelector flow="ii_cas" idPrefix="ii-owner" value={owner} onChange={setOwner} disabled={uploading} />
@@ -860,6 +872,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
           {/* (!) How to get a FULL since-inception statement from CAMS / KFintech (PO 2026-10-03). */}
           <FullStatementHelp />
         </form>
+        )}
         <p className="mt-2 text-xs text-gray-500">
           Supported today, as a digitally-generated <strong>PDF</strong>: a CAMS or KFintech consolidated account statement, or a supported CAMS-serviced
           individual Folio Statement (&ldquo;Folio Details&rdquo; statement). This is not every AMC statement or every CAMS folio-style document — only the

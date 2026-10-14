@@ -36,6 +36,8 @@ import {
   type WaitingImport,
 } from '@/components/financial-data-hub/WaitingImports';
 import { needsSecurityMatch } from '@/lib/investment-import-bridge/auLineRules';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
 
 // 'ai_fallback_review' (2026-09-23, AIE unified document fallback): the native
 // CSV extractor could not read this layout and an AI read a DRAFT off the same
@@ -290,6 +292,9 @@ export function AuInvestmentStatementImportPanel({
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
+  // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
+  const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
   // AIE AU investment-statement AI-fallback (2026-09-23). Held only for the
   // lifetime of the `ai_fallback_review` phase; cleared by `reset()` and on
   // confirm. Nothing in this draft exists in the database yet.
@@ -532,6 +537,11 @@ export function AuInvestmentStatementImportPanel({
       });
       const { ok, json } = await readJson(res);
       if (!ok) {
+        // Premium Upload Entitlement: the unified refusal switches this panel to the locked state (nothing was stored).
+        if (noteImportResponse(json)) {
+          setPhase('form');
+          return;
+        }
         setMessage(json.message ?? json.error ?? 'We could not process this statement.');
         setPhase('unable_to_read');
         return;
@@ -848,7 +858,11 @@ export function AuInvestmentStatementImportPanel({
 
       {phase === 'form' && <WaitingImportsList items={waiting} busy={busy} onContinue={(w) => void resumeWaiting(w)} />}
 
-      {uploadEnabled !== false && phase === 'form' && (
+      {uploadEnabled !== false && phase === 'form' && importAccess?.state !== 'allowed' && (
+        <ImportLockedNotice domain="investments" label="Import investment statement" state={importAccess === null ? 'checking' : importAccess.state} />
+      )}
+
+      {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
             Upload a transaction-history or portfolio-holdings CSV and FHIP will extract the details for you to review before
@@ -883,7 +897,7 @@ export function AuInvestmentStatementImportPanel({
             <span className="mb-1 block text-muted">Statement file (CSV)</span>
             <input type="file" accept="text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
-          <button type="button" onClick={handleUpload} disabled={!file || !uploadOwner || busy || uploadEnabled !== true} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
+          <button type="button" onClick={handleUpload} disabled={!file || !uploadOwner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed'} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
             Upload statement
           </button>
         </div>

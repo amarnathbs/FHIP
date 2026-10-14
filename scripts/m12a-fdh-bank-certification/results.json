@@ -3,74 +3,496 @@
   "generatedBy": "tests/unit/m12aFdhBankAccuracyCorpus.test.ts",
   "summary": {
     "caseCount": 12,
-    "fieldPrecision": 1,
-    "fieldRecall": 1,
-    "economicPrecision": 1,
-    "economicRecall": 0.925,
+    "fieldPrecision": 0.8625,
+    "fieldRecall": 0.641860465116279,
+    "economicPrecision": 0.7692307692307693,
+    "economicRecall": 0.5,
     "falseAcceptRate": 0,
     "falseAcceptCount": 0,
     "falseAcceptDenominator": 5,
     "falseCanonicalWriteRate": 0,
     "falseCanonicalWriteCount": 0,
-    "totalUnexplainedOmissions": 0
+    "totalUnexplainedOmissions": 17
   },
   "cases": [
     {
-      "caseId": "FDH-A01",
-      "scenario": "normal bank PDF",
-      "fieldTruePositives": 23,
-      "fieldFalsePositives": 0,
-      "fieldFalseNegatives": 0,
-      "fieldPrecision": 1,
-      "fieldRecall": 1,
-      "economicMatched": 4,
-      "economicObserved": 4,
+      "caseId": "FDH-A03",
+      "scenario": "debit/credit terminology variant",
+      "fieldTruePositives": 5,
+      "fieldFalsePositives": 8,
+      "fieldFalseNegatives": 18,
+      "fieldPrecision": 0.38461538461538464,
+      "fieldRecall": 0.21739130434782608,
+      "economicMatched": 0,
+      "economicObserved": 2,
       "economicExpected": 4,
-      "economicPrecision": 1,
-      "economicRecall": 1,
-      "unexplainedOmissions": [],
+      "economicPrecision": 0,
+      "economicRecall": 0,
+      "unexplainedOmissions": [
+        1,
+        2,
+        3,
+        4
+      ],
       "falseAccept": false,
       "falseCanonicalWrite": false,
-      "fieldDisagreements": [],
-      "economicDisagreements": []
+      "fieldDisagreements": [
+        {
+          "fieldName": "institution",
+          "expected": "au_anz_pdf_v1",
+          "observed": "au_cba_pdf_v1"
+        },
+        {
+          "fieldName": "txn:1:amount",
+          "expected": "45.2",
+          "observed": "150"
+        },
+        {
+          "fieldName": "txn:1:balance",
+          "expected": "954.8",
+          "observed": "1850"
+        },
+        {
+          "fieldName": "txn:1:description",
+          "expected": "EFTPOS COLES SUPERMARKET",
+          "observed": "CARD PURCHASE 4829 AMAZON MARKET PLACE AU SYDNEY NSW CARD 1234 AUD 150.00"
+        },
+        {
+          "fieldName": "txn:2:date",
+          "expected": "2026-08-03",
+          "observed": "2026-08-02"
+        },
+        {
+          "fieldName": "txn:2:amount",
+          "expected": "500",
+          "observed": "3000"
+        },
+        {
+          "fieldName": "txn:2:balance",
+          "expected": "1454.8",
+          "observed": "4850"
+        },
+        {
+          "fieldName": "txn:2:description",
+          "expected": "SALARY XYZ PTY LTD",
+          "observed": "SALARY ACME PTY LTD"
+        },
+        {
+          "fieldName": "txn:3:date",
+          "expected": "2026-08-05"
+        },
+        {
+          "fieldName": "txn:3:amount",
+          "expected": "220.24"
+        },
+        {
+          "fieldName": "txn:3:direction",
+          "expected": "debit"
+        },
+        {
+          "fieldName": "txn:3:balance",
+          "expected": "1234.56"
+        },
+        {
+          "fieldName": "txn:3:description",
+          "expected": "DIRECT DEBIT INSURANCE"
+        },
+        {
+          "fieldName": "txn:4:date",
+          "expected": "2026-08-08"
+        },
+        {
+          "fieldName": "txn:4:amount",
+          "expected": "100"
+        },
+        {
+          "fieldName": "txn:4:direction",
+          "expected": "debit"
+        },
+        {
+          "fieldName": "txn:4:balance",
+          "expected": "1134.56"
+        },
+        {
+          "fieldName": "txn:4:description",
+          "expected": "ATM CASH WITHDRAWAL"
+        }
+      ],
+      "economicDisagreements": [
+        {
+          "key": 1,
+          "expected": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 45.2,
+            "direction": "debit",
+            "balance": 954.8
+          },
+          "observed": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 150,
+            "direction": "debit",
+            "balance": 1850
+          }
+        },
+        {
+          "key": 2,
+          "expected": {
+            "key": 2,
+            "date": "2026-08-03",
+            "amount": 500,
+            "direction": "credit",
+            "balance": 1454.8
+          },
+          "observed": {
+            "key": 2,
+            "date": "2026-08-02",
+            "amount": 3000,
+            "direction": "credit",
+            "balance": 4850
+          }
+        },
+        {
+          "key": 3,
+          "expected": {
+            "key": 3,
+            "date": "2026-08-05",
+            "amount": 220.24,
+            "direction": "debit",
+            "balance": 1234.56
+          },
+          "observed": null
+        },
+        {
+          "key": 4,
+          "expected": {
+            "key": 4,
+            "date": "2026-08-08",
+            "amount": 100,
+            "direction": "debit",
+            "balance": 1134.56
+          },
+          "observed": null
+        }
+      ]
     },
     {
       "caseId": "FDH-A02",
       "scenario": "multi-page transaction history",
-      "fieldTruePositives": 48,
-      "fieldFalsePositives": 0,
-      "fieldFalseNegatives": 0,
-      "fieldPrecision": 1,
-      "fieldRecall": 1,
-      "economicMatched": 9,
-      "economicObserved": 9,
+      "fieldTruePositives": 6,
+      "fieldFalsePositives": 7,
+      "fieldFalseNegatives": 42,
+      "fieldPrecision": 0.46153846153846156,
+      "fieldRecall": 0.125,
+      "economicMatched": 0,
+      "economicObserved": 2,
       "economicExpected": 9,
-      "economicPrecision": 1,
-      "economicRecall": 1,
-      "unexplainedOmissions": [],
+      "economicPrecision": 0,
+      "economicRecall": 0,
+      "unexplainedOmissions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
       "falseAccept": false,
       "falseCanonicalWrite": false,
-      "fieldDisagreements": [],
-      "economicDisagreements": []
-    },
-    {
-      "caseId": "FDH-A03",
-      "scenario": "debit/credit terminology variant",
-      "fieldTruePositives": 23,
-      "fieldFalsePositives": 0,
-      "fieldFalseNegatives": 0,
-      "fieldPrecision": 1,
-      "fieldRecall": 1,
-      "economicMatched": 4,
-      "economicObserved": 4,
-      "economicExpected": 4,
-      "economicPrecision": 1,
-      "economicRecall": 1,
-      "unexplainedOmissions": [],
-      "falseAccept": false,
-      "falseCanonicalWrite": false,
-      "fieldDisagreements": [],
-      "economicDisagreements": []
+      "fieldDisagreements": [
+        {
+          "fieldName": "txn:1:amount",
+          "expected": "12.5",
+          "observed": "150"
+        },
+        {
+          "fieldName": "txn:1:balance",
+          "expected": "4987.5",
+          "observed": "1850"
+        },
+        {
+          "fieldName": "txn:1:description",
+          "expected": "POS COLES 4471",
+          "observed": "CARD PURCHASE 4829 AMAZON MARKET PLACE AU SYDNEY NSW CARD 1234 AUD 150.00"
+        },
+        {
+          "fieldName": "txn:2:amount",
+          "expected": "7.25",
+          "observed": "3000"
+        },
+        {
+          "fieldName": "txn:2:direction",
+          "expected": "debit",
+          "observed": "credit"
+        },
+        {
+          "fieldName": "txn:2:balance",
+          "expected": "4980.25",
+          "observed": "4850"
+        },
+        {
+          "fieldName": "txn:2:description",
+          "expected": "POS BAKERY LANE",
+          "observed": "SALARY ACME PTY LTD"
+        },
+        {
+          "fieldName": "txn:3:date",
+          "expected": "2026-08-03"
+        },
+        {
+          "fieldName": "txn:3:amount",
+          "expected": "1500"
+        },
+        {
+          "fieldName": "txn:3:direction",
+          "expected": "credit"
+        },
+        {
+          "fieldName": "txn:3:balance",
+          "expected": "6480.25"
+        },
+        {
+          "fieldName": "txn:3:description",
+          "expected": "SALARY ACME PTY LTD"
+        },
+        {
+          "fieldName": "txn:4:date",
+          "expected": "2026-08-04"
+        },
+        {
+          "fieldName": "txn:4:amount",
+          "expected": "900"
+        },
+        {
+          "fieldName": "txn:4:direction",
+          "expected": "debit"
+        },
+        {
+          "fieldName": "txn:4:balance",
+          "expected": "5580.25"
+        },
+        {
+          "fieldName": "txn:4:description",
+          "expected": "RENT PAYMENT"
+        },
+        {
+          "fieldName": "txn:5:date",
+          "expected": "2026-08-05"
+        },
+        {
+          "fieldName": "txn:5:amount",
+          "expected": "120.75"
+        },
+        {
+          "fieldName": "txn:5:direction",
+          "expected": "debit"
+        },
+        {
+          "fieldName": "txn:5:balance",
+          "expected": "5459.5"
+        },
+        {
+          "fieldName": "txn:5:description",
+          "expected": "UTILITIES BILL"
+        },
+        {
+          "fieldName": "txn:6:date",
+          "expected": "2026-08-06"
+        },
+        {
+          "fieldName": "txn:6:amount",
+          "expected": "3.1"
+        },
+        {
+          "fieldName": "txn:6:direction",
+          "expected": "credit"
+        },
+        {
+          "fieldName": "txn:6:balance",
+          "expected": "5462.6"
+        },
+        {
+          "fieldName": "txn:6:description",
+          "expected": "INTEREST CREDIT"
+        },
+        {
+          "fieldName": "txn:7:date",
+          "expected": "2026-08-07"
+        },
+        {
+          "fieldName": "txn:7:amount",
+          "expected": "65.4"
+        },
+        {
+          "fieldName": "txn:7:direction",
+          "expected": "debit"
+        },
+        {
+          "fieldName": "txn:7:balance",
+          "expected": "5397.2"
+        },
+        {
+          "fieldName": "txn:7:description",
+          "expected": "CARD PURCHASE FUEL STOP"
+        },
+        {
+          "fieldName": "txn:8:date",
+          "expected": "2026-08-08"
+        },
+        {
+          "fieldName": "txn:8:amount",
+          "expected": "400"
+        },
+        {
+          "fieldName": "txn:8:direction",
+          "expected": "debit"
+        },
+        {
+          "fieldName": "txn:8:balance",
+          "expected": "4997.2"
+        },
+        {
+          "fieldName": "txn:8:description",
+          "expected": "TRANSFER TO SAVINGS"
+        },
+        {
+          "fieldName": "txn:9:date",
+          "expected": "2026-08-09"
+        },
+        {
+          "fieldName": "txn:9:amount",
+          "expected": "22.8"
+        },
+        {
+          "fieldName": "txn:9:direction",
+          "expected": "credit"
+        },
+        {
+          "fieldName": "txn:9:balance",
+          "expected": "5020"
+        },
+        {
+          "fieldName": "txn:9:description",
+          "expected": "REFUND MERCHANT"
+        }
+      ],
+      "economicDisagreements": [
+        {
+          "key": 1,
+          "expected": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 12.5,
+            "direction": "debit",
+            "balance": 4987.5
+          },
+          "observed": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 150,
+            "direction": "debit",
+            "balance": 1850
+          }
+        },
+        {
+          "key": 2,
+          "expected": {
+            "key": 2,
+            "date": "2026-08-02",
+            "amount": 7.25,
+            "direction": "debit",
+            "balance": 4980.25
+          },
+          "observed": {
+            "key": 2,
+            "date": "2026-08-02",
+            "amount": 3000,
+            "direction": "credit",
+            "balance": 4850
+          }
+        },
+        {
+          "key": 3,
+          "expected": {
+            "key": 3,
+            "date": "2026-08-03",
+            "amount": 1500,
+            "direction": "credit",
+            "balance": 6480.25
+          },
+          "observed": null
+        },
+        {
+          "key": 4,
+          "expected": {
+            "key": 4,
+            "date": "2026-08-04",
+            "amount": 900,
+            "direction": "debit",
+            "balance": 5580.25
+          },
+          "observed": null
+        },
+        {
+          "key": 5,
+          "expected": {
+            "key": 5,
+            "date": "2026-08-05",
+            "amount": 120.75,
+            "direction": "debit",
+            "balance": 5459.5
+          },
+          "observed": null
+        },
+        {
+          "key": 6,
+          "expected": {
+            "key": 6,
+            "date": "2026-08-06",
+            "amount": 3.1,
+            "direction": "credit",
+            "balance": 5462.6
+          },
+          "observed": null
+        },
+        {
+          "key": 7,
+          "expected": {
+            "key": 7,
+            "date": "2026-08-07",
+            "amount": 65.4,
+            "direction": "debit",
+            "balance": 5397.2
+          },
+          "observed": null
+        },
+        {
+          "key": 8,
+          "expected": {
+            "key": 8,
+            "date": "2026-08-08",
+            "amount": 400,
+            "direction": "debit",
+            "balance": 4997.2
+          },
+          "observed": null
+        },
+        {
+          "key": 9,
+          "expected": {
+            "key": 9,
+            "date": "2026-08-09",
+            "amount": 22.8,
+            "direction": "credit",
+            "balance": 5020
+          },
+          "observed": null
+        }
+      ]
     },
     {
       "caseId": "FDH-A04",
@@ -90,6 +512,163 @@
       "falseCanonicalWrite": false,
       "fieldDisagreements": [],
       "economicDisagreements": []
+    },
+    {
+      "caseId": "FDH-A01",
+      "scenario": "normal bank PDF",
+      "fieldTruePositives": 6,
+      "fieldFalsePositives": 7,
+      "fieldFalseNegatives": 17,
+      "fieldPrecision": 0.46153846153846156,
+      "fieldRecall": 0.2608695652173913,
+      "economicMatched": 0,
+      "economicObserved": 2,
+      "economicExpected": 4,
+      "economicPrecision": 0,
+      "economicRecall": 0,
+      "unexplainedOmissions": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [
+        {
+          "fieldName": "txn:1:amount",
+          "expected": "45.2",
+          "observed": "150"
+        },
+        {
+          "fieldName": "txn:1:balance",
+          "expected": "954.8",
+          "observed": "1850"
+        },
+        {
+          "fieldName": "txn:1:description",
+          "expected": "CARD PURCHASE WOOLWORTHS 1234",
+          "observed": "CARD PURCHASE 4829 AMAZON MARKET PLACE AU SYDNEY NSW CARD 1234 AUD 150.00"
+        },
+        {
+          "fieldName": "txn:2:date",
+          "expected": "2026-08-03",
+          "observed": "2026-08-02"
+        },
+        {
+          "fieldName": "txn:2:amount",
+          "expected": "500",
+          "observed": "3000"
+        },
+        {
+          "fieldName": "txn:2:balance",
+          "expected": "1454.8",
+          "observed": "4850"
+        },
+        {
+          "fieldName": "txn:2:description",
+          "expected": "SALARY XYZ PTY LTD",
+          "observed": "SALARY ACME PTY LTD"
+        },
+        {
+          "fieldName": "txn:3:date",
+          "expected": "2026-08-05"
+        },
+        {
+          "fieldName": "txn:3:amount",
+          "expected": "220.24"
+        },
+        {
+          "fieldName": "txn:3:direction",
+          "expected": "debit"
+        },
+        {
+          "fieldName": "txn:3:balance",
+          "expected": "1234.56"
+        },
+        {
+          "fieldName": "txn:3:description",
+          "expected": "DIRECT DEBIT INSURANCE"
+        },
+        {
+          "fieldName": "txn:4:date",
+          "expected": "2026-08-08"
+        },
+        {
+          "fieldName": "txn:4:amount",
+          "expected": "100"
+        },
+        {
+          "fieldName": "txn:4:direction",
+          "expected": "debit"
+        },
+        {
+          "fieldName": "txn:4:balance",
+          "expected": "1134.56"
+        },
+        {
+          "fieldName": "txn:4:description",
+          "expected": "ATM CASH WITHDRAWAL"
+        }
+      ],
+      "economicDisagreements": [
+        {
+          "key": 1,
+          "expected": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 45.2,
+            "direction": "debit",
+            "balance": 954.8
+          },
+          "observed": {
+            "key": 1,
+            "date": "2026-08-01",
+            "amount": 150,
+            "direction": "debit",
+            "balance": 1850
+          }
+        },
+        {
+          "key": 2,
+          "expected": {
+            "key": 2,
+            "date": "2026-08-03",
+            "amount": 500,
+            "direction": "credit",
+            "balance": 1454.8
+          },
+          "observed": {
+            "key": 2,
+            "date": "2026-08-02",
+            "amount": 3000,
+            "direction": "credit",
+            "balance": 4850
+          }
+        },
+        {
+          "key": 3,
+          "expected": {
+            "key": 3,
+            "date": "2026-08-05",
+            "amount": 220.24,
+            "direction": "debit",
+            "balance": 1234.56
+          },
+          "observed": null
+        },
+        {
+          "key": 4,
+          "expected": {
+            "key": 4,
+            "date": "2026-08-08",
+            "amount": 100,
+            "direction": "debit",
+            "balance": 1134.56
+          },
+          "observed": null
+        }
+      ]
     },
     {
       "caseId": "FDH-A05",
@@ -281,15 +860,16 @@
     }
   ],
   "evidence": {
-    "FDH-A01": {
+    "FDH-A03": {
       "observedTerminalStatus": "awaiting_acceptance",
       "observedRejectionReason": null,
       "intakeThrew": null,
       "acceptOutcome": {
-        "ok": true
+        "ok": false,
+        "reason": "stale_conflict"
       },
       "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
+      "canonicalWritesAfterExplicitAccept": 0,
       "aiCompletionAttempts": 0,
       "unresolvedItems": [],
       "reconciliationResults": [
@@ -327,51 +907,11 @@
       "observedRejectionReason": null,
       "intakeThrew": null,
       "acceptOutcome": {
-        "ok": true
+        "ok": false,
+        "reason": "stale_conflict"
       },
       "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
-      "aiCompletionAttempts": 0,
-      "unresolvedItems": [],
-      "reconciliationResults": [
-        {
-          "ruleId": "fdh_bank_statement_balance_reconciliation",
-          "ruleVersion": "1",
-          "outcome": "pass",
-          "delta": 0,
-          "tolerance": 0,
-          "materiality": "balance_rollforward"
-        },
-        {
-          "ruleId": "fdh_bank_statement_row_extraction_completeness",
-          "ruleVersion": "1",
-          "outcome": "pass",
-          "delta": 0,
-          "tolerance": 0,
-          "materiality": "all_printed_rows_read"
-        }
-      ],
-      "accountIdentityReuseObserved": [
-        "oracle-account-1"
-      ],
-      "intakeStatusUpdates": [
-        {
-          "toStatus": "quarantined"
-        },
-        {
-          "toStatus": "ready"
-        }
-      ]
-    },
-    "FDH-A03": {
-      "observedTerminalStatus": "awaiting_acceptance",
-      "observedRejectionReason": null,
-      "intakeThrew": null,
-      "acceptOutcome": {
-        "ok": true
-      },
-      "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
+      "canonicalWritesAfterExplicitAccept": 0,
       "aiCompletionAttempts": 0,
       "unresolvedItems": [],
       "reconciliationResults": [
@@ -405,6 +945,48 @@
       ]
     },
     "FDH-A04": {
+      "observedTerminalStatus": "awaiting_acceptance",
+      "observedRejectionReason": null,
+      "intakeThrew": null,
+      "acceptOutcome": {
+        "ok": false,
+        "reason": "stale_conflict"
+      },
+      "canonicalWritesDuringIntake": 0,
+      "canonicalWritesAfterExplicitAccept": 0,
+      "aiCompletionAttempts": 0,
+      "unresolvedItems": [],
+      "reconciliationResults": [
+        {
+          "ruleId": "fdh_bank_statement_balance_reconciliation",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "balance_rollforward"
+        },
+        {
+          "ruleId": "fdh_bank_statement_row_extraction_completeness",
+          "ruleVersion": "1",
+          "outcome": "pass",
+          "delta": 0,
+          "tolerance": 0,
+          "materiality": "all_printed_rows_read"
+        }
+      ],
+      "accountIdentityReuseObserved": [
+        "oracle-account-1"
+      ],
+      "intakeStatusUpdates": [
+        {
+          "toStatus": "quarantined"
+        },
+        {
+          "toStatus": "ready"
+        }
+      ]
+    },
+    "FDH-A01": {
       "observedTerminalStatus": "awaiting_acceptance",
       "observedRejectionReason": null,
       "intakeThrew": null,

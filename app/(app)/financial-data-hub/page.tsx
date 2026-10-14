@@ -2,6 +2,8 @@ import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { financialImportAccessView } from '@/lib/entitlements/financialDataImport';
+import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
 import { IMPORT_DESTINATIONS, NOT_SUPPORTED_FOR_IMPORT, importDestinationFor } from './importDestinations';
 
 /**
@@ -27,6 +29,10 @@ async function FinancialDataHubPageContent({ searchParams }: { searchParams: Pro
   const destination = importDestinationFor(type);
   if (destination) redirect(destination);
 
+  // Premium Upload Entitlement (14-10-2026): this page only points to where each import lives (it accepts no upload), so it shows the
+  // lock up front for a Free user. Presentation only: each destination's own import is enforced by the server.
+  const importAccess = await financialImportAccessView(user.id, 'fdh.hub_page');
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
@@ -35,6 +41,9 @@ async function FinancialDataHubPageContent({ searchParams }: { searchParams: Pro
           Documents are imported on the page they belong to, where you review what was read and approve it. Choose where to go:
         </p>
       </div>
+      {importAccess.state !== 'allowed' && (
+        <ImportLockedNotice domain="fdh" label="Import a financial document" state={importAccess.state} />
+      )}
       <ul className="space-y-2">
         {IMPORT_DESTINATIONS.map((d) => (
           <li key={d.href} className="rounded border border-gray-200 px-4 py-3 text-sm">

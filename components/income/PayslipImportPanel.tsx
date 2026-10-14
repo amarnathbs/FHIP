@@ -36,6 +36,8 @@ import {
   SCANNING_MESSAGE,
   SCAN_TIMEOUT_MESSAGE,
 } from '@/components/financial-data-hub/scanStatusPolling';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
 
 type Phase =
   | 'form'
@@ -342,6 +344,9 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
+  // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
+  const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
   // 2026-09-25: payslips already read and waiting to be added. Before this,
   // closing the panel or reloading the page stranded a proposal -- nothing on
   // screen listed it, and re-uploading only reached the duplicate guard.
@@ -544,7 +549,14 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         }),
       });
       const { ok: sessionOk, json: sessionJson } = await readJson(sessionRes);
-      if (!sessionOk) throw new Error(sessionJson.message ?? sessionJson.error ?? 'Could not start upload');
+      if (!sessionOk) {
+        // Premium Upload Entitlement: the unified refusal switches this panel to the locked state (nothing was stored).
+        if (noteImportResponse(sessionJson)) {
+          setPhase('form');
+          return;
+        }
+        throw new Error(sessionJson.message ?? sessionJson.error ?? 'Could not start upload');
+      }
 
       const completeRes = await fetch(
         `/api/financial-data-hub/documents/upload-sessions/${sessionJson.data.session_id}/complete`,
@@ -894,7 +906,11 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
         </section>
       )}
 
-      {uploadEnabled !== false && phase === 'form' && (
+      {uploadEnabled !== false && phase === 'form' && importAccess?.state !== 'allowed' && (
+        <ImportLockedNotice domain="income" label="Import from Payslip" state={importAccess === null ? 'checking' : importAccess.state} />
+      )}
+
+      {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
             Upload a payslip and FHIP will extract your income details for you to review before updating your Income
@@ -926,7 +942,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
           <button
             type="button"
             onClick={handleUpload}
-            disabled={!file || !owner || busy || uploadEnabled !== true}
+            disabled={!file || !owner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed'}
             className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             Upload payslip

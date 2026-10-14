@@ -7,6 +7,10 @@
  * refusal is the owner check and not an earlier gate.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Premium Upload Entitlement (14-10-2026): this test is about something else (not the plan), so it runs as an ENTITLED customer, which is the
+// state it was written for. The entitlement itself is proved with the real capability in tests/unit/premiumUpload*.test.ts.
+vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) =>
+  (await import('../support/premiumImportEntitlementMock')).withPremiumImportEntitlement(await importOriginal()));
 
 const SELF = 'a1111111-1111-4111-8111-111111111111';
 const TRUST = 'e1111111-1111-4111-8111-111111111111';

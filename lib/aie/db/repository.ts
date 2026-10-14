@@ -15,6 +15,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AieInvalidTransitionError, assertRunTransition, isAllowedIntakeTransition } from '../stateMachine';
+import { resolveFinancialImportAccess } from '@/lib/entitlements/financialDataImport';
 import type { AieAuditEventType as AieAuditEventTypeName } from '../audit';
 import type {
   AieActorType,
@@ -44,6 +45,10 @@ export async function createIntake(
     sourceModuleHint: AieSourceModuleHint;
   },
 ): Promise<{ id: string } | { error: string }> {
+  // Premium Upload Entitlement (14-10-2026): the service-layer admission boundary behind the four intake routes. No intake row
+  // (and so nothing for a later process step to find) exists for a user who is not Premium NOW.
+  const importDecision = await resolveFinancialImportAccess(params.userId, 'aie.service.create_intake');
+  if (!importDecision.allowed) return { error: importDecision.code };
   const { data, error } = await rlsClient
     .from('aie_document_intake')
     .insert({

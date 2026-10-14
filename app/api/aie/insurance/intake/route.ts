@@ -24,6 +24,7 @@ import {
   AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_NAME,
   AIE_INSURANCE_ADAPTER_FIELD_COMPLETION_SCHEMA_VERSION,
 } from '@/lib/aie/adapters/insurance/schema';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // LIVE-DEV VERIFICATION FIX (2026-09-12, AIE_1_LIVE_DEV_VERIFICATION_REPORT.md
 // pass 2): this used to be a bare `import '@/lib/aie/adapters/insurance';`
@@ -81,6 +82,10 @@ const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
 export async function POST(req: Request) {
   const { user, blocked } = await requireModuleCapability('INSURANCE', req);
   if (!user) return blocked!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'aie.insurance.intake');
+  if (importDenied) return importDenied;
 
   if (!isAieInsuranceAdapterEnabled()) {
     return bad('The AIE-fronted Insurance adapter is not currently enabled in this environment.', 403);

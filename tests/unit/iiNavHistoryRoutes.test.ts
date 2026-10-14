@@ -1,6 +1,10 @@
 // /api/investment-intelligence/nav-history and the confirm routes' kick (PO
 // extension 2026-10-03). NC-D4: the confirm response does not wait on the fetch.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Premium Upload Entitlement (14-10-2026): this test is about something else (not the plan), so it runs as an ENTITLED customer, which is the
+// state it was written for. The entitlement itself is proved with the real capability in tests/unit/premiumUpload*.test.ts.
+vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) =>
+  (await import('../support/premiumImportEntitlementMock')).withPremiumImportEntitlement(await importOriginal()));
 import { createInMemoryDb } from './support/inMemorySupabase';
 import { countryRegistryFrom } from './support/countryRegistryFake';
 

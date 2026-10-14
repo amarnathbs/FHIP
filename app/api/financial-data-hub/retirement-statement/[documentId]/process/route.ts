@@ -9,6 +9,8 @@ import {
   retirementStatementUploadMetadataSchema as metadataSchema,
   currencyMatchesJurisdiction,
 } from '@/lib/financial-data-hub/validation/retirementStatement';
+import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
+import { fdhDocumentRunPosition } from '@/lib/financial-data-hub/services/importRunPosition';
 
 // POST /api/financial-data-hub/retirement-statement/{documentId}/process
 //
@@ -24,6 +26,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): starting NEW extraction work (a retry / re-parse) is Premium; the first run of a
+  // document admitted while Premium and the idempotent in-flight lifecycle still complete after a downgrade.
+  const importDenied = await refuseUnlessImportRunMayStart(user.id, 'fdh.retirement_statement.process', () => fdhDocumentRunPosition(user.id, documentId));
+  if (importDenied) return importDenied;
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Statement uploads are not currently enabled in this environment.', 403);

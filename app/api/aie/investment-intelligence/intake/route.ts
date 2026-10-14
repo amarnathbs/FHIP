@@ -16,6 +16,7 @@ import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
 import { recordIntakeOwnerSelection, resolveAieIntakeOwner } from '@/lib/aie/intakeOwner';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // One shared gateway per process, matching the other AIE intake routes. The
 // provider is constructed HERE, in the route, not inside the adapter —
@@ -63,6 +64,10 @@ const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'aie.investment_intelligence.intake');
+  if (importDenied) return importDenied;
 
   // Three independent gates, all defaulting OFF, checked before a single byte
   // is read: the adapter's own switch, AIE's master intake switch, and the

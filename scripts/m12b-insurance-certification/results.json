@@ -3,55 +3,137 @@
   "generatedBy": "tests/unit/m12bInsuranceAccuracyCorpus.test.ts",
   "summary": {
     "caseCount": 14,
-    "fieldPrecision": 1,
-    "fieldRecall": 1,
-    "economicPrecision": 1,
-    "economicRecall": 0.8275862068965517,
+    "fieldPrecision": 0.9151515151515152,
+    "fieldRecall": 0.893491124260355,
+    "economicPrecision": 0.9166666666666666,
+    "economicRecall": 0.7586206896551724,
     "falseAcceptRate": 0,
     "falseAcceptCount": 0,
     "falseAcceptDenominator": 9,
     "falseCanonicalWriteRate": 0,
     "falseCanonicalWriteCount": 0,
-    "totalUnexplainedOmissions": 0
+    "totalUnexplainedOmissions": 2
   },
   "cases": [
     {
-      "caseId": "INS-B01",
-      "scenario": "normal policy schedule",
-      "fieldTruePositives": 16,
-      "fieldFalsePositives": 0,
-      "fieldFalseNegatives": 0,
-      "fieldPrecision": 1,
-      "fieldRecall": 1,
-      "economicMatched": 2,
-      "economicObserved": 2,
-      "economicExpected": 2,
-      "economicPrecision": 1,
-      "economicRecall": 1,
-      "unexplainedOmissions": [],
-      "falseAccept": false,
-      "falseCanonicalWrite": false,
-      "fieldDisagreements": [],
-      "economicDisagreements": []
-    },
-    {
       "caseId": "INS-B02",
       "scenario": "multi-page policy schedule",
-      "fieldTruePositives": 16,
-      "fieldFalsePositives": 0,
-      "fieldFalseNegatives": 0,
-      "fieldPrecision": 1,
-      "fieldRecall": 1,
-      "economicMatched": 2,
+      "fieldTruePositives": 4,
+      "fieldFalsePositives": 10,
+      "fieldFalseNegatives": 12,
+      "fieldPrecision": 0.2857142857142857,
+      "fieldRecall": 0.25,
+      "economicMatched": 0,
       "economicObserved": 2,
       "economicExpected": 2,
-      "economicPrecision": 1,
-      "economicRecall": 1,
-      "unexplainedOmissions": [],
+      "economicPrecision": 0,
+      "economicRecall": 0,
+      "unexplainedOmissions": [
+        "cover:1",
+        "premium:1"
+      ],
       "falseAccept": false,
       "falseCanonicalWrite": false,
-      "fieldDisagreements": [],
-      "economicDisagreements": []
+      "fieldDisagreements": [
+        {
+          "fieldName": "policyName",
+          "expected": "Family Shield Home Cover",
+          "observed": "Meridian Term Cover"
+        },
+        {
+          "fieldName": "coverType",
+          "expected": "home",
+          "observed": "life"
+        },
+        {
+          "fieldName": "coverAmount",
+          "expected": "850000",
+          "observed": "500000"
+        },
+        {
+          "fieldName": "premium",
+          "expected": "310.5",
+          "observed": "120"
+        },
+        {
+          "fieldName": "premiumFrequency",
+          "expected": "quarterly",
+          "observed": "monthly"
+        },
+        {
+          "fieldName": "renewalDate",
+          "expected": "2027-03-15",
+          "observed": "2027-08-31"
+        },
+        {
+          "fieldName": "provider",
+          "expected": "Northern Reach Insurance Group",
+          "observed": "Meridian Life Assurance Society"
+        },
+        {
+          "fieldName": "policyNumberMasked",
+          "expected": "******4512",
+          "observed": "******4466"
+        },
+        {
+          "fieldName": "policyOwnerName",
+          "expected": "Sam Quinn Harper"
+        },
+        {
+          "fieldName": "excessAmount",
+          "expected": "750"
+        },
+        {
+          "fieldName": "exclusionsText",
+          "expected": "Flood damage excluded in declared catchment zones."
+        },
+        {
+          "fieldName": "printedAnnualPremiumTotal",
+          "expected": "1242",
+          "observed": "1440"
+        },
+        {
+          "fieldName": "insuredPersonName",
+          "expected": null,
+          "observed": "Alex Devon Ray"
+        }
+      ],
+      "economicDisagreements": [
+        {
+          "key": "cover:1",
+          "expected": {
+            "key": "cover:1",
+            "date": null,
+            "amount": 850000,
+            "direction": "cover",
+            "balance": null
+          },
+          "observed": {
+            "key": "cover:1",
+            "date": null,
+            "amount": 500000,
+            "direction": "cover",
+            "balance": null
+          }
+        },
+        {
+          "key": "premium:1",
+          "expected": {
+            "key": "premium:1",
+            "date": null,
+            "amount": 310.5,
+            "direction": "premium",
+            "balance": null
+          },
+          "observed": {
+            "key": "premium:1",
+            "date": null,
+            "amount": 120,
+            "direction": "premium",
+            "balance": null
+          }
+        }
+      ]
     },
     {
       "caseId": "INS-B03",
@@ -70,6 +152,54 @@
       "falseAccept": false,
       "falseCanonicalWrite": false,
       "fieldDisagreements": [],
+      "economicDisagreements": []
+    },
+    {
+      "caseId": "INS-B01",
+      "scenario": "normal policy schedule",
+      "fieldTruePositives": 10,
+      "fieldFalsePositives": 4,
+      "fieldFalseNegatives": 6,
+      "fieldPrecision": 0.7142857142857143,
+      "fieldRecall": 0.625,
+      "economicMatched": 2,
+      "economicObserved": 2,
+      "economicExpected": 2,
+      "economicPrecision": 1,
+      "economicRecall": 1,
+      "unexplainedOmissions": [],
+      "falseAccept": false,
+      "falseCanonicalWrite": false,
+      "fieldDisagreements": [
+        {
+          "fieldName": "policyName",
+          "expected": "Protection Plus Life Cover",
+          "observed": "Meridian Term Cover"
+        },
+        {
+          "fieldName": "provider",
+          "expected": "Southern Cross Mutual Assurance",
+          "observed": "Meridian Life Assurance Society"
+        },
+        {
+          "fieldName": "policyNumberMasked",
+          "expected": "******0983",
+          "observed": "******4466"
+        },
+        {
+          "fieldName": "policyOwnerName",
+          "expected": "Jordan Avery Lee"
+        },
+        {
+          "fieldName": "insuredPersonName",
+          "expected": "Jordan Avery Lee",
+          "observed": "Alex Devon Ray"
+        },
+        {
+          "fieldName": "beneficiaryName",
+          "expected": "Morgan Riley Lee"
+        }
+      ],
       "economicDisagreements": []
     },
     {
@@ -341,16 +471,17 @@
     }
   ],
   "evidence": {
-    "INS-B01": {
+    "INS-B02": {
       "observedTerminalStatus": "awaiting_acceptance",
       "observedRejectionReason": null,
       "passwordRequired": false,
       "intakeThrew": null,
       "acceptOutcome": {
-        "ok": true
+        "ok": false,
+        "reason": "stale_conflict"
       },
       "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
+      "canonicalWritesAfterExplicitAccept": 0,
       "aiCompletionAttempts": 0,
       "aiOutcomes": [],
       "maskingSummaries": [],
@@ -403,7 +534,7 @@
       ],
       "canonicalRowsWritten": [
         {
-          "policy_name": "Protection Plus Life Cover",
+          "policy_name": "Meridian Term Cover",
           "cover_type": "life",
           "cover_amount": 500000,
           "premium": 120,
@@ -412,23 +543,24 @@
           "renewal_date": "2027-08-31",
           "waiting_period_days": null,
           "benefit_period": null,
-          "provider": "Southern Cross Mutual Assurance",
+          "provider": "Meridian Life Assurance Society",
           "owner": "self",
           "master_item_key": null,
           "notes": null
         }
       ]
     },
-    "INS-B02": {
+    "INS-B03": {
       "observedTerminalStatus": "awaiting_acceptance",
       "observedRejectionReason": null,
       "passwordRequired": false,
       "intakeThrew": null,
       "acceptOutcome": {
-        "ok": true
+        "ok": false,
+        "reason": "stale_conflict"
       },
       "canonicalWritesDuringIntake": 0,
-      "canonicalWritesAfterExplicitAccept": 1,
+      "canonicalWritesAfterExplicitAccept": 0,
       "aiCompletionAttempts": 0,
       "aiOutcomes": [],
       "maskingSummaries": [],
@@ -459,7 +591,7 @@
           "ruleVersion": "1",
           "outcome": "pass",
           "delta": 0,
-          "tolerance": 12.42
+          "tolerance": 14.4
         },
         {
           "ruleId": "insurance_printed_fact_completeness",
@@ -481,23 +613,23 @@
       ],
       "canonicalRowsWritten": [
         {
-          "policy_name": "Family Shield Home Cover",
-          "cover_type": "home",
-          "cover_amount": 850000,
-          "premium": 310.5,
-          "premium_frequency": "quarterly",
+          "policy_name": "Meridian Term Cover",
+          "cover_type": "life",
+          "cover_amount": 500000,
+          "premium": 120,
+          "premium_frequency": "monthly",
           "currency_code": "AUD",
-          "renewal_date": "2027-03-15",
+          "renewal_date": "2027-08-31",
           "waiting_period_days": null,
           "benefit_period": null,
-          "provider": "Northern Reach Insurance Group",
+          "provider": "Meridian Life Assurance Society",
           "owner": "self",
           "master_item_key": null,
           "notes": null
         }
       ]
     },
-    "INS-B03": {
+    "INS-B01": {
       "observedTerminalStatus": "awaiting_acceptance",
       "observedRejectionReason": null,
       "passwordRequired": false,
