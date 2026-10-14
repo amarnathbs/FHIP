@@ -13,6 +13,11 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { premiumAi } from '../support/premiumAiAccessMock';
 
+// Composition with the Premium upload entitlement (r2): these routes check "may this user START an upload" before the AI gate,
+// and this file's session mock has no entitlement row. The legacy-test double answers 'entitled' so THIS file still tests the AI gate alone.
+vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) =>
+  (await import('../support/premiumImportEntitlementMock')).withPremiumImportEntitlement(await importOriginal()));
+
 vi.setConfig({ testTimeout: 60000 });
 
 const h = vi.hoisted(() => ({
