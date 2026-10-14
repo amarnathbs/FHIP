@@ -170,11 +170,11 @@ describe('dates never break at their hyphens', () => {
 
 describe('touch targets: compact action buttons and the Show more control', () => {
   it('a compact action button is small on a mouse screen and 44 px on a touch screen; a normal button stays 44 px', () => {
-    const compact = renderToStaticMarkup(h(Btn, { compact: true, kind: 'secondary', ariaLabel: 'Edit revision of record a1b2c3' }, 'Edit revision'));
+    const compact = renderToStaticMarkup(h(Btn, { compact: true, kind: 'secondary', ariaLabel: 'Edit revision of record a1b2c3', children: 'Edit revision' }));
     expect(compact).toContain('min-h-8');
     expect(compact).toContain('[@media(pointer:coarse)]:min-h-11');
     expect(compact).toContain('aria-label="Edit revision of record a1b2c3"');
-    expect(renderToStaticMarkup(h(Btn, { kind: 'secondary' }, 'Open'))).toContain('min-h-11');
+    expect(renderToStaticMarkup(h(Btn, { kind: 'secondary', children: 'Open' }))).toContain('min-h-11');
   });
 
   it('the Show more control grows to 44 px on a touch screen (CSS), 24 px otherwise (WCAG 2.5.8)', () => {
