@@ -42,9 +42,20 @@ Pre-existing failures, each confirmed on a clean extract of `origin/main` `af2d3
 | Failure | On clean `origin/main` | On this branch |
 |---|---|---|
 | `tests/unit/m12cServerOnlySecretBoundary.test.ts` > "ENVIRONMENT_VARIABLES.md's quoted Amplify forward list matches amplify.yml exactly" | **fails** (the quoted list lacks the five promo / reminder prefixes that `amplify.yml` carries) | same single failure, unchanged. Not mine, not fixed here |
-| `tsc --noEmit` | exactly one error: `tests/unit/canonicalCertResidueAllSql.test.ts(127,75)` | the same one error and nothing else |
+| `tsc --noEmit` (source and tests) | exactly one error in the first run: `tests/unit/canonicalCertResidueAllSql.test.ts(127,75)` (it depends on a checked-in artifact the test run rewrites) | the same one error in the early runs; **no error in source or tests in the last run** |
 | `eslint` on every changed / new file | n/a | clean |
 | 11 tests in `m12a*/m12b*/aieOwnerBeforeUploadRoutes` at the 5 s default | time out under load on clean main too | pass with `--testTimeout=120000` |
+
+### Production-style build: NOT a clean pass here, and why
+
+`next build --webpack` of this branch (DEV connection values, nothing deployed): the **bundler compile succeeded** (6.9 minutes), then
+Next's own route-shape type check stopped on two files this change does not touch, both byte-identical to `origin/main`:
+`app/api/admin/recommendations/gaps/route.ts` (exports a constant next to its handlers) and
+`app/api/investment-intelligence/overview/route.ts` (`GET(req?: Request)`). The same two errors appear in `tsc` once `next typegen`
+output is present. Those files are old (the gaps route was last changed in the Admin A0.2 Wave 5 closure) and Amplify has built and deployed `main` since (builds 271 to 274 on 01-10 / 02-10-2026, per the release notes), and this machine resolves `node_modules` through a junction
+(Turbopack refuses it outright), so I treat the failure as environmental, but **I cannot call this a clean production build**: a
+comparison build of clean `origin/main` could not be run in the same way (webpack cannot resolve the junction from the extract). The
+first full proof is Amplify's own build of the push; the step 3 instruction "wait for the Amplify build to finish green" covers it.
 
 ## 3. DEV evidence (DEV-VERIFIED)
 
