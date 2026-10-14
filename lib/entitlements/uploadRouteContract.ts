@@ -17,7 +17,7 @@ export const INGESTION_SIGNALS: readonly { name: string; pattern: RegExp }[] = [
   { name: 'signed upload credential', pattern: /createSignedUploadUrl|createSignedUploadToken/ },
   { name: 'direct storage upload', pattern: /\.storage\s*\.from\([^)]*\)\s*\.upload\(/ },
   { name: 'upload session / document creation', pattern: /\bcreateUploadSession\(|\bcompleteUpload\(/ },
-  { name: 'AIE intake creation', pattern: /\bcreateIntake\(/ },
+  { name: 'AIE intake creation', pattern: /\b(?:createIntake|admitIntake)\(/ },
   { name: 'source-document storage write', pattern: /\buploadSourceDocumentObject\(|\buploadDocumentObject\(/ },
   { name: 'fixture importer', pattern: /\bimportManualFixture\(/ },
   { name: 'bank statement upload service', pattern: /\buploadBank(?:Csv|Pdf)\(/ },

@@ -4,7 +4,8 @@ import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isUserInA
 import { isAieIiAdapterEnabled } from '@/lib/aie/adapters/investment-intelligence/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
-import { createIntake, updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser } from '@/lib/aie/db/repository';
+import { updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser } from '@/lib/aie/db/repository';
+import { admitIntake } from '@/lib/aie/intakeAdmission';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { dispatchInvestmentDocument } from '@/lib/aie/adapters/investment-intelligence/dispatch';
@@ -113,7 +114,7 @@ export async function POST(req: Request) {
   const displayFilename = filename ? filename.replace(/[^\w.\- ]/g, '_').slice(0, 120) : null;
 
   const rlsClient = await createClient();
-  const created = await createIntake(rlsClient, {
+  const created = await admitIntake(rlsClient, {
     userId: user.id,
     declaredMimeType: 'application/pdf',
     byteSize: bytes.byteLength,

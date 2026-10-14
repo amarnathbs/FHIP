@@ -27,7 +27,7 @@ an unknown tier, or a malformed row is Free. The importer holds no second interp
 |---|---|
 | `refuseUnlessFinancialImportAllowed(userId, surface)` | **Admission routes.** Returns a `Response` to send back, or `null`. Call straight after authentication and **before the body is read**, a row is created, a credential is issued, a byte is stored, a job is queued or a provider is called. |
 | `refuseUnlessImportRunMayStart(userId, surface, position)` | **Process / retry / detect / map / confirm routes** for an already-admitted document (they take an id, not a file). Implements the downgrade policy below. |
-| `assertFinancialImportAllowed(userId, surface)` | **Service-layer admission boundary** (throws `FinancialImportDeniedError`). Used in `createUploadSession`, `completeUpload` (every FDH pipeline) and AIE `createIntake`. |
+| `assertFinancialImportAllowed(userId, surface)` | **Service-layer admission boundary** (throws `FinancialImportDeniedError`). Used in `createUploadSession`, `completeUpload` (every FDH pipeline) and AIE `admitIntake` (`lib/aie/intakeAdmission.ts`, the guarded `createIntake`; kept out of the repository because that module reaches a client bundle through `lib/pc5/discard.ts`). |
 | `resolveFinancialImportAccess`, `financialImportAccessView` | The decision / the three-state view the UI is drawn from (`allowed`, `premium_required`, `unavailable`). |
 
 `userId` is always the **authenticated session user's id**. There is no parameter through which a client could supply a plan,

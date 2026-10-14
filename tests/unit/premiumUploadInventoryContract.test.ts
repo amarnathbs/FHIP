@@ -65,7 +65,7 @@ const KNOWN_LOOKALIKES: Record<string, string> = {
 
 // A superset prefilter for `git grep` (ERE); the precise signal rules in uploadRouteContract.ts re-check each candidate.
 const INGESTION_PREFILTER =
-  'formData\\(\\)|arrayBuffer\\(\\)|createSigned(Upload)|\\.upload\\(|createUploadSession\\(|completeUpload\\(|createIntake\\(|uploadSourceDocumentObject|uploadDocumentObject|importManualFixture|uploadBank(Csv|Pdf)\\(|uploadAnd[A-Za-z]+Statement\\(';
+  'formData\\(\\)|arrayBuffer\\(\\)|createSigned(Upload)|\\.upload\\(|createUploadSession\\(|completeUpload\\(|createIntake\\(|admitIntake\\(|uploadSourceDocumentObject|uploadDocumentObject|importManualFixture|uploadBank(Csv|Pdf)\\(|uploadAnd[A-Za-z]+Statement\\(';
 
 describe('inventory is real', () => {
   it('the route scan sees the real estate (not vacuous)', () => {
@@ -224,7 +224,7 @@ describe('(8) no reusable upload credential, no storage write path for customers
       'lib/financial-data-hub/services/uploadLifecycle.ts',
       'lib/financial-data-hub/services/importRunPosition.ts',
       'lib/aie/importRunPosition.ts',
-      'lib/aie/db/repository.ts',
+      'lib/aie/intakeAdmission.ts',
       'lib/services/investment-intelligence/importRunPosition.ts',
     ]);
     expect(importers.filter((f) => !allowed.has(f))).toEqual([]);

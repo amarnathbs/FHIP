@@ -61,7 +61,7 @@ import { runPositionForFdhStatus } from '@/lib/financial-data-hub/services/impor
 import { runPositionForAieIntakeStatus } from '@/lib/aie/importRunPosition';
 import { runPositionForIiStatus } from '@/lib/services/investment-intelligence/importRunPosition';
 import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
-import { createIntake } from '@/lib/aie/db/repository';
+import { admitIntake } from '@/lib/aie/intakeAdmission';
 
 const FREE = { plan_tier: 'free', effective_from: '2026-01-01', effective_to: null };
 const PREMIUM = { plan_tier: 'premium', effective_from: '2026-01-01', effective_to: null };
@@ -139,7 +139,7 @@ describe('FDH completeUpload (the step that stores raw bytes)', () => {
   });
 });
 
-describe('AIE createIntake (the four AIE intake routes enter here)', () => {
+describe('AIE admitIntake (the guarded createIntake the four AIE intake routes use)', () => {
   function rls() {
     const inserted: unknown[] = [];
     const client = { from: () => ({ insert: (row: unknown) => { inserted.push(row); return { select: () => ({ single: async () => ({ data: { id: 'intake-1' }, error: null }) }) }; } }) };
@@ -150,21 +150,21 @@ describe('AIE createIntake (the four AIE intake routes enter here)', () => {
   it('Free: returns the Premium error and inserts NO intake row', async () => {
     h.state.entitlement = FREE;
     const { client, inserted } = rls();
-    expect(await createIntake(client, params)).toEqual({ error: 'PREMIUM_REQUIRED' });
+    expect(await admitIntake(client, params)).toEqual({ error: 'PREMIUM_REQUIRED' });
     expect(inserted).toEqual([]);
   });
 
   it('store down: ENTITLEMENT_UNAVAILABLE, nothing inserted', async () => {
     h.state.entitlementError = 'down';
     const { client, inserted } = rls();
-    expect(await createIntake(client, params)).toEqual({ error: 'ENTITLEMENT_UNAVAILABLE' });
+    expect(await admitIntake(client, params)).toEqual({ error: 'ENTITLEMENT_UNAVAILABLE' });
     expect(inserted).toEqual([]);
   });
 
   it('Premium (NEGATIVE CONTROL): the intake row is created', async () => {
     h.state.entitlement = PREMIUM;
     const { client, inserted } = rls();
-    expect(await createIntake(client, params)).toEqual({ id: 'intake-1' });
+    expect(await admitIntake(client, params)).toEqual({ id: 'intake-1' });
     expect(inserted).toHaveLength(1);
   });
 });
