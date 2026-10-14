@@ -16,6 +16,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { stripUnusedBinContentType } from '../lib/resources/import/xlsx-sanitize';
+import { fixtureSession, maskEmail } from './lib/resourcesBulkFixtureSessions';
 import { ARTICLE_SCHEMA } from '../lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '../lib/resources/import/money-update/schema';
 
@@ -43,21 +44,13 @@ const check = (name: string, pass: boolean, detail = '') => {
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${!pass && detail ? `  -- ${detail}` : ''}`);
 };
 
-const createdUserIds: string[] = [];
-async function makeUser(label: string, roles: string[]) {
-  const email = `${RUN}-${label}@fhip-test.invalid`;
-  const password = `Brw!${Math.random().toString(36).slice(2)}${Date.now()}Zz9`;
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-  if (error) throw error;
-  const id = data.user!.id;
-  createdUserIds.push(id);
-  await admin.from('user_profiles').update({ country_of_residence: 'AU', preferred_currency: 'AUD', country_confirmed_at: new Date().toISOString(), country_source: 'USER_CONFIRMED', onboarding_completed: true }).eq('user_id', id);
-  for (const role of roles) await admin.from('resource_user_roles').insert({ user_id: id, role, is_active: true });
-  const session = await (await fetch(`${URL_}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })).json();
-  const value = 'base64-' + Buffer.from(JSON.stringify(session)).toString('base64url');
-  const CHUNK = 3180;
-  const parts = value.length <= CHUNK ? [{ name: `sb-${REF}-auth-token`, value }] : Array.from({ length: Math.ceil(value.length / CHUNK) }, (_, i) => ({ name: `sb-${REF}-auth-token.${i}`, value: value.slice(i * CHUNK, (i + 1) * CHUNK) }));
-  return { id, parts };
+/** Existing fixture users used in this run (ids only). Nothing about them is created, edited or deleted. */
+const fixtureIds = new Set<string>();
+const STARTED_AT = new Date().toISOString();
+async function makeUser(label: string, role: string) {
+  const f = await fixtureSession(admin, ANON, URL_, REF, label, { kind: 'role', role }, fixtureIds);
+  console.log(`fixture ${label}: ${maskEmail(f.email)}`);
+  return { id: f.id, parts: f.parts };
 }
 
 const fx = { catSlug: `${RUN}-cat`, tag: `${RUN}-tag`, authorSlug: `${RUN}-author` };
@@ -99,8 +92,8 @@ async function main() {
   await admin.from('resource_categories').insert({ name: `${RUN} Category`, slug: fx.catSlug });
   await admin.from('resource_tags').insert({ name: `${RUN} Tag`, slug: fx.tag });
   await admin.from('resource_authors').insert({ display_name: `${RUN} Author`, slug: fx.authorSlug });
-  const editor = await makeUser('editor', ['editor']);
-  const author = await makeUser('author', ['author']);
+  const editor = await makeUser('editor', 'editor');
+  const author = await makeUser('author', 'author');
 
   const browser = await chromium.launch();
   const ctx: BrowserContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -276,12 +269,13 @@ async function main() {
 const evidence: Record<string, unknown> = { run: RUN, app: APP, startedAt: new Date().toISOString() };
 
 async function cleanup() {
-  const ids = createdUserIds;
+  const ids = [...fixtureIds];
+  const since = new Date(new Date(STARTED_AT).getTime() - 60_000).toISOString();
   try {
     if (ids.length) {
-      const mine = await admin.from('resource_posts').select('id').in('created_by', ids).limit(2000);
+      const mine = await admin.from('resource_posts').select('id').in('created_by', ids).gte('created_at', since).limit(5000);
       for (const p of mine.data ?? []) await admin.from('resource_posts').delete().eq('id', p.id);
-      const runs = await admin.from('resource_content_import_runs').select('id').in('uploaded_by', ids);
+      const runs = await admin.from('resource_content_import_runs').select('id').in('uploaded_by', ids).gte('created_at', since);
       for (const r of runs.data ?? []) await admin.from('resource_content_import_runs').delete().eq('id', r.id);
     }
     await admin.from('resource_posts').delete().like('slug', `${RUN}%`);
@@ -290,18 +284,17 @@ async function cleanup() {
     await admin.from('resource_tags').delete().like('slug', `${RUN}%`);
     await admin.from('resource_categories').delete().like('slug', `${RUN}%`);
     if (ids.length) {
-      await admin.from('resource_audit_log').delete().in('actor_user_id', ids);
-      await admin.from('resource_workflow_history').delete().in('actor_user_id', ids);
-      await admin.from('resource_user_roles').delete().in('user_id', ids);
-      for (const id of ids) await admin.auth.admin.deleteUser(id);
+      await admin.from('resource_audit_log').delete().in('actor_user_id', ids).gte('created_at', since);
+      await admin.from('resource_workflow_history').delete().in('actor_user_id', ids).gte('created_at', since);
     }
     for (const f of fs.readdirSync(OUT_DIR)) if (f.startsWith('_tmp_')) fs.rmSync(path.join(OUT_DIR, f));
   } catch (e) {
     console.error('cleanup error', e);
   }
   const c = async (t: string, col: string, pat: string) => (await admin.from(t).select('*', { count: 'exact', head: true }).like(col, pat)).count ?? -1;
-  const residue = { posts: await c('resource_posts', 'slug', `${RUN}%`), sources: await c('resource_sources', 'source_name', `${RUN}%`), categories: await c('resource_categories', 'slug', `${RUN}%`), tags: await c('resource_tags', 'slug', `${RUN}%`), authors: await c('resource_authors', 'slug', `${RUN}%`), runs: ids.length ? ((await admin.from('resource_content_import_runs').select('*', { count: 'exact', head: true }).in('uploaded_by', ids)).count ?? -1) : 0 };
-  check('BROWSER CLEANUP: synthetic posts, sources, categories, tags, authors, import runs all 0', Object.values(residue).every((v) => v === 0), JSON.stringify(residue));
+  const inWin = async (t: string, col: string) => (ids.length ? ((await admin.from(t).select('*', { count: 'exact', head: true }).in(col, ids).gte('created_at', since)).count ?? -1) : 0);
+  const residue = { posts: await c('resource_posts', 'slug', `${RUN}%`), sources: await c('resource_sources', 'source_name', `${RUN}%`), categories: await c('resource_categories', 'slug', `${RUN}%`), tags: await c('resource_tags', 'slug', `${RUN}%`), authors: await c('resource_authors', 'slug', `${RUN}%`), runs: await inWin('resource_content_import_runs', 'uploaded_by'), postsByFixturesInWindow: await inWin('resource_posts', 'created_by'), auditInWindow: await inWin('resource_audit_log', 'actor_user_id') };
+  check('BROWSER CLEANUP: synthetic posts, sources, categories, tags, authors, import runs, and the audit rows of this run all 0', Object.values(residue).every((v) => v === 0), JSON.stringify(residue));
   evidence.residue = residue;
 }
 

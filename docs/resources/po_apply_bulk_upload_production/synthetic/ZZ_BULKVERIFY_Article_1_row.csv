@@ -1,0 +1,9 @@
+template_version,external_id,title,slug,jurisdiction,difficulty,compliance_classification,freshness_type,next_review_at,expires_at,excerpt,quick_answer,key_takeaways,main_content,example,financial_health_meaning,primary_category,tags,author,primary_cta,secondary_cta,seo_title,seo_description,is_indexable,source_1_name,source_1_document_title,source_1_url,source_1_type,source_1_publication_date,source_1_is_public,source_2_name,source_2_document_title,source_2_url,source_2_type,source_2_publication_date,source_2_is_public
+1.0,ZZBV-A-1,"ZZ BULKVERIFY synthetic article 1 (not real content, delete me)",zz-bulkverify-article-1,global,beginner,green,evergreen,,,Synthetic production verification record. Not real content. Delete me.,Synthetic quick answer.,"Synthetic takeaway one
+Synthetic takeaway two
+Synthetic takeaway three","## Synthetic heading
+
+Synthetic paragraph for the production verification.
+
+- synthetic bullet one
+- synthetic bullet two",Synthetic example.,Synthetic financial health meaning.,financial-health,,,,,,,FALSE,ZZ BULKVERIFY Source A,Synthetic document,https://example.com/zz-bulkverify/article,regulator,2026-08-12,TRUE,,,,,,

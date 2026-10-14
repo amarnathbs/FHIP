@@ -11,7 +11,7 @@ const get = (k: string) => raw.split(/\r?\n/).find((l) => l.startsWith(k + '='))
 const url = get('NEXT_PUBLIC_SUPABASE_URL');
 if (!url.includes('vqycarelcoijzwlpkpcz')) throw new Error('REFUSING: not DEV');
 const admin = createClient(url, get('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
-const TAGS = ['bulkcert', 'bulkbrw', 'verify0272', 'verify0273', 'probe', 'timing'];
+const TAGS = ['bulkcert', 'bulkrecert', 'bulkbrw', 'verify0272', 'verify0273', 'probe', 'timing'];
 async function count(table: string, col: string, tag: string) {
   const r = await admin.from(table).select('*', { count: 'exact', head: true }).like(col, `${tag}%`);
   return r.error ? -1 : (r.count ?? 0);

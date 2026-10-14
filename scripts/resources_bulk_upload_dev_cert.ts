@@ -20,6 +20,7 @@ import { ARTICLE_SCHEMA } from '../lib/resources/import/article/schema';
 import { MONEY_UPDATE_SCHEMA } from '../lib/resources/import/money-update/schema';
 import { IMPORT_LIMITS } from '../lib/resources/import/types';
 import { stripUnusedBinContentType } from '../lib/resources/import/xlsx-sanitize';
+import { fixtureSession, maskEmail } from './lib/resourcesBulkFixtureSessions';
 
 const CAP = IMPORT_LIMITS.maxRows;
 const APP = process.argv[2] ?? 'http://localhost:3993';
@@ -35,7 +36,7 @@ if (!URL_.includes('vqycarelcoijzwlpkpcz') || URL_.includes('twwpnltizhtjxhamyox
 const ANON = env('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 const SERVICE = env('SUPABASE_SERVICE_ROLE_KEY');
 const REF = new URL(URL_).host.split('.')[0];
-const RUN = `bulkcert${Date.now().toString(36)}`;
+const RUN = `bulkrecert${Date.now().toString(36)}`;
 const admin: SupabaseClient = createClient(URL_, SERVICE, { auth: { autoRefreshToken: false, persistSession: false } });
 
 // ------------------------------------------------------------------ check framework
@@ -50,31 +51,15 @@ function check(name: string, pass: boolean, detail = '') {
 // ------------------------------------------------------------------ users and HTTP
 interface TestUser { id: string; email: string; label: string; cookie: string }
 const users: Record<string, TestUser> = {};
-const createdUserIds: string[] = [];
+/** Existing fixture users used in this run (ids only). Nothing about them is created, edited or deleted. */
+const fixtureIds = new Set<string>();
+const STARTED_AT = new Date().toISOString();
 
-async function makeUser(label: string, opts: { roles?: string[]; superAdmin?: boolean }): Promise<TestUser> {
-  const email = `${RUN}-${label}@fhip-test.invalid`;
-  const password = `Bulk!${Math.random().toString(36).slice(2)}${Date.now()}Zz9`;
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-  if (error) throw new Error(`createUser ${label}: ${error.message}`);
-  const id = data.user!.id;
-  createdUserIds.push(id);
-  await admin.from('user_profiles').update({ country_of_residence: 'AU', preferred_currency: 'AUD', country_confirmed_at: new Date().toISOString(), country_source: 'USER_CONFIRMED', onboarding_completed: true, full_name: `Cert ${label}` }).eq('user_id', id);
-  for (const role of opts.roles ?? []) {
-    const r = await admin.from('resource_user_roles').insert({ user_id: id, role, is_active: true });
-    if (r.error) throw new Error(`role ${role}: ${r.error.message}`);
-  }
-  if (opts.superAdmin) {
-    const r = await admin.from('admin_users').insert({ user_id: id });
-    if (r.error) throw new Error(`admin_users: ${r.error.message}`);
-  }
-  const res = await fetch(`${URL_}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
-  const session = await res.json();
-  if (!session.access_token) throw new Error(`sign-in ${label} failed`);
-  const value = 'base64-' + Buffer.from(JSON.stringify(session)).toString('base64url');
-  const CHUNK = 3180;
-  const parts = value.length <= CHUNK ? [`sb-${REF}-auth-token=${value}`] : Array.from({ length: Math.ceil(value.length / CHUNK) }, (_, i) => `sb-${REF}-auth-token.${i}=${value.slice(i * CHUNK, (i + 1) * CHUNK)}`);
-  return { id, email, label, cookie: parts.join('; ') };
+type Want = { kind: 'role'; role: string } | { kind: 'superAdmin' } | { kind: 'customer' };
+async function makeUser(label: string, want: Want): Promise<TestUser> {
+  const s = await fixtureSession(admin, ANON, URL_, REF, label, want, fixtureIds);
+  console.log(`fixture ${label}: ${maskEmail(s.email)}`);
+  return { id: s.id, email: s.email, label, cookie: s.cookie };
 }
 
 interface Api { status: number; json: any; text: string; ms: number; bytes: number; headers: Headers }
@@ -209,15 +194,15 @@ async function main() {
   fx.cta = `${RUN} CTA`; fx.ctaId = cta.data!.id;
   void t1; void t2;
 
-  users.superAdmin = await makeUser('super', { superAdmin: true });
-  users.radmin = await makeUser('radmin', { roles: ['resource_admin'] });
-  users.editor = await makeUser('editor', { roles: ['editor'] });
-  users.editor2 = await makeUser('editor2', { roles: ['editor'] });
-  users.author = await makeUser('author', { roles: ['author'] });
-  users.compliance = await makeUser('compliance', { roles: ['compliance_reviewer'] });
-  users.publisher = await makeUser('publisher', { roles: ['publisher'] });
-  users.analyst = await makeUser('analyst', { roles: ['analyst'] });
-  users.customer = await makeUser('customer', {});
+  users.superAdmin = await makeUser('super', { kind: 'superAdmin' });
+  users.radmin = await makeUser('radmin', { kind: 'role', role: 'resource_admin' });
+  users.editor = await makeUser('editor', { kind: 'role', role: 'editor' });
+  users.editor2 = await makeUser('editor2', { kind: 'role', role: 'editor' });
+  users.author = await makeUser('author', { kind: 'role', role: 'author' });
+  users.compliance = await makeUser('compliance', { kind: 'role', role: 'compliance_reviewer' });
+  users.publisher = await makeUser('publisher', { kind: 'role', role: 'publisher' });
+  users.analyst = await makeUser('analyst', { kind: 'role', role: 'analyst' });
+  users.customer = await makeUser('customer', { kind: 'customer' });
   const E = users.editor;
 
   // ============================================================ A. templates (4 downloads) + access
@@ -729,31 +714,29 @@ function patchBase(post: any) {
 }
 
 async function cleanup() {
-  console.log('--- cleanup');
+  console.log('--- cleanup (existing fixture users are never deleted or edited; only rows created by this run are removed)');
   const residue: Record<string, number> = {};
+  // Rows made by the fixture users during THIS run: a created_at window (with a minute of margin for clock skew) plus
+  // the actor. Nothing the fixtures owned before the run starts is selected.
+  const since = new Date(new Date(STARTED_AT).getTime() - 60_000).toISOString();
+  const ids = [...fixtureIds];
+  const chunked = async (arr: string[], fn: (part: string[]) => PromiseLike<unknown>) => { for (let i = 0; i < arr.length; i += 100) await fn(arr.slice(i, i + 100)); };
   try {
     await deleteRunPosts();
-    // all content created by the synthetic users (manual regression drafts included)
-    if (createdUserIds.length) {
-      const mine = await admin.from('resource_posts').select('id').in('created_by', createdUserIds).limit(2000);
-      const ids = (mine.data ?? []).map((p) => p.id);
-      for (let i = 0; i < ids.length; i += 100) await admin.from('resource_posts').delete().in('id', ids.slice(i, i + 100));
-      const runs = await admin.from('resource_content_import_runs').select('id').in('uploaded_by', createdUserIds).limit(2000);
-      const rids = (runs.data ?? []).map((r) => r.id);
-      for (let i = 0; i < rids.length; i += 100) await admin.from('resource_content_import_runs').delete().in('id', rids.slice(i, i + 100));
+    if (ids.length) {
+      const mine = await admin.from('resource_posts').select('id').in('created_by', ids).gte('created_at', since).limit(5000);
+      await chunked((mine.data ?? []).map((p) => p.id as string), (part) => admin.from('resource_posts').delete().in('id', part));
+      const runs = await admin.from('resource_content_import_runs').select('id').in('uploaded_by', ids).gte('created_at', since).limit(5000);
+      await chunked((runs.data ?? []).map((r) => r.id as string), (part) => admin.from('resource_content_import_runs').delete().in('id', part));
     }
     await admin.from('resource_sources').delete().like('source_name', `${RUN}%`);
-    await admin.from('resource_post_sources').delete().in('source_id', []);
     await admin.from('resource_authors').delete().like('slug', `${RUN}%`);
     await admin.from('resource_ctas').delete().like('name', `${RUN}%`);
     await admin.from('resource_tags').delete().like('slug', `${RUN}%`);
     await admin.from('resource_categories').delete().like('slug', `${RUN}%`);
-    if (createdUserIds.length) {
-      await admin.from('resource_audit_log').delete().in('actor_user_id', createdUserIds);
-      await admin.from('resource_workflow_history').delete().in('actor_user_id', createdUserIds);
-      await admin.from('resource_user_roles').delete().in('user_id', createdUserIds);
-      await admin.from('admin_users').delete().in('user_id', createdUserIds);
-      for (const id of createdUserIds) await admin.auth.admin.deleteUser(id);
+    if (ids.length) {
+      await admin.from('resource_audit_log').delete().in('actor_user_id', ids).gte('created_at', since);
+      await admin.from('resource_workflow_history').delete().in('actor_user_id', ids).gte('created_at', since);
     }
   } catch (e) {
     console.error('cleanup error', e);
@@ -765,12 +748,15 @@ async function cleanup() {
   residue.tags = await cnt('resource_tags', 'slug', `${RUN}%`);
   residue.authors = await cnt('resource_authors', 'slug', `${RUN}%`);
   residue.ctas = await cnt('resource_ctas', 'name', `${RUN}%`);
-  residue.importRuns = createdUserIds.length ? ((await admin.from('resource_content_import_runs').select('*', { count: 'exact', head: true }).in('uploaded_by', createdUserIds)).count ?? -1) : 0;
-  residue.postsByUsers = createdUserIds.length ? ((await admin.from('resource_posts').select('*', { count: 'exact', head: true }).in('created_by', createdUserIds)).count ?? -1) : 0;
+  residue.importRuns = ids.length ? ((await admin.from('resource_content_import_runs').select('*', { count: 'exact', head: true }).in('uploaded_by', ids).gte('created_at', since)).count ?? -1) : 0;
+  residue.importRowsTotal = (await admin.from('resource_content_import_rows').select('*', { count: 'exact', head: true })).count ?? -1;
+  residue.postsByFixturesInWindow = ids.length ? ((await admin.from('resource_posts').select('*', { count: 'exact', head: true }).in('created_by', ids).gte('created_at', since)).count ?? -1) : 0;
+  residue.auditByFixturesInWindow = ids.length ? ((await admin.from('resource_audit_log').select('*', { count: 'exact', head: true }).in('actor_user_id', ids).gte('created_at', since)).count ?? -1) : 0;
+  residue.workflowByFixturesInWindow = ids.length ? ((await admin.from('resource_workflow_history').select('*', { count: 'exact', head: true }).in('actor_user_id', ids).gte('created_at', since)).count ?? -1) : 0;
   const { data: au } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  residue.authUsers = (au?.users ?? []).filter((u) => (u.email ?? '').startsWith(`${RUN}-`)).length;
+  residue.authUsersCreatedByRun = (au?.users ?? []).filter((u) => (u.email ?? '').startsWith(`${RUN}-`)).length;
   evidence.residue = residue;
-  check('CLEANUP: synthetic posts, sources, categories, tags, authors, CTAs, import runs/rows and auth users all 0', Object.values(residue).every((v) => v === 0), JSON.stringify(residue));
+  check('CLEANUP: synthetic posts, sources, categories, tags, authors, CTAs, import runs/rows, audit and workflow rows made by this run, and created auth users all 0', Object.values(residue).every((v) => v === 0), JSON.stringify(residue));
 }
 
 (async () => {
