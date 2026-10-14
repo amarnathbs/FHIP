@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, isResourceStaff } from '@/lib/resources/permissions';
-import { searchRelatableContent } from '@/lib/resources/discovery/relatedAdmin';
+import { searchRelatableContent, listRelatableContent } from '@/lib/resources/discovery/relatedAdmin';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/related/search-posts?q=&type=&jurisdiction=&exclude= — spec §77's Related Content picker.
@@ -25,6 +25,12 @@ export async function GET(request: Request) {
   const excludePostId = searchParams.get('exclude') ?? undefined;
 
   try {
+    // PO review F11: `?all=1` returns the capped full list (the dropdown's
+    // data source) instead of the 25-row search. Same gate as above.
+    if (searchParams.get('all') === '1') {
+      const list = await listRelatableContent(supabase, { search: q, contentType, excludePostId });
+      return ok(list);
+    }
     const results = await searchRelatableContent(supabase, q, { contentType, jurisdiction, excludePostId });
     return ok(results);
   } catch (err) {

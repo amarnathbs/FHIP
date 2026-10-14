@@ -1,0 +1,98 @@
+Host verified: vqycarelcoijzwlpkpcz.supabase.co (DEV). Read-only, anon key.
+DEV lists read on 2026-10-07: 12 datasets (11 open), 67 metrics, 39 cohorts, mapping installed=true pairs=71; all lists complete=true
+
+01_cohorts_au_net_worth_income_by_age.csv  [cohorts]  dataset "AU net worth and income by age band" v1.0
+  against DEV as it stands today:   rows 1, accepted 1, blockers 0, warnings 0
+  after the cohorts file is activated: rows 1, accepted 1, blockers 0, warnings 0
+
+02_values_au_household_asset_composition.csv  [values]  dataset "AU household asset composition" v1.0
+  against DEV as it stands today:   rows 2, accepted 2, blockers 0, warnings 0
+  after the cohorts file is activated: rows 2, accepted 2, blockers 0, warnings 0
+
+03_values_au_household_wealth_distribution.csv  [values]  dataset "AU household wealth distribution" v1.0
+  against DEV as it stands today:   rows 6, accepted 6, blockers 0, warnings 0
+  after the cohorts file is activated: rows 6, accepted 6, blockers 0, warnings 0
+
+04_values_au_net_worth_income_by_age.csv  [values]  dataset "AU net worth and income by age band" v1.0
+  against DEV as it stands today:   rows 28, accepted 24, blockers 1, warnings 0
+    BLOCKER row 2 cohort_code COHORT_NOT_FOUND: The cohort "AU_AGE_15_24" is not a registered cohort. Leave cohort_code blank for a country-wide figure. Did you mean "AU_AGE_18_24" or "AU_AGE_25_34" or "AU_AGE_35_44"? (This is a hint only; nothing was changed in your 
+  after the cohorts file is activated: rows 28, accepted 28, blockers 0, warnings 0
+
+05_values_au_high_dti_mortgage_threshold.csv  [values]  dataset "AU high-DTI mortgage threshold" v1.0
+  against DEV as it stands today:   rows 1, accepted 1, blockers 0, warnings 0
+  after the cohorts file is activated: rows 1, accepted 1, blockers 0, warnings 0
+
+06_values_au_average_super_balance.csv  [values]  dataset "AU average superannuation balance" v1.0
+  against DEV as it stands today:   rows 2, accepted 2, blockers 0, warnings 0
+  after the cohorts file is activated: rows 2, accepted 2, blockers 0, warnings 0
+
+07_values_india_household_assets_debt_rural_urban.csv  [values]  dataset "India household assets and debt (rural/urban)" v1.0
+  against DEV as it stands today:   rows 4, accepted 4, blockers 0, warnings 0
+  after the cohorts file is activated: rows 4, accepted 4, blockers 0, warnings 0
+
+08_values_india_epf_eps_contribution_structure.csv  [values]  dataset "India EPF/EPS contribution structure" v1.0
+  against DEV as it stands today:   rows 1, accepted 1, blockers 0, warnings 0
+  after the cohorts file is activated: rows 1, accepted 1, blockers 0, warnings 0
+
+09_target_ranges_au_asfa_retirement_standard.csv  [target_ranges]  dataset "AU ASFA retirement standard" v1.0
+  against DEV as it stands today:   rows 4, accepted 4, blockers 0, warnings 0
+  after the cohorts file is activated: rows 4, accepted 4, blockers 0, warnings 0
+
+TOTAL blockers against DEV as it stands: 1; after the cohorts file is activated: 0
+
+NEGATIVE CONTROLS (a tampered copy of each shipped file must be refused with the named code):
+  REFUSED  NC-F11 01_cohorts_au_net_worth_income_by_age.csv: cohort tier outside 1 to 5 -> expected OUT_OF_RANGE, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F12 01_cohorts_au_net_worth_income_by_age.csv: urban_rural outside the closed list -> expected NOT_IN_LIST, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F1 02_values_au_household_asset_composition.csv: metric not mapped to the dataset: the first row is pointed at a dataset the metric does not belong to -> expected METRIC_NOT_MAPPED, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F2 02_values_au_household_asset_composition.csv: unit differs from the metric unit: the first row carries a different unit -> expected UNIT_MISMATCH, tampered errors 2, code present true, untouched had code false
+  REFUSED  NC-F3 02_values_au_household_asset_composition.csv: thousands separator inside a figure -> expected NUMBER_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F4 02_values_au_household_asset_composition.csv: month-first date (30 is not a month) -> expected DATE_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F5 02_values_au_household_asset_composition.csv: template from another generation -> expected TEMPLATE_VERSION_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F6 02_values_au_household_asset_composition.csv: dataset name that does not exist -> expected DATASET_NOT_FOUND, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F7 02_values_au_household_asset_composition.csv: a duplicate row (same metric, cohort and statistic) -> expected DUPLICATE_KEY, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F1 03_values_au_household_wealth_distribution.csv: metric not mapped to the dataset: the first row is pointed at a dataset the metric does not belong to -> expected METRIC_NOT_MAPPED, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F2 03_values_au_household_wealth_distribution.csv: unit differs from the metric unit: the first row carries a different unit -> expected UNIT_MISMATCH, tampered errors 2, code present true, untouched had code false
+  REFUSED  NC-F3 03_values_au_household_wealth_distribution.csv: thousands separator inside a figure -> expected NUMBER_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F4 03_values_au_household_wealth_distribution.csv: month-first date (30 is not a month) -> expected DATE_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F5 03_values_au_household_wealth_distribution.csv: template from another generation -> expected TEMPLATE_VERSION_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F6 03_values_au_household_wealth_distribution.csv: dataset name that does not exist -> expected DATASET_NOT_FOUND, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F7 03_values_au_household_wealth_distribution.csv: a duplicate row (same metric, cohort and statistic) -> expected DUPLICATE_KEY, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F1 04_values_au_net_worth_income_by_age.csv: metric not mapped to the dataset: the first row is pointed at a dataset the metric does not belong to -> expected METRIC_NOT_MAPPED, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F2 04_values_au_net_worth_income_by_age.csv: unit differs from the metric unit: the first row carries a different unit -> expected UNIT_MISMATCH, tampered errors 2, code present true, untouched had code false
+  REFUSED  NC-F3 04_values_au_net_worth_income_by_age.csv: thousands separator inside a figure -> expected NUMBER_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F4 04_values_au_net_worth_income_by_age.csv: month-first date (30 is not a month) -> expected DATE_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F5 04_values_au_net_worth_income_by_age.csv: template from another generation -> expected TEMPLATE_VERSION_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F6 04_values_au_net_worth_income_by_age.csv: dataset name that does not exist -> expected DATASET_NOT_FOUND, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F7 04_values_au_net_worth_income_by_age.csv: a duplicate row (same metric, cohort and statistic) -> expected DUPLICATE_KEY, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F1 05_values_au_high_dti_mortgage_threshold.csv: metric not mapped to the dataset: the first row is pointed at a dataset the metric does not belong to -> expected METRIC_NOT_MAPPED, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F2 05_values_au_high_dti_mortgage_threshold.csv: unit differs from the metric unit: the first row carries a different unit -> expected UNIT_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F3 05_values_au_high_dti_mortgage_threshold.csv: thousands separator inside a figure -> expected NUMBER_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F4 05_values_au_high_dti_mortgage_threshold.csv: month-first date (30 is not a month) -> expected DATE_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F5 05_values_au_high_dti_mortgage_threshold.csv: template from another generation -> expected TEMPLATE_VERSION_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F6 05_values_au_high_dti_mortgage_threshold.csv: dataset name that does not exist -> expected DATASET_NOT_FOUND, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F7 05_values_au_high_dti_mortgage_threshold.csv: a duplicate row (same metric, cohort and statistic) -> expected DUPLICATE_KEY, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F1 06_values_au_average_super_balance.csv: metric not mapped to the dataset: the first row is pointed at a dataset the metric does not belong to -> expected METRIC_NOT_MAPPED, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F2 06_values_au_average_super_balance.csv: unit differs from the metric unit: the first row carries a different unit -> expected UNIT_MISMATCH, tampered errors 2, code present true, untouched had code false
+  REFUSED  NC-F3 06_values_au_average_super_balance.csv: thousands separator inside a figure -> expected NUMBER_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F4 06_values_au_average_super_balance.csv: month-first date (30 is not a month) -> expected DATE_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F5 06_values_au_average_super_balance.csv: template from another generation -> expected TEMPLATE_VERSION_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F6 06_values_au_average_super_balance.csv: dataset name that does not exist -> expected DATASET_NOT_FOUND, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F7 06_values_au_average_super_balance.csv: a duplicate row (same metric, cohort and statistic) -> expected DUPLICATE_KEY, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F1 07_values_india_household_assets_debt_rural_urban.csv: metric not mapped to the dataset: the first row is pointed at a dataset the metric does not belong to -> expected METRIC_NOT_MAPPED, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F2 07_values_india_household_assets_debt_rural_urban.csv: unit differs from the metric unit: the first row carries a different unit -> expected UNIT_MISMATCH, tampered errors 2, code present true, untouched had code false
+  REFUSED  NC-F3 07_values_india_household_assets_debt_rural_urban.csv: thousands separator inside a figure -> expected NUMBER_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F4 07_values_india_household_assets_debt_rural_urban.csv: month-first date (30 is not a month) -> expected DATE_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F5 07_values_india_household_assets_debt_rural_urban.csv: template from another generation -> expected TEMPLATE_VERSION_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F6 07_values_india_household_assets_debt_rural_urban.csv: dataset name that does not exist -> expected DATASET_NOT_FOUND, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F7 07_values_india_household_assets_debt_rural_urban.csv: a duplicate row (same metric, cohort and statistic) -> expected DUPLICATE_KEY, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F1 08_values_india_epf_eps_contribution_structure.csv: metric not mapped to the dataset: the first row is pointed at a dataset the metric does not belong to -> expected METRIC_NOT_MAPPED, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F2 08_values_india_epf_eps_contribution_structure.csv: unit differs from the metric unit: the first row carries a different unit -> expected UNIT_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F3 08_values_india_epf_eps_contribution_structure.csv: thousands separator inside a figure -> expected NUMBER_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F4 08_values_india_epf_eps_contribution_structure.csv: month-first date (30 is not a month) -> expected DATE_FORMAT, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F5 08_values_india_epf_eps_contribution_structure.csv: template from another generation -> expected TEMPLATE_VERSION_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F6 08_values_india_epf_eps_contribution_structure.csv: dataset name that does not exist -> expected DATASET_NOT_FOUND, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F7 08_values_india_epf_eps_contribution_structure.csv: a duplicate row (same metric, cohort and statistic) -> expected DUPLICATE_KEY, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F8 09_target_ranges_au_asfa_retirement_standard.csv: band cites a source that is not the dataset source -> expected SOURCE_MISMATCH, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F9 09_target_ranges_au_asfa_retirement_standard.csv: lower bound above upper bound -> expected BOUND_ORDER, tampered errors 1, code present true, untouched had code false
+  REFUSED  NC-F10 09_target_ranges_au_asfa_retirement_standard.csv: metric not mapped to the dataset for target ranges -> expected METRIC_NOT_MAPPED, tampered errors 1, code present true, untouched had code false
+Negative controls not refused: 0

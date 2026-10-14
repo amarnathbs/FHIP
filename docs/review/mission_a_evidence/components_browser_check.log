@@ -1,0 +1,50 @@
+PASS  390px back link visible with text "Back to Money Updates"
+PASS  390px back link points at the parent
+PASS  390px back link is at least 44 px high (44)
+PASS  390px first Tab stop is the back link
+PASS  390px back link shows a focus outline ({"style":"solid","width":2})
+PASS  390px no horizontal scroll
+PASS  390px Event Date placeholder is DD-MM-YYYY (not YYYY-MM-DD)
+PASS  390px typing 20-08-2026 stores ISO 2026-08-20 in state
+PASS  390px the box keeps showing 20-08-2026
+PASS  390px month-first 08/20/2026 is rejected (state cleared, field marked invalid)
+PASS  390px year-first 2026-08-20 typed by hand is rejected too
+PASS  390px axe-core: no WCAG 2.x A/AA violation
+PASS  768px back link visible with text "Back to Money Updates"
+PASS  768px back link points at the parent
+PASS  768px back link is at least 44 px high (44)
+PASS  768px first Tab stop is the back link
+PASS  768px back link shows a focus outline ({"style":"solid","width":2})
+PASS  768px no horizontal scroll
+PASS  768px Event Date placeholder is DD-MM-YYYY (not YYYY-MM-DD)
+PASS  768px typing 20-08-2026 stores ISO 2026-08-20 in state
+PASS  768px the box keeps showing 20-08-2026
+PASS  768px month-first 08/20/2026 is rejected (state cleared, field marked invalid)
+PASS  768px year-first 2026-08-20 typed by hand is rejected too
+PASS  768px axe-core: no WCAG 2.x A/AA violation
+PASS  1024px back link visible with text "Back to Money Updates"
+PASS  1024px back link points at the parent
+PASS  1024px back link is at least 44 px high (44)
+PASS  1024px first Tab stop is the back link
+PASS  1024px back link shows a focus outline ({"style":"solid","width":2})
+PASS  1024px no horizontal scroll
+PASS  1024px Event Date placeholder is DD-MM-YYYY (not YYYY-MM-DD)
+PASS  1024px typing 20-08-2026 stores ISO 2026-08-20 in state
+PASS  1024px the box keeps showing 20-08-2026
+PASS  1024px month-first 08/20/2026 is rejected (state cleared, field marked invalid)
+PASS  1024px year-first 2026-08-20 typed by hand is rejected too
+PASS  1024px axe-core: no WCAG 2.x A/AA violation
+PASS  1440px back link visible with text "Back to Money Updates"
+PASS  1440px back link points at the parent
+PASS  1440px back link is at least 44 px high (44)
+PASS  1440px first Tab stop is the back link
+PASS  1440px back link shows a focus outline ({"style":"solid","width":2})
+PASS  1440px no horizontal scroll
+PASS  1440px Event Date placeholder is DD-MM-YYYY (not YYYY-MM-DD)
+PASS  1440px typing 20-08-2026 stores ISO 2026-08-20 in state
+PASS  1440px the box keeps showing 20-08-2026
+PASS  1440px month-first 08/20/2026 is rejected (state cleared, field marked invalid)
+PASS  1440px year-first 2026-08-20 typed by hand is rejected too
+PASS  1440px axe-core: no WCAG 2.x A/AA violation
+
+ALL CHECKS PASSED

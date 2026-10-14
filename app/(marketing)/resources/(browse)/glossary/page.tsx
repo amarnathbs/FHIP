@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
@@ -18,7 +19,7 @@ function letterOf(title: string): string {
   return /[A-Z]/.test(ch) ? ch : '#';
 }
 
-export default async function GlossaryIndexPage() {
+async function GlossaryIndexPageContent() {
   const supabase = await createClient();
   const terms = await getPublicGlossaryTerms(supabase);
 
@@ -70,5 +71,15 @@ export default async function GlossaryIndexPage() {
         </>
       )}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
+export default function GlossaryIndexPage() {
+  return (
+    <>
+      <PageBackLink href="/resources" label="Resources" className="mx-auto max-w-6xl px-4 pt-6 sm:px-6" />
+      <GlossaryIndexPageContent />
+    </>
   );
 }

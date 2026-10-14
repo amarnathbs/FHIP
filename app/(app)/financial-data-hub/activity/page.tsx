@@ -1,3 +1,6 @@
+import { formatDateShort, dateFormatKeyForCountry } from '@/lib/engines/date';
+import { getUserHomeCountry } from '@/lib/services/jurisdiction';
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
@@ -22,7 +25,7 @@ import { resolveActivityParams, type RawSearchParams } from './_lib/searchParams
 // `/financial-data-hub` upload screen, which had no review UI at all).
 const REVIEW_QUEUE_HREF = '/financial-data-hub/review?from=activity';
 
-export default async function FinancialActivityOverviewPage({
+async function FinancialActivityOverviewPageContent({
   searchParams,
 }: {
   searchParams: Promise<RawSearchParams>;
@@ -34,6 +37,7 @@ export default async function FinancialActivityOverviewPage({
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  const dateKey = dateFormatKeyForCountry(await getUserHomeCountry(user.id, supabase));
   const { period, accountId, error } = resolveActivityParams(sp);
   if (error) {
     return <ResourceErrorState message={error} />;
@@ -87,7 +91,7 @@ export default async function FinancialActivityOverviewPage({
       <p className="text-sm text-muted">
         Latest activity:{' '}
         {overview.freshness.latestTransactionDate ? (
-          <span className="font-medium text-ink">{overview.freshness.latestTransactionDate}</span>
+          <span className="font-medium text-ink">{formatDateShort(overview.freshness.latestTransactionDate, dateKey)}</span>
         ) : (
           'no transactions yet'
         )}
@@ -285,5 +289,15 @@ export default async function FinancialActivityOverviewPage({
         </Link>
       </SectionCard>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function FinancialActivityOverviewPage(props: Parameters<typeof FinancialActivityOverviewPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <FinancialActivityOverviewPageContent {...props} />
+    </>
   );
 }

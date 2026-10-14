@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
@@ -30,7 +31,7 @@ import { ResolutionHistoryClient } from '@/components/investment-intelligence/Re
  * were not deleted in this pass (no production authority to also verify
  * nothing else depends on them; safe to remove in a later, dedicated pass).
  */
-export default async function InvestmentResolutionsPage() {
+async function InvestmentResolutionsPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -49,5 +50,15 @@ export default async function InvestmentResolutionsPage() {
       <InvestmentIntelligenceSubNav />
       <ResolutionHistoryClient />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Investment Intelligence).
+export default function InvestmentResolutionsPage() {
+  return (
+    <>
+      <PageBackLink href="/investment-intelligence" label="Investment Intelligence" />
+      <InvestmentResolutionsPageContent />
+    </>
   );
 }

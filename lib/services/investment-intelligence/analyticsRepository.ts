@@ -18,6 +18,7 @@
 // liabilities) or any R3 publication table. The only mutation anywhere in
 // R4 is the ii_analytics_results insert at the bottom of this file.
 
+import { formatDateShort } from '@/lib/engines/date';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { AnalyticsDataset, SchemeDataset, SchemeFolioDataset, PersistableAnalyticsRow } from '@/lib/engines/investment-intelligence/analyticsOrchestrator';
@@ -582,7 +583,7 @@ export async function loadAnalyticsDataset(
     if (currentValue > 0 && externalCashFlowsExcludingTerminal.some((f) => f.date > currentValueDate)) {
       warnings.push({
         scope: 'valuation',
-        detail: `${inst.instrument_name as string}: transactions are recorded after its latest valuation date (${currentValueDate.toISOString().slice(0, 10)}). Upload a more recent statement so returns can include them.`,
+        detail: `${inst.instrument_name as string}: transactions are recorded after its latest valuation date (${formatDateShort(currentValueDate.toISOString().slice(0, 10), 'INR')}). Upload a more recent statement so returns can include them.`,
       });
     }
 
@@ -660,7 +661,7 @@ export async function loadAnalyticsDataset(
   if (latestDataDate && asOfDate.getTime() - latestDataDate.getTime() > 45 * 86_400_000) {
     warnings.push({
       scope: 'data_currency',
-      detail: `The most recent certified valuation is dated ${latestDataDate.toISOString().slice(0, 10)}. Figures are calculated up to that date, not to today.`,
+      detail: `The most recent certified valuation is dated ${formatDateShort(latestDataDate.toISOString().slice(0, 10), 'INR')}. Figures are calculated up to that date, not to today.`,
     });
   }
 

@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { RunReviewPanel } from '@/components/aie/review/RunReviewPanel';
@@ -11,7 +12,7 @@ import { RunReviewPanel } from '@/components/aie/review/RunReviewPanel';
  * page's own established division of labour (page = auth gate, API route
  * = ownership + data).
  */
-export default async function AieReviewRunPage({ params }: { params: Promise<{ runId: string }> }) {
+async function AieReviewRunPageContent({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params;
   const supabase = await createClient();
   const {
@@ -26,5 +27,15 @@ export default async function AieReviewRunPage({ params }: { params: Promise<{ r
       </div>
       <RunReviewPanel runId={runId} />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Document review).
+export default function AieReviewRunPage(props: Parameters<typeof AieReviewRunPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/aie-review" label="Document review" />
+      <AieReviewRunPageContent {...props} />
+    </>
   );
 }

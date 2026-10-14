@@ -1,0 +1,116 @@
+[
+  {
+    "step": 23,
+    "label": "CSV, no digits, no existing account: a new account is created and linked (no picker needed, no forced re-upload)",
+    "ok": true,
+    "detail": "HTTP 200 created"
+  },
+  {
+    "step": 23,
+    "label": "CSV, no digits, exactly ONE existing account: reused silently, linked to that account",
+    "ok": true,
+    "detail": "HTTP 200 reused"
+  },
+  {
+    "step": 23,
+    "label": "CSV with declared last digits 7777: a NEW separate account is created (not merged into the first)",
+    "ok": true,
+    "detail": "HTTP 200 created"
+  },
+  {
+    "step": 23,
+    "label": "CSV, no digits, MULTIPLE accounts: ambiguous (never silently guessed); the document is not linked and a blocking review item is open",
+    "ok": true,
+    "detail": "HTTP 200 ambiguous"
+  },
+  {
+    "step": 23,
+    "label": "picker: resolving with no choice answers needs_choice and lists the candidate accounts (display name + last digits only)",
+    "ok": true,
+    "detail": "{\"status\":\"needs_choice\",\"reason\":\"nothing_read\",\"candidates\":[{\"id\":\"ca34c85c-26fd-4f4b-99b8-7640e4683ba4\",\"display_name\":\"Imported account\",\"last_digits\":null},{\"id\":\"81a5bb26-6ac5-4892-847e-b12556cea5ef\",\"display_name\":\"Imported account\",\"last_digits\":\"7777"
+  },
+  {
+    "step": 23,
+    "label": "picker: choosing an existing account assigns it on the SAME document (no re-upload); the review item closes",
+    "ok": true,
+    "detail": "HTTP 200 how=user_selected status=queued"
+  },
+  {
+    "step": 23,
+    "label": "picker: \"a different / new account\" with last digits creates the account and assigns it on the same document",
+    "ok": true,
+    "detail": "HTTP 200 masked=8888"
+  },
+  {
+    "step": 23,
+    "label": "privacy: no stored account identifier is longer than 6 digits (last digits only)",
+    "ok": true,
+    "detail": "[null,\"****7777\",\"8888\"]"
+  },
+  {
+    "step": 23,
+    "label": "privacy: a FULL account number (10 digits) is refused, never stored",
+    "ok": true,
+    "detail": "HTTP 422 invalid_digits"
+  },
+  {
+    "step": 24,
+    "label": "idempotent: choosing the SAME account again succeeds and changes nothing",
+    "ok": true,
+    "detail": "HTTP 200 how=already_assigned"
+  },
+  {
+    "step": 24,
+    "label": "a DIFFERENT account after assignment is refused 409 already_assigned_to_other; the link is unchanged",
+    "ok": true,
+    "detail": "HTTP 409 already_assigned_to_other"
+  },
+  {
+    "step": 24,
+    "label": "race: two simultaneous different choices -> exactly one winner, the other 409, and the stored link is the winner",
+    "ok": true,
+    "detail": "statuses 409/200, winner 81a5bb26"
+  },
+  {
+    "step": 24,
+    "label": "wrong currency: an INR account cannot be chosen for an AUD statement (refused, nothing linked)",
+    "ok": true,
+    "detail": "HTTP 422 "
+  },
+  {
+    "step": 24,
+    "label": "closed account: refused, nothing linked",
+    "ok": true,
+    "detail": "HTTP 404 "
+  },
+  {
+    "step": 24,
+    "label": "cross-tenant: User B resolving User A's statement gets exactly the answer a random statement id gets (404)",
+    "ok": true,
+    "detail": "foreign 404 missing 404"
+  },
+  {
+    "step": 24,
+    "label": "precondition for the cross-tenant account probe: User B has two accounts and an ambiguous statement",
+    "ok": true,
+    "detail": "ambiguous"
+  },
+  {
+    "step": 24,
+    "label": "cross-tenant: User B choosing User A's account is indistinguishable from a random account id (404, identical body)",
+    "ok": true,
+    "detail": "foreign 404 missing 404"
+  },
+  {
+    "step": 24,
+    "label": "an unresolved statement returns to normal processing once an account is assigned (declared transition; the blocking review item closes)",
+    "ok": true,
+    "detail": "status queued -> queued"
+  },
+  {
+    "step": 24,
+    "label": "after assignment the same document processes and its transactions land on the chosen account",
+    "ok": true,
+    "detail": "detect 200 process 200 txns 2"
+  }
+]

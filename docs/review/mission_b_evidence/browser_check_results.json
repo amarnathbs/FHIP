@@ -1,0 +1,55 @@
+{
+ "f3_chooser_status": 200,
+ "f3_open_creates_nothing": {
+  "untitledBefore": 27,
+  "untitledAfterOpen": 27,
+  "banner": true
+ },
+ "f3_typing_does_not_autosave": {
+  "rowsWhileTyping": 0
+ },
+ "f2_guard_on_breadcrumb": true,
+ "f2_stay_keeps_text": true,
+ "f3_save_creates_one": {
+  "rows": 1,
+  "status": "draft"
+ },
+ "f3_delete_removes_and_audits": {
+  "remaining": 0,
+  "audit": 1
+ },
+ "f12_video_status": 200,
+ "f12_dead_end_gone": {
+  "deadEndMessage": 0,
+  "repairForm": true,
+  "linkPanel": 1
+ },
+ "f11_related": {
+  "optionsRendered": 0,
+  "filteredCount": 0,
+  "activedescendantSet": false,
+  "expanded": "false"
+ },
+ "f11_context": {
+  "optionsRendered": 13,
+  "filteredCount": 13,
+  "activedescendantSet": false,
+  "expanded": null
+ },
+ "overflow_390_/admin/resources/content/new?type=article": 0,
+ "overflow_390_/admin/resources/related": 0,
+ "overflow_390_/admin/resources/content": 0,
+ "overflow_768_/admin/resources/content/new?type=article": 0,
+ "overflow_768_/admin/resources/related": 0,
+ "overflow_768_/admin/resources/content": 0,
+ "overflow_1024_/admin/resources/content/new?type=article": 0,
+ "overflow_1024_/admin/resources/related": 0,
+ "overflow_1024_/admin/resources/content": 0,
+ "overflow_1440_/admin/resources/content/new?type=article": 0,
+ "overflow_1440_/admin/resources/related": 0,
+ "overflow_1440_/admin/resources/content": 0,
+ "console_errors": [
+  "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:\n\n- A server/client bran",
+  "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:\n\n- A server/client bran"
+ ]
+}

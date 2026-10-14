@@ -1,0 +1,42 @@
+
+user sidebar, desktop 1440, Forecasting open (1440px): 3 violation rule(s)
+  - aria-required-children (critical) x1: Element has children which are not allowed: li
+      e.g. <ul id="desktop-forecasting-group" role="menu" aria-label="Forecasting" class="ml-2 space-y-0.5 border-l border-white/10
+  - aria-required-parent (critical) x11: Required ARIA parents role not present: menu, menubar, group
+      e.g. <a href="/forecast" role="menuitem" class="block rounded px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:text-w
+  - listitem (serious) x11: List item parent element has a role that is not role="list"
+      e.g. <li><a href="/forecast" role="menuitem" class="block rounded px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:te
+
+user sidebar, phone 390, drawer and Forecasting open (390px): 3 violation rule(s)
+  - aria-required-children (critical) x1: Element has children which are not allowed: li
+      e.g. <ul id="mobile-forecasting-group" role="menu" aria-label="Forecasting" class="ml-2 space-y-0.5 border-l border-white/10 
+  - aria-required-parent (critical) x11: Required ARIA parents role not present: menu, menubar, group
+      e.g. <a href="/forecast" role="menuitem" class="block rounded px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:text-w
+  - listitem (serious) x11: List item parent element has a role that is not role="list"
+      e.g. <li><a href="/forecast" role="menuitem" class="block rounded px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:te
+
+user sidebar, desktop 1440, Reports open (1440px): 3 violation rule(s)
+  - aria-required-children (critical) x1: Element has children which are not allowed: li
+      e.g. <ul id="desktop-reports-group" role="menu" aria-label="Reports" class="ml-2 space-y-0.5 border-l border-white/10 pl-3">
+  - aria-required-parent (critical) x4: Required ARIA parents role not present: menu, menubar, group
+      e.g. <a href="/reports" role="menuitem" class="block rounded px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:text-wh
+  - listitem (serious) x4: List item parent element has a role that is not role="list"
+      e.g. <li><a href="/reports" role="menuitem" class="block rounded px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:tex
+
+user sidebar, phone 390, drawer and Reports open (390px): 3 violation rule(s)
+  - aria-required-children (critical) x1: Element has children which are not allowed: li
+      e.g. <ul id="mobile-reports-group" role="menu" aria-label="Reports" class="ml-2 space-y-0.5 border-l border-white/10 pl-3">
+  - aria-required-parent (critical) x4: Required ARIA parents role not present: menu, menubar, group
+      e.g. <a href="/reports" role="menuitem" class="block rounded px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:text-wh
+  - listitem (serious) x4: List item parent element has a role that is not role="list"
+      e.g. <li><a href="/reports" role="menuitem" class="block rounded px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 hover:tex
+
+admin sidebar, desktop 1440, Admin open (1440px): 1 violation rule(s)
+  - color-contrast (serious) x8: Element has insufficient color contrast of 3.58 (foreground color: #6f7d91, background color: #0f2747, font size: 7.5pt (10px), font weight: normal). Expected contrast ratio of 4.5:1
+      e.g. <p role="presentation" class="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">Genera
+
+admin sidebar, phone 390, drawer and Admin open (390px): 1 violation rule(s)
+  - color-contrast (serious) x8: Element has insufficient color contrast of 3.58 (foreground color: #6f7d91, background color: #0f2747, font size: 7.5pt (10px), font weight: normal). Expected contrast ratio of 4.5:1
+      e.g. <p role="presentation" class="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">Genera
+
+TOTAL violation rules across all states: 14

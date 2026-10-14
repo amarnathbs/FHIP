@@ -69,6 +69,11 @@ import { POST as verifyPOST } from '@/app/api/admin/investment-intelligence/benc
 import { GET as entitlementsGET, POST as entitlementsPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/route';
 import { POST as approvePOST } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/approve/route';
 import { POST as revokePOST } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/revoke/route';
+import { POST as editPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/edit/route';
+import { POST as revisePOST } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/revise/route';
+import { POST as cancelRevisionPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/cancel-revision/route';
+import { POST as rejectRevisionPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/reject-revision/route';
+import { GET as historyGET } from '@/app/api/admin/investment-intelligence/benchmark-data/entitlements/[id]/history/route';
 import { GET as mappingsGET, POST as mappingsPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/mappings/route';
 import { POST as reviewPOST } from '@/app/api/admin/investment-intelligence/benchmark-data/mappings/[id]/review/route';
 import { GET as unmappedGET } from '@/app/api/admin/investment-intelligence/benchmark-data/mappings/unmapped/route';
@@ -99,6 +104,11 @@ const hasOnly = (cap: Cap) => ({ data: { [COLUMN[cap]]: true } as Record<string,
 
 const json = (body: unknown) => new Request(`${BASE}/x`, { method: 'POST', body: JSON.stringify(body) });
 const KEY = 'IN_NIFTY_100_TRI';
+/** A valid entitlement body (the same shape the Propose form sends). */
+const ENT = {
+  benchmark_id: ID, entitlement_kind: 'commercial_licence', return_variant: 'total_return', currency_code: 'INR',
+  allow_manual_ingest: true, allow_storage: true, allow_calculation: true, valid_from: '2026-01-01', evidence_reference: 'Licence 42',
+};
 
 function multipart(params: unknown) {
   const form = new FormData();
@@ -135,6 +145,11 @@ const ROUTES: RouteCase[] = [
   { name: 'POST entitlements (propose)', allowed: ['catalogue'], call: () => entitlementsPOST(json({})) },
   { name: 'POST entitlements/[id]/approve', allowed: ['entitlementApprove'], call: () => approvePOST(json({ note: 'approved after review' }), params) },
   { name: 'POST entitlements/[id]/revoke', allowed: ['entitlementApprove'], call: () => revokePOST(json({ reason: 'licence ended on the owner side' }), params) },
+  { name: 'POST entitlements/[id]/edit (draft or open revision, in place)', allowed: ['catalogue'], call: () => editPOST(json({ ...ENT, expectedEditCount: 0 }), params) },
+  { name: 'POST entitlements/[id]/revise (one revision of an approved record)', allowed: ['catalogue'], call: () => revisePOST(json({ ...ENT, reason: 'correct the rights after a re-read' }), params) },
+  { name: 'POST entitlements/[id]/cancel-revision', allowed: ['catalogue'], call: () => cancelRevisionPOST(json({ reason: 'proposed in error, withdrawn' }), params) },
+  { name: 'POST entitlements/[id]/reject-revision', allowed: ['entitlementApprove'], call: () => rejectRevisionPOST(json({ reason: 'the evidence does not support this' }), params) },
+  { name: 'GET entitlements/[id]/history', allowed: READ_ALLOWED, call: () => historyGET(new Request(BASE), params) },
   { name: 'GET mappings', allowed: READ_ALLOWED, call: () => mappingsGET() },
   { name: 'GET mappings/unmapped (schemes with no mapping, counts by category)', allowed: READ_ALLOWED, call: () => unmappedGET() },
   { name: 'GET mappings/held (held schemes needing a benchmark; aggregate RPC)', allowed: READ_ALLOWED, call: () => heldGET() },
@@ -532,5 +547,106 @@ describe('422 responses carry field-level messages (`fields`) and never leak sch
     const r = await fieldsOf(await entitlementsPOST(json({ benchmark_id: ID, entitlement_kind: 'commercial_licence', return_variant: 'total_return', currency_code: 'INR', valid_from: '2026-10-01', evidence_reference: 'Licence 42' })));
     expect(r.status).toBe(422);
     expect(Object.keys(r.body.fields ?? {})).toEqual(['benchmark_id']);
+  });
+});
+
+describe('entitlement EDIT (migration 0280): separation of duties, validation and what is sent to the database', () => {
+  it('a catalogue admin edits and revises but cannot approve or reject; an approver rejects and approves but cannot edit, revise or cancel', async () => {
+    adminRow = hasOnly('catalogue');
+    expect((await editPOST(json({ ...ENT, expectedEditCount: 0 }), params)).status).not.toBe(403);
+    expect((await rejectRevisionPOST(json({ reason: 'the evidence does not support this' }), params)).status).toBe(403);
+    expect((await approvePOST(json({ note: 'approve it please', expectedEditCount: 0 }), params)).status).toBe(403);
+    mockRpc.mockClear();
+    adminRow = hasOnly('entitlementApprove');
+    expect((await editPOST(json({ ...ENT, expectedEditCount: 0 }), params)).status).toBe(403);
+    expect((await revisePOST(json({ ...ENT, reason: 'correct the rights after a re-read' }), params)).status).toBe(403);
+    expect((await cancelRevisionPOST(json({ reason: 'proposed in error, withdrawn' }), params)).status).toBe(403);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect((await rejectRevisionPOST(json({ reason: 'the evidence does not support this' }), params)).status).not.toBe(403);
+  });
+
+  it('validation is 422 with no RPC: a missing edit counter, a revision reason under 10 characters, a bad id, an unknown kind', async () => {
+    adminRow = hasOnly('catalogue');
+    expect((await editPOST(json({ ...ENT }), params)).status).toBe(422);
+    expect((await editPOST(json({ ...ENT, expectedEditCount: -1 }), params)).status).toBe(422);
+    expect((await editPOST(json({ ...ENT, expectedEditCount: 0, revision_reason: 'short' }), params)).status).toBe(422);
+    expect((await revisePOST(json({ ...ENT, reason: 'short' }), params)).status).toBe(422);
+    expect((await revisePOST(json({ ...ENT, entitlement_kind: 'free_for_all', reason: 'correct the rights after a re-read' }), params)).status).toBe(422);
+    expect((await cancelRevisionPOST(json({ reason: 'short' }), params)).status).toBe(422);
+    expect((await editPOST(json({ ...ENT, expectedEditCount: 0 }), { params: Promise.resolve({ id: 'not-a-uuid' }) })).status).toBe(422);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it('the routes pass the right arguments to the right database function under the caller session (service-role client never used)', async () => {
+    adminRow = hasOnly('catalogue');
+    mockRpc.mockResolvedValue({ data: 3, error: null });
+    let res = await editPOST(json({ ...ENT, expectedEditCount: 2, revision_reason: 'a clearer explanation' }), params);
+    expect(res.status).toBe(200);
+    expect(mockRpc.mock.calls[0][0]).toBe('update_benchmark_entitlement_draft');
+    expect(mockRpc.mock.calls[0][1]).toMatchObject({ p_id: ID, p_expected_edit_count: 2, p: { benchmark_id: ID, revision_reason: 'a clearer explanation' } });
+    expect(mockRpc.mock.calls[0][1].p, 'the edit counter travels as its own argument, not inside the payload').not.toHaveProperty('expectedEditCount');
+    mockRpc.mockClear();
+    mockRpc.mockResolvedValue({ data: ID, error: null });
+    res = await revisePOST(json({ ...ENT, reason: 'correct the rights after a re-read' }), params);
+    expect(res.status).toBe(200);
+    expect(mockRpc.mock.calls[0][0]).toBe('propose_benchmark_entitlement_revision');
+    expect(mockRpc.mock.calls[0][1]).toMatchObject({ p_original: ID, p_reason: 'correct the rights after a re-read' });
+    expect(mockRpc.mock.calls[0][1].p).not.toHaveProperty('reason');
+    mockRpc.mockClear();
+    await cancelRevisionPOST(json({ reason: 'proposed in error, withdrawn' }), params);
+    expect(mockRpc.mock.calls[0]).toEqual(['close_benchmark_entitlement_revision', { p_id: ID, p_mode: 'cancel', p_reason: 'proposed in error, withdrawn' }]);
+    mockRpc.mockClear();
+    adminRow = hasOnly('entitlementApprove');
+    await rejectRevisionPOST(json({ reason: 'the evidence does not support this' }), params);
+    expect(mockRpc.mock.calls[0]).toEqual(['close_benchmark_entitlement_revision', { p_id: ID, p_mode: 'reject', p_reason: 'the evidence does not support this' }]);
+    mockRpc.mockClear();
+    mockRpc.mockResolvedValue({ data: null, error: null });
+    await approvePOST(json({ note: 'approved after review', expectedEditCount: 4 }), params);
+    expect(mockRpc.mock.calls[0]).toEqual(['approve_benchmark_entitlement', { p_id: ID, p_note: 'approved after review', p_self_approval_ack: false, p_expected_edit_count: 4 }]);
+    mockRpc.mockClear();
+    await approvePOST(json({ note: 'approved after review' }), params);
+    expect(mockRpc.mock.calls[0], 'without a counter the 4th argument is not sent, so the route also works against the 0241 function').toEqual(['approve_benchmark_entitlement', { p_id: ID, p_note: 'approved after review', p_self_approval_ack: false }]);
+    expect(adminClientUsed).not.toHaveBeenCalled();
+  });
+
+  it('database refusals are translated, never swallowed: stale edit 409, not the proposer 403, nothing changed 422, wrong state 409', async () => {
+    adminRow = hasOnly('catalogue');
+    const cases: Array<[string, number, string]> = [['40001', 409, 'stale'], ['42501', 403, 'forbidden'], ['22023', 422, 'invalid'], ['55000', 409, 'wrong_state']];
+    for (const [code, status, kind] of cases) {
+      mockRpc.mockResolvedValue({ data: null, error: { code, message: 'operator-safe sentence' } });
+      const res = await editPOST(json({ ...ENT, expectedEditCount: 0 }), params);
+      expect(res.status).toBe(status);
+      expect((await res.json()).code).toBe(kind);
+    }
+  });
+
+  it('history: a view-only admin reads a timeline in which the caller is You, others are only a role, and no user id or raw image leaves the server', async () => {
+    adminRow = hasOnly('view');
+    const OTHER = '99999999-9999-4999-8999-999999999999';
+    tableData = {
+      ii_benchmark_entitlements: [{ id: ID, benchmark_id: 'bm-1', supersedes_entitlement_id: null, superseded_by: null }],
+      ii_benchmark_governance_events: [
+        { event_type: 'entitlement_proposed', actor_user_id: 'admin-1', actor_kind: 'admin', before_state: null, after_state: { created_by: OTHER }, reason: null, created_at: '2026-10-01T10:00:00Z', subject_id: ID },
+        { event_type: 'entitlement_draft_edited', actor_user_id: 'admin-1', actor_kind: 'admin', before_state: { notes: 'a', created_by: OTHER }, after_state: { notes: 'b', created_by: OTHER, secret: 'x' }, reason: null, created_at: '2026-10-02T10:00:00Z', subject_id: ID },
+        { event_type: 'entitlement_approved', actor_user_id: OTHER, actor_kind: 'admin', before_state: { created_by: OTHER, approved_by: OTHER }, after_state: { self_approved: false }, reason: 'checked against the contract', created_at: '2026-10-03T10:00:00Z', subject_id: ID },
+      ],
+    };
+    const res = await historyGET(new Request(BASE), params);
+    expect(res.status).toBe(200);
+    const text = JSON.stringify(await res.json());
+    expect(text).not.toContain(OTHER);
+    expect(text).not.toContain('admin-1');
+    expect(text).not.toContain('secret');
+    const data = JSON.parse(text).data;
+    expect(data.entries.map((e: { actor: { label: string } }) => e.actor.label)).toEqual(['You', 'You', 'An entitlement approver']);
+    expect(data.entries[1].changes).toEqual([{ field: 'notes', label: 'Notes', before: 'a', after: 'b' }]);
+  });
+
+  it('history: an unknown record is 404 and a missing column (migration not applied) is an explicit 503, never an empty list', async () => {
+    adminRow = hasOnly('view');
+    tableData = {};
+    expect((await historyGET(new Request(BASE), params)).status).toBe(404);
+    tableError = { code: '42703', message: 'column ii_benchmark_entitlements.superseded_by does not exist' };
+    expect((await historyGET(new Request(BASE), params)).status).toBe(503);
   });
 });

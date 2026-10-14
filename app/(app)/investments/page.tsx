@@ -1,5 +1,7 @@
 'use client';
 
+import { PageBackLink } from '@/components/navigation/PageBackLink';
+
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
@@ -22,7 +24,7 @@ import { PublishedFundValuations } from '@/components/investments/PublishedFundV
 // statements are now visible here -- the "Imported, not yet in Net Worth"
 // bucket and the import history -- and "Add to Net Worth" reopens the import
 // panel at its explicit confirm step for that statement.
-export default function InvestmentsPage() {
+function InvestmentsPageContent() {
   const [showAuImport, setShowAuImport] = useState(false);
   const [resumeDocumentId, setResumeDocumentId] = useState<string | null>(null);
   const [gridKey, setGridKey] = useState(0);
@@ -85,5 +87,15 @@ export default function InvestmentsPage() {
 
       <FinancialDataGrid key={gridKey} config={investmentGridConfig} subNav={<InvestmentsSubNav />} moduleKey="INVESTMENTS" />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function InvestmentsPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <InvestmentsPageContent />
+    </>
   );
 }

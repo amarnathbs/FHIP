@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
 
 const LEARNING_JOURNEY = ['Learn', 'Understand', 'Measure', 'Improve', 'Monitor'];
 
-export default async function ResourcesLandingPage() {
+async function ResourcesLandingPageContent() {
   const supabase = await createClient();
   const data = await getResourcesLandingData(supabase);
 
@@ -199,5 +200,15 @@ export default async function ResourcesLandingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (home).
+export default function ResourcesLandingPage() {
+  return (
+    <>
+      <PageBackLink href="/" label="home" className="mx-auto max-w-6xl px-4 pt-6 sm:px-6" />
+      <ResourcesLandingPageContent />
+    </>
   );
 }

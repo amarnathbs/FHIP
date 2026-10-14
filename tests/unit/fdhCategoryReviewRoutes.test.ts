@@ -353,7 +353,7 @@ describe('UI contract (snake_case) and copy', () => {
     expect(workspace).not.toContain('Nothing to review');
     expect(workspace).toContain('waiting for your approval');
     expect(page).toContain('Back to Expenses');
-    expect(page).toMatch(/href=\{backTarget\.href\}/);
+    expect(page).toMatch(/<PageBackLink href=\{target\.href\}/);
   });
 
   it('the bank import "done" step opens this statement\'s category review and returns to Expenses', () => {

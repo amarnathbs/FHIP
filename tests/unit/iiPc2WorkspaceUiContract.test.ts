@@ -175,7 +175,8 @@ describe('Global navigation is not overloaded (spec section 32)', () => {
   it('keeps exactly one Investment Intelligence entry in the app sidebar', () => {
     // Preferred design: the sidebar shows the workspace once, and the
     // workspace carries its own sub-navigation.
-    const shell = read('components/ui/AppShell.tsx');
+    // The sidebar's link data lives in lib/nav/appNavGroups.ts (extracted from AppShell.tsx, PO review F9).
+    const shell = read('lib/nav/appNavGroups.ts');
     const matches = shell.match(/href: '\/investment-intelligence[^']*'/g) ?? [];
     expect(matches).toHaveLength(1);
     expect(matches[0]).toBe("href: '/investment-intelligence'");

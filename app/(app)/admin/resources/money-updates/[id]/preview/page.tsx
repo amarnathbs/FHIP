@@ -1,8 +1,8 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff } from '@/lib/resources/permissions';
 import { getMoneyUpdateEditorPost } from '@/lib/resources/money-update/queries';
 import { BlockRenderer } from '@/components/resources/blocks/BlockRenderer';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
@@ -13,8 +13,8 @@ import type { AnyBlock } from '@/lib/resources/editor/blocks';
 // Structured headings inside BlockRenderer never introduce a second H1
 // (block heading levels are capped at H2-H4 by the R1.3 block model) — the
 // page's own <h1> (the title) remains the only H1 (spec §81).
-export default async function MoneyUpdatePreviewPage({ params }: { params: Promise<{ id: string }> }) {
-  const current = await requireResourceAdminAccess();
+async function MoneyUpdatePreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
+  await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -44,11 +44,6 @@ export default async function MoneyUpdatePreviewPage({ params }: { params: Promi
           <ResourceStatusBadge status={post.status} />
           <ResourceComplianceBadge compliance={post.compliance_classification} />
         </div>
-        {isResourceStaff(current) && (
-          <Link href={`/admin/resources/money-updates/${id}/edit`} className="text-sm font-semibold text-trust hover:underline">
-            Back to Editor
-          </Link>
-        )}
       </div>
 
       <article className="rounded-card border border-line bg-white p-6">
@@ -91,5 +86,16 @@ export default async function MoneyUpdatePreviewPage({ params }: { params: Promi
         )}
       </article>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Editor).
+export default async function MoneyUpdatePreviewPage(props: Parameters<typeof MoneyUpdatePreviewPageContent>[0]) {
+  const { id } = await props.params;
+  return (
+    <>
+      <PageBackLink href={`/admin/resources/money-updates/${id}/edit`} label="Editor" />
+      <MoneyUpdatePreviewPageContent {...props} />
+    </>
   );
 }

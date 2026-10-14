@@ -1,10 +1,15 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
+import { canDeleteDraftResource } from '@/lib/resources/permissions';
+import { DeleteDraftButton } from '@/components/resources/admin/DeleteDraftButton';
 import { getResourceContentById, getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceJurisdictionBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
 import { STATUS_LABELS, formatAdminDate, formatAdminDateTime } from '@/lib/resources/admin/labels';
+import { canManageDiscovery } from '@/lib/resources/permissions';
+import { LinkedVideosPanel, LinkedContentPanel } from '@/components/resources/video/LinkedVideosPanel';
 
 // R1.4 (spec §67): specialist content types link to their own dedicated
 // editor from this read-only detail page, rather than forcing the generic
@@ -30,8 +35,8 @@ const SPECIALIST_EDIT_ROUTES: Record<string, (id: string) => { href: string; lab
 // no content_blocks are fetched or rendered here. It links out to the real
 // editor (SPECIALIST_EDIT_ROUTES above, one entry per content_type) for
 // every type that has one, rather than duplicating editing UI on this page.
-export default async function ResourceContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireResourceAdminAccess();
+async function ResourceContentDetailPageContent({ params }: { params: Promise<{ id: string }> }) {
+  const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -78,6 +83,12 @@ export default async function ResourceContentDetailPage({ params }: { params: Pr
             {SPECIALIST_EDIT_ROUTES[post.content_type](post.id).label}
           </Link>
         )}
+        {/* F3: delete a never-published draft from the screen after "View".
+            Shown only to the delete-draft capability and only for drafts; the
+            DELETE route re-checks both and writes the audit event. */}
+        <div className="mt-3">
+          <DeleteDraftButton postId={post.id} title={post.title} status={post.status} publishedAt={post.published_at} canDelete={canDeleteDraftResource(current)} redirectTo="/admin/resources/content" />
+        </div>
       </div>
 
       <section className="rounded-card border border-line bg-white p-5">
@@ -156,6 +167,17 @@ export default async function ResourceContentDetailPage({ params }: { params: Pr
         </section>
       )}
 
+      {/* PO review F12: link videos to this content (or, on a video, the
+          content it is linked to). Server-rendered; only the add/remove
+          island is a client component. The same one-line mount belongs on the
+          content editor's page:
+          <LinkedVideosPanel supabase={supabase} contentPostId={post.id} contentTitle={post.title} canManage={canManageDiscovery(current)} /> */}
+      {post.content_type === 'video' ? (
+        <LinkedContentPanel supabase={supabase} videoPostId={post.id} videoTitle={post.title} canManage={canManageDiscovery(current)} />
+      ) : (
+        <LinkedVideosPanel supabase={supabase} contentPostId={post.id} contentTitle={post.title} canManage={canManageDiscovery(current)} />
+      )}
+
       <section className="rounded-card border border-line bg-white p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Workflow History</h2>
         {/* Workflow transition controls are intentionally deferred to R1.3 —
@@ -179,5 +201,15 @@ export default async function ResourceContentDetailPage({ params }: { params: Pr
         )}
       </section>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (All Content).
+export default function ResourceContentDetailPage(props: Parameters<typeof ResourceContentDetailPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/content" label="All Content" />
+      <ResourceContentDetailPageContent {...props} />
+    </>
   );
 }

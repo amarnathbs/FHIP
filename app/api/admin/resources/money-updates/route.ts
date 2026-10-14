@@ -4,6 +4,7 @@ import { getCurrentResourceRoles, isResourceStaff, canCreateSpecialistContent } 
 import { getMoneyUpdateList, type MoneyUpdateListFilters } from '@/lib/resources/money-update/queries';
 import { createMoneyUpdateDraft } from '@/lib/resources/money-update/mutations';
 import type { MoneyUpdateContentType } from '@/lib/resources/money-update/types';
+import { validateForDraftSave } from '@/lib/resources/editor/validation';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 const CONTENT_TYPES: MoneyUpdateContentType[] = ['money_update', 'money_update_template'];
@@ -48,7 +49,11 @@ export async function GET(request: Request) {
   }
 }
 
-// POST { contentType: 'money_update' | 'money_update_template' } — spec §41-44.
+// POST { contentType: 'money_update' | 'money_update_template', title: string } — spec §41-44.
+//
+// PO review F3 (06/10/2026): called only when the author presses Save in the
+// editor, with the title they typed. Opening the Create screen creates nothing.
+// A request without a real title is refused (no 'Untitled' drafts).
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -67,8 +72,13 @@ export async function POST(request: Request) {
     const contentType = body?.contentType as string;
     if (!CONTENT_TYPES.includes(contentType as MoneyUpdateContentType)) return bad('Invalid content type. Must be money_update or money_update_template.', 400);
 
-    const { id } = await createMoneyUpdateDraft(supabase, contentType as MoneyUpdateContentType, user.id);
-    return ok({ id });
+    const rawTitle = typeof body?.title === 'string' ? body.title.trim() : '';
+    if (!rawTitle) return Response.json({ error: 'Enter a title before saving.', fields: { title: 'Title is required to save.' } }, { status: 422 });
+    const titleCheck = validateForDraftSave({ title: rawTitle });
+    if (!titleCheck.valid) return Response.json({ error: 'Validation failed.', fields: titleCheck.errors }, { status: 422 });
+
+    const { id, updated_at } = await createMoneyUpdateDraft(supabase, contentType as MoneyUpdateContentType, user.id, rawTitle);
+    return ok({ id, updated_at });
   } catch (err) {
     console.error('Resources money update create error:', err);
     return bad('Could not create this Money Update.', 500);

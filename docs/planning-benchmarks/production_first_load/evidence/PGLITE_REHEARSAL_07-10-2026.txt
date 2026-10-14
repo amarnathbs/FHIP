@@ -1,0 +1,113 @@
+Replica ready (migrations 0001 to 0278 + seed) in 9.8s
+
+TWIN READ BEFORE (real loadPeerBenchmark)
+   property_concentration / (country-wide): mean 56.2
+   net_worth / AU_AGE_25_34: mean 242000
+   net_worth / AU_AGE_55_64: mean 1453000
+   gross_household_income / AU_AGE_25_34: mean 119808
+   net_worth / AU_AGE_18_24: mean 129000
+   net_worth / (country-wide): median 579200
+   retirement_balance / (country-wide): mean 183000
+   debt_to_income / (country-wide): threshold 6
+   liquid_asset_share / IN_RURAL_ALL: mean 4.6
+   retirement_contribution_rate / (country-wide): rate 24
+PRE-STATE {"datasets":12,"mappingPairs":71,"liveValuesByDataset":{"AU ASFA retirement standard":0,"AU average superannuation balance":1,"AU high-DTI mortgage threshold":1,"AU household asset composition":1,"AU household debt context":0,"AU household wealth distribution":4,"AU net worth and income by age band":14,"FHIP Planning Benchmarks v1.0":0,"FHIP dependant-band household benchmark model":198,"India EPF/EPS contribution structure":1,"India household assets and debt (rural/urban)":4,"India household consumption expenditure (rural/urban)":0},"allValues":224,"endDatedValues":0,"bands":200,"liveBands":200,"cohorts":39,"batches":[]}
+
+1. 01_cohorts_au_net_worth_income_by_age.csv (cohorts, 1 rows): staged
+   preview: New 1, Replaced 0, Same as live 0, Conflicts 0, Bands removed 0; blockers 0
+   - new       AU_AGE_15_24: live - -> file cohort
+   activated: 1 added, 0 replaced and kept as history, 0 bands removed, dataset active
+
+2. 02_values_au_household_asset_composition.csv (values, 2 rows): staged
+   preview: New 1, Replaced 1, Same as live 0, Conflicts 0, Bands removed 0; blockers 0
+   - new       (country-wide) / total_assets / mean: live - -> file 1245200
+   - changed   (country-wide) / property_concentration / mean: live 56.2 -> file 55.7661
+   activated: 2 added, 1 replaced and kept as history, 0 bands removed, dataset active
+
+3. 03_values_au_household_wealth_distribution.csv (values, 6 rows): staged
+   preview: New 2, Replaced 2, Same as live 2, Conflicts 0, Bands removed 0; blockers 0
+   - changed   (country-wide) / net_worth / mean: live 1040000 -> file 1042000
+   - unchanged (country-wide) / net_worth / median: live 579200 -> file 579200
+   - new       (country-wide) / net_worth / p10: live - -> file 36900
+   - unchanged (country-wide) / net_worth / p20: live 113400 -> file 113400
+   - changed   (country-wide) / net_worth / p80: live 1400000 -> file 1447800
+   - new       (country-wide) / net_worth / p90: live - -> file 2257700
+   activated: 4 added, 2 replaced and kept as history, 0 bands removed, dataset active
+
+4. 04_values_au_net_worth_income_by_age.csv (values, 28 rows): staged
+   preview: New 16, Replaced 10, Same as live 2, Conflicts 0, Bands removed 0; blockers 0
+   - new       AU_AGE_15_24 / net_worth / mean: live - -> file 83800
+   - new       AU_AGE_15_24 / net_worth / median: live - -> file 34600
+   - new       AU_AGE_15_24 / gross_household_income / mean: live - -> file 88400
+   - new       AU_AGE_15_24 / gross_household_income / median: live - -> file 79872
+   - changed   AU_AGE_25_34 / net_worth / mean: live 242000 -> file 353800
+   - new       AU_AGE_25_34 / net_worth / median: live - -> file 175700
+   - changed   AU_AGE_25_34 / gross_household_income / mean: live 119808 -> file 128180
+   - new       AU_AGE_25_34 / gross_household_income / median: live - -> file 112944
+   - changed   AU_AGE_35_44 / net_worth / mean: live 555000 -> file 692600
+   - new       AU_AGE_35_44 / net_worth / median: live - -> file 401000
+   - changed   AU_AGE_35_44 / gross_household_income / mean: live 153972 -> file 147524
+   - new       AU_AGE_35_44 / gross_household_income / median: live - -> file 122044
+   - changed   AU_AGE_45_54 / net_worth / mean: live 1055000 -> file 1124600
+   - new       AU_AGE_45_54 / net_worth / median: live - -> file 799600
+   - changed   AU_AGE_45_54 / gross_household_income / mean: live 158964 -> file 157716
+   - new       AU_AGE_45_54 / gross_household_income / median: live - -> file 127400
+   - changed   AU_AGE_55_64 / net_worth / mean: live 1453000 -> file 1519000
+   - new       AU_AGE_55_64 / net_worth / median: live - -> file 999900
+   - changed   AU_AGE_55_64 / gross_household_income / mean: live 146744 -> file 131976
+   - new       AU_AGE_55_64 / gross_household_income / median: live - -> file 96096
+   - changed   AU_AGE_65_74 / net_worth / mean: live 1835000 -> file 1673800
+   - new       AU_AGE_65_74 / net_worth / median: live - -> file 926700
+   - changed   AU_AGE_65_74 / gross_household_income / mean: live 81328 -> file 75400
+   - new       AU_AGE_65_74 / gross_household_income / median: live - -> file 50700
+   - unchanged AU_AGE_75_PLUS / net_worth / mean: live 1167000 -> file 1167000
+   - new       AU_AGE_75_PLUS / net_worth / median: live - -> file 725100
+   - unchanged AU_AGE_75_PLUS / gross_household_income / mean: live 54340 -> file 54340
+   - new       AU_AGE_75_PLUS / gross_household_income / median: live - -> file 40716
+   activated: 26 added, 10 replaced and kept as history, 0 bands removed, dataset active
+
+5. 05_values_au_high_dti_mortgage_threshold.csv (values, 1 rows): staged
+   preview: New 0, Replaced 0, Same as live 1, Conflicts 0, Bands removed 0; blockers 0
+   - unchanged (country-wide) / debt_to_income / threshold: live 6 -> file 6
+   activated: 0 added, 0 replaced and kept as history, 0 bands removed, dataset active
+
+6. 06_values_au_average_super_balance.csv (values, 2 rows): staged
+   preview: New 1, Replaced 1, Same as live 0, Conflicts 0, Bands removed 0; blockers 0
+   - changed   (country-wide) / retirement_balance / mean: live 183000 -> file 182781
+   - new       (country-wide) / retirement_balance / median: live - -> file 63339
+   activated: 2 added, 1 replaced and kept as history, 0 bands removed, dataset active
+
+7. 07_values_india_household_assets_debt_rural_urban.csv (values, 4 rows): staged
+   preview: New 2, Replaced 0, Same as live 2, Conflicts 0, Bands removed 0; blockers 0
+   - unchanged IN_RURAL_ALL / total_assets / mean: live 1592379 -> file 1592379
+   - new       IN_RURAL_ALL / debt_to_asset_ratio / rate: live - -> file 3.8
+   - unchanged IN_URBAN_ALL / total_assets / mean: live 2717081 -> file 2717081
+   - new       IN_URBAN_ALL / debt_to_asset_ratio / rate: live - -> file 4.4
+   activated: 2 added, 0 replaced and kept as history, 0 bands removed, dataset active
+
+8. 08_values_india_epf_eps_contribution_structure.csv (values, 1 rows): staged
+   preview: New 0, Replaced 1, Same as live 0, Conflicts 0, Bands removed 0; blockers 0
+   - changed   (country-wide) / retirement_contribution_rate / rate: live 24 -> file 24
+   activated: 1 added, 1 replaced and kept as history, 0 bands removed, dataset active
+
+9. 09_target_ranges_au_asfa_retirement_standard.csv (target_ranges, 4 rows): staged
+   preview: New 0, Replaced 0, Same as live 4, Conflicts 0, Bands removed 0; blockers 0
+   - unchanged single / retirement_balance / modest tier 2: live 0..110000 -> file 0..110000
+   - unchanged single / retirement_balance / comfortable tier 4: live 630000..- -> file 630000..-
+   - unchanged couple_no_kids / retirement_balance / modest tier 2: live 0..120000 -> file 0..120000
+   - unchanged couple_no_kids / retirement_balance / comfortable tier 4: live 730000..- -> file 730000..-
+   activated: 0 added, 0 replaced and kept as history, 0 bands removed, dataset active
+
+POST-STATE {"datasets":12,"mappingPairs":71,"liveValuesByDataset":{"AU ASFA retirement standard":0,"AU average superannuation balance":2,"AU high-DTI mortgage threshold":1,"AU household asset composition":2,"AU household debt context":0,"AU household wealth distribution":6,"AU net worth and income by age band":30,"FHIP Planning Benchmarks v1.0":0,"FHIP dependant-band household benchmark model":198,"India EPF/EPS contribution structure":1,"India household assets and debt (rural/urban)":6,"India household consumption expenditure (rural/urban)":0},"allValues":261,"endDatedValues":15,"bands":200,"liveBands":200,"cohorts":40,"batches":[{"s":"activated","c":9}]}
+
+TWIN READ AFTER (real loadPeerBenchmark)
+   property_concentration / (country-wide): mean 55.7661
+   net_worth / AU_AGE_25_34: median 175700
+   net_worth / AU_AGE_55_64: median 999900
+   gross_household_income / AU_AGE_25_34: median 112944
+   net_worth / AU_AGE_18_24: mean 129000
+   net_worth / (country-wide): median 579200
+   retirement_balance / (country-wide): median 63339
+   debt_to_income / (country-wide): threshold 6
+   liquid_asset_share / IN_RURAL_ALL: mean 4.6
+   retirement_contribution_rate / (country-wide): rate 24

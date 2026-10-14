@@ -11,16 +11,19 @@ import type { MoneyUpdateContentType } from './types';
 
 export interface CreateMoneyUpdateResult {
   id: string;
+  updated_at: string;
 }
 
-export async function createMoneyUpdateDraft(supabase: SupabaseClient, contentType: MoneyUpdateContentType, userId: string): Promise<CreateMoneyUpdateResult> {
+// PO review F3 (06/10/2026): called only when the author presses Save, with
+// the title they typed. The placeholder is kept for scripts/tests only.
+export async function createMoneyUpdateDraft(supabase: SupabaseClient, contentType: MoneyUpdateContentType, userId: string, title?: string): Promise<CreateMoneyUpdateResult> {
   const titlePlaceholder = contentType === 'money_update_template' ? 'Untitled Money Update Template' : 'Untitled Money Update';
   const blocks = contentType === 'money_update_template' ? starterTemplateForMoneyUpdateTemplate() : starterTemplateForMoneyUpdate();
 
   const { data, error } = await supabase
     .from('resource_posts')
     .insert({
-      title: titlePlaceholder,
+      title: title && sanitizePlainText(title, 300).trim() ? sanitizePlainText(title, 300).trim() : titlePlaceholder,
       content_type: contentType,
       status: 'draft',
       compliance_classification: 'green',
@@ -34,10 +37,10 @@ export async function createMoneyUpdateDraft(supabase: SupabaseClient, contentTy
       created_by: userId,
       updated_by: userId,
     })
-    .select('id')
+    .select('id, updated_at')
     .single();
   if (error) throw error;
-  return { id: data.id as string };
+  return { id: data.id as string, updated_at: data.updated_at as string };
 }
 
 export interface SaveMoneyUpdateParams {

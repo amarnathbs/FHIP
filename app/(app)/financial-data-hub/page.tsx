@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -15,7 +16,7 @@ import { IMPORT_DESTINATIONS, NOT_SUPPORTED_FOR_IMPORT, importDestinationFor } f
  * redirects straight to the right tab (old links); otherwise it lists where
  * each type is imported and says plainly which types cannot be imported yet.
  */
-export default async function FinancialDataHubPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
+async function FinancialDataHubPageContent({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -53,5 +54,15 @@ export default async function FinancialDataHubPage({ searchParams }: { searchPar
         <Link href="/financial-data-hub/activity" className="text-trust hover:underline">See your approved financial activity</Link>
       </p>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Expenses).
+export default function FinancialDataHubPage(props: Parameters<typeof FinancialDataHubPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/expenses" label="Expenses" />
+      <FinancialDataHubPageContent {...props} />
+    </>
   );
 }

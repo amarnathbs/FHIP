@@ -45,7 +45,7 @@ function filtersFromParams(params: URLSearchParams): FilterState {
   };
 }
 
-export function ResourceContentListClient({ queue, title, description, canBulkImport = false }: { queue?: QueuePreset; title: string; description: string; canBulkImport?: boolean }) {
+export function ResourceContentListClient({ queue, title, description, canDeleteDrafts = false, canBulkImport = false }: { queue?: QueuePreset; title: string; description: string; canDeleteDrafts?: boolean; canBulkImport?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -60,6 +60,7 @@ export function ResourceContentListClient({ queue, title, description, canBulkIm
   const [categoriesUnavailable, setCategoriesUnavailable] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  // F3: `canDeleteDrafts` is resolved on the server by the page (UI visibility only; the DELETE route re-checks).
 
   useEffect(() => {
     // Admin A0.2 Wave 5 (§8.5): this swallowed every failure, and the
@@ -217,7 +218,7 @@ export function ResourceContentListClient({ queue, title, description, canBulkIm
             />
           ) : (
             <>
-              <ResourceContentTable items={items} />
+              <ResourceContentTable items={items} canDeleteDrafts={canDeleteDrafts} onDeleted={() => setReloadToken((t) => t + 1)} />
               <div className="mt-3">
                 <ResourcePagination page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
               </div>

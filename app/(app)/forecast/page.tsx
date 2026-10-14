@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard } from '@/lib/services/dashboardData';
@@ -7,7 +8,7 @@ import { NetWorthVarianceCard } from '@/components/forecast/NetWorthVarianceCard
 import { ScenarioComparisonPanel } from '@/components/forecast/ScenarioComparisonPanel';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
 
-export default async function ForecastOverviewPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
+async function ForecastOverviewPageContent({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
   const { scenario } = await searchParams;
   const supabase = await createClient();
   const {
@@ -46,5 +47,15 @@ export default async function ForecastOverviewPage({ searchParams }: { searchPar
         <NetWorthVarianceCard variance={variance} currency={summary.currency} />
         <ScenarioComparisonPanel currency={summary.currency} />
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function ForecastOverviewPage(props: Parameters<typeof ForecastOverviewPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <ForecastOverviewPageContent {...props} />
+    </>
   );
 }

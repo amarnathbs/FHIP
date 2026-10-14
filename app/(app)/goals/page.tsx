@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -11,7 +12,7 @@ import { MonthlyAllocationPanel } from '@/components/goals/MonthlyAllocationPane
 import { GoalTimeline } from '@/components/goals/GoalTimeline';
 import { GoalInsights } from '@/components/goals/GoalInsights';
 
-export default async function GoalsPage() {
+async function GoalsPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -82,5 +83,15 @@ export default async function GoalsPage() {
           </div>
         </div>
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function GoalsPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <GoalsPageContent />
+    </>
   );
 }

@@ -8,9 +8,10 @@
 import Link from 'next/link';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceJurisdictionBadge, ResourceTypeBadge } from './ResourceBadges';
 import { formatAdminDate } from '@/lib/resources/admin/labels';
+import { DeleteDraftButton } from './DeleteDraftButton';
 import type { ContentListItem } from '@/lib/resources/admin/queries';
 
-export function ResourceContentTable({ items }: { items: ContentListItem[] }) {
+export function ResourceContentTable({ items, canDeleteDrafts = false, onDeleted }: { items: ContentListItem[]; canDeleteDrafts?: boolean; onDeleted?: () => void }) {
   return (
     <>
       {/* Desktop / tablet table */}
@@ -72,6 +73,16 @@ export function ResourceContentTable({ items }: { items: ContentListItem[] }) {
                   <Link href={`/admin/resources/content/${item.id}`} className="text-xs font-semibold text-trust hover:underline" aria-label={`View "${item.title}"`}>
                     View
                   </Link>
+                  <DeleteDraftButton
+                    postId={item.id}
+                    title={item.title}
+                    status={item.status}
+                    publishedAt={item.published_at}
+                    canDelete={canDeleteDrafts}
+                    onDeleted={onDeleted}
+                    label="Delete"
+                    className="ml-3 text-xs font-semibold text-risk hover:underline"
+                  />
                 </td>
               </tr>
             ))}
@@ -104,6 +115,9 @@ export function ResourceContentTable({ items }: { items: ContentListItem[] }) {
               <ResourceJurisdictionBadge jurisdiction={item.jurisdiction} />
             </div>
             <p className="mt-2 text-xs text-muted">Updated {formatAdminDate(item.updated_at)}</p>
+            <div className="mt-2">
+              <DeleteDraftButton postId={item.id} title={item.title} status={item.status} publishedAt={item.published_at} canDelete={canDeleteDrafts} onDeleted={onDeleted} />
+            </div>
           </li>
         ))}
       </ul>

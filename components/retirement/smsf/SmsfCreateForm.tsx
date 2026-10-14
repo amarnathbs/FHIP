@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 import { useState } from 'react';
 import { fetchJson, type CurrencyCode } from './types';
 import type { SmsfFundRow } from './types';
@@ -99,9 +100,8 @@ export function SmsfCreateForm({ onCreated, onCancel }: { onCreated: (fund: Smsf
           <label htmlFor="smsf-balance-date" className="block text-xs text-muted">
             Valuation Date
           </label>
-          <input
+          <DateInput
             id="smsf-balance-date"
-            type="date"
             value={balanceDate}
             onChange={(e) => setBalanceDate(e.target.value)}
             className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"

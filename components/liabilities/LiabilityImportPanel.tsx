@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDateShort } from '@/lib/engines/date';
+import { DateInput } from '@/components/ui/DateInput';
 /**
  * FDH-10 — Credit Cards & Loans Intelligence: the Liabilities-tab statement
  * import journey (spec sections 2, 15-27, 41-42).
@@ -246,10 +248,10 @@ type CorrectableField =
 
 const CORRECTION_LABELS: Record<CorrectableField, string> = {
   institution_name: 'Institution',
-  statement_period_start: 'Statement period start (YYYY-MM-DD)',
-  statement_period_end: 'Statement period end (YYYY-MM-DD)',
-  statement_date: 'Statement date (YYYY-MM-DD)',
-  due_date: 'Payment due date (YYYY-MM-DD)',
+  statement_period_start: 'Statement period start',
+  statement_period_end: 'Statement period end',
+  statement_date: 'Statement date',
+  due_date: 'Payment due date',
   opening_balance: 'Opening balance',
   closing_balance: 'Closing balance',
   purchases_total: 'Purchases this statement period',
@@ -1151,11 +1153,11 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             )}
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Statement period from (recommended)</span>
-              <input type="date" className="w-full rounded border border-gray-300 px-3 py-2" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+              <DateInput className="w-full rounded border border-gray-300 px-3 py-2" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Statement period to (recommended)</span>
-              <input type="date" className="w-full rounded border border-gray-300 px-3 py-2" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+              <DateInput className="w-full rounded border border-gray-300 px-3 py-2" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
             </label>
           </div>
           <p className="text-xs text-muted">A month counts in your averages only when a statement covers the whole month.</p>
@@ -1270,7 +1272,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
                 <tbody>
                   {aiDraft.activities.map((a, i) => (
                     <tr key={`${a.activityDate}-${i}`} className="border-t border-gray-100">
-                      <td className="px-3 py-2 whitespace-nowrap">{a.activityDate}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(a.activityDate, currency)}</td>
                       <td className="px-3 py-2">{ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType}</td>
                       <td className="px-3 py-2">{a.descriptionRaw ?? '—'}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{a.amount.toFixed(2)}</td>
@@ -1281,7 +1283,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
                           className="rounded border border-gray-300 px-2 py-1 text-xs"
                         >
                           Remove
-                          <span className="sr-only"> the {ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType} line on {a.activityDate}</span>
+                          <span className="sr-only"> the {ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType} line on {formatDateShort(a.activityDate, currency)}</span>
                         </button>
                       </td>
                     </tr>

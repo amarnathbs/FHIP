@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -7,7 +8,7 @@ import { getUserHomeCountry } from '@/lib/services/jurisdiction';
 import { GenerateTwinButton } from '@/components/financial-twin/GenerateTwinButton';
 import { TwinDetailView } from '@/components/financial-twin/TwinDetailView';
 
-export default async function FinancialTwinPage() {
+async function FinancialTwinPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -69,5 +70,15 @@ export default async function FinancialTwinPage() {
           </SectionCard>
         )}
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function FinancialTwinPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <FinancialTwinPageContent />
+    </>
   );
 }

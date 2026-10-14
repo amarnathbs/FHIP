@@ -1,5 +1,7 @@
 'use client';
 
+import { PageBackLink } from '@/components/navigation/PageBackLink';
+
 import { useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { expenseGridConfig } from '@/lib/grid/configs';
@@ -17,7 +19,7 @@ import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability
 //    never copied into the grid and never added to the plan;
 //  - "Update your planned expenses from your actual spending" is the only way
 //    an import changes the plan, and only for the items you tick and apply.
-export default function ExpensesPage() {
+function ExpensesPageContent() {
   const [showImport, setShowImport] = useState(false);
   // Bumped after an Apply so the grid and the actuals re-read what changed.
   const [refreshKey, setRefreshKey] = useState(0);
@@ -60,5 +62,15 @@ export default function ExpensesPage() {
 
       <ImportedExpenseActuals refreshKey={refreshKey} />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function ExpensesPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <ExpensesPageContent />
+    </>
   );
 }

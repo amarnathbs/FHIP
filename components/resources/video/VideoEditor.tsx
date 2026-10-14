@@ -13,13 +13,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
-import { TextField, TextAreaField, CheckboxField } from '@/components/resources/editor/FormField';
+import { TextField, TextAreaField, CheckboxField, DateTextField } from '@/components/resources/editor/FormField';
 import { MetadataSidebar, type MetadataFormState } from '@/components/resources/editor/MetadataSidebar';
 import { WorkflowPanel, type WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 import { RevisionHistoryPanel } from '@/components/resources/editor/RevisionHistoryPanel';
 import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { SaveStatus, type SaveState } from '@/components/resources/editor/SaveStatus';
 import { useUnsavedChangesGuard } from '@/components/resources/editor/useUnsavedChangesGuard';
+import { DeleteDraftButton } from '@/components/resources/admin/DeleteDraftButton';
 import { ChapterEditor } from '@/components/resources/specialist/ChapterEditor';
 import { slugify } from '@/lib/resources/editor/slug';
 import { TITLE_MAX_LENGTH, EXCERPT_MAX_LENGTH } from '@/lib/resources/editor/validation';
@@ -29,8 +30,6 @@ import type { EditorSavePatch, PostVersionSnapshot, EditorReferenceData, PostVer
 import type { VideoEditorPost } from '@/lib/resources/video/types';
 import type { ResourceStatus, ComplianceClassification } from '@/lib/resources/types';
 import type { WorkflowHistoryEntry } from '@/lib/resources/admin/queries';
-
-const AUTOSAVE_DEBOUNCE_MS = 2500;
 
 function toMetadataForm(post: VideoEditorPost): MetadataFormState {
   return {
@@ -64,6 +63,7 @@ export function VideoEditor({
   initialWorkflowHistory,
   currentUserId,
   caps,
+  canDelete = false,
 }: {
   post: VideoEditorPost;
   reference: EditorReferenceData;
@@ -71,6 +71,7 @@ export function VideoEditor({
   initialWorkflowHistory: WorkflowHistoryEntry[];
   currentUserId: string;
   caps: WorkflowCapabilities;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const video = initialPost.video;
@@ -92,7 +93,10 @@ export function VideoEditor({
   const [channelUrl, setChannelUrl] = useState(video?.youtube_channel_url ?? '');
 
   const [status, setStatus] = useState<ResourceStatus>(initialPost.status);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(initialPost.updated_at);
+  // The version token lives in a ref, not state: a save that was queued while another was in flight runs from the
+  // closure of the render BEFORE the response arrived, so a state value would be stale and the queued save would be
+  // refused with "updated elsewhere" although nobody else touched the record (walkthrough 07/10/2026, D3).
+  const lastUpdatedAtRef = useRef(initialPost.updated_at);
   const [versions, setVersions] = useState(initialVersions);
   const [workflowHistory, setWorkflowHistory] = useState(initialWorkflowHistory);
 
@@ -104,7 +108,6 @@ export function VideoEditor({
   const [chapterErrors, setChapterErrors] = useState<Record<string, string>>({});
   const [changeSummary, setChangeSummary] = useState('');
 
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
   // Wave 5 (§28): queue a save requested during an in-flight one instead of
   // dropping it, and only claim "Saved" if nothing changed while the request
@@ -207,7 +210,7 @@ export function VideoEditor({
             },
             categoryIds: meta.categoryIds,
             tagIds: meta.tagIds,
-            expectedUpdatedAt: lastUpdatedAt,
+            expectedUpdatedAt: lastUpdatedAtRef.current,
             createVersion,
             changeSummary: createVersion ? changeSummary : undefined,
             versionSnapshot: createVersion ? buildSnapshot() : undefined,
@@ -232,7 +235,7 @@ export function VideoEditor({
           return;
         }
         setFieldErrors({});
-        setLastUpdatedAt(json.data.updated_at);
+        lastUpdatedAtRef.current = json.data.updated_at;
         if (changeSeqRef.current === seqAtStart) {
           setDirty(false);
           setSaveState('saved');
@@ -258,7 +261,7 @@ export function VideoEditor({
         }
       }
     },
-    [buildPatch, buildSnapshot, changeSummary, chapters, channelHandle, channelUrl, durationSeconds, embedEnabled, initialPost.id, lastUpdatedAt, meta.categoryIds, meta.tagIds, thumbnailUrl, transcript, youtubePublishedAt]
+    [buildPatch, buildSnapshot, changeSummary, chapters, channelHandle, channelUrl, durationSeconds, embedEnabled, initialPost.id, meta.categoryIds, meta.tagIds, thumbnailUrl, transcript, youtubePublishedAt]
   );
 
   // Assigned in an effect, not during render (react-hooks/refs).
@@ -266,17 +269,8 @@ export function VideoEditor({
     doSaveRef.current = doSave;
   }, [doSave]);
 
-  useEffect(() => {
-    if (!dirty) return;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      void doSave(false);
-    }, AUTOSAVE_DEBOUNCE_MS);
-    return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, title, excerpt, slug, meta, durationSeconds, thumbnailUrl, youtubePublishedAt, transcript, chapters, embedEnabled, channelHandle, channelUrl]);
+  // F3 decision (06/10/2026): no autosave. Content is saved only when Save is
+  // pressed; the unsaved-changes guard protects work in the meantime.
 
   const { promptOpen, confirmNavigate, cancelNavigate } = useUnsavedChangesGuard(dirty);
 
@@ -292,7 +286,7 @@ export function VideoEditor({
       return { ok: false, error: [json.error, fieldMsg].filter(Boolean).join(' ') || 'This workflow action could not be completed.' };
     }
     setStatus(json.data.status);
-    setLastUpdatedAt(json.data.updated_at);
+    lastUpdatedAtRef.current = json.data.updated_at;
     router.refresh();
     fetch(`/api/admin/resources/videos/${initialPost.id}/versions`)
       .then((r) => r.json())
@@ -366,6 +360,7 @@ export function VideoEditor({
             <Link href={`/admin/resources/videos/${initialPost.id}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
               Preview
             </Link>
+            <DeleteDraftButton postId={initialPost.id} title={title} status={status} canDelete={canDelete} redirectTo="/admin/resources/videos" />
             <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="min-h-11 rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
               {saveState === 'saving' ? 'Saving…' : 'Save Changes'}
             </button>
@@ -419,7 +414,7 @@ export function VideoEditor({
             <h2 className="mb-3 text-sm font-semibold text-ink">Video Details</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <TextField label="Duration (seconds)" value={durationSeconds} onChange={(v) => { setDurationSeconds(v.replace(/[^0-9]/g, '')); markDirty(); }} placeholder="e.g. 425" />
-              <TextField label="YouTube Publish Date" value={youtubePublishedAt} onChange={(v) => { setYoutubePublishedAt(v); markDirty(); }} placeholder="YYYY-MM-DD" />
+              <DateTextField label="YouTube Publish Date" value={youtubePublishedAt} onChange={(v) => { setYoutubePublishedAt(v); markDirty(); }} />
               <TextField label="Thumbnail URL" value={thumbnailUrl} onChange={(v) => { setThumbnailUrl(v); markDirty(); }} hint="Defaults to the YouTube-derived thumbnail; override if needed." />
               <TextField label="@GKTC Channel Handle" value={channelHandle} onChange={(v) => { setChannelHandle(v); markDirty(); }} />
               <TextField label="@GKTC Channel URL" value={channelUrl} onChange={(v) => { setChannelUrl(v); markDirty(); }} placeholder="https://www.youtube.com/@GKTC" />

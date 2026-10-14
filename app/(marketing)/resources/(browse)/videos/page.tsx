@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
 import { getPublicVideos } from '@/lib/resources/public/queries';
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
   alternates: { canonical: `${getPublicSiteBaseUrl()}/resources/videos` },
 };
 
-export default async function VideosIndexPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+async function VideosIndexPageContent({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number.parseInt(pageParam ?? '1', 10) || 1);
   const supabase = await createClient();
@@ -42,5 +43,15 @@ export default async function VideosIndexPage({ searchParams }: { searchParams: 
         </>
       )}
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
+export default function VideosIndexPage(props: Parameters<typeof VideosIndexPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/resources" label="Resources" className="mx-auto max-w-6xl px-4 pt-6 sm:px-6" />
+      <VideosIndexPageContent {...props} />
+    </>
   );
 }

@@ -1,5 +1,33 @@
 # Owner-before-upload -- FINAL COMPLETION report
 
+## DEV CERTIFICATION UPDATE (06-10-2026 to 07-10-2026) -- read this first
+
+Everything below this section is the 02-10-2026 code-complete report and is kept as written. Since then migration `0236` and the backfill were applied on DEV by the PO and the live certification was run. Per-step results: `DEV_CERT_STEP_RESULTS_06-10-2026.md`; raw evidence: `dev_cert_evidence_06-10-2026/`; checkpoint: `DEV_CERT_CHECKPOINT_1.md`. Branch `fix/owner-before-upload-dev-cert-20261006` (not pushed) holds the seven repairs and the journeys.
+
+### Verdict (step 38), honest
+
+**CONDITIONAL PASS: OWNER-BEFORE-UPLOAD ARCHITECTURE IS DEV-VERIFIED (database and API) FOR EVERY OWNER-CAPABLE FLOW, AND DEV-BROWSER-VERIFIED FOR INDIA CAS AND THE BANK CSV PANEL. It is NOT "UNCONDITIONAL FULL PASS - DEV CERTIFIED", because the conditions below are open.**
+
+What is proved on DEV: migration 0236 applied and re-applied (PO grids 01 and 03, fingerprint `0d1dcc01ebb3285cc0c0f27f510cd38d`, 13 constraints, 2 triggers); backfill previewed, committed and re-previewed to zero (PO grids, my own DEV reads); owner required before upload on every route and refused otherwise; Self, Spouse (real member), Joint 60/40 (oracle 1,000,000 = 600,000 + 400,000, never 2,000,000), Company / Trust / HUF (separate, never in the personal register); per-folio conflict through the screen; same file with another owner refused with no cross-tenant leak; bank CSV and PDF with Self / Spouse / Joint / SMSF; entity bank statements refused; account picker, reassignment and owner-change conflict (API and browser); Phase 2 routes (409 `owner_differs_from_upload`, canonical write exactly once); AIE intake and Accept with the stored owner re-validated; malware admission guard before the identity reader; financial oracles; 23-probe cross-tenant matrix; raw-file purge keeps ownership; production-style (Turbopack) build and tsc clean.
+
+**Open conditions (each blocks the unconditional verdict):**
+1. **Residue is not zero.** 60 rows of applied liability chains from the card / loan / Phase 2 journeys cannot be deleted by the service role. PO action: run `dev_cert_evidence_06-10-2026/PO_residue_liability_chains_DEV.sql` once on DEV (guarded, one transaction, counts stated).
+2. **Browser protocol is incomplete.** Not driven in a browser: bank PDF, entity-refusal message, a full upload through the payslip / liability / retirement / AU-investment panels (only the owner gate was checked there), AIE. Browser runs were a headless Chromium driven by the harness; **the PO's own browser pass over the owner dialogs (and a real screen reader, if wanted) is still a PO action.**
+3. **Older live scripts not re-run.** About 25 older certification scripts create throw-away users with passwords through the Auth admin API; under the PO rule (no created accounts, no passwords) they were not run. They remain syntax-checked, type-checked and covered by the repository guard test. The eight scenario scripts that use the existing fixture users were run: 7 pass fully; `scenario_card` is 22 / 23 (one intermediate check of pair 2 saw 0 instead of 220; its final oracle passes; not owner-related, unrepaired).
+4. **Seven repairs await review and merge** (this branch is not pushed). They are the only changes to product code; section 3 of the step results.
+5. **Residual failing tests are baseline**, proven on a clean `origin/main` and unrelated: `adminAnalyticsPhaseAMeRoute`, `aiResidualClosureFailClosed`, `countryGateAccessMatrix`, `lr1UploadSecurityRawFileLifecycle`, `m12cServerOnlySecretBoundary` (plus live-DEV and temp-cache flakes that pass alone).
+
+**Mandatory statements.**
+`GENERAL PRODUCTION BANK INGESTION STILL BLOCKED ON CANONICAL INSTITUTION IDENTITY.` (`INSTITUTION_ID — NOT YET COMPLETE FOR GENERAL PRODUCTION BANK INGESTION`: the panel still sends no canonical `institution_id`; the adapter-derived deterministic slice worked live.)
+`SMSF BANK OWNER ATTRIBUTION CERTIFIED; SMSF BANK-TRANSACTION CASH-FLOW INTEGRATION REMAINS A SEPARATE DOWNSTREAM CAPABILITY.` (An SMSF-owned statement is attributed to the SMSF and kept out of personal Expenses, proved by oracle; it does not feed an SMSF cash-flow view: PARTIAL / DEFERRED DOWNSTREAM CAPABILITY, not passed.)
+`PRODUCTION DOCUMENT INGESTION REMAINS DELIBERATELY DISABLED PENDING MALWARE, PRODUCTION-SCHEMA AND LOAD/OPERATIONAL READINESS.`
+No production full pass is claimed: production code deployment is unconfirmed, production schema (`0236`) is unknown and was not read, production upload stays off (`isFdhDocumentUploadEnabled()` untouched).
+
+### Defects found by the live testing and repaired (each with a test that failed first)
+D1 field-disposition registry for the five 0236 upload columns; D2 G2 right alignment of joint amounts; D3 stale statement-resume test; D4 stale 0174 scheduler test (0229 end state); D5 Statements & data scrolled sideways at 375 px; **D6 the screen could not confirm the second conflicted folio (the saved review lost its target owner)**; **D7 two Self members created by a racing `POST /api/ownership/self`**. D6 and D7 are genuine product defects that only a live browser run found.
+
+---
+
 Branch `feat/owner-before-upload-phase1-20261001`, HEAD merged with `origin/main` `bf5068c` (owner-edit branch `a669ba1`, premium grants, Net Worth NAV `0240`). Written 2026-10-02. Not pushed; nothing merged to `main`; nothing written to production; DEV was **not reachable unattended**, so **nothing was applied to DEV** -- every DEV / browser step below is a PO step.
 
 ## 1. The answer

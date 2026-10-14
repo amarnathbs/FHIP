@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     return bad('contributionIntervalMonths must be a whole number between 1 and 12.');
   }
   for (const [name, v] of [['startDate', body.startDate], ['endDate', body.endDate]] as const) {
-    if (v !== undefined && (typeof v !== 'string' || !ISO.test(v))) return bad(`Invalid ${name}: expected YYYY-MM-DD.`);
+    if (v !== undefined && (typeof v !== 'string' || !ISO.test(v))) return bad(`Invalid ${name}: expected a valid calendar date.`);
   }
 
   try {

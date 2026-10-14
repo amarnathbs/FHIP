@@ -1,0 +1,152 @@
+Planning Benchmarks upload: allowed values
+"Lists read from the database on 06/10/2026 (when you downloaded this file). If a dataset, metric or cohort is not listed here, the upload will refuse it."
+
+11 datasets are open for upload today
+12 datasets are registered; 1 cannot receive an upload. Type dataset_name and dataset_version exactly as written here (capital letters and spaces count). An upload never creates a dataset. Observed values files: 11 accepted. Planning target ranges files: 11 accepted. Cohorts files: 11 accepted.
+dataset_name,dataset_version,class,evidence level,status,source,source status,figures held today,observed values file,planning target ranges file,cohorts file
+AU ASFA retirement standard,1.0,fhip_planning,official_statistical,active,ASFA_STANDARD_2026,active,0,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""ASFA_STANDARD_2026"".",Yes.
+AU average superannuation balance,1.0,observed_market,official_statistical,active,ATO_SUPER_2023_24,active,1,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""ATO_SUPER_2023_24"".",Yes.
+AU high-DTI mortgage threshold,1.0,regulatory_statutory,regulatory,active,APRA_MACROPRUDENTIAL_2026,active,1,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""APRA_MACROPRUDENTIAL_2026"".",Yes.
+AU household asset composition,1.0,observed_market,official_statistical,active,ABS_SIH_2019_20,active,1,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""ABS_SIH_2019_20"".",Yes.
+AU household wealth distribution,1.0,observed_market,official_statistical,active,ABS_SIH_2019_20,active,4,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""ABS_SIH_2019_20"".",Yes.
+AU net worth and income by age band,1.0,observed_market,official_statistical,active,ABS_SIH_AGE_2019_20,active,14,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""ABS_SIH_AGE_2019_20"".",Yes.
+FHIP dependant-band household benchmark model,1.0,fhip_planning,research_informed,active,FHIP_PLANNING_V1,active,198,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""FHIP_PLANNING_V1"".",Yes.
+FHIP Planning Benchmarks v1.0,1.0,fhip_planning,research_informed,active,FHIP_PLANNING_V1,active,0,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""FHIP_PLANNING_V1"".",Yes.
+India EPF/EPS contribution structure,1.0,regulatory_statutory,regulatory,active,EPFO_CONTRIBUTION_STRUCTURE,active,1,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""EPFO_CONTRIBUTION_STRUCTURE"".",Yes.
+India household assets and debt (rural/urban),1.0,observed_market,official_statistical,active,AIDIS_2019,active,4,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""AIDIS_2019"".",Yes.
+India household consumption expenditure (rural/urban),1.0,observed_market,official_statistical,draft,MOSPI_HCES_2023_24,active,0,"Yes. The metric, its unit and the cohort must come from the lists below.","Yes. source_name must be exactly ""MOSPI_HCES_2023_24"". It holds no figure yet, so it can only be activated by an observed values file.","Yes. It holds no figure yet, so it can only be activated by an observed values file."
+AU household debt context,1.0,observed_market,official_statistical,superseded,ABS_SIH_2019_20,active,0,"No. The dataset is superseded, and a suspended, archived, superseded dataset cannot receive an upload.","No. The dataset is superseded, and a suspended, archived, superseded dataset cannot receive an upload.","No. The dataset is superseded, and a suspended, archived, superseded dataset cannot receive an upload."
+
+67 metrics are registered and can be uploaded to
+"In an observed values file, unit must equal the unit shown here for the metric. statistic_type may be any statistic in the closed lists below: the system does not restrict which statistics a metric may carry. In a planning target ranges file there is no unit column: lower_bound and upper_bound must be in the unit shown here. A metric may carry bands for any household type; household types and tiers already live are shown for reference. An upload cannot create a metric."
+metric_code,plain name,unit (values and band bounds),direction,category,status,band tiers live today,household types in live bands,countries in live bands
+asset_class_diversification,Asset-class diversification,count,higher_better,investments,active,1 low_concern; 2 developing; 3 healthy; 4 strong,none yet,none yet
+country_concentration,Country concentration,percentage,context_only,cross_border,active,1 very_high; 2 high; 3 moderate; 4 low,none yet,none yet
+credit_utilization,Credit utilisation,percentage,lower_better,debt_commitments,active,1 high_risk; 2 elevated; 3 manageable; 4 strong,none yet,none yet
+cross_border_retirement_coverage,Cross-border retirement coverage,percentage,higher_better,cross_border,active,none yet,none yet,none yet
+currency_concentration,Currency concentration,percentage,context_only,cross_border,active,none yet,none yet,none yet
+currency_mismatch,Currency mismatch,percentage,lower_better,cross_border,active,1 very_high; 2 high; 3 moderate; 4 low,none yet,none yet
+debt_at_retirement,Debt at retirement,currency,lower_better,retirement,active,none yet,none yet,none yet
+debt_service_ratio,Debt-service ratio,percentage,lower_better,debt_commitments,active,1 high_risk; 2 elevated; 3 manageable; 4 strong,none yet,none yet
+debt_to_asset_ratio,Debt-to-asset ratio,percentage,lower_better,debt_commitments,active,none yet,none yet,none yet
+debt_to_income,Debt-to-income,ratio,lower_better,debt_commitments,active,1 high_risk; 2 elevated; 3 manageable; 4 strong,none yet,none yet
+depreciating_asset_ratio,Depreciating-asset ratio,percentage,lower_better,assets_networth,active,1 low_concern; 2 developing; 3 balanced; 4 strong,none yet,none yet
+discretionary_expense_ratio,Discretionary expense ratio,percentage,context_only,expenses_savings,active,1 critical; 2 needs_attention; 3 healthy; 4 strong,none yet,none yet
+emergency_fund_months,Emergency fund,months,higher_better,liquidity_resilience,active,1 critical; 2 vulnerable; 3 adequate; 4 strong,none yet,none yet
+essential_expense_ratio,Essential expense ratio,percentage,lower_better,expenses_savings,active,1 critical; 2 needs_attention; 3 healthy; 4 strong,none yet,none yet
+expense_growth_12m,Expense growth,percentage,context_only,expenses_savings,active,none yet,none yet,none yet
+fixed_commitment_ratio,Fixed-commitment ratio,percentage,lower_better,expenses_savings,active,1 critical; 2 needs_attention; 3 healthy; 4 strong,none yet,none yet
+geographic_diversification,Geographic diversification,percentage,context_only,investments,active,none yet,none yet,none yet
+goal_allocation_burden,Goal allocation burden,percentage,target_range,goals,active,1 off_track; 2 at_risk; 3 on_track; 4 ahead,none yet,none yet
+goal_contribution_adequacy,Goal contribution adequacy,percentage,higher_better,goals,active,1 off_track; 2 at_risk; 3 on_track; 4 ahead,none yet,none yet
+goal_progress,Goal progress,percentage,higher_better,goals,active,1 off_track; 2 at_risk; 3 on_track; 4 ahead,none yet,none yet
+gross_household_income,Gross household income,currency,context_only,income_cashflow,active,none yet,none yet,none yet
+high_interest_debt_share,High-interest debt share,percentage,lower_better,debt_commitments,active,1 high_risk; 2 elevated; 3 manageable; 4 strong,none yet,none yet
+home_loan_lvr,Home loan LVR,percentage,lower_better,debt_commitments,active,1 high_risk; 2 elevated; 3 manageable; 4 strong,none yet,none yet
+housing_cost_ratio,Housing-cost ratio,percentage,lower_better,expenses_savings,active,1 critical; 2 needs_attention; 3 healthy; 4 strong,none yet,none yet
+immediate_liquidity_ratio,Immediate liquidity ratio,ratio,higher_better,liquidity_resilience,active,1 critical; 2 vulnerable; 3 adequate; 4 strong,none yet,none yet
+income_concentration,Income concentration,percentage,lower_better,income_cashflow,active,1 critical; 2 vulnerable; 3 adequate; 4 strong,none yet,none yet
+income_growth_12m,Income growth,percentage,higher_better,income_cashflow,active,none yet,none yet,none yet
+income_interruption_coverage,Income interruption coverage,months,higher_better,liquidity_resilience,active,1 critical; 2 vulnerable; 3 adequate; 4 strong,none yet,none yet
+income_protection_alignment,Income-protection alignment,ratio,target_range,insurance,active,1 high_gap; 2 partial; 3 near_adequate; 4 adequate,none yet,none yet
+investable_assets_ratio,Investable-assets ratio,percentage,context_only,investments,active,1 low_concern; 2 developing; 3 balanced; 4 strong,none yet,none yet
+investment_contribution_rate,Investment contribution rate,percentage,higher_better,investments,active,1 low_concern; 2 developing; 3 healthy; 4 strong,none yet,none yet
+largest_holding_concentration,Largest holding concentration,percentage,lower_better,investments,active,1 low_concern; 2 developing; 3 balanced; 4 strong,none yet,none yet
+life_cover_adequacy,Life-cover adequacy,percentage,target_range,insurance,active,1 high_gap; 2 partial; 3 near_adequate; 4 adequate,none yet,none yet
+liquid_asset_share,Liquid-asset share,percentage,context_only,assets_networth,active,1 low_concern; 2 developing; 3 balanced; 4 strong,none yet,none yet
+liquid_net_worth,Liquid net worth,currency,higher_better,liquidity_resilience,active,none yet,none yet,none yet
+major_asset_coverage,Major-asset coverage,percentage,target_range,insurance,active,1 high_gap; 2 partial; 3 near_adequate; 4 adequate,none yet,none yet
+monthly_surplus,Monthly surplus,currency,higher_better,income_cashflow,active,none yet,none yet,none yet
+near_liquid_coverage,Near-liquid coverage,months,higher_better,liquidity_resilience,active,1 critical; 2 vulnerable; 3 adequate; 4 strong,none yet,none yet
+net_household_income,Net household income,currency,context_only,income_cashflow,active,none yet,none yet,none yet
+net_worth,Net worth,currency,higher_better,assets_networth,active,none yet,none yet,none yet
+net_worth_growth_12m,Net-worth growth,percentage,higher_better,assets_networth,active,1 low_concern; 2 developing; 3 balanced; 4 strong,none yet,none yet
+net_worth_to_income,Net-worth-to-income,ratio,higher_better,assets_networth,active,none yet,none yet,none yet
+offshore_liquidity_access,Offshore liquidity access,days,lower_better,cross_border,active,1 very_high; 2 high; 3 moderate; 4 low,none yet,none yet
+on_track_goal_percentage,On-track goal percentage,percentage,higher_better,goals,active,1 off_track; 2 at_risk; 3 on_track; 4 ahead,none yet,none yet
+passive_income_ratio,Passive income ratio,percentage,context_only,income_cashflow,active,1 critical; 2 vulnerable; 3 adequate; 4 strong,none yet,none yet
+policy_completeness,Policy completeness,percentage,higher_better,insurance,active,1 high_gap; 2 partial; 3 near_adequate; 4 adequate,none yet,none yet
+portfolio_cost_ratio,Portfolio cost ratio,percentage,lower_better,investments,active,1 high_concern; 2 developing; 3 healthy; 4 strong,none yet,none yet
+positive_cashflow_consistency,Positive cash-flow consistency,percentage,higher_better,income_cashflow,active,1 critical; 2 needs_attention; 3 healthy; 4 strong,none yet,none yet
+premium_burden,Premium burden,percentage,target_range,insurance,active,none yet,none yet,none yet
+priority_alignment,Priority alignment,percentage,higher_better,goals,active,none yet,none yet,none yet
+productive_asset_ratio,Productive-asset ratio,percentage,higher_better,assets_networth,active,1 low_concern; 2 developing; 3 balanced; 4 strong,none yet,none yet
+projected_retirement_readiness,Projected retirement readiness,percentage,higher_better,retirement,active,1 below_baseline; 2 developing; 3 healthy_pathway; 4 strong_pathway,none yet,none yet
+property_concentration,Property concentration,percentage,context_only,assets_networth,active,1 low_concern; 2 developing; 3 balanced; 4 strong,none yet,none yet
+refinance_exposure_24m,Refinance exposure,percentage,lower_better,debt_commitments,active,1 high_risk; 2 elevated; 3 manageable; 4 strong,none yet,none yet
+remittance_burden,Remittance burden,percentage,lower_better,cross_border,active,1 very_high; 2 high; 3 moderate; 4 low,none yet,none yet
+retirement_balance,Retirement balance,currency,higher_better,retirement,active,2 modest; 4 comfortable,"couple_no_kids, single",AU
+retirement_balance_to_income,Retirement balance-to-income,ratio,higher_better,retirement,active,none yet,none yet,none yet
+retirement_contribution_rate,Retirement contribution rate,percentage,higher_better,retirement,active,1 below_baseline; 2 baseline/developing; 3 healthy_pathway; 4 strong_pathway,none yet,"AU, IN"
+retirement_funding_gap,Retirement funding gap,currency,lower_better,retirement,active,none yet,none yet,none yet
+savings_rate,Savings rate,percentage,higher_better,expenses_savings,active,1 critical; 2 needs_attention; 3 healthy; 4 strong,none yet,none yet
+speculative_asset_ratio,Speculative-asset ratio,percentage,context_only,investments,active,1 high_concern; 2 developing; 3 healthy; 4 strong,none yet,none yet
+surplus_margin,Surplus margin,percentage,higher_better,income_cashflow,active,1 critical; 2 needs_attention; 3 healthy; 4 strong,none yet,none yet
+total_assets,Total assets,currency,context_only,assets_networth,active,none yet,none yet,none yet
+total_expense_ratio,Total expense ratio,percentage,lower_better,expenses_savings,active,1 critical; 2 needs_attention; 3 healthy; 4 strong,none yet,none yet
+tpd_cover_adequacy,TPD-cover adequacy,percentage,target_range,insurance,active,1 high_gap; 2 partial; 3 near_adequate; 4 adequate,none yet,none yet
+unsecured_debt_ratio,Unsecured debt ratio,percentage,lower_better,debt_commitments,active,1 high_risk; 2 elevated; 3 manageable; 4 strong,none yet,none yet
+variable_rate_exposure,Variable-rate exposure,percentage,context_only,debt_commitments,active,1 high_risk; 2 elevated; 3 manageable; 4 strong,none yet,none yet
+
+39 cohorts exist
+"In an observed values file, cohort_code must be one of these, or blank for a country-wide figure. A cohort that is not listed here must first be loaded and activated as a Cohorts file."
+cohort_code,description,country,age band,household type,life stage,urban or rural,cohort tier,dataset it was loaded with
+AU_AGE_18_24,Australian households aged 18-24 (ABS age-based mean reference),AU,AGE_18_24,,,,4,AU net worth and income by age band
+AU_AGE_25_34,Australian households aged 25-34 (ABS age-based mean reference),AU,AGE_25_34,,,,4,AU net worth and income by age band
+AU_AGE_35_44,Australian households aged 35-44 (ABS age-based mean reference),AU,AGE_35_44,,,,4,AU net worth and income by age band
+AU_AGE_45_54,Australian households aged 45-54 (ABS age-based mean reference),AU,AGE_45_54,,,,4,AU net worth and income by age band
+AU_AGE_55_64,Australian households aged 55-64 (ABS age-based mean reference),AU,AGE_55_64,,,,4,AU net worth and income by age band
+AU_AGE_65_74,Australian households aged 65-74 (ABS age-based mean reference),AU,AGE_65_74,,,,4,AU net worth and income by age band
+AU_AGE_75_PLUS,Australian households aged 75+ (ABS age-based mean reference),AU,AGE_75_PLUS,,,,4,AU net worth and income by age band
+AU_ESTABLISHED_FAMILY,"Australian established family, age 45-54, couple with children",AU,AGE_45_54,couple_with_kids,established_family,,3,AU household wealth distribution
+AU_ESTABLISHED_FAMILY_1DEP,"Australian established family, age 45-54, couple with children (1 dependant)",AU,AGE_45_54,couple_with_kids,established_family,,3,AU household wealth distribution
+AU_ESTABLISHED_FAMILY_3PLUSDEP,"Australian established family, age 45-54, couple with children (3 or more dependants)",AU,AGE_45_54,couple_with_kids,established_family,,3,AU household wealth distribution
+AU_ESTABLISHED_NO_KIDS,"Australian established household, age 45-54, couple with no dependants",AU,AGE_45_54,couple_no_kids,established_no_kids,,3,AU household wealth distribution
+AU_PRE_RETIREE,"Australian pre-retiree couple, age 55-64",AU,AGE_55_64,couple_no_kids,pre_retiree,,3,AU household wealth distribution
+AU_RETIREE,"Australian retiree couple, age 65-74",AU,AGE_65_74,couple_no_kids,retiree,,3,AU household wealth distribution
+AU_YOUNG_FAMILY,"Australian young family, age 25-34, couple with children",AU,AGE_25_34,couple_with_kids,young_family,,3,AU household wealth distribution
+AU_YOUNG_FAMILY_1DEP,"Australian young family, age 25-34, couple with children (1 dependant)",AU,AGE_25_34,couple_with_kids,young_family,,3,AU household wealth distribution
+AU_YOUNG_FAMILY_3PLUSDEP,"Australian young family, age 25-34, couple with children (3 or more dependants)",AU,AGE_25_34,couple_with_kids,young_family,,3,AU household wealth distribution
+AU_YOUNG_PROFESSIONAL,"Australian young professional, age 25-34, single, no dependants",AU,AGE_25_34,single,young_professional,,3,AU household wealth distribution
+IN_RURAL_ALL,"Rural India, all ages and household types (AIDIS 2019 broad reference)",IN,,,,rural,4,India household assets and debt (rural/urban)
+IN_RURAL_ESTABLISHED_FAMILY,"Rural Indian established family, age 45-54, couple with children",IN,AGE_45_54,couple_with_kids,established_family,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_ESTABLISHED_FAMILY_1DEP,"Rural Indian established family, age 45-54, couple with children (1 dependant)",IN,AGE_45_54,couple_with_kids,established_family,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_ESTABLISHED_FAMILY_3PLUSDEP,"Rural Indian established family, age 45-54, couple with children (3 or more dependants)",IN,AGE_45_54,couple_with_kids,established_family,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_ESTABLISHED_NO_KIDS,"Rural Indian established household, age 45-54, couple with no dependants",IN,AGE_45_54,couple_no_kids,established_no_kids,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_PRE_RETIREE,"Rural Indian pre-retiree couple, age 55-64",IN,AGE_55_64,couple_no_kids,pre_retiree,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_RETIREE,"Rural Indian retiree couple, age 65-74",IN,AGE_65_74,couple_no_kids,retiree,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_YOUNG_FAMILY,"Rural Indian young family, age 25-34, couple with children",IN,AGE_25_34,couple_with_kids,young_family,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_YOUNG_FAMILY_1DEP,"Rural Indian young family, age 25-34, couple with children (1 dependant)",IN,AGE_25_34,couple_with_kids,young_family,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_YOUNG_FAMILY_3PLUSDEP,"Rural Indian young family, age 25-34, couple with children (3 or more dependants)",IN,AGE_25_34,couple_with_kids,young_family,rural,3,India household consumption expenditure (rural/urban)
+IN_RURAL_YOUNG_PROFESSIONAL,"Rural Indian young professional, age 25-34, single",IN,AGE_25_34,single,young_professional,rural,3,India household consumption expenditure (rural/urban)
+IN_URBAN_ALL,"Urban India, all ages and household types (AIDIS 2019 broad reference)",IN,,,,urban,4,India household assets and debt (rural/urban)
+IN_URBAN_ESTABLISHED_FAMILY,"Urban Indian established family, age 45-54, couple with children",IN,AGE_45_54,couple_with_kids,established_family,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_ESTABLISHED_FAMILY_1DEP,"Urban Indian established family, age 45-54, couple with children (1 dependant)",IN,AGE_45_54,couple_with_kids,established_family,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_ESTABLISHED_FAMILY_3PLUSDEP,"Urban Indian established family, age 45-54, couple with children (3 or more dependants)",IN,AGE_45_54,couple_with_kids,established_family,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_ESTABLISHED_NO_KIDS,"Urban Indian established household, age 45-54, couple with no dependants",IN,AGE_45_54,couple_no_kids,established_no_kids,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_PRE_RETIREE,"Urban Indian pre-retiree couple, age 55-64",IN,AGE_55_64,couple_no_kids,pre_retiree,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_RETIREE,"Urban Indian retiree couple, age 65-74",IN,AGE_65_74,couple_no_kids,retiree,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_YOUNG_FAMILY,"Urban Indian young family, age 25-34, couple with children",IN,AGE_25_34,couple_with_kids,young_family,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_YOUNG_FAMILY_1DEP,"Urban Indian young family, age 25-34, couple with children (1 dependant)",IN,AGE_25_34,couple_with_kids,young_family,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_YOUNG_FAMILY_3PLUSDEP,"Urban Indian young family, age 25-34, couple with children (3 or more dependants)",IN,AGE_25_34,couple_with_kids,young_family,urban,3,India household consumption expenditure (rural/urban)
+IN_URBAN_YOUNG_PROFESSIONAL,"Urban Indian young professional, age 25-34, single",IN,AGE_25_34,single,young_professional,urban,3,India household consumption expenditure (rural/urban)
+
+"Household types, life stages and countries already used by live bands"
+"household_type and life_stage are free text in the database, so a new word is accepted, but a word that no live band uses is flagged in the check so a spelling slip is noticed. Countries are two-letter codes."
+column,values in live bands today
+household_type,"couple_no_kids, single"
+life_stage,none yet
+country_code,"AU, IN"
+
+Closed lists (the only words a column accepts)
+"These lists are fixed by the database. Any other word is refused in the check, row by row."
+column,allowed,note
+statistic_type (Observed values),"mean, median, p10, p20, p25, p50, p75, p80, p90, target_min, target_max, threshold, rate, share",A closed list. Any other word is refused.
+unit (Observed values),"currency, percentage, months, ratio, count, years, days",A closed list. Any other word is refused.
+is_derived (Observed values),true or false,"Also accepted: yes, 1, no, 0 (not case sensitive)."
+band_tier (Planning target ranges),whole number from 1 to 4,"Whole number 1 to 4: 1 is the weakest band, 4 the strongest."
+direction (Planning target ranges),"higher_better, lower_better, target_range",A closed list. Any other word is refused.
+evidence_level (Planning target ranges),"official_statistical, regulatory, research_informed, platform_derived",A closed list. Any other word is refused.
+urban_rural (Cohorts),"urban, rural, metro, regional",A closed list. Any other word is refused.
+cross_border_flag (Cohorts),true or false,"Also accepted: yes, 1, no, 0 (not case sensitive)."
+cohort_tier (Cohorts),whole number from 1 to 5,Whole number 1 to 5: how specific the cohort is.

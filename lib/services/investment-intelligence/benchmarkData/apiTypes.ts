@@ -83,6 +83,52 @@ export interface EntitlementRightsView {
   evidenceUrl: string | null;
   proposedByMe: boolean;
   approvedAt: string | null;
+  /** Present once migration 0280 is applied: what the Edit option needs (the full editable values, the revision link and the edit counter). */
+  edit?: EntitlementEditView;
+}
+
+/**
+ * The extra fields of an entitlement record for the Edit option (migration 0280). Nothing here names another administrator:
+ * who proposed a record is only ever shown to its own proposer as `proposedByMe`.
+ */
+export interface EntitlementEditView {
+  /** Set on a REVISION: the approved record it will replace once approved. */
+  supersedesId: string | null;
+  /** Set on an original that was replaced by an approved revision. */
+  supersededById: string | null;
+  supersededAt: string | null;
+  revisionReason: string | null;
+  /** Number of in-place edits of a draft; sent back on edit and approve so a stale screen is refused. */
+  editCount: number;
+  createdAt: string | null;
+  /** When a revoked or superseded record stopped being in force, and the reason that was recorded. */
+  endedAt: string | null;
+  endedReason: string | null;
+  postExpiryCalculation: boolean;
+  postExpiryDisplay: boolean;
+  evidenceDocumentDate: string | null;
+  evidenceRetrievedAt: string | null;
+  attributionText: string | null;
+  notes: string | null;
+}
+
+/** One line of a record's audit timeline. The actor is only ever "you" or a role, never another administrator's identity. */
+export interface EntitlementTimelineEntry {
+  at: string;
+  /** Machine event name, for tests and icons. */
+  event: string;
+  /** Plain-language sentence, e.g. "A revision was approved". */
+  summary: string;
+  actor: { kind: 'you' | 'role'; label: string };
+  /** Which record the event is about, relative to the record whose history is shown. */
+  about: 'this' | 'earlier' | 'later';
+  reason: string | null;
+  changes: Array<{ field: string; label: string; before: unknown; after: unknown }>;
+}
+
+export interface EntitlementHistoryResponse {
+  entitlementId: string;
+  entries: EntitlementTimelineEntry[];
 }
 
 export interface BenchmarkOverviewRow {
@@ -104,6 +150,8 @@ export interface OverviewResponse {
   capabilities: BenchmarkCapabilityFlags;
   limits: UploadLimits;
   rows: BenchmarkOverviewRow[];
+  /** False until migration 0280 is applied: the Edit option is then hidden and the screen behaves as before. */
+  entitlementEdit?: boolean;
   recentJobs: ImportJobSummary[];
   pendingImports: PendingImportTask[];
   switches: { globalIngestion: boolean; writeIngestion: boolean; environmentFlag: boolean; effectivelyEnabled: boolean };

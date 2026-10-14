@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { InvestmentIntelligenceSubNav } from '@/components/investment-intelligence/InvestmentIntelligenceSubNav';
@@ -11,7 +12,7 @@ import { TaxIntelligenceClient } from '@/components/investment-intelligence/TaxI
 // This page never recommends selling, switching, or timing a redemption; it
 // only observes, estimates, and simulates hypothetical scenarios the user
 // explicitly asks for.
-export default async function TaxIntelligencePage() {
+async function TaxIntelligencePageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -30,5 +31,15 @@ export default async function TaxIntelligencePage() {
       <InvestmentIntelligenceSubNav />
       <TaxIntelligenceClient />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Investment Intelligence).
+export default function TaxIntelligencePage() {
+  return (
+    <>
+      <PageBackLink href="/investment-intelligence" label="Investment Intelligence" />
+      <TaxIntelligencePageContent />
+    </>
   );
 }

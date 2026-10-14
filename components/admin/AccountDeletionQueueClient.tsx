@@ -6,6 +6,7 @@
 // fetched or displayed here (WP-08's own lock).
 
 import { useEffect, useState } from 'react';
+import { formatDateShort } from '@/lib/engines/date';
 
 type QueueName = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
@@ -119,7 +120,7 @@ export function AccountDeletionQueueClient() {
               {rows.map((row) => (
                 <tr key={row.id} className="border-t">
                   <td className="px-3 py-2">{row.email ?? '(account no longer exists)'}</td>
-                  <td className="px-3 py-2">{new Date(row.requested_at).toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                  <td className="px-3 py-2">{formatDateShort(row.requested_at, 'AUD')}</td>
                   <td className="px-3 py-2 text-muted">{row.reason ?? '—'}</td>
                   {queue === 'failed' && <td className="px-3 py-2 text-risk">{row.failure_reason ?? '—'}</td>}
                   {queue === 'pending' && (

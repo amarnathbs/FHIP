@@ -13,6 +13,7 @@ import {
   ackInfo,
   apiPaths,
   buildPublishBody,
+  describeLayoutDisclosure,
   describePublishSuccess,
   formatDate,
   formatCount,
@@ -42,6 +43,15 @@ export function PreviewPanel({ preview, jobId }: { preview: JobPreview; jobId: s
           <div><dt className="inline text-muted">File checksum: </dt><dd className="inline font-mono text-xs text-ink">{shortDigest(preview.fileSha256)}</dd></div>
           <div><dt className="inline text-muted">Staging digest: </dt><dd className="inline font-mono text-xs text-ink">{shortDigest(preview.stagingDigest)}</dd></div>
         </dl>
+        {(() => {
+          const l = describeLayoutDisclosure(preview.disclosure);
+          return l.layoutLine ? (
+            <div className="mt-2 space-y-1 text-sm text-ink">
+              <p data-testid="preview-layout-line">{l.layoutLine}</p>
+              {l.ignoredLine ? <p data-testid="preview-ignored-line">{l.ignoredLine}</p> : null}
+            </div>
+          ) : null;
+        })()}
         {preview.disclosure.sheetProcessed ? (
           <p className="mt-2 text-sm text-ink">
             Sheet processed: <strong>{preview.disclosure.sheetProcessed}</strong>.

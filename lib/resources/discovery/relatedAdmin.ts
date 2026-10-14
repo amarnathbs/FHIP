@@ -52,6 +52,40 @@ export async function searchRelatableContent(supabase: SupabaseClient, search: s
   return (data ?? []) as RelatableSearchResult[];
 }
 
+// PO review F11 (06/10/2026): the shared dropdown (components/ui/
+// ResourceCombobox.tsx) lists ALL current resources, not a 25-row search.
+// This is the lightweight, capped list behind it. Hard cap
+// RELATABLE_LIST_CAP rows per response (PICKER_LOAD_CAP in picker.ts is the
+// same number, kept in step by a unit test): when more exist, `truncated` is
+// true, the most recently updated rows are returned, and the client falls
+// back to a server-side title search for anything typed. Same RLS-scoped
+// client and same staff-only gate as searchRelatableContent.
+export const RELATABLE_LIST_CAP = 500;
+
+export interface RelatableListResult {
+  items: RelatableSearchResult[];
+  total: number;
+  truncated: boolean;
+  cap: number;
+}
+
+export async function listRelatableContent(supabase: SupabaseClient, opts: { search?: string; contentType?: string; excludePostId?: string } = {}): Promise<RelatableListResult> {
+  let query = supabase
+    .from('resource_posts')
+    .select('id, title, content_type, jurisdiction, status, slug', { count: 'exact' })
+    .order('updated_at', { ascending: false })
+    .range(0, RELATABLE_LIST_CAP - 1);
+  const q = (opts.search ?? '').trim().slice(0, 200).replace(/[%_]/g, '\\$&');
+  if (q) query = query.ilike('title', `%${q}%`);
+  if (opts.contentType && opts.contentType !== 'all') query = query.eq('content_type', opts.contentType);
+  if (opts.excludePostId) query = query.neq('id', opts.excludePostId);
+  const { data, error, count } = await query;
+  if (error) throw error;
+  const items = ((data ?? []) as RelatableSearchResult[]).slice(0, RELATABLE_LIST_CAP);
+  const total = typeof count === 'number' ? count : items.length;
+  return { items, total, truncated: total > items.length, cap: RELATABLE_LIST_CAP };
+}
+
 export interface RelatedContentAdminRow {
   id: string;
   relationship_type: RelationshipType;

@@ -1,0 +1,30 @@
+FACTS {"width":390,"firstHeading":"ACCOUNT","firstLink":"Profile","adminHeadings":["GENERAL","RESOURCES","WORKFLOW","DISCOVERY","REFERENCE DATA","FUND LOOK-THROUGH","MARKET INDEX DATA","PREMIUM AND PROMO CODES"],"groupItems":["Premium Access","Promo Codes"],"outline":{"focused":"Profile","outlineStyle":"auto","outlineWidth":"1px","boxShadow":false}}
+FACTS {"width":768,"firstHeading":"ACCOUNT","firstLink":"Profile","adminHeadings":["GENERAL","RESOURCES","WORKFLOW","DISCOVERY","REFERENCE DATA","FUND LOOK-THROUGH","MARKET INDEX DATA","PREMIUM AND PROMO CODES"],"groupItems":["Premium Access","Promo Codes"],"outline":{"focused":"Profile","outlineStyle":"auto","outlineWidth":"1px","boxShadow":false}}
+FACTS {"width":1024,"firstHeading":"ACCOUNT","firstLink":"Profile","adminHeadings":["GENERAL","RESOURCES","WORKFLOW","DISCOVERY","REFERENCE DATA","FUND LOOK-THROUGH","MARKET INDEX DATA","PREMIUM AND PROMO CODES"],"groupItems":["Premium Access","Promo Codes"],"outline":{"focused":"Profile","outlineStyle":"auto","outlineWidth":"1px","boxShadow":false}}
+FACTS {"width":1440,"firstHeading":"ACCOUNT","firstLink":"Profile","adminHeadings":["GENERAL","RESOURCES","WORKFLOW","DISCOVERY","REFERENCE DATA","FUND LOOK-THROUGH","MARKET INDEX DATA","PREMIUM AND PROMO CODES"],"groupItems":["Premium Access","Promo Codes"],"outline":{"focused":"Profile","outlineStyle":"auto","outlineWidth":"1px","boxShadow":false}}
+
+user sidebar, drawer 390, Forecasting open (390px): no violations
+
+user sidebar, drawer 768, Forecasting open (768px): no violations
+
+user sidebar, desktop 1024, Forecasting open (1024px): no violations
+
+user sidebar, desktop 1440, Forecasting open (1440px): no violations
+
+user sidebar, drawer 390, Reports open (390px): no violations
+
+user sidebar, drawer 768, Reports open (768px): no violations
+
+user sidebar, desktop 1024, Reports open (1024px): no violations
+
+user sidebar, desktop 1440, Reports open (1440px): no violations
+
+admin sidebar, drawer 390, Admin open (390px): no violations
+
+admin sidebar, drawer 768, Admin open (768px): no violations
+
+admin sidebar, desktop 1024, Admin open (1024px): no violations
+
+admin sidebar, desktop 1440, Admin open (1440px): no violations
+
+TOTAL violation rules across all states: 0

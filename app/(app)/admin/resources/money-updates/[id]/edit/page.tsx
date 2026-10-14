@@ -1,8 +1,9 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
+import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { getMoneyUpdateEditorPost } from '@/lib/resources/money-update/queries';
 import { getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
@@ -10,7 +11,7 @@ import { getSourceOptionsForPost } from '@/lib/resources/sources/queries';
 import { MoneyUpdateEditor } from '@/components/resources/money-update/MoneyUpdateEditor';
 import type { WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 
-export default async function MoneyUpdateEditPage({ params }: { params: Promise<{ id: string }> }) {
+async function MoneyUpdateEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -36,5 +37,15 @@ export default async function MoneyUpdateEditPage({ params }: { params: Promise<
     canManage: canManageResources(current),
   };
 
-  return <MoneyUpdateEditor post={post} reference={reference} sourceOptions={sourceOptions} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} />;
+  return <MoneyUpdateEditor post={post} reference={reference} sourceOptions={sourceOptions} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />;
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Money Updates).
+export default function MoneyUpdateEditPage(props: Parameters<typeof MoneyUpdateEditPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/money-updates" label="Money Updates" />
+      <MoneyUpdateEditPageContent {...props} />
+    </>
+  );
 }

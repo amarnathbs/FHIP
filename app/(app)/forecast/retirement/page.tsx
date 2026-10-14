@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard } from '@/lib/services/dashboardData';
@@ -6,7 +7,7 @@ import { RetirementForecastPanel } from '@/components/forecast/RetirementForecas
 import { RetirementTimingSettings } from '@/components/forecast/RetirementTimingSettings';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
 
-export default async function ForecastRetirementPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
+async function ForecastRetirementPageContent({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
   const { scenario } = await searchParams;
   const supabase = await createClient();
   const {
@@ -34,5 +35,15 @@ export default async function ForecastRetirementPage({ searchParams }: { searchP
         />
         <RetirementForecastPanel currency={summary.currency} currentBalance={summary.totalRetirement} scenarioId={activeScenario.id} />
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Forecasting).
+export default function ForecastRetirementPage(props: Parameters<typeof ForecastRetirementPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/forecast" label="Forecasting" />
+      <ForecastRetirementPageContent {...props} />
+    </>
   );
 }

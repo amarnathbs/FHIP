@@ -1,5 +1,7 @@
 'use client';
 
+import { PageBackLink } from '@/components/navigation/PageBackLink';
+
 import { useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
 import { retirementGridConfig } from '@/lib/grid/configs';
@@ -36,7 +38,7 @@ import { RetirementStatementHistory } from '@/components/retirement/RetirementSt
 //     (GAP-RET-03): after Apply the statement's contributions, rollovers,
 //     earnings, fees, insurance, tax and holdings stay visible, and are never
 //     summed into Net Worth.
-export default function RetirementPage() {
+function RetirementPageContent() {
   // Applying a statement changes canonical retirement rows, so the grid is
   // remounted to pick them up — the same refresh contract the Investments page
   // uses for FDH-11. The history re-reads on the same key.
@@ -66,5 +68,15 @@ export default function RetirementPage() {
         </>
       }
     />
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Investments).
+export default function RetirementPage() {
+  return (
+    <>
+      <PageBackLink href="/investments" label="Investments" />
+      <RetirementPageContent />
+    </>
   );
 }

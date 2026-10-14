@@ -1,10 +1,11 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { getOrCreateForecastProfile, ensureDefaultScenario, getResolvedAssumptions } from '@/lib/services/forecastData';
 import { AssumptionsTable } from '@/components/forecast/AssumptionsTable';
 
-export default async function ForecastAssumptionsPage() {
+async function ForecastAssumptionsPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -31,5 +32,15 @@ export default async function ForecastAssumptionsPage() {
           <AssumptionsTable initialAssumptions={rows} scenarioId={scenario.scenario_name} />
         </SectionCard>
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Forecasting).
+export default function ForecastAssumptionsPage() {
+  return (
+    <>
+      <PageBackLink href="/forecast" label="Forecasting" />
+      <ForecastAssumptionsPageContent />
+    </>
   );
 }

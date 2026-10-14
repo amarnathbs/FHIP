@@ -316,7 +316,7 @@ function capsFor(current: CurrentResourceRoles): AdminCapabilities {
     // PC6/N.11. This capability lives on admin_users, not on
     // resource_user_roles, so a Resources role snapshot can never grant it —
     // which is exactly the point of Standard §2. Always false here.
-    referenceDataQuality: false, lookthroughDataQuality: false, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+    referenceDataQuality: false, lookthroughDataQuality: false, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false, planningBenchmarkUpload: false, planningBenchmarkActivate: false,
   };
 }
 
@@ -373,7 +373,7 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+      referenceDataQuality: true, lookthroughDataQuality: true, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false, planningBenchmarkUpload: false, planningBenchmarkActivate: false,
     };
     expect(buildAdminNavGroups(true, all).map((g) => g.label)).not.toContain('Analytics');
   });
@@ -405,7 +405,7 @@ describe('Wave 1 §10.3 — Admin navigation group visibility (Wave 3 Gate 3: An
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+      referenceDataQuality: true, lookthroughDataQuality: true, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false, planningBenchmarkUpload: false, planningBenchmarkActivate: false,
     };
     // PC6/N.11 added a fifth capability-driven group, 'Reference Data'; PC7/O.9
     // added a sixth, 'Fund Look-Through'. The probe covers both, and the
@@ -650,9 +650,12 @@ describe('Wave 1 §8 — the Analytics route shell contains no analytics', () =>
     const text = collectText((r as { element: unknown }).element).join(' ');
     expect(text).not.toMatch(/export|download|csv|pdf/i);
     const source = ResourceAnalyticsPage.toString();
-    for (const forbidden of ['/admin/resources/content', '/admin/resources/users', '/admin/resources/videos', 'href']) {
+    for (const forbidden of ['/admin/resources/content', '/admin/resources/users', '/admin/resources/videos']) {
       expect(source).not.toContain(forbidden);
     }
+    // The one link allowed is the shared back link (PO review F6) to the Dashboard: nothing else carries an href.
+    expect([...source.matchAll(/href:\s*"([^"]+)"/g)].map((m) => m[1])).toEqual(['/dashboard']);
+    expect(source.match(/href/g)?.length).toBe(1);
   });
 
   it('makes no analytics API or database call of its own', async () => {
@@ -742,7 +745,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+      referenceDataQuality: true, lookthroughDataQuality: true, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false, planningBenchmarkUpload: false, planningBenchmarkActivate: false,
     };
     expect(buildAdminNavGroups(false, allResources).map((g) => g.label)).not.toContain('General');
   });
@@ -786,7 +789,7 @@ describe('Wave 1 §10.6 — existing navigation content is unchanged', () => {
       resourceWorkflowAdmin: true,
       resourceDiscoveryAdmin: true,
       resourceAnalytics: true,
-      referenceDataQuality: true, lookthroughDataQuality: true, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false,
+      referenceDataQuality: true, lookthroughDataQuality: true, resourceContentBulkImport: false, entitlementManagement: false, promoCodeManagement: false, entitlementOverride: false, marketIndexDataUpload: false, benchmarkDataView: false, benchmarkDataPublish: false, benchmarkDataCorrect: false, benchmarkCatalogueManage: false, benchmarkEntitlementApprove: false, planningBenchmarkUpload: false, planningBenchmarkActivate: false,
     };
     const groups = buildAdminNavGroups(true, all);
     // The pre-existing five are unchanged in both order and match mode —

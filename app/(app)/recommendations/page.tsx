@@ -1,9 +1,10 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { RecommendationsPanel } from '@/components/recommendations/RecommendationsPanel';
 import { getPlanTier } from '@/lib/services/entitlements';
 
-export default async function RecommendationsPage() {
+async function RecommendationsPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -20,5 +21,15 @@ export default async function RecommendationsPage() {
         </div>
         <RecommendationsPanel isPremiumUser={planTier === 'premium'} />
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function RecommendationsPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <RecommendationsPageContent />
+    </>
   );
 }

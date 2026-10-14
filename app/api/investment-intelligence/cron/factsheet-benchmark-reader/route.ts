@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     body = {}; // an empty body is the standard run
   }
   const runMonth = typeof body.runMonth === 'string' ? body.runMonth : undefined;
-  if (runMonth !== undefined && !/^\d{4}-\d{2}-01$/.test(runMonth)) return bad('runMonth must be the first day of a month, ISO yyyy-mm-dd', 422);
+  if (runMonth !== undefined && !/^\d{4}-\d{2}-01$/.test(runMonth)) return bad('runMonth must be the first day of a month, an ISO 8601 calendar date', 422);
   const maxSources = typeof body.maxSources === 'number' && Number.isInteger(body.maxSources) && body.maxSources >= 0 && body.maxSources <= 50 ? body.maxSources : undefined;
 
   try {

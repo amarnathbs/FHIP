@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, ok } from '@/lib/api';
 import { getCurrentResourceRoles, isResourceStaff, canCreateSpecialistContent } from '@/lib/resources/permissions';
 import { parseContentListFilters } from '@/lib/resources/admin/filters';
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const youtubeInput = typeof body?.youtubeInput === 'string' ? body.youtubeInput : '';
-    const result = await createVideoDraft(supabase, youtubeInput, user.id);
+    const result = await createVideoDraft(supabase, youtubeInput, user.id, createAdminClient());
     if (!result.ok) return bad(result.error, 422);
     return ok(result.result);
   } catch (err) {

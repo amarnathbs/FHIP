@@ -1,0 +1,116 @@
+[
+  {
+    "step": 33,
+    "label": "fixture: synthetic documents with raw files exist for Self, Spouse, Joint, SMSF bank and a Joint AU investment statement",
+    "ok": true,
+    "detail": "bank_statement/self, bank_statement/spouse, bank_statement/joint, bank_statement/smsf"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/self: raw object existed, purge reports purged, and the object is verified ABSENT",
+    "ok": true,
+    "detail": "before=true result=purged after.status=purged ref=null downloadAfterErr=Object not found absentAfter=51s"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/self: owner provenance RETAINED (role, member, entity, source, allocation unchanged)",
+    "ok": true,
+    "detail": "{\"role\":\"self\",\"src\":\"user_selected\",\"alloc\":null}"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/self: raw filename handled per policy (nulled on purge; owner metadata is not a filename)",
+    "ok": true,
+    "detail": "before=set after=null"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/self: no full account number (7+ digit run) remains anywhere on the row",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/spouse: raw object existed, purge reports purged, and the object is verified ABSENT",
+    "ok": true,
+    "detail": "before=true result=purged after.status=purged ref=null downloadAfterErr=Object not found absentAfter=54s"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/spouse: owner provenance RETAINED (role, member, entity, source, allocation unchanged)",
+    "ok": true,
+    "detail": "{\"role\":\"spouse\",\"src\":\"user_selected\",\"alloc\":null}"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/spouse: raw filename handled per policy (nulled on purge; owner metadata is not a filename)",
+    "ok": true,
+    "detail": "before=set after=null"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/spouse: no full account number (7+ digit run) remains anywhere on the row",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/joint: raw object existed, purge reports purged, and the object is verified ABSENT",
+    "ok": true,
+    "detail": "before=true result=purged after.status=purged ref=null downloadAfterErr=Object not found absentAfter=51s"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/joint: owner provenance RETAINED (role, member, entity, source, allocation unchanged)",
+    "ok": true,
+    "detail": "{\"role\":\"joint\",\"src\":\"user_selected\",\"alloc\":null}"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/joint: raw filename handled per policy (nulled on purge; owner metadata is not a filename)",
+    "ok": true,
+    "detail": "before=set after=null"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/joint: no full account number (7+ digit run) remains anywhere on the row",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/smsf: raw object existed, purge reports purged, and the object is verified ABSENT",
+    "ok": true,
+    "detail": "before=true result=purged after.status=purged ref=null downloadAfterErr=Object not found absentAfter=54s"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/smsf: owner provenance RETAINED (role, member, entity, source, allocation unchanged)",
+    "ok": true,
+    "detail": "{\"role\":\"smsf\",\"src\":\"user_selected\",\"alloc\":null}"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/smsf: raw filename handled per policy (nulled on purge; owner metadata is not a filename)",
+    "ok": true,
+    "detail": "before=set after=null"
+  },
+  {
+    "step": 33,
+    "label": "bank_statement/smsf: no full account number (7+ digit run) remains anywhere on the row",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 33,
+    "label": "India CAS documents: raw files already purged and owner provenance (role, member / entity, joint allocation) retained on every one",
+    "ok": true,
+    "detail": "9 documents; roles=spouse,joint,company,family_trust,other,self"
+  },
+  {
+    "step": 33,
+    "label": "the active ownership allocations of those documents are retained (the purge never touches them)",
+    "ok": true,
+    "detail": "7 active allocation rows"
+  }
+]

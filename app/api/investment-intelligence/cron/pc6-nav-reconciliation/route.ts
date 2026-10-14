@@ -56,7 +56,7 @@ export async function POST(req: Request) {
 
   const jobKey = typeof body.jobKey === 'string' ? body.jobKey : 'pc6_amfi_daily_nav_reconciliation';
   const publicationDate = typeof body.publicationDate === 'string' ? body.publicationDate : new Date().toISOString().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(publicationDate)) return bad('publicationDate must be ISO yyyy-mm-dd', 422);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(publicationDate)) return bad('publicationDate must be an ISO 8601 calendar date', 422);
 
   try {
     const result = await runNavReconciliationSweep({

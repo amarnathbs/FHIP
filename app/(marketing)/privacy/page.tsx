@@ -1,3 +1,5 @@
+import { formatDateShort } from '@/lib/engines/date';
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
@@ -22,7 +24,7 @@ export const metadata: Metadata = {
 // privacy policy for an app handling real users' financial data) is
 // genuine regardless of that trigger. Must be replaced with
 // legally-reviewed final copy before public launch.
-export default function PrivacyPolicyPage() {
+function PrivacyPolicyPageContent() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16 text-gray-800">
       <div className="mb-8 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -31,7 +33,7 @@ export default function PrivacyPolicyPage() {
       </div>
 
       <h1 className="text-3xl font-semibold text-trust">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-gray-500">Last updated: {new Date().toISOString().slice(0, 10)}</p>
+      <p className="mt-2 text-sm text-gray-500">Last updated: {formatDateShort(new Date(), 'AUD')}</p>
 
       <section className="mt-8 space-y-3">
         <h2 className="text-xl font-semibold">What we collect</h2>
@@ -147,5 +149,15 @@ export default function PrivacyPolicyPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (home).
+export default function PrivacyPolicyPage() {
+  return (
+    <>
+      <PageBackLink href="/" label="home" className="mx-auto max-w-3xl px-6 pt-8" />
+      <PrivacyPolicyPageContent />
+    </>
   );
 }

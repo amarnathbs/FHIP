@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getRecurring } from '@/lib/financial-data-hub/analytics/financialActivityAnalytics';
@@ -33,7 +34,7 @@ const FREQUENCY_LABELS: Record<string, string> = {
 // FDH-8 spec 37-40 — Recurring activity, display-only over FDH-6/R8's
 // fdh_recurring_transactions. No date is ever fabricated: `next_expected_date`
 // is shown only when the certified engine itself set one.
-export default async function FinancialActivityRecurringPage() {
+async function FinancialActivityRecurringPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -88,5 +89,15 @@ export default async function FinancialActivityRecurringPage() {
         </table>
       </div>
     </SectionCard>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Financial Activity).
+export default function FinancialActivityRecurringPage() {
+  return (
+    <>
+      <PageBackLink href="/financial-data-hub/activity" label="Financial Activity" />
+      <FinancialActivityRecurringPageContent />
+    </>
   );
 }

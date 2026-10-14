@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDateShort } from '@/lib/engines/date';
+import { DateInput } from '@/components/ui/DateInput';
 /**
  * LR-3 — Expenses Bank Statement Workflow: the Expenses-tab bank-statement
  * import journey.
@@ -713,8 +715,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
             <legend className="mb-1 text-sm text-muted">Statement period (as printed on the statement, recommended)</legend>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">From</span>
-              <input
-                type="date"
+              <DateInput
+                
                 className="w-full rounded border border-gray-300 px-3 py-2"
                 value={periodStart}
                 onChange={(e) => setPeriodStart(e.target.value)}
@@ -722,8 +724,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">To</span>
-              <input
-                type="date"
+              <DateInput
+                
                 className="w-full rounded border border-gray-300 px-3 py-2"
                 value={periodEnd}
                 onChange={(e) => setPeriodEnd(e.target.value)}
@@ -835,7 +837,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
                 <tbody>
                   {aiDraft.rows.map((row, i) => (
                     <tr key={`${row.transactionDate}-${i}`} className="border-t border-gray-100">
-                      <td className="px-3 py-2 whitespace-nowrap">{row.transactionDate}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(row.transactionDate, currency)}</td>
                       <td className="px-3 py-2">{row.descriptionRaw}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{row.amountOriginal.toFixed(2)}</td>
                       <td className="px-3 py-2">{row.creditDebit === 'credit' ? 'In' : 'Out'}</td>
@@ -845,7 +847,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
                           onClick={() => removeAiDraftRow(i)}
                           className="rounded border border-gray-300 px-2 py-1 text-xs"
                         >
-                          Remove<span className="sr-only"> the {row.descriptionRaw} transaction on {row.transactionDate}</span>
+                          Remove<span className="sr-only"> the {row.descriptionRaw} transaction on {formatDateShort(row.transactionDate, currency)}</span>
                         </button>
                       </td>
                     </tr>

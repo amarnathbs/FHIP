@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionCard } from '@/components/dashboard/SectionCard';
@@ -42,7 +43,7 @@ function fmt(value: number | null, currency: 'AUD' | 'INR') {
   return value === null ? '—' : formatMoneyWhole(value, currency);
 }
 
-export default async function ForecastVariancePage({ searchParams }: { searchParams: Promise<{ scenario?: string; date?: string }> }) {
+async function ForecastVariancePageContent({ searchParams }: { searchParams: Promise<{ scenario?: string; date?: string }> }) {
   const { scenario, date } = await searchParams;
   const supabase = await createClient();
   const {
@@ -149,5 +150,15 @@ export default async function ForecastVariancePage({ searchParams }: { searchPar
           </p>
         </SectionCard>
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Forecasting).
+export default function ForecastVariancePage(props: Parameters<typeof ForecastVariancePageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/forecast" label="Forecasting" />
+      <ForecastVariancePageContent {...props} />
+    </>
   );
 }

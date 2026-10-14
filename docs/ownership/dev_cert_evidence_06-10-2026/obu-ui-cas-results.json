@@ -1,0 +1,68 @@
+[
+  {
+    "step": 11,
+    "label": "BROWSER: before an owner is chosen the Upload button is disabled",
+    "ok": true,
+    "detail": "button[submit](disabled) Upload"
+  },
+  {
+    "step": 11,
+    "label": "BROWSER: the selector \"Who does this document belong to?\" is shown above the file input and offers You, Spouse, Joint and the entities",
+    "ok": true,
+    "detail": "select[select-one] Choose one Forecast Test User TC083 (you) FHIP Synthetic Spouse (Spouse) FHIP OB <label:Who does this document belong to?>"
+  },
+  {
+    "step": 11,
+    "label": "BROWSER: after choosing Self and a file the Upload button is enabled",
+    "ok": true,
+    "detail": "button[submit] Upload"
+  },
+  {
+    "step": 11,
+    "label": "BROWSER+DB: the uploaded statement row carries the chosen owner (self / user_selected)",
+    "ok": true,
+    "detail": "status=uploaded role=self"
+  },
+  {
+    "step": 11,
+    "label": "BROWSER+DB: pressing Process parses the statement and the owner stays",
+    "ok": true,
+    "detail": "{\"status\":\"parsed\",\"owner_role\":\"self\"}"
+  },
+  {
+    "step": 11,
+    "label": "BROWSER: \"Filed under\" shows a friendly name, no raw id",
+    "ok": true,
+    "detail": "Filed under: Forecast Test User TC083"
+  },
+  {
+    "step": 11,
+    "label": "BROWSER: no owner-question (owner_unmatched) prompt is shown for this statement",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 13,
+    "label": "BROWSER: Joint lists the owners with check boxes and says \"Choose at least two owners\"",
+    "ok": true,
+    "detail": "Choose at least two owners for a joint statement."
+  },
+  {
+    "step": 13,
+    "label": "BROWSER: ticking two owners shows one LABELLED percentage box per owner",
+    "ok": true,
+    "detail": "[\"text|Share for Forecast Test User TC083, percent\\n%\",\"text|Share for FHIP Synthetic Spouse, percent\\n%\"]"
+  },
+  {
+    "step": 14,
+    "label": "BROWSER: 60 + 30 shows an inline message about the total (not 100) before any upload",
+    "ok": true,
+    "detail": "The shares add up to 90.00%. They must add up to exactly 100%."
+  },
+  {
+    "step": 13,
+    "label": "BROWSER: 60 + 40 reads as a valid 100 percent",
+    "ok": true,
+    "detail": " Shares add up to 100%."
+  }
+]

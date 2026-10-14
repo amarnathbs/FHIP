@@ -110,15 +110,15 @@ export const MARKET_INDEX_DATA_ITEMS: { label: string; href: string }[] = [
 ];
 
 // Admin Premium grant (migration 0231): the entitlement-management destination.
-// One real screen behind it. A SEPARATE group from every other capability: the
-// ability to allocate Premium (a money-affecting entitlement) is not implied by,
+// One real screen behind it. Its own capability, separate from every other grant (it shares a MENU GROUP with Promo Codes, see
+// PREMIUM_AND_PROMO_GROUP_LABEL, but not a capability): the ability to allocate Premium (a money-affecting entitlement) is not implied by,
 // and does not imply, Resources, Reference Data, Look-Through or any other grant.
 export const ENTITLEMENT_ITEMS: { label: string; href: string }[] = [
   { label: 'Premium Access', href: '/admin/entitlements' },
 ];
 
 // Promo codes (migration 0237): the promo-code management destination. A SEPARATE
-// capability and a SEPARATE group from Entitlements: deciding which codes exist is
+// capability from Entitlements (shown in the same menu group, PO review F10): deciding which codes exist is
 // not the same duty as granting an individual user Premium (Standard §3).
 export const PROMO_CODE_ITEMS: { label: string; href: string }[] = [
   { label: 'Promo Codes', href: '/admin/entitlements/promo-codes' },
@@ -188,6 +188,22 @@ export interface AdminCapabilities {
    * `isAdmin`, and NOT implied by `entitlementManagement` (or vice versa).
    */
   promoCodeManagement: boolean;
+  /**
+   * Planning Benchmarks staged upload (migration 0275) - stage a file, preview, discard own batch. Backed by
+   * admin_users.can_upload_planning_benchmarks. NOT implied by `isAdmin` and NOT implied by the activate capability.
+   */
+  planningBenchmarkUpload: boolean;
+  /**
+   * Planning Benchmarks staged upload (migration 0275) - ACTIVATE a staged upload (makes it live for the Twin).
+   * Backed by admin_users.can_activate_planning_benchmarks. Separately named from the upload capability.
+   */
+  planningBenchmarkActivate: boolean;
+  /**
+   * Hardening 0264 item 3 — override of the Premium grant limits (per grant extension cap and lifetime ceiling). Backed
+   * by admin_users.can_override_entitlement_limits and is_entitlement_override_admin(). NOT implied by `isAdmin`, by
+   * `entitlementManagement` or by `promoCodeManagement`. Used only together with `entitlementManagement`.
+   */
+  entitlementOverride: boolean;
 }
 
 /**
@@ -213,6 +229,9 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   benchmarkEntitlementApprove: false,
   entitlementManagement: false,
   promoCodeManagement: false,
+  planningBenchmarkUpload: false,
+  planningBenchmarkActivate: false,
+  entitlementOverride: false,
 });
 
 function readBooleanField(source: Record<string, unknown>, key: keyof AdminCapabilities): boolean {
@@ -253,6 +272,9 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     benchmarkEntitlementApprove: readBooleanField(source, 'benchmarkEntitlementApprove'),
     entitlementManagement: readBooleanField(source, 'entitlementManagement'),
     promoCodeManagement: readBooleanField(source, 'promoCodeManagement'),
+    planningBenchmarkUpload: readBooleanField(source, 'planningBenchmarkUpload'),
+    planningBenchmarkActivate: readBooleanField(source, 'planningBenchmarkActivate'),
+    entitlementOverride: readBooleanField(source, 'entitlementOverride'),
   };
 }
 
@@ -281,6 +303,14 @@ export interface AdminNavGroup {
  * `isAdmin` (Super Admin, from admin_users) gates only the pre-existing
  * General group, exactly as it did before Wave 1.
  */
+/** The single Admin menu group that holds both Premium Access and Promo Codes (PO review F10). */
+export const PREMIUM_AND_PROMO_GROUP_LABEL = 'Premium and Promo Codes';
+
+function premiumAndPromoGroup(capabilities: AdminCapabilities): AdminNavGroup[] {
+  const items = [...(capabilities.entitlementManagement ? ENTITLEMENT_ITEMS : []), ...(capabilities.promoCodeManagement ? PROMO_CODE_ITEMS : [])];
+  return items.length > 0 ? [{ label: PREMIUM_AND_PROMO_GROUP_LABEL, items, matchMode: 'exact' }] : [];
+}
+
 // Admin A0.2 Wave 3, Gate 3 (Product Owner ruling): the Analytics shell
 // (/admin/resources/analytics) completes no task -- it is a certified,
 // honestly-labelled placeholder (Analyst Wave 1), not a working destination.
@@ -306,8 +336,10 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.marketIndexDataUpload || capabilities.benchmarkDataView || capabilities.benchmarkDataPublish || capabilities.benchmarkDataCorrect || capabilities.benchmarkCatalogueManage || capabilities.benchmarkEntitlementApprove
       ? [{ label: 'Market Index Data', items: MARKET_INDEX_DATA_ITEMS, matchMode: 'exact' as const }]
       : []),
-    ...(capabilities.entitlementManagement ? [{ label: 'Entitlements', items: ENTITLEMENT_ITEMS, matchMode: 'exact' as const }] : []),
-    ...(capabilities.promoCodeManagement ? [{ label: 'Promo Codes', items: PROMO_CODE_ITEMS, matchMode: 'exact' as const }] : []),
+    // PO review 06-10-2026, F10: Premium Access and Promo Codes are interrelated, so they share ONE menu group
+    // (PREMIUM_AND_PROMO_GROUP_LABEL). The capabilities stay two separately named things (Standard section 2/3): each ITEM
+    // is gated by its own field, an operator holding only one sees only that item, and the group is dropped when neither is held.
+    ...premiumAndPromoGroup(capabilities),
   ];
 }
 

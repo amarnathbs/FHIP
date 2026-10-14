@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard } from '@/lib/services/dashboardData';
@@ -6,7 +7,7 @@ import { RunForecastPanel } from '@/components/forecast/RunForecastPanel';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
 import { WhatDoesThisMean } from '@/components/resources/context/WhatDoesThisMean';
 
-export default async function ForecastNetWorthPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
+async function ForecastNetWorthPageContent({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
   const { scenario } = await searchParams;
   const supabase = await createClient();
   const {
@@ -36,5 +37,15 @@ export default async function ForecastNetWorthPage({ searchParams }: { searchPar
         </div>
         <RunForecastPanel currency={summary.currency} currentNetWorth={currentNetWorth} initialDetail={initialDetail} scenarioId={activeScenario.id} />
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Forecasting).
+export default function ForecastNetWorthPage(props: Parameters<typeof ForecastNetWorthPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/forecast" label="Forecasting" />
+      <ForecastNetWorthPageContent {...props} />
+    </>
   );
 }

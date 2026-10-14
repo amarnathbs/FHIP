@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -59,7 +60,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 // returns null identically for "never existed" and "exists but not
 // currently public" — notFound() below can't distinguish them, which is
 // the point.
-export default async function ResourceDetailPage({ params }: { params: Promise<Params> }) {
+async function ResourceDetailPageContent({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
   const supabase = await createClient();
   const post = await getPublicResourceBySlug(supabase, slug);
@@ -81,7 +82,11 @@ export default async function ResourceDetailPage({ params }: { params: Promise<P
     getUseInFhipActionsForPost(supabase, post.id),
   ]);
 
-  const canonicalUrl = buildResourceCanonicalUrl(slug);
+  // Built from the STORED slug (what generateMetadata's canonical and the
+  // JSON-LD also use), not the raw route param, so canonical, og:url,
+  // structured data and the Share button are one and the same URL and a
+  // percent-encoded request path can never be encoded a second time.
+  const canonicalUrl = buildResourceCanonicalUrl(post.slug ?? slug);
   const breadcrumbItems = [
     { label: 'Home', href: '/' },
     { label: 'Resources', href: '/resources' },
@@ -203,5 +208,15 @@ export default async function ResourceDetailPage({ params }: { params: Promise<P
         )}
       </div>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Resources).
+export default function ResourceDetailPage(props: Parameters<typeof ResourceDetailPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/resources" label="Resources" className="mx-auto max-w-6xl px-4 pt-6 sm:px-6" />
+      <ResourceDetailPageContent {...props} />
+    </>
   );
 }

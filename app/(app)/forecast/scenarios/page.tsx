@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionCard } from '@/components/dashboard/SectionCard';
@@ -5,7 +6,7 @@ import { getOrCreateForecastProfile, ensureDefaultScenario, listScenarios, getRe
 import { diffScenarioAssumptions, isScenarioConfigured, summarizeWhatChanged } from '@/lib/engines/forecast/scenarioDiff';
 import { ScenarioManager } from '@/components/forecast/ScenarioManager';
 
-export default async function ForecastScenariosPage() {
+async function ForecastScenariosPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -44,5 +45,15 @@ export default async function ForecastScenariosPage() {
           <ScenarioManager initialScenarios={scenariosWithDiff} />
         </SectionCard>
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Forecasting).
+export default function ForecastScenariosPage() {
+  return (
+    <>
+      <PageBackLink href="/forecast" label="Forecasting" />
+      <ForecastScenariosPageContent />
+    </>
   );
 }

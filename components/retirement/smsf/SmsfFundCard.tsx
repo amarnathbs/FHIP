@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 import { useState } from 'react';
 import { fetchJson, formatMoneySafe, formatDateSafe } from './format';
 import { SmsfMembers } from './SmsfMembers';
@@ -117,9 +118,8 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
               <label htmlFor={`fund-date-${fund.id}`} className="block text-xs text-muted">
                 Valuation Date
               </label>
-              <input
+              <DateInput
                 id={`fund-date-${fund.id}`}
-                type="date"
                 value={dateDraft}
                 onChange={(e) => setDateDraft(e.target.value)}
                 className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"

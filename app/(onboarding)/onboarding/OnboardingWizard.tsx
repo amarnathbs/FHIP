@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
@@ -221,9 +222,8 @@ export function OnboardingWizard() {
             </div>
             <div>
               <label htmlFor="date_of_birth" className="block text-sm text-gray-600">Date of birth</label>
-              <input
+              <DateInput
                 id="date_of_birth"
-                type="date"
                 value={form.date_of_birth}
                 onChange={(e) => update({ date_of_birth: e.target.value })}
                 min={DOB_MIN_DATE}

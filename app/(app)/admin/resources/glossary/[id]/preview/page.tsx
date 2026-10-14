@@ -1,16 +1,16 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff } from '@/lib/resources/permissions';
 import { getGlossaryEditorPost } from '@/lib/resources/glossary/queries';
 import { BlockRenderer } from '@/components/resources/blocks/BlockRenderer';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
 import type { AnyBlock } from '@/lib/resources/editor/blocks';
 
 // /admin/resources/glossary/[id]/preview — spec §31/§63/§96. Admin-only.
-export default async function GlossaryPreviewPage({ params }: { params: Promise<{ id: string }> }) {
-  const current = await requireResourceAdminAccess();
+async function GlossaryPreviewPageContent({ params }: { params: Promise<{ id: string }> }) {
+  await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -40,11 +40,6 @@ export default async function GlossaryPreviewPage({ params }: { params: Promise<
           <ResourceStatusBadge status={post.status} />
           <ResourceComplianceBadge compliance={post.compliance_classification} />
         </div>
-        {isResourceStaff(current) && (
-          <Link href={`/admin/resources/glossary/${id}/edit`} className="text-sm font-semibold text-trust hover:underline">
-            Back to Editor
-          </Link>
-        )}
       </div>
 
       <article className="rounded-card border border-line bg-white p-6">
@@ -73,5 +68,16 @@ export default async function GlossaryPreviewPage({ params }: { params: Promise<
         )}
       </article>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Editor).
+export default async function GlossaryPreviewPage(props: Parameters<typeof GlossaryPreviewPageContent>[0]) {
+  const { id } = await props.params;
+  return (
+    <>
+      <PageBackLink href={`/admin/resources/glossary/${id}/edit`} label="Editor" />
+      <GlossaryPreviewPageContent {...props} />
+    </>
   );
 }

@@ -443,6 +443,17 @@ describe('PO-OBU-05: conflicted folios are decided ONE BY ONE, never as one indi
     expect(audits.map((e) => e.subject_id).sort()).toEqual([ACC_OTHER, ACC_Y].sort()); // one audit per changed folio, none for the third
     expect(audits.every((e) => (e.metadata as any).previousOwner === 'Priya' && (e.metadata as any).newOwner === 'Anil')).toBe(true);
   });
+  it('DEV-found defect: after the FIRST confirmation the saved review still carries the target owner, so the remaining folio can be confirmed next (the UI sends the stored signature)', async () => {
+    await seedThreeConflicts();
+    const first = await confirmOwnerChange(A, DOC, [ACC_OTHER], `member:${SELF}`);
+    expect(first).toMatchObject({ ok: true, remainingConflicts: 2 });
+    const stored = h.db.rows('ii_source_documents')[0].owner_review as any;
+    // the browser reads this value back and sends it with the next confirmation: losing it made every later confirmation a 422
+    expect(stored.targetSignature).toBe(`member:${SELF}`);
+    const second = await confirmOwnerChange(A, DOC, [ACC_X, ACC_Y], stored.targetSignature);
+    expect(second).toMatchObject({ ok: true, remainingConflicts: 0 });
+    for (const id of [ACC_OTHER, ACC_X, ACC_Y]) expect(acc(id).owner_member_id).toBe(SELF);
+  });
   it('NEGATIVE: an empty selection changes nothing; a stale or missing target owner changes nothing', async () => {
     await seedThreeConflicts();
     expect(await confirmOwnerChange(A, DOC, [], `member:${SELF}`)).toMatchObject({ ok: false, status: 422 });

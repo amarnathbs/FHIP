@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard } from '@/lib/services/dashboardData';
@@ -5,7 +6,7 @@ import { resolveForecastPageContext } from '@/lib/services/forecastData';
 import { CrossBorderForecastPanel } from '@/components/forecast/CrossBorderForecastPanel';
 import { ScenarioSwitcher } from '@/components/forecast/ScenarioSwitcher';
 
-export default async function ForecastCrossBorderPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
+async function ForecastCrossBorderPageContent({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
   const { scenario } = await searchParams;
   const supabase = await createClient();
   const {
@@ -29,5 +30,15 @@ export default async function ForecastCrossBorderPage({ searchParams }: { search
         </div>
         <CrossBorderForecastPanel currency={summary.currency} scenarioId={activeScenario.id} />
       </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Forecasting).
+export default function ForecastCrossBorderPage(props: Parameters<typeof ForecastCrossBorderPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/forecast" label="Forecasting" />
+      <ForecastCrossBorderPageContent {...props} />
+    </>
   );
 }

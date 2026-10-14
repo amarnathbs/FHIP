@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const periodStart = parseDateParam(url.searchParams.get('from'));
   const asOfDate = parseDateParam(url.searchParams.get('to'));
   if (periodStart === 'invalid' || asOfDate === 'invalid') {
-    return bad('Invalid date parameter: expected YYYY-MM-DD.');
+    return bad('Invalid date parameter: expected a valid calendar date.');
   }
   if (periodStart && asOfDate && periodStart.getTime() > asOfDate.getTime()) {
     return bad('Invalid period: "from" must not be after "to".');

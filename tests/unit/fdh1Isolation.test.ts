@@ -163,6 +163,8 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
     //     files, not a directory.
     const FDH_APPROVED_CONSUMER_FILES = [
       path.join(REPO_ROOT, 'components', 'ui', 'AppShell.tsx'),
+      // The sidebar's link data moved out of AppShell.tsx into this pure module (PO review F9): the same nav href, no FDH import.
+      path.join(REPO_ROOT, 'lib', 'nav', 'appNavGroups.ts'),
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'adapters', 'incomeAdapter.ts'),
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'types.ts'),
       path.join(REPO_ROOT, 'lib', 'import-bridge', 'incomeProposalService.ts'),

@@ -1,0 +1,152 @@
+[
+  {
+    "step": 20,
+    "label": "Bank PDF as self: accepted (owner chosen first)",
+    "ok": true,
+    "detail": "HTTP 200 resolution=created "
+  },
+  {
+    "step": 20,
+    "label": "self: DB document owner self / user_selected; the account it ended on carries the same owner_role; account linked (created at upload)",
+    "ok": true,
+    "detail": "{\"doc\":\"self\",\"acct\":\"self\",\"how\":\"created at upload\",\"processing\":200,\"status\":\"approved\"}"
+  },
+  {
+    "step": 20,
+    "label": "self: transactions were read and sit on the owner's account",
+    "ok": true,
+    "detail": "2 transactions"
+  },
+  {
+    "step": 20,
+    "label": "Bank PDF as spouse: accepted (owner chosen first)",
+    "ok": true,
+    "detail": "HTTP 200 resolution=ambiguous "
+  },
+  {
+    "step": 20,
+    "label": "spouse: DB document owner spouse / user_selected; the account it ended on carries the same owner_role; account linked (new_account)",
+    "ok": true,
+    "detail": "{\"doc\":\"spouse\",\"acct\":\"spouse\",\"how\":\"new_account\",\"processing\":200,\"status\":\"approved\"}"
+  },
+  {
+    "step": 20,
+    "label": "spouse: transactions were read and sit on the owner's account",
+    "ok": true,
+    "detail": "2 transactions"
+  },
+  {
+    "step": 20,
+    "label": "Bank PDF as joint: accepted (owner chosen first)",
+    "ok": true,
+    "detail": "HTTP 200 resolution=ambiguous "
+  },
+  {
+    "step": 20,
+    "label": "joint: DB document owner joint / user_selected; the account it ended on carries the same owner_role; account linked (new_account)",
+    "ok": true,
+    "detail": "{\"doc\":\"joint\",\"acct\":\"joint\",\"how\":\"new_account\",\"processing\":200,\"status\":\"approved\"}"
+  },
+  {
+    "step": 20,
+    "label": "joint: transactions were read and sit on the owner's account",
+    "ok": true,
+    "detail": "2 transactions"
+  },
+  {
+    "step": 20,
+    "label": "Bank PDF as smsf: accepted (owner chosen first)",
+    "ok": true,
+    "detail": "HTTP 200 resolution=ambiguous "
+  },
+  {
+    "step": 20,
+    "label": "smsf: DB document owner smsf / user_selected; the account it ended on carries the same owner_role; account linked (new_account)",
+    "ok": true,
+    "detail": "{\"doc\":\"smsf\",\"acct\":\"smsf\",\"how\":\"new_account\",\"processing\":200,\"status\":\"approved\"}"
+  },
+  {
+    "step": 20,
+    "label": "smsf: transactions were read and sit on the owner's account",
+    "ok": true,
+    "detail": "2 transactions"
+  },
+  {
+    "step": 20,
+    "label": "bank PDF: the four owner roles produced four separate accounts and only last digits are stored",
+    "ok": true,
+    "detail": "[[\"self\",false,\"****5001\"],[\"spouse\",true,\"5002\"],[\"joint\",true,\"5003\"],[\"smsf\",true,\"5004\"]]"
+  },
+  {
+    "step": 20,
+    "label": "SMSF bank PDF: owner attribution only (AU); personal totals isolation is proved in step 31 (SMSF cash-flow integration is deferred downstream, PARTIAL)",
+    "ok": "INFO",
+    "detail": ""
+  },
+  {
+    "step": 22,
+    "label": "PDF, ONE exact match (printed digits = the Self CBA account): assigned to that account on the same document, no question asked",
+    "ok": true,
+    "detail": "upload=ambiguous how=auto_printed_identifier"
+  },
+  {
+    "step": 22,
+    "label": "PDF printing a FULL account number: no full number in any API answer, document row or account row (trailing digits only)",
+    "ok": true,
+    "detail": "suggestion=null"
+  },
+  {
+    "step": 22,
+    "label": "PDF, NO match (printed ****9999): not guessed; picker lists the existing accounts and suggests \"add as a new account\" with the bank name and ****9999",
+    "ok": true,
+    "detail": "{\"status\":\"needs_choice\",\"reason\":\"new_account_suggested\",\"candidates\":[{\"id\":\"5f0a20e4-4ef5-4a0d-ac9d-223510096e30\",\"display_name\":\"Imported account\",\"last_digits\":\"5001\"},{\"id\":\"32ed4f67-20a7-43c8-a292-c9a5d9274119\",\"display_name\":\"Imported account\",\"last_digits\":\"5002\"},{\"id\":\"cb4681d8-7842-4e21-b3d0-7da8aa38d833\",\"display_name\":\"Imported account\",\"last_d"
+  },
+  {
+    "step": 22,
+    "label": "accepting the suggestion creates the account (bank from the certified adapter, never free text) with the chosen OWNER, and links it",
+    "ok": true,
+    "detail": "HTTP 200 institution=true owner=self"
+  },
+  {
+    "step": 22,
+    "label": "bank-name tie-break: an ANZ PDF printing the same last digits as the CBA account does NOT take the CBA account (asked, or a separate account)",
+    "ok": true,
+    "detail": "how=needs_choice sameAsCba=false"
+  },
+  {
+    "step": 22,
+    "label": "with both banks holding that last-digit pair, a CBA PDF still picks the CBA account (the bank name narrows the matches)",
+    "ok": true,
+    "detail": "how=auto_printed_identifier"
+  },
+  {
+    "step": 22,
+    "label": "PDF from an unrecognised bank: owner still demanded and recorded; no bank or digits are invented (no suggestion). FINDING: with exactly one institution-less account the existing rule attaches it to that account (auto_single_account) without asking",
+    "ok": true,
+    "detail": "upload=ambiguous resolve={\"status\":\"assigned\",\"financial_account_id\":\"5f0a20e4-4ef5-4a0d-ac9d-223510096e30\",\"how\":\"auto_single_account\",\"account\":{\"display_name\":\"Imported account\",\"last_digits\":\"5001\"}}"
+  },
+  {
+    "step": 22,
+    "label": "unreadable (truncated) PDF: no account guessed; refused or the user is asked",
+    "ok": true,
+    "detail": "HTTP 200  resolve=assigned"
+  },
+  {
+    "step": 22,
+    "label": "password-protected PDF: reported as password required; nothing (bank, digits) is taken from a locked file",
+    "ok": true,
+    "detail": "password_required=true resolve={\"status\":\"assigned\",\"financial_account_id\":\"5f0a20e4-4ef5-4a0d-ac9d-223510096e30\",\"how\":\"auto_single_account\",\"account\":{\"display_name\":\"Imported account\",\"last_digits\":\"5001\"}}"
+  },
+  {
+    "step": 28,
+    "label": "live: a document whose malware scan is \"malicious\" is NOT parsed by the bank identity reader (the printed digits do not select the account; no suggestion)",
+    "ok": true,
+    "detail": "update=ok {\"error\":\"account_owner_conflict\",\"message\":\"This statement matches an account that is recorded as yours, but you chose your partner’s. Nothing has been uploaded. Keep the account as it is, or confirm that you want to change its owner.\",\"ex"
+  },
+  {
+    "step": 28,
+    "label": "CONTROL: the same document with the scan state restored IS read: the printed digits select the Spouse account (auto_printed_identifier), so the refusal above was the admission guard",
+    "ok": true,
+    "detail": "{\"data\":{\"status\":\"assigned\",\"financial_account_id\":\"32ed4f67-20a7-43c8-a292-c9a5d9274119\",\"how\":\"auto_printed_identifier\",\"account\":{\"display_name\":\"Imported account\",\"last_digits\":\"5002\"}}}"
+  }
+]

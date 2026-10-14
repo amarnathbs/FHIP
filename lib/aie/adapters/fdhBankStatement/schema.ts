@@ -55,7 +55,7 @@ export const FDH_BANK_STATEMENT_EXTRACTION_SCHEMA_NAME = 'fdh_bank_statement_ext
 export const FDH_BANK_STATEMENT_EXTRACTION_SCHEMA_VERSION = '1';
 
 const decimalString = z.string().regex(/^-?\d+(\.\d+)?$/, 'must be a plain decimal string');
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO 8601 date (YYYY-MM-DD)');
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO 8601 calendar date');
 
 /** Mirrors `AcceptedPdfTransactionPlan` (FDH-5, `bank-pdf/orchestrator.ts`)
  * — see this file's own header for why this is a documentation/test schema,

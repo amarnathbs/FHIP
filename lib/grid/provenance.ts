@@ -1,3 +1,4 @@
+import { formatDateShort } from '@/lib/engines/date';
 /**
  * WP-07 -- provenance of an Input Data row, for the grid badge (GAP-06, G7,
  * GAP-RET-08, and the WP-15 rows).
@@ -72,7 +73,7 @@ function formatImportedAt(value: unknown): string | null {
   if (typeof value !== 'string' || !value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatDateShort(d, 'AUD'); // day-first; PO review F13
 }
 
 /**

@@ -8,13 +8,16 @@ import type { EditorSavePatch } from '@/lib/resources/editor/types';
 
 export interface CreateGlossaryResult {
   id: string;
+  updated_at: string;
 }
 
-export async function createGlossaryDraft(supabase: SupabaseClient, userId: string): Promise<CreateGlossaryResult> {
+// PO review F3 (06/10/2026): called only when the author presses Save, with the
+// term they typed. The placeholder is kept for scripts/tests only.
+export async function createGlossaryDraft(supabase: SupabaseClient, userId: string, title?: string): Promise<CreateGlossaryResult> {
   const { data, error } = await supabase
     .from('resource_posts')
     .insert({
-      title: 'Untitled Glossary Term',
+      title: title && sanitizePlainText(title, 300).trim() ? sanitizePlainText(title, 300).trim() : 'Untitled Glossary Term',
       content_type: 'glossary',
       status: 'draft',
       compliance_classification: 'green',
@@ -27,10 +30,10 @@ export async function createGlossaryDraft(supabase: SupabaseClient, userId: stri
       created_by: userId,
       updated_by: userId,
     })
-    .select('id')
+    .select('id, updated_at')
     .single();
   if (error) throw error;
-  return { id: data.id as string };
+  return { id: data.id as string, updated_at: data.updated_at as string };
 }
 
 export interface SaveGlossaryParams {

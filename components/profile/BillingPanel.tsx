@@ -199,7 +199,7 @@ export function BillingPanel() {
           Promo code
         </label>
         <p id="promo-code-helper" className="mt-1 text-xs text-muted">
-          Have a promo code? Enter it to get Premium for the period the code allows (never more than one year from today). A code cannot be
+          Have a promo code? Enter it to get Premium for the period the code allows (never more than 365 days, counting today). A code cannot be
           applied on top of a paid subscription, and it will not shorten Premium you already have.
         </p>
         <form

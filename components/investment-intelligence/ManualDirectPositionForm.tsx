@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 import { useState } from 'react';
 
 // Investment Intelligence R12 — the first live, user-facing manual entry
@@ -145,7 +146,7 @@ export function ManualDirectPositionForm() {
 
         <label className="flex flex-col text-sm">
           {action === 'reprice' ? 'As of date' : 'Date'}
-          <input type="date" className="mt-1 rounded border px-2 py-1" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} required />
+          <DateInput className="mt-1 rounded border px-2 py-1" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} required />
         </label>
 
         {(action === 'buy' || action === 'sale') && (

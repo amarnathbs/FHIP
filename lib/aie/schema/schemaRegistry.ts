@@ -107,7 +107,7 @@ export const decimalStringField = z
   .string()
   .regex(/^-?\d+(\.\d+)?$/, 'must be a plain decimal string, no scientific notation or thousands separators');
 
-export const isoDateStringField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO 8601 date (YYYY-MM-DD)');
+export const isoDateStringField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO 8601 calendar date');
 
 export const currencyCodeField = z.string().regex(/^[A-Z]{3}$/, 'must be a 3-letter ISO 4217 currency code');
 

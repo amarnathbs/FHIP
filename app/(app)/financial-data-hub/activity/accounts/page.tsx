@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
@@ -38,7 +39,7 @@ interface AccountRow {
 // directly) — this page calls the analytics function and Supabase directly
 // rather than fetching its own API route over HTTP, per this phase's
 // server-page convention (see app/(app)/dashboard/page.tsx).
-export default async function FinancialActivityAccountsPage({
+async function FinancialActivityAccountsPageContent({
   searchParams,
 }: {
   searchParams: Promise<RawSearchParams>;
@@ -158,5 +159,15 @@ export default async function FinancialActivityAccountsPage({
         </div>
       </SectionCard>
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Financial Activity).
+export default function FinancialActivityAccountsPage(props: Parameters<typeof FinancialActivityAccountsPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/financial-data-hub/activity" label="Financial Activity" />
+      <FinancialActivityAccountsPageContent {...props} />
+    </>
   );
 }

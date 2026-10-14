@@ -320,7 +320,16 @@ describe('acknowledgement and option catalogues', () => {
   it('the date format and number locale lists cover the contract and show an example for each', () => {
     expect(DATE_FORMAT_OPTIONS.map((o) => o.value)).toEqual(['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'DD-MM-YYYY', 'DD-MMM-YYYY', 'DD MMM YYYY', 'excel_1900', 'excel_1904']);
     expect(NUMBER_LOCALE_OPTIONS.map((o) => o.value)).toEqual(['plain', 'en', 'in', 'eu']);
-    for (const o of [...DATE_FORMAT_OPTIONS, ...NUMBER_LOCALE_OPTIONS]) expect(o.example.length).toBeGreaterThan(0);
+    // PO rule 07-10-2026: no year-first (yyyy-mm-dd) and no month-first sample text on screen; those two options carry the plain-words label only.
+    const WORDS_ONLY = ['YYYY-MM-DD', 'MM/DD/YYYY'];
+    for (const o of DATE_FORMAT_OPTIONS) {
+      if (WORDS_ONLY.includes(o.value)) expect(o.example).toBe('');
+      else expect(o.example.length).toBeGreaterThan(0);
+      expect(`${o.label} ${o.example}`).not.toMatch(/\b\d{4}-\d{2}-\d{2}\b|\b\d{2}\/\d{2}\/\d{4}\b.*US/);
+    }
+    expect(DATE_FORMAT_OPTIONS.find((o) => o.value === 'YYYY-MM-DD')?.label).toBe('Year first (year, month, day)');
+    expect(DATE_FORMAT_OPTIONS.find((o) => o.value === 'MM/DD/YYYY')?.example).not.toMatch(/\d/);
+    for (const o of NUMBER_LOCALE_OPTIONS) expect(o.example.length).toBeGreaterThan(0);
     expect(NUMBER_LOCALE_OPTIONS.find((o) => o.value === 'in')?.example).toBe('1,23,456.78');
   });
 });
@@ -562,9 +571,10 @@ describe('dates: day-first on screen, ISO only on the wire (PO rule, Document2 f
     const r = { jobId: 'j', batchId: 'b1', inserted: 1, revived: 0, corrected: 0, identicalSkipped: 0, dateFrom: '2020-01-31', dateTo: '2020-02-29' };
     expect(describePublishSuccess({ alreadyPublished: false, result: r }).lines.join(' ')).toContain('Date range: 31-01-2020 to 29-02-2020.');
   });
-  it('the file date-format dropdown still names the machine formats (the only place YYYY-MM-DD appears)', () => {
+  it('the file date-format dropdown names the layouts in words: no label carries the year-first or month-first pattern (PO review F13)', () => {
     const labels = DATE_FORMAT_OPTIONS.map((o) => o.label);
-    expect(labels.filter((l) => l.includes('YYYY-MM-DD'))).toHaveLength(1);
+    expect(labels.filter((l) => /YYYY-MM-DD|MM\/DD\/YYYY/i.test(l))).toHaveLength(0);
+    expect(labels.some((l) => l.startsWith('Year first'))).toBe(true);
     expect(labels.some((l) => l.includes('DD-MM-YYYY'))).toBe(true);
   });
 });

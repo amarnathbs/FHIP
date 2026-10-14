@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ResourceStatusBadge, ResourceComplianceBadge, ResourceTypeBadge } from '@/components/resources/admin/ResourceBadges';
-import { TextField, TextAreaField } from '@/components/resources/editor/FormField';
+import { TextField, TextAreaField, DateTextField } from '@/components/resources/editor/FormField';
 import { BlockEditor } from '@/components/resources/editor/BlockEditor';
 import { MetadataSidebar, type MetadataFormState } from '@/components/resources/editor/MetadataSidebar';
 import { WorkflowPanel, type WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
@@ -20,6 +20,8 @@ import { RevisionHistoryPanel } from '@/components/resources/editor/RevisionHist
 import { AdminTaskHelp } from '@/components/admin/AdminTaskHelp';
 import { SaveStatus, type SaveState } from '@/components/resources/editor/SaveStatus';
 import { useUnsavedChangesGuard } from '@/components/resources/editor/useUnsavedChangesGuard';
+import { DeleteDraftButton } from '@/components/resources/admin/DeleteDraftButton';
+import { createRecordOnFirstSave } from '@/lib/resources/editor/blankPost';
 import { SourcePicker } from '@/components/resources/specialist/SourcePicker';
 import { slugify } from '@/lib/resources/editor/slug';
 import { validateMoneyUpdateForReview } from '@/lib/resources/money-update/validation';
@@ -30,8 +32,6 @@ import type { MoneyUpdateEditorPost } from '@/lib/resources/money-update/types';
 import type { SourceOption } from '@/lib/resources/sources/types';
 import type { ResourceStatus, ComplianceClassification } from '@/lib/resources/types';
 import type { WorkflowHistoryEntry } from '@/lib/resources/admin/queries';
-
-const AUTOSAVE_DEBOUNCE_MS = 2500;
 
 function toMetadataForm(post: MoneyUpdateEditorPost): MetadataFormState {
   return {
@@ -66,6 +66,7 @@ export function MoneyUpdateEditor({
   initialWorkflowHistory,
   currentUserId,
   caps,
+  canDelete = false,
 }: {
   post: MoneyUpdateEditorPost;
   reference: EditorReferenceData;
@@ -74,8 +75,11 @@ export function MoneyUpdateEditor({
   initialWorkflowHistory: WorkflowHistoryEntry[];
   currentUserId: string;
   caps: WorkflowCapabilities;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
+  const [postId, setPostId] = useState(initialPost.id);
+  const postIdRef = useRef(initialPost.id);
   const isTemplate = initialPost.content_type === 'money_update_template';
 
   const [title, setTitle] = useState(initialPost.title);
@@ -91,7 +95,10 @@ export function MoneyUpdateEditor({
   const [meta, setMeta] = useState<MetadataFormState>(() => toMetadataForm(initialPost));
 
   const [status, setStatus] = useState<ResourceStatus>(initialPost.status);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(initialPost.updated_at);
+  // The version token lives in a ref, not state: a save that was queued while another was in flight runs from the
+  // closure of the render BEFORE the response arrived, so a state value would be stale and the queued save would be
+  // refused with "updated elsewhere" although nobody else touched the record (walkthrough 07/10/2026, D3).
+  const lastUpdatedAtRef = useRef(initialPost.updated_at);
   const [versions, setVersions] = useState(initialVersions);
   const [workflowHistory, setWorkflowHistory] = useState(initialWorkflowHistory);
 
@@ -102,7 +109,6 @@ export function MoneyUpdateEditor({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [changeSummary, setChangeSummary] = useState('');
 
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
   // Wave 5 (§28): queue a save requested during an in-flight one instead of
   // dropping it, and only claim "Saved" if nothing changed while the request
@@ -181,12 +187,34 @@ export function MoneyUpdateEditor({
         queuedSaveRef.current = true;
         return;
       }
+      // F3: no record exists until this explicit Save, and only with a title.
+      if (!postIdRef.current && !title.trim()) {
+        setFieldErrors({ title: 'Enter a title before saving.' });
+        setSaveState('error');
+        setSaveError('Enter a title before saving. Nothing has been created yet.');
+        return;
+      }
       savingRef.current = true;
       const seqAtStart = changeSeqRef.current;
       setSaveState('saving');
       setSaveError(null);
       try {
-        const res = await fetch(`/api/admin/resources/money-updates/${initialPost.id}`, {
+        let expectedUpdatedAt = lastUpdatedAtRef.current;
+        if (!postIdRef.current) {
+          const created = await createRecordOnFirstSave('/api/admin/resources/money-updates', { contentType: initialPost.content_type, title: title.trim() });
+          if (!created.ok) {
+            setFieldErrors(created.fields ?? {});
+            setSaveState('error');
+            setSaveError(created.error);
+            return;
+          }
+          postIdRef.current = created.id;
+          setPostId(created.id);
+          expectedUpdatedAt = created.updatedAt;
+          lastUpdatedAtRef.current = created.updatedAt;
+          window.history.replaceState(null, '', `/admin/resources/money-updates/${created.id}/edit`);
+        }
+        const res = await fetch(`/api/admin/resources/money-updates/${postIdRef.current}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -196,7 +224,7 @@ export function MoneyUpdateEditor({
             sourceIds,
             categoryIds: meta.categoryIds,
             tagIds: meta.tagIds,
-            expectedUpdatedAt: lastUpdatedAt,
+            expectedUpdatedAt,
             createVersion,
             changeSummary: createVersion ? changeSummary : undefined,
             versionSnapshot: createVersion ? buildSnapshot() : undefined,
@@ -220,7 +248,7 @@ export function MoneyUpdateEditor({
           return;
         }
         setFieldErrors({});
-        setLastUpdatedAt(json.data.updated_at);
+        lastUpdatedAtRef.current = json.data.updated_at;
         if (changeSeqRef.current === seqAtStart) {
           setDirty(false);
           setSaveState('saved');
@@ -230,7 +258,7 @@ export function MoneyUpdateEditor({
         }
         if (createVersion) {
           setChangeSummary('');
-          fetch(`/api/admin/resources/money-updates/${initialPost.id}/versions`)
+          fetch(`/api/admin/resources/money-updates/${postIdRef.current}/versions`)
             .then((r) => r.json())
             .then((j) => j.data && setVersions(j.data))
             .catch(() => {});
@@ -246,7 +274,7 @@ export function MoneyUpdateEditor({
         }
       }
     },
-    [affectedAudience, buildPatch, buildSnapshot, changeSummary, eventDate, initialPost.id, lastUpdatedAt, meta.categoryIds, meta.tagIds, sourceIds]
+    [affectedAudience, buildPatch, buildSnapshot, changeSummary, eventDate, initialPost.content_type, meta.categoryIds, meta.tagIds, sourceIds, title]
   );
 
   // Assigned in an effect, not during render (react-hooks/refs).
@@ -254,22 +282,13 @@ export function MoneyUpdateEditor({
     doSaveRef.current = doSave;
   }, [doSave]);
 
-  useEffect(() => {
-    if (!dirty) return;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      void doSave(false);
-    }, AUTOSAVE_DEBOUNCE_MS);
-    return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, title, excerpt, slug, blocks, eventDate, affectedAudience, sourceIds, meta]);
+  // F3 decision (06/10/2026): no autosave. Content is saved only when Save is
+  // pressed; the unsaved-changes guard protects work in the meantime.
 
   const { promptOpen, confirmNavigate, cancelNavigate } = useUnsavedChangesGuard(dirty);
 
   async function handleTransition(toStatus: ResourceStatus, reason?: string, notes?: string): Promise<{ ok: boolean; error?: string }> {
-    const res = await fetch(`/api/admin/resources/money-updates/${initialPost.id}/workflow`, {
+    const res = await fetch(`/api/admin/resources/money-updates/${postId}/workflow`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toStatus, reason, notes }),
@@ -280,9 +299,9 @@ export function MoneyUpdateEditor({
       return { ok: false, error: [json.error, fieldMsg].filter(Boolean).join(' ') || 'This workflow action could not be completed.' };
     }
     setStatus(json.data.status);
-    setLastUpdatedAt(json.data.updated_at);
+    lastUpdatedAtRef.current = json.data.updated_at;
     router.refresh();
-    fetch(`/api/admin/resources/money-updates/${initialPost.id}/versions`)
+    fetch(`/api/admin/resources/money-updates/${postId}/versions`)
       .then((r) => r.json())
       .then((j) => j.data && setVersions(j.data))
       .catch(() => {});
@@ -337,23 +356,27 @@ export function MoneyUpdateEditor({
           <Link href="/admin/resources/money-updates" className="hover:text-trust hover:underline">
             Money Updates
           </Link>{' '}
-          &gt; <span className="text-ink">Edit</span>
+          &gt; <span className="text-ink">{postId ? 'Edit' : 'New'}</span>
         </nav>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <ResourceTypeBadge contentType={initialPost.content_type} />
             <ResourceStatusBadge status={status} />
             <ResourceComplianceBadge compliance={meta.complianceClassification} />
-            <h1 className="truncate text-lg font-semibold text-ink">{title || 'Untitled'}</h1>
+            <h1 className="truncate text-lg font-semibold text-ink">{title || (postId ? 'Untitled' : 'New, not saved yet')}</h1>
+            {!postId && <span className="rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-muted">Not saved yet</span>}
           </div>
           {/* Wave 5 (§12, §18): wraps, and matches the shared save label. */}
           <div className="flex flex-wrap items-center gap-3">
-            <SaveStatus state={saveState} onRetry={() => doSave(false)} />
-            <Link href={`/admin/resources/money-updates/${initialPost.id}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
-              Preview
-            </Link>
+            {(postId || saveState !== 'saved') && <SaveStatus state={saveState} onRetry={() => doSave(false)} />}
+            {postId && (
+              <Link href={`/admin/resources/money-updates/${postId}/preview`} className="inline-flex min-h-11 items-center rounded-full border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gray-50">
+                Preview
+              </Link>
+            )}
+            {postId && <DeleteDraftButton postId={postId} title={title} status={status} canDelete={canDelete} redirectTo="/admin/resources/money-updates" />}
             <button type="button" onClick={() => doSave(true)} disabled={saveState === 'saving'} className="min-h-11 rounded-full bg-trust px-4 py-1.5 text-sm font-semibold text-white hover:bg-trust/90 disabled:opacity-50">
-              {saveState === 'saving' ? 'Saving…' : 'Save Changes'}
+              {saveState === 'saving' ? 'Saving…' : postId ? 'Save Changes' : 'Save'}
             </button>
           </div>
         </div>
@@ -363,6 +386,12 @@ export function MoneyUpdateEditor({
           </p>
         )}
       </div>
+
+      {!postId && (
+        <p role="status" className="rounded-compact border border-line bg-white p-3 text-sm text-muted">
+          Nothing is saved yet. This is created only when you press <strong>Save</strong>; leaving this page now creates nothing.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
         <div className="min-w-0 space-y-4">
@@ -376,7 +405,7 @@ export function MoneyUpdateEditor({
             </div>
             {!isTemplate && (
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <TextField label="Event Date" value={eventDate} onChange={(v) => { setEventDate(v); markDirty(); }} placeholder="YYYY-MM-DD" required error={reviewCheck.errors.event_date} hint="The real-world date this development occurred." />
+                <DateTextField label="Event Date" value={eventDate} onChange={(v) => { setEventDate(v); markDirty(); }} required error={reviewCheck.errors.event_date} hint="The real-world date this development occurred." />
                 <TextField label="Affected Audience" value={affectedAudience} onChange={(v) => { setAffectedAudience(v); markDirty(); }} placeholder="e.g. First-home buyers, retirees" />
               </div>
             )}
@@ -427,7 +456,9 @@ export function MoneyUpdateEditor({
             errors={{ ...fieldErrors, ...reviewCheck.errors }}
           />
           <AdminTaskHelp taskId="ADM-13" />
-          <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} />
+          {postId ? <WorkflowPanel status={status} compliance={meta.complianceClassification as ComplianceClassification} caps={caps} history={workflowHistory} hasUnsavedChanges={dirty} onTransition={handleTransition} /> : (
+            <p className="rounded-card border border-line bg-white p-4 text-sm text-muted">Review, approval and publishing become available after the first Save.</p>
+          )}
           <RevisionHistoryPanel versions={versions} currentUserId={currentUserId} />
         </div>
       </div>

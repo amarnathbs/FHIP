@@ -1,5 +1,6 @@
 'use client';
 
+import { DateInput } from '@/components/ui/DateInput';
 /**
  * FDH-12 — Retirement Statement Intelligence: the Retirement-tab import
  * journey (spec sections 146-151).
@@ -732,11 +733,11 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
           <div className="flex flex-wrap gap-3">
             <label className="flex flex-col text-sm">
               <span className="mb-1 font-medium">Statement period start</span>
-              <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="rounded border border-gray-300 px-2 py-1" />
+              <DateInput value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="rounded border border-gray-300 px-2 py-1" />
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1 font-medium">Statement period end</span>
-              <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="rounded border border-gray-300 px-2 py-1" />
+              <DateInput value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="rounded border border-gray-300 px-2 py-1" />
             </label>
           </div>
           <div className="max-w-md">

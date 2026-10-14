@@ -1,0 +1,206 @@
+[
+  {
+    "step": 19,
+    "label": "owner required before upload: no owner -> 422 owner_required, no document row",
+    "ok": true,
+    "detail": "HTTP 422 owner_required"
+  },
+  {
+    "step": 19,
+    "label": "Bank CSV as self: accepted (owner chosen before upload)",
+    "ok": true,
+    "detail": "HTTP 200  resolution=created"
+  },
+  {
+    "step": 19,
+    "label": "self: DB document owner role self, user_selected, member recorded",
+    "ok": true,
+    "detail": "{\"role\":\"self\",\"member\":\"afec9e7e\"}"
+  },
+  {
+    "step": 19,
+    "label": "self: DB account created and linked; account owner_role = self",
+    "ok": true,
+    "detail": "{\"resolution\":\"created\",\"owner\":\"self\"}"
+  },
+  {
+    "step": 19,
+    "label": "self: detect + process ran; 3 transactions, period 2026-03-01 to 2026-03-03 read from the statement, every transaction on the linked account; owner and link unchanged",
+    "ok": true,
+    "detail": "detect 200 process 200 txns 3 2026-03-01..2026-03-03 status=approved"
+  },
+  {
+    "step": 19,
+    "label": "Bank CSV as spouse: accepted (owner chosen before upload)",
+    "ok": true,
+    "detail": "HTTP 200  resolution=created"
+  },
+  {
+    "step": 19,
+    "label": "spouse: DB document owner role spouse, user_selected, member recorded",
+    "ok": true,
+    "detail": "{\"role\":\"spouse\",\"member\":\"519948bf\"}"
+  },
+  {
+    "step": 19,
+    "label": "spouse: DB account created and linked; account owner_role = spouse",
+    "ok": true,
+    "detail": "{\"resolution\":\"created\",\"owner\":\"spouse\"}"
+  },
+  {
+    "step": 19,
+    "label": "spouse: detect + process ran; 3 transactions, period 2026-03-01 to 2026-03-03 read from the statement, every transaction on the linked account; owner and link unchanged",
+    "ok": true,
+    "detail": "detect 200 process 200 txns 3 2026-03-01..2026-03-03 status=approved"
+  },
+  {
+    "step": 19,
+    "label": "Bank CSV as joint: accepted (owner chosen before upload)",
+    "ok": true,
+    "detail": "HTTP 200  resolution=created"
+  },
+  {
+    "step": 19,
+    "label": "joint: DB document owner role joint, user_selected, no member id",
+    "ok": true,
+    "detail": "{\"role\":\"joint\",\"member\":\"\"}"
+  },
+  {
+    "step": 19,
+    "label": "joint: DB account created and linked; account owner_role = joint",
+    "ok": true,
+    "detail": "{\"resolution\":\"created\",\"owner\":\"joint\"}"
+  },
+  {
+    "step": 19,
+    "label": "joint: detect + process ran; 3 transactions, period 2026-03-01 to 2026-03-03 read from the statement, every transaction on the linked account; owner and link unchanged",
+    "ok": true,
+    "detail": "detect 200 process 200 txns 3 2026-03-01..2026-03-03 status=approved"
+  },
+  {
+    "step": 19,
+    "label": "three separate accounts, one per owner (no household ambiguity: each statement belongs to exactly one account and one owner)",
+    "ok": true,
+    "detail": "[\"self\",\"spouse\",\"joint\"]"
+  },
+  {
+    "step": 19,
+    "label": "owner options for a bank statement: members only, no entity listed, entity notice shown, joint needs no percentages",
+    "ok": true,
+    "detail": "{\"members\":2,\"entities\":[],\"joint\":{\"available\":true,\"requiresPercentages\":false,\"candidateCount\":2},\"smsf\":{\"available\":true}}"
+  },
+  {
+    "step": 20,
+    "label": "Bank CSV as smsf: accepted (owner chosen before upload)",
+    "ok": true,
+    "detail": "HTTP 200  resolution=created"
+  },
+  {
+    "step": 20,
+    "label": "smsf: DB document owner role smsf, user_selected, no member id",
+    "ok": true,
+    "detail": "{\"role\":\"smsf\",\"member\":\"\"}"
+  },
+  {
+    "step": 20,
+    "label": "smsf: DB account created and linked; account owner_role = smsf",
+    "ok": true,
+    "detail": "{\"resolution\":\"created\",\"owner\":\"smsf\"}"
+  },
+  {
+    "step": 20,
+    "label": "smsf: detect + process ran; 3 transactions, period 2026-03-01 to 2026-03-03 read from the statement, every transaction on the linked account; owner and link unchanged",
+    "ok": true,
+    "detail": "detect 200 process 200 txns 3 2026-03-01..2026-03-03 status=approved"
+  },
+  {
+    "step": 20,
+    "label": "SMSF is AU only: an India user choosing SMSF is refused (owner_not_allowed_for_country) and nothing is stored",
+    "ok": true,
+    "detail": "HTTP 403 owner_not_allowed_for_country"
+  },
+  {
+    "step": 20,
+    "label": "PARTIAL / DEFERRED DOWNSTREAM CAPABILITY: SMSF BANK OWNER ATTRIBUTION is certified; SMSF BANK TRANSACTION -> SMSF CASH-FLOW INTEGRATION is not built (PO-deferred, OWNER_BEFORE_UPLOAD_FINAL_REPORT section 8 item 2) and is NOT claimed as passed",
+    "ok": "INFO",
+    "detail": "see step 31 for the personal-totals isolation proof"
+  },
+  {
+    "step": 21,
+    "label": "synthetic AU Company and Family Trust exist for the AU user",
+    "ok": true,
+    "detail": "[\"company\",\"family_trust\"]"
+  },
+  {
+    "step": 21,
+    "label": "bank statement owned by a Company: refused before any canonical processing",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_allowed_for_flow Trust, HUF and company statements cannot be imported here yet: bank transactions are count"
+  },
+  {
+    "step": 21,
+    "label": "bank statement owned by a Family Trust: refused before any canonical processing",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_allowed_for_flow Trust, HUF and company statements cannot be imported here yet: bank transactions are count"
+  },
+  {
+    "step": 21,
+    "label": "HUF cannot exist for an AU user (403), so it cannot own a bank statement",
+    "ok": true,
+    "detail": "HTTP 403"
+  },
+  {
+    "step": 21,
+    "label": "India HUF owning a bank statement is refused as well (entity bank cash flow is deferred)",
+    "ok": true,
+    "detail": "HTTP 422 owner_not_allowed_for_flow"
+  },
+  {
+    "step": 21,
+    "label": "DB: no document row and no account was created by any refused entity bank upload (personal totals cannot change)",
+    "ok": true,
+    "detail": "docs 4->4"
+  },
+  {
+    "step": 25,
+    "label": "precondition: an account owned by Self exists (from step 19)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "step": 25,
+    "label": "upload as Spouse to the Self account: 409 conflict BEFORE any overwrite; nothing uploaded; account still Self",
+    "ok": true,
+    "detail": "HTTP 409 account_owner_conflict existing=self selected=spouse"
+  },
+  {
+    "step": 25,
+    "label": "explicit confirmation (\"Yes, change\"): the upload succeeds and the account owner becomes Spouse; reload proves it",
+    "ok": true,
+    "detail": "HTTP 200 {\"account\":\"recorded\",\"document\":\"recorded\"}"
+  },
+  {
+    "step": 25,
+    "label": "the owner change is audited (document audit event metadata names the account owner change)",
+    "ok": true,
+    "detail": "[[\"bank_csv_uploaded\",{\"owner_role\":\"spouse\",\"account_owner\":\"recorded\",\"account_resolution\":\"reused\"}],[\"document_queued\",null]]"
+  },
+  {
+    "step": "18b",
+    "label": "bank: same bytes + same owner is accepted and flagged as a duplicate of the first",
+    "ok": true,
+    "detail": "HTTP 200 dup=34e5bc39"
+  },
+  {
+    "step": "18b",
+    "label": "bank: same bytes + different owner -> 409 identical_upload_different_owner",
+    "ok": true,
+    "detail": "HTTP 409 identical_upload_different_owner"
+  },
+  {
+    "step": "18b",
+    "label": "bank cross-tenant: another user uploading the same bytes gets an ordinary new upload (no duplicate flag, not A's id)",
+    "ok": true,
+    "detail": "HTTP 200 dup=null"
+  }
+]

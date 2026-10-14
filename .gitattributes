@@ -1,0 +1,4 @@
+# The Planning Benchmarks production first-load files are uploaded byte for byte and their SHA-256 is recorded in
+# MANIFEST.csv: never let a checkout convert their line endings.
+docs/planning-benchmarks/production_first_load/*.csv -text
+docs/planning-benchmarks/production_first_load/*.json -text

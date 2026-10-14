@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { requireLookthroughDataAdminPage } from '@/lib/services/investment-intelligence/pc7/lookthroughDataAdmin';
 import LookthroughDataQualityClient from '@/components/admin/LookthroughDataQualityClient';
 
@@ -8,7 +9,17 @@ import LookthroughDataQualityClient from '@/components/admin/LookthroughDataQual
 // an empty dashboard. Layers 1, 2 and 4 are migration 0157's
 // is_pc7_lookthrough_data_admin() RLS predicate, the API route's
 // requireLookthroughDataAdmin(), and lib/admin/adminNav.ts.
-export default async function LookthroughDataQualityPage() {
+async function LookthroughDataQualityPageContent() {
   await requireLookthroughDataAdminPage();
   return <LookthroughDataQualityClient />;
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function LookthroughDataQualityPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <LookthroughDataQualityPageContent />
+    </>
+  );
 }

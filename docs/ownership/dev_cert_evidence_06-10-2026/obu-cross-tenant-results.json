@@ -1,0 +1,140 @@
+[
+  {
+    "step": 32,
+    "label": "fixture: User A owns a Spouse member, a Company entity, a source document, an account, a holding",
+    "ok": true,
+    "detail": "{\"memberId\":\"587fdc53\",\"entityId\":\"235b5825\",\"docId\":\"f977187a\",\"accountId\":\"84089df2\",\"holdingId\":\"8a341ea1\",\"instrumentId\":\"2c86c8cf\",\"caseId\":\"60d65525\",\"resolutionId\":\"60d65525\"}"
+  },
+  {
+    "step": 32,
+    "label": "CAS upload naming a foreign household member as owner: refused exactly like a random id",
+    "ok": true,
+    "detail": "foreign 422 owner_not_found | random 422 owner_not_found"
+  },
+  {
+    "step": 32,
+    "label": "CAS upload naming a foreign business entity as owner: refused exactly like a random id",
+    "ok": true,
+    "detail": "foreign 422 owner_not_found | random 422 owner_not_found"
+  },
+  {
+    "step": 32,
+    "label": "joint participant from another tenant: refused exactly like a random id",
+    "ok": true,
+    "detail": "foreign 422 owner_not_found | random 422 owner_not_found"
+  },
+  {
+    "step": 32,
+    "label": "statement (source document) summary: a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"Source document not found.\"} | random 404 {\"error\":\"Source document not found.\"}"
+  },
+  {
+    "step": 32,
+    "label": "statement status: a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"Source document not found.\"} | random 404 {\"error\":\"Source document not found.\"}"
+  },
+  {
+    "step": 32,
+    "label": "statement process: a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"Source document not found.\"} | random 404 {\"error\":\"Source document not found.\"}"
+  },
+  {
+    "step": 32,
+    "label": "statement discard: a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"Source document not found.\"} | random 404 {\"error\":\"Source document not found.\"}"
+  },
+  {
+    "step": 32,
+    "label": "statement confirm-owner: a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"owner_change_not_applied\",\"message\":\"Document not found.\"} | random 404 {\"error\":\"owner_change_not_applied\",\"message\":\"Document not found.\"}"
+  },
+  {
+    "step": 32,
+    "label": "statement confirm-sole-owner: a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"sole_owner_not_confirmed\",\"message\":\"Document not found.\"} | random 404 {\"error\":\"sole_owner_not_confirmed\",\"message\":\"Document not found.\"}"
+  },
+  {
+    "step": 32,
+    "label": "account owner (GET dialog data): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"Account not found.\"} | random 404 {\"error\":\"Account not found.\"}"
+  },
+  {
+    "step": 32,
+    "label": "account owner change (PATCH): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 422 {\"error\":\"Please check: Owner. This field could not be saved — correct it and try again.\", | random 422 {\"error\":\"Please check: Owner. This field could not be saved — correct it and try again.\","
+  },
+  {
+    "step": 32,
+    "label": "position publish (holding id): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"Position not found\"} | random 404 {\"error\":\"Position not found\"}"
+  },
+  {
+    "step": 32,
+    "label": "position re-evaluate (certify): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"Account not found.\"} | random 404 {\"error\":\"Account not found.\"}"
+  },
+  {
+    "step": 32,
+    "label": "resolution amend (case id): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 422 {\"error\":\"Please check: Owner. This field could not be saved — correct it and try again.\", | random 422 {\"error\":\"Please check: Owner. This field could not be saved — correct it and try again.\","
+  },
+  {
+    "step": 32,
+    "label": "reconciliation case resolve: a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 422 {\"error\":\"Please check: Resolution. This field could not be saved — correct it and try aga | random 422 {\"error\":\"Please check: Resolution. This field could not be saved — correct it and try aga"
+  },
+  {
+    "step": 32,
+    "label": "business entity (GET): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 {\"error\":\"not found\"} | random 404 {\"error\":\"not found\"}"
+  },
+  {
+    "step": 32,
+    "label": "business entity (PATCH): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 400 {\"error\":\"Cannot coerce the result to a single JSON object\"} | random 400 {\"error\":\"Cannot coerce the result to a single JSON object\"}"
+  },
+  {
+    "step": 32,
+    "label": "household member (GET): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 405 null | random 405 null"
+  },
+  {
+    "step": 32,
+    "label": "household member (PATCH): a foreign id is answered exactly like a random id",
+    "ok": true,
+    "detail": "foreign 400 {\"error\":\"Cannot coerce the result to a single JSON object\"} | random 400 {\"error\":\"Cannot coerce the result to a single JSON object\"}"
+  },
+  {
+    "step": 32,
+    "label": "bank statement id of another tenant: resolve-account answers exactly like a random statement id",
+    "ok": true,
+    "detail": "foreign 404 | random 404"
+  },
+  {
+    "step": 32,
+    "label": "bank statement id of another tenant: process answers exactly like a random id",
+    "ok": true,
+    "detail": "foreign 404 | random 404"
+  },
+  {
+    "step": 32,
+    "label": "CONTROL: the owner of the document gets 200 for the same call (the identical 404s above are tenant isolation, not a dead route)",
+    "ok": true,
+    "detail": "owner HTTP 200"
+  }
+]

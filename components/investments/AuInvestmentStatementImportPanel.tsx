@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateShort } from '@/lib/engines/date';
 /**
  * FDH-11 — Australia Investment Statement Intelligence: the Investments-tab
  * statement import journey (spec sections 2, 15-25, 43-46, 63-65, 76, 108).
@@ -977,7 +978,7 @@ export function AuInvestmentStatementImportPanel({
                         <td className="px-3 py-2">{h.tickerRaw ?? '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{h.quantity}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{h.marketValue ?? '—'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{h.valuationDate}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(h.valuationDate, 'AUD')}</td>
                         <td className="px-3 py-2 text-right">
                           <button type="button" onClick={() => removeAiDraftHolding(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
                             Remove<span className="sr-only"> the {h.securityNameRaw} holding</span>

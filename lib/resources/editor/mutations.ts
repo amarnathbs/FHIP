@@ -33,6 +33,7 @@ import type { EditableContentType, EditorSavePatch, PostVersionSnapshot } from '
 
 export interface CreateDraftResult {
   id: string;
+  updated_at: string;
 }
 
 // Draft creation (spec §12/§13). Every default matches the spec's initial
@@ -41,7 +42,12 @@ export interface CreateDraftResult {
 // placeholder default is used so the chooser can create-and-redirect
 // immediately, with the title editable as the very first thing the author
 // sees in the editor.
-export async function createResourceDraft(supabase: SupabaseClient, contentType: EditableContentType, userId: string): Promise<CreateDraftResult> {
+//
+// PO review F3 (06/10/2026): the editor UI no longer calls this on open. A
+// record is created only when the author presses Save, with the title they
+// typed (`title`). The placeholder default below is kept ONLY for scripts and
+// integration tests that create a throwaway draft directly; no screen uses it.
+export async function createResourceDraft(supabase: SupabaseClient, contentType: EditableContentType, userId: string, title?: string): Promise<CreateDraftResult> {
   const titlePlaceholder: Record<EditableContentType, string> = {
     article: 'Untitled Article',
     guide: 'Untitled Guide',
@@ -51,7 +57,7 @@ export async function createResourceDraft(supabase: SupabaseClient, contentType:
   const { data, error } = await supabase
     .from('resource_posts')
     .insert({
-      title: titlePlaceholder[contentType],
+      title: title && sanitizePlainText(title, 300).trim() ? sanitizePlainText(title, 300).trim() : titlePlaceholder[contentType],
       content_type: contentType,
       status: 'draft',
       compliance_classification: 'green',
@@ -63,11 +69,11 @@ export async function createResourceDraft(supabase: SupabaseClient, contentType:
       created_by: userId,
       updated_by: userId,
     })
-    .select('id')
+    .select('id, updated_at')
     .single();
 
   if (error) throw error;
-  return { id: data.id as string };
+  return { id: data.id as string, updated_at: data.updated_at as string };
 }
 
 export type SaveOutcome = { status: 'ok'; post: Record<string, unknown> } | { status: 'conflict' } | { status: 'not_found' };

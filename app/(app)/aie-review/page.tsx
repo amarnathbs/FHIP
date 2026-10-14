@@ -1,3 +1,4 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ReviewInbox } from '@/components/aie/review/ReviewInbox';
@@ -15,7 +16,7 @@ import { ReviewInbox } from '@/components/aie/review/ReviewInbox';
  * feature as unavailable until that flag is explicitly turned on (no
  * production authority is granted by this pass).
  */
-export default async function AieReviewInboxPage() {
+async function AieReviewInboxPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -32,5 +33,15 @@ export default async function AieReviewInboxPage() {
       </div>
       <ReviewInbox />
     </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (Dashboard).
+export default function AieReviewInboxPage() {
+  return (
+    <>
+      <PageBackLink href="/dashboard" label="Dashboard" />
+      <AieReviewInboxPageContent />
+    </>
   );
 }

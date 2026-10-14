@@ -1,17 +1,19 @@
+import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole } from '@/lib/resources/permissions';
+import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canDeleteDraftResource, canManageDiscovery } from '@/lib/resources/permissions';
 import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
 import { getSourceOptionsForPost } from '@/lib/resources/sources/queries';
 import { isEditableContentType } from '@/lib/resources/editor/types';
 import { ResourceEditor } from '@/components/resources/editor/ResourceEditor';
+import { LinkedVideosPanel } from '@/components/resources/video/LinkedVideosPanel';
 import type { WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 
 // /admin/resources/content/[id]/edit — spec §9/§14.
-export default async function ResourceEditPage({ params }: { params: Promise<{ id: string }> }) {
+async function ResourceEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   const current = await requireResourceAdminAccess();
   const { id } = await params;
   const supabase = await createClient();
@@ -59,15 +61,29 @@ export default async function ResourceEditPage({ params }: { params: Promise<{ i
   };
 
   return (
-    <ResourceEditor
-      post={post}
-      reference={reference}
-      initialVersions={versions}
-      initialWorkflowHistory={workflowHistory}
-      currentUserId={current.userId ?? ''}
-      caps={caps}
-      sourceOptions={sources.options}
-      initialSourceIds={sources.linkedIds}
-    />
+    <div className="space-y-6">
+      <ResourceEditor
+        post={post}
+        reference={reference}
+        initialVersions={versions}
+        initialWorkflowHistory={workflowHistory}
+        currentUserId={current.userId ?? ''}
+        caps={caps}
+        canDelete={canDeleteDraftResource(current)}
+        sourceOptions={sources.options}
+        initialSourceIds={sources.linkedIds}
+      />
+      <LinkedVideosPanel supabase={supabase} contentPostId={post.id} contentTitle={post.title} canManage={canManageDiscovery(current)} />
+    </div>
+  );
+}
+
+// PO review 06-10-2026 F6: every page carries the shared back link to its parent (All Content).
+export default function ResourceEditPage(props: Parameters<typeof ResourceEditPageContent>[0]) {
+  return (
+    <>
+      <PageBackLink href="/admin/resources/content" label="All Content" />
+      <ResourceEditPageContent {...props} />
+    </>
   );
 }

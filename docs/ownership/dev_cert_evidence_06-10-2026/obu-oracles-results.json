@@ -1,0 +1,94 @@
+[
+  {
+    "ok": true,
+    "label": "O1: the SMSF-owned bank statement is imported and approved",
+    "detail": {
+      "status": 200,
+      "json": {
+        "data": {
+          "outcome": "approved",
+          "approved": 1
+        }
+      }
+    }
+  },
+  {
+    "ok": true,
+    "label": "O1 ORACLE: SMSF expense 1,000 leaves personal Expenses unchanged (window total and Dashboard monthly expenses both +0)",
+    "detail": {
+      "dWindow": 0,
+      "dDash": 0
+    }
+  },
+  {
+    "ok": true,
+    "label": "O1 control: the same 1,000 expense on a SELF statement is imported and approved",
+    "detail": {
+      "status": 200,
+      "json": {
+        "data": {
+          "outcome": "approved",
+          "approved": 1
+        }
+      }
+    }
+  },
+  {
+    "ok": true,
+    "label": "O1 CONTROL: as Self the same 1,000 DOES count in personal Expenses (+1,000), so the +0 above is the owner rule, not a dead flow",
+    "detail": {
+      "dWindow": 1000
+    }
+  },
+  {
+    "ok": true,
+    "label": "O1 gap record: SMSF bank-transaction -> SMSF cash-flow integration not built (deferred, PARTIAL)",
+    "detail": "owner attribution certified only"
+  },
+  {
+    "ok": true,
+    "label": "O3: a Company-owned bank statement is refused before any processing",
+    "detail": {
+      "status": 422,
+      "error": "owner_not_allowed_for_flow"
+    }
+  },
+  {
+    "ok": true,
+    "label": "O3 ORACLE: personal Expenses, Income and Net Worth are unchanged by the refused entity bank attempt",
+    "detail": {
+      "dExp": 0,
+      "dInc": 0,
+      "dNW": 0
+    }
+  },
+  {
+    "ok": true,
+    "label": "O2: the synthetic Company is set to a 1,000,000 value at 50% ownership through the real route",
+    "detail": {
+      "base": 200,
+      "set": 200
+    }
+  },
+  {
+    "ok": true,
+    "label": "O2 ORACLE: the macro (Net Worth) contribution is 500,000 (50% of 1,000,000)",
+    "detail": {
+      "dNetWorth": 500000
+    }
+  },
+  {
+    "ok": true,
+    "label": "O2 ORACLE: the personal Investments total does NOT add the 1,000,000",
+    "detail": {
+      "dInvestments": 0
+    }
+  },
+  {
+    "ok": true,
+    "label": "O2 CONTROL: at 100% ownership the same company contributes 1,000,000 (+500,000 more), so the 500,000 above is the ownership rule",
+    "detail": {
+      "dNetWorth": 500000
+    }
+  }
+]
