@@ -9,8 +9,10 @@ Written 15-10-2026 (the DEV runs are dated 14-10-2026 UTC). **DEV only. Nothing 
 The unconditional section 21 wording ("NAV2 RELEASE CANDIDATE: DEV CERTIFIED, PRODUCTION NOT STARTED") is NOT used, because two release-critical gates are incomplete and rounding up is not allowed. Everything else passed (the table below has 20 PASS rows, 8 CONDITIONAL PASS rows, 1 NOT APPLICABLE row for beta and alpha, 1 NOT STARTED row for production, and no FAIL row):
 
 1. **DEV catalog inventory, retention-function identity and the DEV proof of migrations 0281 and 0282 are BLOCKED on the Product Owner running the DEV pack** (`docs/nav2/po_apply_dev_release_candidate/`). Everything that can be done without DDL on DEV was done; the REST-level comparison shows exactly the two expected differences (the two 0281 columns and the 0282 function). Idempotency-under-concurrency and the held-back statement-line count are therefore PGlite-verified and unit-tested only.
-2. **A report for 20 funds was not shown to finish reliably on DEV from the development machine** (details in B3). 1, 4 and 10 funds finish. The measurement is dominated by a 170 ms round trip and a home link, so it says nothing certain about production, but the mission rule is that the pilot limit is lowered when 20 cannot finish with margin. The code keeps the Product Owner's number (20) because it is a recorded Product Owner decision; **the recommended pilot limit is 10 funds per report** (one constant and the tests that name it).
+2. **A report for 20 funds was not shown to finish reliably on DEV from the development machine** (details in B3). 1, 4 and 10 funds finish. **Resolved by Product Owner decision on 15-10-2026: the pilot limit is 10 funds per report (see the update below the verdict).** The measurement is dominated by a 170 ms round trip and a home link, so it says nothing certain about production, but the mission rule is that the pilot limit is lowered when 20 cannot finish with margin. The code keeps the Product Owner's number (20) because it is a recorded Product Owner decision; **the recommended pilot limit is 10 funds per report** (one constant and the tests that name it).
 The full unit suite comparison, the type check, the lint and the production-style build are complete (section E): no new failure against a clean origin/main remains.
+
+**Update 15-10-2026 (Product Owner decision, after this report was first written): the NAV2 pilot limit is 10 funds per report.** Done on this branch: `FUND_ANALYTICS_MAX_FUNDS` is 10 (`lib/config/nav2/reportLimits.ts`), the user-facing messages follow from it ("A report covers up to 10 funds. You hold N, so generate it in two reports."; "Choose between 1 and 10 of the funds you hold."), the NAV2 tests are derived from the constant, and the production runbook, release plan and Stage 3 report carry the new number. Row 23 and the 20-fund timing in section B3 are unchanged as measurements; the 20-fund report is no longer something the application will generate, so the open item about 20 funds on DEV is closed by the decision rather than by a new measurement. The DEV timing table for 10 funds (cold in 2 calls, warm in 1 call, worst 22.1 s on that link) is now the relevant one. The two B2 DEV runs that used a choice of 20 predate the decision and are kept as evidence of selective hydration; a choice of 20 would now be refused with the 422 message. **The release SHA is therefore the new tip given in the hand-off message, not `b50c337`.**
 
 ## 0. Identity
 
@@ -54,7 +56,7 @@ Commits on the branch since the integration branch: `c7ca057` (B1 to B5, migrati
 | D-2 | **Sequential read of the whole portfolio.** The shared analytics dataset read every held fund's prices in one query that pages 1,000 rows at a time; a person who holds 22 funds with 13 years of prices waited for about 75 pages in a row (18 s on the DEV link). A report for ONE fund cost as much as for 22 because the dataset is not scoped. | P1 for latency (the platform ends a request at 28 s) | DEV request trace | One read per fund, ten at a time, rows put back in (date, id) order (`analyticsRepository.ts`); the same for the NAV2 loader and the coverage lookup. 1 fund went from a 24 s timeout to a 13 s report on the same link. |
 | D-3 | **A price in another currency moved the Performance total.** A synthetic AUD price ten times larger for an INR fund changed the Performance total from 188,960 to 852,065 while Holdings, Overview, Dashboard and Fund analytics did not move. | P2 (a wrong-currency row is a data error, but surfaces must agree) | D3 journey | The series builder leaves out a price whose currency differs from the instrument's own (a null currency is kept). Negative control: removing the filter fails `nav2ReleaseCandidateAnalyticsNav`. |
 | D-4 | Warn notice title had a contrast of 3.27 to 1 on the Fund Analytics Health page (axe: serious). | P3 | Journey 8b | The warn title is ink; border and background still carry the tone (`components/admin/benchmarkData/ui.tsx`). Journey 8b: 43 pass, 0 fail. |
-| D-5 | Planner and gate disagreed about "loaded": a report could show "18 of 20 funds ready" for ever while the fetch kick did nothing because the per-person hourly fetch limit (30) was used up. | Documented limitation (not changed) | DEV | See Limitations. |
+| D-5 | Planner and gate disagreed about "loaded": a report could show "18 of 20 funds ready" (the cap was 20 when this ran) for ever while the fetch kick did nothing because the per-person hourly fetch limit (30) was used up. | Documented limitation (not changed) | DEV | See Limitations. |
 
 Harness faults found and fixed (not product defects): the big-holder script expected 30 funds although the statement's same-name sections merge into 22 instruments (see D-6 below), journeys 6b and 8 expected an earlier page plan, D3 and D5 had wrong paths or a syntax error, the dev inventory script printed "MISSING" for HTTP 206 answers.
 
@@ -87,7 +89,7 @@ A fixture person (administrator fixture user) uploaded and accepted one 30-line 
 * No call ended in the platform's page in these runs: the longest typed answer was 23.9 s. Two earlier outliers (32.9 s and 64.7 s) happened while other processes (my own test runs and a dev recompile) were using the same CPU; they were not reproduced and are listed as an open risk.
 * A person with 3 funds held jointly (ownership shares path, which loads the dataset twice) needed 5 calls of about 20 s each to get one report on this link.
 * Work after a timed-out response keeps running on a long-lived development server (and writes the shared cache, which is what makes the next call faster). On Amplify the instance may be frozen after the response; this is unproven either way.
-* **Pilot limit.** The mission rule is to lower the pilot limit if 20 cannot finish with margin. The DEV link cannot show 20 finishing with margin; 10 does finish. Recommendation: pilot at no more than 10 funds per report, and measure on production at STOP GATE 2 before raising it to 20. This is a Product Owner decision because 20 is a recorded Product Owner number; the change is `FUND_ANALYTICS_MAX_FUNDS` in `lib/config/nav2/reportLimits.ts` plus the tests that name it (`nav2ReportFundCap`, `nav2ReleaseCandidateSelectedFunds`).
+* **Pilot limit.** The mission rule is to lower the pilot limit if 20 cannot finish with margin. The DEV link cannot show 20 finishing with margin; 10 does finish. Recommendation was: pilot at no more than 10 funds per report, and measure on production at STOP GATE 2 before raising it to 20. **DECIDED by the Product Owner on 15-10-2026: the pilot limit is 10 funds per report.** `FUND_ANALYTICS_MAX_FUNDS` in `lib/config/nav2/reportLimits.ts` is now 10, and `nav2ReportFundCap` and `nav2ReleaseCandidateSelectedFunds` are written against that constant. The 20-fund measurements above stay as measured; they are the reason for the decision. The pairwise-correlation limit of the engine (`MAX_SCHEMES_FOR_PAIRS`, 20) is a separate engine limit and did not change.
 
 ## Phase C: DEV catalog, migration idempotency, retention protection
 
@@ -166,7 +168,7 @@ Classes: PASS, CONDITIONAL PASS, FAIL, BLOCKED, NOT STARTED, NOT APPLICABLE. Evi
 | 11 | Beta and alpha | NOT APPLICABLE | **NOT ACTIVATED — LICENSED BENCHMARK DATA UNAVAILABLE; fail-closed UI verified.** The PDF and the screen say Beta and alpha: not available yet (no benchmark index is linked to this fund); journey 8a and 8b pass. This is not a calculation pass with real data. |
 | 12 | SMA, EMA, ROC | PASS | Same oracle run. |
 | 13 | Held-scheme ranking and comparability | PASS | Same oracle run (ranking checks); PDF page 5 Comparing your funds viewed. |
-| 14 | Held-scheme correlations | PASS | Same oracle run (all pairs); at most 20 funds per report. |
+| 14 | Held-scheme correlations | PASS | Same oracle run (all pairs); the engine limit for pairs is 20 funds and a report now covers at most 10, so every report has its pair table. |
 | 15 | High, low, mean, median | PASS | Same oracle run; the NAV-level footnote (c) is on every cell. |
 | 16 | XIRR separation and correctness | PASS | Your own return (XIRR) is shown apart from the fund's growth (CAGR); journey 6b: a joint holding at the user's share has the whole-holding XIRR (flows proportional), 18 of 18. |
 | 17 | Value and NAV consistency | PASS | DEV-VERIFIED D3: Holdings, Performance, Overview, Investments, Dashboard and Fund analytics agree with units times the latest eligible NAV (21 of 21) after the wrong-currency fix (D-3). |
@@ -175,20 +177,20 @@ Classes: PASS, CONDITIONAL PASS, FAIL, BLOCKED, NOT STARTED, NOT APPLICABLE. Evi
 | 20 | Benchmark and risk-free governance | CONDITIONAL PASS | Risk-free upload, switch, correction and the permission split are DEV-VERIFIED (journeys 3b, 5, D5); RBI wording is the Product Owner's; weekly job OFF. Benchmarks are not activated (row 11). DEV catalog for policies and grants is BLOCKED. |
 | 21 | Unavailable states | PASS | Typed states for short history, missing risk-free, no benchmark; never a zero; seen on the PDF and the screen (journeys 8a, 8b). |
 | 22 | Cache, versioning, idempotency | CONDITIONAL PASS | Cache key with the series checksum UNIT-TESTED with negative controls; DEV journey 4 shows 13 pass and 2 fail only because the Product Owner's report version 6 no longer exists on DEV (precondition, not a defect). The Idempotency-Key is UNIT-TESTED and PGLITE-VERIFIED; its DEV proof is **BLOCKED on migration 0281**. |
-| 23 | Concurrency, resumability, fairness | CONDITIONAL PASS | Fairness, one-fund choice, repeated accepted-statement event, resumability in steps: DEV-VERIFIED. One key, one report under six simultaneous requests: BLOCKED on 0281. 20 funds did not finish on the DEV link (B3); pilot limit 10 recommended. |
+| 23 | Concurrency, resumability, fairness | CONDITIONAL PASS | Fairness, one-fund choice, repeated accepted-statement event, resumability in steps: DEV-VERIFIED. One key, one report under six simultaneous requests: BLOCKED on 0281. 20 funds did not finish on the DEV link (B3); the Product Owner set the pilot limit to 10 funds per report on 15-10-2026 and the code now says 10. |
 | 24 | RLS, privacy, audit | CONDITIONAL PASS | Cross-user, free-user and anonymous behaviour DEV-VERIFIED (journeys 5 and 5b: 47 of 47). Policy and grant inventory from the catalog is BLOCKED. |
 | 25 | UI, accessibility, mobile, PDF | PASS | Journey 8a 24 of 24, 8b 43 of 43 (axe, 375 px, keyboard); the PDF was rendered by Chromium and pages 1 and 2 were looked at as images (day-first dates, charts present, no image-only pages, smallest text 7.1 pt). |
 | 26 | Storage and non-held-history controls | CONDITIONAL PASS | Held-only storage and selective hydration DEV-VERIFIED (row 2). The retention function identity and behaviour on DEV need the pack files 02, 02b and 02d (BLOCKED); the 0261 guard is PGLITE-VERIFIED. |
 | 27 | DEV accepted-statement journey | PASS | Journeys 1 and 2: 54 of 54; the 30-line statement (22 funds) accepted through the real routes, certified, no case. |
 | 28 | Production deployment and pilot evidence | NOT STARTED | Phases F to K were out of scope. |
 | 29 | Rollback and recovery readiness | CONDITIONAL PASS | Rollback files for 0281 and 0282 (DEV pack 90 and 91, production pack) are PGLITE-VERIFIED; never run on DEV or production. Production has no managed backups on the Free plan (Product Owner memo 08-10-2026); manual table backups are part of STOP GATE 1. |
-| 30 | Remaining PO decisions | CONDITIONAL PASS | Listed in the next section: apply the DEV pack; pilot limit 10 or 20; D-6 fix; shared-code changes in this release candidate; the 30 per hour fetch limit for first reports. |
+| 30 | Remaining PO decisions | CONDITIONAL PASS | Listed in the next section: apply the DEV pack; (pilot limit: decided, 10); D-6 fix; shared-code changes in this release candidate; the 30 per hour fetch limit for first reports. |
 
 ## Limitations and open items
 
 **Limitations (honest list)**
 
-1. **20 funds are not shown to finish on DEV** from this machine (B3). Recommended pilot limit 10 per report. Production timing is unmeasured: the first production measurement is a STOP GATE 2 item.
+1. **20 funds are not shown to finish on DEV** from this machine (B3). **Decided by the Product Owner on 15-10-2026: the pilot limit is 10 funds per report, and the code (`FUND_ANALYTICS_MAX_FUNDS`) and the tests, messages and runbook now say 10.** Production timing is unmeasured: the first production measurement is a STOP GATE 2 item, and raising the limit needs it.
 2. **One call can take as long as the whole 22 s budget even for one fund on a slow link** (a report is about 45 sequential database round trips deep). On a link like DEV's the per-call time is dominated by those trips, not by calculation. Not an issue on a fast network, but the margin there is unproven.
 3. **Work after a timed-out response.** On the development server it continues and fills the cache; on Amplify it may be frozen. The next call resumes from whatever was cached either way. One outlier call of 32.9 s and one of 64.7 s were seen under heavy local CPU contention and not reproduced.
 4. **Fund history for a first report is fetched through the public source and is limited to 30 fund fetches per person per hour** (`USER_NAV_FETCH_MAX_PER_HOUR`). A person whose first report needs history for more than about 15 funds waits for the next hour for the rest; the report keeps saying it is being prepared. Normally the history is fetched when the statement is accepted, before the first report, but only for the funds with a requirement.
@@ -201,14 +203,14 @@ Classes: PASS, CONDITIONAL PASS, FAIL, BLOCKED, NOT STARTED, NOT APPLICABLE. Evi
 
 **Conflicts between instructions or documents, and how they were resolved**
 
-* The mission says to lower the pilot limit if 20 cannot finish, while the recorded Product Owner decision (07-10-2026) fixes 20 funds per report. Resolved by keeping 20 in code and recommending 10 for the pilot as a Product Owner decision, with the exact change named.
+* The mission says to lower the pilot limit if 20 cannot finish, while the recorded Product Owner decision (07-10-2026) fixed 20 funds per report. First resolved by keeping 20 in code and recommending 10; the Product Owner then decided 10 on 15-10-2026 and the code was changed (commit after the tip first reported).
 * The production README said the gate and planner look at all funds held; B2 changed that and the README now says so (the old sentence was wrong after this release candidate).
 * Two tests of other workstreams assumed they were the highest-numbered migration or that NAV2 was absent; they were corrected (see `BASELINE_FAILURES.md`).
 
 **Decisions for the Product Owner**
 
 1. Run the DEV pack (`docs/nav2/po_apply_dev_release_candidate/`), in the order of its README, and send back the rows; the agent then closes rows 1, 22, 23, 24, 26 and 29 or reports the difference.
-2. Pilot limit: 10 funds per report (recommended) or keep 20 and measure in production first.
+2. Pilot limit: DECIDED 15-10-2026, 10 funds per report (done in code and tests).
 3. Whether to fix D-6 in the import (small, but it changes statement import for every user).
 4. Whether the shared-code changes of this release candidate (item 7) go in this release or are split out.
 5. The hourly history-fetch limit (30) for a first report of many funds.
@@ -223,7 +225,7 @@ Nothing below was started. It is the list of what the production hand-over must 
 3. Precheck P3: the live `pc6_nav_row_is_candidate` must be the 0219 text (the 0261 guard refuses otherwise).
 4. Order: database first, then the code, then the switches, each switch one at a time, `nav2_fund_analytics` last. Weekly RBI refresh stays OFF until the final-build dry run is repeated on production-like data.
 5. Smoke test for the pilot: one Premium account, 1, 4 and 10 funds, a timing table with the same columns as B3 (this is the first real measurement of production time), a PDF export, a free account refused, and the monitoring page.
-6. Decision at STOP GATE 2: pilot limit 10 or 20 from that table.
+6. Decision at STOP GATE 2: whether the timing table supports raising the pilot limit above 10 (it is 10 by Product Owner decision of 15-10-2026).
 7. Rollback: 0281 and 0282 rollbacks (issued reports are not touched), switches OFF, and the previous Amplify build.
 8. Fixture removal on DEV is done by the cleanup script below; production has no fixtures to remove.
 

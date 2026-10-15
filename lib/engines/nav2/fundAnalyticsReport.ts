@@ -68,7 +68,7 @@ export interface ReportScopeNotes {
   priceHistoryUnavailable: Array<{ schemeName: string; reason: string }>;
 }
 
-/** Which of the funds held this report covers (PO decision 07-10-2026: one report covers at most FUND_ANALYTICS_MAX_FUNDS funds). */
+/** Which of the funds held this report covers (PO decisions 07-10-2026 and 15-10-2026: one report covers at most FUND_ANALYTICS_MAX_FUNDS funds, 10 for the pilot). */
 export interface ReportSelection {
   /** 'all_held' when the report covers every fund held, 'chosen' when the person chose a subset. */
   basis: 'all_held' | 'chosen';

@@ -370,7 +370,7 @@ describe('the real PDF: rendered by Chromium through the export route\'s printPa
     300_000
   );
   it.skipIf(skip !== null)(
-    '20 funds, the LARGEST REAL REPORT (the cap, 07-10-2026): summary of at most 2 pages, 20 fund pages, ONE comparison page = 23 pages',
+    '20 funds, a LAYOUT STRESS CASE (it was the cap until the pilot limit of 10, 15-10-2026): summary of at most 2 pages, 20 fund pages, ONE comparison page = 23 pages',
     () => {
       const { analysis } = run(['--fixture', 'funds-20+unavailable+redeemed+long+young']);
       expect(analysis.pages_per_fund).toBe(1);

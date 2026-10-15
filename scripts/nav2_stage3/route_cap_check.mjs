@@ -1,5 +1,5 @@
 // The REAL generation route (own port, DEV, fixture users): the cap and the choice of funds, for a household that holds FEW funds.
-// (A household with more than 20 funds cannot be made on DEV; the 21-fund refusal is proven at service level in nav2ReportFundCap.test.ts.)
+// (A household with more than 10 funds cannot be made on DEV (cap 10 since 15-10-2026); the 11-fund refusal is proven at service level in nav2ReportFundCap.test.ts.)
 //   * a choice naming a fund the caller does not hold, an empty choice and a repeated fund: 422 with the one plain message, nothing stored;
 //   * a free user with any choice: 403 (the Premium message), nothing stored;
 //   * a choice of two of the fund(s) held: 201, and the stored manifest carries the choice (sorted ids, funds held, cap);
@@ -19,7 +19,7 @@ const post = async (who, body) => {
   return { status: r.status, json: await r.json().catch(() => null) };
 };
 const before = await count();
-const MSG = 'Choose between 1 and 20 of the funds you hold.';
+const MSG = 'Choose between 1 and 10 of the funds you hold.';
 const foreign = await post(USERS.holder, { period: 'since_first_held', funds: [heldIds[0], crypto.randomUUID()] });
 check('a fund the caller does not hold: 422, one plain message', foreign.status === 422 && foreign.json?.error === MSG, `${foreign.status} ${foreign.json?.error}`);
 const empty = await post(USERS.holder, { period: 'since_first_held', funds: [] });
@@ -36,7 +36,7 @@ const chosen = heldIds.slice(0, 2);
 const ok = await post(USERS.holder, { period: 'since_first_held', funds: chosen });
 check('a choice of two held funds: 201', ok.status === 201, `${ok.status} ${JSON.stringify(ok.json).slice(0, 120)}`);
 const row = await latest();
-check('the stored manifest carries the choice (sorted ids, funds held, cap 20)', JSON.stringify(row.manifest_json.selection?.chosenInstrumentIds) === JSON.stringify([...chosen].sort()) && row.manifest_json.selection?.heldFundCount === heldIds.length && row.manifest_json.selection?.max === 20, JSON.stringify(row.manifest_json.selection));
+check('the stored manifest carries the choice (sorted ids, funds held, cap 10)', JSON.stringify(row.manifest_json.selection?.chosenInstrumentIds) === JSON.stringify([...chosen].sort()) && row.manifest_json.selection?.heldFundCount === heldIds.length && row.manifest_json.selection?.max === 10, JSON.stringify(row.manifest_json.selection));
 check('the report covers exactly those funds', row.report_json.schemes.length === 2, `${row.report_json.schemes.length}`);
 check('two of four held funds: the report says it covers 2 of the funds held only when the household holds more than the report covers', row.report_json.selection?.chosenCount === 2 || heldIds.length <= 2, JSON.stringify(row.report_json.selection));
 const all = await post(USERS.holder, { period: 'since_first_held' });

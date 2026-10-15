@@ -1,16 +1,16 @@
 // NAV2 release candidate, blocker B2: the price-history gate and the planner work on the funds the report COVERS, not on every fund held.
 //
-// A person who holds 30 funds and selects 20 must not wait for the 10 they did not select. Evidence level: UNIT-TESTED against the real gate, the
+// A person who holds 30 funds and selects 10 (the pilot limit, PO decision 15-10-2026; it was 20) must not wait for the funds they did not select. Evidence level: UNIT-TESTED against the real gate, the
 // real planner and the real service, over an in-memory database that applies every filter for real (a read that forgets its user scope or its
 // fund scope returns the wrong rows here too). The DEV behavioural test is scripts/nav2_rc/dev_selected_funds_gate.mjs.
 //
 // NAMED NEGATIVE CONTROLS
-//   NC-R1  30 held funds, 10 of them without history: with NO scope the report is held (the old behaviour, proved so the control means something);
-//          scoped to the 20 selected funds it is not held, and the headline counts 20 funds, not 30;
+//   NC-R1  30 held funds, 20 of them without history: with NO scope the report is held (the old behaviour, proved so the control means something);
+//          scoped to the 10 selected funds it is not held, and the headline counts 10 funds, not 30;
 //   NC-R2  one selected fund without history DOES hold the report, and only that fund is named;
 //   NC-R3  an id the person does not hold is ignored by the gate (the gate reads only the caller's own funds), it can never be used to read another
 //          person's funds, and it neither holds nor releases anything;
-//   NC-R4  more than 20 held with no choice yet: the gate is skipped (nothing to wait for until the person chooses), nothing is kicked or written;
+//   NC-R4  more than 10 held with no choice yet: the gate is skipped (nothing to wait for until the person chooses), nothing is kicked or written;
 //   NC-R5  the planner plans only the selected funds (windows and fetches), and the kick for a report period carries the same ids;
 //   NC-R6  the service passes the selection to the gate, the planner and the kick, and pins the selected ids in the stored manifest;
 //   NC-R7  the Monthly Report / Performance callers (no scope) are unchanged.
@@ -46,8 +46,8 @@ const NOW = '2026-10-03T10:00:00.000Z';
 const AS_OF = '2026-10-03';
 const id = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
 const FUNDS = Array.from({ length: 30 }, (_, i) => i + 1);
-const WITH_HISTORY = FUNDS.slice(0, 20); // funds 1..20 have complete history
-const WITHOUT_HISTORY = FUNDS.slice(20); // funds 21..30 have none: they would hold an unscoped report
+const WITH_HISTORY = FUNDS.slice(0, 10); // funds 1..10 have complete history (the size of a full report)
+const WITHOUT_HISTORY = FUNDS.slice(10); // funds 11..30 have none: they would hold an unscoped report
 
 function seed(over: Record<string, Row[]> = {}): InMemoryDb {
   const db = createInMemoryDb();
@@ -82,24 +82,24 @@ const gate = (db: InMemoryDb, o: { onlyInstrumentIds?: readonly string[] | null;
   checkReportNavHistoryGate({ db: db.client as never, userId: USER, today: AS_OF, nowIso: NOW, createAnchor: o.createAnchor, kick: o.kick, onlyInstrumentIds: o.onlyInstrumentIds, skipIfMoreHeldThan: o.skipIfMoreHeldThan });
 
 describe('NC-R1 / NC-R2: the gate looks only at the funds the report covers', () => {
-  it('30 held, 10 without history: unscoped the report is held (the control); scoped to the 20 selected it is NOT held and counts 20 funds', async () => {
+  it('30 held, 20 without history: unscoped the report is held (the control); scoped to the 10 selected it is NOT held and counts 10 funds', async () => {
     const db = seed();
     const unscoped = await gate(db);
-    expect(unscoped).toMatchObject({ hold: true, total: 30, loaded: 20 });
-    expect(unscoped.waiting).toHaveLength(10);
+    expect(unscoped).toMatchObject({ hold: true, total: 30, loaded: 10 });
+    expect(unscoped.waiting).toHaveLength(20);
     const selected = WITH_HISTORY.map(id);
     const scoped = await gate(db, { onlyInstrumentIds: selected });
-    expect(scoped).toMatchObject({ hold: false, total: 20, loaded: 20, headline: null });
+    expect(scoped).toMatchObject({ hold: false, total: 10, loaded: 10, headline: null });
     expect(scoped.waiting).toEqual([]);
   });
 
   it('a selected fund without history holds the report and only that fund is named', async () => {
     const db = seed();
-    const selected = [...WITH_HISTORY.slice(0, 19), WITHOUT_HISTORY[0]].map(id);
+    const selected = [...WITH_HISTORY.slice(0, 9), WITHOUT_HISTORY[0]].map(id);
     const g = await gate(db, { onlyInstrumentIds: selected });
-    expect(g).toMatchObject({ hold: true, total: 20, loaded: 19 });
+    expect(g).toMatchObject({ hold: true, total: 10, loaded: 9 });
     expect(g.waiting.map((f) => f.instrumentId)).toEqual([id(WITHOUT_HISTORY[0])]);
-    expect(g.headline).toBe('Your report will be ready once price history is loaded (19 of 20 funds loaded)');
+    expect(g.headline).toBe('Your report will be ready once price history is loaded (9 of 10 funds loaded)');
   });
 
   it('a hold on a selected fund still starts the window once and kicks the (user-scoped) fetch; an unselected gap alone does not', async () => {
@@ -129,7 +129,7 @@ describe('NC-R4: more than the cap held and no choice yet', () => {
   it('the gate is skipped (skippedForChoice): nothing is held, kicked or written until the person chooses', async () => {
     const db = seed();
     const kick = vi.fn();
-    const g = await gate(db, { skipIfMoreHeldThan: 20, createAnchor: true, kick });
+    const g = await gate(db, { skipIfMoreHeldThan: 10, createAnchor: true, kick });
     expect(g).toMatchObject({ hold: false, total: 0, skippedForChoice: true });
     expect(kick).not.toHaveBeenCalled();
     expect(db.tables.ii_audit_events).toHaveLength(0);
@@ -138,7 +138,7 @@ describe('NC-R4: more than the cap held and no choice yet', () => {
   it('at or under the cap, or with a choice, the gate runs as normal', async () => {
     const db = seed();
     expect((await gate(db, { skipIfMoreHeldThan: 30 })).skippedForChoice).toBeUndefined();
-    expect((await gate(db, { skipIfMoreHeldThan: 20, onlyInstrumentIds: WITH_HISTORY.map(id) })).skippedForChoice).toBeUndefined();
+    expect((await gate(db, { skipIfMoreHeldThan: 10, onlyInstrumentIds: WITH_HISTORY.map(id) })).skippedForChoice).toBeUndefined();
   });
 });
 
@@ -146,7 +146,7 @@ describe('NC-R7: callers that pass no scope are unchanged', () => {
   it('the Monthly Report / Performance gate still waits for every fund held', async () => {
     const db = seed();
     const g = await checkReportNavHistoryGate({ db: db.client as never, userId: USER, today: AS_OF, nowIso: NOW });
-    expect(g).toMatchObject({ hold: true, total: 30, loaded: 20 });
+    expect(g).toMatchObject({ hold: true, total: 30, loaded: 10 });
     expect(g.skippedForChoice).toBeUndefined();
   });
 });
@@ -157,7 +157,7 @@ describe('NC-R5: the planner plans only the selected funds', () => {
     const db = seed();
     const all = await planUserNav2Windows({ db: db.client as never, userId: USER, spec, policy: NAV2_POLICY, today: AS_OF, nowIso: NOW });
     expect(all.windows).toHaveLength(30);
-    const selected = [...WITH_HISTORY.slice(0, 10), ...WITHOUT_HISTORY.slice(0, 2)].map(id);
+    const selected = [...WITH_HISTORY.slice(0, 8), ...WITHOUT_HISTORY.slice(0, 2)].map(id);
     const scoped = await planUserNav2Windows({ db: db.client as never, userId: USER, spec, policy: NAV2_POLICY, today: AS_OF, nowIso: NOW, onlyInstrumentIds: selected });
     expect(scoped.windows.map((w) => w.instrumentId).sort()).toEqual([...selected].sort());
     expect(scoped.fetch.toFetch.map((f) => f.instrumentId).every((x) => selected.includes(x))).toBe(true);
@@ -179,10 +179,10 @@ function scheme(i: number): HeldSchemeInput {
 const inputFor = (schemes: HeldSchemeInput[], heldFundCount: number): FundAnalyticsInput => ({
   asOfDate: AS_OF, displayCurrency: 'INR', policy: NAV2_POLICY, spec: reportAnalysisSpec(AS_OF, NAV2_POLICY, 'since_first_held'), periodChoice: 'since_first_held', riskFree: null, schemes,
   scope: { entityHeldSchemesExcluded: 0, otherInstrumentsExcluded: 0, statementLinesAwaitingReview: 0, priceHistoryUnavailable: [] },
-  selection: { basis: 'chosen', heldFundCount, chosenInstrumentIds: schemes.map((s) => s.instrumentId), max: 20 },
+  selection: { basis: 'chosen', heldFundCount, chosenInstrumentIds: schemes.map((s) => s.instrumentId), max: 10 },
 });
 
-describe('NC-R6: the service (30 held, 20 selected)', () => {
+describe('NC-R6: the service (30 held, 10 selected)', () => {
   it('passes the selection to the gate, the planner and the kick; the report is NOT held by the 10 unselected funds; the selected ids are pinned in the stored manifest', async () => {
     const db = seed({ nav2_fund_analytics_reports: [], nav2_report_nav_dependencies: [], nav2_result_cache: [] });
     const selected = WITH_HISTORY.map(id);
@@ -211,7 +211,7 @@ describe('NC-R6: the service (30 held, 20 selected)', () => {
       nowIso: () => NOW,
       nowMs: () => 0,
     };
-    // a cold report of 20 funds may be prepared in steps (the 18 s engine admission budget at 1 s per uncached fund): ask again until it is issued
+    // a cold report of 10 funds may be prepared in steps (the 18 s engine admission budget at 1 s per uncached fund): ask again until it is issued
     let r = await generateFundAnalyticsReport({ userId: USER, sessionClient: db.client as never, adminClient: db.client as unknown as SupabaseClient, periodChoice: 'since_first_held', fundIds: selected, asOfDate: AS_OF, deps });
     for (let i = 0; i < 3 && r.status === 'in_steps'; i++) r = await generateFundAnalyticsReport({ userId: USER, sessionClient: db.client as never, adminClient: db.client as unknown as SupabaseClient, periodChoice: 'since_first_held', fundIds: selected, asOfDate: AS_OF, deps });
     expect(r.status).toBe('ready');
@@ -242,15 +242,15 @@ describe('NC-R6: the service (30 held, 20 selected)', () => {
     };
     const r = await generateFundAnalyticsReport({ userId: USER, sessionClient: db.client as never, adminClient: db.client as unknown as SupabaseClient, periodChoice: 'since_first_held', fundIds: selected, asOfDate: AS_OF, deps });
     expect(r.status).toBe('preparing');
-    if (r.status === 'preparing') expect(r.waiting.waitingFunds).toEqual(['Fund 21']);
+    if (r.status === 'preparing') expect(r.waiting.waitingFunds).toEqual(['Fund 11']);
     expect(load).not.toHaveBeenCalled();
     expect(db.tables.nav2_fund_analytics_reports).toHaveLength(0);
     expect(kicked).toEqual([USER]);
   });
 
-  it('30 held and NO choice: the answer is the choice (select_funds), not "preparing" for the 10 funds without history', async () => {
+  it('30 held and NO choice: the answer is the choice (select_funds), not "preparing" for the funds without history', async () => {
     const db = seed({ nav2_fund_analytics_reports: [], nav2_report_nav_dependencies: [], nav2_result_cache: [] });
-    const choice = { candidates: FUNDS.map((f) => ({ instrumentId: id(f), schemeName: `Fund ${f}`, currentValue: 1000 - f })), max: 20, suggestedIds: WITH_HISTORY.map(id) };
+    const choice = { candidates: FUNDS.map((f) => ({ instrumentId: id(f), schemeName: `Fund ${f}`, currentValue: 1000 - f })), max: 10, suggestedIds: WITH_HISTORY.map(id) };
     const deps: Partial<FundAnalyticsDeps> = {
       isFlagOn: async () => true,
       isPremium: async () => true,
@@ -275,7 +275,7 @@ describe('NC-R6: the service (30 held, 20 selected)', () => {
       nowMs: () => 0,
     };
     const r = await generateFundAnalyticsReport({ userId: USER, sessionClient: db.client as never, adminClient: db.client as unknown as SupabaseClient, periodChoice: 'since_first_held', fundIds: [id(1), id(99)], asOfDate: AS_OF, deps });
-    expect(r).toEqual({ status: 'invalid_selection', message: 'Choose between 1 and 20 of the funds you hold.' });
+    expect(r).toEqual({ status: 'invalid_selection', message: 'Choose between 1 and 10 of the funds you hold.' });
     expect(db.tables.nav2_fund_analytics_reports).toHaveLength(0);
   });
 });

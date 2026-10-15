@@ -83,7 +83,7 @@ describe('12 funds: the compact comparison', () => {
   });
 });
 
-// 25 funds is a LAYOUT / ENGINE STRESS case only: since 07-10-2026 one report covers at most 20 funds (nav2ReportFundCap.test.ts), so the largest real report is 20.
+// 25 funds is a LAYOUT / ENGINE STRESS case only: one report covers at most FUND_ANALYTICS_MAX_FUNDS funds (nav2ReportFundCap.test.ts: 20 until 07-10-2026, 10 since the pilot limit of 15-10-2026), so the largest real report is 10; 20 and 25 are layout stress cases.
 describe('25 funds (stress, not a real report): built by the real engine', () => {
   const t0 = Date.now();
   const { report, manifest, timings } = buildPrintFixture(parseFixtureName('funds-25+unavailable+redeemed+long+young'));

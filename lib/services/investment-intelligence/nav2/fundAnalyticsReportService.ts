@@ -15,7 +15,7 @@
 //      held scheme) is planned read-only; if some of it is missing and its fetch could be started, the answer is 'preparing'
 //      (a failed attempt goes into the existing cooldown, so this cannot hold forever; a fetch that could not be scheduled
 //      never holds, and neither does one the NAV fetch kill switch would refuse to run). Switch OFF: this step does not exist and generation behaves exactly as before.
-//   3c. ONE REPORT COVERS AT MOST FUND_ANALYTICS_MAX_FUNDS (20) FUNDS (PO decision 07-10-2026; the platform kills a request at 28 s). A person who holds
+//   3c. ONE REPORT COVERS AT MOST FUND_ANALYTICS_MAX_FUNDS (10, the pilot limit, PO decision 15-10-2026; it was 20 on 07-10-2026; the platform kills a request at 28 s). A person who holds
 //      more must choose which funds go in: without a choice the answer is 'select_funds' (the plain refusal, the funds with their values and the
 //      suggested choice: the 20 largest holdings); a choice that is empty, longer than the cap, repeats a fund or names a fund the person does not hold
 //      is 'invalid_selection' (one message for all of them, so another household's fund ids can never be probed). The choice is stored in the manifest.
