@@ -1,6 +1,7 @@
 import { MetricCard } from '@/components/ui/MetricCard';
 import { formatMoneyWhole } from '@/lib/engines/money';
 import type { DashboardSummary } from '@/lib/engines/dashboard';
+import { netWorthHeadline } from './netWorthHeadline';
 
 function ratioStatus(summary: DashboardSummary, key: string): 'good' | 'caution' | 'risk' | 'neutral' {
   return summary.ratios.find((r) => r.key === key)?.status ?? 'neutral';
@@ -20,6 +21,7 @@ export interface DashboardContextLinks {
 }
 
 export function VitalSignsStrip({ summary, contextLinks }: { summary: DashboardSummary; contextLinks?: DashboardContextLinks }) {
+  const netWorth = netWorthHeadline(summary);
   const surplusStatus: 'good' | 'caution' | 'risk' | 'neutral' =
     summary.monthlySurplus > 0 ? 'good' : summary.monthlySurplus < 0 ? 'risk' : 'neutral';
 
@@ -42,8 +44,9 @@ export function VitalSignsStrip({ summary, contextLinks }: { summary: DashboardS
         explain={{ targetCode: 'DASHBOARD_CASH_FLOW', accessibleLabel: 'Explain your monthly surplus' }}
       />
       <MetricCard
-        label="Net Worth"
-        value={formatMoneyWhole(summary.netWorth, summary.currency)}
+        label={netWorth.label}
+        value={formatMoneyWhole(netWorth.value, summary.currency)}
+        trend={netWorth.sub ?? undefined}
         status="neutral"
         contextResolved={contextLinks?.['dashboard.net_worth']}
         explain={{ targetCode: 'DASHBOARD_NET_WORTH', accessibleLabel: 'Explain your net worth' }}

@@ -29,6 +29,8 @@ import { unavailableSentence, XRAY_NO_DATA_NOTE } from '@/lib/ui/reportNotes';
 import { IndiaMfInvestmentReportSection } from '@/components/reports/IndiaMfInvestmentReportSection';
 import type { IndiaMfReport } from '@/lib/engines/investment-intelligence/indiaMfReport';
 import { DataTable } from '@/components/ui/DataTable';
+import { NetWorthLevelsPanel } from '@/components/dashboard/NetWorthLevelsPanel';
+import type { NetWorthLevels } from '@/lib/engines/netWorthLevels';
 
 interface BuiltSectionLike {
   sectionCode: string;
@@ -171,6 +173,13 @@ export function ReportPreview({
   const execSummary = byCode('executive_summary');
   const cashFlow = byCode('cash_flow');
   const netWorth = byCode('net_worth');
+  // PO decision 16-10-2026: the two-level model rides in the section data (absent on reports generated before it).
+  // Every total in the Net Worth section reads the FAMILY level from that one model so the section agrees with itself;
+  // the personal level is shown beside it by NetWorthLevelsPanel.
+  const nwLevels = (netWorth?.sectionData?.levels ?? null) as NetWorthLevels | null;
+  const nwTotalAssets = nwLevels ? nwLevels.family.totalAssets : netWorth?.sectionData.totalAssets;
+  const nwTotalLiabilities = nwLevels ? nwLevels.family.liabilities : netWorth?.sectionData.totalLiabilities;
+  const nwNet = nwLevels ? nwLevels.family.net : netWorth?.sectionData.netWorth;
   const healthScore = byCode('health_score');
   const financialDna = byCode('financial_dna');
   const resilience = byCode('resilience');
@@ -386,8 +395,8 @@ export function ReportPreview({
                 // not add investments/retirement again here, that would
                 // triple-count them.
                 rows={[
-                  { debtType: 'Total assets', balance: Number(netWorth.sectionData.totalAssets ?? 0) },
-                  { debtType: 'Total liabilities', balance: Number(netWorth.sectionData.totalLiabilities ?? 0) },
+                  { debtType: 'Total assets', balance: Number(nwTotalAssets ?? 0) },
+                  { debtType: 'Total liabilities', balance: Number(nwTotalLiabilities ?? 0) },
                 ]}
                 currency={currency}
               />
@@ -488,15 +497,23 @@ export function ReportPreview({
             </div>
             <SectionCard title="Net worth" className="report-section">
               <p className="text-sm text-gray-600">{content.netWorthDefinition('netWorth')}</p>
+              {nwLevels && (
+                <div className="mt-4">
+                  <NetWorthLevelsPanel levels={nwLevels} />
+                </div>
+              )}
               <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Stat label="Total assets" value={fmt(netWorth.sectionData.totalAssets)} />
-                <Stat label="— Property, cash & other" value={fmt(netWorth.sectionData.coreAssets)} />
-                <Stat label="— Investments" value={fmt(netWorth.sectionData.totalInvestments)} />
-                <Stat label="— Retirement" value={fmt(netWorth.sectionData.totalRetirement)} />
-                <Stat label="Total liabilities" value={fmt(netWorth.sectionData.totalLiabilities)} />
-                <Stat label="Net worth" value={fmt(netWorth.sectionData.netWorth)} />
+                <Stat label={nwLevels ? 'Total assets (family level)' : 'Total assets'} value={fmt(nwTotalAssets)} />
+                <Stat label="— Property, cash & other" value={fmt(nwLevels ? nwLevels.family.assets : netWorth.sectionData.coreAssets)} />
+                <Stat label="— Investments" value={fmt(nwLevels ? nwLevels.family.investments : netWorth.sectionData.totalInvestments)} />
+                <Stat label="— Retirement" value={fmt(nwLevels ? nwLevels.family.retirement : netWorth.sectionData.totalRetirement)} />
+                {nwLevels && nwLevels.family.entityValue !== 0 && (
+                  <Stat label="— Company, trust & HUF net value" value={fmt(nwLevels.family.entityValue)} />
+                )}
+                <Stat label={nwLevels ? 'Total liabilities (family level)' : 'Total liabilities'} value={fmt(nwTotalLiabilities)} />
+                <Stat label={nwLevels ? 'Net worth (family level)' : 'Net worth'} value={fmt(nwNet)} />
               </div>
-              <p className="mt-2 text-xs text-gray-400">Total assets = property, cash & other + investments + retirement.</p>
+              <p className="mt-2 text-xs text-gray-400">Total assets = property, cash & other + investments + retirement{nwLevels ? ' + entity net value' : ''}.</p>
               {typeof netWorth.sectionData.groupingNote === 'string' && (
                 <p className="mt-1 text-xs text-gray-500">{netWorth.sectionData.groupingNote}</p>
               )}
@@ -516,8 +533,8 @@ export function ReportPreview({
               <div className="mt-4">
                 <ReportDebtBarChart
                   rows={[
-                    { debtType: 'Total assets', balance: Number(netWorth.sectionData.totalAssets ?? 0) },
-                    { debtType: 'Total liabilities', balance: Number(netWorth.sectionData.totalLiabilities ?? 0) },
+                    { debtType: 'Total assets', balance: Number(nwTotalAssets ?? 0) },
+                    { debtType: 'Total liabilities', balance: Number(nwTotalLiabilities ?? 0) },
                   ]}
                   currency={currency}
                 />
@@ -538,7 +555,7 @@ export function ReportPreview({
               <p className="text-sm text-gray-600">{content.netWorthDefinition('liquidVsIlliquid')}</p>
               {netWorth.sectionData.liquidAssetRatio != null && (
                 <p className="mt-2 text-sm text-gray-600">
-                  Although your household&apos;s total assets are {fmt(netWorth.sectionData.totalAssets)}, approximately{' '}
+                  Although your household&apos;s total assets are {fmt(nwTotalAssets)}, approximately{' '}
                   {(Number(netWorth.sectionData.liquidAssetRatio) * 100).toFixed(0)}% is currently classified as readily
                   accessible or liquid.
                 </p>
@@ -637,9 +654,9 @@ export function ReportPreview({
                 value={cashFlow?.sectionData.savingsRate != null ? `${(Number(cashFlow.sectionData.savingsRate) * 100).toFixed(1)}%` : 'Not available'}
                 meaning={content.coreFigureDefinition('savingsRate')}
               />
-              <MetricExplainer label="Assets" value={netWorth ? fmt(netWorth.sectionData.totalAssets) : '—'} meaning={content.coreFigureDefinition('assets')} />
-              <MetricExplainer label="Liabilities" value={netWorth ? fmt(netWorth.sectionData.totalLiabilities) : '—'} meaning={content.coreFigureDefinition('liabilities')} />
-              <MetricExplainer label="Net worth" value={netWorth ? fmt(netWorth.sectionData.netWorth) : '—'} meaning={content.coreFigureDefinition('netWorth')} />
+              <MetricExplainer label="Assets" value={netWorth ? fmt(nwTotalAssets) : '—'} meaning={content.coreFigureDefinition('assets')} />
+              <MetricExplainer label="Liabilities" value={netWorth ? fmt(nwTotalLiabilities) : '—'} meaning={content.coreFigureDefinition('liabilities')} />
+              <MetricExplainer label={nwLevels ? 'Net worth (family level)' : 'Net worth'} value={netWorth ? fmt(nwNet) : '—'} meaning={content.coreFigureDefinition('netWorth')} />
               <MetricExplainer
                 label="Emergency-fund months"
                 value={emergencyFundChart?.months !== null && emergencyFundChart?.months !== undefined ? `${emergencyFundChart.months.toFixed(1)} months` : 'Not available'}
