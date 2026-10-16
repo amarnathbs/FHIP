@@ -99,7 +99,9 @@ describe('the files', () => {
   it('numbering: 0283 is unique, above everything on main (0280), and clear of NAV2 (0281, 0282) and of every other file in the repository', () => {
     const files = fs.readdirSync(MIG_DIR).filter((f) => /^\d{4}_/.test(f));
     expect(files.filter((f) => f.startsWith('0283_'))).toEqual([MIGRATION.file]);
-    expect(Math.max(...files.map((f) => Number(f.slice(0, 4))))).toBe(283);
+    // Later numbers may now exist on main (0285 income tax amount); what matters is that 0283 is the only file with its number and sorts above 0280.
+    expect(files.filter((f) => Number(f.slice(0, 4)) > 280 && Number(f.slice(0, 4)) < 283)).toEqual([]);
+    expect(files.indexOf(MIGRATION.file)).toBeGreaterThan(files.indexOf('0280_bench1_entitlement_edit_revision.sql'));
     expect(files.some((f) => f.startsWith('0281_') || f.startsWith('0282_'))).toBe(false);
   });
 
