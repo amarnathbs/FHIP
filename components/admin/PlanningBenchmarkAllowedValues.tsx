@@ -14,6 +14,7 @@ import { failureFromResponse, failureFromThrown, readJsonSafely } from '@/lib/re
 import { cohortsHeading, datasetMetricsSection, datasetsHeading, metricsHeading, MAPPING_NOT_INSTALLED_LINE, UNAVAILABLE_LINE, type AllowedDataset, type AllowedValues, type AllowedValuesOk } from '@/lib/planning-benchmarks/allowedValues';
 import { formatDayFirst } from '@/lib/planning-benchmarks/dayFirst';
 import { KIND_LABEL, UPLOAD_KINDS, columnGuide, type UploadKind } from '@/lib/planning-benchmarks/uploadSchema';
+import { DataTable } from '@/components/ui/DataTable';
 
 export const ALLOWED_VALUES_JSON_URL = '/api/admin/benchmarks/upload/allowed-values';
 export const ALLOWED_VALUES_CSV_URL = '/api/admin/benchmarks/upload/allowed-values?format=csv';
@@ -29,15 +30,6 @@ export function summaryText(data: AllowedValues | null): string {
   if (!data) return 'Allowed values and column guide (columns, datasets, metrics with units, cohorts)';
   if (data.state !== 'ok') return 'Allowed values (unavailable right now)';
   return `Allowed values: ${data.counts.datasetsOpen} ${data.counts.datasetsOpen === 1 ? 'dataset is' : 'datasets are'} open for upload, ${data.counts.metricsTotal} metrics, ${data.counts.cohortsTotal} cohorts`;
-}
-
-function ScrollRegion({ label, children }: { label: string; children: React.ReactNode }) {
-  // A scrollable region must be reachable and named for keyboard and screen reader users.
-  return (
-    <div role="region" aria-label={label} tabIndex={0} className="mt-2 max-h-72 overflow-auto rounded border border-line">
-      {children}
-    </div>
-  );
 }
 
 /**
@@ -63,29 +55,27 @@ export function ColumnGuide() {
           ))}
         </select>
       </label>
-      <ScrollRegion label={`Columns of the ${KIND_LABEL[kind]} template`}>
-        <table className="w-full text-left text-xs">
-          <caption className="sr-only">Columns of the {KIND_LABEL[kind]} template</caption>
-          <thead className="sticky top-0 bg-gray-50 text-muted">
-            <tr>
-              <th scope="col" className="px-3 py-2">Column</th>
-              <th scope="col" className="px-3 py-2">Required</th>
-              <th scope="col" className="px-3 py-2">Type</th>
-              <th scope="col" className="px-3 py-2">Description</th>
+      <DataTable label={`Columns of the ${KIND_LABEL[kind]} template`} wrapperClassName="mt-2 rounded border border-line" className="w-full text-left text-xs">
+        <caption className="sr-only">Columns of the {KIND_LABEL[kind]} template</caption>
+        <thead className="sticky top-0 bg-gray-50 text-muted">
+          <tr>
+            <th scope="col" className="px-3 py-2">Column</th>
+            <th scope="col" className="px-3 py-2">Required</th>
+            <th scope="col" className="px-3 py-2">Type</th>
+            <th scope="col" className="px-3 py-2">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.name} className="border-t border-line align-top">
+              <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
+              <td className="px-3 py-2">{r.required}</td>
+              <td className="px-3 py-2">{r.type}</td>
+              <td className="px-3 py-2">{r.description}</td>
             </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.name} className="border-t border-line align-top">
-                <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
-                <td className="px-3 py-2">{r.required}</td>
-                <td className="px-3 py-2">{r.type}</td>
-                <td className="px-3 py-2">{r.description}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </ScrollRegion>
+          ))}
+        </tbody>
+      </DataTable>
     </section>
   );
 }
@@ -114,33 +104,31 @@ function AllowedValuesLists({ data }: { data: AllowedValuesOk }) {
         <p className="mt-1 max-w-3xl text-xs text-muted">
           {data.counts.datasetsTotal} are registered; {data.counts.datasetsClosed} cannot receive an upload. Type dataset_name and dataset_version exactly as shown. An upload never creates a dataset.
         </p>
-        <ScrollRegion label="Datasets that are registered, and whether each is open for upload">
-          <table className="w-full text-left text-xs">
-            <caption className="sr-only">Datasets</caption>
-            <thead className="sticky top-0 bg-gray-50 text-muted">
-              <tr>
-                <th scope="col" className="px-3 py-2">dataset_name</th>
-                <th scope="col" className="px-3 py-2">dataset_version</th>
-                <th scope="col" className="px-3 py-2">Class</th>
-                <th scope="col" className="px-3 py-2">Status</th>
-                <th scope="col" className="px-3 py-2">Source</th>
-                <th scope="col" className="px-3 py-2">Accepts</th>
+        <DataTable label="Datasets that are registered, and whether each is open for upload" wrapperClassName="mt-2 rounded border border-line" className="w-full text-left text-xs">
+          <caption className="sr-only">Datasets</caption>
+          <thead className="sticky top-0 bg-gray-50 text-muted">
+            <tr>
+              <th scope="col" className="px-3 py-2">dataset_name</th>
+              <th scope="col" className="px-3 py-2">dataset_version</th>
+              <th scope="col" className="px-3 py-2">Class</th>
+              <th scope="col" className="px-3 py-2">Status</th>
+              <th scope="col" className="px-3 py-2">Source</th>
+              <th scope="col" className="px-3 py-2">Accepts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.datasets.map((d) => (
+              <tr key={`${d.name}|${d.version}`} className="border-t border-line align-top">
+                <td className="px-3 py-2 font-medium text-ink">{d.name}</td>
+                <td className="px-3 py-2">{d.version}</td>
+                <td className="px-3 py-2">{d.benchmarkClass}</td>
+                <td className="px-3 py-2">{d.status}</td>
+                <td className="px-3 py-2">{d.sourceName ?? 'none'}</td>
+                <td className="px-3 py-2">{acceptsText(d)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.datasets.map((d) => (
-                <tr key={`${d.name}|${d.version}`} className="border-t border-line align-top">
-                  <td className="px-3 py-2 font-medium text-ink">{d.name}</td>
-                  <td className="px-3 py-2">{d.version}</td>
-                  <td className="px-3 py-2">{d.benchmarkClass}</td>
-                  <td className="px-3 py-2">{d.status}</td>
-                  <td className="px-3 py-2">{d.sourceName ?? 'none'}</td>
-                  <td className="px-3 py-2">{acceptsText(d)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ScrollRegion>
+            ))}
+          </tbody>
+        </DataTable>
       </section>
 
       <section aria-labelledby="pb-av-metrics">
@@ -150,29 +138,27 @@ function AllowedValuesLists({ data }: { data: AllowedValuesOk }) {
         <p className="mt-1 max-w-3xl text-xs text-muted">
           In an observed values file, unit must equal the unit shown. In a planning target ranges file the bounds are in that unit (there is no unit column). An upload cannot create a metric.
         </p>
-        <ScrollRegion label="Registered metrics and the unit each must be uploaded in">
-          <table className="w-full text-left text-xs">
-            <caption className="sr-only">Metrics</caption>
-            <thead className="sticky top-0 bg-gray-50 text-muted">
-              <tr>
-                <th scope="col" className="px-3 py-2">metric_code</th>
-                <th scope="col" className="px-3 py-2">Name</th>
-                <th scope="col" className="px-3 py-2">Unit</th>
-                <th scope="col" className="px-3 py-2">Status</th>
+        <DataTable label="Registered metrics and the unit each must be uploaded in" wrapperClassName="mt-2 rounded border border-line" className="w-full text-left text-xs">
+          <caption className="sr-only">Metrics</caption>
+          <thead className="sticky top-0 bg-gray-50 text-muted">
+            <tr>
+              <th scope="col" className="px-3 py-2">metric_code</th>
+              <th scope="col" className="px-3 py-2">Name</th>
+              <th scope="col" className="px-3 py-2">Unit</th>
+              <th scope="col" className="px-3 py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.metrics.map((m) => (
+              <tr key={m.code} className="border-t border-line align-top">
+                <td className="px-3 py-2 font-medium text-ink">{m.code}</td>
+                <td className="px-3 py-2">{m.name}</td>
+                <td className="px-3 py-2">{m.unit}</td>
+                <td className="px-3 py-2">{m.active ? 'active' : 'inactive (retired)'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.metrics.map((m) => (
-                <tr key={m.code} className="border-t border-line align-top">
-                  <td className="px-3 py-2 font-medium text-ink">{m.code}</td>
-                  <td className="px-3 py-2">{m.name}</td>
-                  <td className="px-3 py-2">{m.unit}</td>
-                  <td className="px-3 py-2">{m.active ? 'active' : 'inactive (retired)'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ScrollRegion>
+            ))}
+          </tbody>
+        </DataTable>
       </section>
 
       <MappingSection data={data} />
@@ -182,29 +168,27 @@ function AllowedValuesLists({ data }: { data: AllowedValuesOk }) {
           Part 3. Cohorts: {cohortsHeading(data)}
         </h3>
         <p className="mt-1 max-w-3xl text-xs text-muted">In an observed values file, cohort_code must be one of these, or blank for a country-wide figure.</p>
-        <ScrollRegion label="Registered cohorts">
-          <table className="w-full text-left text-xs">
-            <caption className="sr-only">Cohorts</caption>
-            <thead className="sticky top-0 bg-gray-50 text-muted">
-              <tr>
-                <th scope="col" className="px-3 py-2">cohort_code</th>
-                <th scope="col" className="px-3 py-2">Description</th>
-                <th scope="col" className="px-3 py-2">Country</th>
-                <th scope="col" className="px-3 py-2">Age band</th>
+        <DataTable label="Registered cohorts" wrapperClassName="mt-2 rounded border border-line" className="w-full text-left text-xs">
+          <caption className="sr-only">Cohorts</caption>
+          <thead className="sticky top-0 bg-gray-50 text-muted">
+            <tr>
+              <th scope="col" className="px-3 py-2">cohort_code</th>
+              <th scope="col" className="px-3 py-2">Description</th>
+              <th scope="col" className="px-3 py-2">Country</th>
+              <th scope="col" className="px-3 py-2">Age band</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.cohorts.map((c) => (
+              <tr key={c.code} className="border-t border-line align-top">
+                <td className="px-3 py-2 font-medium text-ink">{c.code}</td>
+                <td className="px-3 py-2">{c.description}</td>
+                <td className="px-3 py-2">{c.countryCode ?? 'any'}</td>
+                <td className="px-3 py-2">{c.ageBand ?? ''}</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.cohorts.map((c) => (
-                <tr key={c.code} className="border-t border-line align-top">
-                  <td className="px-3 py-2 font-medium text-ink">{c.code}</td>
-                  <td className="px-3 py-2">{c.description}</td>
-                  <td className="px-3 py-2">{c.countryCode ?? 'any'}</td>
-                  <td className="px-3 py-2">{c.ageBand ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ScrollRegion>
+            ))}
+          </tbody>
+        </DataTable>
       </section>
     </div>
   );
@@ -228,35 +212,33 @@ export function MappingSection({ data }: { data: AllowedValuesOk }) {
       ) : (
         <>
           <p className="mt-1 max-w-3xl text-xs text-muted">{section.intro}</p>
-          <ScrollRegion label="Metrics each dataset may receive, by kind of file">
-            <table className="w-full text-left text-xs">
-              <caption className="sr-only">Allowed metrics per dataset</caption>
-              <thead className="sticky top-0 bg-gray-50 text-muted">
-                <tr>
-                  <th scope="col" className="px-3 py-2">dataset_name</th>
-                  <th scope="col" className="px-3 py-2">dataset_version</th>
-                  <th scope="col" className="px-3 py-2">metric_code</th>
-                  <th scope="col" className="px-3 py-2">Unit</th>
-                  <th scope="col" className="px-3 py-2">Observed values file</th>
-                  <th scope="col" className="px-3 py-2">Planning target ranges file</th>
-                  <th scope="col" className="px-3 py-2">Live figures</th>
+          <DataTable label="Metrics each dataset may receive, by kind of file" wrapperClassName="mt-2 rounded border border-line" className="w-full text-left text-xs">
+            <caption className="sr-only">Allowed metrics per dataset</caption>
+            <thead className="sticky top-0 bg-gray-50 text-muted">
+              <tr>
+                <th scope="col" className="px-3 py-2">dataset_name</th>
+                <th scope="col" className="px-3 py-2">dataset_version</th>
+                <th scope="col" className="px-3 py-2">metric_code</th>
+                <th scope="col" className="px-3 py-2">Unit</th>
+                <th scope="col" className="px-3 py-2">Observed values file</th>
+                <th scope="col" className="px-3 py-2">Planning target ranges file</th>
+                <th scope="col" className="px-3 py-2">Live figures</th>
+              </tr>
+            </thead>
+            <tbody>
+              {section.rows.map((r) => (
+                <tr key={`${r[0]}|${r[1]}|${r[2]}`} className="border-t border-line align-top">
+                  <td className="px-3 py-2 font-medium text-ink">{r[0]}</td>
+                  <td className="px-3 py-2">{r[1]}</td>
+                  <td className="px-3 py-2">{r[2]}</td>
+                  <td className="px-3 py-2">{r[4]}</td>
+                  <td className="px-3 py-2">{r[5]}</td>
+                  <td className="px-3 py-2">{r[6]}</td>
+                  <td className="px-3 py-2">{r[7]}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {section.rows.map((r) => (
-                  <tr key={`${r[0]}|${r[1]}|${r[2]}`} className="border-t border-line align-top">
-                    <td className="px-3 py-2 font-medium text-ink">{r[0]}</td>
-                    <td className="px-3 py-2">{r[1]}</td>
-                    <td className="px-3 py-2">{r[2]}</td>
-                    <td className="px-3 py-2">{r[4]}</td>
-                    <td className="px-3 py-2">{r[5]}</td>
-                    <td className="px-3 py-2">{r[6]}</td>
-                    <td className="px-3 py-2">{r[7]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollRegion>
+              ))}
+            </tbody>
+          </DataTable>
         </>
       )}
     </section>

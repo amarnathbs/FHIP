@@ -1,0 +1,1278 @@
+{
+  "run": "bulkcertmux6c29t",
+  "app": "http://localhost:3993",
+  "startedAt": "2026-10-06T21:11:44.556Z",
+  "sameFileReupload": {
+    "status": 422,
+    "code": "FILE_ALREADY_APPLIED"
+  },
+  "concurrentApply": [
+    {
+      "status": 200,
+      "already": true,
+      "created": 50,
+      "ms": 1814
+    },
+    {
+      "status": 200,
+      "already": true,
+      "created": 50,
+      "ms": 1815
+    },
+    {
+      "status": 200,
+      "already": true,
+      "created": 50,
+      "ms": 1800
+    },
+    {
+      "status": 200,
+      "already": true,
+      "created": 50,
+      "ms": 1810
+    },
+    {
+      "status": 200,
+      "already": true,
+      "created": 50,
+      "ms": 1807
+    },
+    {
+      "status": 200,
+      "already": false,
+      "created": 50,
+      "ms": 1795
+    }
+  ],
+  "securityMatrix": [
+    {
+      "role": "anonymous",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs",
+      "status": 401
+    },
+    {
+      "role": "anonymous",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}",
+      "status": 401
+    },
+    {
+      "role": "anonymous",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/rows/2",
+      "status": 401
+    },
+    {
+      "role": "anonymous",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/results",
+      "status": 401
+    },
+    {
+      "role": "anonymous",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs/{id}/apply",
+      "status": 401
+    },
+    {
+      "role": "anonymous",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs",
+      "status": 401
+    },
+    {
+      "role": "customer",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "customer",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}",
+      "status": 403
+    },
+    {
+      "role": "customer",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/rows/2",
+      "status": 403
+    },
+    {
+      "role": "customer",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/results",
+      "status": 403
+    },
+    {
+      "role": "customer",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs/{id}/apply",
+      "status": 403
+    },
+    {
+      "role": "customer",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "analyst",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "analyst",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}",
+      "status": 403
+    },
+    {
+      "role": "analyst",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/rows/2",
+      "status": 403
+    },
+    {
+      "role": "analyst",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/results",
+      "status": 403
+    },
+    {
+      "role": "analyst",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs/{id}/apply",
+      "status": 403
+    },
+    {
+      "role": "analyst",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "publisher",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "publisher",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}",
+      "status": 403
+    },
+    {
+      "role": "publisher",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/rows/2",
+      "status": 403
+    },
+    {
+      "role": "publisher",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/results",
+      "status": 403
+    },
+    {
+      "role": "publisher",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs/{id}/apply",
+      "status": 403
+    },
+    {
+      "role": "publisher",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "compliance reviewer",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "compliance reviewer",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}",
+      "status": 403
+    },
+    {
+      "role": "compliance reviewer",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/rows/2",
+      "status": 403
+    },
+    {
+      "role": "compliance reviewer",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/results",
+      "status": 403
+    },
+    {
+      "role": "compliance reviewer",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs/{id}/apply",
+      "status": 403
+    },
+    {
+      "role": "compliance reviewer",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "author",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    },
+    {
+      "role": "author",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}",
+      "status": 403
+    },
+    {
+      "role": "author",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/rows/2",
+      "status": 403
+    },
+    {
+      "role": "author",
+      "method": "GET",
+      "path": "/api/admin/resources/import/runs/{id}/results",
+      "status": 403
+    },
+    {
+      "role": "author",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs/{id}/apply",
+      "status": 403
+    },
+    {
+      "role": "author",
+      "method": "POST",
+      "path": "/api/admin/resources/import/runs",
+      "status": 403
+    }
+  ],
+  "scale": [
+    {
+      "type": "article",
+      "rows": 1,
+      "fileBytes": 1253,
+      "uploadTotalMs": 1947,
+      "parseMs": 0,
+      "resolveMs": 246,
+      "validateMs": 0,
+      "stageMs": 347,
+      "dbQueriesDuringUpload": 9,
+      "uploadResponseBytes": 245,
+      "previewResponseBytes": 1518,
+      "applyMs": 1427,
+      "applyResponseBytes": 154,
+      "timeoutPath": null,
+      "applyHttp": 200,
+      "applyCode": null,
+      "applyError": null,
+      "created": 1
+    },
+    {
+      "type": "article",
+      "rows": 50,
+      "fileBytes": 36827,
+      "uploadTotalMs": 2457,
+      "parseMs": 4,
+      "resolveMs": 236,
+      "validateMs": 29,
+      "stageMs": 570,
+      "dbQueriesDuringUpload": 9,
+      "uploadResponseBytes": 248,
+      "previewResponseBytes": 40181,
+      "applyMs": 1764,
+      "applyResponseBytes": 2066,
+      "timeoutPath": null,
+      "applyHttp": 200,
+      "applyCode": null,
+      "applyError": null,
+      "created": 50
+    },
+    {
+      "type": "article",
+      "rows": 100,
+      "fileBytes": 73127,
+      "uploadTotalMs": 2999,
+      "parseMs": 9,
+      "resolveMs": 240,
+      "validateMs": 14,
+      "stageMs": 1165,
+      "dbQueriesDuringUpload": 10,
+      "uploadResponseBytes": 252,
+      "previewResponseBytes": 79683,
+      "applyMs": 3370,
+      "applyResponseBytes": 4018,
+      "timeoutPath": null,
+      "applyHttp": 200,
+      "applyCode": null,
+      "applyError": null,
+      "created": 100
+    },
+    {
+      "type": "article",
+      "rows": 250,
+      "fileBytes": 182027,
+      "uploadTotalMs": 4204,
+      "parseMs": 12,
+      "resolveMs": 250,
+      "validateMs": 97,
+      "stageMs": 2590,
+      "dbQueriesDuringUpload": 13,
+      "uploadResponseBytes": 253,
+      "previewResponseBytes": 198183,
+      "applyMs": 3672,
+      "applyResponseBytes": 9868,
+      "timeoutPath": null,
+      "applyHttp": 200,
+      "applyCode": null,
+      "applyError": null,
+      "created": 250
+    },
+    {
+      "type": "money_update",
+      "rows": 1,
+      "fileBytes": 997,
+      "uploadTotalMs": 1983,
+      "parseMs": 0,
+      "resolveMs": 247,
+      "validateMs": 1,
+      "stageMs": 413,
+      "dbQueriesDuringUpload": 9,
+      "uploadResponseBytes": 245,
+      "previewResponseBytes": 1470,
+      "applyMs": 1566,
+      "applyResponseBytes": 154,
+      "timeoutPath": null,
+      "applyHttp": 200,
+      "applyCode": null,
+      "applyError": null,
+      "created": 1
+    },
+    {
+      "type": "money_update",
+      "rows": 50,
+      "fileBytes": 22802,
+      "uploadTotalMs": 2219,
+      "parseMs": 3,
+      "resolveMs": 289,
+      "validateMs": 14,
+      "stageMs": 540,
+      "dbQueriesDuringUpload": 9,
+      "uploadResponseBytes": 248,
+      "previewResponseBytes": 37072,
+      "applyMs": 2081,
+      "applyResponseBytes": 2066,
+      "timeoutPath": null,
+      "applyHttp": 200,
+      "applyCode": null,
+      "applyError": null,
+      "created": 50
+    },
+    {
+      "type": "money_update",
+      "rows": 100,
+      "fileBytes": 45052,
+      "uploadTotalMs": 4661,
+      "parseMs": 6,
+      "resolveMs": 399,
+      "validateMs": 13,
+      "stageMs": 1367,
+      "dbQueriesDuringUpload": 10,
+      "uploadResponseBytes": 252,
+      "previewResponseBytes": 73425,
+      "applyMs": 2590,
+      "applyResponseBytes": 4018,
+      "timeoutPath": null,
+      "applyHttp": 200,
+      "applyCode": null,
+      "applyError": null,
+      "created": 100
+    },
+    {
+      "type": "money_update",
+      "rows": 250,
+      "fileBytes": 111802,
+      "uploadTotalMs": 3915,
+      "parseMs": 10,
+      "resolveMs": 264,
+      "validateMs": 32,
+      "stageMs": 2288,
+      "dbQueriesDuringUpload": 13,
+      "uploadResponseBytes": 253,
+      "previewResponseBytes": 182474,
+      "applyMs": 5236,
+      "applyResponseBytes": 9868,
+      "timeoutPath": null,
+      "applyHttp": 200,
+      "applyCode": null,
+      "applyError": null,
+      "created": 250
+    }
+  ],
+  "residue": {
+    "posts": 0,
+    "sources": 0,
+    "categories": 0,
+    "tags": 0,
+    "authors": 0,
+    "ctas": 0,
+    "importRuns": 0,
+    "postsByUsers": 0,
+    "authUsers": 0
+  },
+  "finishedAt": "2026-10-06T21:20:59.898Z",
+  "passed": 166,
+  "failed": 1,
+  "checks": [
+    {
+      "name": "A template article.xlsx: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template article.xlsx: four sheets, upload header equals the schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template article.xlsx: Lookup_Values lists live reference data (synthetic category present)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template article.csv: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template article.csv: header equals the parser schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.xlsx: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template money_update.xlsx: four sheets, upload header equals the schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.xlsx: Lookup_Values lists live reference data (synthetic category present)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.csv: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template money_update.csv: header equals the parser schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template access: anonymous -> 401",
+      "pass": true,
+      "detail": "got 401"
+    },
+    {
+      "name": "A template access: customer -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: analyst -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: publisher -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: compliance -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: author -> 200",
+      "pass": true,
+      "detail": "got 200"
+    },
+    {
+      "name": "B article xlsx: upload -> preview ready (2 rows, 0 errors)",
+      "pass": true,
+      "detail": "{\"data\":{\"runId\":\"9d91f270-efb0-4456-8985-3e3b569d13f7\",\"status\":\"ready\",\"fileIssues\":[{\"row\":null,\"field\":null,\"code\":\"SHEET_NOTE\",\"message\":\"Imported the sheet \\\"Article_Upload\\\". Not imported: \\\"Instructions\\\", \\\"Lookup_Values\\\", \\\"Example_Article\\\".\",\"severity\":\"warning\"}],\"summary\":{\"rowCount\":"
+    },
+    {
+      "name": "B nothing is created by upload/preview (canonical writes = 0)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B preview run + rows load; summary ready",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B row detail shows staged blocks, category, author, source",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B apply: 2 created",
+      "pass": true,
+      "detail": "{\"data\":{\"runId\":\"9d91f270-efb0-4456-8985-3e3b569d13f7\",\"created\":2,\"alreadyApplied\":false,\"postIds\":[\"91bf0536-6f63-4dc9-99ad-d8072b9adcda\",\"80a7ae32-0a98-4614-ae52-47eb4980ed09\"],\"dbMs\":359}}"
+    },
+    {
+      "name": "B golden: content_type article, status draft, visibility private, not indexable, creator = editor",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B golden: title, excerpt, callout, 3 takeaways, 3 H2 (incl. financial health), 1 H3, lists, example",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B golden: financial-health section = H2 + 2 paragraphs",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B golden: category, author",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B golden: 2 tags, 1 source (created by the importer, https link)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B golden: CTA resolved, SEO blank (normal fallback)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B audit: created_via=bulk_import with run id, row number, external id",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B second apply of the same run: no new posts (idempotent)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B same-file re-upload: refused FILE_ALREADY_APPLIED, 0 additional posts",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B editor: imported article opens in the NORMAL editor API",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B editor: change a paragraph and save",
+      "pass": true,
+      "detail": "200 {\"data\":{\"id\":\"91bf0536-6f63-4dc9-99ad-d8072b9adcda\",\"content_id\":\"bulkcertmux6c29t-A1\",\"title\":\"Synthetic bulkcertmux6c29t article 1\",\"slug\":\"bulkcertmux6c29t-article-1\",\"excerpt\":\"Synthetic excerpt "
+    },
+    {
+      "name": "B editor: reload shows the edit persisted, block count unchanged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B article source REMOVE persists",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "B article source ADD persists after reload",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B a save that OMITS sourceIds never clears the sources",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "B normal editor page renders for the imported draft (200)",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "B preview renders: body present, no escaped JSON, no duplicate quick answer",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "B PUBLIC HIDDEN while draft: direct URL 404, listing, search, sitemap, direct table read all empty",
+      "pass": true,
+      "detail": "url 404"
+    },
+    {
+      "name": "B workflow GREEN: an author cannot publish a draft",
+      "pass": true,
+      "detail": "422"
+    },
+    {
+      "name": "B workflow GREEN: editor submits for editorial review (needs author + category: present)",
+      "pass": true,
+      "detail": "200 {\"data\":{\"id\":\"91bf0536-6f63-4dc9-99ad-d8072b9adcda\",\"content_id\":\"bulkcertmux6c29t-A1\",\"title\":\"Synthetic bulkcertmux6c29t article 1\",\"slug\":\"bulkcertmux6c29t-"
+    },
+    {
+      "name": "B workflow GREEN: approved then published by a publisher",
+      "pass": true,
+      "detail": "200/200 {\"data\":{\"id\":\"91bf0536-6f63-4dc9-99ad-d8072b9adcda\",\"content_id\":\"bulkcertmux6c29t-A1\",\"title\":\"Synthetic bulkcertmux6c"
+    },
+    {
+      "name": "B POSITIVE CONTROL: after real publication the public URL serves it (so \"hidden while draft\" is meaningful)",
+      "pass": false,
+      "detail": "404"
+    },
+    {
+      "name": "B workflow AMBER: an editor cannot approve AMBER content (compliance review required)",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "B workflow AMBER: the compliance reviewer approves",
+      "pass": true,
+      "detail": "200 {\"data\":{\"id\":\"80a7ae32-0a98-4614-ae52-47eb4980ed09\",\"content_id\":\"bulkcertmux6c29t-A2\",\"title\":\"Synthetic bulkcertmux6c"
+    },
+    {
+      "name": "B workflow RED: publication blocked",
+      "pass": true,
+      "detail": "422"
+    },
+    {
+      "name": "C article CSV: upload -> preview -> apply (2 created)",
+      "pass": true,
+      "detail": "200/200"
+    },
+    {
+      "name": "C inspect route lists the workbook sheets and preselects the template sheet",
+      "pass": true,
+      "detail": "{\"data\":{\"kind\":\"xlsx\",\"fileSha256\":\"ad2c014ae5a861b098e80707184738163775441e57a705efa6b05117076351d9\",\"sheets\":[{\"name\":\"Instructions\",\"state\":\"visible\",\"rowCount\":54},{\"name\":\"Article_Upload\",\"state"
+    },
+    {
+      "name": "C an XLSX with NO sheet chosen is refused: UPLOAD_SHEET_MISSING (the server never picks a sheet)",
+      "pass": true,
+      "detail": "422 UPLOAD_SHEET_MISSING"
+    },
+    {
+      "name": "C the preview run discloses the sheet imported and the sheets NOT imported (file-level notes)",
+      "pass": true,
+      "detail": "[{\"row\":null,\"code\":\"SHEET_NOTE\",\"field\":null,\"message\":\"Imported the sheet \\\"Article_Upload\\\". Not imported: \\\"Instructions\\\", \\\"Lookup_Values\\\", \\\"Example_Article\\\".\",\"severity\":\"warning\"}]"
+    },
+    {
+      "name": "C a workbook with ANY sheet name imports when the operator chooses that sheet",
+      "pass": true,
+      "detail": "{\"data\":{\"runId\":\"5a203fd7-f1e6-4b51-867e-e7b66ca32d72\",\"status\":\"ready\",\"fileIssues\":[{\"row\":null,\"field\":null,\"code\":\"SHEET_NOTE\",\"message\":\"Imported the sheet \\\"My Rows\\\". Not imported: \\\"Instructi"
+    },
+    {
+      "name": "C money update XLSX: preview ready (2 rows)",
+      "pass": true,
+      "detail": "{\"data\":{\"runId\":\"b4653c9a-c8a0-4bd5-9351-28e4a2057c77\",\"status\":\"ready\",\"fileIssues\":[{\"row\":null,\"field\":null,\"code\":\"SHEET_NOTE\",\"message\":\"Imported the sheet \\\"Money_Update_Upload\\\". Not imported: \\\"Instructions\\\", \\\"Lookup_Values\\\", \\\"Example_Money_Update\\\".\",\"severity\":\"warning\"}],\"summary\":{\""
+    },
+    {
+      "name": "C money update golden: type, draft, private, time_sensitive, not indexable, event date, audience, amber, category",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "C money update golden: five sections (headings) in order with content, source linked, review date",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "C money update opens in the NORMAL Money Update editor API with its source",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "C Money Update editor page renders for the imported draft",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "C money update PUBLIC HIDDEN while draft",
+      "pass": true,
+      "detail": "404"
+    },
+    {
+      "name": "C money update CSV round trip (1 created)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "D invalid article (missing title): MISSING_REQUIRED_VALUE, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 MISSING_REQUIRED_VALUE 409"
+    },
+    {
+      "name": "D invalid article (missing excerpt): MISSING_REQUIRED_VALUE, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 MISSING_REQUIRED_VALUE 409"
+    },
+    {
+      "name": "D invalid article (empty main body): ARTICLE_BODY_EMPTY, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 ARTICLE_BODY_EMPTY 409"
+    },
+    {
+      "name": "D invalid article (invalid jurisdiction): INVALID_ENUM, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 INVALID_ENUM 409"
+    },
+    {
+      "name": "D invalid article (invalid compliance): INVALID_ENUM, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 INVALID_ENUM 409"
+    },
+    {
+      "name": "D invalid article (unknown category): UNKNOWN_PRIMARY_CATEGORY, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 UNKNOWN_PRIMARY_CATEGORY 409"
+    },
+    {
+      "name": "D invalid article (unsupported markup): UNSUPPORTED_ARTICLE_MARKUP, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 UNSUPPORTED_ARTICLE_MARKUP 409"
+    },
+    {
+      "name": "D invalid article (bad https source): INSECURE_URL, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 INSECURE_URL 409"
+    },
+    {
+      "name": "D invalid article (unknown author): UNKNOWN_AUTHOR, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 UNKNOWN_AUTHOR 409"
+    },
+    {
+      "name": "D invalid article (existing slug): EXISTING_CONTENT_CONFLICT, Apply refused, canonical writes = 0",
+      "pass": true,
+      "detail": "200 EXISTING_CONTENT_CONFLICT 409"
+    },
+    {
+      "name": "D invalid article (ambiguous author): AMBIGUOUS_AUTHOR",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "D invalid money update (future event date): FUTURE_EVENT_DATE, Apply refused, writes = 0",
+      "pass": true,
+      "detail": "FUTURE_EVENT_DATE 409"
+    },
+    {
+      "name": "D invalid money update (missing review and expiry): MISSING_REVIEW_OR_EXPIRY, Apply refused, writes = 0",
+      "pass": true,
+      "detail": "MISSING_REVIEW_OR_EXPIRY 409"
+    },
+    {
+      "name": "D invalid money update (no source): SOURCE_REQUIRED, Apply refused, writes = 0",
+      "pass": true,
+      "detail": "SOURCE_REQUIRED 409"
+    },
+    {
+      "name": "D invalid money update (blank section): MISSING_REQUIRED_VALUE, Apply refused, writes = 0",
+      "pass": true,
+      "detail": "MISSING_REQUIRED_VALUE 409"
+    },
+    {
+      "name": "D invalid money update (invalid jurisdiction): INVALID_ENUM, Apply refused, writes = 0",
+      "pass": true,
+      "detail": "INVALID_ENUM 409"
+    },
+    {
+      "name": "D invalid money update (unknown category): UNKNOWN_PRIMARY_CATEGORY, Apply refused, writes = 0",
+      "pass": true,
+      "detail": "UNKNOWN_PRIMARY_CATEGORY 409"
+    },
+    {
+      "name": "D invalid money update (bad https source): INSECURE_URL, Apply refused, writes = 0",
+      "pass": true,
+      "detail": "INSECURE_URL 409"
+    },
+    {
+      "name": "D validation results CSV downloads (row, field, error_code, message) and neutralises injection",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "E mixed file (20 valid + 1 invalid): Apply blocked, 0 created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "E stale preview: STALE_PREVIEW 409, no partial write (the racing post is the only new one)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "E stale preview: run is marked stale, not applied",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "E CONCURRENT apply (6 parallel requests): exactly one effect, 50 posts, 0 duplicates",
+      "pass": true,
+      "detail": "[{\"status\":200,\"already\":true,\"created\":50,\"ms\":1814},{\"status\":200,\"already\":true,\"created\":50,\"ms\":1815},{\"status\":200,\"already\":true,\"created\":50,\"ms\":1800},{\"status\":200,\"already\":true,\"created\":50,\"ms\":1810},{\"status\":200,\"already\":true,\"created\":50,\"ms\":1807},{\"status\":200,\"already\":false,\"created\":50,\"ms\":1795}]"
+    },
+    {
+      "name": "E concurrent apply: no duplicate slugs",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "E duplicates inside the file: DUPLICATE_SLUG_IN_FILE and DUPLICATE_EXTERNAL_ID_IN_FILE",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "E import history lists runs for both types with the result and status",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "F anonymous DENIED GET /api/admin/resources/import/runs -> 401",
+      "pass": true,
+      "detail": "401"
+    },
+    {
+      "name": "F anonymous DENIED GET /api/admin/resources/import/runs/{id} -> 401",
+      "pass": true,
+      "detail": "401"
+    },
+    {
+      "name": "F anonymous DENIED GET /api/admin/resources/import/runs/{id}/rows/2 -> 401",
+      "pass": true,
+      "detail": "401"
+    },
+    {
+      "name": "F anonymous DENIED GET /api/admin/resources/import/runs/{id}/results -> 401",
+      "pass": true,
+      "detail": "401"
+    },
+    {
+      "name": "F anonymous DENIED POST /api/admin/resources/import/runs/{id}/apply -> 401",
+      "pass": true,
+      "detail": "401"
+    },
+    {
+      "name": "F anonymous DENIED POST /api/admin/resources/import/runs -> 401",
+      "pass": true,
+      "detail": "401"
+    },
+    {
+      "name": "F customer DENIED GET /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F customer DENIED GET /api/admin/resources/import/runs/{id} -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F customer DENIED GET /api/admin/resources/import/runs/{id}/rows/2 -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F customer DENIED GET /api/admin/resources/import/runs/{id}/results -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F customer DENIED POST /api/admin/resources/import/runs/{id}/apply -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F customer DENIED POST /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F analyst DENIED GET /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F analyst DENIED GET /api/admin/resources/import/runs/{id} -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F analyst DENIED GET /api/admin/resources/import/runs/{id}/rows/2 -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F analyst DENIED GET /api/admin/resources/import/runs/{id}/results -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F analyst DENIED POST /api/admin/resources/import/runs/{id}/apply -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F analyst DENIED POST /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F publisher DENIED GET /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F publisher DENIED GET /api/admin/resources/import/runs/{id} -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F publisher DENIED GET /api/admin/resources/import/runs/{id}/rows/2 -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F publisher DENIED GET /api/admin/resources/import/runs/{id}/results -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F publisher DENIED POST /api/admin/resources/import/runs/{id}/apply -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F publisher DENIED POST /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F compliance reviewer DENIED GET /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F compliance reviewer DENIED GET /api/admin/resources/import/runs/{id} -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F compliance reviewer DENIED GET /api/admin/resources/import/runs/{id}/rows/2 -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F compliance reviewer DENIED GET /api/admin/resources/import/runs/{id}/results -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F compliance reviewer DENIED POST /api/admin/resources/import/runs/{id}/apply -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F compliance reviewer DENIED POST /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F author DENIED GET /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F author DENIED GET /api/admin/resources/import/runs/{id} -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F author DENIED GET /api/admin/resources/import/runs/{id}/rows/2 -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F author DENIED GET /api/admin/resources/import/runs/{id}/results -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F author DENIED POST /api/admin/resources/import/runs/{id}/apply -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F author DENIED POST /api/admin/resources/import/runs -> 403",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "F page /admin/resources/import for author is redirected, never rendered",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "F page /admin/resources/import for analyst is redirected, never rendered",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "F page /admin/resources/import for publisher is redirected, never rendered",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "F page /admin/resources/import for compliance is redirected, never rendered",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "F page /admin/resources/import for customer is redirected, never rendered",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "F page anonymous is redirected to login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "F page /admin/resources/import for editor renders (200)",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "F page /admin/resources/import for resource admin renders (200)",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "F page /admin/resources/import for super admin renders (200)",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "F cross-actor: another editor cannot read, download or see rows (404) or apply (403) an editor's run",
+      "pass": true,
+      "detail": "404/404/404/403"
+    },
+    {
+      "name": "F a resource admin can READ others' runs for history but cannot apply them",
+      "pass": true,
+      "detail": "200/403"
+    },
+    {
+      "name": "F database bypass: an author calling the apply RPC directly is DENIED",
+      "pass": true,
+      "detail": "FORBIDDEN: the bulk import capability is required"
+    },
+    {
+      "name": "F database bypass: another editor calling the apply RPC directly is DENIED (not the owner)",
+      "pass": true,
+      "detail": "FORBIDDEN: only the person who uploaded this file can apply it"
+    },
+    {
+      "name": "F database bypass: anonymous apply RPC DENIED",
+      "pass": true,
+      "detail": "permission denied for function apply_resource_content_import"
+    },
+    {
+      "name": "F database bypass: an editor cannot insert a staged run directly (no write grant)",
+      "pass": true,
+      "detail": "permission denied for table resource_content_import_runs"
+    },
+    {
+      "name": "F database bypass: an editor cannot mark a run applied directly",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "F database bypass: an author reading the staging table sees nothing",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "F injection: a \"status\" column is refused for the whole file (FORBIDDEN_COLUMN), 0 created",
+      "pass": true,
+      "detail": "422 FORBIDDEN_COLUMN"
+    },
+    {
+      "name": "F injection: a \"visibility\" column is refused for the whole file (FORBIDDEN_COLUMN), 0 created",
+      "pass": true,
+      "detail": "422 FORBIDDEN_COLUMN"
+    },
+    {
+      "name": "F injection: a \"content_type\" column is refused for the whole file (FORBIDDEN_COLUMN), 0 created",
+      "pass": true,
+      "detail": "422 FORBIDDEN_COLUMN"
+    },
+    {
+      "name": "F injection: a \"published_at\" column is refused for the whole file (FORBIDDEN_COLUMN), 0 created",
+      "pass": true,
+      "detail": "422 FORBIDDEN_COLUMN"
+    },
+    {
+      "name": "F injection: a \"approved_by\" column is refused for the whole file (FORBIDDEN_COLUMN), 0 created",
+      "pass": true,
+      "detail": "422 FORBIDDEN_COLUMN"
+    },
+    {
+      "name": "F file type xlsm: INVALID_FILE_TYPE",
+      "pass": true,
+      "detail": "422 INVALID_FILE_TYPE"
+    },
+    {
+      "name": "F file type xls: INVALID_FILE_TYPE",
+      "pass": true,
+      "detail": "422 INVALID_FILE_TYPE"
+    },
+    {
+      "name": "F file type ods: INVALID_FILE_TYPE",
+      "pass": true,
+      "detail": "422 INVALID_FILE_TYPE"
+    },
+    {
+      "name": "F file type zip: INVALID_FILE_TYPE",
+      "pass": true,
+      "detail": "422 INVALID_FILE_TYPE"
+    },
+    {
+      "name": "F file type pdf: INVALID_FILE_TYPE",
+      "pass": true,
+      "detail": "422 INVALID_FILE_TYPE"
+    },
+    {
+      "name": "F formula cell: FORMULA_NOT_ALLOWED on the row, never evaluated, Apply blocked",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "F file over 10 MB: refused",
+      "pass": true,
+      "detail": "400"
+    },
+    {
+      "name": "F 251 rows: TOO_MANY_ROWS",
+      "pass": true,
+      "detail": "422 TOO_MANY_ROWS"
+    },
+    {
+      "name": "G scale article 1 rows: upload ok, apply created 1",
+      "pass": true,
+      "detail": "200 apply 200  "
+    },
+    {
+      "name": "G scale article 50 rows: upload ok, apply created 50",
+      "pass": true,
+      "detail": "200 apply 200  "
+    },
+    {
+      "name": "G scale article 100 rows: upload ok, apply created 100",
+      "pass": true,
+      "detail": "200 apply 200  "
+    },
+    {
+      "name": "G scale article 250 rows: upload ok, apply created 250",
+      "pass": true,
+      "detail": "200 apply 200  "
+    },
+    {
+      "name": "G scale money_update 1 rows: upload ok, apply created 1",
+      "pass": true,
+      "detail": "200 apply 200  "
+    },
+    {
+      "name": "G scale money_update 50 rows: upload ok, apply created 50",
+      "pass": true,
+      "detail": "200 apply 200  "
+    },
+    {
+      "name": "G scale money_update 100 rows: upload ok, apply created 100",
+      "pass": true,
+      "detail": "200 apply 200  "
+    },
+    {
+      "name": "G scale money_update 250 rows: upload ok, apply created 250",
+      "pass": true,
+      "detail": "200 apply 200  "
+    },
+    {
+      "name": "G no N+1: upload database round trips are constant across 1 -> cap rows (rows staged in 50-row chunks only)",
+      "pass": true,
+      "detail": "[9,9,10,13]"
+    },
+    {
+      "name": "H regression: manual Article, Guide, FHIP Explainer, Money Update, Template and Create-from-Template all still work",
+      "pass": true,
+      "detail": "200,200,200,200,200,200"
+    },
+    {
+      "name": "H regression: manual Guide opens in its editor (page 200) and loads",
+      "pass": true,
+      "detail": "200/200"
+    },
+    {
+      "name": "H regression: manual FHIP Explainer opens in its editor (page 200) and loads",
+      "pass": true,
+      "detail": "200/200"
+    },
+    {
+      "name": "H regression: SourcePicker creation route still works (and rejects http)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "H regression: Money Update SourcePicker save persists the source link",
+      "pass": true,
+      "detail": "200"
+    },
+    {
+      "name": "H regression: Resources public pages still serve (200)",
+      "pass": true,
+      "detail": "200/200"
+    },
+    {
+      "name": "H nav capability: editor and super admin get resourceContentBulkImport, author does not",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "CLEANUP: synthetic posts, sources, categories, tags, authors, CTAs, import runs/rows and auth users all 0",
+      "pass": true,
+      "detail": "{\"posts\":0,\"sources\":0,\"categories\":0,\"tags\":0,\"authors\":0,\"ctas\":0,\"importRuns\":0,\"postsByUsers\":0,\"authUsers\":0}"
+    }
+  ]
+}

@@ -22,6 +22,7 @@ import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } fro
 import { failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { JURISDICTION_LABELS, JURISDICTION_VALUES, formatAdminDate } from '@/lib/resources/admin/labels';
 import type { FaqListItem } from '@/lib/resources/faq/queries';
+import { DataTable } from '@/components/ui/DataTable';
 
 const selectClass = 'rounded border border-line bg-white px-2 py-1.5 text-sm text-ink';
 
@@ -137,44 +138,42 @@ export function FaqListClient({ canCreate }: { canCreate: boolean }) {
             <>
               {/* `relative` — see ResourceContentTable for why this is
                   load-bearing rather than cosmetic. */}
-              <div className="relative hidden overflow-x-auto sm:block">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-                      <th scope="col" className="py-2 pr-3 font-semibold">Question</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Category</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">Active</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Linked</th>
-                      <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
-                      <th scope="col" className="py-2 pl-3 font-semibold"><span className="sr-only">Actions</span></th>
+              <DataTable label="FAQs" wrapperClassName="relative hidden sm:block" className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+                    <th scope="col" className="py-2 pr-3 font-semibold">Question</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Category</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">Active</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Linked</th>
+                    <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
+                    <th scope="col" className="py-2 pl-3 font-semibold"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((f) => (
+                    <tr key={f.id} className="border-b border-line/60 hover:bg-gray-50">
+                      <td className="max-w-[280px] py-2.5 pr-3">
+                        <Link href={`/admin/resources/faqs/${f.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
+                          {f.question}
+                        </Link>
+                      </td>
+                      <td className="hidden py-2.5 pr-3 text-muted md:table-cell">{f.category?.name ?? '—'}</td>
+                      <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={f.jurisdiction} /></td>
+                      <td className="py-2.5 pr-3">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${f.is_active ? 'bg-positive/10 text-positive' : 'bg-gray-100 text-gray-500'}`}>{f.is_active ? 'Active' : 'Inactive'}</span>
+                      </td>
+                      <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{f.linkedCount}</td>
+                      <td className="hidden py-2.5 pr-3 text-muted sm:table-cell whitespace-nowrap">{formatAdminDate(f.updated_at)}</td>
+                      <td className="py-2.5 pl-3 text-right">
+                        <Link href={`/admin/resources/faqs/${f.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${f.question}"`}>
+                          Edit
+                        </Link>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((f) => (
-                      <tr key={f.id} className="border-b border-line/60 hover:bg-gray-50">
-                        <td className="max-w-[280px] py-2.5 pr-3">
-                          <Link href={`/admin/resources/faqs/${f.id}/edit`} className="font-medium text-ink hover:text-trust hover:underline">
-                            {f.question}
-                          </Link>
-                        </td>
-                        <td className="hidden py-2.5 pr-3 text-muted md:table-cell">{f.category?.name ?? '—'}</td>
-                        <td className="hidden py-2.5 pr-3 lg:table-cell"><ResourceJurisdictionBadge jurisdiction={f.jurisdiction} /></td>
-                        <td className="py-2.5 pr-3">
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${f.is_active ? 'bg-positive/10 text-positive' : 'bg-gray-100 text-gray-500'}`}>{f.is_active ? 'Active' : 'Inactive'}</span>
-                        </td>
-                        <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{f.linkedCount}</td>
-                        <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(f.updated_at)}</td>
-                        <td className="py-2.5 pl-3 text-right">
-                          <Link href={`/admin/resources/faqs/${f.id}/edit`} className="inline-flex min-h-11 items-center text-xs font-semibold text-trust hover:underline" aria-label={`Edit "${f.question}"`}>
-                            Edit
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
 
               <ul className="space-y-2 sm:hidden">
                 {items.map((f) => (

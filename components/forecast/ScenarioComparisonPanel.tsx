@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface ScenarioComparison {
   scenarioId: string;
@@ -44,7 +45,7 @@ export function ScenarioComparisonPanel({ currency }: { currency: 'AUD' | 'INR' 
       </button>
       {error && <p className="mt-3 text-sm text-risk">{error}</p>}
       {comparisons && (
-        <table className="mt-4 w-full text-sm">
+        <DataTable label="Scenario comparison" className="mt-4 w-full">
           <thead className="text-left text-xs uppercase text-gray-500">
             <tr>
               <th className="py-1">Scenario</th>
@@ -65,7 +66,7 @@ export function ScenarioComparisonPanel({ currency }: { currency: 'AUD' | 'INR' 
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       )}
     </SectionCard>
   );

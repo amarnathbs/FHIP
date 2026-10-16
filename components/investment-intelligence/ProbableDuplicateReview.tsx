@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CROSS_SOURCE_OPTION_COPY } from '@/lib/services/investment-intelligence/crossSourceReviewPolicy';
 import { fmtDate } from './dateDisplay';
 import { formatMoneyCode } from '@/lib/engines/money';
+import { DataTable } from '@/components/ui/DataTable';
 
 // Probable duplicate between a statement entry and a manual entry (Document2
 // D-5, PO decision 2026-10-03). A NON-BLOCKING highlight: both entries are
@@ -73,33 +74,31 @@ const CONFIRM_COPY: Record<'accept_statement_remove_manual' | 'reject_statement'
 
 export function EntryTable({ entries, currencyCode }: { entries: EntryView[]; currencyCode: string | null }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[32rem] text-left text-xs">
-        <caption className="sr-only">The entries that may be the same transaction</caption>
-        <thead>
-          <tr className="text-muted">
-            <th scope="col" className="pb-1 pr-3 font-medium">Source</th>
-            <th scope="col" className="pb-1 pr-3 font-medium">Date</th>
-            <th scope="col" className="pb-1 pr-3 font-medium">Type</th>
-            <th scope="col" className="pb-1 pr-3 text-right font-medium">Units</th>
-            <th scope="col" className="pb-1 pr-3 text-right font-medium">Amount</th>
-            <th scope="col" className="pb-1 font-medium">In your figures</th>
+    <DataTable label="The entries that may be the same transaction" className="w-full min-w-[32rem] text-left text-xs">
+      <caption className="sr-only">The entries that may be the same transaction</caption>
+      <thead>
+        <tr className="text-muted">
+          <th scope="col" className="pb-1 pr-3 font-medium">Source</th>
+          <th scope="col" className="pb-1 pr-3 font-medium">Date</th>
+          <th scope="col" className="pb-1 pr-3 font-medium">Type</th>
+          <th scope="col" className="pb-1 pr-3 text-right font-medium">Units</th>
+          <th scope="col" className="pb-1 pr-3 text-right font-medium">Amount</th>
+          <th scope="col" className="pb-1 font-medium">In your figures</th>
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map((e) => (
+          <tr key={e.transactionId} className="border-t border-line">
+            <td className="py-1 pr-3">{e.sourceName}</td>
+            <td className="py-1 pr-3 whitespace-nowrap">{fmtDate(e.date, currencyCode)}</td>
+            <td className="py-1 pr-3">{e.type.replace(/_/g, ' ')}</td>
+            <td className="py-1 pr-3 text-right">{e.units === null ? '—' : e.units.toLocaleString(currencyCode === 'INR' ? 'en-IN' : 'en-AU', { maximumFractionDigits: 3 })}</td>
+            <td className="py-1 pr-3 text-right">{formatMoneyCode(e.amount, currencyCode)}</td>
+            <td className="py-1">{describeEntryStatus(e.status)}</td>
           </tr>
-        </thead>
-        <tbody>
-          {entries.map((e) => (
-            <tr key={e.transactionId} className="border-t border-line">
-              <td className="py-1 pr-3">{e.sourceName}</td>
-              <td className="py-1 pr-3 whitespace-nowrap">{fmtDate(e.date, currencyCode)}</td>
-              <td className="py-1 pr-3">{e.type.replace(/_/g, ' ')}</td>
-              <td className="py-1 pr-3 text-right">{e.units === null ? '—' : e.units.toLocaleString(currencyCode === 'INR' ? 'en-IN' : 'en-AU', { maximumFractionDigits: 3 })}</td>
-              <td className="py-1 pr-3 text-right">{formatMoneyCode(e.amount, currencyCode)}</td>
-              <td className="py-1">{describeEntryStatus(e.status)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </DataTable>
   );
 }
 

@@ -3,6 +3,7 @@ import { formatMoney } from '@/lib/engines/money';
 import type { GoalPayload } from '@/lib/services/goalsData';
 import type { AffordabilityResult } from '@/lib/engines/goalAffordability';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
+import { DataTable } from '@/components/ui/DataTable';
 
 const STATUS_COPY: Record<string, { label: string; color: string }> = {
   comfortable: { label: 'Comfortable', color: '#0F6B41' },
@@ -62,7 +63,7 @@ export function MonthlyAllocationPanel({
         </div>
       </div>
 
-      <table className="w-full text-sm">
+      <DataTable label="Monthly allocation by goal" className="w-full">
         <thead className="text-left text-xs uppercase text-gray-500">
           <tr>
             <th className="py-1">Goal</th>
@@ -87,7 +88,7 @@ export function MonthlyAllocationPanel({
             );
           })}
         </tbody>
-      </table>
+      </DataTable>
     </SectionCard>
   );
 }

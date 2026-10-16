@@ -6,6 +6,7 @@ import {
   canViewResourceWorkflow,
   canViewResourceDiscovery,
   canViewResourceAnalytics,
+  canBulkImportResources,
 } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { PC6_ADMIN_CAPABILITY } from '@/lib/services/investment-intelligence/pc6/referenceDataAdmin';
@@ -275,6 +276,7 @@ export async function GET() {
       resourceWorkflowAdmin: canViewResourceWorkflow(current),
       resourceDiscoveryAdmin: canViewResourceDiscovery(current),
       resourceAnalytics: canViewResourceAnalytics(current),
+      resourceContentBulkImport: canBulkImportResources(current),
       referenceDataQuality: await canViewReferenceDataQuality(),
       lookthroughDataQuality: await canViewLookthroughDataQuality(),
       marketIndexDataUpload: await canUploadMarketIndexData(),

@@ -9,6 +9,7 @@ import {
   documentOwnerConflictResponse,
   ownerKeyOfRow,
 } from '@/lib/financial-data-hub/services/documentOwnerRequest';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // The largest size FDH-3 accepts for ANY allowed type — a hard, cheap,
 // pre-session-lookup bound so an oversized request body is never read fully
@@ -24,6 +25,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
   const { sessionId } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'fdh.upload_session.complete');
+  if (importDenied) return importDenied;
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Document uploads are not currently enabled in this environment.', 403);

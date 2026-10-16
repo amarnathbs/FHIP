@@ -14,6 +14,7 @@ import {
   recordDocumentOwner,
   resolveUploadOwnerFromUrl,
 } from '@/lib/financial-data-hub/services/documentOwnerRequest';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['text/csv'];
 
@@ -30,6 +31,10 @@ const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['text/csv'];
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'fdh.liability_statement.upload');
+  if (importDenied) return importDenied;
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Statement uploads are not currently enabled in this environment.', 403);
@@ -126,6 +131,10 @@ export async function POST(req: Request) {
       // for explicit review and call
       // `POST .../{documentId}/ai-fallback/confirm` before anything is saved.
       ai_fallback_draft: result.aiFallbackDraft ?? null,
+      // 14-10-2026: present ('premium_required' | 'entitlement_unavailable') only when the file could not be read
+      // natively and the AI reading was NOT attempted for entitlement reasons, so the screen can explain and offer
+      // the upgrade. Null in every other case.
+      ai_fallback_refusal: result.aiFallbackRefusal ?? null,
     });
   } catch (e) {
     const ownerConflict = documentOwnerConflictResponse(e);

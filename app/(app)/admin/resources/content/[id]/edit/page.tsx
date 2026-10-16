@@ -6,6 +6,7 @@ import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
 import { isResourceStaff, canManageResources, canPublishResource, hasResourceRole, canDeleteDraftResource, canManageDiscovery } from '@/lib/resources/permissions';
 import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
+import { getSourceOptionsForPost } from '@/lib/resources/sources/queries';
 import { isEditableContentType } from '@/lib/resources/editor/types';
 import { ResourceEditor } from '@/components/resources/editor/ResourceEditor';
 import { LinkedVideosPanel } from '@/components/resources/video/LinkedVideosPanel';
@@ -44,7 +45,12 @@ async function ResourceEditPageContent({ params }: { params: Promise<{ id: strin
     redirect(SPECIALIST_EDIT_ROUTES[post.content_type] ?? `/admin/resources/content/${id}`);
   }
 
-  const [reference, versions, workflowHistory] = await Promise.all([getEditorReferenceData(supabase, createAdminClient()), getResourcePostVersions(supabase, id), getResourceWorkflowHistory(supabase, id)]);
+  const [reference, versions, workflowHistory, sources] = await Promise.all([
+    getEditorReferenceData(supabase, createAdminClient()),
+    getResourcePostVersions(supabase, id),
+    getResourceWorkflowHistory(supabase, id),
+    getSourceOptionsForPost(supabase, id),
+  ]);
 
   const caps: WorkflowCapabilities = {
     isCreator: post.created_by === current.userId,
@@ -56,7 +62,17 @@ async function ResourceEditPageContent({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-6">
-      <ResourceEditor post={post} reference={reference} initialVersions={versions} initialWorkflowHistory={workflowHistory} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />
+      <ResourceEditor
+        post={post}
+        reference={reference}
+        initialVersions={versions}
+        initialWorkflowHistory={workflowHistory}
+        currentUserId={current.userId ?? ''}
+        caps={caps}
+        canDelete={canDeleteDraftResource(current)}
+        sourceOptions={sources.options}
+        initialSourceIds={sources.linkedIds}
+      />
       <LinkedVideosPanel supabase={supabase} contentPostId={post.id} contentTitle={post.title} canManage={canManageDiscovery(current)} />
     </div>
   );

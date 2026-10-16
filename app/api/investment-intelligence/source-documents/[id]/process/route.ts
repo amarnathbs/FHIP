@@ -2,6 +2,8 @@ import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } fr
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
 import { kickUserNavHistory } from '@/lib/services/investment-intelligence/pc6/userNavHistoryKick';
 import { z } from 'zod';
+import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
+import { iiSourceDocumentRunPosition } from '@/lib/services/investment-intelligence/importRunPosition';
 import {
   ensureIiRealScanAdmissible,
   II_SCAN_PENDING_MESSAGE,
@@ -51,6 +53,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const parsed = processBodySchema.safeParse(bodyRaw);
   if (!parsed.success) return badValidation(parsed.error, 422);
 
+  // Premium Upload Entitlement (14-10-2026): a retry or a forced re-parse is NEW extraction work and needs Premium; the first run of
+  // a document admitted while Premium (and the password it is waiting for) still completes after a downgrade.
+  const importDenied = await refuseUnlessImportRunMayStart(user.id, 'ii.source_document.process', () =>
+    iiSourceDocumentRunPosition(user.id, id, parsed.data.forceReparse === true),
+  );
+  if (importDenied) return importDenied;
+
   // AIE-1 final completion (2026-09-25): nothing parses these bytes until the
   // real malware scan has cleared them (a no-op while the scan is switched
   // off). 409 is retryable -- the client polls; 422 is final.
@@ -65,7 +74,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const result = await processSourceDocument({
     userId: user.id,
-    userEmail: user.email ?? null,
     sourceDocumentId: id,
     password: parsed.data.password,
     forceReparse: parsed.data.forceReparse,

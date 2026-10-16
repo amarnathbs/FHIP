@@ -1,0 +1,278 @@
+{
+  "run": "bulkrecertmv86lcw6",
+  "app": "http://localhost:3994",
+  "startedAt": "2026-10-14T14:04:26.179Z",
+  "timingCap": {
+    "article": {
+      "dbMs": {
+        "n": 5,
+        "min": 1805,
+        "median": 1948,
+        "max": 2114,
+        "all": [
+          2091,
+          1948,
+          2114,
+          1805,
+          1864
+        ]
+      },
+      "clientMs": {
+        "n": 5,
+        "min": 2873,
+        "median": 2981,
+        "max": 3403,
+        "all": [
+          3153,
+          2981,
+          3403,
+          2873,
+          2956
+        ]
+      },
+      "concurrent": [
+        {
+          "status": 200,
+          "dbMs": 3165,
+          "clientMs": 6437
+        },
+        {
+          "status": 200,
+          "dbMs": 3453,
+          "clientMs": 4608
+        }
+      ]
+    },
+    "money_update": {
+      "dbMs": {
+        "n": 5,
+        "min": 1460,
+        "median": 1583,
+        "max": 2830,
+        "all": [
+          2830,
+          1817,
+          1510,
+          1460,
+          1583
+        ]
+      },
+      "clientMs": {
+        "n": 5,
+        "min": 2633,
+        "median": 2780,
+        "max": 3994,
+        "all": [
+          3994,
+          2947,
+          2633,
+          2719,
+          2780
+        ]
+      },
+      "concurrent": [
+        {
+          "status": 200,
+          "dbMs": 2661,
+          "clientMs": 3939
+        },
+        {
+          "status": 200,
+          "dbMs": 2866,
+          "clientMs": 4160
+        }
+      ]
+    }
+  },
+  "fixtureProfilesRestored": 8,
+  "residue": {
+    "posts": 0,
+    "sources": 0,
+    "categories": 0,
+    "tags": 0,
+    "authors": 0,
+    "ctas": 0,
+    "importRuns": 0,
+    "importRowsTotal": 0,
+    "postsByFixturesInWindow": 0,
+    "auditByFixturesInWindow": 0,
+    "workflowByFixturesInWindow": 0,
+    "fixtureProfilesNotRestored": 0,
+    "authUsersCreatedByRun": 0
+  },
+  "finishedAt": "2026-10-14T14:07:16.303Z",
+  "passed": 34,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "A template article.xlsx: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template article.xlsx: four sheets, upload header equals the schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template article.xlsx: Lookup_Values lists live reference data (synthetic category present)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template article.csv: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template article.csv: header equals the parser schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.xlsx: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template money_update.xlsx: four sheets, upload header equals the schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.xlsx: Lookup_Values lists live reference data (synthetic category present)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template money_update.csv: 200 with the right file name",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "A template money_update.csv: header equals the parser schema",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "A template access: anonymous -> 401",
+      "pass": true,
+      "detail": "got 401"
+    },
+    {
+      "name": "A template access: customer -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: analyst -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: publisher -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: compliance -> 403",
+      "pass": true,
+      "detail": "got 403"
+    },
+    {
+      "name": "A template access: author -> 200",
+      "pass": true,
+      "detail": "got 200"
+    },
+    {
+      "name": "0274 VERIFY the server assigns planned post ids when staging",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "0274 VERIFY the signed-in wrapper applies through the new core (created 2, db_ms reported)",
+      "pass": true,
+      "detail": "{\"ok\":true,\"db_ms\":499,\"run_id\":\"93fe2697-67f0-4352-9b6b-bbc8570a5612\",\"created\":2,\"post_ids\":[\"bf69c8ce-4c5c-48c8-b00d-1e9e3aab552a\",\"21cf1c56-3768-4637-b040-3cc700f3ef14\"],\"already_applied\":false}"
+    },
+    {
+      "name": "0274 VERIFY second apply is idempotent",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "0274 VERIFY forced values, planned ids used as post ids, no per-post version rows",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "0274 VERIFY the route (service-role twin) applies and reports dbMs",
+      "pass": true,
+      "detail": "{\"data\":{\"runId\":\"21641c6f-fcc6-4fe4-90b6-bd639ae1ef08\",\"created\":1,\"alreadyApplied\":false,\"postIds\":[\"f9ee64b0-1c9f-4716-9794-a206e7cdd351\"],\"dbMs\":142}}"
+    },
+    {
+      "name": "TIMING article 250 rows run 1: applied (db_ms 2091, client 3153 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article 250 rows run 2: applied (db_ms 1948, client 2981 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article 250 rows run 3: applied (db_ms 2114, client 3403 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article 250 rows run 4: applied (db_ms 1805, client 2873 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article 250 rows run 5: applied (db_ms 1864, client 2956 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING article two CONCURRENT 250-row runs (different run ids): both applied (db_ms 3165,3453, client 6437,4608 ms)",
+      "pass": true,
+      "detail": "200  200 "
+    },
+    {
+      "name": "TIMING money_update 250 rows run 1: applied (db_ms 2830, client 3994 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update 250 rows run 2: applied (db_ms 1817, client 2947 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update 250 rows run 3: applied (db_ms 1510, client 2633 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update 250 rows run 4: applied (db_ms 1460, client 2719 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update 250 rows run 5: applied (db_ms 1583, client 2780 ms)",
+      "pass": true,
+      "detail": "200 "
+    },
+    {
+      "name": "TIMING money_update two CONCURRENT 250-row runs (different run ids): both applied (db_ms 2661,2866, client 3939,4160 ms)",
+      "pass": true,
+      "detail": "200  200 "
+    },
+    {
+      "name": "CLEANUP: synthetic posts, sources, categories, tags, authors, CTAs, import runs/rows, audit and workflow rows made by this run, and created auth users all 0",
+      "pass": true,
+      "detail": "{\"posts\":0,\"sources\":0,\"categories\":0,\"tags\":0,\"authors\":0,\"ctas\":0,\"importRuns\":0,\"importRowsTotal\":0,\"postsByFixturesInWindow\":0,\"auditByFixturesInWindow\":0,\"workflowByFixturesInWindow\":0,\"fixtureProfilesNotRestored\":0,\"authUsersCreatedByRun\":0}"
+    }
+  ]
+}

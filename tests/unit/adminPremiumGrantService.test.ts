@@ -553,6 +553,7 @@ describe('admin navigation — the capability gates its own item and is implied 
       canViewResourceWorkflow: () => false,
       canViewResourceDiscovery: () => false,
       canViewResourceAnalytics: () => false,
+      canBulkImportResources: () => false,
     }));
     const read = async (fake: ReturnType<typeof makeSupabase>) => {
       vi.resetModules();
@@ -563,6 +564,7 @@ describe('admin navigation — the capability gates its own item and is implied 
         canViewResourceWorkflow: () => false,
         canViewResourceDiscovery: () => false,
         canViewResourceAnalytics: () => false,
+        canBulkImportResources: () => false,
       }));
       const { GET } = await load<{ GET: () => Promise<Response> }>('@/app/api/admin/me/route', fake);
       return (await (await GET()).json()).data.capabilities.entitlementManagement as boolean;

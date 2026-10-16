@@ -119,6 +119,22 @@ export function canManageFaqs(current: CurrentResourceRoles): boolean {
   return canCreateSpecialistContent(current);
 }
 
+// Resources Bulk Upload (Articles + Money Updates) — capability
+// `resources.content.bulk_import`. Held by Super Admin, Resource Admin and
+// Editor ONLY: deliberately NOT Author, Compliance Reviewer, Publisher or
+// Analyst (Admin Architecture Standard §2/§5: its own named capability, never
+// inherited from isResourceStaff() or canCreateSpecialistContent()). Mirrors
+// private.can_bulk_import_resource_content() in migration 0272 exactly — that
+// SQL is the authoritative enforcement layer (the apply RPC and the staging
+// tables' RLS call it); this predicate exists for early 403s, page gating and
+// nav visibility.
+export const BULK_IMPORT_CAPABILITY = 'resources.content.bulk_import';
+const BULK_IMPORT_ROLES: ResourceRole[] = ['resource_admin', 'editor'];
+
+export function canBulkImportResources(current: CurrentResourceRoles): boolean {
+  return current.isSuperAdmin || current.roles.some((r) => BULK_IMPORT_ROLES.includes(r));
+}
+
 // PO review F3 (06/10/2026) — deleting a NEVER-PUBLISHED draft. A separately
 // named capability (Admin Architecture Standard s2), deliberately NOT
 // isResourceStaff(): it mirrors the database's own "managers delete posts"

@@ -9,6 +9,7 @@ import { ResourceEmptyState, ResourceErrorState, ResourceLoadingSkeleton } from 
 // the canonical rule, not a copy (spendingRules is pure and client-safe).
 import { isDuplicateExcluded } from '@/lib/read-models/core/spendingRules';
 import { SplitTransactionEditor } from './SplitTransactionEditor';
+import { DataTable } from '@/components/ui/DataTable';
 
 // Mirrors lib/financial-data-hub/constants/enums.ts FDH_ECONOMIC_TRANSACTION_TYPES
 // (kept as a plain literal list here rather than importing the server-only
@@ -574,51 +575,49 @@ export function ReviewWorkspace({
         <ResourceEmptyState title={emptyTitle} message={emptyMessage} />
       )}
       {!queueLoading && !queueError && items.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">{REASON_LABEL[reason ?? 'needs_attention']}</caption>
-            <thead>
-              <tr className="border-b border-line text-xs text-muted">
-                <th scope="col" className="py-2 pr-2 font-medium">Date</th>
-                <th scope="col" className="py-2 pr-2 font-medium">Description</th>
-                <th scope="col" className="py-2 pr-2 text-right font-medium">Amount</th>
-                <th scope="col" className="py-2 pr-2 font-medium">Type</th>
-                <th scope="col" className="py-2 font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => (
-                <tr key={it.id} className="border-b border-line/60">
-                  <td className="py-2 pr-2 text-ink">{it.transaction_date}</td>
-                  <td className="py-2 pr-2 text-ink">{it.description_clean ?? '—'}</td>
-                  <td className="py-2 pr-2 text-right tabular-nums text-ink">
-                    {formatMoneyCode(it.amount_original, it.currency_original)} {it.currency_original}
-                  </td>
-                  <td className="py-2 pr-2 text-muted">{TYPE_LABEL[it.economic_transaction_type] ?? it.economic_transaction_type}</td>
-                  <td className="py-2">
-                    <span className="flex flex-wrap gap-2">
-                      {it.statement_upload_id && (
-                        <Link
-                          href={`/financial-data-hub/review?statement=${it.statement_upload_id}&from=${fromParam}`}
-                          className="rounded-compact bg-trust px-2 py-1 text-xs font-semibold text-white"
-                        >
-                          Review statement by category
-                        </Link>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => focusTransaction(it.id)}
-                        className="rounded-compact border border-trust px-2 py-1 text-xs font-semibold text-trust hover:bg-trust/5"
+        <DataTable label={REASON_LABEL[reason ?? 'needs_attention']} className="w-full text-left">
+          <caption className="sr-only">{REASON_LABEL[reason ?? 'needs_attention']}</caption>
+          <thead>
+            <tr className="border-b border-line text-xs text-muted">
+              <th scope="col" className="py-2 pr-2 font-medium">Date</th>
+              <th scope="col" className="py-2 pr-2 font-medium">Description</th>
+              <th scope="col" className="py-2 pr-2 text-right font-medium">Amount</th>
+              <th scope="col" className="py-2 pr-2 font-medium">Type</th>
+              <th scope="col" className="py-2 font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it) => (
+              <tr key={it.id} className="border-b border-line/60">
+                <td className="py-2 pr-2 text-ink">{it.transaction_date}</td>
+                <td className="py-2 pr-2 text-ink">{it.description_clean ?? '—'}</td>
+                <td className="py-2 pr-2 text-right tabular-nums text-ink">
+                  {formatMoneyCode(it.amount_original, it.currency_original)} {it.currency_original}
+                </td>
+                <td className="py-2 pr-2 text-muted">{TYPE_LABEL[it.economic_transaction_type] ?? it.economic_transaction_type}</td>
+                <td className="py-2">
+                  <span className="flex flex-wrap gap-2">
+                    {it.statement_upload_id && (
+                      <Link
+                        href={`/financial-data-hub/review?statement=${it.statement_upload_id}&from=${fromParam}`}
+                        className="rounded-compact bg-trust px-2 py-1 text-xs font-semibold text-white"
                       >
-                        Open transaction
-                      </button>
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        Review statement by category
+                      </Link>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => focusTransaction(it.id)}
+                      className="rounded-compact border border-trust px-2 py-1 text-xs font-semibold text-trust hover:bg-trust/5"
+                    >
+                      Open transaction
+                    </button>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       )}
     </div>
   );

@@ -3,6 +3,8 @@ import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
 import { confirmAiBankStatementFallback, BankPdfProcessingError } from '@/lib/financial-data-hub/services/bankPdfProcessingService';
 import { AIE_BANK_STATEMENT_MAX_TRANSACTIONS } from '@/lib/aie/adapters/bankStatement';
+import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
+import { fdhDocumentRunPosition } from '@/lib/financial-data-hub/services/importRunPosition';
 
 // POST /api/financial-data-hub/bank-pdf/{documentId}/ai-fallback/confirm
 //
@@ -68,6 +70,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): starting NEW extraction work (a retry / re-parse) is Premium; the first run of a
+  // document admitted while Premium and the idempotent in-flight lifecycle still complete after a downgrade.
+  const importDenied = await refuseUnlessImportRunMayStart(user.id, 'fdh.bank_pdf.ai_fallback_confirm', () => fdhDocumentRunPosition(user.id, documentId));
+  if (importDenied) return importDenied;
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Bank statement processing is not currently enabled in this environment.', 403);

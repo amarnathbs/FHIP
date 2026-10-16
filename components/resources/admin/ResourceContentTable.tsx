@@ -10,6 +10,7 @@ import { ResourceStatusBadge, ResourceComplianceBadge, ResourceJurisdictionBadge
 import { formatAdminDate } from '@/lib/resources/admin/labels';
 import { DeleteDraftButton } from './DeleteDraftButton';
 import type { ContentListItem } from '@/lib/resources/admin/queries';
+import { DataTable } from '@/components/ui/DataTable';
 
 export function ResourceContentTable({ items, canDeleteDrafts = false, onDeleted }: { items: ContentListItem[]; canDeleteDrafts?: boolean; onDeleted?: () => void }) {
   return (
@@ -26,69 +27,67 @@ export function ResourceContentTable({ items, canDeleteDrafts = false, onDeleted
           even though the table itself was scrolling correctly inside this
           container. Making this element a positioning context keeps the
           hidden text inside the container, where `overflow-x-auto` clips it. */}
-      <div className="relative hidden overflow-x-auto sm:block">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-              <th scope="col" className="py-2 pr-3 font-semibold">Title</th>
-              <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Type</th>
-              <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Category</th>
-              <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
-              <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
-              <th scope="col" className="py-2 pr-3 font-semibold">Compliance</th>
-              <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Author</th>
-              <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
-              <th scope="col" className="hidden py-2 pr-3 font-semibold xl:table-cell">Review</th>
-              <th scope="col" className="py-2 pl-3 font-semibold">
-                <span className="sr-only">Actions</span>
-              </th>
+      <DataTable label="Resource content" wrapperClassName="relative hidden sm:block" className="w-full text-left">
+        <thead>
+          <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+            <th scope="col" className="py-2 pr-3 font-semibold">Title</th>
+            <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Type</th>
+            <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Category</th>
+            <th scope="col" className="hidden py-2 pr-3 font-semibold lg:table-cell">Jurisdiction</th>
+            <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
+            <th scope="col" className="py-2 pr-3 font-semibold">Compliance</th>
+            <th scope="col" className="hidden py-2 pr-3 font-semibold md:table-cell">Author</th>
+            <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Updated</th>
+            <th scope="col" className="hidden py-2 pr-3 font-semibold xl:table-cell">Review</th>
+            <th scope="col" className="py-2 pl-3 font-semibold">
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id} className="border-b border-line/60 hover:bg-gray-50">
+              <td className="max-w-[280px] py-2.5 pr-3">
+                <Link href={`/admin/resources/content/${item.id}`} className="font-medium text-ink hover:text-trust hover:underline">
+                  {item.title}
+                </Link>
+                {item.content_id && <p className="text-xs text-muted">{item.content_id}</p>}
+              </td>
+              <td className="hidden py-2.5 pr-3 md:table-cell">
+                <ResourceTypeBadge contentType={item.content_type} />
+              </td>
+              <td className="hidden py-2.5 pr-3 text-muted lg:table-cell">{item.primary_category?.name ?? '—'}</td>
+              <td className="hidden py-2.5 pr-3 lg:table-cell">
+                <ResourceJurisdictionBadge jurisdiction={item.jurisdiction} />
+              </td>
+              <td className="py-2.5 pr-3">
+                <ResourceStatusBadge status={item.status} />
+              </td>
+              <td className="py-2.5 pr-3">
+                <ResourceComplianceBadge compliance={item.compliance_classification} />
+              </td>
+              <td className="hidden py-2.5 pr-3 text-muted md:table-cell">{item.author?.name ?? '—'}</td>
+              <td className="hidden py-2.5 pr-3 text-muted sm:table-cell whitespace-nowrap">{formatAdminDate(item.updated_at)}</td>
+              <td className="hidden py-2.5 pr-3 text-muted xl:table-cell whitespace-nowrap">{formatAdminDate(item.next_review_at)}</td>
+              <td className="py-2.5 pl-3 text-right">
+                <Link href={`/admin/resources/content/${item.id}`} className="text-xs font-semibold text-trust hover:underline" aria-label={`View "${item.title}"`}>
+                  View
+                </Link>
+                <DeleteDraftButton
+                  postId={item.id}
+                  title={item.title}
+                  status={item.status}
+                  publishedAt={item.published_at}
+                  canDelete={canDeleteDrafts}
+                  onDeleted={onDeleted}
+                  label="Delete"
+                  className="ml-3 text-xs font-semibold text-risk hover:underline"
+                />
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-b border-line/60 hover:bg-gray-50">
-                <td className="max-w-[280px] py-2.5 pr-3">
-                  <Link href={`/admin/resources/content/${item.id}`} className="font-medium text-ink hover:text-trust hover:underline">
-                    {item.title}
-                  </Link>
-                  {item.content_id && <p className="text-xs text-muted">{item.content_id}</p>}
-                </td>
-                <td className="hidden py-2.5 pr-3 md:table-cell">
-                  <ResourceTypeBadge contentType={item.content_type} />
-                </td>
-                <td className="hidden py-2.5 pr-3 text-muted lg:table-cell">{item.primary_category?.name ?? '—'}</td>
-                <td className="hidden py-2.5 pr-3 lg:table-cell">
-                  <ResourceJurisdictionBadge jurisdiction={item.jurisdiction} />
-                </td>
-                <td className="py-2.5 pr-3">
-                  <ResourceStatusBadge status={item.status} />
-                </td>
-                <td className="py-2.5 pr-3">
-                  <ResourceComplianceBadge compliance={item.compliance_classification} />
-                </td>
-                <td className="hidden py-2.5 pr-3 text-muted md:table-cell">{item.author?.name ?? '—'}</td>
-                <td className="hidden py-2.5 pr-3 text-muted sm:table-cell">{formatAdminDate(item.updated_at)}</td>
-                <td className="hidden py-2.5 pr-3 text-muted xl:table-cell">{formatAdminDate(item.next_review_at)}</td>
-                <td className="py-2.5 pl-3 text-right">
-                  <Link href={`/admin/resources/content/${item.id}`} className="text-xs font-semibold text-trust hover:underline" aria-label={`View "${item.title}"`}>
-                    View
-                  </Link>
-                  <DeleteDraftButton
-                    postId={item.id}
-                    title={item.title}
-                    status={item.status}
-                    publishedAt={item.published_at}
-                    canDelete={canDeleteDrafts}
-                    onDeleted={onDeleted}
-                    label="Delete"
-                    className="ml-3 text-xs font-semibold text-risk hover:underline"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </DataTable>
 
       {/* Mobile stacked cards */}
       <ul className="space-y-2 sm:hidden">

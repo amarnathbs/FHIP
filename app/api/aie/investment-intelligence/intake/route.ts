@@ -1,10 +1,12 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
-import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { refuseUnlessPremiumAi } from '@/lib/ai/access/premiumAiAccess';
+import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed } from '@/lib/aie/featureFlags';
 import { isAieIiAdapterEnabled } from '@/lib/aie/adapters/investment-intelligence/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
-import { createIntake, updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser } from '@/lib/aie/db/repository';
+import { updateIntakeStatus, recordFingerprint, existingFingerprintHashesForUser } from '@/lib/aie/db/repository';
+import { admitIntake } from '@/lib/aie/intakeAdmission';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { dispatchInvestmentDocument } from '@/lib/aie/adapters/investment-intelligence/dispatch';
@@ -16,6 +18,7 @@ import { isAieAiFallbackEnabled } from '@/lib/aie/featureFlags';
 import { reserveConservativeAiCost, settleAiCost } from '@/lib/aie/cost/costAdmission';
 import { runAieRealMalwareScanGate } from '@/lib/aie/malware/aieGateAdapter';
 import { recordIntakeOwnerSelection, resolveAieIntakeOwner } from '@/lib/aie/intakeOwner';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // One shared gateway per process, matching the other AIE intake routes. The
 // provider is constructed HERE, in the route, not inside the adapter —
@@ -63,6 +66,10 @@ const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'aie.investment_intelligence.intake');
+  if (importDenied) return importDenied;
 
   // Three independent gates, all defaulting OFF, checked before a single byte
   // is read: the adapter's own switch, AIE's master intake switch, and the
@@ -74,9 +81,10 @@ export async function POST(req: Request) {
   if (!isAieDocumentIntakeEnabled()) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
   }
-  if (!isUserInAiePilotCohort({ userId: user.id, email: user.email })) {
-    return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
-  }
+  // Premium entitlement (14-10-2026) replaced the pilot allowlist: checked server-side on the session user,
+  // before a byte of the body is read, stored or scanned.
+  const premiumRefusal = await refuseUnlessPremiumAi(user.id, 'aie_intake_investment_intelligence');
+  if (premiumRefusal) return premiumRefusal;
 
   const url = new URL(req.url);
   const filename = url.searchParams.get('filename');
@@ -108,7 +116,7 @@ export async function POST(req: Request) {
   const displayFilename = filename ? filename.replace(/[^\w.\- ]/g, '_').slice(0, 120) : null;
 
   const rlsClient = await createClient();
-  const created = await createIntake(rlsClient, {
+  const created = await admitIntake(rlsClient, {
     userId: user.id,
     declaredMimeType: 'application/pdf',
     byteSize: bytes.byteLength,

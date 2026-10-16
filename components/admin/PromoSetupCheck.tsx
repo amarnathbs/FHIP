@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AdminActionStatus, type AdminActionOutcome } from '@/components/admin/AdminActionStatus';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface Health {
   minimumSecretLength: number;
@@ -153,27 +154,25 @@ export function PromoSetupCheck() {
             </div>
           )}
 
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Server secrets and their state">
-          <table className="min-w-full text-sm">
-            <caption className="sr-only">The four dedicated server secrets and whether each is set</caption>
-            <thead className="text-left text-xs uppercase text-muted">
-              <tr>
-                <th scope="col" className="px-2 py-1">Server variable</th>
-                <th scope="col" className="px-2 py-1">State</th>
-                <th scope="col" className="px-2 py-1">What it does</th>
+          <DataTable label="Server secrets and their state" className="min-w-full">
+          <caption className="sr-only">The four dedicated server secrets and whether each is set</caption>
+          <thead className="text-left text-xs uppercase text-muted">
+            <tr>
+              <th scope="col" className="px-2 py-1">Server variable</th>
+              <th scope="col" className="px-2 py-1">State</th>
+              <th scope="col" className="px-2 py-1">What it does</th>
+            </tr>
+          </thead>
+          <tbody>
+            {health.secrets.map((s) => (
+              <tr key={s.name} className="border-t align-top">
+                <th scope="row" className="px-2 py-1 text-left font-mono font-normal">{s.name}</th>
+                <td className={`px-2 py-1 ${s.status === 'ok' ? 'text-ink' : 'font-medium text-risk'}`}>{STATUS_TEXT[s.status]}</td>
+                <td className="px-2 py-1 text-muted">{s.purpose}</td>
               </tr>
-            </thead>
-            <tbody>
-              {health.secrets.map((s) => (
-                <tr key={s.name} className="border-t align-top">
-                  <th scope="row" className="px-2 py-1 text-left font-mono font-normal">{s.name}</th>
-                  <td className={`px-2 py-1 ${s.status === 'ok' ? 'text-ink' : 'font-medium text-risk'}`}>{STATUS_TEXT[s.status]}</td>
-                  <td className="px-2 py-1 text-muted">{s.purpose}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
+            ))}
+          </tbody>
+        </DataTable>
           {broken.length > 0 && <p className="text-xs text-muted">Values are never shown here, only whether they are set.</p>}
           <p className="text-sm text-muted">
             E-mailing codes is currently <strong>{health.emailSwitchOn ? 'switched on' : 'switched off'}</strong> (the PREMIUM_PROMO_EMAIL_ENABLED setting).

@@ -7,6 +7,7 @@ import { getResourceEditorPost, getEditorReferenceData, getResourcePostVersions,
 import { updateResourceDraft } from '@/lib/resources/editor/mutations';
 import { validateForDraftSave, validateCtaAssignment } from '@/lib/resources/editor/validation';
 import type { EditorSavePatch, PostVersionSnapshot } from '@/lib/resources/editor/types';
+import { syncPostSources } from '@/lib/resources/sources/mutations';
 import { countryConfirmationBlockResponse } from '@/lib/services/countryGate';
 
 // GET /api/admin/resources/content/[id] — full editor payload: the post
@@ -96,6 +97,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       changeSummary,
       versionSnapshot,
     });
+
+    // Linked Sources (Article / Guide / FHIP Explainer editors). Written ONLY when the client sent `sourceIds`, so any
+    // caller that does not manage sources (older clients, scripts) can never clear an item's sources by omission.
+    // Same helper and same tables as the Money Update save; each id must be a UUID, capped at 50.
+    if (outcome.status === 'ok' && Array.isArray(body?.sourceIds)) {
+      const ids = (body.sourceIds as unknown[]).filter((x): x is string => typeof x === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x)).slice(0, 50);
+      await syncPostSources(supabase, id, ids);
+    }
 
     if (outcome.status === 'not_found') return bad('Resource not found.', 404);
     if (outcome.status === 'conflict') {

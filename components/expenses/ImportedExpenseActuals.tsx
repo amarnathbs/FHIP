@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import { formatMoneyWhole } from '@/lib/engines/money';
 import type { ImportedActualsDto, ImportedActualsOk } from '@/lib/expenses/importedActuals';
+import { DataTable } from '@/components/ui/DataTable';
 
 const money = (value: number, currency: string) => formatMoneyWhole(value, (currency === 'INR' ? 'INR' : 'AUD'));
 
@@ -105,32 +106,30 @@ export function ActualsBody({
       ) : null}
 
       {data.groups.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" data-testid="planned-vs-actual">
-            <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
-              <tr>
-                <th className="px-3 py-2">Category</th>
-                <th className="px-3 py-2 text-right">Planned / month</th>
-                <th className="px-3 py-2 text-right">Actual / month</th>
-                <th className="px-3 py-2 text-right">Difference</th>
-                <th className="px-3 py-2">Used in your totals</th>
+        <DataTable label="Actual spending (imported)" className="w-full" data-testid="planned-vs-actual">
+          <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
+            <tr>
+              <th className="px-3 py-2">Category</th>
+              <th className="px-3 py-2 text-right">Planned / month</th>
+              <th className="px-3 py-2 text-right">Actual / month</th>
+              <th className="px-3 py-2 text-right">Difference</th>
+              <th className="px-3 py-2">Used in your totals</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.groups.map((g) => (
+              <tr key={g.group} className="border-b last:border-0">
+                <td className="px-3 py-2">{g.label}</td>
+                <td className="px-3 py-2 text-right">{g.plannedMonthly === null ? '—' : money(g.plannedMonthly, cur)}</td>
+                <td className="px-3 py-2 text-right">{g.actualMonthly === null ? '—' : money(g.actualMonthly, cur)}</td>
+                <td className={`px-3 py-2 text-right ${g.varianceMonthly !== null && g.varianceMonthly > 0 ? 'text-risk' : ''}`}>
+                  {g.varianceMonthly === null ? '—' : `${g.varianceMonthly > 0 ? '+' : ''}${money(g.varianceMonthly, cur)}`}
+                </td>
+                <td className="px-3 py-2 text-xs text-muted">{g.basis === 'actual' ? 'Actual' : g.basis === 'planned' ? 'Planned' : '—'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.groups.map((g) => (
-                <tr key={g.group} className="border-b last:border-0">
-                  <td className="px-3 py-2">{g.label}</td>
-                  <td className="px-3 py-2 text-right">{g.plannedMonthly === null ? '—' : money(g.plannedMonthly, cur)}</td>
-                  <td className="px-3 py-2 text-right">{g.actualMonthly === null ? '—' : money(g.actualMonthly, cur)}</td>
-                  <td className={`px-3 py-2 text-right ${g.varianceMonthly !== null && g.varianceMonthly > 0 ? 'text-risk' : ''}`}>
-                    {g.varianceMonthly === null ? '—' : `${g.varianceMonthly > 0 ? '+' : ''}${money(g.varianceMonthly, cur)}`}
-                  </td>
-                  <td className="px-3 py-2 text-xs text-muted">{g.basis === 'actual' ? 'Actual' : g.basis === 'planned' ? 'Planned' : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </DataTable>
       )}
 
       {data.hasActual && (
@@ -157,41 +156,39 @@ export function ActualsBody({
             </label>
             <span className="text-xs text-muted">{data.lineCount} line{data.lineCount === 1 ? '' : 's'}</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="imported-actual-lines">
-              <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Description</th>
-                  <th className="px-3 py-2">Category</th>
-                  <th className="px-3 py-2 text-right">Amount</th>
-                  <th className="px-3 py-2">Source</th>
+          <DataTable label="Imported spending lines" className="w-full" data-testid="imported-actual-lines">
+            <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-3 py-2">Date</th>
+                <th className="px-3 py-2">Description</th>
+                <th className="px-3 py-2">Category</th>
+                <th className="px-3 py-2 text-right">Amount</th>
+                <th className="px-3 py-2">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.lines.map((l) => (
+                <tr key={l.key} className="border-b last:border-0">
+                  <td className="whitespace-nowrap px-3 py-2">{l.date}</td>
+                  <td className="px-3 py-2">
+                    {l.description ?? '—'}
+                    {l.coverage === 'partial' && <span className="ml-2 text-[11px] text-muted">(part month — shown, not averaged)</span>}
+                  </td>
+                  <td className="px-3 py-2">{l.categoryLabel ?? l.groupLabel}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    {l.currency === cur || l.amountReporting === null ? `${l.currency} ${l.amount.toFixed(2)}` : `${money(l.amountReporting, cur)} (${l.currency} ${l.amount.toFixed(2)})`}
+                    {l.amountReporting === null && <span className="block text-[11px] text-caution">not converted — left out of totals</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">{l.sourceLabel}</span>
+                    {l.statementHref && (
+                      <a href={l.statementHref} className="ml-2 text-[11px] text-trust underline">View statement</a>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {data.lines.map((l) => (
-                  <tr key={l.key} className="border-b last:border-0">
-                    <td className="whitespace-nowrap px-3 py-2">{l.date}</td>
-                    <td className="px-3 py-2">
-                      {l.description ?? '—'}
-                      {l.coverage === 'partial' && <span className="ml-2 text-[11px] text-muted">(part month — shown, not averaged)</span>}
-                    </td>
-                    <td className="px-3 py-2">{l.categoryLabel ?? l.groupLabel}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right">
-                      {l.currency === cur || l.amountReporting === null ? `${l.currency} ${l.amount.toFixed(2)}` : `${money(l.amountReporting, cur)} (${l.currency} ${l.amount.toFixed(2)})`}
-                      {l.amountReporting === null && <span className="block text-[11px] text-caution">not converted — left out of totals</span>}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">{l.sourceLabel}</span>
-                      {l.statementHref && (
-                        <a href={l.statementHref} className="ml-2 text-[11px] text-trust underline">View statement</a>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </DataTable>
           {data.pageCount > 1 && (
             <div className="flex items-center gap-3 text-xs">
               <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border px-2 py-1 disabled:opacity-50">Previous</button>

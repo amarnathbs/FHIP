@@ -28,6 +28,7 @@ import { taxTableRows, type TaxDisposalLike } from '@/lib/engines/reportTaxTable
 import { unavailableSentence, XRAY_NO_DATA_NOTE } from '@/lib/ui/reportNotes';
 import { IndiaMfInvestmentReportSection } from '@/components/reports/IndiaMfInvestmentReportSection';
 import type { IndiaMfReport } from '@/lib/engines/investment-intelligence/indiaMfReport';
+import { DataTable } from '@/components/ui/DataTable';
 
 interface BuiltSectionLike {
   sectionCode: string;
@@ -446,6 +447,10 @@ export function ReportPreview({
                 <Stat label="Debt repayments" value={fmt(cashFlow.sectionData.debtMonthlyRepayments)} />
                 <Stat label={Number(cashFlow.sectionData.monthlySurplus ?? 0) >= 0 ? 'Surplus' : 'Deficit'} value={fmt(cashFlow.sectionData.monthlySurplus)} />
               </div>
+              {/* PO review 16-10-2026: the Dashboard's "take-home pay is unknown" notice, so net income / deficit are never read as complete. */}
+              {typeof cashFlow.sectionData.netIncomeNote === 'string' && (
+                <p className="mt-3 text-xs text-gray-600" data-testid="report-net-income-note">{cashFlow.sectionData.netIncomeNote}</p>
+              )}
             </SectionCard>
           </>
         )}
@@ -492,12 +497,18 @@ export function ReportPreview({
                 <Stat label="Net worth" value={fmt(netWorth.sectionData.netWorth)} />
               </div>
               <p className="mt-2 text-xs text-gray-400">Total assets = property, cash & other + investments + retirement.</p>
+              {typeof netWorth.sectionData.groupingNote === 'string' && (
+                <p className="mt-1 text-xs text-gray-500">{netWorth.sectionData.groupingNote}</p>
+              )}
               {/* WP-06: shown beside Net Worth, never added to it (PO D-04 / D-05). */}
               {((netWorth.sectionData.notInNetWorth as { label: string; count: number; total: number }[] | undefined) ?? []).map((item) => (
                 <p key={item.label} className="mt-1 text-xs text-gray-500">
                   Not included in net worth — {item.label}: {item.count} item{item.count === 1 ? '' : 's'}, {fmt(item.total)}.
                 </p>
               ))}
+              {typeof netWorth.sectionData.notInNetWorthNote === 'string' && (
+                <p className="mt-1 text-xs text-gray-500">{netWorth.sectionData.notInNetWorthNote}</p>
+              )}
               {/* Same assets-vs-liabilities comparison as the Page 2 chart,
                   reused here as the "visual representation" companion to
                   this section's own numeric Stat grid — anchored to the Net
@@ -821,7 +832,7 @@ export function ReportPreview({
 
         {forecast?.sectionStatus === 'included' && ((forecast.sectionData.goalForecasts as unknown[]) ?? []).length > 0 && (
           <SectionCard title={forecast.sectionTitle} className="report-section">
-            <table className="w-full text-sm">
+            <DataTable label="Goal forecasts by scenario" className="w-full">
               <thead className="text-left text-xs uppercase text-gray-500">
                 <tr>
                   <th className="py-1">Goal</th>
@@ -848,7 +859,7 @@ export function ReportPreview({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
             <p className="mt-3 text-justify text-xs text-gray-400">{forecast.limitationText}</p>
           </SectionCard>
         )}
@@ -856,7 +867,7 @@ export function ReportPreview({
         {commitmentsTimeline && (
           <SectionCard title={commitmentsTimeline.sectionTitle} className="report-section">
             {((commitmentsTimeline.sectionData.commitments as { amount: number; due_date: string; is_mandatory: boolean }[]) ?? []).length > 0 ? (
-              <table className="w-full text-sm">
+              <DataTable label="Upcoming commitments" className="w-full">
                 <thead className="text-left text-xs uppercase text-gray-500">
                   <tr>
                     <th className="py-1">Due date</th>
@@ -867,13 +878,13 @@ export function ReportPreview({
                 <tbody>
                   {(commitmentsTimeline.sectionData.commitments as { amount: number; due_date: string; is_mandatory: boolean }[]).map((c, i) => (
                     <tr key={i} className="border-t">
-                      <td className="py-1">{formatDateShort(c.due_date, currency)}</td>
+                      <td className="py-1 whitespace-nowrap">{formatDateShort(c.due_date, currency)}</td>
                       <td className={`py-1 ${NUM_CELL_CLASS}`}>{fmt(c.amount)}</td>
                       <td className="py-1">{c.is_mandatory ? 'Mandatory' : 'Discretionary'}</td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </DataTable>
             ) : (
               <p className="text-justify text-sm text-gray-500">{commitmentsTimeline.narrativeText}</p>
             )}
@@ -957,7 +968,7 @@ export function ReportPreview({
             <div className="report-page-break space-y-6">
               <SectionCard title={scoreDiagnosticFull.sectionTitle} className="report-section">
                 <p className="mb-4 text-justify text-sm text-gray-600">{scoreDiagnosticFull.narrativeText}</p>
-                <table className="w-full text-sm">
+                <DataTable label="Score pillars and their weights" className="w-full">
                   <thead className="text-left text-xs uppercase text-gray-500">
                     <tr>
                       <th className="py-1">Pillar</th>
@@ -996,7 +1007,7 @@ export function ReportPreview({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
               </SectionCard>
             </div>
           )}
@@ -1127,7 +1138,7 @@ export function ReportPreview({
                 {/* Lump-sum, monthly-benefit and no-lump-sum cover types are
                     not economically comparable — shown as separate rows,
                     never summed into one figure. */}
-                <table className="w-full text-sm">
+                <DataTable label="Insurance cover by type" className="w-full">
                   <thead className="text-left text-xs uppercase text-gray-500">
                     <tr>
                       <th className="py-1">Cover type</th>
@@ -1157,7 +1168,7 @@ export function ReportPreview({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
               </SectionCard>
             </div>
           )}
@@ -1180,7 +1191,7 @@ export function ReportPreview({
                   ).map((g, i) => (
                     <div key={i} className="border-t pt-4 first:border-0 first:pt-0">
                       <p className="font-medium text-gray-900">{g.goalName}</p>
-                      <table className="mt-2 w-full text-sm">
+                      <DataTable label="Goal forecast scenarios for one goal" className="mt-2 w-full">
                         <thead className="text-left text-xs uppercase text-gray-500">
                           <tr>
                             <th className="py-1">Conservative</th>
@@ -1195,7 +1206,7 @@ export function ReportPreview({
                             <td className="py-1">{formatGoalForecastCell(g.optimistic, g.targetDate !== null, fmt)}</td>
                           </tr>
                         </tbody>
-                      </table>
+                      </DataTable>
                       {g.milestones.length > 0 && (
                         <ul className="mt-2 list-disc pl-5 text-xs text-gray-600">
                           {g.milestones.map((m, mi) => (
@@ -1306,7 +1317,7 @@ export function ReportPreview({
             <div className="report-page-break space-y-6">
               <SectionCard title={stressTesting.sectionTitle} className="report-section">
                 <p className="mb-4 text-justify text-sm text-gray-600">{stressTesting.narrativeText}</p>
-                <table className="w-full text-sm">
+                <DataTable label="Stress test scenarios" className="w-full">
                   <thead className="text-left text-xs uppercase text-gray-500">
                     <tr>
                       <th className="py-1">Scenario</th>
@@ -1341,7 +1352,7 @@ export function ReportPreview({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
                 <p className="mt-3 text-justify text-xs text-gray-400">{stressTesting.limitationText}</p>
               </SectionCard>
             </div>
@@ -1384,7 +1395,7 @@ export function ReportPreview({
             <div className="report-page-break space-y-6">
               <SectionCard title={investmentPerformance.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{investmentPerformance.narrativeText}</p>
-                <table className="mt-4 w-full text-sm">
+                <DataTable label="Investment performance by currency" className="mt-4 w-full">
                   <thead className="text-left text-xs uppercase text-gray-500">
                     <tr>
                       <th className="py-1">Currency</th>
@@ -1404,7 +1415,7 @@ export function ReportPreview({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
                 <p className="mt-3 text-justify text-xs text-gray-400">{investmentPerformance.limitationText}</p>
               </SectionCard>
             </div>
@@ -1448,7 +1459,7 @@ export function ReportPreview({
                     return <p className="mt-4 text-sm text-gray-500" data-testid="xray-no-data">{XRAY_NO_DATA_NOTE}</p>;
                   }
                   return (
-                    <table className="mt-4 w-full text-sm">
+                    <DataTable label="Sector exposure through funds" className="mt-4 w-full">
                       <thead className="text-left text-xs uppercase text-gray-500">
                         <tr>
                           <th className="py-1">Sector</th>
@@ -1466,7 +1477,7 @@ export function ReportPreview({
                             </tr>
                           ))}
                       </tbody>
-                    </table>
+                    </DataTable>
                   );
                 })()}
                 <p className="mt-3 text-justify text-xs text-gray-400">{portfolioXray.limitationText}</p>
@@ -1484,7 +1495,7 @@ export function ReportPreview({
             <div className="report-page-break space-y-6">
               <SectionCard title={taxAndCost.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{taxAndCost.narrativeText}</p>
-                <table className="mt-4 w-full text-sm">
+                <DataTable label="Realised gains and tax" className="mt-4 w-full">
                   <thead className="text-left text-xs uppercase text-gray-500">
                     <tr>
                       <th className="py-1">Instrument</th>
@@ -1506,7 +1517,7 @@ export function ReportPreview({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
                 <p className="mt-3 text-justify text-xs text-gray-400">{taxAndCost.limitationText}</p>
               </SectionCard>
             </div>
@@ -1572,7 +1583,7 @@ export function ReportPreview({
                   {appendices.sectionData.canonical.tables.map((t) =>
                     t.rows.length === 0 ? null : (
                       <SectionCard key={t.key} title={t.title} className="report-section">
-                        <table className="w-full text-sm">
+                        <DataTable label="Appendix items" className="w-full">
                           <thead>
                             <tr className="text-left text-xs text-gray-500">
                               <th className="py-1">Item</th>
@@ -1599,13 +1610,13 @@ export function ReportPreview({
                               <td className={NUM_CELL_CLASS}>{fmt(t.countedTotal)}</td>
                             </tr>
                           </tbody>
-                        </table>
+                        </DataTable>
                       </SectionCard>
                     )
                   )}
                   {appendices.sectionData.canonical.reconciliation.expenses && (
                     <SectionCard title="How monthly expenses were calculated" className="report-section">
-                      <table className="w-full text-sm">
+                      <DataTable label="How monthly expenses were calculated" className="w-full">
                         <tbody>
                           {appendices.sectionData.canonical.reconciliation.expenses.byGroup.map((g) => (
                             <tr key={g.group} className="border-t">
@@ -1619,7 +1630,7 @@ export function ReportPreview({
                             <td className={NUM_CELL_CLASS}>{fmt(appendices.sectionData.canonical.reconciliation.expenses.combinedMonthly)}</td>
                           </tr>
                         </tbody>
-                      </table>
+                      </DataTable>
                     </SectionCard>
                   )}
                   {appendices.sectionData.canonical.notInCalculations.length > 0 && (
@@ -1636,7 +1647,7 @@ export function ReportPreview({
                   )}
                   {((appendices.sectionData.insurancePolicies as Record<string, unknown>[] | undefined) ?? []).length > 0 && (
                     <SectionCard title="Insurance policies" className="report-section">
-                      <table className="w-full text-sm">
+                      <DataTable label="Insurance policies" className="w-full">
                         <tbody>
                           {(appendices.sectionData.insurancePolicies as Record<string, unknown>[]).map((row, i) => (
                             <tr key={i} className="border-t">
@@ -1645,7 +1656,7 @@ export function ReportPreview({
                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                      </DataTable>
                     </SectionCard>
                   )}
                 </>
@@ -1664,7 +1675,7 @@ export function ReportPreview({
                 if (rows.length === 0) return null;
                 return (
                   <SectionCard key={key} title={title} className="report-section">
-                    <table className="w-full text-sm">
+                    <DataTable label="Appendix detail" className="w-full">
                       <tbody>
                         {rows.map((row, i) => (
                           <tr key={i} className="border-t">
@@ -1673,7 +1684,7 @@ export function ReportPreview({
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </DataTable>
                   </SectionCard>
                 );
               })
@@ -1699,7 +1710,7 @@ export function ReportPreview({
           <SectionCard title={dataQuality.sectionTitle} className="report-section">
             <p className="text-justify text-sm text-gray-600">{content.dataQualityDefinition('completion')}</p>
             <p className="mt-2 text-sm font-medium text-gray-900">{(dataQuality.sectionData.dataCompletenessPct as number).toFixed(0)}% complete</p>
-            <table className="mt-4 w-full text-sm">
+            <DataTable label="Data quality by area" className="mt-4 w-full">
               <thead className="text-left text-xs uppercase text-gray-500">
                 <tr>
                   <th className="py-1">Area</th>
@@ -1713,12 +1724,12 @@ export function ReportPreview({
                   <tr key={i} className="border-t">
                     <td className="py-1">{row.area}</td>
                     <td className="py-1">{DATA_QUALITY_STATUS_LABELS[row.status]}</td>
-                    <td className="py-1">{row.lastUpdated ? formatDateShort(row.lastUpdated, currency) : 'Not provided'}</td>
+                    <td className="py-1 whitespace-nowrap">{row.lastUpdated ? formatDateShort(row.lastUpdated, currency) : 'Not provided'}</td>
                     <td className="py-1">{row.reportTreatment}</td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
             {dataQualityRows.some((r) => r.status === 'stale') && <p className="mt-3 text-justify text-xs text-gray-500">{content.dataQualityDefinition('stale')}</p>}
           </SectionCard>
         )}

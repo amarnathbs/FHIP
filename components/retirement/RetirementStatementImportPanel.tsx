@@ -1,5 +1,6 @@
 'use client';
 
+import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { DateInput } from '@/components/ui/DateInput';
 /**
  * FDH-12 — Retirement Statement Intelligence: the Retirement-tab import
@@ -49,6 +50,9 @@ import {
   DUPLICATE_UPLOAD_MESSAGE,
   type WaitingImport,
 } from '@/components/financial-data-hub/WaitingImports';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { DataTable } from '@/components/ui/DataTable';
 
 type Phase =
   | 'form'
@@ -266,6 +270,9 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
+  // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
+  const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
   // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
   // poll if the panel unmounts mid-scan.
   const scanPollCancelRef = useRef({ cancelled: false });
@@ -364,7 +371,11 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     }
     if (data.pipeline_status === 'extraction_failed') {
       setPhase('unable_to_read');
-      setMessage(String(data.failure_message ?? 'We could not read this statement.'));
+      setMessage(
+        [String(data.failure_message ?? 'We could not read this statement.'), aiFallbackRefusalNote(data.ai_fallback_refusal)]
+          .filter(Boolean)
+          .join(' '),
+      );
       return;
     }
     if (data.pipeline_status === 'duplicate_statement') {
@@ -393,7 +404,11 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
         body: await file.arrayBuffer(),
       });
       const body = await readJson(res);
-      if (!res.ok) { setPhase('error'); setMessage(String(body.message ?? body.error ?? 'Could not read this statement.')); return; }
+      if (!res.ok) {
+        // Premium Upload Entitlement: the unified refusal switches this panel to the locked state (nothing was stored).
+        if (noteImportResponse(body)) { setPhase('form'); return; }
+        setPhase('error'); setMessage(String(body.message ?? body.error ?? 'Could not read this statement.')); return;
+      }
 
       // `readJson` already unwrapped the `{ data }` envelope (clientApiEnvelope.ts).
       const data = body;
@@ -444,7 +459,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
 
       await handleStatementOutcome(body);
     } finally { setBusy(false); }
-  }, [file, owner, buildStatementMetadataQuery, handleStatementOutcome]);
+  }, [file, owner, buildStatementMetadataQuery, handleStatementOutcome, noteImportResponse]);
 
   const handleMatch = useCallback(async (action: 'auto' | 'resolve' | 'confirm_new') => {
     if (!documentId) return;
@@ -696,7 +711,11 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
 
       {phase === 'form' && <WaitingImportsList items={waiting} busy={busy} onContinue={(w) => void resumeWaiting(w)} />}
 
-      {uploadEnabled !== false && phase === 'form' && (
+      {uploadEnabled !== false && phase === 'form' && importAccess?.state !== 'allowed' && (
+        <ImportLockedNotice domain="retirement" label="Import retirement statement" state={importAccess === null ? 'checking' : importAccess.state} />
+      )}
+
+      {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'form' && (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-3">
             <label className="flex flex-col text-sm">
@@ -755,7 +774,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
             </span>
           </label>
           <button
-            type="button" onClick={handleUpload} disabled={busy || !file || !owner || uploadEnabled !== true}
+            type="button" onClick={handleUpload} disabled={busy || !file || !owner || uploadEnabled !== true || importAccess?.state !== 'allowed'}
             className="rounded bg-trust px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             Upload and read statement
@@ -842,37 +861,35 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
                 {aiDraft.activities.length} activit{aiDraft.activities.length === 1 ? 'y' : 'ies'} read. Remove any line
                 that is wrong, or that is a total of other lines rather than a movement of its own.
               </p>
-              <div className="max-h-72 overflow-y-auto rounded border border-gray-200">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Activities read from this statement by AI, awaiting your confirmation</caption>
-                  <thead className="sticky top-0 bg-gray-50 text-left">
-                    <tr>
-                      <th scope="col" className="px-3 py-2">Date</th>
-                      <th scope="col" className="px-3 py-2">Type</th>
-                      <th scope="col" className="px-3 py-2 text-right">Amount</th>
-                      <th scope="col" className="px-3 py-2">Total?</th>
-                      <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+              <DataTable wrapperClassName="max-h-72 rounded border border-gray-200" label="Activities read from this statement by AI, awaiting your confirmation" className="w-full">
+                <caption className="sr-only">Activities read from this statement by AI, awaiting your confirmation</caption>
+                <thead className="sticky top-0 bg-gray-50 text-left">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">Date</th>
+                    <th scope="col" className="px-3 py-2">Type</th>
+                    <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                    <th scope="col" className="px-3 py-2">Total?</th>
+                    <th scope="col" className="px-3 py-2"><span className="sr-only">Remove</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiDraft.activities.map((a, i) => (
+                    <tr key={`${a.activityType}-${i}`} className="border-t border-gray-100">
+                      <td className="px-3 py-2 whitespace-nowrap">{a.activityDate ?? '—'}</td>
+                      <td className="px-3 py-2">{a.activityType}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{money(a.amount, aiDraft.currencyCode)}</td>
+                      <td className="px-3 py-2">
+                        {a.isSummaryTotal ? 'Summary total' : a.isYearToDate ? 'Year to date' : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={() => removeAiActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                          Remove<span className="sr-only"> the {a.activityType} activity</span>
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {aiDraft.activities.map((a, i) => (
-                      <tr key={`${a.activityType}-${i}`} className="border-t border-gray-100">
-                        <td className="px-3 py-2 whitespace-nowrap">{a.activityDate ?? '—'}</td>
-                        <td className="px-3 py-2">{a.activityType}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(a.amount, aiDraft.currencyCode)}</td>
-                        <td className="px-3 py-2">
-                          {a.isSummaryTotal ? 'Summary total' : a.isYearToDate ? 'Year to date' : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => removeAiActivity(i)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-                            Remove<span className="sr-only"> the {a.activityType} activity</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </DataTable>
             </div>
           )}
 
@@ -1040,42 +1057,40 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
               retirement accounts only if you tick them, and always together with how often they are paid.
             </p>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] border-collapse text-sm">
-              <caption className="sr-only">Comparison of your current retirement account with the statement</caption>
-              <thead>
-                <tr className="border-b border-gray-200 text-left">
-                  <th scope="col" className="py-2 pr-2">Field</th>
-                  <th scope="col" className="py-2 pr-2">Current</th>
-                  <th scope="col" className="py-2 pr-2">Statement</th>
-                  <th scope="col" className="py-2">Apply this field</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map((f) => {
-                  const changed = f.proposedValue !== f.existingValue;
-                  const label = FIELD_LABELS[f.fieldName] ?? f.fieldName;
-                  return (
-                    <tr key={f.fieldName} className="border-b border-gray-100">
-                      <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{label}</th>
-                      <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind, currency)}</td>
-                      <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind, currency)}</td>
-                      <td className="py-2">
-                        <label className="inline-flex items-center gap-2">
-                          <input
-                            type="checkbox" checked={selected.has(f.fieldName)}
-                            onChange={() => toggleField(f.fieldName)}
-                            aria-label={`Apply ${label}`}
-                          />
-                          {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
-                        </label>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable label="Comparison of your current retirement account with the statement" className="w-full min-w-[420px] border-collapse">
+            <caption className="sr-only">Comparison of your current retirement account with the statement</caption>
+            <thead>
+              <tr className="border-b border-gray-200 text-left">
+                <th scope="col" className="py-2 pr-2">Field</th>
+                <th scope="col" className="py-2 pr-2">Current</th>
+                <th scope="col" className="py-2 pr-2">Statement</th>
+                <th scope="col" className="py-2">Apply this field</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fields.map((f) => {
+                const changed = f.proposedValue !== f.existingValue;
+                const label = FIELD_LABELS[f.fieldName] ?? f.fieldName;
+                return (
+                  <tr key={f.fieldName} className="border-b border-gray-100">
+                    <th scope="row" className="py-2 pr-2 text-left font-normal text-muted">{label}</th>
+                    <td className="py-2 pr-2">{displayValue(f.existingValue, f.valueKind, currency)}</td>
+                    <td className={`py-2 pr-2 ${changed ? 'font-medium' : ''}`}>{displayValue(f.proposedValue, f.valueKind, currency)}</td>
+                    <td className="py-2">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox" checked={selected.has(f.fieldName)}
+                          onChange={() => toggleField(f.fieldName)}
+                          aria-label={`Apply ${label}`}
+                        />
+                        {f.requiresConfirmation && <span className="text-xs text-amber-800">please confirm</span>}
+                      </label>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
 
           {/* spec sections 61, 113: stated to the user, not just enforced. */}
           <p className="text-xs text-muted">

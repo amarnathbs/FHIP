@@ -11,6 +11,7 @@ import { SectionCard } from '@/components/dashboard/SectionCard';
 import { ResourceEmptyState, ResourceErrorState } from '@/components/resources/admin/ResourceStates';
 import { resolveActivityParams, rawParam, type RawSearchParams } from '../_lib/searchParams';
 import { TransactionFilters } from './TransactionFilters';
+import { DataTable } from '@/components/ui/DataTable';
 
 // FDH-8 closure (spec Phase I) — the dedicated FDH-7 review workspace.
 // Deep-links to the specific transaction so "Review / Edit" opens focused,
@@ -121,69 +122,67 @@ async function FinancialActivityTransactionsPageContent({
         {page.transactions.length === 0 ? (
           <ResourceEmptyState title="No transactions match these filters" message="Try widening the date range or clearing a filter." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">Your financial transactions</caption>
-              <thead>
-                <tr className="border-b border-line text-xs text-muted">
-                  <th scope="col" className="py-2 pr-2 font-medium">Date</th>
-                  <th scope="col" className="py-2 pr-2 font-medium">Description</th>
-                  <th scope="col" className="py-2 pr-2 font-medium">Category</th>
-                  <th scope="col" className="py-2 pr-2 text-right font-medium">Amount</th>
-                  <th scope="col" className="py-2 pr-2 font-medium">Economic type</th>
-                  <th scope="col" className="py-2 pr-2 font-medium">Approval status</th>
-                  <th scope="col" className="py-2 font-medium">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {page.transactions.map((t) => {
-                  const currency = t.currency_original as 'AUD' | 'INR';
-                  const account = accountMap.get(t.financial_account_id);
-                  const merchantOrDescription = (t.merchant_id && merchantMap.get(t.merchant_id)) || t.description_clean || 'Unlabelled transaction';
-                  const categoryLabel = t.category_id ? categoryMap.get(t.category_id) ?? 'Uncategorised' : 'Uncategorised';
-                  const needsReview = t.approval_status === 'pending' || t.review_status === 'pending' || t.review_status === 'in_review';
+          <DataTable label="Your financial transactions" className="w-full text-left">
+            <caption className="sr-only">Your financial transactions</caption>
+            <thead>
+              <tr className="border-b border-line text-xs text-muted">
+                <th scope="col" className="py-2 pr-2 font-medium">Date</th>
+                <th scope="col" className="py-2 pr-2 font-medium">Description</th>
+                <th scope="col" className="py-2 pr-2 font-medium">Category</th>
+                <th scope="col" className="py-2 pr-2 text-right font-medium">Amount</th>
+                <th scope="col" className="py-2 pr-2 font-medium">Economic type</th>
+                <th scope="col" className="py-2 pr-2 font-medium">Approval status</th>
+                <th scope="col" className="py-2 font-medium">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {page.transactions.map((t) => {
+                const currency = t.currency_original as 'AUD' | 'INR';
+                const account = accountMap.get(t.financial_account_id);
+                const merchantOrDescription = (t.merchant_id && merchantMap.get(t.merchant_id)) || t.description_clean || 'Unlabelled transaction';
+                const categoryLabel = t.category_id ? categoryMap.get(t.category_id) ?? 'Uncategorised' : 'Uncategorised';
+                const needsReview = t.approval_status === 'pending' || t.review_status === 'pending' || t.review_status === 'in_review';
 
-                  return (
-                    <tr key={t.id} className="border-b border-line/60 align-top">
-                      <td className="py-2 pr-2 whitespace-nowrap text-ink">{t.transaction_date}</td>
-                      <td className="py-2 pr-2 text-ink">{merchantOrDescription}</td>
-                      <td className="py-2 pr-2 text-muted">{categoryLabel}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(t.amount_original, currency)}</td>
-                      <td className="py-2 pr-2 text-muted">{titleCase(t.economic_transaction_type)}</td>
-                      <td className="py-2 pr-2">
-                        <span
-                          className={`inline-block rounded-compact px-2 py-0.5 text-xs font-semibold ${
-                            t.approval_status === 'approved' ? 'bg-positive/10 text-positive' : 'bg-attention/10 text-attention'
-                          }`}
-                        >
-                          {t.approval_status === 'approved' ? 'Approved' : 'Pending'}
-                        </span>
-                      </td>
-                      <td className="py-2">
-                        <details>
-                          <summary className="cursor-pointer text-xs font-medium text-trust">
-                            <span className="sr-only">Details for {merchantOrDescription} on {t.transaction_date}</span>
-                            <span aria-hidden="true">More</span>
-                          </summary>
-                          <div className="mt-2 space-y-1 text-xs text-muted">
-                            <p>Account: {account ? (account.masked_identifier ? `${account.display_name} (${account.masked_identifier})` : account.display_name) : 'Unknown account'}</p>
-                            <p>Recurring: {t.recurring_transaction_id ? 'Yes' : 'No'}</p>
-                            <p>Transfer: {t.economic_transaction_type === 'transfer' ? 'Yes' : 'No'}</p>
-                            <p>Duplicate status: {titleCase(t.dedup_status)}</p>
-                            {needsReview && (
-                              <Link href={`${REVIEW_QUEUE_HREF}&transaction=${t.id}`} className="inline-block font-semibold text-trust hover:underline">
-                                Review / Edit this transaction →
-                              </Link>
-                            )}
-                          </div>
-                        </details>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                return (
+                  <tr key={t.id} className="border-b border-line/60 align-top">
+                    <td className="py-2 pr-2 whitespace-nowrap text-ink">{t.transaction_date}</td>
+                    <td className="py-2 pr-2 text-ink">{merchantOrDescription}</td>
+                    <td className="py-2 pr-2 text-muted">{categoryLabel}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(t.amount_original, currency)}</td>
+                    <td className="py-2 pr-2 text-muted">{titleCase(t.economic_transaction_type)}</td>
+                    <td className="py-2 pr-2">
+                      <span
+                        className={`inline-block rounded-compact px-2 py-0.5 text-xs font-semibold ${
+                          t.approval_status === 'approved' ? 'bg-positive/10 text-positive' : 'bg-attention/10 text-attention'
+                        }`}
+                      >
+                        {t.approval_status === 'approved' ? 'Approved' : 'Pending'}
+                      </span>
+                    </td>
+                    <td className="py-2">
+                      <details>
+                        <summary className="cursor-pointer text-xs font-medium text-trust">
+                          <span className="sr-only">Details for {merchantOrDescription} on {t.transaction_date}</span>
+                          <span aria-hidden="true">More</span>
+                        </summary>
+                        <div className="mt-2 space-y-1 text-xs text-muted">
+                          <p>Account: {account ? (account.masked_identifier ? `${account.display_name} (${account.masked_identifier})` : account.display_name) : 'Unknown account'}</p>
+                          <p>Recurring: {t.recurring_transaction_id ? 'Yes' : 'No'}</p>
+                          <p>Transfer: {t.economic_transaction_type === 'transfer' ? 'Yes' : 'No'}</p>
+                          <p>Duplicate status: {titleCase(t.dedup_status)}</p>
+                          {needsReview && (
+                            <Link href={`${REVIEW_QUEUE_HREF}&transaction=${t.id}`} className="inline-block font-semibold text-trust hover:underline">
+                              Review / Edit this transaction →
+                            </Link>
+                          )}
+                        </div>
+                      </details>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
         )}
       </SectionCard>
     </div>

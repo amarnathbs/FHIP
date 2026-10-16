@@ -584,6 +584,7 @@ describe('admin navigation — promo codes is its own capability', () => {
         canViewResourceWorkflow: () => false,
         canViewResourceDiscovery: () => false,
         canViewResourceAnalytics: () => false,
+        canBulkImportResources: () => false,
       }));
       const fake = makeSupabase({ adminRow: row });
       const { GET } = await load<{ GET: () => Promise<Response> }>('@/app/api/admin/me/route', fake);

@@ -8,6 +8,7 @@
  * Intelligence mechanism this adapter's shape was modelled on.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { premiumAi } from '../support/premiumAiAccessMock';
 
 // Pre-existing, unrelated environment gap (found while building this test,
 // reported separately): `pdf-parse` is imported by
@@ -30,16 +31,14 @@ vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({
   }),
 }));
 
-const flagState = { adapterEnabled: false, globalEnabled: false, cohortAllows: true };
+const flagState = { adapterEnabled: false, globalEnabled: false };
 vi.mock('@/lib/aie/featureFlags', () => ({
   isAieAiFallbackEnabled: () => flagState.globalEnabled,
-  isUserInAiePilotCohort: () => flagState.cohortAllows,
 }));
-// AIE-1 final completion: the email resolver (service-role Auth lookup) is
-// outside this unit's scope; the cohort decision itself is mocked above.
-vi.mock('@/lib/aie/pilotCohortEmail', () => ({
-  resolveEmailForAiePilotCohort: async () => null,
-}));
+// 14-10-2026: the Premium-entitlement read (service-role) is outside this unit's scope; each test sets the
+// user's tier on the shared test double and the REAL guard logic runs over it.
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 // ...and so is the durable draft store (migration 0197): reported as not
 // present, i.e. the pre-0197 behaviour this suite was written against.
 vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
@@ -75,12 +74,14 @@ vi.mock('@/lib/aie/adapters/payslip', () => ({
 }));
 
 import { attemptAiPayslipFallback } from '@/lib/financial-data-hub/services/payslipProcessingService';
+import { requestPayslipAiExtraction } from '@/lib/aie/adapters/payslip';
 
 beforeEach(() => {
+  vi.mocked(requestPayslipAiExtraction).mockClear();
   auditEvents.length = 0;
   flagState.adapterEnabled = false;
   flagState.globalEnabled = false;
-  flagState.cohortAllows = true;
+  premiumAi.reset();
   maskingState.throwOnMask = false;
   maskingState.belowPolicy = false;
   providerState.outcome = 'success';
@@ -101,12 +102,41 @@ describe('attemptAiPayslipFallback', () => {
     expect(result).toEqual({ ok: false, reason: 'global_kill_switch_disabled' });
   });
 
-  it('refuses when the shared pilot cohort denies this user', async () => {
+  it('refuses a Free user before masking or any AI call (premium_required)', async () => {
     flagState.adapterEnabled = true;
     flagState.globalEnabled = true;
-    flagState.cohortAllows = false;
+    premiumAi.setTier('user-1', 'free');
     const result = await attemptAiPayslipFallback('user-1', 'doc-1', 'raw text', 'AU');
-    expect(result).toEqual({ ok: false, reason: 'cohort_denied' });
+    expect(result).toEqual({ ok: false, reason: 'premium_required' });
+    expect(requestPayslipAiExtraction).not.toHaveBeenCalled(); // no provider call, so nothing to charge
+    expect(auditEvents.map((e) => e.eventType)).not.toContain('payslip_ai_fallback_attempted');
+  });
+
+  it('refuses an expired Premium entitlement, and an unreadable one (fail closed)', async () => {
+    flagState.adapterEnabled = true;
+    flagState.globalEnabled = true;
+    premiumAi.setTier('user-1', 'expired');
+    expect(await attemptAiPayslipFallback('user-1', 'doc-1', 'raw text', 'AU')).toEqual({ ok: false, reason: 'premium_required' });
+    premiumAi.setTier('user-1', 'unavailable');
+    expect(await attemptAiPayslipFallback('user-1', 'doc-1', 'raw text', 'AU')).toEqual({ ok: false, reason: 'entitlement_unavailable' });
+    expect(requestPayslipAiExtraction).not.toHaveBeenCalled();
+  });
+
+  it('PREMIUM, never on any pilot list: reaches the provider exactly once and gets a draft (negative control for the refusals above)', async () => {
+    flagState.adapterEnabled = true;
+    flagState.globalEnabled = true;
+    premiumAi.setTier('brand-new-premium-user', 'premium');
+    const result = await attemptAiPayslipFallback('brand-new-premium-user', 'doc-9', 'raw text', 'AU');
+    expect(result.ok).toBe(true);
+    expect(requestPayslipAiExtraction).toHaveBeenCalledTimes(1);
+    expect(premiumAi.asked).toEqual(['brand-new-premium-user']);
+  });
+
+  it('checks the kill switches BEFORE the entitlement (a disabled adapter never reads the plan)', async () => {
+    flagState.adapterEnabled = true;
+    flagState.globalEnabled = false;
+    await attemptAiPayslipFallback('user-1', 'doc-1', 'raw text', 'AU');
+    expect(premiumAi.asked).toEqual([]);
   });
 
   it('degrades to unavailable (never throws) when masking is unavailable', async () => {

@@ -10,6 +10,8 @@ import { InvestmentsSubNav } from '@/components/investments/InvestmentsSubNav';
 import { AuInvestmentStatementImportPanel } from '@/components/investments/AuInvestmentStatementImportPanel';
 import { ImportedInvestmentStatements } from '@/components/investments/ImportedInvestmentStatements';
 import { PublishedFundValuations } from '@/components/investments/PublishedFundValuations';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedLink } from '@/components/entitlements/ImportLockedLink';
 
 // FDH-11 spec sections 2, 76-83: the Investments hub offers three entry
 // points — Add Investment Manually (the existing grid below, unchanged and
@@ -30,6 +32,9 @@ function InvestmentsPageContent() {
   const [gridKey, setGridKey] = useState(0);
   const auImportToggleRef = useRef<HTMLButtonElement>(null);
 
+  // Premium Upload Entitlement (14-10-2026): presentation only (the server re-checks every upload). Manual entry is untouched.
+  const { access: importAccess } = useFinancialImportAccess();
+
   function closeAuImport() {
     setShowAuImport(false);
     setResumeDocumentId(null);
@@ -43,18 +48,22 @@ function InvestmentsPageContent() {
         <h1 className="text-2xl font-semibold text-trust">Investments</h1>
         <p className="mt-1 text-sm text-muted">Add investments manually, import an Australian broker statement, or view your India investments.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            ref={auImportToggleRef}
-            type="button"
-            onClick={() => {
-              setResumeDocumentId(null);
-              setShowAuImport((v) => !v);
-            }}
-            aria-expanded={showAuImport}
-            className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5"
-          >
-            Import Australian Investment Statement
-          </button>
+          {importAccess?.state === 'premium_required' ? (
+            <ImportLockedLink domain="investments" label="Import Australian Investment Statement" />
+          ) : (
+            <button
+              ref={auImportToggleRef}
+              type="button"
+              onClick={() => {
+                setResumeDocumentId(null);
+                setShowAuImport((v) => !v);
+              }}
+              aria-expanded={showAuImport}
+              className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5"
+            >
+              Import Australian Investment Statement
+            </button>
+          )}
           <Link
             href="/investment-intelligence"
             className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-trust hover:bg-gray-50"

@@ -9,6 +9,8 @@ import { BankStatementImportPanel } from '@/components/expenses/BankStatementImp
 import { ImportedExpenseActuals } from '@/components/expenses/ImportedExpenseActuals';
 import { PlannedFromActualProposal } from '@/components/expenses/PlannedFromActualProposal';
 import { useModuleWriteAvailability } from '@/lib/nav/useModuleWriteAvailability';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { ImportLockedLink } from '@/components/entitlements/ImportLockedLink';
 
 // Expenses tab (LR-3 layout; WP-07/WP-15 planned-vs-actual model, PO D-02):
 //  - the grid below is your PLANNED expenses (expense_items), entered by you
@@ -27,6 +29,8 @@ function ExpensesPageContent() {
   // internal controls use — this button lives outside the grid component.
   const { available: writeAvailable, resolved: writeResolved } = useModuleWriteAvailability('EXPENSES');
   const importDisabled = writeResolved && !writeAvailable;
+  // Premium Upload Entitlement (14-10-2026): presentation only (the server re-checks every upload). Manual entry is untouched.
+  const { access: importAccess } = useFinancialImportAccess();
 
   return (
     <div className="space-y-6">
@@ -34,16 +38,20 @@ function ExpensesPageContent() {
         <h1 className="text-2xl font-semibold text-trust">Expenses</h1>
         <p className="mt-1 text-sm text-muted">Manage your household expenses.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowImport((v) => !v)}
-            aria-expanded={showImport}
-            disabled={importDisabled}
-            title={importDisabled ? "Importing isn't available for your country yet" : undefined}
-            className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-          >
-            Import bank statement
-          </button>
+          {importAccess?.state === 'premium_required' ? (
+            <ImportLockedLink domain="expenses" label="Import bank statement" />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowImport((v) => !v)}
+              aria-expanded={showImport}
+              disabled={importDisabled}
+              title={importDisabled ? "Importing isn't available for your country yet" : undefined}
+              className="rounded border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            >
+              Import bank statement
+            </button>
+          )}
         </div>
         <p className="mt-2 text-sm text-muted">
           Upload a bank statement (PDF or CSV) and FHIP will extract your transactions for you to review and approve.

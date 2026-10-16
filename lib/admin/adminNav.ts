@@ -58,6 +58,11 @@ export const CONTENT_TYPE_ITEMS: { label: string; href: string }[] = [
   { label: 'Money Updates', href: '/admin/resources/money-updates' },
 ];
 
+// Resources Bulk Upload (Articles + Money Updates): ONE real destination. A SEPARATE group, because it is a
+// separate capability (resources.content.bulk_import: Super Admin, Resource Admin, Editor) that CREATES content in
+// bulk -- an Author who can create one draft by hand is not thereby trusted with a file of 500.
+export const BULK_UPLOAD_ITEMS: { label: string; href: string }[] = [{ label: 'Bulk Upload', href: '/admin/resources/import' }];
+
 export const WORKFLOW_ITEMS: { label: string; href: string }[] = [
   { label: 'Drafts', href: '/admin/resources/content/drafts' },
   { label: 'Review Queue', href: '/admin/resources/content/review' },
@@ -143,6 +148,12 @@ export interface AdminCapabilities {
   resourceDiscoveryAdmin: boolean;
   resourceAnalytics: boolean;
   /**
+   * Resources Bulk Upload (Articles + Money Updates) - capability resources.content.bulk_import. Held by Super Admin,
+   * Resource Admin and Editor only (migration 0272, private.can_bulk_import_resource_content). Deliberately NOT implied
+   * by resourceContentAdmin or any other capability (Standard section 2).
+   */
+  resourceContentBulkImport: boolean;
+  /**
    * PC6/N.11 — the reference-market-data quality surface. Backed by
    * admin_users.can_view_reference_data_quality (migration 0155) and the
    * is_pc6_reference_data_admin() RLS predicate. Deliberately NOT implied by
@@ -224,6 +235,7 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   resourceWorkflowAdmin: false,
   resourceDiscoveryAdmin: false,
   resourceAnalytics: false,
+  resourceContentBulkImport: false,
   referenceDataQuality: false,
   lookthroughDataQuality: false,
   marketIndexDataUpload: false,
@@ -268,6 +280,7 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     resourceWorkflowAdmin: readBooleanField(source, 'resourceWorkflowAdmin'),
     resourceDiscoveryAdmin: readBooleanField(source, 'resourceDiscoveryAdmin'),
     resourceAnalytics: readBooleanField(source, 'resourceAnalytics'),
+    resourceContentBulkImport: readBooleanField(source, 'resourceContentBulkImport'),
     referenceDataQuality: readBooleanField(source, 'referenceDataQuality'),
     lookthroughDataQuality: readBooleanField(source, 'lookthroughDataQuality'),
     marketIndexDataUpload: readBooleanField(source, 'marketIndexDataUpload'),
@@ -334,6 +347,7 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(isAdmin ? [{ label: 'General', items: ADMIN_GENERAL_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.resourcesDashboard ? [{ label: 'Resources', items: RESOURCES_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.resourceContentAdmin ? [{ label: 'Content', items: CONTENT_TYPE_ITEMS, matchMode: 'prefix' as const }] : []),
+    ...(capabilities.resourceContentBulkImport ? [{ label: 'Bulk Upload', items: BULK_UPLOAD_ITEMS, matchMode: 'prefix' as const }] : []),
     ...(capabilities.resourceWorkflowAdmin ? [{ label: 'Workflow', items: WORKFLOW_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.resourceDiscoveryAdmin ? [{ label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),

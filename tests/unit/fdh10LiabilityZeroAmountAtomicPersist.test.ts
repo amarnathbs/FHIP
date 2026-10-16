@@ -229,7 +229,8 @@ vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
   claimPendingAiFallbackDraft: async () => ({ claimed: false, reason: 'table_missing' }),
   releaseClaimedAiFallbackDraftIfNothingWritten: vi.fn(async () => ({ released: true })),
 }));
-vi.mock('@/lib/aie/pilotCohortEmail', () => ({ resolveEmailForAiePilotCohort: async () => null }));
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 
 import { POST as processRoute } from '@/app/api/financial-data-hub/liability-statement/[documentId]/process/route';
 import {

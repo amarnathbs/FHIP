@@ -1,0 +1,122 @@
+// Article upload adapter -- canonical schema (template FHIP_Article_Upload_Template_v1).
+//
+// The finished body fields (quick_answer, key_takeaways, main_content, example,
+// financial_health_meaning) become canonical resource_posts.content_blocks;
+// they are never metadata or planning notes.
+
+import {
+  ARTICLE_FRESHNESS_VALUES,
+  COL_COMPLIANCE,
+  COL_DIFFICULTY,
+  COL_EXCERPT,
+  COL_EXPIRES,
+  COL_EXTERNAL_ID,
+  COL_IS_INDEXABLE,
+  COL_JURISDICTION,
+  COL_NEXT_REVIEW,
+  COL_PRIMARY_CATEGORY,
+  COL_PRIMARY_CTA,
+  COL_SECONDARY_CTA,
+  COL_SEO_DESCRIPTION,
+  COL_SEO_TITLE,
+  COL_SLUG,
+  COL_TAGS,
+  COL_TEMPLATE_VERSION,
+  COL_TITLE,
+  sourceColumns,
+} from '../common-schema';
+import { TEMPLATE_VERSION, type ColumnSpec, type ImportSchema } from '../types';
+
+const BODY_MAX = 20000;
+
+const COL_FRESHNESS: ColumnSpec = {
+  key: 'freshness_type',
+  kind: 'enum',
+  required: false,
+  label: 'Freshness type',
+  help: 'evergreen (default when blank) or time_sensitive. A time_sensitive article needs a next review date or an expiry date.',
+  example: 'evergreen',
+  enumValues: ARTICLE_FRESHNESS_VALUES,
+};
+
+export const ARTICLE_SCHEMA: ImportSchema = {
+  contentType: 'article',
+  templateVersion: TEMPLATE_VERSION,
+  uploadSheetName: 'Article_Upload',
+  exampleSheetName: 'Example_Article',
+  templateFileBase: 'FHIP_Article_Upload_Template_v1',
+  columns: [
+    COL_TEMPLATE_VERSION,
+    COL_EXTERNAL_ID,
+    COL_TITLE,
+    COL_SLUG,
+    COL_JURISDICTION,
+    COL_DIFFICULTY,
+    COL_COMPLIANCE,
+    COL_FRESHNESS,
+    COL_NEXT_REVIEW,
+    COL_EXPIRES,
+    COL_EXCERPT,
+    {
+      key: 'quick_answer',
+      kind: 'long_text',
+      required: false,
+      label: 'Quick answer',
+      help: 'The 30-second answer shown in a highlighted box at the top. Optional; when blank no box is created.',
+      example: 'An offset account is a savings account linked to your home loan. Every dollar in it reduces the balance your interest is charged on.',
+      maxLength: 2000,
+    },
+    {
+      key: 'key_takeaways',
+      kind: 'line_list',
+      required: false,
+      label: 'Key takeaways',
+      help: 'One takeaway per line (a new line inside the cell). Becomes the Key Takeaways list. Optional.',
+      example: 'Interest is calculated daily on the loan balance minus the offset balance.\nYour money stays accessible.\nA full offset can match a lower rate loan.',
+      maxLength: BODY_MAX,
+    },
+    {
+      key: 'main_content',
+      kind: 'long_text',
+      required: true,
+      label: 'Main content',
+      help: 'The article body in restricted Markdown: ## for a main heading, ### for a sub-heading, plain paragraphs separated by a blank line, bullet lists (lines starting with - ) and numbered lists (1. 2. 3.). Bold (**text**), italic (_text_) and secure links ([text](https://...)) are allowed. Raw HTML, tables, images, code and nested lists are rejected.',
+      example: '## How it works\n\nYour offset account balance is subtracted from your loan balance before interest is calculated.\n\n### An example\n\n- Loan balance: $500,000\n- Offset balance: $50,000\n- Interest is charged on $450,000\n\n## Things to check\n\n1. Whether the loan charges a package fee\n2. Whether the offset is 100 percent or partial',
+      maxLength: BODY_MAX,
+    },
+    {
+      key: 'example',
+      kind: 'long_text',
+      required: false,
+      label: 'Example',
+      help: 'A worked example, shown in the Example block. Optional.',
+      example: 'Sam has a $500,000 loan at 6 percent and keeps $50,000 in the offset account, so interest is charged on $450,000.',
+      maxLength: 4000,
+    },
+    {
+      key: 'financial_health_meaning',
+      kind: 'long_text',
+      required: false,
+      label: 'What this means for your financial health',
+      help: 'Becomes the section titled "What this means for your financial health". Plain paragraphs. Optional.',
+      example: 'An offset account turns idle cash into interest savings, which can raise your savings rate without changing your income.',
+      maxLength: BODY_MAX,
+    },
+    COL_PRIMARY_CATEGORY,
+    COL_TAGS,
+    {
+      key: 'author',
+      kind: 'reference',
+      required: false,
+      label: 'Author',
+      help: 'The author slug or the exact display name of an existing author. Authors are never created by an upload. An item without an author can be saved as a draft but cannot go to review until an author is set.',
+      example: '',
+    },
+    COL_PRIMARY_CTA,
+    COL_SECONDARY_CTA,
+    COL_SEO_TITLE,
+    COL_SEO_DESCRIPTION,
+    COL_IS_INDEXABLE,
+    ...sourceColumns(),
+  ],
+};

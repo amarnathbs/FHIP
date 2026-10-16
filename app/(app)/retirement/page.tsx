@@ -10,6 +10,8 @@ import { RetirementPlanningSection } from '@/components/retirement/RetirementPla
 import { SmsfSection } from '@/components/retirement/smsf/SmsfSection';
 import { RetirementStatementImportPanel } from '@/components/retirement/RetirementStatementImportPanel';
 import { RetirementStatementHistory } from '@/components/retirement/RetirementStatementHistory';
+import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
+import { PremiumImportPill } from '@/components/entitlements/PremiumImportPill';
 
 // Hierarchy per spec s.34: "Retirement Planning" (target ages) ->
 // "Retirement Accounts" (the grid below, industry/retail super etc.) with
@@ -43,6 +45,9 @@ function RetirementPageContent() {
   // remounted to pick them up — the same refresh contract the Investments page
   // uses for FDH-11. The history re-reads on the same key.
   const [gridKey, setGridKey] = useState(0);
+  // Premium Upload Entitlement (14-10-2026): presentation only (the server re-checks every upload). Manual entry is untouched.
+  const { access: importAccess } = useFinancialImportAccess();
+  const importLocked = importAccess?.state === 'premium_required';
 
   return (
     <FinancialDataGrid
@@ -54,8 +59,12 @@ function RetirementPageContent() {
         <>
           <nav aria-label="Ways to update your retirement accounts" className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted">Update your retirement accounts by hand below, or</span>
-            <a href="#import-retirement-statement" className="rounded bg-trust px-3 py-1 font-medium text-white">
+            <a
+              href="#import-retirement-statement"
+              className={importLocked ? 'inline-flex items-center gap-2 rounded border border-ai px-3 py-1 font-medium text-ai' : 'rounded bg-trust px-3 py-1 font-medium text-white'}
+            >
               Import statement
+              {importLocked && <PremiumImportPill />}
             </a>
             <a href="#imported-retirement-statements" className="rounded border border-gray-300 px-3 py-1">
               Imported statements

@@ -8,6 +8,7 @@ import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { AllocationPieChart } from '@/components/dashboard/charts';
 import { ResourceEmptyState, ResourceErrorState } from '@/components/resources/admin/ResourceStates';
 import { resolveActivityParams, type RawSearchParams } from '../_lib/searchParams';
+import { DataTable } from '@/components/ui/DataTable';
 
 const ESSENTIAL_DISCRETIONARY_LABELS: Record<string, string> = {
   essential: 'Essential',
@@ -102,31 +103,29 @@ async function FinancialActivitySpendingPageContent({
                   {/* Accessibility (spec 102-104): every chart needs an adjacent
                       text/data summary — this table is that summary, not just
                       decoration next to the pie chart above. */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <caption className="sr-only">Approved spending by category for {breakdown.currencyCode}</caption>
-                      <thead>
-                        <tr className="border-b border-line text-xs text-muted">
-                          <th scope="col" className="py-2 pr-2 font-medium">Category</th>
-                          <th scope="col" className="py-2 pr-2 font-medium">Type</th>
-                          <th scope="col" className="py-2 pr-2 text-right font-medium">Amount</th>
-                          <th scope="col" className="py-2 text-right font-medium">Share</th>
+                  <DataTable label={`Approved spending by category for ${breakdown.currencyCode}`} className="w-full text-left">
+                    <caption className="sr-only">Approved spending by category for {breakdown.currencyCode}</caption>
+                    <thead>
+                      <tr className="border-b border-line text-xs text-muted">
+                        <th scope="col" className="py-2 pr-2 font-medium">Category</th>
+                        <th scope="col" className="py-2 pr-2 font-medium">Type</th>
+                        <th scope="col" className="py-2 pr-2 text-right font-medium">Amount</th>
+                        <th scope="col" className="py-2 text-right font-medium">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {breakdown.categories.map((c) => (
+                        <tr key={c.categoryId} className="border-b border-line/60">
+                          <td className="py-2 pr-2 text-ink">{c.displayName}</td>
+                          <td className="py-2 pr-2 text-muted">
+                            {c.essentialDiscretionary ? ESSENTIAL_DISCRETIONARY_LABELS[c.essentialDiscretionary] ?? c.essentialDiscretionary : '—'}
+                          </td>
+                          <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(c.total, currency)}</td>
+                          <td className="py-2 text-right tabular-nums text-muted">{c.percentage}%</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {breakdown.categories.map((c) => (
-                          <tr key={c.categoryId} className="border-b border-line/60">
-                            <td className="py-2 pr-2 text-ink">{c.displayName}</td>
-                            <td className="py-2 pr-2 text-muted">
-                              {c.essentialDiscretionary ? ESSENTIAL_DISCRETIONARY_LABELS[c.essentialDiscretionary] ?? c.essentialDiscretionary : '—'}
-                            </td>
-                            <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(c.total, currency)}</td>
-                            <td className="py-2 text-right tabular-nums text-muted">{c.percentage}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </DataTable>
                 </div>
               )}
             </SectionCard>
@@ -143,7 +142,7 @@ async function FinancialActivitySpendingPageContent({
           {merchantsByCurrency.map((m) =>
             m.merchants.length === 0 ? null : (
               <div key={m.currencyCode} className="mb-4 overflow-x-auto last:mb-0">
-                <table className="w-full text-left text-sm">
+                <DataTable label={`Top merchants by approved spending for ${m.currencyCode}`} className="w-full text-left">
                   <caption className="sr-only">Top merchants by approved spending for {m.currencyCode}</caption>
                   <thead>
                     <tr className="border-b border-line text-xs text-muted">
@@ -161,11 +160,11 @@ async function FinancialActivitySpendingPageContent({
                         <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(row.totalSpent, m.currencyCode as 'AUD' | 'INR')}</td>
                         <td className="py-2 pr-2 text-right tabular-nums text-muted">{row.transactionCount}</td>
                         <td className="py-2 pr-2 text-right tabular-nums text-muted">{formatMoney(row.averageTransaction, m.currencyCode as 'AUD' | 'INR')}</td>
-                        <td className="py-2 text-right tabular-nums text-muted">{formatDateShort(row.lastTransactionDate, m.currencyCode as 'AUD' | 'INR')}</td>
+                        <td className="py-2 text-right tabular-nums text-muted whitespace-nowrap">{formatDateShort(row.lastTransactionDate, m.currencyCode as 'AUD' | 'INR')}</td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
               </div>
             ),
           )}

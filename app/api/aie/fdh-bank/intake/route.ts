@@ -1,9 +1,11 @@
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
-import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed, isUserInAiePilotCohort } from '@/lib/aie/featureFlags';
+import { refuseUnlessPremiumAi } from '@/lib/ai/access/premiumAiAccess';
+import { isAieDocumentIntakeEnabled, isMissingSignatureScannerAllowed } from '@/lib/aie/featureFlags';
 import { DEFAULT_AIE_UPLOAD_LIMITS, validateUploadForAdmission } from '@/lib/aie/validation/fileValidation';
 import { buildQuarantineStorageKey, uploadToQuarantine } from '@/lib/aie/storage';
-import { createIntake, updateIntakeStatus, recordFdhBankUploadMetadata, recordFingerprint, existingFingerprintHashesForUser, createRun, createUnresolvedItems } from '@/lib/aie/db/repository';
+import { updateIntakeStatus, recordFdhBankUploadMetadata, recordFingerprint, existingFingerprintHashesForUser, createRun, createUnresolvedItems } from '@/lib/aie/db/repository';
+import { admitIntake } from '@/lib/aie/intakeAdmission';
 import { recordAieAuditEvent } from '@/lib/aie/audit';
 import { classifyDuplicate } from '@/lib/aie/fingerprint';
 import { createDefaultDeps, runExtractionPipeline } from '@/lib/aie/orchestrator';
@@ -30,6 +32,7 @@ import { fdhBankStatementReconciliationRule, extractInstitutionHintForDisplay } 
 // write a deliberate act rather than an easy one. See the block at the end
 // of `POST` for the full rationale and the RED reproduction it closes.
 import '@/lib/aie/adapters/fdhBankStatement'; // side-effecting registration (schemas + classification parser)
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // A single project-wide mock provider instance — genuinely no external AI
 // provider traffic occurs anywhere in this route (matches the generic
@@ -71,6 +74,10 @@ const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), {
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'aie.fdh_bank.intake');
+  if (importDenied) return importDenied;
 
   if (!isAieFdhBankAdapterEnabled()) {
     return bad('The AIE-fronted FDH bank-statement adapter is not currently enabled in this environment.', 403);
@@ -78,9 +85,10 @@ export async function POST(req: Request) {
   if (!isAieDocumentIntakeEnabled()) {
     return bad('AIE document intake is not currently enabled in this environment.', 403);
   }
-  if (!isUserInAiePilotCohort({ userId: user.id, email: user.email })) {
-    return bad('AIE is currently limited to an allowlisted pilot cohort.', 403);
-  }
+  // Premium entitlement (14-10-2026) replaced the pilot allowlist: checked server-side on the session user,
+  // before a byte of the body is read, stored or scanned.
+  const premiumRefusal = await refuseUnlessPremiumAi(user.id, 'aie_intake_fdh_bank');
+  if (premiumRefusal) return premiumRefusal;
 
   const url = new URL(req.url);
   const metadataParsed = bankCsvUploadMetadataSchema.safeParse({
@@ -113,7 +121,7 @@ export async function POST(req: Request) {
   const displayFilename = metadata.original_filename_sanitised ?? null;
 
   const rlsClient = await createClient();
-  const created = await createIntake(rlsClient, {
+  const created = await admitIntake(rlsClient, {
     userId: user.id,
     declaredMimeType: 'application/pdf',
     byteSize: bytes.byteLength,

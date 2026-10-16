@@ -5,6 +5,7 @@
 // publish / cancel / rollback actions the caller's capabilities allow.
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DateTimeText } from '@/components/ui/DataTable';
 import type { BenchmarkCapabilityFlags, ImportJobDetail, ImportJobSummary } from '@/lib/services/investment-intelligence/benchmarkData/apiTypes';
 import { apiCall, failureOf, useLoad, useUnmountSignal } from './api';
 import {
@@ -131,29 +132,36 @@ export default function JobsTab({ caps, refreshKey, onChanged, say }: { caps: Be
         {jobs.length === 0 ? (
           <EmptyState title="No import has been staged yet">Start on the Upload tab. Staging checks a file; nothing is published until a publisher approves it.</EmptyState>
         ) : (
-          <ScrollTable label="Recent import jobs" minWidth="min-w-[860px]">
+          <ScrollTable label="Recent import jobs">
             <thead>
-              <tr><Th>Status</Th><Th>Mode</Th><Th>File</Th><Th>Benchmarks</Th><Th num>Rows</Th><Th num>New</Th><Th num>Corrections</Th><Th>Staged</Th><Th>Published</Th><Th>Details</Th></tr>
+              <tr><Th>Status</Th><Th>File</Th><Th>Benchmarks</Th><Th num>Rows</Th><Th num>New</Th><Th num title="Corrections"><span aria-hidden="true">Corr.</span><span className="sr-only">Corrections</span></Th><Th kind="date">Staged</Th><Th kind="date">Published</Th><Th kind="action">Details</Th></tr>
             </thead>
-            <tbody>
-              {jobs.map((j) => {
-                const c = jobStatusChip(j.status);
-                return (
-                  <tr key={j.id}>
-                    <Td><Chip label={c.label} tone={c.tone} title={c.hint} /></Td>
-                    <Td>{j.mode === 'correction' ? 'Correction' : 'New history'}</Td>
-                    <Td className="max-w-[14rem] truncate">{j.fileName}</Td>
-                    <Td>{j.benchmarkKeys.join(', ')}</Td>
+            {jobs.map((j) => {
+              const c = jobStatusChip(j.status);
+              const mode = j.mode === 'correction' ? 'Correction' : 'New history';
+              // One job = two rows in one row group: the figures, dates and the Open button on the first (compact, so the table fits a
+              // laptop screen), the plain-words note on the second. "(by you)" and "self-published" used to be glued onto the dates, which
+              // squeezed the date column and wrapped it to five lines.
+              const note = [mode, j.stagedByMe ? 'Staged by you' : '', j.publishedAt ? [j.publishedByMe ? 'Published by you' : '', j.selfPublished ? (j.publishedByMe ? 'self-published' : 'Self-published') : ''].filter(Boolean).join(', ') : ''].filter(Boolean).join('. ');
+              return (
+                <tbody key={j.id}>
+                  <tr>
+                    <Td kind="status"><Chip label={c.label} tone={c.tone} title={c.hint} /></Td>
+                    <Td kind="clamp" minCh={8}>{j.fileName}</Td>
+                    <Td kind="clamp" minCh={8}>{j.benchmarkKeys.join(', ')}</Td>
                     <Td num>{formatCount(j.rowsTotal)}</Td>
                     <Td num>{formatCount(j.rowsNew + j.rowsRevive)}</Td>
                     <Td num>{formatCount(j.rowsCorrection)}</Td>
-                    <Td>{formatDateTime(j.stagedAt)}{j.stagedByMe ? ' (by you)' : ''}</Td>
-                    <Td>{j.publishedAt ? `${formatDateTime(j.publishedAt)}${j.publishedByMe ? ' (by you)' : ''}${j.selfPublished ? ', self-published' : ''}` : 'no'}</Td>
-                    <Td><Btn kind="secondary" onClick={() => setSelected(j.id)}>{`Open job ${j.id.slice(0, 8)}`}</Btn></Td>
+                    <Td><DateTimeText value={formatDateTime(j.stagedAt)} /></Td>
+                    <Td>{j.publishedAt ? <DateTimeText value={formatDateTime(j.publishedAt)} /> : 'no'}</Td>
+                    <Td kind="action"><Btn kind="secondary" ariaLabel={`Open job ${j.id.slice(0, 8)}`} onClick={() => setSelected(j.id)}>Open</Btn></Td>
                   </tr>
-                );
-              })}
-            </tbody>
+                  <tr>
+                    <Td colSpan={9} className="border-t-0 pt-0 text-xs text-muted">{note}.</Td>
+                  </tr>
+                </tbody>
+              );
+            })}
           </ScrollTable>
         )}
       </Panel>

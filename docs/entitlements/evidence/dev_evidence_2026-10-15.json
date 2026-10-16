@@ -1,0 +1,569 @@
+{
+  "at": "2026-10-14T15:16:28.854Z",
+  "branchSha": "fadfcd2",
+  "base": "local Next.js (this branch) -> DEV Supabase vqycarelcoijzwlpkpcz",
+  "users": {
+    "free": {
+      "id8": "ea92e844",
+      "entitlement": {
+        "plan_tier": "free",
+        "effective_to": null
+      },
+      "import_access": "premium_required",
+      "before": {
+        "fdh_statement_uploads": 0,
+        "fdh_upload_sessions": 0,
+        "fdh_document_audit_events": 0,
+        "fdh_ingestion_jobs": 0,
+        "aie_document_intake": 0,
+        "ii_source_documents": 1,
+        "storage_objects_for_user": 0
+      },
+      "after": {
+        "fdh_statement_uploads": 0,
+        "fdh_upload_sessions": 0,
+        "fdh_document_audit_events": 0,
+        "fdh_ingestion_jobs": 0,
+        "aie_document_intake": 0,
+        "ii_source_documents": 1,
+        "storage_objects_for_user": 0
+      },
+      "unchanged": true,
+      "premium_refusals": 28,
+      "unavailable": 0,
+      "unexpected_5xx": [],
+      "rows": [
+        {
+          "surface": "fdh.upload_session.create",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 11920,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.upload_session.complete",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 20954,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.bank_csv.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 3470,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.bank_pdf.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 2995,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.liability_statement.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 8119,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.investment_statement.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 11108,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.retirement_statement.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 3539,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "aie.intake.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 8109,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "aie.insurance.intake",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 5930,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "aie.fdh_bank.intake",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 11191,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "aie.investment_intelligence.intake",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 7044,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "ii.source_document.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 4859,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "ii.source_document.parse_fixture",
+          "kind": "admission",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 24566,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.bank_csv.detect",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 50246,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.bank_csv.map",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 17162,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.bank_csv.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 3932,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.bank_pdf.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 5105,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.bank_pdf.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 4045,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.payslip.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 6676,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.payslip.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 9694,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.liability_statement.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 4944,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.liability_statement.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 7381,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.investment_statement.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 9255,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.investment_statement.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 5264,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.retirement_statement.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 7615,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "fdh.retirement_statement.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 5681,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "aie.investment_intelligence.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 6088,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        },
+        {
+          "surface": "ii.source_document.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": "PREMIUM_REQUIRED",
+          "ms": 7826,
+          "note": "Statement and document import is available on Premium. You can continue to add a"
+        }
+      ]
+    },
+    "premium": {
+      "id8": "6f10dec4",
+      "entitlement": {
+        "plan_tier": "premium",
+        "effective_to": "2026-11-30"
+      },
+      "import_access": "allowed",
+      "before": {
+        "fdh_statement_uploads": 0,
+        "fdh_upload_sessions": 0,
+        "fdh_document_audit_events": 0,
+        "fdh_ingestion_jobs": 0,
+        "aie_document_intake": 0,
+        "ii_source_documents": 1,
+        "storage_objects_for_user": 1
+      },
+      "after": {
+        "fdh_statement_uploads": 0,
+        "fdh_upload_sessions": 0,
+        "fdh_document_audit_events": 0,
+        "fdh_ingestion_jobs": 0,
+        "aie_document_intake": 0,
+        "ii_source_documents": 1,
+        "storage_objects_for_user": 1
+      },
+      "unchanged": true,
+      "premium_refusals": 0,
+      "unavailable": 0,
+      "unexpected_5xx": [],
+      "rows": [
+        {
+          "surface": "fdh.upload_session.create",
+          "kind": "admission",
+          "status": 422,
+          "code": null,
+          "ms": 2252,
+          "note": "Required"
+        },
+        {
+          "surface": "fdh.upload_session.complete",
+          "kind": "admission",
+          "status": 422,
+          "code": null,
+          "ms": 2107,
+          "note": "File upload incomplete."
+        },
+        {
+          "surface": "fdh.bank_csv.upload",
+          "kind": "admission",
+          "status": 422,
+          "code": null,
+          "ms": 2518,
+          "note": "Required"
+        },
+        {
+          "surface": "fdh.bank_pdf.upload",
+          "kind": "admission",
+          "status": 422,
+          "code": null,
+          "ms": 9093,
+          "note": "Required"
+        },
+        {
+          "surface": "fdh.liability_statement.upload",
+          "kind": "admission",
+          "status": 422,
+          "code": null,
+          "ms": 5450,
+          "note": "Required"
+        },
+        {
+          "surface": "fdh.investment_statement.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": null,
+          "ms": 2936,
+          "note": "This statement upload is only available for accounts confirmed in Australia. Ind"
+        },
+        {
+          "surface": "fdh.retirement_statement.upload",
+          "kind": "admission",
+          "status": 400,
+          "code": null,
+          "ms": 2822,
+          "note": "Required"
+        },
+        {
+          "surface": "aie.intake.upload",
+          "kind": "admission",
+          "status": 403,
+          "code": null,
+          "ms": 3181,
+          "note": "AIE document intake is not currently enabled in this environment."
+        },
+        {
+          "surface": "aie.insurance.intake",
+          "kind": "admission",
+          "status": 403,
+          "code": null,
+          "ms": 2995,
+          "note": "The AIE-fronted Insurance adapter is not currently enabled in this environment."
+        },
+        {
+          "surface": "aie.fdh_bank.intake",
+          "kind": "admission",
+          "status": 403,
+          "code": null,
+          "ms": 3101,
+          "note": "The AIE-fronted FDH bank-statement adapter is not currently enabled in this envi"
+        },
+        {
+          "surface": "aie.investment_intelligence.intake",
+          "kind": "admission",
+          "status": 403,
+          "code": null,
+          "ms": 3059,
+          "note": "The AIE-fronted Investment Intelligence adapter is not currently enabled in this"
+        },
+        {
+          "surface": "ii.source_document.upload",
+          "kind": "admission",
+          "status": 422,
+          "code": null,
+          "ms": 2170,
+          "note": "Expected multipart/form-data with \"file\" and \"meta\" fields"
+        },
+        {
+          "surface": "ii.source_document.parse_fixture",
+          "kind": "admission",
+          "status": 422,
+          "code": null,
+          "ms": 2562,
+          "note": "Please check: FixtureKey, SourceKey, CountryCode, CurrencyCode, OriginalFilename"
+        },
+        {
+          "surface": "fdh.bank_csv.detect",
+          "kind": "run_start",
+          "status": 404,
+          "code": null,
+          "ms": 2322,
+          "note": "document not found"
+        },
+        {
+          "surface": "fdh.bank_csv.map",
+          "kind": "run_start",
+          "status": 422,
+          "code": null,
+          "ms": 4170,
+          "note": "Required"
+        },
+        {
+          "surface": "fdh.bank_csv.process",
+          "kind": "run_start",
+          "status": 404,
+          "code": null,
+          "ms": 2399,
+          "note": "document not found"
+        },
+        {
+          "surface": "fdh.bank_pdf.process",
+          "kind": "run_start",
+          "status": 404,
+          "code": null,
+          "ms": 2659,
+          "note": "document not found"
+        },
+        {
+          "surface": "fdh.bank_pdf.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 422,
+          "code": null,
+          "ms": 1736,
+          "note": "Invalid or incomplete statement values."
+        },
+        {
+          "surface": "fdh.payslip.process",
+          "kind": "run_start",
+          "status": 404,
+          "code": null,
+          "ms": 1979,
+          "note": "document not found"
+        },
+        {
+          "surface": "fdh.payslip.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 422,
+          "code": null,
+          "ms": 1846,
+          "note": "Invalid or incomplete payslip values."
+        },
+        {
+          "surface": "fdh.liability_statement.process",
+          "kind": "run_start",
+          "status": 422,
+          "code": null,
+          "ms": 1876,
+          "note": "Required"
+        },
+        {
+          "surface": "fdh.liability_statement.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 422,
+          "code": null,
+          "ms": 1742,
+          "note": "Invalid or incomplete statement values."
+        },
+        {
+          "surface": "fdh.investment_statement.process",
+          "kind": "run_start",
+          "status": 422,
+          "code": null,
+          "ms": 2518,
+          "note": "Required"
+        },
+        {
+          "surface": "fdh.investment_statement.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 422,
+          "code": null,
+          "ms": 1768,
+          "note": "Invalid or incomplete statement values."
+        },
+        {
+          "surface": "fdh.retirement_statement.process",
+          "kind": "run_start",
+          "status": 400,
+          "code": null,
+          "ms": 1841,
+          "note": "Required"
+        },
+        {
+          "surface": "fdh.retirement_statement.ai_fallback_confirm",
+          "kind": "run_start",
+          "status": 422,
+          "code": null,
+          "ms": 1948,
+          "note": "Invalid or incomplete retirement statement values."
+        },
+        {
+          "surface": "aie.investment_intelligence.process",
+          "kind": "run_start",
+          "status": 403,
+          "code": null,
+          "ms": 2133,
+          "note": "The AIE-fronted Investment Intelligence adapter is not currently enabled in this"
+        },
+        {
+          "surface": "ii.source_document.process",
+          "kind": "run_start",
+          "status": 404,
+          "code": null,
+          "ms": 3086,
+          "note": "Source document not found."
+        }
+      ]
+    }
+  },
+  "premium_end_to_end_admission": {
+    "create_session": {
+      "status": 200,
+      "code": null
+    },
+    "complete_upload": {
+      "status": 200,
+      "processing_status": "queued",
+      "error_code": null
+    },
+    "counters_before": {
+      "fdh_statement_uploads": 0,
+      "fdh_upload_sessions": 0,
+      "fdh_document_audit_events": 0,
+      "fdh_ingestion_jobs": 0,
+      "aie_document_intake": 0,
+      "ii_source_documents": 1,
+      "storage_objects_for_user": 1
+    },
+    "counters_after_admission": {
+      "fdh_statement_uploads": 1,
+      "fdh_upload_sessions": 1,
+      "fdh_document_audit_events": 4,
+      "fdh_ingestion_jobs": 1,
+      "aie_document_intake": 0,
+      "ii_source_documents": 1,
+      "storage_objects_for_user": 2
+    },
+    "admission_audit_stamp": {
+      "source_type": "pdf_native",
+      "document_type": "tax_document",
+      "import_entitlement": "premium"
+    },
+    "user_delete": {
+      "status": 200,
+      "message": null
+    },
+    "counters_after_user_delete": {
+      "fdh_statement_uploads": 1,
+      "fdh_upload_sessions": 1,
+      "fdh_document_audit_events": 6,
+      "fdh_ingestion_jobs": 1,
+      "aie_document_intake": 0,
+      "ii_source_documents": 1,
+      "storage_objects_for_user": 1
+    },
+    "script_object_cleanup": [
+      "fdh-source-documents:1 object(s)"
+    ]
+  }
+}

@@ -38,6 +38,7 @@ import {
 import { deriveUploadSubstate, deriveDocumentStatusLabel } from '../domain/uploadSubstate';
 import { buildStatementUploadPurgePatch } from '../domain/privacy';
 import { runFdhRealMalwareScanGate } from './malwareScanGate';
+import { assertFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 import type { FdhCreateUploadSessionInput } from '../validation/uploadSession';
 import type { FdhStatementUpload } from '../domain/types';
 
@@ -82,6 +83,11 @@ async function assertNotRateLimited(userId: string): Promise<void> {
  * bytes.
  */
 export async function createUploadSession(userId: string, input: FdhCreateUploadSessionInput) {
+  // Premium Upload Entitlement (14-10-2026): the service-layer admission boundary behind every route guard. No
+  // document row, no session and no credential exists for a user who is not Premium NOW -- so an accidentally
+  // ungated route still cannot create new Free upload work. (Every FDH upload pipeline -- payslip, bank CSV/PDF,
+  // credit card / loan, AU investment, retirement -- enters through here.)
+  await assertFinancialImportAllowed(userId, 'fdh.service.create_upload_session');
   await assertNotRateLimited(userId);
 
   const { data: document, error: docError } = await statementUploadsRepository.create(userId, {
@@ -118,7 +124,9 @@ export async function createUploadSession(userId: string, input: FdhCreateUpload
     eventType: 'document_upload_created',
     actorType: 'user',
     actorId: userId,
-    metadata: { document_type: input.document_type, source_type: input.source_type },
+    // `import_entitlement` is the Premium-at-admission stamp (an immutable audit record that this document was
+    // admitted while Premium); it is never read back from a client and never rewritten on a plan change.
+    metadata: { document_type: input.document_type, source_type: input.source_type, import_entitlement: 'premium' },
   });
 
   return { document, session };
@@ -139,6 +147,9 @@ export async function completeUpload(
   sessionId: string,
   bytes: Uint8Array,
 ): Promise<FdhStatementUpload> {
+  // Premium Upload Entitlement: the bytes are the raw-file persistence step, so Premium is re-checked here too. A
+  // session created while Premium is NOT honoured after a downgrade -- there is no reusable upload credential.
+  await assertFinancialImportAllowed(userId, 'fdh.service.complete_upload');
   const { data: session } = await uploadSessionsRepository.getForUser(userId, sessionId);
   if (!session) throw new FdhUploadLifecycleError('not_found', 'upload session not found');
 

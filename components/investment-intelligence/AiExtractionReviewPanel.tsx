@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { DataTable } from '@/components/ui/DataTable';
 
 // Investment Intelligence — AI-fallback document extraction: explicit
 // accept/reject UI (2026-09-17 Product Owner addendum).
@@ -246,7 +247,7 @@ export function AiExtractionReviewPanel({
                       </div>
                     </div>
                     {h.transactions.length > 0 ? (
-                      <table className="mt-3 w-full text-left text-xs">
+                      <DataTable label="Transactions read from the document" className="mt-3 w-full text-left text-xs">
                         <thead>
                           <tr className="border-b border-line uppercase tracking-wide text-muted">
                             <th className="py-1 pr-2 font-medium">Date</th>
@@ -265,7 +266,7 @@ export function AiExtractionReviewPanel({
                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                      </DataTable>
                     ) : (
                       <p className="mt-2 text-xs text-muted">No individual transaction lines were extracted for this holding — only its valuation.</p>
                     )}

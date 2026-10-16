@@ -37,7 +37,6 @@
  * 93, 94). No OCR is claimed anywhere.
  */
 
-import { resolveEmailForAiePilotCohort } from '@/lib/aie/pilotCohortEmail';
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -71,6 +70,8 @@ import {
   mapRetirementFactsToExtraction,
 } from '@/lib/aie/adapters/retirement';
 import { evaluateAiFallbackGate } from '@/lib/aie/adapters/shared/fallbackGate';
+import { aiFallbackRefusalFromReason, type AiFallbackRefusal } from '@/lib/ai/access/aiFallbackRefusal';
+import { singleFlight } from '@/lib/ai/access/singleFlight';
 import { adapterCallEvidenceMetadata } from '@/lib/aie/adapters/shared/gateway';
 import { reviewableMaskedIdentifier, figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { AIE_RETIREMENT_FACTS_SCHEMA_NAME, AIE_RETIREMENT_FACTS_SCHEMA_VERSION } from '@/lib/aie/adapters/retirement/schema';
@@ -158,6 +159,13 @@ export interface UploadRetirementStatementResult {
    * statement row and refuses.
    */
   aiFallbackDraft?: RetirementAiDraftForReview;
+  /**
+   * Set ONLY when the native reader could not read the file and the AI reading
+   * was not attempted because the person has no active Premium entitlement
+   * ('premium_required') or it could not be confirmed ('entitlement_unavailable').
+   * Lets the screen explain why and offer the upgrade; nothing else changes.
+   */
+  aiFallbackRefusal?: AiFallbackRefusal;
   /** 2026-09-25: set when this upload is a byte-identical copy of an earlier
    * one that already has a result; the caller carries on with THAT upload
    * (the copy has no statement of its own, so reviewing it dead-ended). */
@@ -503,6 +511,7 @@ async function resolveRetirementStatementDocument(
     // document already in `failed` (see the guard at the top of this
     // function), so a draft offered AFTER `failDocument` could never be
     // confirmed. The document is therefore deliberately left in `queued`.
+    let aiFallbackRefusal: AiFallbackRefusal | undefined;
     if (RETIREMENT_AI_FALLBACK_ELIGIBLE_FAILURE_KINDS.includes(extraction.kind)) {
       // (A draft already issued for this document was returned above, before
       // the download -- a repeated /process never pays for a second call.)
@@ -522,6 +531,7 @@ async function resolveRetirementStatementDocument(
           aiFallbackDraft: fallback.extraction, ...empty,
         };
       }
+      aiFallbackRefusal = aiFallbackRefusalFromReason(fallback.reason);
       await recordDocumentAuditEvent({
         userId, documentId: document.id,
         eventType: 'retirement_statement_ai_fallback_not_usable', actorType: 'system',
@@ -533,6 +543,7 @@ async function resolveRetirementStatementDocument(
     return {
       document, statementId: null, pipelineStatus: 'extraction_failed',
       failureKind: extraction.kind, ...empty,
+      ...(aiFallbackRefusal ? { aiFallbackRefusal } : {}),
     };
   }
   const ex = extraction.extraction;
@@ -549,7 +560,7 @@ export type AiRetirementFallbackOutcome = { ok: true; extraction: RetirementAiDr
  * The one call site that reaches the AI provider for a retirement statement.
  *
  * Every gate — this adapter's own kill switch, the shared global AIE kill
- * switch, the shared AIE-1 pilot cohort, and masking (which FAILS CLOSED) —
+ * switch, the shared Premium-entitlement check, and masking (which FAILS CLOSED) —
  * is evaluated by the shared `evaluateAiFallbackGate`, in that order. The
  * gate returns ONLY masked text on success, so this function cannot send the
  * raw statement to the provider even by mistake.
@@ -561,7 +572,17 @@ export type AiRetirementFallbackOutcome = { ok: true; extraction: RetirementAiDr
  *
  * Exported so it is independently unit-testable with a faked provider.
  */
-export async function attemptAiRetirementFallback(
+export function attemptAiRetirementFallback(
+  userId: string,
+  documentId: string,
+  bytes: Uint8Array,
+  context: { jurisdiction: RetirementJurisdiction; currencyCode: string; statementType: RetirementStatementType; accountType: RetirementAccountType },
+): Promise<AiRetirementFallbackOutcome> {
+  // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
+  return singleFlight(`retirement_statement:${userId}:${documentId}`, () => attemptAiRetirementFallbackOnce(userId, documentId, bytes, context));
+}
+
+async function attemptAiRetirementFallbackOnce(
   userId: string,
   documentId: string,
   bytes: Uint8Array,
@@ -574,7 +595,7 @@ export async function attemptAiRetirementFallback(
     return { ok: false, reason: 'could_not_decode_bytes' };
   }
 
-  const gate = evaluateAiFallbackGate({ userId, cohortEmail: await resolveEmailForAiePilotCohort(userId), adapterEnabled: isAieRetirementAiFallbackEnabled(), extractedText: text });
+  const gate = await evaluateAiFallbackGate({ userId, adapterEnabled: isAieRetirementAiFallbackEnabled(), extractedText: text });
   if (!gate.ok) {
     if (gate.reason === 'masking_below_policy') {
       await recordDocumentAuditEvent({

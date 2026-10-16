@@ -8,6 +8,8 @@ import {
   toPayslipAiDraftForReview,
   getDocumentIdForPayrollEvent,
 } from '@/lib/financial-data-hub/services/payslipProcessingService';
+import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
+import { fdhDocumentRunPosition } from '@/lib/financial-data-hub/services/importRunPosition';
 
 const bodySchema = z.object({ password: z.string().max(200).optional() }).optional();
 
@@ -26,6 +28,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): starting NEW extraction work (a retry / re-parse) is Premium; the first run of a
+  // document admitted while Premium and the idempotent in-flight lifecycle still complete after a downgrade.
+  const importDenied = await refuseUnlessImportRunMayStart(user.id, 'fdh.payslip.process', () => fdhDocumentRunPosition(user.id, documentId));
+  if (importDenied) return importDenied;
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Payslip processing is not currently enabled in this environment.', 403);
@@ -65,6 +71,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
       // confirmation failed with 422. Only the reviewable fields go out now,
       // exactly the confirm route's own vocabulary.
       ai_fallback_draft: result.aiFallbackDraft ? toPayslipAiDraftForReview(result.aiFallbackDraft) : null,
+      // 14-10-2026: present ('premium_required' | 'entitlement_unavailable') only when the file could not be read
+      // natively and the AI reading was NOT attempted for entitlement reasons, so the screen can explain and offer
+      // the upgrade. Null in every other case.
+      ai_fallback_refusal: result.aiFallbackRefusal ?? null,
     });
   } catch (e) {
     if (e instanceof PayslipProcessingError) {

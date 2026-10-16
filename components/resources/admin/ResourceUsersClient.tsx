@@ -27,6 +27,7 @@ import { ResourceLoadingSkeleton, ResourceEmptyState, ResourceFailureState } fro
 import { actionFailureMessage, failureFromResponse, failureFromThrown, readJsonSafely, type AdminFailure } from '@/lib/resources/admin/resultState';
 import { formatAdminDate } from '@/lib/resources/admin/labels';
 import type { ResourceRole } from '@/lib/resources/types';
+import { DataTable } from '@/components/ui/DataTable';
 
 const ALL_ROLES: ResourceRole[] = ['resource_admin', 'author', 'editor', 'compliance_reviewer', 'publisher', 'analyst'];
 
@@ -297,44 +298,42 @@ export function ResourceUsersClient({ currentUserId }: { currentUserId: string }
                   containing a select and a button (§12). */}
               {/* `relative` — the sr-only caption is position:absolute; see
                   ResourceContentTable. */}
-              <div className="relative hidden overflow-x-auto sm:block">
-                <table className="w-full text-left text-sm">
-                  <caption className="sr-only">FHIP users and the Resources roles they currently hold</caption>
-                  <thead>
-                    <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
-                      <th scope="col" className="py-2 pr-3 font-semibold">
-                        User
-                      </th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">
-                        Resources Roles
-                      </th>
-                      <th scope="col" className="py-2 pr-3 font-semibold">
-                        Last Updated
-                      </th>
-                      <th scope="col" className="py-2 pl-3 font-semibold">
-                        Assign
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((u) => {
-                      const activeRoles = u.roles.filter((r) => r.is_active);
-                      return (
-                        <tr key={u.id} className="border-b border-line/60 align-top hover:bg-gray-50">
-                          <th scope="row" className="max-w-[240px] py-2.5 pr-3 text-left font-normal">
-                            <span className="block truncate font-medium text-ink">{u.fullName || '(no name on file)'}</span>
-                            <span className="block truncate text-xs text-muted">{u.email}</span>
-                            {u.isSuperAdmin && <span className="mt-1 inline-block rounded-full bg-ai/10 px-2 py-0.5 text-xs font-semibold text-ai">FHIP Super Admin</span>}
-                          </th>
-                          <td className="py-2.5 pr-3">{rolePills(u, activeRoles)}</td>
-                          <td className="py-2.5 pr-3 text-muted">{u.lastUpdated ? formatAdminDate(u.lastUpdated) : '—'}</td>
-                          <td className="py-2.5 pl-3">{assignControls(u, activeRoles)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable label="FHIP users and the Resources roles they currently hold" wrapperClassName="relative hidden sm:block" className="w-full text-left">
+                <caption className="sr-only">FHIP users and the Resources roles they currently hold</caption>
+                <thead>
+                  <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+                    <th scope="col" className="py-2 pr-3 font-semibold">
+                      User
+                    </th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">
+                      Resources Roles
+                    </th>
+                    <th scope="col" className="py-2 pr-3 font-semibold">
+                      Last Updated
+                    </th>
+                    <th scope="col" className="py-2 pl-3 font-semibold">
+                      Assign
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((u) => {
+                    const activeRoles = u.roles.filter((r) => r.is_active);
+                    return (
+                      <tr key={u.id} className="border-b border-line/60 align-top hover:bg-gray-50">
+                        <th scope="row" className="max-w-[240px] py-2.5 pr-3 text-left font-normal">
+                          <span className="block truncate font-medium text-ink">{u.fullName || '(no name on file)'}</span>
+                          <span className="block truncate text-xs text-muted">{u.email}</span>
+                          {u.isSuperAdmin && <span className="mt-1 inline-block rounded-full bg-ai/10 px-2 py-0.5 text-xs font-semibold text-ai">FHIP Super Admin</span>}
+                        </th>
+                        <td className="py-2.5 pr-3">{rolePills(u, activeRoles)}</td>
+                        <td className="py-2.5 pr-3 text-muted whitespace-nowrap">{u.lastUpdated ? formatAdminDate(u.lastUpdated) : '—'}</td>
+                        <td className="py-2.5 pl-3">{assignControls(u, activeRoles)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </DataTable>
 
               <ul className="space-y-2 sm:hidden">
                 {items.map((u) => {

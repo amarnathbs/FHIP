@@ -22,7 +22,7 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 
 ## Inventory
 
-127 pages: 116 carry the back link, 11 are exempt.
+127 pages: 117 carry the back link, 10 are exempt.
 
 | Page (URL) | File | Parent target | Status |
 |---|---|---|---|
@@ -65,6 +65,10 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 | `/admin/resources/glossary/[id]/edit` | `app/(app)/admin/resources/glossary/[id]/edit/page.tsx` | `/admin/resources/glossary`: "Back to Glossary" | Done |
 | `/admin/resources/glossary/[id]/preview` | `app/(app)/admin/resources/glossary/[id]/preview/page.tsx` | `/admin/resources/glossary/${id}/edit`: "Back to Editor" | Done |
 | `/admin/resources/glossary/new` | `app/(app)/admin/resources/glossary/new/page.tsx` | `/admin/resources/glossary`: "Back to Glossary" | Done |
+| `/admin/resources/import` | `app/(app)/admin/resources/import/page.tsx` | `/admin/resources`: "Back to Resources" | Done |
+| `/admin/resources/import/history` | `app/(app)/admin/resources/import/history/page.tsx` | `/admin/resources/import`: "Back to Bulk Upload" | Done |
+| `/admin/resources/import/runs/[id]` | `app/(app)/admin/resources/import/runs/[id]/page.tsx` | `/admin/resources/import`: "Back to Bulk Upload" | Done |
+| `/admin/resources/import/upload` | `app/(app)/admin/resources/import/upload/page.tsx` | `/admin/resources/import`: "Back to Bulk Upload" | Done |
 | `/admin/resources/money-updates` | `app/(app)/admin/resources/money-updates/page.tsx` | `/admin/resources`: "Back to Resources" | Done |
 | `/admin/resources/money-updates/[id]/edit` | `app/(app)/admin/resources/money-updates/[id]/edit/page.tsx` | `/admin/resources/money-updates`: "Back to Money Updates" | Done |
 | `/admin/resources/money-updates/[id]/preview` | `app/(app)/admin/resources/money-updates/[id]/preview/page.tsx` | `/admin/resources/money-updates/${id}/edit`: "Back to Editor" | Done |

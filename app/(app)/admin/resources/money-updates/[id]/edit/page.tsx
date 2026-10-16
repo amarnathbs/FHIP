@@ -7,7 +7,7 @@ import { isResourceStaff, canManageResources, canPublishResource, hasResourceRol
 import { getMoneyUpdateEditorPost } from '@/lib/resources/money-update/queries';
 import { getEditorReferenceData, getResourcePostVersions } from '@/lib/resources/editor/queries';
 import { getResourceWorkflowHistory } from '@/lib/resources/admin/queries';
-import { searchSources } from '@/lib/resources/sources/queries';
+import { getSourceOptionsForPost } from '@/lib/resources/sources/queries';
 import { MoneyUpdateEditor } from '@/components/resources/money-update/MoneyUpdateEditor';
 import type { WorkflowCapabilities } from '@/components/resources/editor/WorkflowPanel';
 
@@ -25,7 +25,8 @@ async function MoneyUpdateEditPageContent({ params }: { params: Promise<{ id: st
     getEditorReferenceData(supabase, createAdminClient()),
     getResourcePostVersions(supabase, id),
     getResourceWorkflowHistory(supabase, id),
-    searchSources(supabase, ''),
+    // Linked sources are always offered, so an imported source beyond the first page of the library can still be reviewed and removed.
+    getSourceOptionsForPost(supabase, id).then((s) => s.options),
   ]);
 
   const caps: WorkflowCapabilities = {

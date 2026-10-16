@@ -3,6 +3,7 @@ import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/f
 import { createUploadSession, FdhUploadLifecycleError } from '@/lib/financial-data-hub/services/uploadLifecycle';
 import { fdhCreateUploadSessionSchema } from '@/lib/financial-data-hub/validation/uploadSession';
 import { OWNER_FLOW_FOR_DOCUMENT_TYPE, recordDocumentOwner, resolveUploadOwner, type UploadOwnerResult } from '@/lib/financial-data-hub/services/documentOwnerRequest';
+import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 
 // POST /api/financial-data-hub/documents/upload-sessions — createUploadSession()
 // (spec section 27). Returns no storage credential — only a session id the
@@ -10,6 +11,10 @@ import { OWNER_FLOW_FOR_DOCUMENT_TYPE, recordDocumentOwner, resolveUploadOwner, 
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
+  // Premium Upload Entitlement (14-10-2026): a customer financial upload is a Premium capability. Refused here, before the body,
+  // a document row, a credential, storage, a scan, a parser or a provider is touched. Server-authoritative; no client flag is read.
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'fdh.upload_session.create');
+  if (importDenied) return importDenied;
 
   if (!isFdhDocumentUploadEnabled()) {
     return bad('Document uploads are not currently enabled in this environment.', 403);

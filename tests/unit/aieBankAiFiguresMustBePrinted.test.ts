@@ -13,7 +13,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { facts } = vi.hoisted(() => ({ facts: { current: null as unknown } }));
-vi.mock('@/lib/aie/pilotCohortEmail', () => ({ resolveEmailForAiePilotCohort: vi.fn().mockResolvedValue('p@fhip-test.invalid') }));
+vi.mock('@/lib/ai/access/premiumAiAccess', async (importOriginal) =>
+  (await import('../support/premiumAiAccessMock')).premiumAiAccessModule(await importOriginal()));
 vi.mock('@/lib/financial-data-hub/services/auditLog', () => ({ recordDocumentAuditEvent: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/lib/financial-data-hub/services/aiFallbackDrafts', () => ({
   saveAiFallbackDraft: vi.fn().mockResolvedValue({ persisted: true, draftId: 'd' }),
@@ -42,7 +43,6 @@ const LETTER = [
 
 beforeEach(() => {
   process.env.AIE_AI_FALLBACK_ENABLED = 'true';
-  process.env.AIE_PILOT_COHORT_ENFORCED = 'false';
   process.env.AIE_MASK_TOKEN_ENCRYPTION_KEY = 'e5'.repeat(32);
   process.env.AIE_BANK_STATEMENT_AI_FALLBACK_ENABLED = 'true';
   facts.current = {

@@ -19,6 +19,8 @@ import { SaveStatus, type SaveState } from './SaveStatus';
 import { useUnsavedChangesGuard } from './useUnsavedChangesGuard';
 import { DeleteDraftButton } from '@/components/resources/admin/DeleteDraftButton';
 import { createRecordOnFirstSave } from '@/lib/resources/editor/blankPost';
+import { SourcePicker } from '@/components/resources/specialist/SourcePicker';
+import type { SourceOption } from '@/lib/resources/sources/types';
 import { slugify } from '@/lib/resources/editor/slug';
 import { toPlainText } from '@/lib/resources/editor/richtext';
 import { validateForReview, TITLE_MAX_LENGTH, EXCERPT_MAX_LENGTH } from '@/lib/resources/editor/validation';
@@ -60,6 +62,8 @@ export function ResourceEditor({
   currentUserId,
   caps,
   canDelete = false,
+  sourceOptions: initialSourceOptions,
+  initialSourceIds,
 }: {
   post: EditorPost;
   reference: EditorReferenceData;
@@ -68,6 +72,13 @@ export function ResourceEditor({
   currentUserId: string;
   caps: WorkflowCapabilities;
   canDelete?: boolean;
+  /**
+   * Linked Sources (resource_sources / resource_post_sources) -- the same reusable SourcePicker the Money Update editor
+   * uses. Optional so any caller that does not load sources simply gets no Sources card and never sends `sourceIds`
+   * (the save route only touches source links when `sourceIds` is present).
+   */
+  sourceOptions?: SourceOption[];
+  initialSourceIds?: string[];
 }) {
   const router = useRouter();
   // The record id. Empty until the first explicit Save creates the record.
@@ -86,6 +97,9 @@ export function ResourceEditor({
   const slug = slugTouched ? slugOverride : slugify(title);
   const [blocks, setBlocks] = useState<AnyBlock[]>((initialPost.content_blocks as AnyBlock[]) ?? []);
   const [meta, setMeta] = useState<MetadataFormState>(() => toMetadataForm(initialPost));
+  const sourcesEnabled = initialSourceOptions !== undefined;
+  const [sourceOptions, setSourceOptions] = useState<SourceOption[]>(initialSourceOptions ?? []);
+  const [sourceIds, setSourceIds] = useState<string[]>(initialSourceIds ?? []);
 
   const [status, setStatus] = useState<ResourceStatus>(initialPost.status);
   const [publishedAt, setPublishedAt] = useState(initialPost.published_at);
@@ -243,6 +257,7 @@ export function ResourceEditor({
             patch: buildPatch(),
             categoryIds: meta.categoryIds,
             tagIds: meta.tagIds,
+            ...(sourcesEnabled ? { sourceIds } : {}),
             expectedUpdatedAt,
             createVersion,
             changeSummary: createVersion ? changeSummary : undefined,
@@ -299,7 +314,7 @@ export function ResourceEditor({
         }
       }
     },
-    [buildPatch, buildSnapshot, changeSummary, initialPost.content_type, meta.categoryIds, meta.tagIds, title]
+    [buildPatch, buildSnapshot, changeSummary, initialPost.content_type, meta.categoryIds, meta.tagIds, title, sourcesEnabled, sourceIds]
   );
 
   // Keeps the queue-drain above pointing at the current closure, so a
@@ -532,6 +547,20 @@ export function ResourceEditor({
               }}
             />
           </div>
+
+          {sourcesEnabled && (
+            <div className="rounded-card border border-line bg-white p-4">
+              <SourcePicker
+                options={sourceOptions}
+                selectedIds={sourceIds}
+                onChangeSelection={(ids) => {
+                  setSourceIds(ids);
+                  markDirty();
+                }}
+                onSourceCreated={(src) => setSourceOptions((prev) => [...prev, src])}
+              />
+            </div>
+          )}
 
           <div className="rounded-card border border-line bg-white p-4">
             <label htmlFor="change-summary" className="block text-sm font-medium text-ink">

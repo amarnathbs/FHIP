@@ -47,7 +47,7 @@ export const INACTIVE_UPLOAD_FLOWS: readonly { route: string; status: UploadFlow
   { route: '/api/aie/insurance/intake', status: 'not_active', note: 'Insurance adapter: flags unset, no UI caller' },
   { route: '/api/aie/intake', status: 'not_active', note: 'Generic AIE intake: diagnostic only, Apply structurally refused' },
   { route: '/api/aie/fdh-bank/intake', status: 'not_active', note: 'AIE FDH-bank adapter: AIE_FDH_BANK_ADAPTER_ENABLED off, no UI' },
-  { route: '/api/aie/investment-intelligence/intake', status: 'not_active', note: 'AIE II adapter: 2-email API pilot, canonical write flag off, no UI' },
+  { route: '/api/aie/investment-intelligence/intake', status: 'not_active', note: 'AIE II adapter: API only, Premium-gated (the 2-email pilot list was removed 14-10-2026), canonical write flag off, no UI' },
 ];
 
 export const insuranceRegistry: RegistryFile = {
