@@ -22,6 +22,34 @@ function withCrossBorderLimitation(existingText: string | null, countriesInUseCo
   return existingText ? `${existingText} ${note}` : note;
 }
 
+/**
+ * PO review 16-10-2026: the Dashboard tells the household when take-home pay is unknown for part of its income
+ * (DashboardDataStatusNotice, GAP-09: a missing net is never replaced by the gross). The report is built from the
+ * same DashboardSummary but used to print "Net income" and the deficit built on it with no such qualification, so a
+ * gross income of 19,781 beside a net of 3,365 read as a complete picture. This is the report's equivalent notice.
+ * It only DISCLOSES; no figure changes.
+ */
+export function netIncomeBasisNote(d: DashboardSummary): string | null {
+  const unknown = d.dataStatus?.netIncomeUnknownComponents ?? 0;
+  if (unknown <= 0) return null;
+  if (d.dataStatus?.netIncomeBasis === 'gross_fallback') {
+    return 'Take-home pay is not recorded for any of your income sources, so the monthly surplus or deficit in this report is worked out from gross income (before tax and other deductions). Add the take-home amount on the Income page for a net-based result.';
+  }
+  const total = Math.max(d.incomeSourceCount, unknown);
+  return `Take-home pay is not recorded for ${unknown} of your ${total} income source${total === 1 ? '' : 's'}. ${unknown === 1 ? 'That source counts' : 'Those sources count'} in gross income but not in net income, so net income, the monthly surplus or deficit and the ratios built on them may be understated. Add the take-home amount on the Income page to complete them.`;
+}
+
+/** Same label as lib/read-models/investments.ts UNPUBLISHED_BUCKET_LABEL (not imported: that module is server-only). */
+const IMPORTED_NOT_IN_NET_WORTH_LABEL = 'Imported, not yet in Net Worth';
+
+export function importedNotInNetWorthNote(items: { label: string }[] | undefined): string | null {
+  if (!items?.some((i) => i.label === IMPORTED_NOT_IN_NET_WORTH_LABEL)) return null;
+  return 'Imported, not yet in Net Worth: these are holdings read from an uploaded broker or fund statement that appear on your Investments tab but have not yet been added to Net Worth. They are not counted in the assets or net worth in this report, so nothing is counted before you have confirmed it, or counted twice. Choose Add to Net Worth on the Investments tab to include them.';
+}
+
+const WEALTH_GROUPING_NOTE =
+  'Total assets is split two ways on this page. The lines under Net worth follow where each item is recorded (property, cash and other assets; the Investments register; retirement accounts). Where your wealth is held groups the same assets by type across those registers, so a property or cash holding recorded in the Investments register appears there under Property or Cash and Deposits rather than under Shares. Both add up to the same total assets.';
+
 export interface BuiltSection {
   sectionCode: SectionCode;
   sectionTitle: string;
@@ -189,6 +217,7 @@ function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean)
   // income, rather than silently describing totalMonthlyExpenses alone as
   // "total expenses and commitments".
   const totalMonthlyOutflow = d.totalMonthlyExpenses + d.debtMonthlyRepayments;
+  const netIncomeNote = netIncomeBasisNote(d);
   const cashFlowChart = {
     grossMonthlyIncome: d.grossMonthlyIncome,
     netMonthlyIncome: d.netMonthlyIncome,
@@ -196,10 +225,11 @@ function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean)
     debtMonthlyRepayments: d.debtMonthlyRepayments,
     totalMonthlyOutflow,
     monthlySurplus: d.monthlySurplus,
+    netIncomeNote,
     summary:
-      d.monthlySurplus >= 0
+      (d.monthlySurplus >= 0
         ? `Your household received net income of ${fmt(d.netMonthlyIncome)} during the month. After ${fmt(d.totalMonthlyExpenses)} in living and other expenses and ${fmt(d.debtMonthlyRepayments)} in debt repayments (${fmt(totalMonthlyOutflow)} total outflows), the household retained a monthly surplus of ${fmt(d.monthlySurplus)}.`
-        : `Your recorded expenses, commitments and debt repayments (${fmt(totalMonthlyOutflow)} in total) exceeded net monthly income by ${fmt(Math.abs(d.monthlySurplus))}. This may require the household to use savings, additional borrowing or other available funds to meet the difference.`,
+        : `Your recorded expenses, commitments and debt repayments (${fmt(totalMonthlyOutflow)} in total) exceeded net monthly income by ${fmt(Math.abs(d.monthlySurplus))}. This may require the household to use savings, additional borrowing or other available funds to meet the difference.`) + (netIncomeNote ? ` ${netIncomeNote}` : ''),
   };
   const emergencyFundChart = {
     months: d.emergencyFundMonths,
@@ -277,6 +307,8 @@ function buildCashFlow(source: ReportSourceData, status: SectionStatus, reason: 
             passiveMonthlyIncome: d.passiveMonthlyIncome,
             activeMonthlyIncome: d.activeMonthlyIncome,
             incomeSourceCount: d.incomeSourceCount,
+            netIncomeUnknownComponents: d.dataStatus?.netIncomeUnknownComponents ?? 0,
+            netIncomeNote: netIncomeBasisNote(d),
             largestIncomeSharePct: d.largestIncomeSharePct,
             essentialMonthlyExpenses: d.essentialMonthlyExpenses,
             lifestyleMonthlyExpenses: d.lifestyleMonthlyExpenses,
@@ -358,6 +390,8 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
             // closing balances not yet Applied as a cash asset (PO D-04) --
             // are listed beside it, never added to it.
             notInNetWorth: source.notInNetWorth ?? [],
+            notInNetWorthNote: importedNotInNetWorthNote(source.notInNetWorth),
+            groupingNote: d.totalInvestments > 0 ? WEALTH_GROUPING_NOTE : null,
           }
         : {},
     narrativeText:

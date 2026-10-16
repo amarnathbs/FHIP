@@ -447,6 +447,10 @@ export function ReportPreview({
                 <Stat label="Debt repayments" value={fmt(cashFlow.sectionData.debtMonthlyRepayments)} />
                 <Stat label={Number(cashFlow.sectionData.monthlySurplus ?? 0) >= 0 ? 'Surplus' : 'Deficit'} value={fmt(cashFlow.sectionData.monthlySurplus)} />
               </div>
+              {/* PO review 16-10-2026: the Dashboard's "take-home pay is unknown" notice, so net income / deficit are never read as complete. */}
+              {typeof cashFlow.sectionData.netIncomeNote === 'string' && (
+                <p className="mt-3 text-xs text-gray-600" data-testid="report-net-income-note">{cashFlow.sectionData.netIncomeNote}</p>
+              )}
             </SectionCard>
           </>
         )}
@@ -493,12 +497,18 @@ export function ReportPreview({
                 <Stat label="Net worth" value={fmt(netWorth.sectionData.netWorth)} />
               </div>
               <p className="mt-2 text-xs text-gray-400">Total assets = property, cash & other + investments + retirement.</p>
+              {typeof netWorth.sectionData.groupingNote === 'string' && (
+                <p className="mt-1 text-xs text-gray-500">{netWorth.sectionData.groupingNote}</p>
+              )}
               {/* WP-06: shown beside Net Worth, never added to it (PO D-04 / D-05). */}
               {((netWorth.sectionData.notInNetWorth as { label: string; count: number; total: number }[] | undefined) ?? []).map((item) => (
                 <p key={item.label} className="mt-1 text-xs text-gray-500">
                   Not included in net worth — {item.label}: {item.count} item{item.count === 1 ? '' : 's'}, {fmt(item.total)}.
                 </p>
               ))}
+              {typeof netWorth.sectionData.notInNetWorthNote === 'string' && (
+                <p className="mt-1 text-xs text-gray-500">{netWorth.sectionData.notInNetWorthNote}</p>
+              )}
               {/* Same assets-vs-liabilities comparison as the Page 2 chart,
                   reused here as the "visual representation" companion to
                   this section's own numeric Stat grid — anchored to the Net
