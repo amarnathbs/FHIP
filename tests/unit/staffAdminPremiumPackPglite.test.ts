@@ -33,7 +33,7 @@ const run = async (sql: string): Promise<Row[]> => {
 const snapshot = async () => JSON.stringify([(await run('select * from user_entitlements order by user_id')), (await run('select * from admin_users order by user_id')), (await run('select * from resource_user_roles order by id'))]);
 
 const U = (n: number) => `cccccccc-7000-0000-0000-${String(n).padStart(12, '0')}`;
-const ids = { free: U(1), grant: U(2), promo: U(3), paid: U(4), role: U(5), customer: U(6), inactive: U(7), lapsed: U(8) };
+const ids = { free: U(1), grant: U(2), promo: U(3), paid: U(4), role: U(5), customer: U(6), inactive: U(7), lapsed: U(8), author: U(9) };
 
 beforeAll(async () => {
   db = await PGlite.create();
@@ -41,7 +41,7 @@ beforeAll(async () => {
   await replayAll(db, '0280_bench1_entitlement_edit_revision.sql');
   for (const [k, id] of Object.entries(ids)) await db.exec(`insert into auth.users(id,email) values ('${id}','${k}person@pg.test');`);
   await db.exec(`insert into admin_users(user_id) values ('${ids.free}'),('${ids.grant}'),('${ids.promo}'),('${ids.paid}'),('${ids.lapsed}');`);
-  await db.exec(`insert into resource_user_roles(user_id, role, is_active) values ('${ids.role}','editor',true),('${ids.inactive}','author',false);`);
+  await db.exec(`insert into resource_user_roles(user_id, role, is_active) values ('${ids.role}','editor',true),('${ids.inactive}','author',false),('${ids.author}','author',true);`);
   await db.exec(`update user_entitlements set plan_tier='premium', entitlement_source='admin_grant', effective_from=current_date-3, effective_to=current_date+40, admin_grant_ends_on=current_date+40, reserve_source='admin_grant', admin_lifetime_grant_units=4 where user_id='${ids.grant}'`);
   await db.exec(`update user_entitlements set plan_tier='premium', entitlement_source='promo_code', effective_from=current_date-3, effective_to=current_date+40, admin_grant_ends_on=current_date+40, reserve_source='promo_code' where user_id='${ids.promo}'`);
   await db.exec(`update user_entitlements set plan_tier='premium', entitlement_source='payment', provider='stripe', provider_customer_id='cus_1', provider_subscription_id='sub_1', subscription_status='active' where user_id='${ids.paid}'`);
@@ -171,7 +171,12 @@ describe('the PO runs the pack (DEV and production use the same files)', () => {
     expect(by(ids.paid)).toContain('keep, a paid subscription');
     expect(by(ids.lapsed)).toContain('would: start Staff Premium');
     expect(by(ids.role)).toContain('resource role: editor');
-    expect(b.some((r) => r.user_id === ids.customer || r.user_id === ids.inactive), 'a customer and an inactive role are never listed').toBe(false);
+    expect(b.some((r) => r.user_id === ids.customer || r.user_id === ids.inactive || r.user_id === ids.author), 'a customer, an inactive role and an Author are never listed as staff').toBe(false);
+    // Section C (information): active holders of the other Resources roles are shown, and are told they stay as they are
+    const c = rows.filter((r) => r.section === 'C open to Admin but NOT staff');
+    expect(c.map((r) => r.user_id)).toEqual([ids.author]);
+    expect(String(c[0].detail)).toContain('active role author');
+    expect(c.every((r) => r.ok === true)).toBe(true);
     for (const r of b) expect(String(r.masked_email)).toMatch(/^.{2}\*\*\*@pg\.test$/);
     expect(JSON.stringify(rows)).not.toContain('person@pg.test');
     d1Before = JSON.stringify(b.map((r) => [r.user_id, r.detail]));

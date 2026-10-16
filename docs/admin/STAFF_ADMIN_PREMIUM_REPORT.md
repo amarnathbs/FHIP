@@ -19,29 +19,26 @@ This deliberately reverses the earlier rule "admin status alone must not grant c
 
 The grant mechanism cannot express "no end date, lasts while the role lasts": a grant ends at most 364 days after today (365 inclusive days), may be extended 5 times, counts against a lifetime ceiling of 10 per person, creates expiry reminder e-mails and shows in the expiry summary, and the override capability that lifts those limits is held by nobody. Forcing staff through it would either break those PO-accepted consumer rules or make staff Premium expire and need a renewal job. A distinct source (`staff_admin`) keeps both rule sets intact: staff rows have no end date, are invisible to the ceilings, the extension cap, the expiry summary, the reminder claim and the promo counters, and the grant functions refuse to touch them.
 
-## 4. DECISION D1: which accounts count (needs your confirmation)
+## 4. DECISION D1: which accounts count (PO-decided 16-10-2026)
 
 Found in the code: there is no single "admin user" table. Admin access comes from two places:
 - `admin_users`: a row means Super Admin (full rights; optional named capability columns such as `can_manage_premium_entitlements`; written only by the service role or SQL).
 - `resource_user_roles`: an ACTIVE row for one of six Resources roles (`resource_admin`, `author`, `editor`, `compliance_reviewer`, `publisher`, `analyst`), written by the Admin "Users and roles" screen. Every one of the six opens the Admin shell (`requireResourceAdminAccess`: any role, or Super Admin).
 
-**Recommendation, implemented as the default:** staff = a row in `admin_users`, or any active row in `resource_user_roles`. Reason: it is exactly "can enter the Admin area", it matches the sentence of the decision, and it is the one rule that needs no per-role judgement.
-
-Edge cases, named so none is silently in or out:
+**Decision (Product Owner, 16-10-2026, after the recommendation was put to him: "use your recommendations"):** staff = a row in `admin_users` (Super Admin), or an active `resource_admin`, or an active `editor`. Author, Compliance Reviewer, Publisher and Analyst do NOT qualify. They can be added later by editing one function.
 
 | Case | Treatment |
 |---|---|
 | Super Admin with no optional capability | Staff |
-| Resource Administrator, Publisher, Compliance Reviewer | Staff |
-| Author, Editor | Staff (they sign in to Admin, but may be outside contractors: cost and trust question) |
-| Analyst (read-only, dormant role) | Staff (it opens the Admin shell; the least useful to include) |
+| Resource Administrator, Editor | Staff |
+| Author, Compliance Reviewer, Publisher, Analyst | Not staff (open the Admin shell but get no Staff Premium; the pre-migration preview lists them in Section C) |
 | Role row with `is_active = false` (removed) | Not staff |
-| Account holding both a Super Admin row and a role | Staff; ends only when ALL are gone |
+| Account holding both a Super Admin row and a role | Staff; ends only when ALL qualifying rows are gone |
 | Account that is staff AND has a paid subscription | Paid wins and is untouched; Staff Premium resumes if the subscription ends |
-| Account that is staff AND has an active admin grant or promo | Staff Premium replaces it (no end date is a superset); on leaving staff the account returns to Free, the old grant is not restored. The preview names these accounts first |
+| Account that is staff AND has an active admin grant or promo | Staff Premium replaces it (no end date is a superset); on leaving staff the account returns to Free, the old grant is not restored (PO accepted this on 16-10-2026). The preview names these accounts first |
 | Any other account | Never gets a staff row (the database refuses one) |
 
-To narrow it (for example Super Admin and Resource Administrator only) change one function, `public.is_staff_premium_account`, then run the preview: accounts that no longer qualify show as `end`. A test asserts the SQL role list equals the TypeScript list `STAFF_PREMIUM_RESOURCE_ROLES`.
+Changing the rule later is one function, `public.is_staff_premium_account`, plus the TypeScript list `STAFF_PREMIUM_RESOURCE_ROLES` (a test asserts they are equal, and that the six Resources roles are exactly the included plus the excluded lists). The reconcile preview (`staff_premium_reconcile(true)`, read only) then lists who would `start` and who would `end`; a test narrows the function and shows the `end` list.
 
 ## 5. Design
 
@@ -66,7 +63,7 @@ None needed: there is no end date. It ends when the last staff role goes (trigge
 
 ## 8. Verification (honest labels)
 
-See section 9 for the numbers. PGLITE-VERIFIED: qualification (all six roles, inactive role, customer), new assignment and removal incl. the last-role rule, a statement typed in the SQL editor, account deletion, the preview writes nothing, the backfill is idempotent (table byte-identical after a second run), paid is left alone, an active grant or promo is replaced and recorded, payment webhook interplay (premium event, cancel, abandoned checkout), consumer counters untouched, the grant functions refuse a staff row, staff rows invisible to the grant list, expiry summary and reminder claim, no staff row for a non-staff account (guard, even as the service role), RLS and privileges, the AI entitlement state, rollback R1 and R2. Each rule has a named negative control that goes red when the rule is removed (guard rewrite, qualification test, `is_active` test, trigger on `admin_users`, ending branch, the preview). UNIT-TESTED: routes, wording, the no-role-shortcut guard with controls against the real guard sources.
+See section 9 for the numbers. PGLITE-VERIFIED: qualification (the two included roles qualify, the four excluded ones and an inactive role do not, a customer never does), new assignment and removal incl. the last-role rule, a statement typed in the SQL editor, account deletion, the preview writes nothing, the backfill is idempotent (table byte-identical after a second run), paid is left alone, an active grant or promo is replaced and recorded, payment webhook interplay (premium event, cancel, abandoned checkout), consumer counters untouched, the grant functions refuse a staff row, staff rows invisible to the grant list, expiry summary and reminder claim, no staff row for a non-staff account (guard, even as the service role), RLS and privileges, the AI entitlement state, rollback R1 and R2. Each rule has a named negative control that goes red when the rule is removed (guard rewrite, qualification test, `is_active` test, trigger on `admin_users`, ending branch, the preview). UNIT-TESTED: routes, wording, the no-role-shortcut guard with controls against the real guard sources.
 
 NOT verified: DEV (the PO applies the SQL), production, real concurrency, the hosted Supabase role grants, a visual browser check (no DEV sign-in was available to this session; the component is only server-render smoke tested).
 
@@ -83,9 +80,9 @@ Branch rebased on origin/main 4b5a60a (16-10-2026). Baseline = a clean checkout 
 - `tsc --noEmit`: one error (`tests/unit/canonicalCertResidueAllSql.test.ts(127,75)`), identical on the clean baseline. `eslint` on the 19 changed source and test files: clean. `next build` (Turbopack, dummy public Supabase variables): exit 0; the new route `/api/admin/entitlements/staff` is in the build.
 - The full run rewrites checked-in `scripts/` artifacts; they were restored with `git checkout -- scripts/` and are not in the commit.
 
-## 10. Open questions for the PO
+## 10. Open questions (all answered by the PO on 16-10-2026)
 
-1. D1 above: include Author, Editor and Analyst, or Super Admin and Resource Administrator only?
-2. A staff person who holds an active admin grant or promo today loses the remaining time when staff Premium replaces it, and on leaving staff goes to Free. Acceptable, or should the grant be preserved and restored?
-3. Retention: the audit tables keep pseudonymous user ids after an account is deleted, like `admin_entitlement_events`. Confirm.
-4. Cost: staff can now start chargeable AI-assisted reading, subject to the usual allowance, rate limit and spend cap.
+1. D1: decided, see section 4.
+2. A staff member's replaced admin grant or promo is not restored when they leave staff: acceptable.
+3. Pseudonymous user ids kept in the audit tables after an account is deleted: confirmed.
+4. Staff may use chargeable AI-assisted reading under the normal allowance, rate limit and spend cap (including the per-user daily cap being built on another branch): confirmed.

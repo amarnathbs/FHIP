@@ -16,6 +16,7 @@ import { describePlanStatus } from '@/lib/services/entitlementPlanStatus';
 import { computeEntitlementReminder } from '@/lib/services/entitlementReminder';
 import {
   STAFF_PREMIUM_PLAN_LABEL,
+  STAFF_PREMIUM_EXCLUDED_RESOURCE_ROLES,
   STAFF_PREMIUM_PROMO_NOTE,
   STAFF_PREMIUM_RESOURCE_ROLES,
   STAFF_PREMIUM_SOURCE,
@@ -274,13 +275,15 @@ describe('what a staff person reads and is offered', () => {
 });
 
 describe('the role list', () => {
-  it('the TypeScript list is exactly the six Resources roles and every one is a Resources role the Admin shell accepts', () => {
+  it('the TypeScript lists split the six Resources roles exactly: Resource Administrator and Editor are staff, the other four are excluded (PO decision D1)', () => {
     const here = path.dirname(fileURLToPath(import.meta.url));
     const rolesSrc = fs.readFileSync(path.join(here, '..', '..', 'lib', 'resources', 'admin', 'userRoles.ts'), 'utf8');
     const m = rolesSrc.match(/export const RESOURCE_ROLES: ResourceRole\[\] = \[([^\]]*)\]/);
     expect(m).not.toBeNull();
     const all = m![1].split(',').map((s) => s.trim().replace(/'/g, '')).filter(Boolean).sort();
-    expect([...STAFF_PREMIUM_RESOURCE_ROLES].sort()).toEqual(all);
+    expect([...STAFF_PREMIUM_RESOURCE_ROLES].sort()).toEqual(['editor', 'resource_admin']);
+    expect([...STAFF_PREMIUM_EXCLUDED_RESOURCE_ROLES].sort()).toEqual(['analyst', 'author', 'compliance_reviewer', 'publisher']);
+    expect([...STAFF_PREMIUM_RESOURCE_ROLES, ...STAFF_PREMIUM_EXCLUDED_RESOURCE_ROLES].sort()).toEqual(all);
     expect(isStaffPremiumSource('staff_admin')).toBe(true);
     expect(isStaffPremiumSource('admin_grant')).toBe(false);
     expect(isStaffPremiumSource(undefined)).toBe(false);

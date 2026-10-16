@@ -15,10 +15,13 @@ export const STAFF_PREMIUM_SOURCE = 'staff_admin' as const;
 
 /**
  * The Resources roles that make an account staff (together with a row in admin_users, i.e. Super Admin).
- * Every one of them opens the Admin area (requireResourceAdminAccess). Narrowing this list means changing the SQL function and running
- * the reconcile preview; the test keeps the two in step.
+ * PO decision D1 (16-10-2026): Super Admin, Resource Administrator and Editor only. Changing this list means changing the SQL function and
+ * running the reconcile preview (it lists who would start and who would end); the test keeps the two in step.
  */
-export const STAFF_PREMIUM_RESOURCE_ROLES = ['resource_admin', 'author', 'editor', 'compliance_reviewer', 'publisher', 'analyst'] as const;
+export const STAFF_PREMIUM_RESOURCE_ROLES = ['resource_admin', 'editor'] as const;
+
+/** Resources roles that open the Admin area but do NOT qualify (PO decision D1, 16-10-2026). Listed so a test can show the split is deliberate. */
+export const STAFF_PREMIUM_EXCLUDED_RESOURCE_ROLES = ['author', 'compliance_reviewer', 'publisher', 'analyst'] as const;
 
 /** What the person is told on their own billing page. Never worded as a purchase and never offers a cancel flow. */
 export const STAFF_PREMIUM_PLAN_LABEL = 'Premium (included with your FHIP staff account)';

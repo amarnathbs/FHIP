@@ -190,7 +190,7 @@ describe('who counts as staff (decision D1)', () => {
     expect(e.effective_from).toBe(await today());
   });
 
-  for (const role of ['resource_admin', 'author', 'editor', 'compliance_reviewer', 'publisher', 'analyst']) {
+  for (const role of ['resource_admin', 'editor']) {
     it(`an ACTIVE ${role} role makes the account staff`, async () => {
       const u = await newUser(role);
       expect((await ent(u)).plan_tier).toBe('free');
@@ -200,6 +200,48 @@ describe('who counts as staff (decision D1)', () => {
       expect(e.entitlement_source).toBe('staff_admin');
     });
   }
+
+  // PO decision D1 (16-10-2026): these four open the Admin area but get no Staff Premium.
+  for (const role of ['author', 'compliance_reviewer', 'publisher', 'analyst']) {
+    it(`an ACTIVE ${role} role does NOT make the account staff (excluded by the PO decision)`, async () => {
+      const u = await newUser(role);
+      await giveRole(u, role);
+      const e = await ent(u);
+      expect(e.plan_tier).toBe('free');
+      expect(e.entitlement_source).toBe('payment');
+      expect(await events(u)).toEqual([]);
+      expect((await reconcile(true)).some((r) => r.user_id === u), 'the preview never lists an excluded role').toBe(false);
+    });
+  }
+
+  it('NEGATIVE CONTROL -- with the role list widened to every Resources role an Author would qualify (assertion "author is not staff" goes red)', async () => {
+    await withMutation(QUAL_FN, (s) => s.replace("r.role in ('resource_admin', 'editor')", "r.role in ('resource_admin', 'author', 'editor', 'compliance_reviewer', 'publisher', 'analyst')"), async () => {
+      await expectAssertionFails(async () => {
+        const u = await newUser();
+        await giveRole(u, 'author');
+        expect((await ent(u)).entitlement_source, 'author is not staff').toBe('payment');
+      }, 'author is not staff');
+    });
+  });
+
+  it('LATER CHANGE: narrowing the rule again, the preview lists exactly who would END (and the run returns them to Free)', async () => {
+    const ed = await newUser('narrow-ed');
+    const ra = await newUser('narrow-ra');
+    await giveRole(ed, 'editor');
+    await giveRole(ra, 'resource_admin');
+    await withMutation(QUAL_FN, (s) => s.replace("r.role in ('resource_admin', 'editor')", "r.role in ('resource_admin')"), async () => {
+      const preview = await reconcile(true);
+      expect(preview.find((r) => r.user_id === ed)?.planned, 'the editor would end').toBe('end');
+      expect(preview.find((r) => r.user_id === ra)?.planned, 'the resource admin stays').toBe('keep_staff');
+      expect((await ent(ed)).entitlement_source, 'the preview changed nothing').toBe('staff_admin');
+      await reconcile(false);
+      expect((await ent(ed)).plan_tier).toBe('free');
+      expect((await ent(ra)).entitlement_source).toBe('staff_admin');
+    });
+    // widening again brings the editor back
+    await reconcile(false);
+    expect((await ent(ed)).entitlement_source).toBe('staff_admin');
+  });
 
   it('an INACTIVE role does not, and an ordinary customer never gets a staff row', async () => {
     const u = await newUser();
@@ -215,7 +257,7 @@ describe('who counts as staff (decision D1)', () => {
     await withMutation(QUAL_FN, (s) => s.replace('where r.user_id = p_user_id and r.is_active', 'where r.user_id = p_user_id'), async () => {
       await expectAssertionFails(async () => {
         const u = await newUser();
-        await giveRole(u, 'author', false);
+        await giveRole(u, 'editor', false);
         expect((await ent(u)).entitlement_source, 'inactive role is not staff').toBe('payment');
       }, 'inactive role is not staff');
     });
@@ -225,23 +267,23 @@ describe('who counts as staff (decision D1)', () => {
 describe('automatic path -- assignment creates it, removal of the LAST staff role ends it', () => {
   it('assigning a role through the service role creates the entitlement and an audit event with its origin', async () => {
     const u = await newUser();
-    await as(null, 'service_role', () => db.query(`insert into resource_user_roles(user_id, role, is_active) values ($1,'author',true)`, [u]));
+    await as(null, 'service_role', () => db.query(`insert into resource_user_roles(user_id, role, is_active) values ($1,'editor',true)`, [u]));
     expect((await ent(u)).entitlement_source).toBe('staff_admin');
     expect(await events(u)).toEqual([{ action: 'start', origin: 'resource_user_roles', replaced_source: null }]);
   });
 
   it('removing one of two roles keeps it, removing the last ends it (Free, source payment, no leftovers), reassigning restores it', async () => {
     const u = await newUser();
-    await giveRole(u, 'author');
+    await giveRole(u, 'resource_admin');
     await giveRole(u, 'editor');
-    await db.exec(`update resource_user_roles set is_active=false where user_id='${u}' and role='author'`);
+    await db.exec(`update resource_user_roles set is_active=false where user_id='${u}' and role='resource_admin'`);
     expect((await ent(u)).entitlement_source, 'still staff via the editor role').toBe('staff_admin');
     await db.exec(`update resource_user_roles set is_active=false where user_id='${u}' and role='editor'`);
     const e = await ent(u);
     expect(e.plan_tier, 'removal of all staff roles ends it').toBe('free');
     expect(e.entitlement_source).toBe('payment');
     expect(e.effective_to).toBeNull();
-    await db.exec(`update resource_user_roles set is_active=true where user_id='${u}' and role='author'`);
+    await db.exec(`update resource_user_roles set is_active=true where user_id='${u}' and role='resource_admin'`);
     expect((await ent(u)).entitlement_source).toBe('staff_admin');
     expect((await events(u)).map((x) => x.action)).toEqual(['start', 'end', 'start']);
   });
@@ -249,7 +291,7 @@ describe('automatic path -- assignment creates it, removal of the LAST staff rol
   it('a Super Admin who also holds a role stays staff when the admin row is deleted, and ends when the role goes too', async () => {
     const u = await newUser();
     await makeAdmin(u);
-    await giveRole(u, 'publisher');
+    await giveRole(u, 'resource_admin');
     await db.exec(`delete from admin_users where user_id='${u}'`);
     expect((await ent(u)).entitlement_source).toBe('staff_admin');
     await db.exec(`delete from resource_user_roles where user_id='${u}'`);
@@ -307,7 +349,7 @@ describe('preview and backfill (the PO runs these)', () => {
     await db.exec(`alter table user_entitlements disable trigger trg_staff_premium_guard`);
     const ids = { free: await newUser('legacyfree'), grant: await newUser('legacygrant'), promo: await newUser('legacypromo'), paid: await newUser('legacypaid'), lapsed: await newUser('legacylapsed'), role: await newUser('legacyrole') };
     for (const k of ['free', 'grant', 'promo', 'paid', 'lapsed']) await makeAdmin(ids[k as keyof typeof ids]);
-    await giveRole(ids.role, 'compliance_reviewer');
+    await giveRole(ids.role, 'resource_admin');
     const end = await addDays(40);
     const past = await addDays(-5);
     await db.exec(`update user_entitlements set plan_tier='premium', entitlement_source='admin_grant', effective_from=current_date-3, effective_to='${end}', admin_grant_ends_on='${end}', reserve_source='admin_grant', admin_lifetime_grant_units=3, admin_grant_extension_count=2 where user_id='${ids.grant}'`);
@@ -400,7 +442,7 @@ describe('edge cases of the sync', () => {
 
   it('a staff row that is not yet in force (start date in the future) is corrected, and the preview says start, not keep', async () => {
     const u = await newUser();
-    await giveRole(u, 'publisher');
+    await giveRole(u, 'editor');
     await db.exec('alter table user_entitlements disable trigger trg_staff_premium_guard');
     await db.exec(`update user_entitlements set effective_from = current_date + 20 where user_id='${u}'`);
     await db.exec('alter table user_entitlements enable trigger trg_staff_premium_guard');
@@ -413,7 +455,7 @@ describe('edge cases of the sync', () => {
     const u = await newUser();
     await db.query(`select set_config('fhip.staff_premium_origin','not-a-real-origin',false)`);
     try {
-      await db.exec(`insert into resource_user_roles(user_id, role, is_active) values ('${u}','author',true)`);
+      await db.exec(`insert into resource_user_roles(user_id, role, is_active) values ('${u}','editor',true)`);
     } finally {
       await db.query(`select set_config('fhip.staff_premium_origin','',false)`);
     }
@@ -483,7 +525,7 @@ describe('no effect on the consumer grant and promo rules', () => {
 
   it('a promo code or admin grant can never be written over a staff row (it would put an end date on it)', async () => {
     const u = await newUser();
-    await giveRole(u, 'author');
+    await giveRole(u, 'resource_admin');
     const end = await addDays(30);
     await expectCode(
       db.query(`update user_entitlements set plan_tier='premium', entitlement_source='promo_code', effective_to=$2, admin_grant_ends_on=$2, reserve_source='promo_code' where user_id=$1`, [u, end]),
@@ -529,7 +571,7 @@ describe('payment webhook and other writers cannot take staff Premium away', () 
 
   it('an admin revoke (or any writer) that would leave a staff account Free is rewritten to Staff Premium', async () => {
     const u = await newUser();
-    await giveRole(u, 'publisher');
+    await giveRole(u, 'resource_admin');
     await db.exec(`update user_entitlements set plan_tier='free', entitlement_source='payment' where user_id='${u}'`);
     expect((await ent(u)).entitlement_source).toBe('staff_admin');
   });
@@ -611,7 +653,7 @@ describe('what the Admin screen can read (Standard sections 2, 4 and 9)', () => 
     await sync(pending);
     // a stray staff row: the triggers are off while the role disappears
     const stray = await newUser('s');
-    await giveRole(stray, 'author');
+    await giveRole(stray, 'editor');
     await db.exec(`alter table resource_user_roles disable trigger trg_staff_premium_resource_roles`);
     await db.exec(`update resource_user_roles set is_active=false where user_id='${stray}'`);
     await db.exec(`alter table resource_user_roles enable trigger trg_staff_premium_resource_roles`);
@@ -638,7 +680,7 @@ describe('what the Admin screen can read (Standard sections 2, 4 and 9)', () => 
 describe('consumer guards read ONLY the row (the SQL AI functions work for staff with no admin lookup)', () => {
   it('ai_entitlement_state sees a staff account as Premium, and the function text mentions no role table', async () => {
     const u = await newUser();
-    await giveRole(u, 'analyst');
+    await giveRole(u, 'editor');
     const v = ((await db.query(`select ai_entitlement_state($1) v`, [u])).rows[0] as { v: Json }).v;
     expect(v.eligible, 'a staff account is eligible for the Premium AI feature').toBe(true);
     const free = ((await db.query(`select ai_entitlement_state($1) v`, [PLAIN])).rows[0] as { v: Json }).v;

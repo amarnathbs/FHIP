@@ -485,7 +485,7 @@ export function PremiumEntitlementsClient() {
           Staff Premium (automatic)
         </h2>
         <p className="text-xs text-muted">
-          Accounts that hold a Super Admin or Resources role get Premium automatically while the role lasts. It has no end date, is not a paid
+          Accounts that hold a Super Admin row or an active Resource Administrator or Editor role get Premium automatically while the role lasts. It has no end date, is not a paid
           subscription, never uses up a grant, extension or promo limit, and cannot be granted, extended or revoked here: it starts and ends with the
           role. A paid subscription, if the person has one, takes precedence and Staff Premium resumes if it ends.
         </p>
@@ -594,8 +594,8 @@ export function PremiumEntitlementsClient() {
           {isStaffPremium ? (
             <p className="text-sm text-ink" data-testid="staff-premium-manage-note">
               This account has Premium because it is an FHIP staff account. It is automatic and has no end date, so there is nothing to grant,
-              extend or revoke here. It ends when the account no longer holds a staff role. To change who is staff, change their Super Admin or
-              Resources role.
+              extend or revoke here. It ends when the account no longer holds a staff role. To change who is staff, change their Super Admin row or
+              their Resource Administrator or Editor role.
             </p>
           ) : protectedPaid ? (
             <p className="text-sm text-ink">

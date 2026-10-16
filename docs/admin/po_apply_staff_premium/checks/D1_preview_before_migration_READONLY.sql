@@ -4,8 +4,9 @@
 --              such as column does not exist, STOP and send me the message.
 --   Section B: exactly which accounts would receive Staff Premium, and what would happen to each. E-mail addresses are masked to
 --              their first two characters and their domain. Nothing else about a person is shown.
--- The rule used: an account is staff while it has a row in admin_users, or an ACTIVE row in resource_user_roles for any of the six
--- Resources roles. Send me this table before you apply anything.
+-- The rule used (PO decision D1, 16-10-2026): an account is staff while it has a row in admin_users, or an ACTIVE row in
+-- resource_user_roles for resource_admin or editor. Section C lists active holders of the other Resources roles. They do NOT get Premium.
+-- Section C is information only: its ok is always true. Send me this table before you apply anything.
 
 select section, user_id, masked_email, detail, ok
 from (
@@ -45,7 +46,18 @@ from (
     left join public.user_entitlements e on e.user_id = u.id
     where exists (select 1 from public.admin_users a where a.user_id = u.id)
        or exists (select 1 from public.resource_user_roles r where r.user_id = u.id and r.is_active
-                    and r.role in ('resource_admin', 'author', 'editor', 'compliance_reviewer', 'publisher', 'analyst'))
+                    and r.role in ('resource_admin', 'editor'))
   ) s
+  union all
+  select 'C open to Admin but NOT staff', x.id, x.masked, 'active role ' || x.roles || ', stays as it is (no Staff Premium)', true, 200000
+  from (
+    select u.id,
+           left(coalesce(u.email::text, ''), 2) || '***@' || split_part(coalesce(u.email::text, ''), '@', 2) as masked,
+           (select string_agg(r.role, ', ' order by r.role) from public.resource_user_roles r where r.user_id = u.id and r.is_active) as roles
+    from auth.users u
+    where exists (select 1 from public.resource_user_roles r where r.user_id = u.id and r.is_active)
+      and not exists (select 1 from public.admin_users a where a.user_id = u.id)
+      and not exists (select 1 from public.resource_user_roles r where r.user_id = u.id and r.is_active and r.role in ('resource_admin', 'editor'))
+  ) x
 ) all_rows
 order by n, section, user_id;

@@ -5,7 +5,7 @@
 
 select check_name, actual, expected, coalesce(expected is null or actual = expected, false) as ok
 from (
-  select 1 as n, 'staff accounts today (Super Admin rows plus active Resources roles)' as check_name,
+  select 1 as n, 'staff accounts today (Super Admin rows plus active Resource Administrator and Editor roles)' as check_name,
          (select count(*) from auth.users u where public.is_staff_premium_account(u.id))::text as actual, null::text as expected
   union all select 2, 'of those: holding Staff Premium',
          (select count(*) from public.user_entitlements e where e.entitlement_source = 'staff_admin')::text, null

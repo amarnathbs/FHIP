@@ -133,7 +133,10 @@ grant select on public.staff_premium_events to authenticated;
 
 -- DEFINITION OF A STAFF ACCOUNT (decision D1 in the report). An account is staff while it has
 --   a row in admin_users (Super Admin, with or without optional capabilities), or
---   an ACTIVE row in resource_user_roles for any of the six Resources roles. Every one of them opens the Admin area.
+--   an ACTIVE row in resource_user_roles for resource_admin or editor.
+-- PO decision 16-10-2026 (D1): the other four Resources roles (author, compliance_reviewer, publisher, analyst) do NOT qualify. They can be
+-- added later by editing the role list below and running the reconcile. Taking a role out of the list works the same way: the preview
+-- then lists every account that would END.
 -- This is the ONE place the rule lives. To narrow it, change this function and run the reconcile (the preview lists who would end).
 create or replace function public.is_staff_premium_account(p_user_id uuid)
 returns boolean
@@ -147,7 +150,7 @@ as $fn$
     or exists (
       select 1 from public.resource_user_roles r
        where r.user_id = p_user_id and r.is_active
-         and r.role in ('resource_admin', 'author', 'editor', 'compliance_reviewer', 'publisher', 'analyst')
+         and r.role in ('resource_admin', 'editor')
     )
   );
 $fn$;

@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | P0 | you | Confirm that the earlier promo hardening migrations (0264 to 0268) are applied on production, or consciously that they are not: this pack needs only 0231 and 0237, and D1 section A tells you. | D1 section A all `true` | A `false` in section A: stop, send me the table. Nothing was changed. |
 | P1 | you | `checks/D1_preview_before_migration_READONLY.sql` | Section A all `true`. Section B is the list of staff accounts. | Send me the table before anything else. |
-| P2 | you | Read Section B. Decision D1: is every account in it supposed to get Premium? | yes / narrow it (see README section 4) | Do not continue until you are happy with the list. |
+| P2 | you | Read Section B (who gets Premium) and Section C (other Resources roles, who do not). D1 was decided on 16-10-2026: Super Admin, Resource Administrator and Editor. | the lists match that decision | Do not continue until the list is what you expect. |
 | P3 | you | `supabase/migrations/0283_staff_admin_premium.sql` as parts `0283a`, `0283b`, `0283c` | success for each | Stop and send me the message. Each part can be run again. The migration changes no row. |
 | P4 | you | `checks/V0283_after_migration.sql` | 15 rows, all `true`, row 15 is `0` | Stop, send me the table. |
 | P5 | you | Push the application (see the push lines in my report) and wait for the Amplify build to be **Deployed**. | build Deployed | Redeploy the previous build. The database objects do no harm to the old site. |
@@ -20,7 +20,7 @@
 
 ## Behaviour to know
 
-- **New staff after this day.** Assigning a Super Admin row or a Resources role (Admin screen, the service role, or a statement in the SQL editor) creates the entitlement by itself in the same moment. Removing the last staff role ends it. This cannot be bypassed.
+- **New staff after this day.** Assigning a Super Admin row, or the Resource Administrator or Editor role (Admin screen, the service role, or a statement in the SQL editor) creates the entitlement by itself in the same moment. Removing the last staff role ends it. This cannot be bypassed.
 - **A staff person who pays.** A live paid subscription wins and is untouched. If it ends, Staff Premium takes over again at once.
 - **A staff person with a promo or admin grant.** Staff Premium replaces it (it is a superset: no end date). If they later leave staff they return to Free; the old grant is not restored. The preview names these accounts (`start_replacing_...`) so there are no surprises.
 - **Emergency off switch** (stops new and repaired staff entitlements without removing data): `rollback/R1_restore_from_backup.sql` if you want the data back, or only `alter table public.user_entitlements disable trigger trg_staff_premium_guard` plus the two role triggers (`R3` re-enables them).
