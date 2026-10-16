@@ -1,5 +1,6 @@
 import type { DashboardSummary } from './dashboard';
 import { percentChange } from './dashboard';
+import { netWorthForHistoryComparison } from './netWorthBasis';
 
 export const MODEL_VERSION = 'dna-1.0.0';
 
@@ -82,7 +83,7 @@ export function computeDnaMetrics(input: {
   const income = d.netMonthlyIncome || d.grossMonthlyIncome;
   const essentialExpenseRatio = income > 0 ? d.essentialMonthlyExpenses / income : null;
   const netWorthGrowthPct =
-    d.snapshots.length >= 2 ? percentChange(d.netWorth, d.snapshots[0].net_worth) : null;
+    d.snapshots.length >= 2 ? percentChange(netWorthForHistoryComparison(d).value, d.snapshots[0].net_worth) : null;
   return {
     age: input.age,
     dependantsCount: input.dependantsCount,

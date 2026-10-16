@@ -31,6 +31,14 @@ import { loadLiabilityRows, type LiabilityRow } from '@/lib/read-models/liabilit
 import { fxContext, isSupportedCurrency, toReporting, type FxContext } from '@/lib/read-models/core/currency';
 import type { ReadModelClient } from '@/lib/read-models/core/paginate';
 import { roundMoney } from '@/lib/read-models/core/types';
+import { isPersonalBasisRow } from '@/lib/engines/netWorthBasis';
+
+/*
+ * PERSONAL BASIS (PO decision 16-10-2026). A forecast of the household's own position starts from the same PERSONAL
+ * rows the Dashboard uses: entity-held rows (owner smsf / family_trust / company) and an SMSF fund's own property
+ * loan are the entity's, not the household's, and are left out of every opening balance below. They remain in the
+ * entity block and the consolidated family figure (lib/engines/netWorthLevels.ts).
+ */
 
 export type ForecastCurrency = 'AUD' | 'INR';
 
@@ -67,13 +75,21 @@ export interface ForeignPosition {
 }
 
 export async function loadForeignPosition(userId: string, client: ReadModelClient, foreignCurrency: ForecastCurrency): Promise<ForeignPosition> {
-  const [assets, investments, liabilities, retirement] = await Promise.all([
+  const [assets, investments, loadedLiabilities, retirement] = await Promise.all([
     loadAssetRows(userId, client),
     loadInvestmentRows(userId, client),
-    loadLiabilityRows(userId, client).then((l) => l.rows),
+    loadLiabilityRows(userId, client),
     loadRetirementAccounts(userId, client),
   ]);
-  return computeForeignPosition({ assets, investments, liabilities, retirement }, foreignCurrency);
+  return computeForeignPosition(
+    {
+      assets: assets.filter((a) => isPersonalBasisRow(a)),
+      investments: investments.filter((i) => isPersonalBasisRow(i)),
+      liabilities: loadedLiabilities.rows.filter((l) => isPersonalBasisRow(l, { smsfLinkedLoan: loadedLiabilities.smsfPropertyLoanLinkedIds.has(l.id) })),
+      retirement: retirement.filter((r) => isPersonalBasisRow(r)),
+    },
+    foreignCurrency,
+  );
 }
 
 export function computeForeignPosition(
@@ -153,7 +169,7 @@ export function retirementForecastAccounts(lines: readonly RetirementLine[]): Re
 }
 
 export async function loadRetirementForecastPosition(userId: string, client: ReadModelClient, fx: FxContext): Promise<RetirementForecastPosition> {
-  const model = computeRetirement(await loadRetirementAccounts(userId, client), fx);
+  const model = computeRetirement((await loadRetirementAccounts(userId, client)).filter((r) => isPersonalBasisRow(r)), fx);
   const accounts = retirementForecastAccounts(model.lines);
   return {
     accounts,
@@ -168,11 +184,12 @@ export async function loadRetirementForecastPosition(userId: string, client: Rea
 // ---------------------------------------------------------------------------
 
 export async function loadDebtForecastLiabilities(userId: string, client: ReadModelClient): Promise<LiabilityRow[]> {
-  return (await loadLiabilityRows(userId, client)).rows;
+  const loaded = await loadLiabilityRows(userId, client);
+  return loaded.rows.filter((l) => isPersonalBasisRow(l, { smsfLinkedLoan: loaded.smsfPropertyLoanLinkedIds.has(l.id) }));
 }
 
 export async function loadInvestmentForecastHoldings(userId: string, client: ReadModelClient): Promise<InvestmentRow[]> {
-  return loadInvestmentRows(userId, client);
+  return (await loadInvestmentRows(userId, client)).filter((i) => isPersonalBasisRow(i));
 }
 
 // ---------------------------------------------------------------------------

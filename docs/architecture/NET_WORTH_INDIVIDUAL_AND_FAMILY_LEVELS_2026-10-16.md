@@ -2,6 +2,8 @@
 
 Status: implemented on branch `feat/networth-individual-and-family-20261016`, not pushed. Evidence labels are in section 9.
 
+SUPERSEDED IN PART (16-10-2026, second ruling): sections 2 and 5 and decision 3 of section 7 describe `summary.netWorth` as the family-basis figure. It is now the PERSONAL figure; read section 10 first.
+
 ## 1. The PO decisions this implements (16-10-2026, genuine, from the user in chat)
 
 1. Net Worth is presented at TWO levels on the Dashboard, the Monthly Report and the Net Worth section:
@@ -91,3 +93,70 @@ No migration. No Admin change (Admin standard not engaged). Free and Premium rep
 - UNIT-TESTED with hand-calculated oracles on the PO household (Self 543,941; Spouse 833,500; personal 1,377,441; SMSF 133,000; family 1,510,441 = the previously reported figure; joint 60/40 totals 100%); real loaders against an in-memory PostgREST fake; negative controls proven to fail by sabotage (SMSF rows reclassified, netting disabled: 11 named failures).
 - Layout: a static render of the real components with fixture data checked in the browser pane at 375, 768 and 1280 px (no page-level horizontal scroll; tables scroll inside their labelled region below 768 px). NOT checked against the live app or DEV (no existing signed-in session; passwords are never typed).
 - Observed, pre-existing and not changed: a seven-digit value in a half-width card overflows the card by about 30 px at 375 px (MetricCard text-3xl). Applies to the old "Net Worth" card too.
+
+## 10. SECOND PO RULING, 16-10-2026: personal figures exclude entity-held amounts (supersedes sections 2 and 5 where they differ)
+
+Decision note: `docs/decisions/PO_DECISION_2026-10-16_PERSONAL_NET_WORTH_EXCLUDES_ENTITY_AMOUNTS.md`.
+
+The older figure `summary.netWorth` (Health Score, Resilience, Forecast opening balance, Twin, DNA, What-if, AI, stored snapshots) was described above as the family-basis figure. The PO ruled that an SMSF fund-level amount (and any entity-held amount) in a PERSONAL net worth is wrong. So:
+
+- `summary.netWorth`, `totalAssets`, `totalInvestments`, `totalRetirement`, `totalLiabilities`, `totalAssetsCombined`, the allocation chart, liquid and property ratios, debt-by-type and everything derived are now on the PERSONAL basis. The loader (`lib/services/dashboardData.ts`) passes only personal rows to `computeDashboard` (`lib/engines/netWorthBasis.ts`: entity-held = owner `smsf`, `family_trust`, `company`, an SMSF-linked property loan, and registered Companies, Trusts and HUFs). The engine itself is unchanged.
+- Entity amounts appear ONLY in the entity blocks and the consolidated family figure of `netWorthLevels` (unchanged: SMSF full, Trust full, HUF full, Company at the ownership share). The family figure stays on the Dashboard card, the Net Worth section and the Monthly Report as its own labelled line.
+- `summary.netWorthBasis` records what was left out (`entityHeld`) and the history-basis figures; `levels.bridge.personalParityOk` proves the summary equals the model's personal level (a difference is shown on screen, never hidden).
+
+### 10.1 Surface-by-surface inventory (basis BEFORE -> AFTER)
+
+| Surface / reader | Before | After |
+|---|---|---|
+| Dashboard cards: Net Worth, Debt Outstanding, Investment Portfolio, Retirement Balance, Core figures | all rows, all entities (the Net Worth card already showed personal first) | personal rows only; the Retirement section notes the fund-level amount left out |
+| Net Worth section and wealth charts (allocation, debt composition) | family (all rows) | personal; the levels panel shows both levels |
+| Monthly Report: Executive Summary, Net worth totals and stat grid, wealth-by-group chart, liquid / illiquid and property percentages, retirement assets, core figures | stat grid at family level; charts and percentages on all rows | personal totals and charts; a labelled "Family net worth" line; movement labelled |
+| Report evidence appendix | every row counted | entity-held rows listed and labelled, NOT counted; reconciliation on personal rows |
+| Health Score (net worth ratio, concentration, Retirement Readiness) and pillars | all rows | personal |
+| Resilience, Financial DNA, What-if, Recommendations, Goals affordability | summary | personal (via the summary) |
+| Forecast opening balances (net worth, retirement, resilience, cross-border, debt, investment) | all rows | personal rows; engine version 1.7.0 so older cached runs are not reused |
+| Forecast variance | actual on the live basis | actual on the SAME basis as the original run (older runs: earlier basis) |
+| Financial Twin | summary plus raw lines of all rows | summary plus personal raw lines; stored net worth months left unknown when the bases differ |
+| AI context and Explain | `net_worth` on all rows | `net_worth` personal, `net_worth_basis: personal`, `family_net_worth` when entities exist |
+| Stored `financial_snapshots` | all rows | UNCHANGED (history basis), see 10.3 |
+| Register grid footers (Assets, Investments, Liabilities, Retirement) | one total of all rows | personal total plus a labelled "held by an entity" line |
+| Goals funding through a linked account | explicit user link | unchanged (the user chose the link); flagged, not changed |
+| Investment Intelligence owner-class views | already separate owner classes | unchanged |
+
+### 10.2 SMSF treatment: gross asset, fund liability, net balance, member benefit (explicit)
+
+The fund is an ENTITY with its own balance sheet.
+
+- SMSF assets (rows owned by the SMSF) enter the SMSF block at their value; SMSF liabilities (rows owned by the SMSF, or a loan linked to the fund) enter the SMSF block as liabilities. SMSF net = assets minus liabilities (the fund's net balance). Nothing from the fund enters the personal level.
+- THE SMSF FUND ROW IS ENTITY-HELD. The SMSF section stores the fund as a retirement_accounts row with master_item_key = smsf, owned by a person by construction (smsf_create_fund). It is the fund's own net balance (already net of its linked loan, migration 0084), not a member balance, so it is classified by that key as entity-held (`isSmsfFundRow`), whoever owns it: SMSF block and family level only. The linked loan is a memo (netted), so it is counted once. Genuine personal pension and super accounts (other rows) stay personal.
+- If BOTH the fund row and a fund-level row (owner smsf) exist, the fund is counted ONCE: the SMSF block counts the fund-level row (the user's explicit entity-level net entry); the fund record is listed on the block as "shown but not counted" (`suppressedFundRecord`), appears in the bridge to the previously reported figure as `smsf_fund_record_not_counted`, and a plain data-quality notice recommends recording the fund once, using its own net balance (assets less liabilities). With only a fund row, it is counted in the SMSF block.
+- The member's benefit is the member's share of the fund net balance. Until entity-level input exists it is not a separate figure: it is the SMSF block net. A fund-level (owner smsf) amount is never treated as a member balance (PO ruling).
+- No double count (tests in `personalNetWorthBasis.test.ts`): every row lands in exactly one of personal or one entity block; personal plus entities equals the family figure line by line; the SMSF loan is deducted once, at the SMSF block (or inside the netted fund balance).
+
+Numbers for the PO household (hand-calculated in the test header; AUD):
+
+| | Personal assets | Personal liabilities | Personal net worth | Retirement (personal) | SMSF block | Family net worth |
+|---|---|---|---|---|---|---|
+| Before this change | 2,896,298 (incl. 133,000) | 1,385,857 | 1,510,441 | 636,000 | not shown separately | not shown |
+| (A1) data as today, 503,000 is the SMSF-section fund row (key smsf, owner self) + 133,000 owner smsf | 2,260,298 | 1,385,857 | 874,441 | 0 | 133,000 (fund record 503,000 listed, not counted) | 1,007,441 |
+| (A2) the same two amounts typed by hand, no fund key (503,000 owner self, named SMSF) | 2,763,298 | 1,385,857 | 1,377,441 | 503,000 | 133,000 | 1,510,441 |
+| (B) interim: 503,000 row removed, 133,000 smsf kept as the fund net | 2,260,298 | 1,385,857 | 874,441 | 0 | 133,000 | 1,007,441 |
+| (C) entity level: SMSF asset 503,000 and SMSF liability 370,000, no 133,000 row | 2,260,298 | 1,385,857 | 874,441 | 0 | 503,000 - 370,000 = 133,000 | 1,007,441 |
+
+In (A2) the model cannot know that the hand-typed 503,000 row is the fund's own money, so it stays personal; a plain data-quality notice appears when a personal retirement row named like an SMSF sits beside an owner-smsf row ("may be counted twice", no blame). (A1), (B) and (C) give identical personal and family totals (874,441 and 1,007,441), so moving from today's data to the interim shape to the entity-level shape changes no figure.
+
+Score effects, case (A2) (case A1 equals case B below): net worth ratio 1,510,441 / 2,896,298 = 0.5215 -> 1,377,441 / 2,763,298 = 0.4985; property concentration 1,960,000 / 2,896,298 = 0.6767 -> 1,960,000 / 2,763,298 = 0.7093; liquid ratio 21,798 / 2,896,298 = 0.00753 -> 0.00789; retirement balance 636,000 -> 503,000, so the Retirement Readiness balance ratio falls by 20.9 per cent against the unchanged age guideline. Case (B): retirement balance 0 (Retirement Readiness has no personal balance to score); net worth ratio 874,441 / 2,260,298 = 0.3869. Debt ratios (DTI, DSR) are unchanged: SMSF rows were never in them.
+
+### 10.3 Stored history and month-on-month (PO decision needed)
+
+`financial_snapshots` is NOT rewritten and its basis is NOT changed: new months keep being written on the history basis (the figure reported before this ruling, all entities included), so a series never mixes bases. No migration. Rules:
+
+- Entity-free household: personal equals the history basis, identical numbers, movement as before.
+- Household with entity amounts: the live personal figure is never compared with a stored month. Month-on-month change, the history chart, Financial DNA growth and the report movement are shown on the history (family) basis and labelled "Family net worth" with a plain note; the Twin leaves stored net worth months unknown; the debt-to-income movement is not available.
+- Forecast variance compares like with like: runs created by engine 1.7.0 or later use the personal position; earlier runs are compared on the earlier basis (`lib/engines/forecast/varianceBasis.ts`).
+
+Recommendation (PO to decide): accept this for now. If a personal month-on-month series is wanted for households with entities, add one nullable column (`financial_snapshots.net_worth_personal`) in migration 0288 and compare only months that have it; history before the first personal month stays on the family basis. Not built: it needs a migration applied to DEV and production before the code.
+
+### 10.4 Files (this ruling)
+
+New: `lib/engines/netWorthBasis.ts`, `lib/engines/forecast/varianceBasis.ts`, `tests/unit/personalNetWorthBasis.test.ts`. Changed: `dashboard.ts` (type, comment), `dashboardData.ts` (personal rows, history basis, snapshot write), `netWorthLevels.ts` (personal parity, SMSF double-count notice), `netWorthLevelsData.ts`, `reportSections.ts`, `reportSectionsPremium.ts`, `reportCanonicalAppendix.ts`, `financialDna.ts`, `forecastData.ts`, `forecastCanonicalInputs.ts`, `engine.ts` (1.7.0), `twinData.ts`, `FinancialDataGrid.tsx`, `ReportPreview.tsx`, `NetWorthLevelsPanel.tsx`, `netWorthHeadline.ts`, `sections.tsx`, the AI context type and builder. Updated tests: `netWorthLevelsDashboardReportParity`, `twinCanonicalParity`.

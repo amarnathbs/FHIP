@@ -17,6 +17,15 @@ import {
   type ReportNavGate,
 } from '@/lib/services/investment-intelligence/pc6/reportNavHistoryGate';
 import { kickUserNavHistory } from '@/lib/services/investment-intelligence/pc6/userNavHistoryKick';
+import { runWithRequestMemo } from '@/lib/services/requestMemo';
+import {
+  ReportNotSavedError,
+  ReportPreparationStalledError,
+  ReportPreparingError,
+  RUN_STALE_AFTER_MS,
+  STALLED_AFTER_ATTEMPTS,
+  STALLED_WINDOW_MS,
+} from '@/lib/services/reportGenerationErrors';
 
 // II-R10 security hardening (migration 0070_ii_r10_reports_authoritative_write_hardening.sql):
 // the `reports` table family now grants the `authenticated` role SELECT-own
@@ -103,6 +112,8 @@ export interface GenerateReportParams {
   // Optional pre-built client (a service-role client for the scheduled job,
   // which has no per-request cookie session to build one from).
   client?: SupabaseServerClient;
+  /** Called once the preparation is recorded, so a caller that must answer before it finishes can hand out a poll token. */
+  onRunStarted?: (runId: string) => void;
   /** Test seam for the price-history gate; production uses checkReportNavHistoryGate. */
   navHistoryGate?: (userId: string, db: SupabaseServerClient) => Promise<ReportNavGate | null>;
 }
@@ -111,6 +122,12 @@ export interface GenerateReportParams {
 // source snapshots, builds sections, checks eligibility, enforces
 // idempotency for original (non-revision) reports, and writes an audit run.
 export async function generateReport(params: GenerateReportParams): Promise<GenerateReportResult> {
+  // One request-memo scope for the whole build: the canonical snapshot and dashboard context are computed once
+  // (they were computed 24 and 20 times). See lib/services/requestMemo.ts.
+  return runWithRequestMemo(() => generateReportInScope(params));
+}
+
+async function generateReportInScope(params: GenerateReportParams): Promise<GenerateReportResult> {
   // Defaults to the service-role admin client now (II-R10 hardening) — the
   // scheduled cron job already always passed one explicitly (see
   // GenerateReportParams.client's original comment); manual/API-triggered
@@ -125,12 +142,20 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
   const reportMonth = params.reportMonth ?? monthStart();
   const triggerType = params.triggerType ?? 'manual';
 
+  // A preparation still marked "started" long after the platform would have stopped it was cut off. Mark it so the
+  // history is honest, and retire any half-saved report shell it left behind (never shown, never a finished report).
+  await retireAbandonedRuns(supabase, params.userId);
+
+  const startedAt = new Date().toISOString();
   const { data: runRow } = await supabase
     .from('report_generation_runs')
-    .insert({ user_id: params.userId, trigger_type: triggerType, output_status: 'started' })
+    .insert({ user_id: params.userId, trigger_type: triggerType, output_status: 'started', started_at: startedAt })
     .select('id')
     .single();
+  if (runRow?.id) params.onRunStarted?.(runRow.id as string);
 
+  let createdReportId: string | null = null;
+  let reportMadeReady = false;
   try {
     // Idempotency: an existing ready/published report for this user+type+month
     // is returned as-is rather than duplicated. This must match on ANY active
@@ -156,6 +181,7 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
     // the regenerated row's generated_at is newer than every input timestamp
     // it was built from, so the very next call short-circuits again.
     let autoReviseReportId: string | null = null;
+    let autoReviseBecauseIncomplete = false;
     if (!params.reviseReportId) {
       const { data: existing } = await supabase
         .from('reports')
@@ -169,15 +195,27 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
         const inputsChangedAt = await loadReportInputsLastChangedAt(params.userId, supabase);
         const generatedAt = (existing.generated_at as string | null) ?? (existing.created_at as string | null);
         const stale = Boolean(inputsChangedAt && generatedAt && inputsChangedAt > generatedAt);
-        if (!stale) {
+        // 16-10-2026: a finished report with NO saved sections is not finished (an earlier build was cut off or its
+        // sections never saved, while the report row already said "ready"). It must never be handed back as the
+        // answer; it is rebuilt through the same revision mechanism, and the empty one is kept as history.
+        const { data: savedSections } = await supabase.from('report_sections').select('*').eq('report_id', existing.id).order('display_order');
+        const incomplete = (savedSections ?? []).length === 0;
+        if (!stale && !incomplete) {
           await finishRun(supabase, runRow?.id, existing.id, 'already_exists');
-          const { data: sections } = await supabase.from('report_sections').select('*').eq('report_id', existing.id).order('display_order');
-          return { report: existing as ReportRow, sections: (sections ?? []).map(fromSectionRow), alreadyExisted: true };
+          return { report: existing as ReportRow, sections: (savedSections ?? []).map(fromSectionRow), alreadyExisted: true };
         }
         autoReviseReportId = existing.id as string;
+        autoReviseBecauseIncomplete = incomplete;
       }
     }
     const effectiveReviseReportId = params.reviseReportId ?? autoReviseReportId;
+
+    // Idempotency under repeated clicks / polling: if an OLDER preparation for this user is still running, do not start
+    // a second one. Exactly one of two simultaneous requests is the older, so exactly one proceeds.
+    const olderRun = await findOlderRunInFlight(supabase, params.userId, runRow?.id as string | undefined, startedAt);
+    if (olderRun) throw new ReportPreparingError(olderRun.id, olderRun.startedAt);
+    const stalledAttempts = await countRecentAbandonedRuns(supabase, params.userId);
+    if (stalledAttempts >= STALLED_AFTER_ATTEMPTS) throw new ReportPreparationStalledError(stalledAttempts);
 
     // PO 2026-10-03 -- WAIT FOR THE DATA, but never trap the user. This is the ONE
     // place a report is built (manual, retry, revise and the monthly cron all
@@ -260,13 +298,16 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
         report_month: reportMonth,
         as_of_date: source.asOfDate,
         title: reportTitle(reportType, reportMonth, source.currency),
-        status: 'ready',
+        // Saved as 'generating' and only flipped to 'ready' once every section is stored (see below).
+        status: 'generating',
         version_number: versionNumber,
         revises_report_id: revisesReportId,
         revision_reason:
           params.revisionReason ??
           (autoReviseReportId
-            ? 'Automatically revised: your financial data changed after this report was generated.'
+            ? autoReviseBecauseIncomplete
+              ? 'Automatically rebuilt: the previous version had no saved content.'
+              : 'Automatically revised: your financial data changed after this report was generated.'
             : null),
         reporting_currency: source.currency,
         // G7 Contract 1 (docs/country-programme/g7-data-contracts.md) —
@@ -299,23 +340,38 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
       .select('*')
       .single();
     if (reportError || !report) throw new Error(reportError?.message ?? 'Could not create report');
+    createdReportId = report.id as string;
 
-    await supabase.from('report_sections').insert(
-      sections.map((s) => ({
-        report_id: report.id,
-        user_id: params.userId,
-        section_code: s.sectionCode,
-        section_title: s.sectionTitle,
-        display_order: s.displayOrder,
-        section_status: s.sectionStatus,
-        section_data_json: s.sectionData,
-        narrative_text: s.narrativeText,
-        chart_data_json: s.chartData,
-        source_references_json: s.sourceReferences,
-        confidence_level: s.confidenceLevel,
-        limitation_text: s.limitationText,
-      }))
-    );
+    // Remember the report on the run straight away, so a cut-off preparation can later be tidied up.
+    if (runRow?.id) await supabase.from('report_generation_runs').update({ report_id: report.id }).eq('id', runRow.id);
+
+    // The sections were inserted in one UNCHECKED statement before: if it failed, the report still became "ready" with
+    // nothing in it. Now every chunk is checked, and a failure retires the shell instead of publishing it.
+    try {
+      await insertSectionsChecked(
+        supabase,
+        sections.map((s) => ({
+          report_id: report.id,
+          user_id: params.userId,
+          section_code: s.sectionCode,
+          section_title: s.sectionTitle,
+          display_order: s.displayOrder,
+          section_status: s.sectionStatus,
+          section_data_json: s.sectionData,
+          narrative_text: s.narrativeText,
+          chart_data_json: s.chartData,
+          source_references_json: s.sourceReferences,
+          confidence_level: s.confidenceLevel,
+          limitation_text: s.limitationText,
+        }))
+      );
+    } catch (saveError) {
+      await supabase
+        .from('reports')
+        .update({ status: 'failed', failure_code: 'sections_not_saved', failure_message: 'The report content could not be saved. Please generate the report again.' })
+        .eq('id', report.id);
+      throw saveError;
+    }
 
     // G7 Contract 5 (docs/country-programme/g7-data-contracts.md) — FX/
     // country provenance added to the primary 'financial' snapshot's
@@ -326,7 +382,7 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
     // possibly-drifting source. No schema change: snapshot_metadata_json
     // already exists precisely for this kind of additive provenance data.
     const fxRateAudInr = await getFxRateAudInr(supabase);
-    await supabase.from('report_snapshots').insert([
+    const { error: snapshotsError } = await supabase.from('report_snapshots').insert([
       {
         report_id: report.id,
         user_id: params.userId,
@@ -393,6 +449,18 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
         ? [{ report_id: report.id, user_id: params.userId, snapshot_type: 'ii_review', source_version: 'ii-r9-review-centre', source_as_of_date: source.asOfDate, snapshot_metadata_json: { openItemCount: source.premium.reviewItems.totalOpenCount } }]
         : []),
     ]);
+    if (snapshotsError) console.error('[reports] report_snapshots were not saved', { reportId: report.id, message: snapshotsError.message });
+
+    // Everything the report is made of is now stored: only NOW does it become a finished report.
+    const { data: readyReport, error: readyError } = await supabase
+      .from('reports')
+      .update({ status: 'ready' })
+      .eq('id', report.id)
+      .eq('user_id', params.userId)
+      .select('*')
+      .single();
+    if (readyError || !readyReport) throw new ReportNotSavedError('finish', readyError?.message ?? 'The report could not be marked ready');
+    reportMadeReady = true;
 
     // NAV 1 R1 — report-pinning write path. Must run only for a REAL,
     // already-committed 'ready' report row (this line is only reachable
@@ -419,11 +487,20 @@ export async function generateReport(params: GenerateReportParams): Promise<Gene
     }
 
     await finishRun(supabase, runRow?.id, report.id, 'succeeded');
-    return { report: report as ReportRow, sections, alreadyExisted: false };
+    return { report: readyReport as ReportRow, sections, alreadyExisted: false };
   } catch (e) {
     // A held report is not a failure: nothing was stored, the user is asked to wait.
     if (e instanceof ReportWaitingForPriceHistoryError) await finishRun(supabase, runRow?.id, null, 'waiting_for_price_history', e.message);
-    else await finishRun(supabase, runRow?.id, null, 'failed', e instanceof Error ? e.message : 'Unknown error');
+    else if (e instanceof ReportPreparingError) await finishRun(supabase, runRow?.id, null, 'deferred_in_flight', e.message);
+    else await finishRun(supabase, runRow?.id, createdReportId, 'failed', e instanceof Error ? e.message : 'Unknown error');
+    // A shell that never became a finished report must not stay behind looking like one.
+    if (createdReportId && !reportMadeReady) {
+      await supabase
+        .from('reports')
+        .update({ status: 'failed', failure_code: 'not_completed', failure_message: 'The report could not be completed. Please generate the report again.' })
+        .eq('id', createdReportId)
+        .eq('status', 'generating');
+    }
     throw e;
   }
 }
@@ -455,6 +532,108 @@ async function finishRun(
     .eq('id', runId);
 }
 
+// ---------------------------------------------------------------------------
+// Preparation bookkeeping (16-10-2026). A run row is the only coordination state: no migration, no new table.
+// ---------------------------------------------------------------------------
+
+type RunRow = { id: string; started_at: string | null };
+
+/** Another preparation for this user that started EARLIER than ours and is not yet considered cut off. */
+async function findOlderRunInFlight(
+  supabase: SupabaseServerClient,
+  userId: string,
+  ownRunId: string | undefined,
+  ownStartedAt: string
+): Promise<{ id: string; startedAt: string } | null> {
+  const cutoff = new Date(Date.now() - RUN_STALE_AFTER_MS).toISOString();
+  const { data } = await supabase
+    .from('report_generation_runs')
+    .select('id, started_at')
+    .eq('user_id', userId)
+    .eq('output_status', 'started')
+    .gte('started_at', cutoff)
+    .lte('started_at', ownStartedAt);
+  const older = ((data ?? []) as RunRow[])
+    .filter((r) => r.id !== ownRunId && r.started_at !== null)
+    .filter((r) => (r.started_at as string) < ownStartedAt || ((r.started_at as string) === ownStartedAt && ownRunId !== undefined && r.id < ownRunId))
+    .sort((a, b) => ((a.started_at as string) < (b.started_at as string) ? -1 : 1));
+  return older.length > 0 ? { id: older[0].id, startedAt: older[0].started_at as string } : null;
+}
+
+/** Runs that were cut off recently (so a loop of cut-off attempts can be recognised and stopped). */
+async function countRecentAbandonedRuns(supabase: SupabaseServerClient, userId: string): Promise<number> {
+  const since = new Date(Date.now() - STALLED_WINDOW_MS).toISOString();
+  const { data } = await supabase
+    .from('report_generation_runs')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('output_status', 'abandoned')
+    .gte('started_at', since);
+  return (data ?? []).length;
+}
+
+/** Marks cut-off runs and retires the unfinished report shell each one may have left (never deletes anything). */
+async function retireAbandonedRuns(supabase: SupabaseServerClient, userId: string): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - RUN_STALE_AFTER_MS).toISOString();
+    const { data } = await supabase
+      .from('report_generation_runs')
+      .select('id, report_id')
+      .eq('user_id', userId)
+      .eq('output_status', 'started')
+      .lt('started_at', cutoff);
+    for (const run of (data ?? []) as Array<{ id: string; report_id: string | null }>) {
+      await supabase
+        .from('report_generation_runs')
+        .update({ output_status: 'abandoned', completed_at: new Date().toISOString(), failure_details: 'The preparation was cut off before it finished.' })
+        .eq('id', run.id);
+      if (run.report_id) {
+        await supabase
+          .from('reports')
+          .update({ status: 'failed', failure_code: 'abandoned_generation', failure_message: 'The report was cut off before it finished. Please generate the report again.' })
+          .eq('id', run.report_id)
+          .eq('status', 'generating');
+      }
+    }
+  } catch (err) {
+    console.error('[reports] could not tidy cut-off preparations', err instanceof Error ? err.message : err);
+  }
+}
+
+const SECTION_INSERT_MAX_BYTES = 1_500_000;
+
+/**
+ * Inserts the section rows in size-bounded chunks (a single section can be over a megabyte: the scenario projections),
+ * and THROWS if any chunk is rejected, so a partly or wholly unsaved report can never be reported as saved.
+ */
+async function insertSectionsChecked(supabase: SupabaseServerClient, rows: Array<Record<string, unknown>>): Promise<void> {
+  const chunks: Array<Array<Record<string, unknown>>> = [];
+  let current: Array<Record<string, unknown>> = [];
+  let currentBytes = 0;
+  for (const row of rows) {
+    const bytes = JSON.stringify(row).length;
+    if (current.length > 0 && currentBytes + bytes > SECTION_INSERT_MAX_BYTES) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(row);
+    currentBytes += bytes;
+  }
+  if (current.length > 0) chunks.push(current);
+  for (const chunk of chunks) {
+    const { error } = await supabase.from('report_sections').insert(chunk);
+    if (error) {
+      console.error('[reports] report_sections insert rejected', {
+        message: error.message,
+        sectionCodes: chunk.map((r) => r.section_code),
+        approxBytes: JSON.stringify(chunk).length,
+      });
+      throw new ReportNotSavedError('sections', error.message);
+    }
+  }
+}
+
 export function fromSectionRow(row: Record<string, unknown>): BuiltSection {
   return {
     sectionCode: row.section_code as BuiltSection['sectionCode'],
@@ -477,6 +656,7 @@ export async function listReports(userId: string) {
     .select('*')
     .eq('user_id', userId)
     .neq('status', 'archived')
+    .neq('status', 'generating')
     .order('report_month', { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as ReportRow[];
