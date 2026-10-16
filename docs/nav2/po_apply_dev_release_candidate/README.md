@@ -36,3 +36,7 @@ Rollbacks (only if something goes wrong): `sql/90_rollback_0281.sql`, `sql/91_ro
 * Step 6 and 9: the comparison with `docs/nav2/dev_inventory/expected_inventory.json` (derived by replaying the migrations from empty, from the historic partial 0260 state, from complete, and on re-run, all four identical).
 * Steps 3, 4, 5: the retention function identity (arguments, return type, owner, grants, normalized checksum) and its behaviour on real rows.
 * Steps 7 and 8 unlock the DEV proof of the idempotency key and of the held-back count. Until they are applied those two are PGlite-verified and unit-tested only.
+
+## Result (16-10-2026)
+
+The Product Owner ran steps 1 to 5 and 7 to 8 (state check, identity and behaviour of the retention function, inventory 1, 0281 with check 11 all true, 0282 with check 13 all true). The agent then re-ran the DEV proofs that needed them: journey 7 (6 reports for 6 intended), D8 (one key, one report), the 0282 held-back count on the monitoring route, the REST comparison (exact match) and journey 8b on the shared table (43 of 43). Still to send: the two catalog inventory files (steps 6 and 9) so that the file comparison can be run. Details: docs/nav2/NAV2_RELEASE_CANDIDATE_DEV_CERTIFICATION_15-10-2026.md.

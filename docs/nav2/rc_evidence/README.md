@@ -21,3 +21,14 @@ Logs of the runs quoted in `docs/nav2/NAV2_RELEASE_CANDIDATE_DEV_CERTIFICATION_1
 | `nav2_group_run2.log` | NAV2 tests together plus two migration-number guards (61 files, 948 tests) |
 
 The full-suite comparison is summarised in `docs/nav2/BASELINE_FAILURES.md`; the JSON files of both full runs are not kept (about 6 MB each).
+
+## Added 16-10-2026 (after the Product Owner applied the DEV pack: 0281 and 0282 on DEV)
+
+| File | What it is |
+|---|---|
+| `dev2_j12.log` | Journeys 1 and 2 on the final tip (53 of 54; the one failure is a PDF export timeout under machine load) |
+| `dev2_j5b.log` | Journey 5b: exactly one case for an ISIN and AMFI conflict (6 of 6) |
+| `dev2_m0282.log` | The 0282 held-back count on the monitoring route (2 of 2) |
+| `dev2_j7.log` | Journey 7 with 0281: 6 reports for 6 intended (15 of 15) |
+| `dev2_d8.log` | D8 with 0281: one report for one key (12 of 12) |
+| `dev2_j6.log`, `dev2_j8.log`, `dev2_j8b.log` | Journey 6 (19), 8a (24), 8b on the shared DataTable report table (43) |

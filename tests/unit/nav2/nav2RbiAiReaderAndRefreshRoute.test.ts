@@ -29,6 +29,14 @@ describe('AI reader contract', () => {
     expect(factsToParsedAuction({ ...facts, title: null })).toBeNull();
     expect(factsToParsedAuction(facts)).toEqual({ releaseNumber: '2026-2027/1218', title: 'Treasury Bills: Full Auction Result', auctionDate: '2026-09-30', cutoffPrice: 98.7203, cutoffYieldPercent: 5.2, noAcceptedBids: false });
   });
+  it('NC-AI3b: with the switch ON but no person to attribute the call to (the cron run) there is still no reader: the per-user daily cap fails closed without a user', () => {
+    const prev = process.env.AIE_AI_FALLBACK_ENABLED;
+    process.env.AIE_AI_FALLBACK_ENABLED = 'true';
+    expect(createGatewayAiReader()).toBeNull();
+    expect(createGatewayAiReader(null)).toBeNull();
+    if (prev === undefined) delete process.env.AIE_AI_FALLBACK_ENABLED;
+    else process.env.AIE_AI_FALLBACK_ENABLED = prev;
+  });
   it('NC-AI3: with the AIE kill switch off there is no reader (so no provider call can happen)', () => {
     const prev = process.env.AIE_AI_FALLBACK_ENABLED;
     delete process.env.AIE_AI_FALLBACK_ENABLED;

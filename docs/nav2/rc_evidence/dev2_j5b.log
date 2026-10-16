@@ -1,0 +1,19 @@
+=== journey 5 part 2 2026-10-16T08:27:32.912Z ===
+  PASS  the statement whose ISIN belongs to fund A and whose AMFI code belongs to fund D is processed (not a crash)  ({"ok":true,"step":"process","status":200,"docId":"191cb19b-b270-445d-a539-2a8ce36a6a9d","memberId":"36ab02d6-3218-4479-ad47-2ba8e588820e","deduplicated":false})
+   cases: [["ambiguous_instrument","open","account"]]
+  PASS  EXACTLY ONE reconciliation case is open for the disagreeing identifiers (two statement lines, one case)  (1 open of 1)
+  PASS  no canonical transaction was created for the disputed scheme (nothing is held on a guess)  (0 transactions)
+  PASS  processing the same document again opens no second case  (re-process 200; 1 cases)
+  PASS  NO FUNDS: a Premium user whose only statement is still awaiting reconciliation gets the typed "no funds" answer, not a report  (200 {"data":{"status":"no_funds","message":"The Fund analytics report covers Indian mutual funds. Upload a mutual fund statement to see it."}})
+  PASS  hydration switch and the free plan are restored
+
+=== journey 5 part 2: 6 PASS, 0 FAIL ===
+file:///D:/FHIP/.claude/worktrees/agent-a4c066c4316765694/scripts/nav2_stage3/j5b_states_and_reconciliation.mjs:34
+  const j = ih.report_json;
+               ^
+
+TypeError: Cannot read properties of null (reading 'report_json')
+    at file:///D:/FHIP/.claude/worktrees/agent-a4c066c4316765694/scripts/nav2_stage3/j5b_states_and_reconciliation.mjs:34:16
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+Node.js v24.18.0

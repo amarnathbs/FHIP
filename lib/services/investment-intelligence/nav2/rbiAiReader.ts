@@ -62,9 +62,13 @@ export function factsToParsedAuction(facts: RbiAuctionFacts): ParsedAuction | nu
   return { releaseNumber: facts.releaseNumber, title: facts.title, auctionDate: facts.auctionDate, cutoffPrice: facts.cutoffPrice91Day, cutoffYieldPercent: facts.cutoffYield91DayPercent, noAcceptedBids: facts.noAcceptedBids };
 }
 
-/** null when the AIE kill switch is off (then no provider call is ever made and the job runs on the parser alone). */
-export function createGatewayAiReader(): AiAuctionReader | null {
-  if (!isAieAiFallbackEnabled()) return null;
+/**
+ * null when the AIE kill switch is off, OR when there is no person to attribute the call to: since 16-10-2026 every AI call must carry the authenticated user it is
+ * made for (per-user daily spend cap, migration 0284), and the cron weekly refresh has no user, so the cron route passes none and the job runs on the parser alone
+ * (the AI second opinion is optional and the weekly refresh is OFF). An administrator-triggered run may pass that administrator's id.
+ */
+export function createGatewayAiReader(actorUserId: string | null = null): AiAuctionReader | null {
+  if (!isAieAiFallbackEnabled() || !actorUserId) return null;
   aieSchemaRegistry.register({ name: RBI_AI_SCHEMA_NAME, version: RBI_AI_SCHEMA_VERSION, schema: rbiAuctionFactsSchema, ownerAdapterId: RBI_AI_ADAPTER_ID });
   const gateway = new AieDocumentAiGateway(createLazyAieAiProvider(), { isKillSwitchEnabled: () => isAieAiFallbackEnabled(), costAdmission: { reserve: reserveConservativeAiCost, settle: settleAiCost } });
   return {
@@ -78,6 +82,7 @@ export function createGatewayAiReader(): AiAuctionReader | null {
         maxOutputTokens: 400,
         requestedFields: ['releaseNumber', 'title', 'auctionDate', 'cutoffPrice91Day', 'cutoffYield91DayPercent', 'noAcceptedBids'],
         idempotencyKey: `nav2-rbi-auction:${randomUUID()}`,
+        userId: actorUserId,
       });
       if (result.outcome !== 'success') return null;
       const parsed = rbiAuctionFactsSchema.safeParse(result.data);

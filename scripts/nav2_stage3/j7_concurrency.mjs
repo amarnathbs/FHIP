@@ -33,10 +33,11 @@ const results = await Promise.all(Array.from({ length: N }, () => settle()));
 console.log(`   ${N} concurrent generations finished in ${Math.round((Date.now() - t0) / 1000)} s: statuses ${results.map((r) => r.status).join(',')}`);
 const after = (await db.from('nav2_fund_analytics_reports').select('id, version_number, supersedes_report_id, report_json, manifest_json, manifest_checksum').eq('user_id', uid).order('version_number')).data ?? [];
 const fresh = after.filter((r) => !before.some((b) => b.id === r.id));
-const okCount = results.filter((r) => r.status === 201).length;
+// a 200 is the REPLAY of a report already issued for the same Idempotency-Key (a retry after a typed 202 or 503 whose first attempt finished in the background): it is a success and issues nothing
+const okCount = results.filter((r) => r.status === 201 || r.status === 200).length;
 save('j7_generation_statuses.json', results.map((r) => ({ status: r.status, body: r.text.slice(0, 160) })));
-check('every concurrent request ended in a typed answer (201 ready) or an honest typed refusal; none was a bare server error', results.every((r) => [201, 202, 409, 429].includes(r.status)), results.map((r) => r.status).join(','));
-check(`${okCount} reports were stored for ${okCount} successful answers: nothing lost, nothing double-counted`, fresh.length === okCount, `${fresh.length} new rows`);
+check('every concurrent request ended in a typed answer (201 ready, or 200 for the replay of the same key) or an honest typed refusal; none was a bare server error', results.every((r) => [200, 201, 202, 409, 429].includes(r.status)), results.map((r) => r.status).join(','));
+check(`${okCount} reports were stored for ${okCount} successful answers (one per Idempotency-Key, however many times each was retried): nothing lost, nothing double-counted`, fresh.length === okCount, `${fresh.length} new rows`);
 const versions = after.map((r) => r.version_number);
 check('version numbers are unique and contiguous (no gap, no duplicate)', new Set(versions).size === versions.length && versions.every((v, i) => v === i + 1), versions.join(','));
 check('each version supersedes exactly the one before it (an unbroken chain)', after.every((r, i) => (i === 0 ? r.supersedes_report_id === null : r.supersedes_report_id === after[i - 1].id)));

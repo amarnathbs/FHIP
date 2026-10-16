@@ -1,8 +1,10 @@
 # NAV2 (Fund Analytics) PRODUCTION hand-over
 
-Written 07-10-2026 for the Product Owner. **Nothing in this folder has been run on production.** Every SQL file here was replayed on an isolated in-memory Postgres (PGlite) on top of the whole migration ledger up to 0278, in the order below, with its check, its rollback and a second run (`scripts/nav2_production_deploy_order_proof.mjs`, results in section 12). That is not production evidence: your pasted answers are.
+Written 07-10-2026, updated 16-10-2026 (STOP GATE 1 package: DEV-proven 0281 and 0282, manual backup step, pilot limit of 10 funds, monitoring queries) for the Product Owner. **Nothing in this folder has been run on production.** Every SQL file here was replayed on an isolated in-memory Postgres (PGlite) on top of the whole migration ledger up to 0278, in the order below, with its check, its rollback and a second run (`scripts/nav2_production_deploy_order_proof.mjs`, results in section 12). That is not production evidence: your pasted answers are.
 
-Release in one sentence: you apply nine small database files (all new tables and functions, nothing existing is changed except two columns on `admin_users`, four rows in the switch table, one hook on the price correction ledger and one retention function that gets one more protection), then you push the code, then you check, then you switch the report on for Premium people when you are ready. All four NAV2 job switches stay OFF at release.
+**Do NOT push the NAV2 code before the production migrations (steps 2.1 to 2.14) are applied and all checks are true.** With the code live and migration 0281 missing, every retry after a "prepared in steps" or "timed out" answer can issue another report (DEV journey 7 without 0281: 15 reports stored for 6 intended), and the held-back-lines and attempt panels say unavailable. The database comes first, always.
+
+Release in one sentence: you take a manual backup of the few existing things the release alters (production has NO managed backups), you apply nine small database files (all new tables and functions, nothing existing is changed except two columns on `admin_users`, four rows in the switch table, one hook on the price correction ledger and one retention function that gets one more protection), then you push the code, then you check, then you switch the report on for Premium people when you are ready. All four NAV2 job switches stay OFF at release.
 
 ## 0. Rules for every step
 
@@ -17,7 +19,7 @@ Release in one sentence: you apply nine small database files (all new tables and
 
 | Step | What | Where it runs | Needs the new code? |
 |---|---|---|---|
-| 1 | Read-only pre-checks P1 to P7 | SQL editor, production | no |
+| 1 | Read-only pre-checks P1 to P7, then the manual backup B1 and its check B2 | SQL editor, production | no |
 | 2 | Migrations: 0260 parts a to e, 0261, 0262, 0263, 0269, 0270, 0271, 0281, 0282, final check | SQL editor, production | no |
 | 3 | Push the code and wait for the deploy | your machine, then Amplify | n/a |
 | 4 | Smoke checks with every NAV2 switch OFF | browser | yes |
@@ -28,9 +30,9 @@ Release in one sentence: you apply nine small database files (all new tables and
 
 **Why the database first, then the code** (full reasoning in `docs/nav2/NAV2_PRODUCTION_RELEASE_PLAN.md` section 4):
 
-- The new database objects are additive and nothing the old code calls changes behaviour (proved on PGlite: section 12, group D). So applying them while the OLD code is live is safe.
+- The new database objects are additive and nothing the old code calls changes behaviour (proved on PGlite: section 12, group D). So applying them while the OLD code is live is safe. Migrations 0272 to 0274, 0283 to 0286 on main belong to other workstreams and have their own packs; this pack does not depend on them and they do not depend on it.
 - The new code on an OLD database is also safe (every NAV2 page and route answers a plain "not available yet" or "not found" and never a 500 to an ordinary user), but it shows nothing useful and the admin screens say "unavailable". So there is no benefit in deploying first, and doing the database first lets you check the shape with the old code still serving.
-- If you push first by mistake, nothing breaks: carry on with step 2 and refresh.
+- **Do not push first.** The new code on an old database does not break the application, but it shows nothing useful, and without 0281 a retried request can issue extra reports. If you pushed first by mistake: switch `nav2_fund_analytics` OFF (it is OFF unless you switched it on), carry on with step 2, and check with M1 (section 8) that `duplicate_idempotency_keys` is 0 and `reports_total` is 0 before switching it on.
 
 ## 2. Step 1: read-only pre-checks (nothing is written)
 
@@ -50,7 +52,22 @@ Run each file from `sql/prechecks/`.
 | `P6b_administrator_list.sql` | the administrators with their addresses (for your choice of who gets which permission) | **nothing, keep it to yourself** |
 | `P7_switch_state.sql` | the existing switch rows (including the price fetch switch) | the rows |
 
+**What each pre-check proves (the list a release reviewer asks for).**
+
+| Question | File |
+|---|---|
+| Is this the production database, and is there NO partial NAV2 attempt (tables, columns, functions, switch rows)? | P1 (all four true) |
+| Is the migration lineage the one this release builds on (the price correction ledger, the retention function, the NAV 1 tables, the reference data admin function, the Premium function)? | P2 (all six true) and P5 (the ledger rows, when the ledger is kept) |
+| Which text does the retention function `pc6_nav_row_is_candidate` hold: production likely has the 0219 text, not the 0261 text; 0261's own first statement accepts either and refuses anything else? | P3, P3c (`is_0219` or `is_0261` true), P3d (behaviour on real rows), P3b only if both are false |
+| Which switch rows exist today (including the existing price fetch switch)? | P7, and P1 for the four NAV2 rows (must be absent) |
+| Are the two admin permission columns absent, and who are the administrators and the Premium people? | P1 (columns absent), P6a, P6b |
+| How big is the database and the price table (no write touches the price table)? | P4 |
+
 **Stop rules.** P1 not all true: wrong database or NAV2 partly there, stop. P2 any false: a migration NAV2 depends on is missing, stop. **P3 `body_is_0219` false, and P3c `is_0219` false: stop.** Migration 0261 redefines the retention function `pc6_nav_row_is_candidate` and was written against the 0219 text. 0261 now carries its own guard: its first statement compares the live function (normalized checksum, so formatting does not matter) with the 0219 text and the 0261 text and STOPS the whole file with nothing changed if it is neither. A raw-text difference alone (P3 false, P3c `is_0219` true) is a formatting difference and is not a stop. Send me the P3, P3c and P3b output and I will compare.
+
+### 2.1 The manual backup (production has NO managed backups)
+
+After P1 to P7 are all as expected and BEFORE any migration: paste `sql/backup/B1_backup_altered_tables.sql`, then `sql/backup/B2_backup_check.sql` and paste the row back (expect equal counts, `function_text_saved` true, `backups_locked_to_service_role` true). B1 copies the three things the release alters (the administrator permissions table, the switch table, the retention function text) and records the size of the price correction ledger (a trigger is added to it, no row is changed). It writes four small tables named `nav2_backup_20261016_*`, locked to the service role, safe to run twice. Nothing else is copied because nothing else existing is altered; the NAV2 tables are new and empty. Remove the copies with `sql/backup/B3_drop_backups_after_release.sql` after the pilot has run a week. The price tables are NOT copied: no file here writes, updates or deletes a price row.
 
 Disk space: NAV2 adds twelve small empty tables and seventeen functions. It adds no price rows. A report is stored as one row of about 0.09 MB per fund (0.35 MB for four funds, 2.1 MB for 25). The free space is read in the Supabase dashboard (Reports, Database), not by SQL; the P4 sizes are for the record.
 
@@ -152,11 +169,15 @@ Paste both results back. After the load, if you are the only administrator, run 
 
 **What controls it.** (`sql/switches/read_switches.sql` shows every switch.) One switch row, `nav2_fund_analytics` in `ii_reference_job_control` (`sql/switches/switch_on_fund_analytics.sql` / `switch_off_fund_analytics.sql`). It is global: there is **no per-user allowlist in the code**. Who can see the report is decided by Premium plus that switch. Premium is held only by people you or a promo or payment route have made Premium, so the audience is already a small controlled group (P6a tells you how many today).
 
+**Pilot limit (Product Owner decision 15-10-2026): one report covers at most 10 funds.** This is in the code (`FUND_ANALYTICS_MAX_FUNDS`), not a setting, so every Premium person is under it from the first report. A person who holds more funds picks up to 10 on the page and makes a second report for the rest. It stays 10 until a production timing run supports more and you decide.
+
 **Recommendation.**
 1. Release with the switch OFF (it is OFF after step 2).
 2. After steps 4 to 6 pass, turn it ON during a time you are present (`switch_on_fund_analytics.sql`) and test with your own Premium account first: Reports, **Fund Analytics**, generate a report from the funds you hold (it uses the price history already stored; see section 9 for what happens with funds that have none), open the PDF, open Admin, Reference Data, Fund Analytics Health.
 3. If all is well, leave it ON: the audience is only Premium people. If anything looks wrong, `switch_off_fund_analytics.sql` removes the page, the menu entry and generation at once; stored reports remain.
 4. A per-person pilot (allowlist) would need a code change; I recommend against it for this release because the Premium group is already small.
+
+**Monitoring during the pilot (read only, aggregate only).** `sql/monitoring/M1_pilot_health.sql`: one row, run after the first reports and once a day. `duplicate_idempotency_keys` must stay 0, `widest_report` must never exceed 10, `unprocessed_correction_events` is harmless while the worker is OFF. `sql/monitoring/M2_reports_per_day.sql`: reports, people and largest report per day for 30 days. In the browser: Admin, Reference Data, Fund Analytics Health shows the held-back statement lines (0282), correction lag and refresh attempts. **Stop and switch OFF** (`switch_off_fund_analytics.sql`) if a Premium person reports a report that never finishes (the page keeps saying it is being prepared for more than ten minutes), if `duplicate_idempotency_keys` is above 0, or if a report is wrong against a figure you can check by hand.
 
 **Smoke checks after switching ON** (Premium account): the menu shows Reports, Fund Analytics. Generate report: it finishes within the 28 second platform limit (section 11), or says it is prepared in steps and shows one entry per fund with figures or plain "not available" labels. "View PDF" opens a PDF (about one page per fund, one comparison page). A free account: still no menu entry; the page says Premium only. Direct API call by a free account answers 403 with a sentence. Admin Fund Analytics Health loads. Then run `sql/smoke/S1_after_first_reports.sql` and paste the row.
 
@@ -187,6 +208,7 @@ Paste both results back. After the load, if you are the only administrator, run 
 | A series is wrong | Admin screen, series state (reason 20 characters or more) | Sharpe, Sortino, alpha report the rate as unavailable; nothing deleted |
 | A rate was loaded wrongly | Admin screen, "Correct one published value" | audited correction with old and new value; never a delete |
 | Code deploy must go back | revert the commit and push, or Amplify redeploy of the previous build | the database stays; old code ignores NAV2 objects (proved, group D) |
+| Backup copies | `sql/backup/B3_drop_backups_after_release.sql` (only after the release is confirmed) | the four `nav2_backup_20261016_*` tables are removed |
 | Step 2.13 | `sql/rollback/rollback_0282.sql` | the held-back count is gone from Fund Analytics Health (it then says not available) |
 | Step 2.12 | `sql/rollback/rollback_0281.sql` | no idempotency key: a repeated click can issue a second report again; issued reports untouched |
 | Step 2.11/2.10 | paste the 0262 migration file again | first monitoring function back |
@@ -203,6 +225,7 @@ The rollbacks were run on PGlite in reverse order after a full apply and returne
 - **Generation is synchronous** and runs inside one web request. The platform (Amplify) ends a request at 28 seconds, so the generation route declares 28 seconds. Engine time measured offline: about 3.4 s for 4 funds and about 18 s for 20 funds, plus database reads; 25 funds took about 14.5 s of engine time on a loaded development machine in Stage 3. A report covers at most **10 funds** (Product Owner decision 15-10-2026, the pilot limit; it was 20 on 07-10-2026): a person who holds more is told in plain words ("A report covers up to 10 funds. You hold N, so generate it in two reports."; the API answers 409 with the list of funds to choose from, 422 for an invalid choice), picks the funds on the page, and can make a second report for the rest. The price-history check and the NAV2 planner look only at the funds the report covers (release candidate, B2): a person who holds 30 funds and chooses 20 waits for the history of those 20 only, nothing is fetched for the other 10, and the chosen ids are pinned in the report manifest. One clock runs from the moment the request arrives: at 22 seconds the route answers a typed 503 timed_out (retryable, nothing lost) instead of waiting for the platform page, and a generation never starts engine work that would not finish inside its 18 second budget: it prepares what fits (kept in the shared cache), answers 202 prepared in steps and carries on when the person generates again, always with the same Idempotency-Key so that one intended report issues exactly one report (needs migration 0281). **Measured on DEV from a development machine on a home link (170 ms round trip, not the production network): 1 and 4 funds issue in one call (about 15 s), 10 funds in two calls cold and one warm, 20 funds did NOT finish reliably (cold: three prepared-in-steps answers, then repeated 22 second timeouts; warm: issued on the fifth call at 21.8 s). Most of that time is reads over the slow link, not engine time (engine: about 3 s cold for 18 funds on the same machine). The Product Owner therefore set the pilot limit to 10 funds per report (FUND_ANALYTICS_MAX_FUNDS in lib/config/nav2/reportLimits.ts); raising it again needs a production timing run and a Product Owner decision. A person who holds many funds is asked to choose.** The largest real report is 20 funds: a 23 page PDF. The PDF export is a second request (declared 60 seconds, in practice about 3 s).
 - **Size:** a stored report is about 0.09 MB per fund (0.35 MB for four funds); a PDF about 0.1 to 0.6 MB, never stored. No price rows are added. Twelve new tables are empty at release; the RBI load adds 1,134 small rows.
 - **Cost:** no external paid service is called. The weekly RBI reader and the AI second opinion are off. The headless PDF render runs inside the existing PDF path used by the Monthly Report.
+- **Timing on production is not yet measured.** All timings above are from a development machine on a slow link. The first production measurement is part of the pilot: with your own Premium account generate a report for 1, 4 and 10 funds (cold, then again) and note how long each takes and whether any answers "prepared in steps"; paste the times back before inviting anyone else.
 - **Premium count today** (P6a) is the number of people who can see the report once switched on.
 
 ## 12. What the proof script showed (PGlite)
@@ -218,4 +241,4 @@ The rollbacks were run on PGlite in reverse order after a full apply and returne
 
 ## 14. What to paste back, in short
 
-P1 to P4, P6a, P7 (and P5 if it answers), the check row of each of steps 2.1 to 2.13 and the final check, the two load verification results, "smoke 1 to 4 ok" after the push, `check_grants.sql`, and after the pilot the `S1_after_first_reports.sql` row. Any error text exactly as shown.
+P1 to P4, P6a, P7 (and P5 if it answers), the B2 backup check row, the check row of each of steps 2.1 to 2.13 and the final check, the two load verification results, "smoke 1 to 4 ok" after the push, `check_grants.sql`, and after the pilot the `S1_after_first_reports.sql` row. Any error text exactly as shown.

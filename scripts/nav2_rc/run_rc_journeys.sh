@@ -25,6 +25,7 @@ for part in "$@"; do
     j8b) run j8b scripts/nav2_stage3/j8b_ui_accessibility.mjs ;;
     j9) run j9 scripts/nav2_stage3/j9_rbi_dry_run.mjs ;;
     d5) run d5 scripts/nav2_rc/d5_immutability_extra.mjs ;;
+    m0282) run m0282 scripts/nav2_rc/d_monitor0282.mjs ;;
   esac
 done
 node scripts/nav2_stage3/flags.mjs off > $L/flags_after.log 2>&1
