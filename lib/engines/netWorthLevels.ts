@@ -35,6 +35,7 @@
 import { attributeByBasisPoints } from '@/lib/services/investment-intelligence/ownerAttribution';
 import { computeBusinessEntityNetAssetValue, type BusinessEntityWithLineItems } from '@/lib/engines/businessEntityValuation';
 import { convertToReportingCurrency, type SupportedCurrency } from '@/lib/engines/fx';
+import { isEntityOwnerTag, isSmsfFundRow } from '@/lib/engines/netWorthBasis';
 
 export type NetWorthRegister = 'assets' | 'investments' | 'retirement' | 'liabilities';
 export type NetWorthRole = 'self' | 'spouse' | 'other';
@@ -64,6 +65,8 @@ export interface NetWorthRowInput {
   /** Joint items only: a recorded split. Absent or invalid = the default equal split. */
   jointShares?: readonly NetWorthJointShare[] | null;
   /** Liabilities only: linked to an SMSF fund as its property loan (effective owner = the SMSF). */
+  /** Retirement rows: 'smsf' marks the SMSF section's fund row, which is entity-held whoever it is owned by. */
+  masterItemKey?: string | null;
   smsfLinkedLoan?: boolean;
   /** Liabilities only: that loan is ALREADY netted inside a Detailed-mode fund's retirement balance. */
   nettedInFundBalance?: boolean;
@@ -120,6 +123,11 @@ export interface NetWorthEntityBlock {
   included: Totals;
   /** SMSF only: property loans already inside the fund balance (not subtracted again). */
   nettedLoans: { count: number; amount: number } | null;
+  /**
+   * SMSF only: the SMSF section's fund record(s) NOT counted here because a separate fund-level row (owner smsf) exists
+   * and counting both would count the fund twice. Listed so nothing disappears silently.
+   */
+  suppressedFundRecord: { count: number; amount: number } | null;
   note: string | null;
 }
 
@@ -130,7 +138,7 @@ export interface NetWorthReconciliationLine {
 }
 
 export interface NetWorthBridgeLine {
-  key: 'smsf_loan_counted_once' | 'trust_huf_included_in_full' | 'unexplained';
+  key: 'smsf_loan_counted_once' | 'smsf_fund_record_not_counted' | 'trust_huf_included_in_full' | 'unexplained';
   label: string;
   /** Amount that turns the FAMILY figure into the previously reported figure (add to family net). */
   amount: number;
@@ -163,6 +171,13 @@ export interface NetWorthLevels {
     lines: NetWorthBridgeLine[];
     /** null when no previous figure was supplied. */
     parityOk: boolean | null;
+    /**
+     * PERSONAL-BASIS PARITY (PO decision 16-10-2026): the Dashboard summary's personal net worth (the figure
+     * every personal-facing reader uses) against this model's personal level. They must be equal; a
+     * difference is reported, never hidden. null when no summary figure was supplied.
+     */
+    personalSummaryNet: number | null;
+    personalParityOk: boolean | null;
   };
   dataStatus: {
     unconvertedCount: number;
@@ -170,6 +185,11 @@ export interface NetWorthLevels {
     unavailable: { section: string; reason: string }[];
     /** Set when the same company/trust could be counted twice (legacy tag + registry entity). */
     duplicateRisk: string | null;
+    /**
+     * Set when a PERSONAL retirement row (owner self / spouse / joint) is described as an SMSF AND a separate row is held
+     * at SMSF fund level (owner smsf): the fund may have been entered twice. Plain wording, no blame; never changes a figure.
+     */
+    smsfPossibleDoubleCount: string | null;
   };
   hasEntities: boolean;
   /** Plain-language explanation of each level (identical wording on every surface). */
@@ -180,8 +200,10 @@ export interface NetWorthLevelsInput {
   currency: string;
   rows: readonly NetWorthRowInput[];
   entities?: readonly NetWorthEntityInput[];
-  /** The Dashboard's previously reported net worth, to prove the bridge. */
+  /** The Dashboard's previously reported (history-basis, all entities included) net worth, to prove the bridge. */
   previouslyReported?: number | null;
+  /** The Dashboard summary's PERSONAL-basis net worth, to prove it equals the personal level. */
+  personalSummaryNet?: number | null;
   unavailable?: readonly { section: string; reason: string }[];
 }
 
@@ -257,6 +279,8 @@ const KIND_ORDER: NetWorthEntityKind[] = ['smsf', 'family_trust', 'huf', 'compan
 
 /** Register-row owner tag -> entity kind, or null for a personal / household owner. */
 function entityKindOfOwner(owner: string | null): NetWorthEntityKind | null {
+  // netWorthBasis.ts is the one definition of "entity-held"; this maps it onto a kind (a test proves they agree).
+  if (!isEntityOwnerTag(owner)) return null;
   if (owner === 'smsf') return 'smsf';
   if (owner === 'family_trust') return 'family_trust';
   if (owner === 'company') return 'company';
@@ -267,6 +291,30 @@ export const NET_WORTH_PERSONAL_EXPLANATION =
   'Personal level: what you and your partner own and owe in your own names, plus your share of joint items (split equally unless a different split is recorded). It does not include any SMSF, trust, HUF or company assets.';
 export const NET_WORTH_FAMILY_EXPLANATION =
   'Family level: the personal level plus your entities, shown separately: SMSF, family trusts and HUFs in full, and companies at your ownership share. Entity data stays recorded separately; this is a combined view for reporting.';
+
+/**
+ * Data-quality notice (PO decision 16-10-2026): a personal retirement row named like an SMSF next to a row owned by the
+ * SMSF itself may be the same fund entered twice (for example the fund's gross balance as a member row and its net
+ * balance as a fund-level row). The model cannot know which is true, so it says so and changes no figure.
+ */
+export function detectSmsfPossibleDoubleCount(rows: readonly NetWorthRowInput[], currency: string): string | null {
+  const fmt = (n: number) => `${currency} ${Math.round(n).toLocaleString('en-AU')}`;
+  const ok = (r: NetWorthRowInput) => r.amountReporting !== null && Number.isFinite(r.amountReporting);
+  const fundLevel = rows.filter((r) => r.register === 'retirement' && r.owner === 'smsf' && ok(r));
+  if (fundLevel.length === 0) return null;
+  const list = (rs: readonly NetWorthRowInput[]) => rs.map((r) => `"${r.name}" (${fmt(r.amountReporting as number)})`).join(', ');
+  // 1) the SMSF section's own fund record sits beside a fund-level row.
+  const fundRecords = rows.filter((r) => r.register === 'retirement' && r.owner !== 'smsf' && isSmsfFundRow(r) && ok(r));
+  if (fundRecords.length > 0) {
+    return `Your Retirement register has an SMSF fund record, ${list(fundRecords)}, and a separate row held at SMSF fund level, ${list(fundLevel)}. If both describe the same fund, counting both would count it twice, so only the fund-level row is counted in the SMSF block and the fund record is shown but not counted. Please record the fund once, using its own net balance (assets less liabilities).`;
+  }
+  // 2) a personal retirement row merely NAMED like an SMSF (no fund record) sits beside a fund-level row.
+  const personalNamedSmsf = rows.filter((r) => r.register === 'retirement' && !isEntityOwnerTag(r.owner) && /smsf|self[ -]?managed/i.test(r.name) && ok(r));
+  if (personalNamedSmsf.length > 0) {
+    return `Your Retirement register has a personal account that looks like an SMSF, ${list(personalNamedSmsf)}, and a separate row held at SMSF fund level, ${list(fundLevel)}. If both describe the same fund, it may be counted twice (once as the fund and once as a member balance). Please check which one is right; the personal figure currently includes the first and the family figure includes both.`;
+  }
+  return null;
+}
 
 export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevels {
   const unconvertedByCurrency: Record<string, number> = {};
@@ -297,6 +345,11 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
     return a;
   };
 
+  const fundLevelRowExists = input.rows.some(
+    (r) => r.register === 'retirement' && r.owner === 'smsf' && r.amountReporting !== null && Number.isFinite(r.amountReporting),
+  );
+  const suppressedFund = { count: 0, amount: 0 };
+
   for (const row of input.rows) {
     if (row.amountReporting === null || !Number.isFinite(row.amountReporting)) {
       unconvertedCount += 1;
@@ -318,7 +371,15 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       continue;
     }
 
-    const entityKind = entityKindOfOwner(effectiveOwner);
+    // The SMSF section's fund row is the fund's own net balance whoever it is owned by (PO decision 16-10-2026).
+    const isFundRecord = row.register === 'retirement' && effectiveOwner !== 'smsf' && isSmsfFundRow(row);
+    const entityKind = isFundRecord ? 'smsf' : entityKindOfOwner(effectiveOwner);
+    if (isFundRecord && fundLevelRowExists) {
+      // A fund-level row (owner smsf) already carries the fund: count the fund ONCE. The fund record is listed, not counted.
+      suppressedFund.count += 1;
+      suppressedFund.amount += amount;
+      continue;
+    }
     if (entityKind) {
       const acc = tagOf(entityKind);
       addToTotals(acc.totals, row.register, amount);
@@ -390,9 +451,12 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       entityTotals: totals,
       included: totals,
       nettedLoans,
+      suppressedFundRecord: kind === 'smsf' && suppressedFund.count > 0 ? { count: suppressedFund.count, amount: cents(suppressedFund.amount) } : null,
       note:
         kind === 'smsf'
-          ? nettedLoans
+          ? suppressedFund.count > 0
+            ? `The SMSF fund record (${cents(suppressedFund.amount)}) is shown but not counted: a separate fund-level row exists, and counting both would count the fund twice. Record the fund once, using its own net balance (assets less liabilities).`
+            : nettedLoans
             ? `${nettedLoans.count} SMSF property loan${nettedLoans.count === 1 ? '' : 's'} already deducted inside the fund balance are not deducted again.`
             : null
           : 'Recorded with this owner tag and counted as entered. The tag carries no ownership percentage.',
@@ -421,6 +485,7 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       entityTotals,
       included: scaleTotals(entityTotals, factor),
       nettedLoans: null,
+      suppressedFundRecord: null,
       note:
         e.kind === 'company'
           ? `Counted at your ${e.ownershipPercent}% ownership share of the company's net value.`
@@ -453,6 +518,13 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       key: 'smsf_loan_counted_once',
       label: 'SMSF property loan already deducted inside the fund balance (previously deducted twice)',
       amount: -smsfBlock.nettedLoans.amount,
+    });
+  }
+  if (smsfBlock?.suppressedFundRecord) {
+    bridgeLines.push({
+      key: 'smsf_fund_record_not_counted',
+      label: 'SMSF fund record not counted in the family figure because a fund-level row already carries the fund (previously both were counted)',
+      amount: smsfBlock.suppressedFundRecord.amount,
     });
   }
   const trustHufDelta = (input.entities ?? [])
@@ -504,12 +576,23 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
     entities: { blocks, byKind, total: entitiesTotal },
     family,
     reconciliation,
-    bridge: { previouslyReported: prev, reproduced, lines: bridgeLines, parityOk },
+    bridge: {
+      previouslyReported: prev,
+      reproduced,
+      lines: bridgeLines,
+      parityOk,
+      personalSummaryNet: input.personalSummaryNet ?? null,
+      personalParityOk:
+        input.personalSummaryNet === null || input.personalSummaryNet === undefined || !Number.isFinite(input.personalSummaryNet)
+          ? null
+          : Math.abs(cents(input.personalSummaryNet) - personalTotal.net) <= 0.05,
+    },
     dataStatus: {
       unconvertedCount,
       unconvertedByCurrency,
       unavailable: [...(input.unavailable ?? [])],
       duplicateRisk,
+      smsfPossibleDoubleCount: detectSmsfPossibleDoubleCount(input.rows, input.currency),
     },
     hasEntities: blocks.length > 0,
     explanation: { personal: NET_WORTH_PERSONAL_EXPLANATION, family: NET_WORTH_FAMILY_EXPLANATION, jointSplit },

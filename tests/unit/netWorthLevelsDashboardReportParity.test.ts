@@ -102,11 +102,14 @@ async function dashboard(t: Record<string, Row[]>, options: Parameters<typeof ma
 const party = (l: NetWorthLevels, key: string) => l.personal.parties.find((p) => p.key === key)!;
 
 describe('Dashboard loader: PO household (hand-calculated oracle)', () => {
-  it('the previously reported figures are unchanged: assets 2,896,298, liabilities 1,385,857, net worth 1,510,441', async () => {
+  it('summary.netWorth is the PERSONAL figure (PO decision 16-10-2026): assets 2,763,298, liabilities 1,385,857, net worth 1,377,441; the previously reported 1,510,441 is the history basis', async () => {
     const d = await dashboard(poHousehold());
-    expect(d.totalAssetsCombined).toBe(2_896_298);
+    expect(d.totalAssetsCombined).toBe(2_763_298);
+    expect(d.totalRetirement).toBe(503_000);
     expect(d.totalLiabilities).toBe(1_385_857);
-    expect(d.netWorth).toBe(1_510_441);
+    expect(d.netWorth).toBe(1_377_441);
+    expect(d.netWorthBasis!.history).toMatchObject({ netWorth: 1_510_441, totalAssets: 2_896_298, totalLiabilities: 1_385_857, comparableToPersonal: false });
+    expect(d.netWorthBasis!.entityHeld).toMatchObject({ retirement: 133_000, liabilities: 0, net: 133_000 });
   });
 
   it('builds the two levels: Self 543,941, Spouse 833,500, personal 1,377,441, SMSF 133,000, family 1,510,441', async () => {
@@ -122,10 +125,12 @@ describe('Dashboard loader: PO household (hand-calculated oracle)', () => {
     expect(l.family.liabilities).toBe(1_385_857);
   });
 
-  it("today's figure is reproducible: the family level equals the previously reported net worth with an empty bridge", async () => {
+  it("the previously reported figure stays reproducible: the family level equals the history-basis net worth with an empty bridge, and the personal summary equals the personal level", async () => {
     const d = await dashboard(poHousehold());
     const l = d.netWorthLevels!;
-    expect(l.bridge.previouslyReported).toBe(d.netWorth);
+    expect(l.bridge.previouslyReported).toBe(d.netWorthBasis!.history.netWorth);
+    expect(l.bridge.personalSummaryNet).toBe(d.netWorth);
+    expect(l.bridge.personalParityOk).toBe(true);
     expect(l.bridge.parityOk).toBe(true);
     expect(l.bridge.lines).toEqual([]);
   });
@@ -214,9 +219,11 @@ describe('SMSF property loan counted once (loader level)', () => {
       smsf_funds: [{ id: 'f', user_id: USER, retirement_account_id: 'r-fund', mode: 'detailed' }],
     }, extra);
 
-  it('previous behaviour is preserved in summary.netWorth (-230,000) and the family figure counts the loan once (135,000)', async () => {
+  it('the SMSF fund row (135,000, net of its loan) is the SMSF block, not personal (PO decision 16-10-2026); the history basis keeps the old -230,000; the family figure counts the loan once (135,000)', async () => {
     const d = await dashboard(smsfHousehold());
-    expect(d.netWorth).toBe(135_000 - 365_000);
+    expect(d.netWorth).toBe(0);
+    expect(d.totalLiabilities).toBe(0);
+    expect(d.netWorthBasis!.history.netWorth).toBe(135_000 - 365_000);
     const l = d.netWorthLevels!;
     expect(l.family.net).toBe(135_000);
     expect(l.family.liabilities).toBe(0);
@@ -262,8 +269,10 @@ describe('registered entities at family level (PO decision 16-10-2026)', () => {
       business_entities: [entity('co', 'company', 40, 500_000), entity('tr', 'family_trust', 50, 300_000), entity('hu', 'huf', 100, 200_000)],
     });
     const d = await dashboard(t);
-    // previously reported: every entity at its ownership percentage: 100,000 + 200,000 + 150,000 + 200,000
-    expect(d.netWorth).toBe(650_000);
+    // PERSONAL: only the savings. The previously reported (history) basis counted every entity at its ownership percentage:
+    // 100,000 + 200,000 + 150,000 + 200,000.
+    expect(d.netWorth).toBe(100_000);
+    expect(d.netWorthBasis!.history.netWorth).toBe(650_000);
     const l = d.netWorthLevels!;
     expect(l.personal.total.net).toBe(100_000);
     expect(l.entities.byKind.company.net).toBe(200_000);
@@ -296,9 +305,10 @@ describe('Monthly Report reads the SAME model as the Dashboard (single source of
     expect(data.levels).toEqual(source.dashboard.netWorthLevels);
     expect(data.levels.personal.total.net).toBe(1_377_441);
     expect(data.levels.family.net).toBe(1_510_441);
-    // The previously reported basis (movement vs earlier months) is unchanged.
-    expect(data.netWorth).toBe(1_510_441);
-    expect(data.totalAssets).toBe(2_896_298);
+    // The section's own totals are PERSONAL; the family figure is its own labelled value.
+    expect(data.netWorth).toBe(1_377_441);
+    expect(data.totalAssets).toBe(2_763_298);
+    expect((data as unknown as { familyNetWorth: number }).familyNetWorth).toBe(1_510_441);
     const summary = (nw.chartData as { summary: string }).summary;
     expect(summary).toContain('Personal net worth');
     expect(summary).toContain('$1,377,441');

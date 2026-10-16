@@ -3,6 +3,7 @@ import { loadDashboard, getLatestSnapshotAsOf, type LatestSnapshot } from '@/lib
 import { memoClientId, memoInRequest } from '@/lib/services/requestMemo';
 import { resolveAssumptions, getAssumptionValue, type RawForecastAssumption, type RawGlobalAssumption } from '@/lib/engines/forecast/assumptions';
 import { runForecastCalculation, computeForecastInputHash, isForecastTypeSupported, FORECAST_ENGINE_VERSION } from '@/lib/engines/forecast/engine';
+import { resolveVarianceActual } from '@/lib/engines/forecast/varianceBasis';
 import type { NetWorthCalculatorInput, PlannedFinancialEvent } from '@/lib/engines/forecast/netWorthCalculator';
 import { round2 } from '@/lib/engines/forecast/monthlyPrimitives';
 import type { GoalCalculatorInput } from '@/lib/engines/forecast/goalCalculator';
@@ -517,8 +518,9 @@ async function buildCalculatorInput(
     // conversion (lib/read-models/retirement.ts computeRetirement).
     const currentBalance = retirementPosition.currentBalance;
     // LR-6 (WP-07, NEG-06 "forecast contaminates household") — SMSF-fund-
-    // linked accounts stay IN currentBalance above (SMSF wealth genuinely
-    // belongs in the household's retirement net worth), but must never
+    // linked accounts (a member balance recorded against a person) stay IN currentBalance above; rows owned by the
+    // SMSF itself (owner 'smsf') are fund-level and were left out of it by loadRetirementForecastPosition (PO decision
+    // 16-10-2026, personal basis). Linked accounts must never
     // contribute to this household FORECAST's contribution component. Before
     // this fix nothing filtered them here at all: the only reason no live
     // numeric leak existed yet was that smsf_create_fund() has never written
@@ -1217,9 +1219,17 @@ export async function getNetWorthVariance(
   // page happened to load. Falls back to live dashboard data when no
   // snapshot has been recorded yet (e.g. a brand-new user's very first
   // session, before loadDashboard's own upsert has run).
-  const comparisonDate = snapshot?.snapshot_month ?? today;
-  const actualNetWorth = snapshot?.net_worth ?? dashboard.netWorth;
+  // PO decision 16-10-2026 (personal basis): the actual is taken on the SAME basis as the original run it is compared
+  // with (varianceBasis.ts), so a basis difference is never published as a forecast variance.
   const originalRun = originalRunResult.data;
+  const resolvedActual = resolveVarianceActual({
+    category: 'net_worth',
+    runEngineVersion: originalRun?.engine_version ?? null,
+    snapshot,
+    dashboard,
+  });
+  const comparisonDate = resolvedActual.usedSnapshot && snapshot ? snapshot.snapshot_month : today;
+  const actualNetWorth = resolvedActual.actual;
   if (!originalRun) {
     return {
       hasOriginal: false,
@@ -1379,11 +1389,11 @@ export interface CategoryVariance {
 // implements it) so the two cannot drift.
 export const VARIANCE_ACTUAL_BASIS: Record<VarianceForecastCategory, string> = {
   net_worth:
-    'The dated net worth from your most recent financial snapshot at or before the comparison date; live dashboard net worth when no snapshot exists yet.',
+    'Personal net worth (SMSF, trust and company amounts are not included). The dated net worth from your most recent financial snapshot at or before the comparison date when stored history is on the same basis; otherwise live personal net worth. A forecast built before 16-10-2026 is compared on the earlier basis, which counted those entity amounts.',
   retirement:
-    'Sum of current_balance across every active row in your Retirement register (retirement_accounts), converted to your reporting currency. Your SMSF is one such row — its single canonical home — so its value is counted exactly once and is not added again from the SMSF fund record.',
-  investment: 'Sum of current_value across every active row in your Investments register (investments), converted to your reporting currency.',
-  debt: 'Sum of balance across every active household liability (liabilities), converted to your reporting currency. SMSF-linked loans are excluded here because their value is already netted inside the SMSF retirement figure.',
+    'Sum of current_balance across your PERSONAL rows of the Retirement register (retirement_accounts), converted to your reporting currency. Rows owned by the SMSF itself (fund-level amounts) are not included; an SMSF member balance recorded against you or your partner is, counted exactly once and not added again from the SMSF fund record. A forecast built before 16-10-2026 is compared on the earlier basis, which counted fund-level rows.',
+  investment: 'Sum of current_value across your personal rows of the Investments register (investments), converted to your reporting currency. Rows owned by an SMSF, trust or company are not included.',
+  debt: 'Sum of balance across every active household liability (liabilities), converted to your reporting currency. Liabilities owned by the SMSF, a trust or a company, and SMSF-linked property loans, are the debt of the entity itself and are not included; they appear in the entity block of Net Worth. A forecast built before 16-10-2026 is compared on the earlier basis.',
   goal: 'Sum of current_amount across every active goal (user_goals), plus each goal’s allocated share of any linked investment, asset or retirement account.',
   cross_border:
     'Net foreign wealth: foreign-currency assets + investments + retirement balances, less foreign-currency liabilities, converted at the FX rate assumption.',
@@ -1439,8 +1449,9 @@ async function getCurrentActualValue(
   profile: { base_currency: 'AUD' | 'INR' },
   assumptions: ResolvedAssumptionSet,
   supabase: SupabaseServerClient,
-  snapshot: LatestSnapshot | null
-): Promise<{ actual: number; target: number | null }> {
+  snapshot: LatestSnapshot | null,
+  runEngineVersion: string | null
+): Promise<{ actual: number; target: number | null; usedSnapshot?: boolean }> {
   if (category === 'net_worth' || category === 'retirement' || category === 'debt' || category === 'investment') {
     // net_worth prefers the resolved comparison-date snapshot (a committed,
     // dated figure) over live present-moment data — this is what makes the
@@ -1448,12 +1459,10 @@ async function getCurrentActualValue(
     // categories have no per-category historical snapshot to draw on (see
     // financial_snapshots' columns), so they remain live/present-moment,
     // consistent with comparisonDate itself falling back to "today" for them.
-    if (category === 'net_worth' && snapshot) return { actual: snapshot.net_worth, target: null };
+    // PO decision 16-10-2026 (personal basis): the actual is taken on the same basis as the original run (varianceBasis.ts).
     const dashboard = await loadDashboard(userId, supabase);
-    if (category === 'net_worth') return { actual: dashboard.netWorth, target: null };
-    if (category === 'retirement') return { actual: dashboard.totalRetirement, target: null };
-    if (category === 'investment') return { actual: dashboard.totalInvestments, target: null };
-    return { actual: dashboard.totalLiabilities, target: 0 };
+    const resolved = resolveVarianceActual({ category, runEngineVersion, snapshot: category === 'net_worth' ? snapshot : null, dashboard });
+    return { actual: resolved.actual, target: category === 'debt' ? 0 : null, usedSnapshot: resolved.usedSnapshot };
   }
   if (category === 'goal') {
     // LR-7 WP-11 — same fix as buildCalculatorInput's 'goal' branch above:
@@ -1569,17 +1578,17 @@ export async function getForecastVariance(
   // dashboard hasn't been loaded this month). dataLastUpdated is only set
   // when a snapshot actually backed the comparison, so callers can
   // distinguish "grounded in recorded data" from "live/present-moment".
-  const effectiveComparisonDate = snapshot?.snapshot_month ?? requestedDate;
-  const dataLastUpdated = snapshot?.snapshot_month ?? null;
+  let effectiveComparisonDate = snapshot?.snapshot_month ?? requestedDate;
+  let dataLastUpdated = snapshot?.snapshot_month ?? null;
 
   const profile = profileResult.data ?? { base_currency: 'AUD' as const, country_code: null };
   const assumptions = await loadResolvedAssumptions(userId, profileId, scenarioId, profile.country_code, supabase);
   // WP-05 (DC-14): a failed read of the actual side is reported as
   // 'unavailable' -- never as an actual of 0, which the variance bands would
   // otherwise score as "significantly off track".
-  let actualResult: { actual: number; target: number | null };
+  let actualResult: { actual: number; target: number | null; usedSnapshot?: boolean };
   try {
-    actualResult = await getCurrentActualValue(userId, category, profile, assumptions, supabase, snapshot);
+    actualResult = await getCurrentActualValue(userId, category, profile, assumptions, supabase, snapshot, originalRunResult.data?.engine_version ?? null);
   } catch {
     return {
       forecastCategory: category,
@@ -1604,6 +1613,11 @@ export async function getForecastVariance(
     };
   }
   const { actual: actualTillDate, target: liveTarget } = actualResult;
+  // Net worth only: when the stored snapshot was not the actual (basis difference), the comparison is live, not dated.
+  if (category === 'net_worth' && actualResult.usedSnapshot === false) {
+    effectiveComparisonDate = requestedDate;
+    dataLastUpdated = null;
+  }
 
   const originalRun = originalRunResult.data;
   if (!originalRun) {

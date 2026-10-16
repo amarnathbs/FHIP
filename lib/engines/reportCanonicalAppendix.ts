@@ -26,6 +26,7 @@
 import type { CanonicalFinancialSnapshot } from '@/lib/read-models/snapshot';
 import { NON_SPENDING_LABELS, type NonSpendingBucket } from '@/lib/read-models/core/spendingRules';
 import { bankBalancesNotInNetWorth } from '@/lib/read-models/bankBalanceDisclosure';
+import { isPersonalBasisRow } from '@/lib/engines/netWorthBasis';
 
 export const CANONICAL_APPENDIX_VERSION = 2 as const;
 
@@ -242,11 +243,17 @@ export function buildCanonicalAppendix(snapshot: CanonicalFinancialSnapshot): Ca
   }
 
   // ---- Balance sheet (Net Worth) ----------------------------------------------
+  // PO decision 16-10-2026 (personal basis): the tables list every register row, but a row held by an ENTITY (owner
+  // smsf / family_trust / company, or an SMSF fund's own property loan) is NOT counted in the personal figures the
+  // report shows; it is labelled and left out of `countedTotal` and of the net worth reconciliation below.
+  const ENTITY_NOTE = 'Held by an entity (SMSF, trust or company): not in personal net worth; shown in the entity block and family net worth';
+  const rowNote = (entityHeld: boolean, unconverted: boolean) =>
+    entityHeld ? ENTITY_NOTE : unconverted ? 'Not counted: currency cannot be converted' : null;
   const { assets, investments, retirement, liabilities } = snapshot;
   if (assets.status === 'ok') {
     tables.push(table('assets', 'Assets', 'balance', assets.lines.map((l) => ({
       name: l.name, detail: l.assetClass, amountNative: l.value.amountNative, currency: l.value.currency, amountReporting: l.value.amountReporting,
-      provenance: l.provenance.label, counted: l.value.amountReporting !== null, note: l.value.amountReporting === null ? 'Not counted: currency cannot be converted' : null,
+      provenance: l.provenance.label, counted: l.value.amountReporting !== null && isPersonalBasisRow(l), note: rowNote(!isPersonalBasisRow(l), l.value.amountReporting === null),
     }))));
     const openBalances = bankBalancesNotInNetWorth(assets.bankBalanceEvidence);
     if (openBalances) notInCalculations.push(openBalances);
@@ -254,7 +261,7 @@ export function buildCanonicalAppendix(snapshot: CanonicalFinancialSnapshot): Ca
   if (investments.status === 'ok') {
     tables.push(table('investments', 'Investments', 'balance', investments.lines.map((l) => ({
       name: l.name, detail: l.investmentType, amountNative: l.value.amountNative, currency: l.value.currency, amountReporting: l.value.amountReporting,
-      provenance: l.provenance.label, counted: l.value.amountReporting !== null, note: l.value.amountReporting === null ? 'Not counted: currency cannot be converted' : null,
+      provenance: l.provenance.label, counted: l.value.amountReporting !== null && isPersonalBasisRow(l), note: rowNote(!isPersonalBasisRow(l), l.value.amountReporting === null),
     }))));
     if (investments.unpublished.count > 0) {
       notInCalculations.push({ label: investments.unpublished.label, count: investments.unpublished.count, total: investments.unpublished.total });
@@ -263,17 +270,26 @@ export function buildCanonicalAppendix(snapshot: CanonicalFinancialSnapshot): Ca
   if (retirement.status === 'ok') {
     tables.push(table('retirement', 'Retirement accounts', 'balance', retirement.lines.map((l) => ({
       name: l.name, detail: l.accountType, amountNative: l.balance.amountNative, currency: l.balance.currency, amountReporting: l.balance.amountReporting,
-      provenance: l.provenance.label, counted: l.balance.amountReporting !== null, note: l.balance.amountReporting === null ? 'Not counted: currency cannot be converted' : null,
+      provenance: l.provenance.label, counted: l.balance.amountReporting !== null && isPersonalBasisRow(l), note: rowNote(!isPersonalBasisRow(l), l.balance.amountReporting === null),
     }))));
   } else unavailable.push('retirement');
   if (liabilities.status === 'ok') {
     tables.push(table('liabilities', 'Liabilities', 'balance', liabilities.lines.map((l) => ({
       name: l.name, detail: l.debtType, amountNative: l.balance.amountNative, currency: l.balance.currency, amountReporting: l.balance.amountReporting,
-      provenance: l.provenance.label, counted: l.balance.amountReporting !== null, note: l.balance.amountReporting === null ? 'Not counted: currency cannot be converted' : null,
+      provenance: l.provenance.label,
+      counted: l.balance.amountReporting !== null && isPersonalBasisRow(l, { smsfLinkedLoan: l.smsfPropertyLoanLinked }),
+      note: rowNote(!isPersonalBasisRow(l, { smsfLinkedLoan: l.smsfPropertyLoanLinked }), l.balance.amountReporting === null),
     }))));
   } else unavailable.push('liabilities');
   if (assets.status === 'ok' && investments.status === 'ok' && retirement.status === 'ok' && liabilities.status === 'ok') {
-    reconciliation.netWorth = { assets: assets.total, investments: investments.publishedTotal, retirement: retirement.totalBalance, liabilities: liabilities.totalBalance };
+    const personalSum = <T,>(lines: readonly T[], keep: (l: T) => boolean, amount: (l: T) => number | null) =>
+      Math.round(lines.filter(keep).reduce((sum, l) => sum + (amount(l) ?? 0), 0) * 100) / 100;
+    reconciliation.netWorth = {
+      assets: personalSum(assets.lines, (l) => isPersonalBasisRow(l), (l) => l.value.amountReporting),
+      investments: personalSum(investments.lines, (l) => isPersonalBasisRow(l), (l) => l.value.amountReporting),
+      retirement: personalSum(retirement.lines, (l) => isPersonalBasisRow(l), (l) => l.balance.amountReporting),
+      liabilities: personalSum(liabilities.lines, (l) => isPersonalBasisRow(l, { smsfLinkedLoan: l.smsfPropertyLoanLinked }), (l) => l.balance.amountReporting),
+    };
   }
 
   const expensesWindow = expenses.status === 'ok' ? expenses : null;

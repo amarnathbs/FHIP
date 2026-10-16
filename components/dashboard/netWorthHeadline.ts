@@ -11,7 +11,11 @@ import type { DashboardSummary } from '@/lib/engines/dashboard';
  */
 export function netWorthHeadline(summary: DashboardSummary): { label: string; value: number; sub: string | null } {
   const levels = summary.netWorthLevels;
-  if (!levels) return { label: 'Net Worth', value: summary.netWorth, sub: null };
+  if (!levels) {
+    // summary.netWorth is the PERSONAL figure (PO decision 16-10-2026). Say so when entity amounts were left out of it.
+    const leftOutEntities = summary.netWorthBasis ? !summary.netWorthBasis.history.comparableToPersonal : false;
+    return { label: leftOutEntities ? 'Net Worth (personal)' : 'Net Worth', value: summary.netWorth, sub: null };
+  }
   const family = formatMoneyWhole(levels.family.net, summary.currency);
   return {
     label: 'Net Worth (personal)',
