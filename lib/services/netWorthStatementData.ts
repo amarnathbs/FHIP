@@ -5,10 +5,12 @@ import { loadNetWorthLevels } from '@/lib/services/netWorthLevelsData';
 import { netWorthHeadline } from '@/components/dashboard/netWorthHeadline';
 import { bucketAssetClass } from '@/lib/engines/dashboard';
 import type { NetWorthRowInput } from '@/lib/engines/netWorthLevels';
+import { toReporting } from '@/lib/read-models/core/currency';
 import {
   buildNetWorthStatements,
   type AssetGroupKey,
   type NetWorthStatementSet,
+  type SmsfFundInput,
   type StatementSourceRow,
 } from '@/lib/engines/netWorthStatement';
 
@@ -77,10 +79,58 @@ export async function loadNetWorthStatementData(userId: string, client?: Supabas
       nativeAmount: line && Number.isFinite(line.native) ? line.native : null,
       nativeCurrency: line?.currency ?? r.currencyCode ?? null,
       group: line?.group ?? null,
+      masterItemKey: r.masterItemKey ?? null,
       smsfLinkedLoan: r.smsfLinkedLoan,
       nettedInFundBalance: r.nettedInFundBalance,
     };
   });
+
+  // SMSF funds and their holdings (smsf_funds / smsf_holdings): a Detailed-mode fund's holdings are its assets. Fail-soft: a failed
+  // read is reported on the SMSF page ("could not be read"), never turned into an empty or invented list.
+  const smsfFunds: SmsfFundInput[] = [];
+  let smsfFundsUnavailable = false;
+  try {
+    const fundsRes = await supabase.from('smsf_funds').select('id, fund_name, mode, is_active').eq('user_id', userId).eq('is_active', true);
+    if (fundsRes.error) throw fundsRes.error;
+    const funds = (fundsRes.data ?? []) as { id: string; fund_name: string | null; mode: string | null }[];
+    const detailedIds = funds.filter((f) => f.mode === 'detailed').map((f) => f.id);
+    let holdings: { id: string; smsf_fund_id: string; holding_name: string | null; holding_class: string | null; value: number | string | null; currency_code: string | null }[] = [];
+    if (detailedIds.length > 0) {
+      const holdingsRes = await supabase
+        .from('smsf_holdings')
+        .select('id, smsf_fund_id, holding_name, holding_class, value, currency_code')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .in('smsf_fund_id', detailedIds);
+      if (holdingsRes.error) throw holdingsRes.error;
+      holdings = (holdingsRes.data ?? []) as typeof holdings;
+    }
+    for (const f of funds) {
+      smsfFunds.push({
+        fundId: f.id,
+        fundName: f.fund_name?.trim() || 'SMSF',
+        mode: f.mode === 'detailed' ? 'detailed' : 'summary',
+        holdings: holdings
+          .filter((h) => h.smsf_fund_id === f.id)
+          .map((h): StatementSourceRow => {
+            const native = h.value === null || h.value === undefined ? null : Number(h.value);
+            const currencyCode = h.currency_code ?? 'AUD';
+            return {
+              id: `smsf_holdings:${h.id}`,
+              register: 'assets',
+              name: h.holding_name?.trim() || 'SMSF holding',
+              owner: 'smsf',
+              amountReporting: native === null || !Number.isFinite(native) ? null : toReporting(native, currencyCode, snapshot.fx),
+              nativeAmount: native !== null && Number.isFinite(native) ? native : null,
+              nativeCurrency: currencyCode,
+              group: null,
+            };
+          }),
+      });
+    }
+  } catch {
+    smsfFundsUnavailable = true;
+  }
 
   let holderName: string | null = null;
   try {
@@ -107,6 +157,10 @@ export async function loadNetWorthStatementData(userId: string, client?: Supabas
     fx: { fxRateAudInr: snapshot.fx.fxRateAudInr, rateSource: snapshot.fx.rateSource },
     importedNotInNetWorth: unpublished.count > 0 ? { count: unpublished.count, amount: unpublished.total } : null,
     registryValueNotProvided,
+    smsfFunds,
+    smsfFundsUnavailable,
+    dashboardPersonal: { netWorth: summary.netWorth, totalAssets: summary.totalAssetsCombined, totalLiabilities: summary.totalLiabilities },
+    dashboardHistoryNetWorth: summary.netWorthBasis?.history.netWorth ?? null,
     dashboardHeadline: { label: headline.label, value: headline.value },
   });
 

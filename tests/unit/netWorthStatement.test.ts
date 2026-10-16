@@ -149,17 +149,37 @@ describe('the three SMSF data shapes (PO example: asset 503,000, liability 370,0
   const smsfBalance = () => row('retirement', 'Other Retirement Assets', 'smsf', 133_000);
   const memberSmsf = () => row('retirement', 'SMSF', 'self', 503_000);
 
-  it('(A) today: 503,000 owner self + 133,000 owner smsf -> personal 1,377,441, SMSF 133,000, family 1,510,441', () => {
+  it("(A) today, personal basis: the SMSF section's fund record (master key smsf, owner self) beside the fund-level row is shown but NOT counted -> personal 874,441, SMSF 133,000, family 1,007,441", () => {
+    const { set } = build([...poPersonalRows(), row('retirement', 'SMSF', 'self', 503_000, { masterItemKey: 'smsf' }), smsfBalance()]);
+    expect(set.personal.totals.net).toBe(874_441);
+    expect(set.personal.assetGroups.find((g) => g.key === 'retirement')).toBeUndefined();
+    expect(set.entities[0]).toMatchObject({ entityKind: 'smsf', net: 133_000, contribution: 133_000, itemisation: 'net_only' });
+    expect(set.entities[0].shownNotCounted.map((l) => l.amount)).toEqual([503_000]);
+    expect(set.entities[0].enteredAs).toEqual(['Other Retirement Assets']);
+    expect(set.entities[0].assets).toEqual([]);
+    expect(set.family.totals.net).toBe(1_007_441);
+    expect(set.family.dashboard.bridgeLines.map((l) => l.amount)).toEqual([503_000]);
+    expect(set.parity.ok).toBe(true);
+  });
+
+  it('(A0) a personal retirement row named SMSF WITHOUT the fund key is a genuine personal row: personal 1,377,441, family 1,510,441', () => {
     const { set } = build([...poPersonalRows(), memberSmsf(), smsfBalance()]);
     expect(set.personal.totals.net).toBe(1_377_441);
     expect(set.personal.assetGroups.find((g) => g.key === 'retirement')!.subtotal).toBe(503_000);
-    expect(set.entities).toHaveLength(1);
     expect(set.entities[0]).toMatchObject({ entityKind: 'smsf', net: 133_000, contribution: 133_000, itemisation: 'net_only' });
     expect(set.entities[0].notItemisedNote).toMatch(/not itemised yet/);
     expect(set.entities[0].enteredAs).toEqual(['Other Retirement Assets']);
     expect(set.entities[0].assets).toEqual([]); // no asset rows are invented: only the one net figure exists
     expect(set.family.totals.net).toBe(1_510_441);
     expect(set.family.contributionSum).toBe(1_510_441);
+    expect(set.parity.ok).toBe(true);
+  });
+
+  it("a fund record with NO fund-level row is the fund's own balance: counted once, in the SMSF block, not as a personal asset", () => {
+    const { set } = build([...poPersonalRows(), row('retirement', 'SMSF', 'self', 503_000, { masterItemKey: 'smsf' })]);
+    expect(set.personal.totals.net).toBe(874_441);
+    expect(set.entities[0]).toMatchObject({ net: 503_000, shownNotCounted: [] });
+    expect(set.family.totals.net).toBe(874_441 + 503_000);
     expect(set.parity.ok).toBe(true);
   });
 
@@ -342,6 +362,25 @@ describe('NEGATIVE CONTROLS: the parity check really fails when an entity amount
     // The statement classifies via the model, so the tampered row is now personal while the supplied model still says it is the SMSF's.
     expect(set.personal.totals.net).toBe(874_441);
     expect(set.parity.ok).toBe(false);
+  });
+
+  it('LEAK (fund record): a model that still counts the SMSF fund record (key smsf) as a personal asset is caught by the statement', () => {
+    const rs = [...rows(), row('retirement', 'SMSF', 'self', 503_000, { masterItemKey: 'smsf' })];
+    // An out-of-date model: the same rows WITHOUT the fund key, so the 503,000 lands in the personal level.
+    const stale = computeNetWorthLevels({ currency: 'AUD', rows: rs.map((r) => ({ ...toModelRow(r), masterItemKey: null })) });
+    expect(stale.personal.total.net).toBe(1_377_441);
+    const { set } = build(rs, { levels: stale });
+    expect(set.parity.ok).toBe(false);
+    expect(set.parity.messages.join(' ')).toMatch(/Personal level: the itemised lines add to assets 2260298/);
+    // and with the real model the same rows pass
+    expect(build(rs).set.parity.ok).toBe(true);
+  });
+
+  it('the Dashboard summary personal figures must equal the personal statement: a differing summary is caught', () => {
+    expect(build(rows(), { dashboardPersonal: { netWorth: 874_441, totalAssets: 2_260_298, totalLiabilities: 1_385_857 } }).set.parity.ok).toBe(true);
+    const bad = build(rows(), { dashboardPersonal: { netWorth: 1_377_441, totalAssets: 2_763_298, totalLiabilities: 1_385_857 } });
+    expect(bad.set.parity.ok).toBe(false);
+    expect(bad.set.parity.messages.join(' ')).toMatch(/Dashboard personal net worth is 1377441/);
   });
 
   it('DOUBLE COUNT: family total that counts the entity twice is caught', () => {

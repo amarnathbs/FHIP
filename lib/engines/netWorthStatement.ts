@@ -47,7 +47,7 @@ export type StatementCurrency = 'AUD' | 'INR';
 export type AssetGroupKey = 'property' | 'cash' | 'investments' | 'retirement' | 'other';
 export type LineStatus = 'ok' | 'not_provided' | 'not_converted';
 export type EntityItemisation = 'itemised' | 'net_only' | 'totals_only';
-export type EntityDataSource = 'entity_level_rows' | 'owner_tagged_rows' | 'registry_detail' | 'registry_summary';
+export type EntityDataSource = 'entity_level_rows' | 'smsf_holdings' | 'owner_tagged_rows' | 'registry_detail' | 'registry_summary';
 
 export const ASSET_GROUP_ORDER: readonly AssetGroupKey[] = ['property', 'cash', 'investments', 'retirement', 'other'];
 export const ASSET_GROUP_LABELS: Readonly<Record<AssetGroupKey, string>> = {
@@ -77,6 +77,8 @@ export interface StatementSourceRow {
   nativeCurrency: string | null;
   /** Assets side only: which group the row is listed under. */
   group: AssetGroupKey | null;
+  /** Retirement rows: 'smsf' marks the SMSF section's fund record (entity-held whoever owns it). Passed through to the model. */
+  masterItemKey?: string | null;
   smsfLinkedLoan?: boolean;
   nettedInFundBalance?: boolean;
 }
@@ -114,6 +116,14 @@ export interface EntityStatementInput {
   /** The entity's net at 100% as the model reports it. Never recomputed here. */
   net: number | null;
   source: EntityDataSource;
+}
+
+/** A fund's holdings as stored (smsf_funds + smsf_holdings), already converted once to the reporting currency. */
+export interface SmsfFundInput {
+  fundId: string;
+  fundName: string;
+  mode: 'summary' | 'detailed';
+  holdings: readonly StatementSourceRow[];
 }
 
 export interface TotalsView {
@@ -183,6 +193,12 @@ export interface EntityStatement {
   contributionText: string;
   nettedLoans: { count: number; amount: number } | null;
   notItemisedNote: string | null;
+  /** SMSF: true when no liability is recorded at the fund (the model counts the net value only); never invented. */
+  liabilitiesNotRecorded: boolean;
+  /** True when the MODEL's own entity figures are one net value (the itemised lines, if any, come from elsewhere, e.g. fund holdings). */
+  netOnlyInModel: boolean;
+  /** The SMSF fund record(s) shown but NOT counted because a fund-level row already carries the fund (model: suppressedFundRecord). */
+  shownNotCounted: StatementLine[];
   /** Net-only entities: the register rows the single net figure was entered as (names, for the note). */
   enteredAs: string[];
   notIncluded: NotIncludedLine[];
@@ -260,6 +276,14 @@ export interface NetWorthStatementInput {
   importedNotInNetWorth?: { count: number; amount: number } | null;
   /** Future/explicit entity-level rows; override the data assembled from today's rows for that entity id. */
   entityInputs?: readonly EntityStatementInput[];
+  /** SMSF funds and their holdings (smsf_funds / smsf_holdings). A Detailed-mode fund's holdings itemise the SMSF page. */
+  smsfFunds?: readonly SmsfFundInput[];
+  /** The SMSF funds/holdings could not be read: said on the SMSF page, never guessed. */
+  smsfFundsUnavailable?: boolean;
+  /** The Dashboard summary's own personal figures (summary.netWorth / totalAssetsCombined / totalLiabilities), proven equal to the personal level. */
+  dashboardPersonal?: { netWorth: number; totalAssets: number; totalLiabilities: number } | null;
+  /** The Dashboard's history-basis figure (summary.netWorthBasis.history.netWorth), proven equal to the model's previously reported figure. */
+  dashboardHistoryNetWorth?: number | null;
   /** Registered entities (block ids `entity:<id>`) whose net value was never provided: shown "Not provided", not zero. */
   registryValueNotProvided?: readonly string[];
   /** The Dashboard headline figure (components/dashboard/netWorthHeadline), for the reconciliation line. */
@@ -273,7 +297,10 @@ const sameMoney = (a: number, b: number): boolean => Math.abs(a - b) <= 0.05;
 // Classification: ask the model where one row lands (no copy of its rule here).
 // ---------------------------------------------------------------------------------------------------------------------
 
-export type RowDestination = { level: 'personal' } | { level: 'entity'; kind: NetWorthEntityKind } | { level: 'netted_in_fund' };
+export type RowDestination =
+  | { level: 'personal' }
+  | { level: 'entity'; kind: NetWorthEntityKind; /** The SMSF section's fund record (not owned by the fund): counted only when no fund-level row exists. */ fundRecord: boolean }
+  | { level: 'netted_in_fund' };
 
 export function toModelRow(r: StatementSourceRow, amountReporting: number | null = r.amountReporting): NetWorthRowInput {
   return {
@@ -283,6 +310,7 @@ export function toModelRow(r: StatementSourceRow, amountReporting: number | null
     owner: r.owner,
     amountReporting,
     currencyCode: r.nativeCurrency,
+    masterItemKey: r.masterItemKey,
     smsfLinkedLoan: r.smsfLinkedLoan,
     nettedInFundBalance: r.nettedInFundBalance,
   };
@@ -295,7 +323,7 @@ export function classifyRow(r: StatementSourceRow, currency: string): RowDestina
   if (block) {
     const t = block.entityTotals;
     if (block.nettedLoans && t.totalAssets === 0 && t.liabilities === 0) return { level: 'netted_in_fund' };
-    return { level: 'entity', kind: block.kind };
+    return { level: 'entity', kind: block.kind, fundRecord: block.kind === 'smsf' && r.register === 'retirement' && r.owner !== 'smsf' };
   }
   return { level: 'personal' };
 }
@@ -383,9 +411,11 @@ function buildEntityInputs(input: NetWorthStatementInput, destinations: Map<stri
       continue;
     }
     if (block.source === 'owner_tag') {
+      const suppressed = !!block.suppressedFundRecord;
       const mine = input.rows.filter((r) => {
         const d = destinations.get(r.id);
-        return d && d.level === 'entity' && d.kind === block.kind;
+        if (!d || d.level !== 'entity' || d.kind !== block.kind) return false;
+        return !(suppressed && d.fundRecord); // shown but not counted: listed separately, never in the entity's lines
       });
       out.push({
         entityId: block.id,
@@ -482,7 +512,7 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
     rowCount: personalAllLines.length + assetGroups.length * 2 + 2,
   };
   if (levels.dataStatus.duplicateRisk) personal.notes.push(levels.dataStatus.duplicateRisk);
-  const doubleCount = (levels.dataStatus as { smsfPossibleDoubleCount?: string | null }).smsfPossibleDoubleCount;
+  const doubleCount = levels.dataStatus.smsfPossibleDoubleCount;
   if (doubleCount) personal.notes.push(doubleCount);
   if (personal.importedNotInNetWorth) {
     const i = personal.importedNotInNetWorth;
@@ -520,14 +550,31 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
     else if (ein.source === 'registry_summary' || retirementOnly || !hasRows) itemisation = 'net_only';
     else itemisation = 'itemised';
 
+    const netOnlyInModel = itemisation === 'net_only';
+
+    // A Detailed-mode SMSF fund: its stored holdings (smsf_holdings) ARE the fund's assets and itemise the SMSF page. The loan
+    // is shown as "not recorded at the fund" unless a linked loan is already inside the balance (then it is a note). Nothing
+    // about the fund's liabilities is invented, and the net value counted stays the model's figure.
+    const detailedFunds = block.kind === 'smsf' && ein.source === 'owner_tagged_rows' ? (input.smsfFunds ?? []).filter((f) => f.mode === 'detailed' && f.holdings.length > 0) : [];
+    let holdingLines: StatementLine[] = [];
+    if (detailedFunds.length > 0) {
+      holdingLines = detailedFunds
+        .flatMap((f) => f.holdings.map((h) => toLine(h, currency)))
+        .filter((l) => l.status !== 'not_converted')
+        .sort(byNameThenId);
+      itemisation = 'itemised';
+    }
+    const fromHoldings = holdingLines.length > 0;
+
     const notItemisedNote = itemisation === 'itemised' ? null : itemisation === 'totals_only' ? 'Individual line items for this entity are recorded under Companies & Trusts; only their totals are shown here.' : ENTITY_NOT_ITEMISED_NOTE;
 
-    const assetsTotal = itemisation === 'net_only' ? null : t.totalAssets;
-    const liabilitiesTotal = itemisation === 'net_only' ? null : t.liabilities;
+    const liabilitiesNotRecorded = fromHoldings && !block.nettedLoans && liabilityLinesE.length === 0;
+    const assetsTotal = fromHoldings ? sumCounted(holdingLines) : itemisation === 'net_only' ? null : t.totalAssets;
+    const liabilitiesTotal = liabilitiesNotRecorded ? null : itemisation === 'net_only' ? null : t.liabilities;
     const net = valueMissing ? null : t.net;
     const contribution = valueMissing ? null : block.included.net;
 
-    let shownAssets = assetLines;
+    let shownAssets = fromHoldings ? holdingLines : assetLines;
     const enteredAs = itemisation === 'net_only' ? assetLines.map((l) => l.name) : [];
     if (itemisation === 'net_only') shownAssets = [];
     if (itemisation === 'totals_only') {
@@ -539,7 +586,7 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
         : liabilityLinesE;
 
     // Parity of the itemised lines against the model's entity totals.
-    if (itemisation === 'itemised') {
+    if (itemisation === 'itemised' && !fromHoldings) {
       const a = sumCounted(assetLines);
       const l = sumCounted(liabilityLinesE);
       if (!sameMoney(a, t.totalAssets) || !sameMoney(l, t.liabilities)) {
@@ -556,10 +603,24 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
           : `Counted in full (100%) in the family total.`;
 
     const notes: string[] = [];
-    if (block.note) notes.push(block.note);
+    // The model's note for a suppressed fund record quotes the amount unformatted; the "Shown but not counted" list carries it instead.
+    if (block.note && !block.suppressedFundRecord) notes.push(block.note);
     if (block.nettedLoans) {
       notes.push(`${block.nettedLoans.count} SMSF property loan${block.nettedLoans.count === 1 ? '' : 's'} totalling ${formatMoneyPlain(block.nettedLoans.amount, currency)} ${block.nettedLoans.count === 1 ? 'is' : 'are'} already deducted inside the fund balance and ${block.nettedLoans.count === 1 ? 'is' : 'are'} not deducted again.`);
     }
+    if (fromHoldings) {
+      const gap = cents((assetsTotal as number) - (t.net));
+      notes.push(
+        `Assets are the fund's holdings (${detailedFunds.map((f) => f.fundName).join(', ')}), recorded in Detailed mode. ${liabilitiesNotRecorded ? 'No loan or other liability is recorded at the fund, so none is shown here (not recorded at the fund). ' : ''}The net value counted for the fund is ${formatMoneyPlain(t.net, currency)}${assetLines.length > 0 ? ` (entered as: ${assetLines.map((l) => l.name).join(', ')})` : ''}${Math.abs(gap) > 0.05 && !block.nettedLoans ? `; the holdings add to ${formatMoneyPlain(assetsTotal as number, currency)}, so ${formatMoneyPlain(Math.abs(gap), currency)} of the difference is not itemised` : ''}.`,
+      );
+    }
+    if (block.kind === 'smsf' && input.smsfFundsUnavailable) notes.push('The fund’s holdings could not be read, so they are not itemised here.');
+    const shownNotCounted = input.rows
+      .filter((r) => {
+        const d = destinations.get(r.id);
+        return !!block.suppressedFundRecord && !!d && d.level === 'entity' && d.kind === block.kind && d.fundRecord;
+      })
+      .map((r) => toLine(r, currency));
     if (valueMissing) notes.push(`${NOT_PROVIDED_LABEL}: the value of this ${kindLabel} has not been entered.`);
 
     entities.push({
@@ -568,7 +629,7 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
       entityKind: block.kind,
       header: headerOf(input, `${kindLabel}${block.name && block.name !== kindLabel ? ` – ${block.name}` : ''}`),
       name: block.name,
-      source: ein.source,
+      source: fromHoldings ? 'smsf_holdings' : ein.source,
       itemisation,
       assets: shownAssets,
       liabilities: shownLiabilities,
@@ -582,6 +643,9 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
       contributionText,
       nettedLoans: block.nettedLoans,
       notItemisedNote,
+      liabilitiesNotRecorded,
+      netOnlyInModel,
+      shownNotCounted,
       enteredAs,
       notIncluded: notIncludedOf(assetLinesAll.concat(liabilityLinesAll)),
       notes,
@@ -604,7 +668,7 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
     },
     ...levels.entities.blocks.map((b, i): FamilyLevelRow => {
       const e = entities[i];
-      const netOnly = e.itemisation === 'net_only';
+      const netOnly = e.netOnlyInModel;
       return {
         key: b.id,
         label: `${NET_WORTH_ENTITY_KIND_LABELS[b.kind]}${b.name && b.name !== NET_WORTH_ENTITY_KIND_LABELS[b.kind] ? ` – ${b.name}` : ''}`,
@@ -628,9 +692,18 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
     messages.push('Personal level: net worth is not assets minus liabilities.');
   }
   if (levels.bridge.parityOk === false) messages.push('The Dashboard’s bridge to the previously reported net worth reports an unexplained difference.');
-  const personalParity = (levels.bridge as { personalParityOk?: boolean | null }).personalParityOk;
-  if (personalParity === false) messages.push('The Dashboard summary’s personal net worth differs from the personal level of the model.');
+  if (levels.bridge.personalParityOk === false) messages.push('The Dashboard summary’s personal net worth differs from the personal level of the model.');
 
+  // The Dashboard summary computes its personal figures independently of the model: they must agree line by line.
+  const dp = input.dashboardPersonal ?? null;
+  if (dp) {
+    if (!sameMoney(dp.netWorth, personalTotals.net)) messages.push(`The Dashboard personal net worth is ${dp.netWorth}, but the personal statement shows ${personalTotals.net}.`);
+    if (!sameMoney(dp.totalAssets, personalTotals.assets)) messages.push(`The Dashboard personal total assets are ${dp.totalAssets}, but the personal statement shows ${personalTotals.assets}.`);
+    if (!sameMoney(dp.totalLiabilities, personalTotals.liabilities)) messages.push(`The Dashboard personal total liabilities are ${dp.totalLiabilities}, but the personal statement shows ${personalTotals.liabilities}.`);
+  }
+  if (input.dashboardHistoryNetWorth !== null && input.dashboardHistoryNetWorth !== undefined && levels.bridge.previouslyReported !== null && !sameMoney(input.dashboardHistoryNetWorth, levels.bridge.previouslyReported)) {
+    messages.push('The Dashboard history-basis net worth differs from the previously reported figure the model was proven against.');
+  }
   const headline = input.dashboardHeadline ?? null;
   const headlineMatches = headline ? sameMoney(headline.value, personalTotals.net) : null;
   if (headlineMatches === false) messages.push(`The Dashboard headline (${headline!.label}) is ${headline!.value}, but the personal statement shows ${personalTotals.net}.`);
@@ -667,7 +740,12 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
     rowCount: familyLevels.length + contributions.length + assetGroups.length + 10,
   };
   if (levels.dataStatus.unavailable.length > 0) family.notes.push(personal.notes.find((n) => n.startsWith('Some information could not be read'))!);
-  if (entities.some((e) => e.itemisation === 'net_only')) family.notes.push('Where an entity’s value was entered as one net figure, the model counts it on the assets side; its liabilities are not itemised.');
+  for (const e of entities) {
+    if (e.shownNotCounted.length > 0) {
+      family.notes.push(`${e.header.subtitle} fund record ${e.shownNotCounted.map((l) => `"${l.name}" ${l.amount === null ? NOT_PROVIDED_LABEL : formatMoneyPlain(l.amount, currency)}`).join(', ')} is shown but not counted, because a separate fund-level row already carries the fund (see the ${e.header.subtitle} statement).`);
+    }
+  }
+  if (entities.some((e) => e.netOnlyInModel)) family.notes.push('Where an entity’s value was entered as one net figure, the model counts it on the assets side; its liabilities are not itemised.');
 
   return {
     currency,

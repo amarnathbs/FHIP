@@ -341,8 +341,8 @@ export function EntityStatementPage({ s }: { s: EntityStatement }) {
           <tbody>
             {s.liabilities.length === 0 ? (
               <tr>
-                <DataTd colSpan={2} className="italic text-gray-600">
-                  {itemised ? 'No liabilities recorded.' : 'Not itemised'}
+                <DataTd colSpan={2} className="italic text-gray-600" data-testid={s.liabilitiesNotRecorded ? 'liabilities-not-recorded' : undefined}>
+                  {s.liabilitiesNotRecorded ? 'Not recorded at the fund' : itemised ? 'No liabilities recorded.' : 'Not itemised'}
                 </DataTd>
               </tr>
             ) : (
@@ -362,7 +362,7 @@ export function EntityStatementPage({ s }: { s: EntityStatement }) {
                 Total liabilities
               </DataTh>
               <DataTd kind="num" data-testid="entity-total-liabilities">
-                <MaybeAmount value={s.liabilitiesTotal} currency={c} />
+                <MaybeAmount value={s.liabilitiesTotal} currency={c} fallback={s.liabilitiesNotRecorded ? 'Not recorded' : 'Not itemised'} />
               </DataTd>
             </Totalled>
           </tbody>
@@ -374,6 +374,20 @@ export function EntityStatementPage({ s }: { s: EntityStatement }) {
           {s.notItemisedNote}
           {s.enteredAs.length > 0 ? ` Entered as: ${s.enteredAs.join(', ')}.` : ''}
         </p>
+      ) : null}
+      {s.shownNotCounted.length > 0 ? (
+        <section aria-labelledby={`${id}-notcounted`} className="nws-notincluded mt-2" data-testid="shown-not-counted">
+          <h3 id={`${id}-notcounted`} className="text-xs font-semibold text-ink">
+            Shown but not counted
+          </h3>
+          <ul className="list-disc space-y-0.5 pl-5 text-xs text-gray-700">
+            {s.shownNotCounted.map((l) => (
+              <li key={l.id}>
+                {l.name}: {l.amount === null ? NOT_PROVIDED_LABEL : money(l.amount, c)}. A separate fund-level row already carries the fund, so counting this record as well would count the fund twice.
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
       <Block title="What this adds to the family total" id={`${id}-family`}>
         <DataTable label={`${s.header.subtitle} contribution to the family total`} className="nws-table">

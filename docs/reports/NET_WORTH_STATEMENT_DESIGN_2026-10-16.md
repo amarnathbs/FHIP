@@ -49,13 +49,23 @@ Today it is assembled from: owner-tagged register rows (SMSF fund rows, legacy F
 
 Itemisation states shown honestly: `itemised` (asset and liability rows), `totals_only` (Detailed-mode registry entity), `net_only` ("Entity assets and liabilities are not itemised yet. Only the entity's net value has been entered...", with the register row(s) it was entered as). A registered entity with no value entered is **Not provided**, adds nothing to the family total, and is never zero.
 
+## Personal basis (merged from origin/main, 17-10-2026)
+
+The statement uses the personal-basis model as shipped (`lib/engines/netWorthBasis.ts`, `netWorthLevels.ts`): **no "if present" accessors remain.** It reads `levels.bridge.personalParityOk`, `levels.dataStatus.smsfPossibleDoubleCount`, `block.suppressedFundRecord` and the bridge line `smsf_fund_record_not_counted`; and the Dashboard's own personal figures (`summary.netWorth`, `totalAssetsCombined`, `totalLiabilities`) and history figure (`summary.netWorthBasis.history.netWorth`) are proven equal to the statement in `parity`.
+
+* **Personal** = the model's personal level. The SMSF section's fund record (retirement row with `master_item_key = 'smsf'`, owned by a person) is entity-held: it is not a personal asset. Rows pass `masterItemKey` to the model, and placement is still asked of the model.
+* **Fund record beside a fund-level row (owner smsf):** the record is **shown but not counted** (SMSF page list "Shown but not counted", a family note, the bridge line, and the model's double-count notice on the personal page). With no fund-level row the record is the fund's own balance and is counted once, in the SMSF block.
+* **SMSF holdings:** when a fund is in Detailed mode its `smsf_holdings` (active rows, converted once to the reporting currency) itemise the SMSF page as assets. Liabilities are **"Not recorded at the fund"** (nothing is invented; a linked loan already inside the balance stays a note), and the net value counted stays the model's figure. A gap between holdings and net is stated, not hidden ("the holdings add to $503,000, so $370,000 of the difference is not itemised"). A failed read says "could not be read" on the page. The family page still adds the SMSF at its net.
+* **PO production household as diagnosed:** fund record 503,000 (key smsf, owner self) + Other Retirement Assets 133,000 (owner smsf) + holdings 475,000 + 3,000 + 25,000 + an inactive personal loan 365,000 (never read): personal assets 2,260,298, liabilities 1,385,857, net **874,441**; SMSF net 133,000; family **1,007,441**; the history-basis figure 1,510,441 is bridged by `+503,000`. Tested through the real loaders in `tests/unit/netWorthStatementParity.test.ts`.
+
 ## Hand oracles (PO household, AUD)
 
 Personal level: assets 2,260,298 (Property 1,522,500, Cash 21,798, Investments 590,000, Other 126,000), liabilities 1,385,857, net **874,441**. By person (joint 50/50, counted once): Self 1,044,667.50, Spouse/Partner -170,226.50.
 
 | Shape | Rows | Personal | SMSF | Family |
 |---|---|---|---|---|
-| A today | SMSF 503,000 owner self + 133,000 owner smsf | 1,377,441 | 133,000 | 1,510,441 |
+| A today (personal basis) | fund record 503,000 key smsf owner self + 133,000 owner smsf | 874,441 | 133,000 | 1,007,441 |
+| A0 | a personal row named SMSF without the fund key + 133,000 owner smsf | 1,377,441 | 133,000 | 1,510,441 |
 | B interim | the 503,000 personal row removed | 874,441 | 133,000 | 1,007,441 |
 | C future | SMSF asset 503,000 + liability 370,000 itemised | 874,441 | 503,000 - 370,000 = 133,000 | 1,007,441 |
 

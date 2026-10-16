@@ -188,6 +188,52 @@ describe('entity statements', () => {
   });
 });
 
+describe('SMSF page on the personal basis: holdings itemised, loan not recorded, fund record shown but not counted', () => {
+  function productionSet() {
+    const rows: StatementSourceRow[] = [
+      row('assets', 'Savings Account', 'self', 900, { group: 'cash' }),
+      row('retirement', 'SMSF', 'self', 503_000, { masterItemKey: 'smsf' }),
+      row('retirement', 'Other Retirement Assets', 'smsf', 133_000),
+    ];
+    const levels = computeNetWorthLevels({ currency: 'AUD', rows: rows.map((r) => toModelRow(r)) });
+    const holding = (id: string, name: string, v: number): StatementSourceRow => ({ id, register: 'assets', name, owner: 'smsf', amountReporting: v, nativeAmount: v, nativeCurrency: 'AUD', group: null });
+    return buildNetWorthStatements({
+      levels, currency: 'AUD', asAt: '2026-10-16', rows,
+      smsfFunds: [{ fundId: 'f1', fundName: 'Rao Super Fund', mode: 'detailed', holdings: [holding('h1', 'Investment property', 475_000), holding('h2', 'Cash', 3_000), holding('h3', 'Other', 25_000)] }],
+    });
+  }
+
+  it('lists property 475,000, cash 3,000, other 25,000 = 503,000 as assets, the liabilities as "Not recorded at the fund", and net 133,000', () => {
+    const set = productionSet();
+    const markup = renderToStaticMarkup(createElement(NetWorthStatementView, { statements: [set.entities[0]] }));
+    expect(markup).toContain('Investment property');
+    expect(markup).toMatch(/>\$475,000</);
+    expect(markup).toMatch(/>\$3,000</);
+    expect(markup).toMatch(/>\$25,000</);
+    expect(markup).toMatch(/data-testid="entity-total-assets"[^>]*>\$503,000</);
+    expect(markup).toMatch(/data-testid="liabilities-not-recorded"[^>]*>Not recorded at the fund</);
+    expect(markup).toMatch(/data-testid="entity-total-liabilities"[^>]*><span[^>]*>Not recorded</);
+    expect(markup).toMatch(/data-testid="entity-net"[^>]*>\$133,000</);
+    expect(markup).not.toContain('not-itemised-note');
+  });
+
+  it('lists the fund record as "Shown but not counted" and says why', () => {
+    const markup = renderToStaticMarkup(createElement(NetWorthStatementView, { statements: [productionSet().entities[0]] }));
+    expect(markup).toContain('data-testid="shown-not-counted"');
+    expect(markup).toContain('Shown but not counted');
+    expect(markup).toContain('SMSF: $503,000.');
+    expect(markup).toContain('would count the fund twice');
+  });
+
+  it('the personal page has no retirement group and no SMSF amount in any table (the data-quality notice may name it)', () => {
+    const set = productionSet();
+    const markup = renderToStaticMarkup(createElement(NetWorthStatementView, { statements: [set.personal] }));
+    expect(markup).not.toContain('data-testid="group-retirement"');
+    expect(markup).not.toMatch(/<td[^>]*>\$503,000/);
+    expect(markup).toContain('Total assets');
+  });
+});
+
 describe('family statement', () => {
   it('lists personal + each entity line by line = family net worth, and reconciles to the Dashboard', () => {
     const set = fixture({ smsf: true, company: true });
