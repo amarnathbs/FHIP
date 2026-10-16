@@ -29,6 +29,7 @@ import type { XrayDataset } from '@/lib/engines/investment-intelligence/xray/xra
 import type { FundHoldingsSnapshot, PortfolioFundPosition, SnapshotHolding } from '@/lib/engines/investment-intelligence/xray/lookThrough';
 import type { DebtExposureLine } from '@/lib/engines/investment-intelligence/xray/debtXray';
 import { fetchAllRows } from './pagination';
+import { POSTGREST_PAGE_SIZE, NAV_PAGE_CONCURRENCY } from './pagination';
 import { accessAllows, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey } from './currentValuationLoader';
 import { isNavQualityEligible, type StatementPositionInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
@@ -146,7 +147,9 @@ export async function loadSipDataset(
       .select('instrument_id, price_date, price, quality_status, currency_code')
       .in('instrument_id', instrumentIds)
       .order('instrument_id', { ascending: true })
-      .order('price_date', { ascending: true })
+      .order('price_date', { ascending: true }),
+    POSTGREST_PAGE_SIZE,
+    { concurrency: NAV_PAGE_CONCURRENCY }
   );
 
   const navByInstrument = new Map<string, Observation[]>();

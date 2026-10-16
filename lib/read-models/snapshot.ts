@@ -20,6 +20,7 @@ import { selectInvestments, type InvestmentsReadModel } from './investments';
 import { loadLiabilityRows, selectLiabilities, type CardRepaymentRule, type LiabilitiesReadModel, type LoadedLiabilities } from './liabilities';
 import { selectRetirement, type RetirementReadModel } from './retirement';
 import { ensurePublishedValuesCurrent } from '@/lib/services/investment-intelligence/publishedValueRemark';
+import { memoClientId, memoInRequest } from '@/lib/services/requestMemo';
 
 export interface CanonicalFinancialSnapshot {
   status: 'ok';
@@ -39,6 +40,17 @@ export interface CanonicalFinancialSnapshot {
 export type CanonicalFinancialSnapshotResult = CanonicalFinancialSnapshot | ReadModelUnavailable;
 
 export async function buildCanonicalFinancialSnapshot(
+  userId: string,
+  opts: ReadModelOptions & { expenseBasis?: ExpenseBasis; cardRepaymentRule?: CardRepaymentRule },
+): Promise<CanonicalFinancialSnapshotResult> {
+  // Inside a request-memo scope (report generation only) an identical read is computed once. A call that pins
+  // its own window / clock / FX / ledger is never shared. Outside a scope this is exactly buildSnapshotUncached.
+  const shareable = !opts.window && !opts.now && !opts.fx && !opts.ledger && !opts.normalise;
+  if (!shareable) return buildSnapshotUncached(userId, opts);
+  return memoInRequest(`snapshot:${userId}:${memoClientId(opts.client)}:${opts.expenseBasis ?? ''}:${opts.cardRepaymentRule ?? ''}`, () => buildSnapshotUncached(userId, opts));
+}
+
+async function buildSnapshotUncached(
   userId: string,
   opts: ReadModelOptions & { expenseBasis?: ExpenseBasis; cardRepaymentRule?: CardRepaymentRule },
 ): Promise<CanonicalFinancialSnapshotResult> {

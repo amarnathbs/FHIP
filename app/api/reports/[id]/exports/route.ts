@@ -4,6 +4,7 @@ import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { canExportReports } from '@/lib/services/entitlements';
 import { isExportFormatImplemented, requiresPremiumEntitlement, type ExportFormat } from '@/lib/engines/reportExport';
 import { renderReportToPdf } from '@/lib/services/reportPdfRenderer';
+import { newCorrelationId, typedError } from '@/lib/services/reportApiResponses';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,7 +12,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return unauthenticated!;
   const supabase = await createClient();
   const { data, error } = await supabase.from('report_exports').select('*').eq('report_id', id).eq('requested_by_user_id', user.id).order('requested_at', { ascending: false });
-  return error ? bad(error.message) : ok(data);
+  if (error) {
+    const correlationId = newCorrelationId();
+    console.error('[reports] export list failed', { correlationId, reportId: id, message: error.message });
+    return typedError(500, 'EXPORT_LIST_FAILED', 'The list of exports could not be read just now. Please try again.', correlationId, true);
+  }
+  return ok(data);
 }
 
 // PDF is a real, server-rendered export (see lib/services/reportPdfRenderer.ts,
@@ -20,6 +26,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 // working pipeline. The in-app report and browser print stylesheet remain
 // fully functional regardless (Persona I).
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const correlationId = newCorrelationId();
+  try {
+    return await handleExportPost(req, params, correlationId);
+  } catch (e) {
+    // Nothing may escape as an empty body: an unexpected throw is a typed JSON answer with a reference.
+    console.error('[reports] export failed unexpectedly', { correlationId, message: e instanceof Error ? e.message : String(e) });
+    return typedError(500, 'EXPORT_FAILED', 'The export could not be prepared just now. You can still view and print this report. Please try again later.', correlationId, true, e instanceof Error ? e.message : undefined);
+  }
+}
+
+async function handleExportPost(req: Request, params: Promise<{ id: string }>, correlationId: string): Promise<Response> {
   const { id } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
@@ -93,6 +110,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .from('report_exports')
       .update({ status: 'failed', error_code: 'render_failed', completed_at: new Date().toISOString() })
       .eq('id', exportRow.id);
-    return bad(message.slice(0, 300), 500);
+    console.error('[reports] pdf render failed', { correlationId, reportId: id, exportId: exportRow.id, message: message.slice(0, 300) });
+    return typedError(500, 'EXPORT_RENDER_FAILED', 'The PDF could not be produced just now. You can still view and print this report in your browser.', correlationId, true, message);
   }
 }

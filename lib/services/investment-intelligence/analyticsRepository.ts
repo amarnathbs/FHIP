@@ -27,6 +27,7 @@ import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmar
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
+import { POSTGREST_PAGE_SIZE, NAV_PAGE_CONCURRENCY } from './pagination';
 import { loadCategoryReferenceMappings } from './benchmarkData/categoryReferenceLoader';
 import { accessAllows, blockedReason, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
@@ -220,7 +221,9 @@ export async function loadAnalyticsDataset(
       // instruments are queried together, so a tie needs a deterministic
       // sort to page reliably.
       .order('price_date', { ascending: true })
-      .order('id', { ascending: true })
+      .order('id', { ascending: true }),
+    POSTGREST_PAGE_SIZE,
+    { concurrency: NAV_PAGE_CONCURRENCY }
   );
 
   const navByInstrument = new Map<string, SeriesPoint[]>();

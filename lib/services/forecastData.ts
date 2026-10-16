@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboard, getLatestSnapshotAsOf, type LatestSnapshot } from '@/lib/services/dashboardData';
+import { memoClientId, memoInRequest } from '@/lib/services/requestMemo';
 import { resolveAssumptions, getAssumptionValue, type RawForecastAssumption, type RawGlobalAssumption } from '@/lib/engines/forecast/assumptions';
 import { runForecastCalculation, computeForecastInputHash, isForecastTypeSupported, FORECAST_ENGINE_VERSION } from '@/lib/engines/forecast/engine';
 import type { NetWorthCalculatorInput, PlannedFinancialEvent } from '@/lib/engines/forecast/netWorthCalculator';
@@ -230,6 +231,17 @@ export async function resolveForecastPageContext(userId: string, requestedScenar
 }
 
 async function loadResolvedAssumptions(
+  userId: string,
+  profileId: string,
+  scenarioId: string,
+  countryCode: string | null,
+  supabase: SupabaseServerClient
+): Promise<ResolvedAssumptionSet> {
+  // Read-only; inside a request-memo scope (report generation) the eight per-category variance builds share one read.
+  return memoInRequest(`assumptions:${userId}:${profileId}:${scenarioId}:${countryCode ?? ''}:${memoClientId(supabase)}`, () => loadResolvedAssumptionsUncached(userId, profileId, scenarioId, countryCode, supabase));
+}
+
+async function loadResolvedAssumptionsUncached(
   userId: string,
   profileId: string,
   scenarioId: string,

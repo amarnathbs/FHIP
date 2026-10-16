@@ -9,6 +9,7 @@ import { computeMonthCashFlow } from '@/lib/read-models/monthlyCashFlow';
 import { ECONOMIC_TRANSACTION_TYPES, ECONOMIC_TYPE_BUCKET, type EconomicTransactionType } from '@/lib/read-models/core/spendingRules';
 import { DEFAULT_FX_RATE_AUD_INR } from '@/lib/read-models/core/currency';
 import { monthStart as monthStartOf } from '@/lib/read-models/core/window';
+import { memoClientId, memoInRequest } from '@/lib/services/requestMemo';
 
 export type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -195,6 +196,11 @@ async function writeFinancialSnapshots(
 // (which has no per-request cookie session) can pass a service-role client.
 export async function loadDashboardContext(userId: string, client?: SupabaseServerClient): Promise<DashboardContext> {
   const supabase = client ?? (await createClient());
+  // Inside a request-memo scope (report generation only) the dashboard context is built once; see requestMemo.ts.
+  return memoInRequest(`dashboardContext:${userId}:${memoClientId(supabase)}`, () => loadDashboardContextUncached(userId, supabase));
+}
+
+async function loadDashboardContextUncached(userId: string, supabase: SupabaseServerClient): Promise<DashboardContext> {
 
   // THE one snapshot for this request: income, expenses, debt service,
   // investments, retirement and assets, each 'ok' or explicitly 'unavailable'.
