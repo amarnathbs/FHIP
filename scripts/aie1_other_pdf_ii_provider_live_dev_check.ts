@@ -75,7 +75,10 @@ async function main() {
   const provider = await resolveAieDocumentProvider();
   let result: any = null;
   let error: string | null = null;
-  try { result = await provider!({ maskedDocumentText: masked }); } catch (e) { error = e instanceof Error ? e.message : String(e); }
+  const fixtureUsers = await admin.auth.admin.listUsers({ page: 1, perPage: 1 });
+  const fixtureUserId = fixtureUsers.data.users[0]?.id;
+  if (!fixtureUserId) throw new Error('no existing DEV fixture user found');
+  try { result = await provider!({ maskedDocumentText: masked }, { userId: fixtureUserId }); } catch (e) { error = e instanceof Error ? e.message : String(e); }
   const after = (await admin.from('aie_ai_cost_ledger').select('settled_usd,reserved_usd,total_attempts').eq('id', 'global').single()).data as any;
   const ev = result?.evidence ?? null;
   check('real gpt-4o-mini returned a schema-valid reading (line-item output budget)', !!result && !error, error ?? '');

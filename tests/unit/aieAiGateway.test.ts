@@ -14,6 +14,7 @@ function baseRequest(overrides: Partial<Parameters<AieDocumentAiGateway['request
     maxOutputTokens: 256,
     requestedFields: ['account_number'],
     idempotencyKey: 'test-key-1',
+    userId: '20000000-0000-4000-8000-0000000000aa',
     ...overrides,
   };
 }

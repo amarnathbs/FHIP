@@ -108,6 +108,7 @@ describe.skipIf(!ENABLED)('M2 (H.6) real OpenAI provider proof', () => {
       maxOutputTokens: 256,
       requestedFields: ['scheme_name'],
       idempotencyKey: `m2-live-proof-${Date.now()}`,
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
 
     // Report the observable facts for the evidence record.
@@ -143,6 +144,7 @@ describe.skipIf(!ENABLED)('M2 (H.6) real OpenAI provider proof', () => {
       maxOutputTokens: 256,
       requestedFields: ['scheme_name'],
       idempotencyKey: `m2-live-killswitch-${Date.now()}`,
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
     expect(result.outcome).toBe('kill_switch_blocked');
   });

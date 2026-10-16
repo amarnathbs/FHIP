@@ -35,7 +35,7 @@ function gateway(provider: AieAiProvider) {
 
 const request = (key: string) => ({
   systemPrompt: 's', maskedUserPrompt: 'u', schemaName: 'x', schemaVersion: '1',
-  model: 'gpt-4o-mini', maxOutputTokens: 10, requestedFields: [], idempotencyKey: key,
+  model: 'gpt-4o-mini', maxOutputTokens: 10, requestedFields: [], idempotencyKey: key, userId: '20000000-0000-4000-8000-0000000000aa',
 });
 
 function networkFailure() {

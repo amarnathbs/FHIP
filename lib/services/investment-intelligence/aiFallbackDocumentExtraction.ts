@@ -129,7 +129,12 @@ export interface AieDocumentExtractionResult {
   evidence?: IiAiCallEvidence;
 }
 
-export type AieDocumentProvider = (req: AieDocumentExtractionRequest) => Promise<AieDocumentExtractionResult>;
+/** Who the spend is attributed to (per-user daily cap, 16-10-2026): the authenticated session user, set by the caller. */
+export interface AieDocumentProviderContext {
+  userId: string;
+}
+
+export type AieDocumentProvider = (req: AieDocumentExtractionRequest, ctx: AieDocumentProviderContext) => Promise<AieDocumentExtractionResult>;
 
 /** 2026-09-25 (other-PDF AI proof): identifiers and counts only -- never
  * content -- so each II AI call is attributable to its metered OpenAI
@@ -249,7 +254,7 @@ export const II_AI_DOCUMENT_EXTRACTION_SYSTEM_PROMPT =
  */
 export async function resolveAieDocumentProvider(): Promise<AieDocumentProvider | null> {
   registerInvestmentDocumentFactsSchema();
-  return async (req: AieDocumentExtractionRequest): Promise<AieDocumentExtractionResult> => {
+  return async (req: AieDocumentExtractionRequest, providerCtx: AieDocumentProviderContext): Promise<AieDocumentExtractionResult> => {
     const idempotencyKey = `ii-doc-extract:${randomUUID()}`;
     const result = await gateway.requestFieldCompletion({
       systemPrompt: II_AI_DOCUMENT_EXTRACTION_SYSTEM_PROMPT,
@@ -264,6 +269,7 @@ export async function resolveAieDocumentProvider(): Promise<AieDocumentProvider 
       maxOutputTokens: getAieAiMaxOutputTokensPerLineItemDocument(),
       requestedFields: [],
       idempotencyKey,
+      userId: providerCtx.userId,
     });
 
     const evidence: IiAiCallEvidence = {
@@ -301,6 +307,10 @@ export type AiFallbackDocumentOutcome =
   | { outcome: 'entitlement_unavailable' }
   // The real malware scan is not switched on for this deployment: document content is never sent out (fail closed).
   | { outcome: 'malware_scan_not_enforced' }
+  // 16-10-2026: this user has used their daily share of AI reading. Returned
+  // BEFORE any provider call (the cost admission refused it), so nothing was
+  // sent and nothing was charged; the statement can still be entered manually.
+  | { outcome: 'daily_limit_reached' }
   | { outcome: 'unavailable'; reason: string }
   | { outcome: 'already_pending'; reviewId: string; holdings: AieExtractedHolding[] }
   | { outcome: 'already_decided'; reviewId: string; status: 'accepted' | 'rejected' }
@@ -413,8 +423,9 @@ async function getAiFallbackDocumentExtractionOnce(ctx: AiFallbackDocumentContex
 
   let result: AieDocumentExtractionResult;
   try {
-    result = await provider(request);
+    result = await provider(request, { userId: ctx.userId });
   } catch (e) {
+    if (e instanceof IiAiProviderOutcomeError && e.outcome === 'user_daily_cap_reached') return { outcome: 'daily_limit_reached' };
     return {
       outcome: 'still_failed',
       reason: e instanceof Error ? e.message : 'AI-fallback document extraction failed.',

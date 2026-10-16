@@ -90,7 +90,10 @@ async function main() {
   // An allowance that leaves room for nothing: what is already reserved+settled.
   process.env.AIE_AI_COST_ALLOWANCE_USD = String(Number(l5.reserved_usd) + Number(l5.settled_usd) + 0.0000005);
   const { requestPayslipAiExtraction } = await import('../lib/aie/adapters/payslip');
-  const out = await requestPayslipAiExtraction({ maskedText: 'Remittance advice. Net amount 100.00 paid 1 August 2026.', requestId: `${P}-exhaust` });
+  const fixtureUsers = await (await import('../lib/supabase/admin')).createAdminClient().auth.admin.listUsers({ page: 1, perPage: 1 });
+  const fixtureUserId = fixtureUsers.data.users[0]?.id;
+  if (!fixtureUserId) throw new Error('no existing DEV fixture user found');
+  const out = await requestPayslipAiExtraction({ maskedText: 'Remittance advice. Net amount 100.00 paid 1 August 2026.', requestId: `${P}-exhaust`, userId: fixtureUserId });
   const l5b = await ledger();
   check('EXHAUSTION: the real application path returns budget_exhausted and never calls OpenAI (no request id, attempts unchanged)',
     out.outcome === 'budget_exhausted' && (out.evidence?.providerRequestIds ?? []).length === 0 && Number(l5b.total_attempts) === Number(l5.total_attempts),

@@ -607,7 +607,7 @@ async function attemptAiRetirementFallbackOnce(
   }
 
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_attempted', actorType: 'system' });
-  const result = await requestRetirementAiExtraction({ maskedText: gate.maskedText, requestId: documentId });
+  const result = await requestRetirementAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId });
   if (result.outcome !== 'success') {
     await recordDocumentAuditEvent({
       userId, documentId,

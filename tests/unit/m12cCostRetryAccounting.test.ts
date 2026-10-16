@@ -94,6 +94,7 @@ function gatewayRequest(overrides: Record<string, unknown> = {}) {
     maxOutputTokens: 512,
     requestedFields: ['account_number'],
     idempotencyKey: 'm12c-retry-accounting-key',
+    userId: '20000000-0000-4000-8000-0000000000aa',
     ...overrides,
   };
 }

@@ -47,7 +47,7 @@ export const RETIREMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSystemPr
  * Requests a whole-document extraction of `maskedText` — already masked by
  * the caller. This function never sees raw statement text.
  */
-export async function requestRetirementAiExtraction(params: { maskedText: string; requestId?: string }): Promise<RetirementAiExtractionOutcome> {
+export async function requestRetirementAiExtraction(params: { maskedText: string; requestId?: string; userId: string }): Promise<RetirementAiExtractionOutcome> {
   registerRetirementDocumentFactsSchema();
   return requestAdapterDocumentFacts({
     schema: retirementDocumentFactsSchema,
@@ -57,6 +57,7 @@ export async function requestRetirementAiExtraction(params: { maskedText: string
     maskedText: params.maskedText,
     idempotencyPrefix: 'retirement-statement-ai-fallback',
     requestId: params.requestId,
+    userId: params.userId,
     // Activities and positions are arrays — see
     // `getAieAiMaxOutputTokensPerLineItemDocument()` for why that needs its
     // own output budget rather than the 512-token scalar default.

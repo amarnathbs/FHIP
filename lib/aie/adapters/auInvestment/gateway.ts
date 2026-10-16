@@ -62,7 +62,7 @@ export const AU_INVESTMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSyste
  * idempotency key and collapses at the gateway's in-flight layer rather than
  * double-billing a statement that is expensive to re-read.
  */
-export async function requestAuInvestmentAiExtraction(params: { maskedText: string; requestId?: string }): Promise<AuInvestmentAiExtractionOutcome> {
+export async function requestAuInvestmentAiExtraction(params: { maskedText: string; requestId?: string; userId: string }): Promise<AuInvestmentAiExtractionOutcome> {
   registerAuInvestmentDocumentFactsSchema();
   return requestAdapterDocumentFacts({
     schema: auInvestmentDocumentFactsSchema,
@@ -72,6 +72,7 @@ export async function requestAuInvestmentAiExtraction(params: { maskedText: stri
     maskedText: params.maskedText,
     idempotencyPrefix: 'au-investment-statement-ai-fallback',
     requestId: params.requestId,
+    userId: params.userId,
     // An investment statement is a line-item document — and one with TWO
     // arrays — so it needs the larger line-item output budget rather than the
     // 512-token scalar default. See

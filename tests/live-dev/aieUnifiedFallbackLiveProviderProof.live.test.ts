@@ -196,6 +196,7 @@ describe.skipIf(!ENABLED)('AIE unified fallback — REAL gpt-4o-mini provider pr
       maxOutputTokens: getAieAiMaxOutputTokensPerLineItemDocument(),
       requestedFields: [],
       idempotencyKey: `live-proof-bank-${Date.now()}`,
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
 
     console.log('[live proof] bank outcome:', result.outcome);
@@ -261,6 +262,7 @@ describe.skipIf(!ENABLED)('AIE unified fallback — REAL gpt-4o-mini provider pr
       maxOutputTokens: getAieAiMaxOutputTokensPerLineItemDocument(),
       requestedFields: [],
       idempotencyKey: `live-proof-retirement-${Date.now()}`,
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
 
     console.log('[live proof] retirement outcome:', result.outcome);

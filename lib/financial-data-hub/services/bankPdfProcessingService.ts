@@ -1081,7 +1081,7 @@ async function attemptAiBankStatementFallbackOnce(userId: string, documentId: st
   }
 
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_statement_ai_fallback_attempted', actorType: 'system' });
-  const result = await requestBankStatementAiExtraction({ maskedText: gate.maskedText, requestId: documentId });
+  const result = await requestBankStatementAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId });
   if (result.outcome !== 'success') {
     await recordDocumentAuditEvent({
       userId,

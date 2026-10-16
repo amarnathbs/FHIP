@@ -258,6 +258,7 @@ describe('AIE unified fallback — masking at the egress boundary', () => {
       maxOutputTokens: 256,
       requestedFields: [],
       idempotencyKey: 'masking-egress-bank',
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
 
     expect(captured.length).toBe(1);
@@ -282,6 +283,7 @@ describe('AIE unified fallback — masking at the egress boundary', () => {
       maxOutputTokens: 256,
       requestedFields: [],
       idempotencyKey: 'masking-egress-retirement',
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
 
     expect(captured.length).toBe(1);

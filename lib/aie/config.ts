@@ -99,6 +99,41 @@ export function getAieCostAllowanceUsd(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 10;
 }
 
+/**
+ * PER-USER DAILY AI SPEND CAP (Product Owner decision 16-10-2026).
+ *
+ * WHAT. The most one signed-in user may have reserved or spent on AI document
+ * reading in one day, in US dollars. It is decided in the same atomic database
+ * step as the global allowance above (migration 0284, `aie_reserve_ai_cost_v2`),
+ * before any provider call.
+ *
+ * SOURCE OF TRUTH. The database column `aie_ai_cost_ledger.user_daily_cap_usd`
+ * (default 1.00). It is never taken from a browser, a request or a user. To
+ * change the limit for everyone, update that one column in the database; no
+ * deploy is needed. `AIE_USER_DAILY_COST_CAP_USD` is an emergency brake that can
+ * only LOWER it, exactly like `AIE_AI_COST_ALLOWANCE_USD` for the global ledger.
+ * This constant is the documented default the migration creates the column with;
+ * a unit test keeps the two equal.
+ *
+ * DAY BOUNDARY. The UTC calendar day (00:00 to 24:00 UTC), the same definition
+ * Module 11's platform daily limit and the entitlement windows use. It never
+ * moves with daylight saving. For Australia it rolls over at 10:00 or 11:00 in
+ * the morning, for India at 05:30 in the morning. An attempt belongs to the day
+ * it was made, even when it is settled after midnight.
+ */
+export const AIE_USER_DAILY_CAP_USD_DEFAULT = 1;
+export const AIE_USER_DAILY_CAP_DAY_BOUNDARY = 'UTC' as const;
+
+/** The optional LOWER figure the application passes to the database, or null
+ * to let the stored column decide. Never higher than the stored column: the
+ * database takes the smaller of the two. */
+export function getAieUserDailyCapOverrideUsd(): number | null {
+  const raw = process.env.AIE_USER_DAILY_COST_CAP_USD;
+  if (raw === undefined || raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 /** Per-document output budget the gateway/orchestrator already sends today
  * (`maxOutputTokens: 512` at the one call site) — surfaced here so limits
  * are visible/auditable in one place rather than only inline at the call

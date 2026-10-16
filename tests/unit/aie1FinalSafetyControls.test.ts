@@ -162,14 +162,14 @@ describe('provider selection and model contract', () => {
         settle: async () => undefined,
       },
     });
-    const r = await gw.requestFieldCompletion({ systemPrompt: 's', maskedUserPrompt: 'u', schemaName: 'x', schemaVersion: '1', model: 'gpt-4o', maxOutputTokens: 10, requestedFields: [], idempotencyKey: 'k1' });
+    const r = await gw.requestFieldCompletion({ systemPrompt: 's', maskedUserPrompt: 'u', schemaName: 'x', schemaVersion: '1', model: 'gpt-4o', maxOutputTokens: 10, requestedFields: [], idempotencyKey: 'k1', userId: '20000000-0000-4000-8000-0000000000aa' });
     expect(r.outcome).toBe('kill_switch_blocked');
     expect(providerCalls).toBe(0);
     expect(reserveCalls).toBe(0);
   });
 
   it('the gateway sizes the reservation from the actual prompt and output budget', async () => {
-    let sizing: { promptChars?: number; maxOutputTokens?: number } | undefined;
+    let sizing: { promptChars?: number; maxOutputTokens?: number; userId?: string } | undefined;
     const gw = new AieDocumentAiGateway(new MockAieProvider({ respond: () => '{}' }), {
       isKillSwitchEnabled: () => true,
       costAdmission: {
@@ -177,7 +177,7 @@ describe('provider selection and model contract', () => {
         settle: async () => undefined,
       },
     });
-    await gw.requestFieldCompletion({ systemPrompt: 'abc', maskedUserPrompt: 'defgh', schemaName: 'x', schemaVersion: '1', model: 'gpt-4o-mini', maxOutputTokens: 4096, requestedFields: [], idempotencyKey: 'k2' });
-    expect(sizing).toEqual({ promptChars: 8, maxOutputTokens: 4096 });
+    await gw.requestFieldCompletion({ systemPrompt: 'abc', maskedUserPrompt: 'defgh', schemaName: 'x', schemaVersion: '1', model: 'gpt-4o-mini', maxOutputTokens: 4096, requestedFields: [], idempotencyKey: 'k2', userId: '20000000-0000-4000-8000-0000000000aa' });
+    expect(sizing).toEqual({ promptChars: 8, maxOutputTokens: 4096, userId: '20000000-0000-4000-8000-0000000000aa' });
   });
 });
