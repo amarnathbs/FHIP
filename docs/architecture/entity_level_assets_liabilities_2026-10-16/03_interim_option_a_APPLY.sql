@@ -16,7 +16,7 @@ begin
    where user_id = v_user and master_item_key = 'smsf' and owner <> 'smsf' and is_active and current_balance = v_expected;
   if v_n <> 1 then raise exception 'expected exactly 1 active SMSF fund row of % but found %: stop and re-run 02', v_expected, v_n; end if;
   if to_regclass('public.zz_backup_20261016_retirement_accounts') is not null then
-    raise exception 'a backup from an earlier run already exists: do not overwrite it, rename or drop it deliberately first';
+    raise exception 'a backup left by an earlier run already exists: do not overwrite it, rename or drop it deliberately first';
   end if;
 
   create table public.zz_backup_20261016_retirement_accounts as

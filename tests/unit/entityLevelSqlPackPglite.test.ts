@@ -225,8 +225,12 @@ describe('interim path (existing UI only): link the SMSF loan so the fund net co
     await db.exec(`insert into liabilities(user_id, liability_name, debt_type, balance, currency_code, owner) values ('${V}','SMSF property loan','mortgage',365000,'AUD','joint');`);
     loanId = ((await db.query(`select id from liabilities where user_id='${V}'`)).rows[0] as Row).id as string;
     await db.exec(`insert into property_liability_links(user_id, linked_retirement_id, liability_id, link_type) values ('${V}','${fundRow}','${loanId}','smsf_property_loan');`);
+    await db.exec('alter table smsf_holdings disable trigger trg_smsf_holdings_mode_rule; alter table smsf_funds disable trigger trg_smsf_funds_mode_rule;');
     await db.exec([holding('property', 'residential_property', '250 Elizebth st Melbourne 3000', 475_000), holding('cash', 'cash_account', 'Bank Australia', 3_000), holding('cash', 'cash_account', 'Secured finance', 25_000)].join('\n'));
-    await db.exec(`select smsf_switch_to_detailed('${fundId}');`);
+    // The pre-0290 way (staged lines, then a zero-variance switch) is now forbidden; the production rows were written that way, so the legacy shape is
+    // rebuilt with the rule triggers off and switched back on, exactly as legacy rows exist beside the rule.
+    await db.exec(`update smsf_funds set mode='detailed', activated_detailed_at=now() where id='${fundId}'; select smsf_recompute_fund('${fundId}');`);
+    await db.exec('alter table smsf_holdings enable trigger trg_smsf_holdings_mode_rule; alter table smsf_funds enable trigger trg_smsf_funds_mode_rule;');
   }, 60_000);
 
   it('baseline = the production shape after the loan went inactive and unlinked: mode detailed, summary 138,000, net 503,000', async () => {
