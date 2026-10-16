@@ -119,3 +119,21 @@ Both runs: `npx vitest run --testTimeout=60000 --hookTimeout=60000` with the JSO
 * **Failing on both** (pre-existing, not touched by NAV2): `adminAnalyticsPhaseAMeRoute` (stale five-key expectations; 17 of 24 fail on both), `aiResidualClosureFailClosed` A4, `countryGateAccessMatrix` MC-15 (an account-deletion route exists), `iiNetWorthNavRemarkPublishFlow` (date dependent), `lr1UploadSecurityRawFileLifecycle`, `m12cServerOnlySecretBoundary`, `promoHardeningProofCorePglite` (3, date dependent), `resourcesR1_1`, and the Resources live-DEV suites.
 * **Failing on the baseline run only** (environment of the extract, not code): `heldSchemes` (module mocking in the extract), `migrationVersionsCrossBranch` (needs `.git`), `resourcesR1_4LiveDev` and two other live-DEV suites.
 * The NAV2 folder alone: 58 files, 851 tests, all pass.
+
+## Release candidate comparison after the D-6 fix and the merge of origin/main 417d5f5 (16-10-2026)
+
+Both runs: `npx vitest run --maxWorkers=3 --testTimeout=90000 --hookTimeout=90000`, JSON reporter, one after the other, `git checkout -- scripts/` afterwards. Baseline = `git archive` of `origin/main` (`417d5f5`) in its own folder with `node_modules` linked; release candidate = the branch at the merge commit `426ed95` plus the fixes below.
+
+| | Tests | Passed | Failed | Files with a failure |
+|---|---|---|---|---|
+| origin/main `417d5f5` (clean extract) | 14,896 | 14,793 | 29 | 15 |
+| Release candidate (`426ed95`, before the two fixes below) | 15,781 | 15,748 | 28 | 13 |
+
+* **Failing on the release candidate and NOT on main: 2 entries, both real interactions of NAV2 with guards that main added, both fixed.**
+  * `dataTableGuard`: two NAV2 components had a raw `<table>` (the Fund analytics PDF page and the on-screen report table). The on-screen table now uses the shared `<DataTable>` (same caption, header and rows, now with the shared scroll region; `nav2ReportViewAccessibility` now recognises that wrapper); the PDF page is on the guard's allow-list with a stated reason (fixed percentage column widths for a printed sheet).
+  * `premiumAiGuardCoverage`: `nav2/rbiAiReader.ts` reaches an AI provider and was neither guarded nor listed. It is reached only by the cron-secret weekly RBI refresh job (switch OFF), never by a user request, so it is listed as a building block with that reason.
+* **Failing on main only** (fixed or absent on the branch): `benchmarkEntitlementEditRevisionPglite` (demanded that 0280 be the last migration, which 0285 on main now breaks; the branch carries the corrected guard), `migrationVersionsCrossBranch` (needs `.git`, absent in the extract), two Resources live-DEV suites (environment).
+* **Failing on both** (pre-existing): `adminAnalyticsPhaseAMeRoute` (17), `aiResidualClosureFailClosed` A4, `countryGateAccessMatrix` MC-15, `iiNetWorthNavRemarkPublishFlow`, `lr1UploadSecurityRawFileLifecycle`, `m12cServerOnlySecretBoundary`, `promoHardeningMigrations` NC-M4, `resourcesBulkImportMigration` editor safety (both of these lint main's own migration 0285), `resourcesR1_1`, `smsfHouseholdIsolation`.
+* The vitest `ssr` ENOENT harness fault again hit a different set of suites in each run; the suites hit in the release candidate run pass when re-run.
+* `tsc --noEmit`: one error, `tests/unit/canonicalCertResidueAllSql.test.ts(127,75)`, byte-identical on origin/main. ESLint on the 235 changed files: one error in `components/ui/AppShell.tsx`, the same line exists on origin/main.
+* `npm run check:migrations`: OK (245 active migrations, next version 0286). `npm run check:migrations:against-main`: no cross-branch collisions. Migration numbers: NAV2 owns 0260 to 0263, 0269 to 0271, 0281, 0282; 0283 staff Premium, 0284 AIE cap, 0285 income tax amount (on main) and 0286 Module 11 prompt v3 belong to other workstreams.

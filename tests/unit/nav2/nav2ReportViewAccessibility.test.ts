@@ -21,7 +21,8 @@ const contrast = (a: string, b: string) => { const [x, y] = [luminance(a), lumin
 
 describe('the report page tables and labels (axe findings)', () => {
   it('NC-A1: every sideways-scrolling table wrapper is keyboard focusable and named (tabindex 0, region role, label)', () => {
-    const wrappers = html.match(/<div class="[^"]*overflow-x-auto[^"]*"[^>]*>/g) ?? [];
+    // the report tables now sit in the shared <DataTable> scroll region (class fhip-table-wrap); the older hand-made wrappers (overflow-x-auto) are checked the same way
+    const wrappers = html.match(/<div[^>]*class="[^"]*(?:overflow-x-auto|fhip-table-wrap)[^"]*"[^>]*>/g) ?? [];
     expect(wrappers.length).toBeGreaterThan(3);
     for (const w of wrappers) {
       expect(w, w).toMatch(/tabindex="0"/);

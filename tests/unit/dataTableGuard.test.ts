@@ -16,6 +16,10 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), 'utf8');
 /** Files that may contain a raw `<table`. Every entry needs a reason; entries marked optional may not exist on every branch. */
 export const RAW_TABLE_ALLOWED: Record<string, { reason: string; optional?: boolean }> = {
   'components/ui/DataTable.tsx': { reason: 'The shared mechanism itself: it renders the one real <table>.' },
+  'components/reports/FundAnalyticsPrintDocument.tsx': {
+    reason:
+      'NAV2 Fund analytics PDF page (rendered by Chromium for print, not a screen table): fixed-layout tables whose column widths are percentages that add up to 100 so each fund page fits one sheet; a sideways scroll region has no meaning on paper. The on-screen report uses the shared <DataTable>.',
+  },
   'components/admin/benchmarkData/responsiveTable.tsx': {
     reason:
       'Card-below-1280px table of the Market Index Data Mappings tab, built on branch fix/market-index-data-layout-20261008. Allowed until that branch adopts <DataTable>; remove this entry then.',

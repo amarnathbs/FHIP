@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { DataTable } from '@/components/ui/DataTable';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { SelectField } from '@/components/admin/benchmarkData/ui';
 import { REPORT_PERIOD_LABELS } from '@/lib/engines/nav2/analysisSpec';
@@ -61,8 +62,8 @@ function rfLabel(r: Nav2Result<unknown> | null | undefined): string {
 
 function Table({ caption, head, children }: { caption: string; head: Array<{ label: string; num?: boolean }>; children: React.ReactNode }) {
   return (
-    <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label={caption}>
-      <table className="w-full min-w-[32rem] text-sm">
+    <div className="mt-3">
+      <DataTable label={caption} className="text-sm">
         <caption className="mb-1 text-left text-xs text-muted">{caption}</caption>
         <thead>
           <tr className="text-left text-muted">
@@ -74,7 +75,7 @@ function Table({ caption, head, children }: { caption: string; head: Array<{ lab
           </tr>
         </thead>
         <tbody className="align-top">{children}</tbody>
-      </table>
+      </DataTable>
     </div>
   );
 }
