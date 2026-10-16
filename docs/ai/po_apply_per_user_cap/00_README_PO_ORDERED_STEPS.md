@@ -21,6 +21,15 @@ The new application code calls a new database function (`aie_reserve_ai_cost_v2`
 **every AI reading is refused** (fail closed, by design: it never falls back to the uncapped function). So: **apply the migration first,
 verify, then push.** The reverse is safe: the migration alone changes nothing for the old code, which keeps calling the old function.
 
+## UPDATE 16-10-2026 after the first DEV run: re-run `04_apply_migration_0284.sql` (corrected function)
+
+The live check on DEV found a real defect in the first version of the function: it claimed its key (a foreign key insert that takes a shared lock on the
+ledger row) and only then asked for the exclusive ledger lock, so simultaneous requests for different keys waited on each other. On DEV, 22 parallel requests
+admitted 2 and timed out 20 at the statement timeout (nothing overshot, every failure refused, but real concurrent use would have been refused spuriously). The function now
+takes the ledger lock first. The migration file is `create or replace`, so **DEV: paste the current `dev/04_apply_migration_0284.sql` again, then `05` and `06`, then tell me and I re-run the live check in parallel mode**.
+**Production: if `04` was already applied there, paste the current file again too (same, safe to repeat), then `05` and `06`.** The same lock-order weakness exists in the older 0195 function
+(`aie_reserve_ai_cost`), which the new code no longer calls; I left it unchanged.
+
 ## DEV (you apply; I then run the live proof)
 
 Files are in `dev/`. Paste each into the Supabase **DEV** SQL editor (project `vqycarelcoijzwlpkpcz`) and press Run, one file at a time.
