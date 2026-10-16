@@ -1,7 +1,7 @@
 | Case | Scenario | Field P | Field R | Econ P | Econ R | Unexplained omissions | False accept | False canonical write |
 |---|---|---|---|---|---|---|---|---|
-| FDH-A01 | normal bank PDF | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | FDH-A02 | multi-page transaction history | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
+| FDH-A01 | normal bank PDF | 12.50% | 26.09% | 0.00% | 0.00% | 4 | no | no |
 | FDH-A03 | debit/credit terminology variant | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | FDH-A04 | wrapped description | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | FDH-A05 | ambiguous institution requiring AI clarification | n/a | n/a | n/a | n/a | 0 | no | no |
@@ -12,8 +12,8 @@
 | FDH-A10 | adversarial prompt-injection text | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
 | FDH-A11 | ADDITIVE — silent-omission probe | 100.00% | 100.00% | 100.00% | 66.67% | 0 | no | no |
 | FDH-A12 | ADDITIVE — India / INR jurisdiction variant | 100.00% | 100.00% | 100.00% | 100.00% | 0 | no | no |
-| **ALL 12** | — | **100.00%** | **100.00%** | **100.00%** | **92.50%** | **0** | **0.00%** | **0.00%** |
+| **ALL 12** | — | **82.50%** | **92.09%** | **78.57%** | **82.50%** | **4** | **0.00%** | **0.00%** |
 
-- unexplained economic omissions: **0**
+- unexplained economic omissions: **4**
 - false accept rate: **0.00%** (0 of 5 must-not-be-acceptable cases)
 - false canonical write rate: **0.00%** (0 of 12 cases)
