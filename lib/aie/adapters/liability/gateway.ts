@@ -59,7 +59,7 @@ export const LIABILITY_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSystemPro
  * idempotency key and collapses at the gateway's in-flight layer rather than
  * double-billing a statement that is expensive to re-read.
  */
-export async function requestLiabilityAiExtraction(params: { maskedText: string; requestId?: string }): Promise<LiabilityAiExtractionOutcome> {
+export async function requestLiabilityAiExtraction(params: { maskedText: string; requestId?: string; userId: string }): Promise<LiabilityAiExtractionOutcome> {
   registerLiabilityStatementDocumentFactsSchema();
   return requestAdapterDocumentFacts({
     schema: liabilityStatementDocumentFactsSchema,
@@ -69,6 +69,7 @@ export async function requestLiabilityAiExtraction(params: { maskedText: string;
     maskedText: params.maskedText,
     idempotencyPrefix: 'liability-statement-ai-fallback',
     requestId: params.requestId,
+    userId: params.userId,
     // A liability statement is a line-item document — see
     // `getAieAiMaxOutputTokensPerLineItemDocument()` for why that needs its
     // own output budget rather than the 512-token scalar default.

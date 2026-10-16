@@ -26,6 +26,8 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 import { reserveConservativeAiCost, settleAiCost, getAieCostLedgerSnapshot, AIE_COST_LEDGER_ID } from '@/lib/aie/cost/costAdmission';
 
+const USER = '50000000-0000-4000-8000-0000000000d1';
+
 beforeEach(() => {
   selectRow = null;
   rpcImpl = async () => ({ data: null, error: { message: 'not configured' } });
@@ -34,13 +36,14 @@ beforeEach(() => {
 describe('reserveConservativeAiCost', () => {
   it('admits and returns the remaining allowance when the RPC admits', async () => {
     rpcImpl = async (fn, args) => {
-      expect(fn).toBe('aie_reserve_ai_cost');
+      expect(fn).toBe('aie_reserve_ai_cost_v2'); // since 0284 the per-user cap lives in the v2 function
+      expect(args.p_user_id).toBe(USER);
       expect(args.p_ledger_id).toBe(AIE_COST_LEDGER_ID);
       expect(typeof args.p_amount_usd).toBe('number');
       expect(typeof args.p_allowance_usd).toBe('number');
       return { data: [{ reserved: true, remaining_usd: 9.5 }], error: null };
     };
-    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-1');
+    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-1', { userId: USER });
     expect(result.admitted).toBe(true);
     expect(result.remainingUsd).toBe(9.5);
     expect(result.reservedUsd).toBeGreaterThan(0);
@@ -48,20 +51,20 @@ describe('reserveConservativeAiCost', () => {
 
   it('refuses when the RPC refuses', async () => {
     rpcImpl = async () => ({ data: [{ reserved: false, remaining_usd: 0 }], error: null });
-    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-2');
+    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-2', { userId: USER });
     expect(result.admitted).toBe(false);
     expect(result.reservedUsd).toBe(0);
   });
 
   it('fails CLOSED (never admits) if the RPC itself errors -- a broken admission gate must not become no gate at all', async () => {
     rpcImpl = async () => ({ data: null, error: { message: 'function does not exist' } });
-    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-3');
+    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-3', { userId: USER });
     expect(result.admitted).toBe(false);
   });
 
   it('fails closed on an empty data array too', async () => {
     rpcImpl = async () => ({ data: [], error: null });
-    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-4');
+    const result = await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-4', { userId: USER });
     expect(result.admitted).toBe(false);
   });
 
@@ -71,7 +74,7 @@ describe('reserveConservativeAiCost', () => {
       captured = args;
       return { data: [{ reserved: true, remaining_usd: 9.5 }], error: null };
     };
-    await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-5-stable-key');
+    await reserveConservativeAiCost('gpt-4o-mini-2024-07-18', 'attempt-5-stable-key', { userId: USER });
     expect((captured as unknown as { p_idempotency_key: string }).p_idempotency_key).toBe('attempt-5-stable-key');
   });
 });

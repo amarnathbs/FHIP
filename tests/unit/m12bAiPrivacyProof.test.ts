@@ -394,6 +394,7 @@ describe('M12B.6 — real AI privacy proof at the egress boundary', () => {
       maxOutputTokens: 256,
       requestedFields: ['policyNameClarification'],
       idempotencyKey: 'privacy-schema-1',
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
     expect(outcome.outcome).toBe('schema_rejected');
     expect(outcome.data).toBeUndefined();

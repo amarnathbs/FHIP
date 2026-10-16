@@ -109,6 +109,7 @@ describe.skipIf(!ENABLED)('AIE investment-intelligence adapter — real OpenAI p
       maxOutputTokens: getAieAiMaxOutputTokensPerDocument(),
       requestedFields: [],
       idempotencyKey: `ii-doc-extract-live-proof-${Date.now()}`,
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
 
     console.log('[AIE II live proof] outcome=%s model=%s errorCodes=%s', result.outcome, getAieAiModel(), JSON.stringify(result.errorCodes ?? null));

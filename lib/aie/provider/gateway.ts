@@ -42,12 +42,24 @@ export interface AieFieldCompletionRequest {
   maxOutputTokens: number;
   requestedFields: string[];
   idempotencyKey: string;
+  /**
+   * The AUTHENTICATED session user this call is made for (PO decision
+   * 16-10-2026: per-user daily AI spend cap). Required so the cost admission
+   * step can attribute the reservation; it must come from the server-side
+   * session, never from a request body. A call without a usable user is
+   * refused before any provider call (it is never counted against nobody).
+   */
+  userId: string;
 }
 
 export interface AieFieldCompletionResult {
   // 'budget_exhausted' (AIE-1 closure mission, section 8): the atomic cost
   // admission reservation was refused -- the provider was never called.
-  outcome: AieAiOutcome | 'kill_switch_blocked' | 'unmasked_pii_detected' | 'budget_exhausted';
+  // 'user_daily_cap_reached' (16-10-2026): the SAME admission step refused
+  // because THIS user has used their daily share -- again no provider call.
+  // Kept distinct from 'budget_exhausted' so the person can be told (the global
+  // allowance running out is not something they can act on).
+  outcome: AieAiOutcome | 'kill_switch_blocked' | 'unmasked_pii_detected' | 'budget_exhausted' | 'user_daily_cap_reached';
   data?: unknown;
   errorCodes?: string[];
   inputTokens?: number;
@@ -123,8 +135,8 @@ export interface AieGatewayOptions {
     reserve: (
       model: string,
       idempotencyKey: string,
-      sizing?: { promptChars?: number; maxOutputTokens?: number },
-    ) => Promise<{ admitted: boolean; reservedUsd: number }>;
+      sizing?: { promptChars?: number; maxOutputTokens?: number; userId?: string },
+    ) => Promise<{ admitted: boolean; reservedUsd: number; refusalReason?: string }>;
     settle: (params: {
       reservedUsd: number;
       actualInputTokens: number;
@@ -197,11 +209,15 @@ export class AieDocumentAiGateway {
       const reservation = await this.options.costAdmission.reserve(req.model, req.idempotencyKey, {
         promptChars: req.systemPrompt.length + req.maskedUserPrompt.length,
         maxOutputTokens: req.maxOutputTokens,
+        userId: req.userId,
       });
       if (!reservation.admitted) {
         // No provider call, no recordAttempt (nothing was attempted) --
         // matches kill_switch_blocked/unmasked_pii_detected precedent.
-        return { outcome: 'budget_exhausted' };
+        // Only the per-user daily cap gets its own outcome; every other
+        // refusal (global allowance, replay, admission unavailable) stays
+        // 'budget_exhausted' exactly as before.
+        return { outcome: reservation.refusalReason === 'user_daily_cap' ? 'user_daily_cap_reached' : 'budget_exhausted' };
       }
       reservedUsd = reservation.reservedUsd;
     }

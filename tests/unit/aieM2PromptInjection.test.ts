@@ -101,6 +101,7 @@ function request(maskedUserPrompt: string, idempotencyKey: string) {
     maxOutputTokens: 256,
     requestedFields: ['scheme_name'],
     idempotencyKey,
+    userId: '20000000-0000-4000-8000-0000000000aa',
   };
 }
 

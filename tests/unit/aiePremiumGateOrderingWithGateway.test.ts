@@ -59,6 +59,7 @@ function makeStack(opts: { admit?: boolean; killSwitch?: boolean } = {}) {
       maxOutputTokens: 256,
       requestedFields: ['account_number'],
       idempotencyKey: key,
+      userId,
     });
     return { stage: 'gateway' as const, outcome: result.outcome };
   }

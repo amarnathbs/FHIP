@@ -48,7 +48,7 @@ export const BANK_STATEMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSyst
  * idempotency key and collapses at the gateway's in-flight layer rather than
  * double-billing a statement that is expensive to re-read.
  */
-export async function requestBankStatementAiExtraction(params: { maskedText: string; requestId?: string }): Promise<BankStatementAiExtractionOutcome> {
+export async function requestBankStatementAiExtraction(params: { maskedText: string; requestId?: string; userId: string }): Promise<BankStatementAiExtractionOutcome> {
   registerBankStatementDocumentFactsSchema();
   return requestAdapterDocumentFacts({
     schema: bankStatementDocumentFactsSchema,
@@ -58,6 +58,7 @@ export async function requestBankStatementAiExtraction(params: { maskedText: str
     maskedText: params.maskedText,
     idempotencyPrefix: 'bank-statement-ai-fallback',
     requestId: params.requestId,
+    userId: params.userId,
     // A statement is a line-item document — see
     // `getAieAiMaxOutputTokensPerLineItemDocument()` for why that needs its
     // own output budget rather than the 512-token scalar default.

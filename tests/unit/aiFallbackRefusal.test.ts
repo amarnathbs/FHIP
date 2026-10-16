@@ -10,6 +10,11 @@ describe('aiFallbackRefusalFromReason', () => {
     expect(aiFallbackRefusalFromReason('entitlement_unavailable')).toBe('entitlement_unavailable');
   });
 
+  it('maps the per-user daily limit (16-10-2026) to the plain daily_limit_reached, and only that typed outcome', () => {
+    expect(aiFallbackRefusalFromReason('user_daily_cap_reached')).toBe('daily_limit_reached');
+    expect(aiFallbackRefusalFromReason('daily_limit_reached')).toBeUndefined(); // the browser value is not an input reason
+  });
+
   it('never exposes any other gate reason (kill switch, adapter, malware precondition, masking, provider outcome)', () => {
     for (const reason of ['adapter_disabled', 'global_kill_switch_disabled', 'malware_scan_not_enforced', 'masking_unavailable', 'masking_below_policy', 'no_extracted_text', 'budget_exhausted', 'schema_rejected', 'cohort_denied', '', undefined, null]) {
       expect(aiFallbackRefusalFromReason(reason as string | null | undefined), String(reason)).toBeUndefined();
@@ -31,6 +36,14 @@ describe('aiFallbackRefusalNote', () => {
     expect(note).not.toMatch(/upgrade/i);
     expect(note).toMatch(/try again/i);
     expect(note).toMatch(/manually/i);
+  });
+
+  it('daily limit: says the daily limit was reached, to try again tomorrow or enter manually, with no upgrade offer and no amount', () => {
+    const note = aiFallbackRefusalNote('daily_limit_reached')!;
+    expect(note).toMatch(/daily limit/i);
+    expect(note).toMatch(/try again tomorrow/i);
+    expect(note).toMatch(/manually/i);
+    expect(note).not.toMatch(/upgrade|premium|\$|usd/i);
   });
 
   it('anything unrecognised (absent, null, a forged string) yields no note', () => {

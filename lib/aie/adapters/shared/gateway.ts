@@ -41,6 +41,7 @@ export type AieAdapterFailureOutcome =
   | 'kill_switch_blocked'
   | 'unmasked_pii_detected'
   | 'budget_exhausted'
+  | 'user_daily_cap_reached'
   | 'schema_rejected'
   | 'timeout'
   | 'rate_limited'
@@ -144,6 +145,9 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
   maskedText: string;
   idempotencyPrefix: string;
   requestId?: string;
+  /** The AUTHENTICATED session user the spend is attributed to (per-user daily
+   * cap, 16-10-2026). Server-side session value only; never from a request. */
+  userId: string;
   /** `true` for a document whose useful content is an ARRAY (bank
    * transactions, retirement activities, broker holdings). Selects the
    * separate, larger line-item output budget — see
@@ -165,6 +169,7 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
     maxOutputTokens: params.lineItemDocument ? getAieAiMaxOutputTokensPerLineItemDocument() : getAieAiMaxOutputTokensPerDocument(),
     requestedFields: [],
     idempotencyKey,
+    userId: params.userId,
   });
 
   const evidence: AieAdapterCallEvidence = {

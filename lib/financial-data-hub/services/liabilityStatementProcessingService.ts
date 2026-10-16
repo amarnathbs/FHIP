@@ -799,7 +799,7 @@ async function attemptAiLiabilityFallbackOnce(userId: string, documentId: string
   }
 
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_attempted', actorType: 'system' });
-  const result = await requestLiabilityAiExtraction({ maskedText: gate.maskedText, requestId: documentId });
+  const result = await requestLiabilityAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId });
   if (result.outcome !== 'success') {
     await recordDocumentAuditEvent({
       userId,

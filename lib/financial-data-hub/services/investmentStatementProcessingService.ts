@@ -662,7 +662,7 @@ async function attemptAiAuInvestmentFallbackOnce(
   }
 
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_attempted', actorType: 'system' });
-  const result = await requestAuInvestmentAiExtraction({ maskedText: gate.maskedText, requestId: documentId });
+  const result = await requestAuInvestmentAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId });
   if (result.outcome !== 'success') {
     await recordDocumentAuditEvent({
       userId,

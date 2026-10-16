@@ -52,7 +52,7 @@ describe('shared adapter gateway returns call evidence', () => {
   it('a refused call still reports the model, the per-attempt cost key, the OpenAI request ids and the tokens it was billed for', async () => {
     nextResult.current = { outcome: 'refused', providerRequestIds: ['req_synthetic_refused'], inputTokens: 1500, outputTokens: 20 };
     const { requestBankStatementAiExtraction } = await import('@/lib/aie/adapters/bankStatement/gateway');
-    const out = await requestBankStatementAiExtraction({ maskedText: 'synthetic masked text', requestId: 'doc-1' });
+    const out = await requestBankStatementAiExtraction({ maskedText: 'synthetic masked text', requestId: 'doc-1', userId: '20000000-0000-4000-8000-0000000000aa' });
     expect(out.outcome).toBe('refused');
     expect(out.evidence).toBeDefined();
     expect(out.evidence!.providerRequestIds).toEqual(['req_synthetic_refused']);

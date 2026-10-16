@@ -293,6 +293,7 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
       maxOutputTokens: getAieAiMaxOutputTokensPerDocument(),
       requestedFields: parserResult.aiEligibleGaps,
       idempotencyKey,
+      userId,
     });
 
     aiWasUsed = true;
@@ -304,7 +305,7 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
     // PAY-04/cost-admission all block the call before it happens, so there
     // is no "attempt" to record — only the audit event already written
     // above/below for these cases).
-    if (result.outcome !== 'kill_switch_blocked' && result.outcome !== 'unmasked_pii_detected' && result.outcome !== 'budget_exhausted') {
+    if (result.outcome !== 'kill_switch_blocked' && result.outcome !== 'unmasked_pii_detected' && result.outcome !== 'budget_exhausted' && result.outcome !== 'user_daily_cap_reached') {
       const attempt = await deps.recordAiCompletionAttempt({
         runId,
         intakeId,
@@ -331,14 +332,24 @@ export async function runExtractionPipeline(params: RunPipelineParams): Promise<
       }
     }
 
-    if (result.outcome === 'kill_switch_blocked' || result.outcome === 'unmasked_pii_detected' || result.outcome === 'budget_exhausted') {
+    if (result.outcome === 'kill_switch_blocked' || result.outcome === 'unmasked_pii_detected' || result.outcome === 'budget_exhausted' || result.outcome === 'user_daily_cap_reached') {
       const eventType =
         result.outcome === 'kill_switch_blocked'
           ? 'ai_fallback_kill_switch_blocked'
           : result.outcome === 'unmasked_pii_detected'
             ? 'ai_fallback_unmasked_pii_blocked'
             : 'ai_fallback_budget_exhausted';
-      await deps.audit({ intakeId, runId, userId, eventType, actorType: 'system' });
+      // 16-10-2026: the per-user daily cap is recorded under the SAME audit
+      // event as the shared allowance (ai_fallback_budget_exhausted) so no new
+      // constrained event type is needed; the metadata says which one it was.
+      await deps.audit({
+        intakeId,
+        runId,
+        userId,
+        eventType,
+        actorType: 'system',
+        ...(result.outcome === 'user_daily_cap_reached' ? { metadata: { reason: 'user_daily_cap_reached' } } : {}),
+      });
       await transition(deps, { runId, intakeId, userId, from: current, to: 'reconciling' });
       current = 'reconciling';
     } else if (result.outcome === 'schema_rejected') {

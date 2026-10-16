@@ -99,6 +99,7 @@ describe.skipIf(!ENABLED)('AIE payslip adapter — real OpenAI provider proof', 
       maxOutputTokens: getAieAiMaxOutputTokensPerDocument(),
       requestedFields: [],
       idempotencyKey: `payslip-live-proof-${Date.now()}`,
+      userId: '20000000-0000-4000-8000-0000000000aa',
     });
 
     // eslint-disable-next-line no-console

@@ -595,7 +595,7 @@ async function attemptAiPayslipFallbackOnce(
   }
 
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_attempted', actorType: 'system' });
-  const result = await requestPayslipAiExtraction({ maskedText: masking.maskedText, requestId: documentId });
+  const result = await requestPayslipAiExtraction({ maskedText: masking.maskedText, requestId: documentId, userId });
   if (result.outcome !== 'success') {
     await recordDocumentAuditEvent({ userId, documentId, eventType: 'payslip_ai_fallback_provider_outcome', actorType: 'system', metadata: { outcome: result.outcome, ...aiEvidenceMetadata(result.evidence) } });
     return { ok: false, reason: result.outcome };

@@ -45,7 +45,7 @@ export interface PayslipAiCallEvidence {
 
 export type PayslipAiExtractionOutcome =
   | { outcome: 'success'; facts: PayslipDocumentFacts; evidence?: PayslipAiCallEvidence }
-  | { outcome: 'kill_switch_blocked' | 'unmasked_pii_detected' | 'budget_exhausted' | 'schema_rejected' | 'timeout' | 'rate_limited' | 'provider_error' | 'refused'; evidence?: PayslipAiCallEvidence };
+  | { outcome: 'kill_switch_blocked' | 'unmasked_pii_detected' | 'budget_exhausted' | 'user_daily_cap_reached' | 'schema_rejected' | 'timeout' | 'rate_limited' | 'provider_error' | 'refused'; evidence?: PayslipAiCallEvidence };
 
 /**
  * Exported (not inlined) so `tests/live-dev/aiePayslipAdapterLiveProviderProof.live.test.ts`
@@ -75,7 +75,7 @@ export const PAYSLIP_AI_EXTRACTION_SYSTEM_PROMPT =
  * (caller-supplied so a retry can reuse the SAME id and collapse at the
  * gateway's own in-flight/idempotency layer rather than double-billing).
  */
-export async function requestPayslipAiExtraction(params: { maskedText: string; requestId?: string }): Promise<PayslipAiExtractionOutcome> {
+export async function requestPayslipAiExtraction(params: { maskedText: string; requestId?: string; userId: string }): Promise<PayslipAiExtractionOutcome> {
   registerPayslipDocumentFactsSchema();
   // AIE-1 final completion (2026-09-25): `requestId` is a CORRELATION id (the
   // document id), not the attempt identity. The key used to be exactly the
@@ -92,6 +92,7 @@ export async function requestPayslipAiExtraction(params: { maskedText: string; r
     maxOutputTokens: getAieAiMaxOutputTokensPerDocument(),
     requestedFields: [],
     idempotencyKey,
+    userId: params.userId,
   });
 
   const evidence: PayslipAiCallEvidence = {

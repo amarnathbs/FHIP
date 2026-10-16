@@ -204,7 +204,7 @@ vi.mock('@/lib/supabase/admin', () => ({
     // and those cases would then "pass" their zero-egress assertions while
     // proving nothing. (M12A hit exactly this and recorded it.)
     rpc: async (fn: string) => {
-      if (fn === 'aie_reserve_ai_cost') return { data: [{ reserved: true, remaining_usd: 10 }], error: null };
+      if (fn === 'aie_reserve_ai_cost' || fn === 'aie_reserve_ai_cost_v2') return { data: [{ reserved: true, remaining_usd: 10 }], error: null };
       return { data: null, error: null };
     },
   }),

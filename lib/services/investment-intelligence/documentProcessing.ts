@@ -149,6 +149,9 @@ function honestFailureMessage(baseMessage: string, aiOutcome: AiFallbackDocument
       return `${baseMessage} AI-assisted re-extraction is a Premium feature; you can upgrade to Premium to have this statement read for you.`;
     case 'malware_scan_not_enforced':
       return `${baseMessage} AI-assisted re-extraction is not available right now.`;
+    case 'daily_limit_reached':
+      // 16-10-2026: the per-user daily limit. No provider call was made.
+      return `${baseMessage} You have reached the daily limit for AI-assisted reading, so it was not attempted. The limit resets every day: please try again tomorrow, or enter the figures manually.`;
     case 'entitlement_unavailable':
       return `${baseMessage} We could not confirm your plan just now, so AI-assisted re-extraction was not attempted. Please try again in a moment.`;
     case 'unavailable':

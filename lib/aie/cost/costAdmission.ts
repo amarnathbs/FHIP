@@ -26,6 +26,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   getAieCostAllowanceUsd,
+  getAieUserDailyCapOverrideUsd,
   getAieAiMaxInputTokensPerDocument,
   getAieAiMaxOutputTokensPerDocument,
   getAieAiMaxTransientRetries,
@@ -34,10 +35,23 @@ import {
 
 export const AIE_COST_LEDGER_ID = 'global';
 
+/**
+ * Why a reservation was refused. `user_daily_cap` is the per-user daily limit
+ * (migration 0284); `budget_exhausted` is the global ledger; `replay` is a key
+ * that was already used; `unavailable` means the admission step itself could
+ * not be run (missing user, missing function, database error) and the request
+ * was refused rather than waved through.
+ */
+export type CostRefusalReason = 'user_daily_cap' | 'budget_exhausted' | 'replay' | 'unavailable';
+
 export interface CostReservation {
   admitted: boolean;
   remainingUsd: number;
   reservedUsd: number;
+  /** Set only when `admitted` is false. */
+  refusalReason?: CostRefusalReason;
+  /** What the user may still reserve today (server-side telemetry only; never sent to a browser). */
+  userRemainingUsd?: number;
 }
 
 export interface ReservationSizing {
@@ -45,7 +59,14 @@ export interface ReservationSizing {
   promptChars?: number;
   /** The `max_tokens` the call will request. */
   maxOutputTokens?: number;
+  /**
+   * The AUTHENTICATED session user the spend is attributed to. Required: a
+   * reservation without a user is refused (fail closed), never counted against
+   * nobody. It must come from the server-side session, never from a request.
+   */
+  userId?: string;
 }
+
 
 /**
  * Conservative token estimate for a prompt: one token per 3 characters (real
@@ -71,20 +92,40 @@ export function computeConservativeReservationUsd(model: string, sizing: Reserva
  * refused), so callers must mint a fresh key per attempt.
  */
 export async function reserveConservativeAiCost(model: string, idempotencyKey: string, sizing: ReservationSizing = {}): Promise<CostReservation> {
+  const refused = (refusalReason: CostRefusalReason): CostReservation => ({ admitted: false, remainingUsd: 0, reservedUsd: 0, refusalReason });
+  // Fail closed: a spend that cannot be attributed to a user cannot be capped
+  // per user, so it is not admitted at all.
+  // (A value that is not a uuid is rejected by the database function, whose parameter is typed uuid, and that error is a refusal too.)
+  if (typeof sizing.userId !== 'string' || sizing.userId.trim().length === 0) {
+    console.error('aie cost admission refused: no user id supplied for the per-user daily cap');
+    return refused('unavailable');
+  }
   const admin = createAdminClient();
   const reservedUsd = computeConservativeReservationUsd(model, sizing);
-  const { data, error } = await admin.rpc('aie_reserve_ai_cost', {
+  const { data, error } = await admin.rpc('aie_reserve_ai_cost_v2', {
     p_ledger_id: AIE_COST_LEDGER_ID,
     p_amount_usd: reservedUsd,
     p_allowance_usd: getAieCostAllowanceUsd(),
     p_idempotency_key: idempotencyKey,
+    p_user_id: sizing.userId,
+    // null = the stored column decides; a number can only lower it.
+    p_user_daily_cap_usd: getAieUserDailyCapOverrideUsd(),
   });
   if (error || !data || data.length === 0) {
-    // Fail closed: a broken admission gate must not become no gate at all.
-    return { admitted: false, remainingUsd: 0, reservedUsd: 0 };
+    // Fail closed: a broken admission gate must not become no gate at all. In
+    // particular a missing v2 function (migration 0284 not applied) refuses
+    // instead of falling back to the uncapped 0195 function.
+    if (error) console.error(`aie cost admission unavailable (is migration 0284 applied?): ${error.message}`);
+    return refused('unavailable');
   }
-  const row = data[0] as { reserved: boolean; remaining_usd: number };
-  return { admitted: row.reserved, remainingUsd: Number(row.remaining_usd), reservedUsd: row.reserved ? reservedUsd : 0 };
+  const row = data[0] as { reserved: boolean; remaining_usd: number; refusal_reason?: string | null; user_remaining_usd?: number | null };
+  const userRemainingUsd = row.user_remaining_usd === null || row.user_remaining_usd === undefined ? undefined : Number(row.user_remaining_usd);
+  if (row.reserved) {
+    return { admitted: true, remainingUsd: Number(row.remaining_usd), reservedUsd, userRemainingUsd };
+  }
+  const reason: CostRefusalReason =
+    row.refusal_reason === 'user_daily_cap' || row.refusal_reason === 'budget_exhausted' || row.refusal_reason === 'replay' ? row.refusal_reason : 'unavailable';
+  return { admitted: false, remainingUsd: Number(row.remaining_usd), reservedUsd: 0, refusalReason: reason, userRemainingUsd };
 }
 
 export interface SettleParams {
