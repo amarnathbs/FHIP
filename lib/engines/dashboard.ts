@@ -3,6 +3,7 @@ import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems } from './businessEntityValuation';
 import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
 import { debtServiceClassFor, isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
+import type { NetWorthLevels } from './netWorthLevels';
 import type { PublishedValuationSummary } from './investment-intelligence/valuation/publishedRowRemark';
 import { assessNetToGross, isWageLikeIncome, type NetPlausibilityFlag } from './incomePlausibility';
 import { resolveNetBasis, type AssumedNetSource, type NetBasis } from './incomeNetBasis';
@@ -212,6 +213,7 @@ export interface DashboardDataStatus {
 // rather than leaving "why isn't this filtered?" to inference.
 export interface AssetRow {
   current_value: number;
+  asset_name?: string | null;
   asset_class: string;
   master_item_key?: string | null;
   country_code?: string | null;
@@ -407,12 +409,28 @@ const MASTER_ASSET_ITEM_TO_BUCKET: Record<string, AllocationBucket> = {
   bonds: 'fixed_income',
 };
 
-export function bucketAssetClass(assetClass: string, masterItemKey?: string | null): AllocationBucket {
-  const fromCatalog = masterItemKey ? MASTER_ASSET_ITEM_TO_BUCKET[masterItemKey] : undefined;
+// 2026-10-16 (PO production report): an asset the user named 'House ' (trailing space) with no
+// master item key was grouped as 'other'. The grid never collects asset_class, so a custom row keeps the
+// default 'other' and its NAME is the only signal. Deliberately narrow: a WHOLE-name match after
+// trimming/lower-casing/collapsing spaces and dropping a leading 'my'/'the', property words only. It is
+// consulted last, so a real master item key or an explicit asset_class always wins, and a name that merely
+// contains one of these words ('House insurance refund') is never guessed at.
+const PROPERTY_NAMES = new Set([
+  'house', 'home', 'family home', 'residence', 'principal residence', 'unit', 'apartment', 'flat', 'townhouse',
+  'villa', 'land', 'vacant land', 'property', 'investment property', 'rental property', 'holiday home',
+]);
+function normaliseAssetName(name: string | null | undefined): string {
+  return (name ?? '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/^(my|the) /, '');
+}
+
+export function bucketAssetClass(assetClass: string, masterItemKey?: string | null, assetName?: string | null): AllocationBucket {
+  const key = masterItemKey ? masterItemKey.trim().toLowerCase() : '';
+  const fromCatalog = key ? MASTER_ASSET_ITEM_TO_BUCKET[key] : undefined;
   if (fromCatalog) return fromCatalog;
   if (assetClass === 'cash') return 'cash';
   if (assetClass === 'property') return 'property';
   if (assetClass === 'business') return 'business';
+  if (PROPERTY_NAMES.has(normaliseAssetName(assetName))) return 'property';
   return 'other';
 }
 
@@ -620,6 +638,11 @@ export interface DashboardSummary {
   // entity populations into one opaque number) — 0 for every household with
   // no business entities, identical to every pre-LR-11 result.
   businessEntityOwnershipValue: number;
+  // PO decision 16-10-2026: the previously reported figure below is UNCHANGED and remains the basis for
+  // ratios, scores, forecasts and the stored monthly snapshots. netWorthLevels is the two-level view
+  // (personal / consolidated family) that every Net Worth surface reads; its bridge reproduces netWorth.
+  // Absent in engine-only callers; null when a balance-sheet section was unavailable.
+  netWorthLevels?: NetWorthLevels | null;
   netWorth: number;
   netWorthAllocation: AllocationSlice[];
   liabilityByType: { debtType: string; balance: number }[];
@@ -1114,7 +1137,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const allocationMap = new Map<AllocationBucket, number>();
   const addAlloc = (bucket: AllocationBucket, value: number) =>
     allocationMap.set(bucket, (allocationMap.get(bucket) ?? 0) + value);
-  for (const a of input.assets) addAlloc(bucketAssetClass(a.asset_class, a.master_item_key), reportingValue(a.currency_code, a.current_value));
+  for (const a of input.assets) addAlloc(bucketAssetClass(a.asset_class, a.master_item_key, a.asset_name), reportingValue(a.currency_code, a.current_value));
   for (const i of input.investments) addAlloc(bucketInvestmentType(i.investment_type, i.master_item_key), reportingValue(i.currency_code, i.current_value));
   if (totalRetirement > 0) addAlloc('super', totalRetirement);
   const netWorthAllocation: AllocationSlice[] = Array.from(allocationMap.entries()).map(([bucket, value]) => ({

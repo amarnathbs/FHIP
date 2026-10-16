@@ -54,11 +54,12 @@ async function BulkUploadPageContent() {
   );
 }
 
-// PO review 06-10-2026 F6 (Admin Standard section 18): every page carries the shared back link to its parent (Resources).
+// PO decision 16-10-2026: Bulk Upload lives inside Create Resource, so this page's parent is Create Resource (Admin Standard
+// section 18: the parent, not history). The route and its capability guard are unchanged.
 export default function BulkUploadPage() {
   return (
     <>
-      <PageBackLink href="/admin/resources" label="Resources" />
+      <PageBackLink href="/admin/resources/content/new" label="Create Resource" />
       <BulkUploadPageContent />
     </>
   );

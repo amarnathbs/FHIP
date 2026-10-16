@@ -151,6 +151,10 @@ export function ImportUploader({ type }: { type: ImportContentType }) {
           Resources
         </Link>{' '}
         &gt;{' '}
+        <Link href="/admin/resources/content/new" className="hover:text-trust hover:underline">
+          Create Resource
+        </Link>{' '}
+        &gt;{' '}
         <Link href="/admin/resources/import" className="hover:text-trust hover:underline">
           Bulk Upload
         </Link>{' '}

@@ -11,6 +11,9 @@ import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 
 export interface BusinessEntityRow {
   id: string;
+  /** 'company' | 'family_trust' | 'huf' (migrations 0134/0136/0154). Optional so older fixtures stay valid. */
+  entity_type?: string | null;
+  name?: string | null;
   ownership_percentage: number;
   valuation_mode: 'summary' | 'detailed';
   summary_net_asset_value: number | null;

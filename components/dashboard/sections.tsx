@@ -7,6 +7,8 @@ import { formatMoney } from '@/lib/engines/money';
 import { formatDateShort } from '@/lib/engines/date';
 import { percentChange, type DashboardSummary, type AllocationBucket } from '@/lib/engines/dashboard';
 import { DataTable } from '@/components/ui/DataTable';
+import { NetWorthLevelsPanel } from './NetWorthLevelsPanel';
+import { netWorthHeadline } from './netWorthHeadline';
 
 function titleCase(s: string): string {
   return s
@@ -60,14 +62,18 @@ export function ExecutiveSummary({ summary }: { summary: DashboardSummary }) {
   const netWorthSeries = snapshotSeries(summary, 'net_worth');
   const prevSnapshot = summary.snapshots.length > 1 ? summary.snapshots[summary.snapshots.length - 2] : null;
   const netWorthChange = prevSnapshot ? percentChange(summary.netWorth, prevSnapshot.net_worth) : null;
+  const headline = netWorthHeadline(summary);
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <MetricCard
-        label="Net Worth"
-        value={formatMoney(summary.netWorth, summary.currency)}
-        trend={netWorthChange !== null ? `${netWorthChange >= 0 ? '+' : ''}${(netWorthChange * 100).toFixed(1)}% vs last month` : 'Building history...'}
-        status={summary.netWorth >= 0 ? 'good' : 'risk'}
+        label={headline.label}
+        value={formatMoney(headline.value, summary.currency)}
+        trend={
+          headline.sub ??
+          (netWorthChange !== null ? `${netWorthChange >= 0 ? '+' : ''}${(netWorthChange * 100).toFixed(1)}% vs last month` : 'Building history...')
+        }
+        status={headline.value >= 0 ? 'good' : 'risk'}
       />
       <MetricCard
         label="Monthly Income"
@@ -171,15 +177,24 @@ export function NetWorthSection({ summary }: { summary: DashboardSummary }) {
   const debtSlices = summary.liabilityByType.map((l) => ({ label: titleCase(l.debtType), value: l.balance }));
   return (
     <SectionCard title="Net Worth Dashboard">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <Stat label="Total Assets" value={formatMoney(summary.totalAssets + summary.totalInvestments + summary.totalRetirement, summary.currency)} />
-        <Stat label="Total Liabilities" value={formatMoney(summary.totalLiabilities, summary.currency)} />
-        <Stat label="Net Worth" value={formatMoney(summary.netWorth, summary.currency)} />
-      </div>
+      {summary.netWorthLevels ? (
+        // PO decision 16-10-2026: two levels, one model (summary.netWorthLevels). The history chart
+        // below stays on the previously reported basis; the panel states how the two relate.
+        <NetWorthLevelsPanel levels={summary.netWorthLevels} />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <Stat label="Total Assets" value={formatMoney(summary.totalAssets + summary.totalInvestments + summary.totalRetirement, summary.currency)} />
+          <Stat label="Total Liabilities" value={formatMoney(summary.totalLiabilities, summary.currency)} />
+          <Stat label="Net Worth" value={formatMoney(summary.netWorth, summary.currency)} />
+        </div>
+      )}
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div>
           <p className="mb-2 text-sm font-medium text-gray-700">Net Worth Trend</p>
           <TrendLineChart data={netWorthSeries} currency={summary.currency} />
+          {summary.netWorthLevels && (
+            <p className="mt-1 text-xs text-muted">History is kept on the basis net worth was previously reported, which includes all of your entities.</p>
+          )}
         </div>
         <div>
           <p className="mb-2 text-sm font-medium text-gray-700">Asset Allocation</p>

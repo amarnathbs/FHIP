@@ -289,6 +289,7 @@ export function ImportPreview({ run: initialRun, rows: initialRows, editBase, li
 
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
         <Link href="/admin/resources" className="hover:text-trust hover:underline">Resources</Link> &gt;{' '}
+        <Link href="/admin/resources/content/new" className="hover:text-trust hover:underline">Create Resource</Link> &gt;{' '}
         <Link href="/admin/resources/import" className="hover:text-trust hover:underline">Bulk Upload</Link> &gt; <span className="text-ink">{applied ? 'Import result' : 'Preview'}</span>
       </nav>
 

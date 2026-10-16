@@ -7,6 +7,7 @@ import { formatMoneyWhole } from './money';
 import { buildPremiumSections } from './reportSectionsPremium';
 import type { FinancialSection } from './financialSectionStatus';
 import type { DashboardSummary, SnapshotRow } from './dashboard';
+import { describeNetWorthLevels } from './netWorthLevels';
 
 // G7 Contract 4 (docs/country-programme/g7-data-contracts.md) — appends a
 // cross-border blending caveat to a consolidated (multi-register) section's
@@ -375,6 +376,17 @@ function buildCashFlow(source: ReportSourceData, status: SectionStatus, reason: 
   };
 }
 
+// The Net Worth section's one-sentence summary. With the two-level model (PO decision 16-10-2026) it states
+// both levels from that model; without it (engine-only callers, an unavailable section) it is the original sentence.
+function netWorthSummarySentence(d: DashboardSummary, currency: 'AUD' | 'INR'): string {
+  const fmt = (n: number) => formatMoneyWhole(n, currency);
+  if (d.netWorthLevels) {
+    const f = d.netWorthLevels.family;
+    return `${describeNetWorthLevels(d.netWorthLevels, fmt)} At family level your recorded assets total ${fmt(f.totalAssets)} and your recorded liabilities total ${fmt(f.liabilities)}.`;
+  }
+  return `Your recorded assets total ${fmt(d.totalAssetsCombined)} and your recorded liabilities total ${fmt(d.totalLiabilities)}, resulting in an estimated net worth of ${fmt(d.netWorth)}.`;
+}
+
 function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: string | null): BuiltSection {
   const d = source.dashboard;
   const prev = previousSnapshotRow(source);
@@ -416,6 +428,9 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
             notInNetWorth: source.notInNetWorth ?? [],
             notInNetWorthNote: importedNotInNetWorthNote(source.notInNetWorth),
             groupingNote: d.totalInvestments > 0 ? WEALTH_GROUPING_NOTE : null,
+            // PO decision 16-10-2026: the two-level model (personal / consolidated family) read by every Net Worth surface.
+            // `netWorth` above stays the previously reported basis (movement vs prior snapshots); levels bridges to it.
+            levels: d.netWorthLevels ?? null,
           }
         : {},
     narrativeText:
@@ -426,7 +441,7 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
       status === 'included'
         ? {
             allocation: d.netWorthAllocation,
-            summary: `Your recorded assets total ${formatMoneyWhole(d.totalAssetsCombined, source.currency)} and your recorded liabilities total ${formatMoneyWhole(d.totalLiabilities, source.currency)}, resulting in an estimated net worth of ${formatMoneyWhole(d.netWorth, source.currency)}.${(source.notInNetWorth ?? []).map((i) => ` Not included: ${i.label} (${i.count} item${i.count === 1 ? '' : 's'}, ${formatMoneyWhole(i.total, source.currency)}).`).join('')}`,
+            summary: `${netWorthSummarySentence(d, source.currency)}${(source.notInNetWorth ?? []).map((i) => ` Not included: ${i.label} (${i.count} item${i.count === 1 ? '' : 's'}, ${formatMoneyWhole(i.total, source.currency)}).`).join('')}`,
           }
         : null,
     sourceReferences: { financialSnapshotMonth: source.reportMonth },

@@ -1,5 +1,7 @@
 # Resources Bulk Upload: Articles + Money Updates
 
+> **PO decision 16-10-2026 (placement only): Bulk Upload lives inside Create Resource; no separate sidebar group.** The Admin sidebar no longer has a "Bulk Upload" group. The option is a separate "Bulk Upload" section on the Create Resource page (`/admin/resources/content/new`, below the Article / Guide / FHIP Explainer cards) and on the Money Update create screen (`/admin/resources/money-updates/new`), shown only when the server-side capability `resources.content.bulk_import` is held (Super Admin, Resource Admin, Editor). The routes `/admin/resources/import/**`, their capability guards, the API routes and the Upload buttons on All Content and Money Updates are unchanged, as are apply, staging, the database and the migrations (none added). The importer's parent is now Create Resource (back link and breadcrumb); upload, preview and history pages still return to the Bulk Upload chooser. Tests: `tests/unit/resourcesBulkUploadInsideCreateResource.test.ts`.
+
 One reusable framework for two content types, not two upload systems. Manual creation (New Article, New Money Update, Create Money Update from Template, editing with explicit Save, preview, workflow, revision history) is unchanged and remains first-class. Bulk upload is additional.
 
 **Invariants:** upload is not publish. Upload creates a **private draft**. Article upload goes to the existing Article editor; Money Update upload goes to the existing Money Update editor. Finished bodies become canonical `content_blocks`. Sources are `resource_sources`. Category, tag and CTA are the existing relationships. The spreadsheet cannot approve, schedule, publish or bypass the GREEN / AMBER / RED workflow. A failed apply creates nothing. The same file twice creates nothing the second time. An existing human-edited Resource is never overwritten (v1 is create-only).
@@ -15,7 +17,7 @@ One reusable framework for two content types, not two upload systems. Manual cre
 | API | `app/api/admin/resources/import/**` |
 | Admin pages | `app/(app)/admin/resources/import/**` (chooser, upload, preview/result, history) |
 | Components | `components/resources/import/**` |
-| Capability | `lib/resources/permissions.ts` `canBulkImportResources` (`resources.content.bulk_import`), `lib/admin/adminNav.ts` field `resourceContentBulkImport` |
+| Capability | `lib/resources/permissions.ts` `canBulkImportResources` (`resources.content.bulk_import`), `lib/admin/adminNav.ts` field `resourceContentBulkImport` (a capability field only; no nav group since 16-10-2026) |
 | Database | `supabase/migrations/0272_resource_content_bulk_import.sql` (tables, capability, lookup, purge, apply), `0273_resource_content_bulk_import_apply_as_actor.sql` (private core + server-only twin), `0274_resource_content_bulk_import_faster_apply.sql` (lighter core) |
 | Production hand-over (prepared, not executed) | `docs/resources/po_apply_bulk_upload_production/` (prechecks, the three migrations with a check after each, manual backup, synthetic verification files, exact cleanup, rollback and stop switch; PGlite-proven by `tests/unit/resourcesBulkImportProductionPack.test.ts`) |
 | Template docs (generated) | `ARTICLE_UPLOAD_TEMPLATE_SPEC.md`, `MONEY_UPDATE_UPLOAD_TEMPLATE_SPEC.md` |
@@ -53,7 +55,7 @@ Capability affected: `resources.content.bulk_import` (new, Super Admin, Resource
 | 6 Privileged RPC pattern | `SECURITY DEFINER`, `auth.uid()`, capability predicate inside, fixed empty `search_path`, no dynamic SQL, `EXECUTE` revoked from public and anon, caller cannot choose actor, status, visibility or content type. Note: Section 6 is written for analytics RPCs; the return is a fixed-key `jsonb` summary (ids and counts), documented here as an interpretation, not an exception | PGlite suite, migration test |
 | 11 Safe exports | results CSV: server generated, fixed column allow-list, formula-injection neutralised, authorised again at download, non-identifying file name | security test NC-S6, live DEV |
 | 13 Safe failure | any failure creates nothing and is an explicit error | atomicity tests |
-| 14 No hidden scope expansion | adds one capability, one nav group, its own routes; the Article editor gains the existing SourcePicker because the spec requires imported sources to be manageable | see Article source picker below |
+| 14 No hidden scope expansion | adds one capability, its own routes (and, since 16-10-2026, no nav group: the option sits inside Create Resource); the Article editor gains the existing SourcePicker because the spec requires imported sources to be manageable | see Article source picker below |
 
 No exception to the Standard is requested.
 
