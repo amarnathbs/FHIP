@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { computeDashboard, type DashboardSummary, type LiabilityRow as DashboardLiabilityRow } from '@/lib/engines/dashboard';
 import { loadBusinessEntitiesForValuation } from '@/lib/services/businessEntityData';
+import { loadNetWorthLevels } from '@/lib/services/netWorthLevelsData';
 import { applySmsfPropertyLoanLinkOverride } from '@/lib/engines/householdContext';
 import { allUnavailableCashFlow, toCanonicalCashFlow } from '@/lib/services/dashboardCanonicalAdapter';
 import { buildCanonicalFinancialSnapshot, type CanonicalFinancialSnapshotResult } from '@/lib/read-models/snapshot';
@@ -220,7 +221,7 @@ export async function loadDashboardContext(userId: string, client?: SupabaseServ
   // from these rows any more.
   const [assets, liabilities, investments, retirement, insurance, goals, snapshotsRes, businessEntitiesResult] = await Promise.all([
     fetchAllRows((from, to) =>
-      supabase.from('assets').select('current_value, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true).range(from, to)
+      supabase.from('assets').select('current_value, asset_name, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true).range(from, to)
     ),
     fetchAllRows<DashboardLiabilityRow & { id: string }>((from, to) =>
       supabase
@@ -320,6 +321,21 @@ export async function loadDashboardContext(userId: string, client?: SupabaseServ
     currency,
     fxRateAudInr
   );
+
+  // PO decision 16-10-2026: Net Worth at two levels (personal / consolidated family), built ONCE here from
+  // the same canonical snapshot so Dashboard, Report and the Net Worth section read one model. Fail-soft:
+  // any problem leaves the previously reported figure (summary.netWorth) untouched and levels = null.
+  try {
+    summary.netWorthLevels = await loadNetWorthLevels({
+      userId,
+      supabase,
+      snapshot,
+      businessEntities: businessEntitiesResult.error || !businessEntitiesResult.data ? null : businessEntitiesResult.data,
+      previouslyReported: summary.netWorth,
+    });
+  } catch {
+    summary.netWorthLevels = null;
+  }
 
   const snapshotWrite = await writeFinancialSnapshots(userId, supabase, summary, snapshot, fxRateAudInr);
   if (summary.dataStatus) summary.dataStatus.snapshotWrite = snapshotWrite;

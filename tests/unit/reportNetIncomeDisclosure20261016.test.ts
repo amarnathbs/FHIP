@@ -1,6 +1,8 @@
 /**
  * PO complaint 16-10-2026: "the report, the net worth and monthly surplus working is not correct".
- * Synthetic reproduction of the shape of the PO's production Monthly Report (AUD):
+ * FIRST HYPOTHESIS (blank take-home on the salary) - the PO's real cause turned out to be a period-basis mismatch
+ * (see incomePeriodBasis20261016.test.ts); this file keeps the blank-take-home scenario because the PO then DECIDED
+ * (16-10-2026) that a blank take-home is calculated at the GROSS and disclosed (reversing GAP-09). Synthetic shape (AUD):
  *
  *   income (monthly): Employment Salary 16,416 (take-home NOT recorded), Rental 2,123, Business 1,208,
  *                     Capital Gains 34 (take-home recorded for the last three, equal to gross)
@@ -8,8 +10,8 @@
  *
  * Hand-calculated oracle (never produced by running the code):
  *   gross income            = 16,416 + 2,123 + 1,208 + 34                    = 19,781
- *   net income (known only) = 2,123 + 1,208 + 34 (salary take-home unknown)  = 3,365
- *   monthly surplus         = 3,365 - 4,535 - 8,362                          = -9,532
+ *   net income (salary take-home blank -> gross assumed) = 16,416 + 2,123 + 1,208 + 34 = 19,781
+ *   monthly surplus         = 19,781 - 4,535 - 8,362                         = +6,884
  *   Net worth               = assets register 1,670,298 + investments 590,000 + retirement 636,000
  *                             - liabilities 1,385,857                        = 1,510,441
  *   wealth chart (bucketed by asset class across registers) sums to total assets 2,896,298
@@ -96,38 +98,41 @@ async function build(t: Record<string, Row[]>) {
 }
 
 describe('Monthly Report net income and surplus on a PO-shaped household', () => {
-  it('reproduces the PO figures: gross counts every source, net counts only sources with a recorded take-home', async () => {
+  it('a blank take-home is taken at the gross: net = gross = 19,781, surplus +6,884, and the source is named', async () => {
     const { source } = await build(poShapedHousehold({ salaryNet: null }));
     const d = source.dashboard;
     expect(d.grossMonthlyIncome).toBe(19781);
-    expect(d.netMonthlyIncome).toBe(3365);
+    expect(d.netMonthlyIncome).toBe(19781);
     expect(d.totalMonthlyExpenses).toBe(4535);
     expect(d.debtMonthlyRepayments).toBe(8362);
-    expect(d.monthlySurplus).toBe(-9532);
-    expect(d.dataStatus?.netIncomeUnknownComponents).toBe(1);
+    expect(d.monthlySurplus).toBe(6884);
+    expect(d.dataStatus?.netIncomeAssumed).toEqual({ count: 1, grossMonthly: 16416, sources: [{ name: 'Employment Salary', grossMonthly: 16416 }] });
+    expect(d.dataStatus?.netIncomeBasis).toBe('net_partial');
   });
 
   it('with the salary take-home recorded the surplus is on a complete net basis (control: nothing to disclose)', async () => {
     const { source, get } = await build(poShapedHousehold({ salaryNet: 11000 }));
     expect(source.dashboard.netMonthlyIncome).toBe(14365);
     expect(source.dashboard.monthlySurplus).toBe(14365 - 4535 - 8362);
-    expect(get('cash_flow').sectionData.netIncomeUnknownComponents).toBe(0);
+    expect((get('cash_flow').sectionData.netIncomeAssumed as { count: number }).count).toBe(0);
     expect(get('cash_flow').sectionData.netIncomeNote ?? null).toBeNull();
     expect(JSON.stringify(get('executive_summary').chartData)).not.toMatch(/take-home/i);
   });
 
-  it('[DEFECT] the Cash Flow section discloses that take-home pay is unknown for part of the income', async () => {
+  it('[DEFECT] the Cash Flow section says gross is treated as take-home, naming the source and how many', async () => {
     const { get } = await build(poShapedHousehold({ salaryNet: null }));
     const cf = get('cash_flow');
-    expect(cf.sectionData.netIncomeUnknownComponents).toBe(1);
-    expect(cf.sectionData.netIncomeNote).toMatch(/take-home pay is not recorded for 1 of your 4 income sources/i);
+    expect((cf.sectionData.netIncomeAssumed as { count: number }).count).toBe(1);
+    expect(cf.sectionData.netIncomeNote).toMatch(/Gross is being treated as take-home: no tax has been deducted for 1 income source/);
+    expect(cf.sectionData.netIncomeNote).toMatch(/Employment Salary \(\$16,416 a month\)/);
+    expect(cf.sectionData.netIncomeNote).toMatch(/Cash Flow, Savings and Debt scores/);
   });
 
-  it('[DEFECT] the Executive Summary deficit sentence says the net income behind it is incomplete', async () => {
+  it('[DEFECT] the Executive Summary surplus sentence carries the same assumed-gross note', async () => {
     const { get } = await build(poShapedHousehold({ salaryNet: null }));
     const summary = (get('executive_summary').chartData as { cashFlow: { summary: string } }).cashFlow.summary;
-    expect(summary).toContain('exceeded net monthly income by $9,532');
-    expect(summary).toMatch(/take-home pay is not recorded for 1 of your 4 income sources/i);
+    expect(summary).toContain('retained a monthly surplus of $6,884');
+    expect(summary).toMatch(/Gross is being treated as take-home/);
   });
 });
 

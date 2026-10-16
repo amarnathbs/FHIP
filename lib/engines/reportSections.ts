@@ -7,6 +7,7 @@ import { formatMoneyWhole } from './money';
 import { buildPremiumSections } from './reportSectionsPremium';
 import type { FinancialSection } from './financialSectionStatus';
 import type { DashboardSummary, SnapshotRow } from './dashboard';
+import { describeNetWorthLevels } from './netWorthLevels';
 
 // G7 Contract 4 (docs/country-programme/g7-data-contracts.md) — appends a
 // cross-border blending caveat to a consolidated (multi-register) section's
@@ -29,14 +30,38 @@ function withCrossBorderLimitation(existingText: string | null, countriesInUseCo
  * gross income of 19,781 beside a net of 3,365 read as a complete picture. This is the report's equivalent notice.
  * It only DISCLOSES; no figure changes.
  */
-export function netIncomeBasisNote(d: DashboardSummary): string | null {
-  const unknown = d.dataStatus?.netIncomeUnknownComponents ?? 0;
-  if (unknown <= 0) return null;
-  if (d.dataStatus?.netIncomeBasis === 'gross_fallback') {
-    return 'Take-home pay is not recorded for any of your income sources, so the monthly surplus or deficit in this report is worked out from gross income (before tax and other deductions). Add the take-home amount on the Income page for a net-based result.';
-  }
-  const total = Math.max(d.incomeSourceCount, unknown);
-  return `Take-home pay is not recorded for ${unknown} of your ${total} income source${total === 1 ? '' : 's'}. ${unknown === 1 ? 'That source counts' : 'Those sources count'} in gross income but not in net income, so net income, the monthly surplus or deficit and the ratios built on them may be understated. Add the take-home amount on the Income page to complete them.`;
+export function netIncomeBasisNote(d: DashboardSummary, currency: 'AUD' | 'INR' = 'AUD'): string | null {
+  const parts = [assumedTakeHomeNote(d, currency), implausibleTakeHomeNote(d)].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
+/**
+ * PO production audit 16-10-2026: the PO's salary was an ANNUAL gross beside the net of ONE fortnightly payslip, so
+ * its take-home read as 2% of gross and the report showed a 9,324 deficit instead of about 1,041. A wage whose
+ * take-home is under 30% of gross (see lib/engines/incomePlausibility.ts for the rationale) is named so the
+ * mismatch is visible. Disclosure only.
+ */
+function implausibleTakeHomeNote(d: DashboardSummary): string | null {
+  const flags = d.dataStatus?.netIncomeImplausible ?? [];
+  if (flags.length === 0) return null;
+  const pct = (f: { netToGross: number }) => `${(f.netToGross * 100).toFixed(0)}%`;
+  const named = flags
+    .map((f) => (f.kind === 'net_above_gross' ? `${f.name} (take-home is higher than gross)` : `${f.name} (take-home pay of ${pct(f)} of gross)`))
+    .join('; ');
+  return `Please check ${flags.length === 1 ? 'this income entry' : 'these income entries'}: ${named}. Gross and take-home must be entered for the same pay period (for example both per year, or both per fortnight); if they are not, net income, the monthly surplus or deficit and the ratios built on them are wrong.`;
+}
+
+/**
+ * PO decision 16-10-2026 (reversing GAP-09): a source with no take-home pay and no tax entered is calculated with its
+ * GROSS as take-home, and every place that shows the affected figures says so, naming the sources.
+ * Affected: net income, monthly surplus or deficit, savings rate, debt-service ratio (all read DashboardSummary.netMonthlyIncome),
+ * and the scores built on them (Cash Flow Health, Savings Behaviour, Debt Health, plus Financial Resilience inputs).
+ */
+function assumedTakeHomeNote(d: DashboardSummary, currency: 'AUD' | 'INR'): string | null {
+  const assumed = d.dataStatus?.netIncomeAssumed;
+  if (!assumed || assumed.count <= 0) return null;
+  const named = assumed.sources.map((s) => `${s.name} (${formatMoneyWhole(s.grossMonthly, currency)} a month)`).join('; ');
+  return `Gross is being treated as take-home: no tax has been deducted for ${assumed.count} income source${assumed.count === 1 ? '' : 's'} because no take-home pay or tax is recorded for ${assumed.count === 1 ? 'it' : 'them'}: ${named}. Net income, the monthly surplus or deficit, the savings rate, the debt-service ratio and the Cash Flow, Savings and Debt scores are calculated on that basis. Enter the take-home pay, or the tax, on the Income page to replace the assumption.`;
 }
 
 /** Same label as lib/read-models/investments.ts UNPUBLISHED_BUCKET_LABEL (not imported: that module is server-only). */
@@ -217,7 +242,7 @@ function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean)
   // income, rather than silently describing totalMonthlyExpenses alone as
   // "total expenses and commitments".
   const totalMonthlyOutflow = d.totalMonthlyExpenses + d.debtMonthlyRepayments;
-  const netIncomeNote = netIncomeBasisNote(d);
+  const netIncomeNote = netIncomeBasisNote(d, currency);
   const cashFlowChart = {
     grossMonthlyIncome: d.grossMonthlyIncome,
     netMonthlyIncome: d.netMonthlyIncome,
@@ -307,8 +332,8 @@ function buildCashFlow(source: ReportSourceData, status: SectionStatus, reason: 
             passiveMonthlyIncome: d.passiveMonthlyIncome,
             activeMonthlyIncome: d.activeMonthlyIncome,
             incomeSourceCount: d.incomeSourceCount,
-            netIncomeUnknownComponents: d.dataStatus?.netIncomeUnknownComponents ?? 0,
-            netIncomeNote: netIncomeBasisNote(d),
+            netIncomeAssumed: d.dataStatus?.netIncomeAssumed ?? { count: 0, grossMonthly: 0, sources: [] },
+            netIncomeNote: netIncomeBasisNote(d, source.currency),
             largestIncomeSharePct: d.largestIncomeSharePct,
             essentialMonthlyExpenses: d.essentialMonthlyExpenses,
             lifestyleMonthlyExpenses: d.lifestyleMonthlyExpenses,
@@ -349,6 +374,17 @@ function buildCashFlow(source: ReportSourceData, status: SectionStatus, reason: 
     // figure to caveat).
     limitationText: status === 'included' ? withCrossBorderLimitation(reason, d.countriesInUse.length) : reason,
   };
+}
+
+// The Net Worth section's one-sentence summary. With the two-level model (PO decision 16-10-2026) it states
+// both levels from that model; without it (engine-only callers, an unavailable section) it is the original sentence.
+function netWorthSummarySentence(d: DashboardSummary, currency: 'AUD' | 'INR'): string {
+  const fmt = (n: number) => formatMoneyWhole(n, currency);
+  if (d.netWorthLevels) {
+    const f = d.netWorthLevels.family;
+    return `${describeNetWorthLevels(d.netWorthLevels, fmt)} At family level your recorded assets total ${fmt(f.totalAssets)} and your recorded liabilities total ${fmt(f.liabilities)}.`;
+  }
+  return `Your recorded assets total ${fmt(d.totalAssetsCombined)} and your recorded liabilities total ${fmt(d.totalLiabilities)}, resulting in an estimated net worth of ${fmt(d.netWorth)}.`;
 }
 
 function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: string | null): BuiltSection {
@@ -392,6 +428,9 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
             notInNetWorth: source.notInNetWorth ?? [],
             notInNetWorthNote: importedNotInNetWorthNote(source.notInNetWorth),
             groupingNote: d.totalInvestments > 0 ? WEALTH_GROUPING_NOTE : null,
+            // PO decision 16-10-2026: the two-level model (personal / consolidated family) read by every Net Worth surface.
+            // `netWorth` above stays the previously reported basis (movement vs prior snapshots); levels bridges to it.
+            levels: d.netWorthLevels ?? null,
           }
         : {},
     narrativeText:
@@ -402,7 +441,7 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
       status === 'included'
         ? {
             allocation: d.netWorthAllocation,
-            summary: `Your recorded assets total ${formatMoneyWhole(d.totalAssetsCombined, source.currency)} and your recorded liabilities total ${formatMoneyWhole(d.totalLiabilities, source.currency)}, resulting in an estimated net worth of ${formatMoneyWhole(d.netWorth, source.currency)}.${(source.notInNetWorth ?? []).map((i) => ` Not included: ${i.label} (${i.count} item${i.count === 1 ? '' : 's'}, ${formatMoneyWhole(i.total, source.currency)}).`).join('')}`,
+            summary: `${netWorthSummarySentence(d, source.currency)}${(source.notInNetWorth ?? []).map((i) => ` Not included: ${i.label} (${i.count} item${i.count === 1 ? '' : 's'}, ${formatMoneyWhole(i.total, source.currency)}).`).join('')}`,
           }
         : null,
     sourceReferences: { financialSnapshotMonth: source.reportMonth },

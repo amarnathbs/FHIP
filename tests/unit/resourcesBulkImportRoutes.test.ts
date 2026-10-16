@@ -275,14 +275,14 @@ describe('the capability is its own predicate and its own nav field (Standard se
     expect(canCreateSpecialistContent(author)).toBe(true);
     expect(canBulkImportResources(author)).toBe(false);
   });
-  it('the nav contract has its own field and group, fails closed, and no other capability implies it', () => {
+  it('the nav contract has its own capability field (no sidebar group since the PO decision of 16-10-2026), fails closed, and no other capability implies it', () => {
     expect(NO_ADMIN_CAPABILITIES.resourceContentBulkImport).toBe(false);
     expect(parseAdminCapabilities({ data: { capabilities: { resourceContentAdmin: true, resourcesDashboard: true } } }).resourceContentBulkImport).toBe(false);
     expect(parseAdminCapabilities({ data: { capabilities: { resourceContentBulkImport: 'true' } } }).resourceContentBulkImport).toBe(false);
     expect(parseAdminCapabilities({ data: { capabilities: { resourceContentBulkImport: true } } }).resourceContentBulkImport).toBe(true);
-    const only = buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, resourceContentBulkImport: true });
-    expect(only.map((g) => g.label)).toEqual(['Bulk Upload']);
-    expect(only[0].items).toEqual([{ label: 'Bulk Upload', href: '/admin/resources/import' }]);
+    // PO decision 16-10-2026: Bulk Upload lives inside Create Resource; holding the capability adds NO sidebar group or item
+    // (the Create Resource page decides, on the server, whether to offer it: resourcesBulkUploadInsideCreateResource.test.ts).
+    expect(buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, resourceContentBulkImport: true })).toEqual([]);
     expect(buildAdminNavGroups(true, { ...NO_ADMIN_CAPABILITIES, resourceContentAdmin: true, resourcesDashboard: true }).map((g) => g.label)).not.toContain('Bulk Upload');
   });
 });

@@ -180,7 +180,8 @@ describe('an imported-only household is not treated as having no expenses (DC-05
 });
 
 describe('null, unknown and unconvertible values are never read as figures (GAP-09, GAP-RET-02, DC-12)', () => {
-  it('a payslip row with an unknown net contributes NOTHING to net income (it used to contribute its gross)', async () => {
+  // PO decision 16-10-2026 reverses GAP-09: the unknown net now uses the gross, and it is named.
+  it('a payslip row with an unknown net is taken at its GROSS as take-home, and disclosed by name (reverses GAP-09)', async () => {
     const t = tables(profile(), taxonomy(), {
       income_sources: [
         incomeSource('a', 'Acme (variable pay month)', 6500, 'monthly', { net_amount: null, source_type: 'payslip_import' }),
@@ -189,8 +190,8 @@ describe('null, unknown and unconvertible values are never read as figures (GAP-
     });
     const { d } = await dashboard(t);
     expect(d.grossMonthlyIncome).toBe(7700);
-    expect(d.netMonthlyIncome).toBe(1000);
-    expect(d.dataStatus?.netIncomeUnknownComponents).toBe(1);
+    expect(d.netMonthlyIncome).toBe(7500); // 6,500 assumed (gross) + 1,000 entered
+    expect(d.dataStatus?.netIncomeAssumed).toEqual({ count: 1, grossMonthly: 6500, sources: [{ name: 'Acme (variable pay month)', grossMonthly: 6500 }] });
     expect(d.dataStatus?.netIncomeBasis).toBe('net_partial');
   });
 

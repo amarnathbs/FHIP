@@ -70,7 +70,9 @@ function rowFromLine(line: LiabilityLine): LiabilityRow {
 export interface MonthCashFlow {
   month: MonthKey;
   grossIncome: number;
+  /** Take-home incl. the gross assumed as take-home for sources with no take-home or tax entered (PO decision 16-10-2026). */
   netIncomeKnown: number;
+  /** Sources (rows + variable pay) on that assumed-gross basis. */
   netIncomeUnknownComponents: number;
   expenses: number;
   debtService: number;
@@ -93,8 +95,8 @@ export function computeMonthCashFlow(snapshot: CanonicalFinancialSnapshot, month
   const actualIncome = coveredMonthlyAverage(ledger, countedInMonth);
   const variablePay = roundMoney(income.actual.variablePay.lines.filter((v) => monthOf(v.date) === month).reduce((s, v) => s + (v.grossReporting ?? 0), 0));
   const grossIncome = roundMoney(income.planned.grossMonthly + actualIncome + variablePay);
-  const netIncomeKnown = roundMoney(income.planned.netKnownMonthly + actualIncome);
-  const netIncomeUnknownComponents = income.planned.netUnknownCount + (variablePay > 0 ? 1 : 0);
+  const netIncomeKnown = roundMoney(income.planned.netMonthly + actualIncome + variablePay);
+  const netIncomeUnknownComponents = income.planned.netAssumedCount + (variablePay > 0 ? 1 : 0);
 
   const actual = computeActualExpenses(ledger);
   const combined = computeCombinedExpenses(snapshot.expenses.planned, actual);

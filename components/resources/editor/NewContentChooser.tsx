@@ -19,7 +19,10 @@ const CARDS: { type: EditableContentType; title: string; description: string }[]
   { type: 'fhip_explainer', title: 'FHIP Explainer', description: 'Content explaining an FHIP metric, score, methodology, feature or financial-health concept.' },
 ];
 
-export function NewContentChooser({ canCreate }: { canCreate: boolean }) {
+// PO decision 16-10-2026: Bulk Upload lives inside Create Resource, not as a separate Admin module. `canBulkImport` is
+// resolved ON THE SERVER by the page (canBulkImportResources: capability resources.content.bulk_import) and passed down as a
+// boolean; this component never decides it. It is false by default, so the option fails closed.
+export function NewContentChooser({ canCreate, canBulkImport = false }: { canCreate: boolean; canBulkImport?: boolean }) {
   if (!canCreate) {
     return (
       <div className="rounded-card border border-line bg-white p-6 text-center">
@@ -58,6 +61,18 @@ export function NewContentChooser({ canCreate }: { canCreate: boolean }) {
           </Link>
         ))}
       </div>
+
+      {canBulkImport && (
+        <section aria-labelledby="bulk-upload-h" className="rounded-card border border-line bg-white p-5">
+          <h2 id="bulk-upload-h" className="text-base font-semibold text-ink">
+            Bulk Upload
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm text-muted">Create many Articles or Money Updates from one spreadsheet. Every item becomes a private draft.</p>
+          <Link href="/admin/resources/import" className="mt-4 inline-flex min-h-11 items-center rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
+            Bulk Upload
+          </Link>
+        </section>
+      )}
     </div>
   );
 }

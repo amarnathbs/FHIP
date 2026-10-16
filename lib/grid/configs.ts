@@ -1,6 +1,7 @@
 import { FREQUENCY_OPTIONS } from '@/lib/engines/money';
 import { COUNTRY_OPTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
 import { getAssetFieldMetadata } from './assetFieldMetadata';
+import { defaultIsEssentialForExpenseItem } from '@/lib/engines/dashboard';
 import type { GridConfig } from './types';
 
 export const incomeGridConfig: GridConfig = {
@@ -19,7 +20,10 @@ export const incomeGridConfig: GridConfig = {
   restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
   fields: [
     { name: 'amount', label: 'Gross Amount', type: 'number', step: '0.01', required: true },
-    { name: 'net_amount', label: 'Net Amount', type: 'number', step: '0.01' },
+    { name: 'net_amount', label: 'Net Amount (take-home pay)', type: 'number', step: '0.01' },
+    // PO decision 16-10-2026: if you do not know your take-home pay, enter the TAX per pay period instead and the
+    // take-home is worked out as gross minus tax. With neither, the gross is treated as take-home (no tax deducted).
+    { name: 'tax_amount', label: 'Tax per period (if no net amount)', type: 'number', step: '0.01' },
     { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
     { name: 'is_taxable', label: 'Taxable', type: 'checkbox', defaultValue: true },
     { name: 'employer_name', label: 'Employer', type: 'text' },
@@ -46,6 +50,9 @@ export const expenseGridConfig: GridConfig = {
   frequencyField: 'frequency',
   reviewSection: 'expenses',
   restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  // PO decision 16-10-2026: necessities (rent, mortgage, rates, utilities, groceries, health, fuel, transport, home
+  // insurance, body corporate, internet) start ticked Essential when the row is created; the user can untick.
+  defaultsForMasterItem: (itemKey) => (defaultIsEssentialForExpenseItem(itemKey) ? { is_essential: true } : {}),
   fields: [
     { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
     { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
