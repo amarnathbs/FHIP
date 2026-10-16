@@ -1,0 +1,12 @@
+=== journey 6b (joint SHARE) 2026-10-16T02:11:30.949Z ===
+  PASS  three statements accepted: D joint 60/40, B joint 50/50, A sole  ([200,200,200])
+  FAIL  the report is generated  (503 {"error":"The report is taking longer than expected. Nothing was lost: ask again and it carries on where it stopped.","data":{"status":"timed_out","retryAfterSeconds":5,"retryable":true}})
+file:///D:/FHIP/.claude/worktrees/agent-a4c066c4316765694/scripts/nav2_stage3/j6b_joint_share.mjs:28
+const asOf = rep.asOfDate;
+                 ^
+
+TypeError: Cannot read properties of undefined (reading 'asOfDate')
+    at file:///D:/FHIP/.claude/worktrees/agent-a4c066c4316765694/scripts/nav2_stage3/j6b_joint_share.mjs:28:18
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+Node.js v24.18.0

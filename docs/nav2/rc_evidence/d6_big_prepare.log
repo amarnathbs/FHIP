@@ -1,0 +1,10 @@
+=== big user (30 funds: 4 with history + 26 without)  mode prepare  2026-10-16T01:31:16.348Z ===
+  PASS  the funds without history have no stored HISTORY (pre-changeover prices) before the run  (0 history rows)
+nav2rc-big-30 30 funds A 22.21 | B 282.012 | D 252.134
+   upload+process 521020 ms {"ok":true,"step":"process","status":200,"docId":"ca380bda-65ef-47d7-8073-f8c5ad74e485","memberId":"02178555-31e4-4508-82f7-f91d6478cc70","deduplicated":false}
+  PASS  D1: the 30-fund statement is uploaded, parsed and accepted through the real routes  ({"ok":true,"step":"process","status":200,"docId":"ca380bda-65ef-47d7-8073-f8c5ad74e485","memberId":"02178555-31e4-4508-82f7-f91d6478cc70","deduplicated":false})
+  PASS  D1: 30 canonical positions exist and are certified  (30 positions, 30 certified)
+  PASS  D1: no reconciliation case was opened for the 30 funds (every ISIN agrees with its AMFI code)  ([])
+  PASS  D1/held-only: accepting 30 funds with fetching OFF stored NO price for the 26 funds without history  (0 rows)
+
+=== big user: 5 PASS, 0 FAIL ===
