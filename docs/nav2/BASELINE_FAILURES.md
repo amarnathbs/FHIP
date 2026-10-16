@@ -137,3 +137,10 @@ Both runs: `npx vitest run --maxWorkers=3 --testTimeout=90000 --hookTimeout=9000
 * The vitest `ssr` ENOENT harness fault again hit a different set of suites in each run; the suites hit in the release candidate run pass when re-run.
 * `tsc --noEmit`: one error, `tests/unit/canonicalCertResidueAllSql.test.ts(127,75)`, byte-identical on origin/main. ESLint on the 235 changed files: one error in `components/ui/AppShell.tsx`, the same line exists on origin/main.
 * `npm run check:migrations`: OK (245 active migrations, next version 0286). `npm run check:migrations:against-main`: no cross-branch collisions. Migration numbers: NAV2 owns 0260 to 0263, 0269 to 0271, 0281, 0282; 0283 staff Premium, 0284 AIE cap, 0285 income tax amount (on main) and 0286 Module 11 prompt v3 belong to other workstreams.
+
+## After the merge of origin/main cd33561 (16-10-2026)
+
+* `tsc --noEmit` after the merge showed one NEW error: `nav2/rbiAiReader.ts` (main made `userId` mandatory on every AI gateway call for the per-user daily cap). Fixed: the NAV2 cron RBI reader has no user, so it is parser-only unless a user id is passed (unit-tested, NC-AI3b). The other `tsc` error is the pre-existing `canonicalCertResidueAllSql.test.ts(127,75)`, identical on main.
+* `staffAdminPremiumPackPglite` (numbering) failed on the branch only: it asserted that no 0281 or 0282 file exists. The assertion now allows exactly the two NAV2 migrations and nothing else in that gap (passes).
+* A test that had kept merge conflict markers (`benchmarkEntitlementEditRevisionPglite`) was resolved by taking main's version of the tripwire (passes, 56 of 56).
+* Checks on the final tip: `check:migrations` OK (247 active migrations, next 0286), `check:migrations:against-main` no collisions, NAV2 suite plus the touched guards 64 files and 955 tests all pass. `promoHardeningMigrations` NC-M4 and `resourcesBulkImportMigration` editor safety fail identically on main (they lint main's own 0285).
