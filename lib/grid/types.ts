@@ -35,6 +35,9 @@ export interface GridConfig {
   // Per-catalogue-item defaults applied when a NEW row is created from a catalogue item (e.g. Expenses pre-ticks Essential
   // for the necessities). Applied after the field defaults; the user can change any value. Never touches saved rows.
   defaultsForMasterItem?: (itemKey: string) => Record<string, unknown>;
+  // A short line shown under the item name in the Add / Edit form for catalogue items that need explaining (Income:
+  // Bonus). Presentation only.
+  itemHint?: (itemKey: string | null | undefined) => string | undefined;
   // When set, shows a "this doesn't apply to me" toggle backed by this
   // user_profiles boolean column (migration 0029) — only offered for the
   // categories where genuine inapplicability is plausible (investments,

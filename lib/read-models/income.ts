@@ -25,12 +25,19 @@
  *    gross minus the entered tax_amount, else the GROSS is assumed to be take-home (no tax deducted) so every figure
  *    can be calculated. The rows and the variable pay on the assumed basis are named in `combined.assumedNetSources`
  *    so every consumer can disclose them. See lib/engines/incomeNetBasis.ts.
+ *  - NO DOUBLE COUNT of a recorded Bonus / Overtime / Commission (PO request 16-10-2026): when the household has ALSO
+ *    recorded that kind of pay as its own income source (catalogue item 'bonus' / 'overtime' / 'commission', counted,
+ *    same owner as the payslip's income row), the payslip's component of that kind is NOT added as variable pay. The
+ *    recorded source is the household's statement of it; adding the payslip's copy would count the same bonus twice
+ *    (once at its yearly amount / 12, once on its pay date). The left-out amounts are listed in
+ *    `actual.variablePay.leftOut` so the Income page can say so. Other components (and other kinds) still count.
  *  - Broker dividends in ii_* are never read here: the bank credit is the
  *    single household-income leg (INV-G4).
  */
 import '@/lib/serverOnly';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
 import { resolveNetBasis, type AssumedNetSource, type NetBasis } from '@/lib/engines/incomeNetBasis';
+import { VARIABLE_PAY_COLUMN_TO_ITEM_KEY, type VariablePayKind } from '@/lib/engines/incomeVariablePay';
 import { resolveContext, type ReadModelOptions } from './core/context';
 import { toReporting, type FxContext, type ReportingCurrency } from './core/currency';
 import { coveredMonthlyAverage, type ActualLine, type NormalisedLedger } from './core/ledger';
@@ -121,6 +128,18 @@ export interface VariablePayLine {
   provenance: Provenance;
 }
 
+/** A payslip's bonus / overtime / commission that was NOT added because the household recorded it as its own source. */
+export interface LeftOutVariablePayLine {
+  payrollEventId: string;
+  kind: VariablePayKind;
+  date: string;
+  grossNative: number;
+  currency: string;
+  /** The income source that already stands for this pay. */
+  recordedSourceId: string;
+  recordedSourceName: string;
+}
+
 export interface IncomeReadModelData {
   window: ReadWindow;
   reportingCurrency: ReportingCurrency;
@@ -139,7 +158,7 @@ export interface IncomeReadModelData {
     countedMonthly: number;
     representedCount: number;
     possibleDuplicateCount: number;
-    variablePay: { lines: VariablePayLine[]; grossMonthly: number };
+    variablePay: { lines: VariablePayLine[]; grossMonthly: number; leftOut: LeftOutVariablePayLine[] };
     unconverted: UnconvertedTally;
   };
   combined: {
@@ -329,12 +348,29 @@ export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
 
   // D-06 variable pay of Applied, approved, current payslips dated in the window.
   const variablePay: VariablePayLine[] = [];
+  const leftOut: LeftOutVariablePayLine[] = [];
+  // Counted planned lines that record a kind of variable pay as their own source, by (kind, owner).
+  const recordedVariableSource = (kind: VariablePayKind, owner: string | null): PlannedIncomeLine | undefined =>
+    countedPlanned.find((p) => p.masterItemKey === kind && (p.owner ?? 'self') === (owner ?? 'self') && (p.grossMonthly ?? 0) > 0);
   for (const e of input.payrollEvents) {
     const sourceId = appliedEventToSource.get(e.id);
     if (!sourceId || e.approval_status !== 'approved' || e.superseded_by_payroll_event_id) continue;
     const date = e.payment_date ?? e.pay_period_end;
     if (!date || !isDateInWindow(date, ledger.window)) continue;
-    const parts = [e.bonus_pay, e.overtime_pay, e.commission_pay, e.other_earnings].filter((v): v is number => v != null).map(Number);
+    const appliedOwner = sourceById.get(sourceId)?.owner ?? null;
+    const parts: number[] = [];
+    for (const column of ['bonus_pay', 'overtime_pay', 'commission_pay'] as const) {
+      const amount = e[column];
+      if (amount == null || Number(amount) <= 0) continue;
+      const kind = VARIABLE_PAY_COLUMN_TO_ITEM_KEY[column];
+      const recorded = recordedVariableSource(kind, appliedOwner);
+      if (recorded) {
+        leftOut.push({ payrollEventId: e.id, kind, date, grossNative: r(Number(amount)), currency: e.currency_code, recordedSourceId: recorded.id, recordedSourceName: recorded.name });
+      } else {
+        parts.push(Number(amount));
+      }
+    }
+    if (e.other_earnings != null) parts.push(Number(e.other_earnings));
     const gross = r(parts.reduce((s, v) => s + v, 0));
     if (gross <= 0) continue;
     variablePay.push({
@@ -365,7 +401,7 @@ export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
       countedMonthly,
       representedCount: actualLines.length - counted.length,
       possibleDuplicateCount: counted.filter((l) => l.possibleDuplicateOf.length > 0).length,
-      variablePay: { lines: variablePay, grossMonthly: variableGrossMonthly },
+      variablePay: { lines: variablePay, grossMonthly: variableGrossMonthly, leftOut },
       unconverted: actualUnconverted,
     },
     combined: {

@@ -19,6 +19,8 @@
  */
 import { useEffect, useState } from 'react';
 import { formatMoneyWhole } from '@/lib/engines/money';
+import { formatDateInText } from '@/lib/engines/date';
+import { VARIABLE_PAY_LABELS } from '@/lib/engines/incomeVariablePay';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import type { IncomeActualsDto, IncomeActualsOk } from '@/lib/income/importedIncomeActuals';
 import { PayslipDetails } from '@/components/income/PayslipDetails';
@@ -102,7 +104,7 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
       <div>
         <h2 id="income-actuals-heading" className="text-lg font-semibold text-trust">Actual income from your imports</h2>
         <p className="mt-1 text-xs text-muted">
-          {data.window.from} to {data.window.to}. Each payment is counted once: a bank deposit that is your payslip&apos;s pay is shown
+          {formatDateInText(data.window.from, cur)} to {formatDateInText(data.window.to, cur)}. Each payment is counted once: a bank deposit that is your payslip&apos;s pay is shown
           but not added again.
         </p>
       </div>
@@ -131,6 +133,20 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
         </div>
       )}
 
+      {data.variablePay.leftOut.length > 0 && (
+        <div role="note" className="rounded-card border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" data-testid="income-variable-left-out">
+          <p className="font-medium">Counted once: not added again from your payslip.</p>
+          <ul className="mt-1 list-disc pl-5">
+            {data.variablePay.leftOut.map((v) => (
+              <li key={`${v.payrollEventId}-${v.kind}`}>
+                The {VARIABLE_PAY_LABELS[v.kind]} of {money(v.grossNative, v.currency)} on your payslip dated {formatDateInText(v.date, v.currency)} is already counted
+                in your income entry “{v.recordedSourceName}”, so it is not added a second time.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {data.actual.lines.length > 0 && (
         <DataTable label="Actual income from bank statements" className="w-full min-w-[520px] border-collapse">
           <caption className="py-1 text-left text-sm font-medium">Actual income from bank statements</caption>
@@ -145,7 +161,7 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
           <tbody>
             {data.actual.lines.map((l) => (
               <tr key={l.key} className="border-b border-gray-100" data-treatment={l.treatment}>
-                <td className="py-1 pr-2">{l.date}</td>
+                <td className="py-1 pr-2">{formatDateInText(l.date, l.currency)}</td>
                 <td className="py-1 pr-2">
                   {l.description ?? 'Bank deposit'}
                   <span className="block text-xs text-muted">
@@ -178,7 +194,7 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
           <tbody>
             {data.variablePay.lines.map((v) => (
               <tr key={v.payrollEventId} className="border-b border-gray-100">
-                <td className="py-1 pr-2">{v.date}</td>
+                <td className="py-1 pr-2">{formatDateInText(v.date, v.currency)}</td>
                 <td className="py-1 pr-2">{v.employerName ?? v.sourceName ?? 'Payslip'}<span className="block text-xs text-muted">Imported from payslip · counted once, on its pay date</span></td>
                 <td className={`py-1 ${NUM_CELL_CLASS}`}>{money(v.grossNative, v.currency)}</td>
               </tr>
