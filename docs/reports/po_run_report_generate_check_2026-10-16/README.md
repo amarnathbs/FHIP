@@ -31,3 +31,4 @@ How to read the results
 
 - `REPORT_GENERATE_DEADLINE_MS` (default 22000, allowed 1000 to 26000): how long the generate route works before it answers "still being prepared".
 - `REPORT_REQUEST_MEMO=off`: turns the per-request sharing of the dashboard/snapshot reads off (restores the old behaviour exactly).
+- `REPORT_NAV_SHARED_READ=off`: restores the previous price-history read (one ordered query per loader). Same figures either way.

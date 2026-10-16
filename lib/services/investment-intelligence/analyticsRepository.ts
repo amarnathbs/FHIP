@@ -28,6 +28,7 @@ import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/ris
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
 import { POSTGREST_PAGE_SIZE, NAV_PAGE_CONCURRENCY } from './pagination';
+import { loadNavHistoryByFund, sharedNavReadEnabled, sortLikePerformanceQuery } from './navHistoryRead';
 import { loadCategoryReferenceMappings } from './benchmarkData/categoryReferenceLoader';
 import { accessAllows, blockedReason, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
@@ -212,7 +213,10 @@ export async function loadAnalyticsDataset(
     quality_status: string | null;
     currency_code: string | null;
   }
-  const navRows = await fetchAllRows<NavRow>(() =>
+  // 16-10-2026: one shared per-fund read (see navHistoryRead.ts); the rows come back in the order this query produced.
+  const navRows: NavRow[] = sharedNavReadEnabled()
+    ? sortLikePerformanceQuery(await loadNavHistoryByFund(supabase, instrumentIds), instrumentIds)
+    : await fetchAllRows<NavRow>(() =>
     supabase
       .from('ii_prices_nav')
       .select('instrument_id, price_date, price, data_version, quality_status, currency_code')

@@ -30,6 +30,7 @@ import type { FundHoldingsSnapshot, PortfolioFundPosition, SnapshotHolding } fro
 import type { DebtExposureLine } from '@/lib/engines/investment-intelligence/xray/debtXray';
 import { fetchAllRows } from './pagination';
 import { POSTGREST_PAGE_SIZE, NAV_PAGE_CONCURRENCY } from './pagination';
+import { loadNavHistoryByFund, sharedNavReadEnabled, sortLikeSipQuery } from './navHistoryRead';
 import { accessAllows, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey } from './currentValuationLoader';
 import { isNavQualityEligible, type StatementPositionInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
@@ -141,7 +142,10 @@ export async function loadSipDataset(
     quality_status: string;
     currency_code: string | null;
   }
-  const navRows = await fetchAllRows<NavRow>(() =>
+  // 16-10-2026: one shared per-fund read (see navHistoryRead.ts); the rows come back in the order this query produced.
+  const navRows: NavRow[] = sharedNavReadEnabled()
+    ? (sortLikeSipQuery(await loadNavHistoryByFund(supabase, instrumentIds), instrumentIds) as unknown as NavRow[])
+    : await fetchAllRows<NavRow>(() =>
     supabase
       .from('ii_prices_nav')
       .select('instrument_id, price_date, price, quality_status, currency_code')
