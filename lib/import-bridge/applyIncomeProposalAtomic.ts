@@ -23,6 +23,7 @@
 import { createClient } from '@/lib/supabase/server';
 import type { ApplyResult } from './applyService';
 import type { ImportApplyErrorCode, PersistedApplyMode, UserApplyDecision } from './types';
+import { incomePeriodBasisViolation } from './adapters/incomeAdapter';
 
 export interface ApplyIncomeProposalRequest {
   proposalId: string;
@@ -56,6 +57,28 @@ interface RpcResponse {
  */
 export async function applyIncomeProposalAtomic(request: ApplyIncomeProposalRequest): Promise<ApplyResult> {
   const supabase = await createClient();
+
+  // PO production audit 16-10-2026: gross and net share ONE frequency, so a selection that writes a one-pay net onto an
+  // existing row of another frequency (a fortnightly 3,975.43 on an ANNUAL salary) must never reach the RPC. The RPC
+  // (migration 0091) is not changed by this fix; this pre-flight reads the proposal's own stored fields with the
+  // caller's RLS-scoped client and runs the same pure rule as the adapter's validateApply(). If the fields cannot be
+  // read the call falls through to the RPC exactly as before (the pre-flight is an addition, never a new failure mode).
+  if (request.decision !== 'keep_existing' && request.decision !== 'add_new') {
+    try {
+      const { data } = await supabase
+        .from('fhip_import_proposal_fields')
+        .select('field_name, proposed_value, existing_value')
+        .eq('proposal_id', request.proposalId);
+      if (Array.isArray(data) && data.length > 0) {
+        const fields = data.map((r) => ({ fieldName: String(r.field_name), proposedValue: (r.proposed_value as string | null) ?? null, existingValue: (r.existing_value as string | null) ?? null }));
+        const selected = request.selectedFields && request.selectedFields.length > 0 ? request.selectedFields : fields.map((f) => f.fieldName);
+        const problem = incomePeriodBasisViolation(fields, selected);
+        if (problem) return { ok: false, code: 'DOMAIN_VALIDATION_FAILED', error: problem };
+      }
+    } catch {
+      // Pre-flight unavailable: continue to the RPC.
+    }
+  }
   const { data, error } = await supabase.rpc('fdh9_apply_income_proposal', {
     p_proposal_id: request.proposalId,
     p_decision: request.decision,

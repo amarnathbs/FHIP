@@ -33,6 +33,13 @@ export function DashboardDataStatusNotice({ status, currency }: { status: Dashbo
   if (status.netIncomeUnknownComponents > 0) {
     notes.push('Take-home pay is unknown for part of your income, so that part is not counted as take-home pay.');
   }
+  for (const f of status.netIncomeImplausible ?? []) {
+    notes.push(
+      f.kind === 'net_above_gross'
+        ? `${f.name}: the take-home pay is higher than the gross. Check that both are entered for the same pay period (for example both per year, or both per fortnight).`
+        : `${f.name}: the take-home pay is only ${(f.netToGross * 100).toFixed(0)}% of the gross, which tax alone does not explain. Check that gross and take-home are entered for the same pay period (for example both per year, or both per fortnight); otherwise net income and your monthly surplus are understated.`,
+    );
+  }
   if (status.retirementContributionFrequencyUnknown > 0) {
     notes.push('Some retirement contributions have no frequency recorded, so they are not counted as a monthly amount.');
   }

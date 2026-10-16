@@ -4,6 +4,7 @@ import { computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems }
 import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
 import { debtServiceClassFor, isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
 import type { PublishedValuationSummary } from './investment-intelligence/valuation/publishedRowRemark';
+import { assessNetToGross, isWageLikeIncome, type NetPlausibilityFlag } from './incomePlausibility';
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the subset of each register's columns the dashboard uses)
@@ -22,6 +23,8 @@ export interface IncomeRow {
   master_item_key: string | null;
   employer_name?: string | null;
   owner?: string | null;
+  /** Optional: only used to recognise payslip-imported wages for the net-to-gross plausibility disclosure. */
+  source_type?: string | null;
   // LR-3 (migration 0131): explicit, user-declared opt-out — true once the
   // user has said this row's real income is now tracked via an approved
   // bank/payslip import instead. Optional so every existing caller (tests,
@@ -93,6 +96,8 @@ export interface CanonicalIncomeFigures {
   netUnknownComponents: number;
   /** D-07: bank credits (net only) are inside the gross as a floor. */
   grossIncludesNetFloor: boolean;
+  /** Wage records whose take-home is implausible against their gross (see incomePlausibility.ts). Disclosure only. */
+  netImplausible?: NetPlausibilityFlag[];
   /** Approved bank income credits counted (not represented by a payslip row). */
   importedMonthly: number;
   lines: CanonicalIncomeLine[];
@@ -166,6 +171,8 @@ export interface DashboardDataStatus {
   unconverted: { count: number; byCurrency: Record<string, number> };
   /** GAP-09: counted income components whose NET is unknown (never replaced by gross). */
   netIncomeUnknownComponents: number;
+  /** Wage records whose take-home is under 30% of gross (or above it): a likely mixed pay-period basis. Disclosure only. */
+  netIncomeImplausible?: NetPlausibilityFlag[];
   /** Surplus basis: 'net' (all known), 'net_partial' (unknown nets left out), 'gross_fallback' (no net known). */
   netIncomeBasis: 'net' | 'net_partial' | 'gross_fallback' | 'none';
   grossIncomeIncludesNetFloor: boolean;
@@ -800,6 +807,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     netMonthlyIncome: number;
     netUnknownComponents: number;
     grossIncludesNetFloor: boolean;
+    netImplausible: NetPlausibilityFlag[];
     passiveMonthlyIncome: number;
     dividendMonthlyIncome: number;
     rentalMonthlyIncome: number;
@@ -870,6 +878,11 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       netMonthlyIncome: sumBy(income, (i) => i.net ?? 0),
       netUnknownComponents: income.filter((i) => i.net === null).length,
       grossIncludesNetFloor: false,
+      netImplausible: income.flatMap(({ r, gross, net }) => {
+        if (net === null || !isWageLikeIncome(r.master_item_key, r.source_type)) return [];
+        const kind = assessNetToGross(gross, net);
+        return kind === 'ok' ? [] : [{ name: r.source_name ?? r.employer_name ?? 'Income source', kind, grossMonthly: gross, netMonthly: net, netToGross: gross > 0 ? net / gross : 0 }];
+      }),
       passiveMonthlyIncome: sumBy(income.filter((i) => isPassive(i.r.master_item_key)), (i) => i.gross),
       dividendMonthlyIncome: sumBy(income.filter((i) => i.r.master_item_key === 'dividend_income'), (i) => i.gross),
       rentalMonthlyIncome: sumBy(income.filter((i) => i.r.master_item_key === 'rental_income' || i.r.master_item_key === 'airbnb_income'), (i) => i.gross),
@@ -921,6 +934,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       netMonthlyIncome: inc?.netKnownMonthly ?? 0,
       netUnknownComponents: inc?.netUnknownComponents ?? 0,
       grossIncludesNetFloor: inc?.grossIncludesNetFloor ?? false,
+      netImplausible: inc?.netImplausible ?? [],
       // Imported bank credits carry no master item to classify them by, so
       // they count as active income (the documented pre-programme default).
       passiveMonthlyIncome: sumBy(plannedIncome.filter((l) => isPassive(l.masterItemKey)), (l) => l.monthly),
@@ -1559,6 +1573,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       unavailable: cf.unavailable,
       unconverted,
       netIncomeUnknownComponents: cf.netUnknownComponents,
+      netIncomeImplausible: cf.netImplausible,
       netIncomeBasis,
       grossIncomeIncludesNetFloor: cf.grossIncludesNetFloor,
       costOfDebtMonthly: cf.costOfDebtMonthly,

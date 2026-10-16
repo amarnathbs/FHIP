@@ -30,6 +30,27 @@ function withCrossBorderLimitation(existingText: string | null, countriesInUseCo
  * It only DISCLOSES; no figure changes.
  */
 export function netIncomeBasisNote(d: DashboardSummary): string | null {
+  const parts = [unknownTakeHomeNote(d), implausibleTakeHomeNote(d)].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
+/**
+ * PO production audit 16-10-2026: the PO's salary was an ANNUAL gross beside the net of ONE fortnightly payslip, so
+ * its take-home read as 2% of gross and the report showed a 9,324 deficit instead of about 1,041. A wage whose
+ * take-home is under 30% of gross (see lib/engines/incomePlausibility.ts for the rationale) is named so the
+ * mismatch is visible. Disclosure only.
+ */
+function implausibleTakeHomeNote(d: DashboardSummary): string | null {
+  const flags = d.dataStatus?.netIncomeImplausible ?? [];
+  if (flags.length === 0) return null;
+  const pct = (f: { netToGross: number }) => `${(f.netToGross * 100).toFixed(0)}%`;
+  const named = flags
+    .map((f) => (f.kind === 'net_above_gross' ? `${f.name} (take-home is higher than gross)` : `${f.name} (take-home pay of ${pct(f)} of gross)`))
+    .join('; ');
+  return `Please check ${flags.length === 1 ? 'this income entry' : 'these income entries'}: ${named}. Gross and take-home must be entered for the same pay period (for example both per year, or both per fortnight); if they are not, net income, the monthly surplus or deficit and the ratios built on them are wrong.`;
+}
+
+function unknownTakeHomeNote(d: DashboardSummary): string | null {
   const unknown = d.dataStatus?.netIncomeUnknownComponents ?? 0;
   if (unknown <= 0) return null;
   if (d.dataStatus?.netIncomeBasis === 'gross_fallback') {

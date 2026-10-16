@@ -31,6 +31,7 @@ import { groupForExpenseItem, type CanonicalExpenseGroup } from '@/lib/read-mode
 import { coveredMonthlyAverage, type NormalisedLedger } from '@/lib/read-models/core/ledger';
 import { roundMoney, type ReadModelUnavailable } from '@/lib/read-models/core/types';
 import { bankBalancesNotInNetWorth } from '@/lib/read-models/bankBalanceDisclosure';
+import { assessNetToGross, isWageLikeIncome } from '@/lib/engines/incomePlausibility';
 
 const unavailable = (u: ReadModelUnavailable): CanonicalUnavailable => ({ status: 'unavailable', reason: u.reason, source: u.source });
 
@@ -85,6 +86,11 @@ export function incomeFigures(income: IncomeReadModelData, ledger: NormalisedLed
     netKnownMonthly: income.combined.netKnownMonthly,
     netUnknownComponents: income.combined.netUnknownComponents,
     grossIncludesNetFloor: income.combined.grossIncludesNetFloor,
+    netImplausible: counted.flatMap((l) => {
+      if (l.grossMonthly === null || l.netMonthly === null || !isWageLikeIncome(l.masterItemKey, l.provenance.kind)) return [];
+      const kind = assessNetToGross(l.grossMonthly, l.netMonthly);
+      return kind === 'ok' ? [] : [{ name: l.name, kind, grossMonthly: l.grossMonthly, netMonthly: l.netMonthly, netToGross: l.grossMonthly > 0 ? l.netMonthly / l.grossMonthly : 0 }];
+    }),
     importedMonthly: income.actual.countedMonthly,
     lines,
     present: plannedPresent || actualPresent,

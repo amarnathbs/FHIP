@@ -133,13 +133,17 @@ describe('FDH-9 income bridge — keep existing (spec section 37)', () => {
 });
 
 describe('FDH-9 income bridge — selected fields only (spec section 38)', () => {
-  it('amount approved, frequency not approved: amount changes, frequency untouched', async () => {
+  // 16-10-2026 (PO production audit): this test used to select ONLY the amount of a proposal that also proposed a
+  // different frequency (fortnightly onto a monthly row). That is exactly the mixed pay-period selection that put a
+  // one-pay net on an annual salary, and it is now refused (see the next test). The "unselected field stays
+  // untouched" rule is still proved here with a field that does not change the pay period.
+  it('amount approved, employer not approved: amount changes, employer untouched', async () => {
     const store = new ImportBridgeMemoryStore();
-    store.addIncome(baseIncomeRow({ frequency: 'monthly' }));
+    store.addIncome(baseIncomeRow({ frequency: 'monthly', employer_name: 'Old Employer' }));
     store.addProposal(proposal({
       fields: [
         field('amount', '5200.00', '5000.00'),
-        field('frequency', 'fortnightly', 'monthly', { requiresConfirmation: true }),
+        field('employer_name', 'New Employer', 'Old Employer', { requiresConfirmation: true }),
       ],
     }));
 
@@ -151,7 +155,25 @@ describe('FDH-9 income bridge — selected fields only (spec section 38)', () =>
     expect(result.ok).toBe(true);
     const row = store.incomeRows.get('income-1');
     expect(row?.amount).toBe(5200);
-    expect(row?.frequency).toBe('monthly'); // untouched
+    expect(row?.employer_name).toBe('Old Employer'); // untouched
+  });
+
+  it('amount approved without the frequency it is expressed in is REFUSED: gross and net never mix pay periods', async () => {
+    const store = new ImportBridgeMemoryStore();
+    store.addIncome(baseIncomeRow({ frequency: 'monthly' }));
+    store.addProposal(proposal({
+      fields: [
+        field('amount', '5200.00', '5000.00'),
+        field('frequency', 'fortnightly', 'monthly', { requiresConfirmation: true }),
+      ],
+    }));
+    const result = await applyImportProposal(
+      store, incomeAdapter, USER_A,
+      { proposalId: 'proposal-1', decision: 'apply_selected_fields', selectedFields: ['amount'] },
+      newIncomeRowDefaults,
+    );
+    expect(result.ok).toBe(false);
+    expect(store.incomeRows.get('income-1')?.amount).toBe(5000);
   });
 });
 
