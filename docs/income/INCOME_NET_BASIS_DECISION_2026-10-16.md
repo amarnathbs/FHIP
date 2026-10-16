@@ -41,8 +41,8 @@ income and does not change. Net worth does not change.
 ## Entering the real figure
 
 Income form: **Net Amount (take-home pay)** or **Tax per period (if no net amount)**. Both are per the row's own frequency.
-Migration `0281` adds `income_sources.tax_amount` with `CHECK (tax_amount IS NULL OR (tax_amount >= 0 AND tax_amount <= amount))`.
-Apply 0281 BEFORE deploying the code that sends `tax_amount` from the Income grid; the read model retries without the column
+Migration `0285` adds `income_sources.tax_amount` with `CHECK (tax_amount IS NULL OR (tax_amount >= 0 AND tax_amount <= amount))`.
+Apply 0285 BEFORE deploying the code that sends `tax_amount` from the Income grid; the read model retries without the column
 if it is missing, so reads never break.
 
 ## Sibling guard: one pay period per row

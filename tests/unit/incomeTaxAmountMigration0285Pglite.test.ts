@@ -1,5 +1,5 @@
 /**
- * PGLITE-VERIFIED: migration 0281 adds income_sources.tax_amount with a CHECK (0 <= tax <= amount), is idempotent,
+ * PGLITE-VERIFIED: migration 0285 adds income_sources.tax_amount with a CHECK (0 <= tax <= amount), is idempotent,
  * and changes no existing row. Negative control: the same inserts WITHOUT the migration's constraint succeed.
  */
 import fs from 'node:fs';
@@ -7,11 +7,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATION = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/0281_income_sources_tax_amount.sql'), 'utf8');
+const MIGRATION = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/0285_income_sources_tax_amount.sql'), 'utf8');
 const BASE = `create table public.income_sources (id serial primary key, amount numeric(18,2) not null, net_amount numeric(18,2));
 insert into public.income_sources (amount, net_amount) values (196994.48, 3975.43);`;
 
-describe('migration 0281 income_sources.tax_amount', () => {
+describe('migration 0285 income_sources.tax_amount', () => {
   it('adds a nullable column, keeps existing rows unchanged, enforces 0 <= tax <= amount, and is idempotent', async () => {
     const db = new PGlite();
     await db.exec(BASE);

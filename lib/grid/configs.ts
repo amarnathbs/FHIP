@@ -1,6 +1,7 @@
 import { FREQUENCY_OPTIONS } from '@/lib/engines/money';
 import { COUNTRY_OPTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
 import { getAssetFieldMetadata } from './assetFieldMetadata';
+import { defaultIsEssentialForExpenseItem } from '@/lib/engines/dashboard';
 import type { GridConfig } from './types';
 
 export const incomeGridConfig: GridConfig = {
@@ -49,6 +50,9 @@ export const expenseGridConfig: GridConfig = {
   frequencyField: 'frequency',
   reviewSection: 'expenses',
   restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  // PO decision 16-10-2026: necessities (rent, mortgage, rates, utilities, groceries, health, fuel, transport, home
+  // insurance, body corporate, internet) start ticked Essential when the row is created; the user can untick.
+  defaultsForMasterItem: (itemKey) => (defaultIsEssentialForExpenseItem(itemKey) ? { is_essential: true } : {}),
   fields: [
     { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
     { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },

@@ -66,7 +66,7 @@ function fieldDefaults(config: GridConfig): Record<string, unknown> {
   return defaults;
 }
 
-function rowFromMaster(item: MasterItem, defaultCurrency: string, config: GridConfig): Row {
+export function rowFromMaster(item: MasterItem, defaultCurrency: string, config: GridConfig): Row {
   return {
     key: item.item_key,
     id: null,
@@ -82,6 +82,8 @@ function rowFromMaster(item: MasterItem, defaultCurrency: string, config: GridCo
     currency_override: item.item_key === 'foreign_currency',
     expanded: false,
     ...fieldDefaults(config),
+    // PO decision 16-10-2026: catalogue-driven defaults for a NEW row (Expenses: necessities start ticked Essential).
+    ...(config.defaultsForMasterItem?.(item.item_key) ?? {}),
   };
 }
 

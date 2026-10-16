@@ -31,7 +31,7 @@ You confirmed: pay is FORTNIGHTLY and 3,975.43 is the take-home of ONE payslip, 
 | 5 | `14_repair_rollback.sql` | Only if you want it undone: restores the saved value. |
 
 The same repair without SQL: open the Income page, edit Employment Salary and set **Net Amount (take-home pay)** to 103,361.18
-(frequency stays annually). The new **Tax per period** box is an alternative once migration 0281 is applied: enter the tax for a
+(frequency stays annually). The new **Tax per period** box is an alternative once migration 0285 is applied: enter the tax for a
 whole year because this record is annual.
 
 ## Part 3 - how many other records look like this (read only, counts only)

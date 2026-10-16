@@ -32,6 +32,9 @@ export interface GridConfig {
   isFlow?: boolean; // true = recurring amount that needs a frequency to annualise
   frequencyField?: string;
   fields: GridFieldDef[]; // extra editable columns beyond item name/owner/currency
+  // Per-catalogue-item defaults applied when a NEW row is created from a catalogue item (e.g. Expenses pre-ticks Essential
+  // for the necessities). Applied after the field defaults; the user can change any value. Never touches saved rows.
+  defaultsForMasterItem?: (itemKey: string) => Record<string, unknown>;
   // When set, shows a "this doesn't apply to me" toggle backed by this
   // user_profiles boolean column (migration 0029) — only offered for the
   // categories where genuine inapplicability is plausible (investments,

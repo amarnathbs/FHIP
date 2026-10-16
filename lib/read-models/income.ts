@@ -45,7 +45,7 @@ export interface IncomeSourceRow {
   income_type: string | null;
   amount: number;
   net_amount: number | null;
-  /** Tax per period (the row's own frequency). Optional: absent before migration 0281 or when not entered. */
+  /** Tax per period (the row's own frequency). Optional: absent before migration 0285 or when not entered. */
   tax_amount?: number | null;
   frequency: string;
   currency_code: string;
@@ -400,7 +400,7 @@ export async function loadIncomeInputs(userId: string, client: ReadModelClient):
   try {
     sources = await page(`${INCOME_BASE_COLUMNS}, tax_amount`);
   } catch (error) {
-    // Deployment-order safety: this code can reach an environment before migration 0281 (income_sources.tax_amount) is
+    // Deployment-order safety: this code can reach an environment before migration 0285 (income_sources.tax_amount) is
     // applied there. Net Worth, the Dashboard and the report must never go offline for that: retry with the columns
     // every environment has (no tax amount entered means the gross is assumed, exactly as for a blank take-home).
     // A genuine failure fails again here and propagates unchanged.

@@ -47,7 +47,7 @@ export type IncomeInput = z.infer<typeof incomeSchema>;
 /**
  * Tax per period can never exceed the gross it is a part of. A cross-field rule, so it lives beside the schema (the
  * PATCH route parses `incomeSchema.partial()`, which a schema-level refine would break). The database carries the same
- * rule as a CHECK constraint (migration 0281) for the PATCH that sends only one of the two.
+ * rule as a CHECK constraint (migration 0285) for the PATCH that sends only one of the two.
  */
 export function incomeTaxProblem(data: { amount?: number; tax_amount?: number | null }): string | null {
   if (data.tax_amount == null || data.amount == null) return null;

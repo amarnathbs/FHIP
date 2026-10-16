@@ -1,4 +1,4 @@
--- 0281 -- Optional tax per pay period on an income record (PO decision 16-10-2026).
+-- 0285 -- Optional tax per pay period on an income record (PO decision 16-10-2026).
 --
 -- WHY. Net (take-home) income used to stay "unknown" when a record had no net amount. The PO decided that the
 -- app must instead (a) ask for the take-home pay, (b) meanwhile treat the GROSS as take-home and say so, and

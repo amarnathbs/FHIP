@@ -21,7 +21,9 @@ export const expenseSchema = z.object({
   // no country_code key at all remains valid.
   country_code: z.enum(AUTHORITATIVE_COUNTRY_CODES).optional().nullable(),
   owner: z.enum(OWNER_VALUES).default('self'),
-  is_essential: z.boolean().default(false),
+  // PO decision 16-10-2026: no schema default. When omitted, POST applies the catalogue default
+  // (defaultIsEssentialForExpenseItem: necessities start Essential, everything else not). An explicit value always wins.
+  is_essential: z.boolean().optional(),
   master_item_key: z.string().nullable().optional(),
   // LR-3: explicit opt-out once this row's real spending is tracked via an
   // approved bank-statement import instead — see migration 0131.

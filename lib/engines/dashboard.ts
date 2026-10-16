@@ -361,6 +361,24 @@ export const CORE_SURVIVAL_EXPENSE_KEYS: ReadonlySet<string> = new Set([
   'public_transport',
 ]);
 
+/**
+ * PO decision 16-10-2026: the expense items that are necessities are pre-ticked Essential WHEN A ROW IS CREATED (grid and
+ * API), and the user can untick them. ONE catalogue list, used by the grid default and the API default, so the two can
+ * never disagree. The first thirteen are the core-survival items above; the PO added home insurance, body corporate and
+ * internet. This list only sets the DEFAULT of a new row: it does not change CORE_SURVIVAL_EXPENSE_KEYS (which still decides
+ * what counts as Level-1 core survival once a row is essential) and it never rewrites an existing row.
+ */
+export const ESSENTIAL_DEFAULT_EXPENSE_KEYS: ReadonlySet<string> = new Set([
+  ...CORE_SURVIVAL_EXPENSE_KEYS,
+  'home_insurance',
+  'body_corporate',
+  'internet',
+]);
+
+export function defaultIsEssentialForExpenseItem(masterItemKey: string | null | undefined): boolean {
+  return Boolean(masterItemKey && ESSENTIAL_DEFAULT_EXPENSE_KEYS.has(masterItemKey));
+}
+
 export type AllocationBucket =
   | 'cash'
   | 'property'
