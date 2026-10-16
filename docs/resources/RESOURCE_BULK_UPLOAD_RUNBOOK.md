@@ -2,6 +2,8 @@
 
 For the people who run Resources day to day and for whoever supports them.
 
+> **PO decision 16-10-2026 (placement only): Bulk Upload lives inside Create Resource; no separate sidebar group.** The Admin sidebar no longer has a "Bulk Upload" group. The option is a separate "Bulk Upload" section on the Create Resource page (`/admin/resources/content/new`, below the Article / Guide / FHIP Explainer cards) and on the Money Update create screen (`/admin/resources/money-updates/new`), shown only when the server-side capability `resources.content.bulk_import` is held (Super Admin, Resource Admin, Editor). The routes `/admin/resources/import/**`, their capability guards, the API routes and the Upload buttons on All Content and Money Updates are unchanged, as are apply, staging, the database and the migrations (none added). The importer's parent is now Create Resource (back link and breadcrumb); upload, preview and history pages still return to the Bulk Upload chooser. Tests: `tests/unit/resourcesBulkUploadInsideCreateResource.test.ts`.
+
 ## Who can do what
 
 | Action | Super Admin | Resource Admin | Editor | Author | Compliance Reviewer | Publisher | Analyst |
@@ -13,7 +15,7 @@ For the people who run Resources day to day and for whoever supports them.
 
 ## Uploading Articles or Money Updates
 
-1. Resources, Bulk Upload (or the Upload button on All Content or Money Updates).
+1. Resources, Create Resource, then the Bulk Upload section (or the Upload button on All Content or Money Updates).
 2. Choose the type, download the template, paste finished rows into the upload sheet (`Article_Upload` or `Money_Update_Upload`).
 3. Upload the file. Read the preview. Open a row to see exactly what will be stored.
 4. If a row has an error, fix the file and upload it again. All rows must pass before anything is created.
@@ -56,7 +58,7 @@ The API connects to the database through a login role that allows **8 seconds pe
 - **A person says "my upload created nothing".** Open Import history. `Has errors` or `File rejected`: download the results CSV from the preview. `Ready, not applied`: they did not confirm. `Out of date`: re-upload.
 - **A person says "it created the wrong thing".** Every created item is a private draft with an audit row (`created_via=bulk_import`, run id, row number). Delete or edit the drafts in the normal editor; nothing is published.
 - **Re-running the same file** creates nothing (`FILE_ALREADY_APPLIED`). To import corrected content, change the file (the fingerprint changes) and give the changed rows new slugs and external ids, or edit the existing drafts by hand.
-- **Disabling the feature.** In the database the immediate switch is `docs/resources/po_apply_bulk_upload_production/rollback/R2_disable_apply_only.sql` (nobody can then create drafts; uploads can still be previewed; `R3` switches it back on). It revokes **both** apply functions. Correction 15-10-2026: this runbook used to name only `apply_resource_content_import ... from authenticated`, which does NOT stop an apply, because the application calls the server-only twin `apply_resource_content_import_as_actor` first (migration 0273); a PGlite negative control (`resourcesBulkImportProductionPack.test.ts`, PACK-DB14) shows the single revoke leaves the twin working. Fully, remove the nav group and the routes in code. Existing drafts are ordinary Resources and are unaffected.
+- **Disabling the feature.** In the database the immediate switch is `docs/resources/po_apply_bulk_upload_production/rollback/R2_disable_apply_only.sql` (nobody can then create drafts; uploads can still be previewed; `R3` switches it back on). It revokes **both** apply functions. Correction 15-10-2026: this runbook used to name only `apply_resource_content_import ... from authenticated`, which does NOT stop an apply, because the application calls the server-only twin `apply_resource_content_import_as_actor` first (migration 0273); a PGlite negative control (`resourcesBulkImportProductionPack.test.ts`, PACK-DB14) shows the single revoke leaves the twin working. Fully, remove the Bulk Upload section from Create Resource and the routes in code (there is no sidebar group since 16-10-2026). Existing drafts are ordinary Resources and are unaffected.
 - **Retention.** Unapplied staged rows are removed after 7 days on the next upload. Applied runs keep their metadata, never their content.
 
 ## Rollback of the database change

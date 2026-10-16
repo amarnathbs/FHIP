@@ -1,6 +1,6 @@
 import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource, canDeleteDraftResource } from '@/lib/resources/permissions';
+import { canBulkImportResources, canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MoneyUpdateNewChooser } from '@/components/resources/money-update/MoneyUpdateNewChooser';
@@ -46,7 +46,7 @@ async function NewMoneyUpdatePageContent({ searchParams }: { searchParams: Promi
     );
   }
 
-  return <MoneyUpdateNewChooser canCreate={canCreate} />;
+  return <MoneyUpdateNewChooser canCreate={canCreate} canBulkImport={canBulkImportResources(current)} />;
 }
 
 // PO review 06-10-2026 F6: every page carries the shared back link to its parent (Money Updates).

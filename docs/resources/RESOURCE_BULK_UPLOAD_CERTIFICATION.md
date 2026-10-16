@@ -1,5 +1,9 @@
 # Resources Bulk Upload — Articles + Money Updates
 
+> **PO decision 16-10-2026 (placement only; supersedes the "Bulk Upload" nav group described below): Bulk Upload lives inside Create Resource; no separate sidebar group.** The Admin sidebar no longer has a "Bulk Upload" group. The option is a separate "Bulk Upload" section on the Create Resource page (`/admin/resources/content/new`, below the Article / Guide / FHIP Explainer cards) and on the Money Update create screen (`/admin/resources/money-updates/new`), shown only when the server-side capability `resources.content.bulk_import` is held (Super Admin, Resource Admin, Editor). The routes `/admin/resources/import/**`, their capability guards, the API routes and the Upload buttons on All Content and Money Updates are unchanged, as are apply, staging, the database and the migrations (none added). The importer's parent is now Create Resource (back link and breadcrumb); upload, preview and history pages still return to the Bulk Upload chooser. Tests: `tests/unit/resourcesBulkUploadInsideCreateResource.test.ts`.
+
+Evidence for this change: see the 16-10-2026 section at the end of this note.
+
 ## Re-certification on current main (15-10-2026)
 
 ### Overall verdict
@@ -87,7 +91,7 @@ The earlier 48/48 browser certification ran on the pre-rebase build, so it was *
 ### Merge notes
 
 - **Global table component.** The brief said main holds the new `DataTable` / `ClampText`; on `af2d330` it does not: they live on `feat/global-table-layout-20261008` (not merged). This branch has **two raw `<table>`s** (`components/resources/import/ImportHistoryTable.tsx` and the row table in `ImportPreview.tsx`, both horizontally scrollable inside their own region, no page scroll at 390 px). That branch's `tests/unit/dataTableGuard.test.ts` fails on any raw `<table>` outside its allow-list, so **whichever of the two branches merges second must convert these two tables to `DataTable` (or allow-list them with a reason)**. I did not touch that branch.
-- **Navigation grouping.** Admin Standard §18's grouping sentence ("entries that belong together share one group") is satisfied by one destination; the "Bulk Upload" group is its own because its capability is its own (`resources.content.bulk_import`), unchanged from the PO-reviewed design.
+- **Navigation grouping.** Admin Standard §18's grouping sentence ("entries that belong together share one group") is satisfied by one destination; the "Bulk Upload" group was its own because its capability is its own (`resources.content.bulk_import`). SUPERSEDED 16-10-2026: the group is removed; Bulk Upload lives inside Create Resource; no separate sidebar group. The capability stays its own field.
 - **Pre-existing red tests on main** listed above are not touched (Standard §14).
 
 ### Next action for the Product Owner
@@ -239,3 +243,22 @@ New routes: `/admin/resources/import` (+ `/upload`, `/runs/[id]`, `/history`), A
 ### Next Action
 
 STOP, WAIT FOR PRODUCT OWNER DIRECTION.
+
+## Placement change 16-10-2026: Bulk Upload lives inside Create Resource (navigation only)
+
+PO decision 16-10-2026: Bulk Upload lives inside Create Resource; no separate sidebar group. Navigation and placement only: no apply, staging, database, migration or API change (no migration).
+
+**Changed.** (1) `NewContentChooser` (Create Resource, `/admin/resources/content/new`) gains a separate "Bulk Upload" section below the three cards (title, "Create many Articles or Money Updates from one spreadsheet. Every item becomes a private draft.", link "Bulk Upload" to `/admin/resources/import`); the Money Update create screen (`/admin/resources/money-updates/new`) gains the same section linking to `/admin/resources/import/upload?type=money_update`. Both are shown only when the server page passes `canBulkImportResources(current)` (capability `resources.content.bulk_import`); the prop defaults to false. (2) The Admin sidebar group is removed (`BULK_UPLOAD_ITEMS` and its `buildAdminNavGroups` line deleted); the capability field `resourceContentBulkImport` stays. (3) The importer chooser's back link and breadcrumb now lead to Create Resource; the upload, preview/result and history pages keep returning to the Bulk Upload chooser, and their breadcrumbs read Resources > Create Resource > Bulk Upload > page. `docs/ux/BACK_NAVIGATION_INVENTORY.md` updated. **Unchanged:** every `/admin/resources/import/**` page and its capability redirect, every API guard, the Upload buttons on All Content and Money Updates.
+
+**Standard clauses.** Section 2 (the capability stays its own named field, not implied by create rights), section 4 (page decides server-side; direct URL redirect, API 403, database unchanged), section 13 (prop fails closed), section 14 (no scope expansion), section 18 (shared `PageBackLink`, inventory, guard).
+
+| Evidence | Label | Result |
+|---|---|---|
+| `resourcesBulkUploadInsideCreateResource.test.ts` (17: nav has no Bulk Upload group for any capability mix; option shown to Editor, Resource Admin, Super Admin; absent for Author, Compliance Reviewer, Publisher, Analyst; Money Update screen; direct URL redirects; back link/breadcrumb; docs note; negative controls) plus the adjusted nav assertion in `resourcesBulkImportRoutes.test.ts` | UNIT-TESTED | pass |
+| Mutation checks (temporary, reverted): page passing `canBulkImport={true}` fails BU-5 and BU-7; the sidebar group restored fails BU-2, BU-3, BU-N2 and the routes nav test | UNIT-TESTED | each mutation caught |
+| `pageBackLinkGuard`, `premiumUploadInventoryContract`, `sidebarOrderAndGroups`, `adminNavBenchmarkLabels`, all `resourcesBulkImport*`, `resourcesArticleImport`, `resourcesMoneyUpdateImport`, `benchmarkData*` | UNIT-TESTED | pass (several files fail only when run in a large parallel batch on this Windows machine with a temp-directory ENOENT race and pass alone) |
+| `adminAnalyticsPhaseAMeRoute` | UNIT-TESTED | 17 failures, identical on a clean checkout of `origin/main` `4b5a60a` (pre-existing, not touched) |
+| `tsc --noEmit` | BUILD | one error in `tests/unit/canonicalCertResidueAllSql.test.ts` (not touched, present on `origin/main`); none in changed files. ESLint on changed files clean |
+| Real-browser run (headless Chromium, local dev server against DEV, existing fixture users: Editor, Resource Admin, Author, Compliance Reviewer; axe WCAG 2.0/2.1 A and AA) | BROWSER-verified (automated) | 66 / 66 plus a 3 / 3 sidebar probe. Editor and Resource Admin at 375, 768 and 1280 px: section visible with the exact text, three create cards intact, no horizontal page scroll, link at least 44 px high, axe no violation at all on Create Resource, the importer chooser and the Money Update create screen; keyboard: Tab reaches the Bulk Upload link (browser default focus ring), Enter opens the chooser, back link "Back to Create Resource" returns; the open Admin menu lists Resources, Workflow and Discovery with no Bulk Upload entry. Author and Compliance Reviewer at 375 and 1280 px: no Bulk Upload text or link on Create Resource or on the Money Update create screen; direct URLs `/admin/resources/import`, `/upload` and `/history` redirect away; `GET /api/admin/resources/import/runs` is 403 |
+
+**Disclosure.** DEV (`vqycarelcoijzwlpkpcz`) was used with password-less magic-link sessions for four existing fixture users (nothing created, no password typed or read); the profile gate columns are borrowed only when a fixture does not already pass and were written back (`restoreBorrowedProfiles`: restored 4 in the main run and 1 in the sidebar probe; still different 0). No `PRODUCTION_SUPABASE_*` key was in the environment (stripped). **Not done:** a human screen-reader pass and a real phone check; production is unverified and unchanged.

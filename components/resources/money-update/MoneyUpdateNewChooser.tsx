@@ -11,7 +11,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export function MoneyUpdateNewChooser({ canCreate }: { canCreate: boolean }) {
+// PO decision 16-10-2026: Bulk Upload lives inside the create screens. `canBulkImport` is resolved on the server by the page
+// (capability resources.content.bulk_import); false by default so the option fails closed.
+export function MoneyUpdateNewChooser({ canCreate, canBulkImport = false }: { canCreate: boolean; canBulkImport?: boolean }) {
   const router = useRouter();
   const [creating, setCreating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +89,18 @@ export function MoneyUpdateNewChooser({ canCreate }: { canCreate: boolean }) {
           <p className="mt-4 text-sm font-semibold text-trust">Create Template</p>
         </Link>
       </div>
+
+      {canBulkImport && (
+        <section aria-labelledby="bulk-upload-h" className="rounded-card border border-line bg-white p-5">
+          <h2 id="bulk-upload-h" className="text-base font-semibold text-ink">
+            Bulk Upload
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm text-muted">Create many Money Updates from one spreadsheet. Every item becomes a private draft.</p>
+          <Link href="/admin/resources/import/upload?type=money_update" className="mt-4 inline-flex min-h-11 items-center rounded-full bg-trust px-4 py-2 text-sm font-semibold text-white hover:bg-trust/90">
+            Bulk Upload
+          </Link>
+        </section>
+      )}
 
       {templates.length > 0 && (
         <div className="rounded-card border border-line bg-white p-5">

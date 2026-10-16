@@ -1,3 +1,4 @@
+// PO decision 16-10-2026: reached from Create Resource (its parent), not from a sidebar group.
 // Resources Bulk Upload -- the shared entry: "What would you like to upload?". Both cards lead to the SAME
 // importer; the choice only decides which canonical adapter reads the file.
 
@@ -11,6 +12,16 @@ const CARDS: { type: 'article' | 'money_update'; title: string; blurb: string; b
 export function BulkUploadChooser() {
   return (
     <div className="space-y-6">
+      <nav aria-label="Breadcrumb" className="text-sm text-muted">
+        <Link href="/admin/resources" className="hover:text-trust hover:underline">
+          Resources
+        </Link>{' '}
+        &gt;{' '}
+        <Link href="/admin/resources/content/new" className="hover:text-trust hover:underline">
+          Create Resource
+        </Link>{' '}
+        &gt; <span className="text-ink">Bulk Upload</span>
+      </nav>
       <header>
         <h1 className="text-2xl font-semibold text-ink">Bulk Upload Resources</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">

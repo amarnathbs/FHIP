@@ -63,7 +63,7 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 | `/admin/resources/glossary/[id]/edit` | `app/(app)/admin/resources/glossary/[id]/edit/page.tsx` | `/admin/resources/glossary`: "Back to Glossary" | Done |
 | `/admin/resources/glossary/[id]/preview` | `app/(app)/admin/resources/glossary/[id]/preview/page.tsx` | `/admin/resources/glossary/${id}/edit`: "Back to Editor" | Done |
 | `/admin/resources/glossary/new` | `app/(app)/admin/resources/glossary/new/page.tsx` | `/admin/resources/glossary`: "Back to Glossary" | Done |
-| `/admin/resources/import` | `app/(app)/admin/resources/import/page.tsx` | `/admin/resources`: "Back to Resources" | Done |
+| `/admin/resources/import` | `app/(app)/admin/resources/import/page.tsx` | `/admin/resources/content/new`: "Back to Create Resource" (PO decision 16-10-2026: Bulk Upload lives inside Create Resource) | Done |
 | `/admin/resources/import/history` | `app/(app)/admin/resources/import/history/page.tsx` | `/admin/resources/import`: "Back to Bulk Upload" | Done |
 | `/admin/resources/import/runs/[id]` | `app/(app)/admin/resources/import/runs/[id]/page.tsx` | `/admin/resources/import`: "Back to Bulk Upload" | Done |
 | `/admin/resources/import/upload` | `app/(app)/admin/resources/import/upload/page.tsx` | `/admin/resources/import`: "Back to Bulk Upload" | Done |

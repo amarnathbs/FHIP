@@ -1,6 +1,6 @@
 import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { requireResourceAdminAccess } from '@/lib/resources/admin/access';
-import { canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource, canDeleteDraftResource } from '@/lib/resources/permissions';
+import { canBulkImportResources, canCreateSpecialistContent, hasResourceRole, canManageResources, canPublishResource, canDeleteDraftResource } from '@/lib/resources/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NewContentChooser } from '@/components/resources/editor/NewContentChooser';
@@ -40,7 +40,8 @@ async function NewResourceContentPageContent({ searchParams }: { searchParams: P
     return <ResourceEditor post={blankEditorPost(type, current.userId)} reference={reference} initialVersions={[]} initialWorkflowHistory={[]} currentUserId={current.userId ?? ''} caps={caps} canDelete={canDeleteDraftResource(current)} />;
   }
 
-  return <NewContentChooser canCreate={canCreate} />;
+  // PO decision 16-10-2026: the Bulk Upload option is decided here, server-side, from its own capability.
+  return <NewContentChooser canCreate={canCreate} canBulkImport={canBulkImportResources(current)} />;
 }
 
 // PO review 06-10-2026 F6: every page carries the shared back link to its parent (All Content).

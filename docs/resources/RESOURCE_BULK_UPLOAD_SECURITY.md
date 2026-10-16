@@ -29,7 +29,7 @@ Capability `resources.content.bulk_import` = Super Admin, Resource Admin, Editor
 1. **Database**: `private.can_bulk_import_resource_content`; RLS on the staging tables (a person reads only their own runs; Resource Admin and Super Admin read all, for history); the apply function re-checks the capability and that the caller **uploaded the run**.
 2. **API**: `guardBulkImport()` is the first statement of every handler (a structural test enforces this): 401 not signed in, country gate, 403 no capability.
 3. **Page**: a caller without the capability is redirected, never shown an empty page.
-4. **Navigation**: its own field and group; fails closed.
+4. **Navigation / placement**: its own capability field, fails closed. PO decision 16-10-2026: Bulk Upload lives inside Create Resource; no separate sidebar group. The Create Resource and Money Update create pages decide on the server (`canBulkImportResources`) whether to show the option; a user without the capability does not see it and a direct URL still redirects (`tests/unit/resourcesBulkUploadInsideCreateResource.test.ts`).
 
 Staging writes use the service role **after** the capability check, and no API role holds a write grant on the staging tables, so a browser can never write or alter staged rows. The preview shown in the browser is not apply authority: Apply carries only a run id and the database reads the server-staged rows.
 
