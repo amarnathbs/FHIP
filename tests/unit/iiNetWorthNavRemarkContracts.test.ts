@@ -221,7 +221,7 @@ describe('read model: deployment-order safety and fail-soft', () => {
 // 4. Dashboard disclosure and the Investments table
 // ---------------------------------------------------------------------------
 const status = (publishedValuation: DashboardDataStatus['publishedValuation']): DashboardDataStatus => ({
-  basis: 'canonical_read_models', unavailable: [], unconverted: { count: 0, byCurrency: {} }, netIncomeUnknownComponents: 0, netIncomeBasis: 'net',
+  basis: 'canonical_read_models', unavailable: [], unconverted: { count: 0, byCurrency: {} }, netIncomeAssumed: { count: 0, grossMonthly: 0, sources: [] }, netIncomeBasis: 'net',
   grossIncomeIncludesNetFloor: false, costOfDebtMonthly: 0, window: null, importedNotInNetWorth: null, bankBalanceEvidence: null, publishedValuation,
   retirementContributionFrequencyUnknown: 0, possibleDuplicateIncomeCount: 0, unknownPendingCount: 0,
 });

@@ -83,8 +83,8 @@ export function incomeFigures(income: IncomeReadModelData, ledger: NormalisedLed
   return {
     status: 'ok',
     grossMonthly: income.combined.grossMonthly,
-    netKnownMonthly: income.combined.netKnownMonthly,
-    netUnknownComponents: income.combined.netUnknownComponents,
+    netMonthly: income.combined.netMonthly,
+    netAssumed: { monthly: income.combined.netAssumedMonthly, sources: income.combined.assumedNetSources },
     grossIncludesNetFloor: income.combined.grossIncludesNetFloor,
     netImplausible: counted.flatMap((l) => {
       if (l.grossMonthly === null || l.netMonthly === null || !isWageLikeIncome(l.masterItemKey, l.provenance.kind)) return [];

@@ -1,6 +1,6 @@
 import { ok, bad, badValidation } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
-import { incomeSchema } from '@/lib/validation/income';
+import { incomeSchema, incomeTaxProblem } from '@/lib/validation/income';
 import { requireModuleCapability } from '@/lib/services/appCapability';
 
 const registry = makeRegistry('income_sources');
@@ -11,6 +11,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!user) return blocked!;
   const parsed = incomeSchema.partial().safeParse(await req.json());
   if (!parsed.success) return badValidation(parsed.error, 422);
+  const taxProblem = incomeTaxProblem(parsed.data);
+  if (taxProblem) return bad(taxProblem, 422);
   const { data, error } = await registry.update(user.id, id, parsed.data);
   return error ? bad(error.message) : ok(data);
 }

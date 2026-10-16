@@ -30,9 +30,6 @@ export function DashboardDataStatusNotice({ status, currency }: { status: Dashbo
     const codes = Object.keys(status.unconverted.byCurrency).join(', ');
     notes.push(`${status.unconverted.count} amount${status.unconverted.count === 1 ? '' : 's'} in ${codes} cannot be converted to ${currency} and ${status.unconverted.count === 1 ? 'is' : 'are'} left out of these totals.`);
   }
-  if (status.netIncomeUnknownComponents > 0) {
-    notes.push('Take-home pay is unknown for part of your income, so that part is not counted as take-home pay.');
-  }
   for (const f of status.netIncomeImplausible ?? []) {
     notes.push(
       f.kind === 'net_above_gross'
@@ -66,14 +63,33 @@ export function DashboardDataStatusNotice({ status, currency }: { status: Dashbo
   if (status.costOfDebtMonthly > 0) {
     notes.push(`Cost of debt (interest and fees inside your card and loan repayments): ${formatMoney(status.costOfDebtMonthly, currency)} a month, already included in your debt repayments.`);
   }
-  if (notes.length === 0) return null;
+  const assumed = status.netIncomeAssumed;
+  const hasAssumed = Boolean(assumed && assumed.count > 0);
+  if (notes.length === 0 && !hasAssumed) return null;
   return (
-    <section aria-label="About these figures" className="rounded-card border border-line bg-white p-4 text-sm text-muted">
-      <ul className="list-disc space-y-1 pl-5">
-        {notes.map((n) => (
-          <li key={n}>{n}</li>
-        ))}
-      </ul>
-    </section>
+    <>
+      {hasAssumed && assumed && (
+        // PO decision 16-10-2026: a source with no take-home pay and no tax entered is calculated at its gross.
+        // Highlighted, never buried in the muted list below.
+        <section role="note" aria-label="Gross is being treated as take-home" data-testid="dashboard-net-assumed" className="rounded-card border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-medium">Gross is being treated as take-home: no tax has been deducted.</p>
+          <p className="mt-1">
+            {assumed.count} income source{assumed.count === 1 ? ' has' : 's have'} no take-home pay or tax entered, so {assumed.count === 1 ? 'its' : 'their'} gross is used instead:{' '}
+            {assumed.sources.map((s) => `${s.name} (${formatMoney(s.grossMonthly, currency)} a month)`).join('; ')}.
+            Your net income, monthly surplus or deficit, savings rate, debt-service ratio and the Cash Flow, Savings and Debt scores are calculated on that basis.
+            Enter the take-home pay, or the tax, on the Income page to use your real figure.
+          </p>
+        </section>
+      )}
+      {notes.length > 0 && (
+        <section aria-label="About these figures" className="rounded-card border border-line bg-white p-4 text-sm text-muted">
+          <ul className="list-disc space-y-1 pl-5">
+            {notes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }

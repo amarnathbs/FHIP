@@ -5,6 +5,7 @@ import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './
 import { debtServiceClassFor, isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
 import type { PublishedValuationSummary } from './investment-intelligence/valuation/publishedRowRemark';
 import { assessNetToGross, isWageLikeIncome, type NetPlausibilityFlag } from './incomePlausibility';
+import { resolveNetBasis, type AssumedNetSource, type NetBasis } from './incomeNetBasis';
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the subset of each register's columns the dashboard uses)
@@ -35,6 +36,8 @@ export interface IncomeRow {
   // code is the reporting currency (legacy fixtures), an unsupported one is
   // excluded and surfaced in dataStatus.unconverted.
   currency_code?: string | null;
+  /** Tax per period (the row's own frequency); net = gross - tax when no net_amount. See incomeNetBasis.ts. */
+  tax_amount?: number | null;
 }
 export interface ExpenseRow {
   expense_name: string;
@@ -60,8 +63,9 @@ export interface ExpenseRow {
 // When `canonical` is present, EVERY cash-flow figure comes from it and the
 // raw income / expense rows are ignored:
 //   - income: planned income_sources + approved bank credits, the payslip's
-//     own matched bank credit counted ONCE (GAP-01), unknown net never
-//     replaced by gross (GAP-09), currency converted once (GAP-03);
+//     own matched bank credit counted ONCE (GAP-01), a blank take-home taken
+//     as the gross and DISCLOSED (PO decision 16-10-2026, reversing GAP-09; see
+//     incomeNetBasis.ts), currency converted once (GAP-03);
 //   - expenses: the COMBINED basis -- per canonical group, the actual monthly
 //     average over complete covered months when the group has any, otherwise
 //     the plan; never planned + actual for the same group (PO D-02, DC-02);
@@ -91,9 +95,12 @@ export interface CanonicalIncomeLine {
 export interface CanonicalIncomeFigures {
   status: 'ok';
   grossMonthly: number;
-  /** The KNOWN net only -- a component whose net is unknown adds nothing here (GAP-09). */
-  netKnownMonthly: number;
-  netUnknownComponents: number;
+  /**
+   * The ONE net-income figure (take-home): entered, gross minus entered tax, or - when neither was provided - the
+   * GROSS assumed to be take-home (PO decision 16-10-2026, reversing GAP-09). The assumed part is named in `netAssumed`.
+   */
+  netMonthly: number;
+  netAssumed: { monthly: number; sources: AssumedNetSource[] };
   /** D-07: bank credits (net only) are inside the gross as a floor. */
   grossIncludesNetFloor: boolean;
   /** Wage records whose take-home is implausible against their gross (see incomePlausibility.ts). Disclosure only. */
@@ -169,11 +176,15 @@ export interface DashboardDataStatus {
   unavailable: { section: string; reason: string; source: string }[];
   /** Amounts in a currency the app cannot convert (e.g. USD): excluded from totals, never added raw. */
   unconverted: { count: number; byCurrency: Record<string, number> };
-  /** GAP-09: counted income components whose NET is unknown (never replaced by gross). */
-  netIncomeUnknownComponents: number;
+  /**
+   * PO decision 16-10-2026 (reversing GAP-09): income sources with no take-home and no tax entered. Their GROSS is used
+   * as take-home (no tax deducted) so the figures can be calculated; every screen that shows net income, the surplus
+   * or deficit, the savings rate or the debt-service ratio must say so and name them.
+   */
+  netIncomeAssumed: { count: number; grossMonthly: number; sources: AssumedNetSource[] };
   /** Wage records whose take-home is under 30% of gross (or above it): a likely mixed pay-period basis. Disclosure only. */
   netIncomeImplausible?: NetPlausibilityFlag[];
-  /** Surplus basis: 'net' (all known), 'net_partial' (unknown nets left out), 'gross_fallback' (no net known). */
+  /** Net basis: 'net' (every source entered or derived from tax), 'net_partial' (some on the assumed gross), 'gross_fallback' (all assumed). */
   netIncomeBasis: 'net' | 'net_partial' | 'gross_fallback' | 'none';
   grossIncomeIncludesNetFloor: boolean;
   /** D-09 display line ("Cost of debt"): already inside debtMonthlyRepayments, never added again. */
@@ -805,7 +816,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     debtAvailable: boolean;
     grossMonthlyIncome: number;
     netMonthlyIncome: number;
-    netUnknownComponents: number;
+    netAssumedSources: AssumedNetSource[];
     grossIncludesNetFloor: boolean;
     netImplausible: NetPlausibilityFlag[];
     passiveMonthlyIncome: number;
@@ -842,9 +853,11 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
         addUnconvertedAmount(String(r.currency_code), Number(r.amount));
         return [];
       }
-      // GAP-09: a missing net is UNKNOWN. It is never replaced by the gross.
-      const net = r.net_amount === null || r.net_amount === undefined ? null : reportingValue(r.currency_code, toMonthly(Number(r.net_amount), r.frequency));
-      return [{ r, gross, net }];
+      // PO decision 16-10-2026 (reversing GAP-09): entered take-home, else gross minus entered tax, else the GROSS is
+      // assumed to be take-home. The assumed rows are named in dataStatus.netIncomeAssumed.
+      const resolved = resolveNetBasis(Number(r.amount), r.net_amount, r.tax_amount);
+      const net = reportingValue(r.currency_code, toMonthly(resolved.net, r.frequency));
+      return [{ r, gross, net, basis: resolved.basis as NetBasis }];
     });
     const incomeLines: CanonicalIncomeLine[] = income.map(({ r, gross }) => ({
       name: r.source_name ?? r.employer_name ?? 'Income source',
@@ -876,7 +889,9 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       debtAvailable: true,
       grossMonthlyIncome: sumBy(income, (i) => i.gross),
       netMonthlyIncome: sumBy(income, (i) => i.net ?? 0),
-      netUnknownComponents: income.filter((i) => i.net === null).length,
+      netAssumedSources: income
+        .filter((i) => i.basis === 'assumed_gross')
+        .map((i) => ({ name: i.r.source_name ?? i.r.employer_name ?? 'Income source', grossMonthly: i.gross })),
       grossIncludesNetFloor: false,
       netImplausible: income.flatMap(({ r, gross, net }) => {
         if (net === null || !isWageLikeIncome(r.master_item_key, r.source_type)) return [];
@@ -931,8 +946,8 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       expensesAvailable: exp !== null,
       debtAvailable: debt !== null,
       grossMonthlyIncome: inc?.grossMonthly ?? 0,
-      netMonthlyIncome: inc?.netKnownMonthly ?? 0,
-      netUnknownComponents: inc?.netUnknownComponents ?? 0,
+      netMonthlyIncome: inc?.netMonthly ?? 0,
+      netAssumedSources: inc?.netAssumed.sources ?? [],
       grossIncludesNetFloor: inc?.grossIncludesNetFloor ?? false,
       netImplausible: inc?.netImplausible ?? [],
       // Imported bank credits carry no master item to classify them by, so
@@ -994,17 +1009,17 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     0
   );
 
-  // The household-level surplus basis is unchanged (net when any net is
-  // known, gross otherwise). What changed (GAP-09) is that a component whose
-  // net is unknown no longer contributes its GROSS as if it were net.
+  // PO decision 16-10-2026 (reversing GAP-09): netMonthlyIncome already contains the gross of every source whose
+  // take-home and tax were both left blank, so the surplus below is calculated, and cf.netAssumedSources names them.
   const incomeForSurplus = netMonthlyIncome || grossMonthlyIncome;
+  const netAssumedGross = cf.netAssumedSources.reduce((s, a) => s + a.grossMonthly, 0);
   const netIncomeBasis: DashboardDataStatus['netIncomeBasis'] = !cf.incomeAvailable || incomeForSurplus === 0
     ? 'none'
-    : netMonthlyIncome === 0
-      ? 'gross_fallback'
-      : cf.netUnknownComponents > 0
-        ? 'net_partial'
-        : 'net';
+    : cf.netAssumedSources.length === 0
+      ? 'net'
+      : netAssumedGross >= netMonthlyIncome - 0.005
+        ? 'gross_fallback'
+        : 'net_partial';
   // A surplus needs all three inputs. With any of them unreadable the figure
   // below is still returned (it is a number in the contract), but every RATIO
   // built on it is null, so nothing downstream scores it (DC-14).
@@ -1572,7 +1587,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       basis: input.canonical ? 'canonical_read_models' : 'registers_only',
       unavailable: cf.unavailable,
       unconverted,
-      netIncomeUnknownComponents: cf.netUnknownComponents,
+      netIncomeAssumed: { count: cf.netAssumedSources.length, grossMonthly: netAssumedGross, sources: cf.netAssumedSources },
       netIncomeImplausible: cf.netImplausible,
       netIncomeBasis,
       grossIncomeIncludesNetFloor: cf.grossIncludesNetFloor,

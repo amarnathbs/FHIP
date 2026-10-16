@@ -19,7 +19,10 @@ export const incomeGridConfig: GridConfig = {
   restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
   fields: [
     { name: 'amount', label: 'Gross Amount', type: 'number', step: '0.01', required: true },
-    { name: 'net_amount', label: 'Net Amount', type: 'number', step: '0.01' },
+    { name: 'net_amount', label: 'Net Amount (take-home pay)', type: 'number', step: '0.01' },
+    // PO decision 16-10-2026: if you do not know your take-home pay, enter the TAX per pay period instead and the
+    // take-home is worked out as gross minus tax. With neither, the gross is treated as take-home (no tax deducted).
+    { name: 'tax_amount', label: 'Tax per period (if no net amount)', type: 'number', step: '0.01' },
     { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
     { name: 'is_taxable', label: 'Taxable', type: 'checkbox', defaultValue: true },
     { name: 'employer_name', label: 'Employer', type: 'text' },

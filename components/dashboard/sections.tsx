@@ -72,7 +72,7 @@ export function ExecutiveSummary({ summary }: { summary: DashboardSummary }) {
       <MetricCard
         label="Monthly Income"
         value={formatMoney(summary.netMonthlyIncome, summary.currency)}
-        trend={`Gross ${formatMoney(summary.grossMonthlyIncome, summary.currency)} · Passive ${formatMoney(summary.passiveMonthlyIncome, summary.currency)}`}
+        trend={`Gross ${formatMoney(summary.grossMonthlyIncome, summary.currency)} · Passive ${formatMoney(summary.passiveMonthlyIncome, summary.currency)}${(summary.dataStatus?.netIncomeAssumed?.count ?? 0) > 0 ? ` · Gross treated as take-home for ${summary.dataStatus!.netIncomeAssumed.count} source${summary.dataStatus!.netIncomeAssumed.count === 1 ? '' : 's'}` : ''}`}
       />
       <MetricCard
         label="Monthly Expenses"

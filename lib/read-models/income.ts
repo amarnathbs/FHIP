@@ -21,18 +21,22 @@
  *    duplicate of <source>" prompt for the user to resolve. A household with
  *    only bank income has net known and gross unknown: gross uses net as a
  *    floor and says so (grossIncludesNetFloor).
- *  - GAP-09: a null net_amount is UNKNOWN, never the gross.
+ *  - NET BASIS (PO decision 16-10-2026, reversing GAP-09): per planned row, take-home is the entered net_amount, else
+ *    gross minus the entered tax_amount, else the GROSS is assumed to be take-home (no tax deducted) so every figure
+ *    can be calculated. The rows and the variable pay on the assumed basis are named in `combined.assumedNetSources`
+ *    so every consumer can disclose them. See lib/engines/incomeNetBasis.ts.
  *  - Broker dividends in ii_* are never read here: the bank credit is the
  *    single household-income leg (INV-G4).
  */
 import '@/lib/serverOnly';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
+import { resolveNetBasis, type AssumedNetSource, type NetBasis } from '@/lib/engines/incomeNetBasis';
 import { resolveContext, type ReadModelOptions } from './core/context';
 import { toReporting, type FxContext, type ReportingCurrency } from './core/currency';
 import { coveredMonthlyAverage, type ActualLine, type NormalisedLedger } from './core/ledger';
 import { fetchAllRows, type ReadModelClient } from './core/paginate';
 import { toMinor } from './core/spendingRules';
-import { addUnconverted, emptyUnconverted, isHouseholdOwner, provenance, roundMoney, toUnavailable, type Provenance, type ReadModelResult, type UnconvertedTally } from './core/types';
+import { addUnconverted, emptyUnconverted, isHouseholdOwner, provenance, ReadModelUnavailableError, roundMoney, toUnavailable, type Provenance, type ReadModelResult, type UnconvertedTally } from './core/types';
 import { isDateInWindow, type ReadWindow } from './core/window';
 
 export interface IncomeSourceRow {
@@ -41,6 +45,8 @@ export interface IncomeSourceRow {
   income_type: string | null;
   amount: number;
   net_amount: number | null;
+  /** Tax per period (the row's own frequency). Optional: absent before migration 0281 or when not entered. */
+  tax_amount?: number | null;
   frequency: string;
   currency_code: string;
   owner: string | null;
@@ -83,9 +89,13 @@ export interface PlannedIncomeLine {
   frequency: string;
   currency: string;
   grossNative: number;
-  netNative: number | null;
+  /** The take-home actually used (entered, gross minus tax, or the assumed gross). */
+  netNative: number;
+  taxNative: number | null;
+  /** How `netNative` was arrived at. 'assumed_gross' = no take-home and no tax entered: gross treated as take-home. */
+  netBasis: NetBasis;
   grossMonthly: number | null;
-  /** null = net unknown (GAP-09) or unconverted. */
+  /** null = unconverted. */
   netMonthly: number | null;
   excludedReason: PlannedIncomeExclusion | null;
   provenance: Provenance;
@@ -117,9 +127,10 @@ export interface IncomeReadModelData {
   planned: {
     lines: PlannedIncomeLine[];
     grossMonthly: number;
-    netKnownMonthly: number;
-    /** Counted planned lines whose net is unknown. */
-    netUnknownCount: number;
+    /** Take-home of the counted planned lines (entered, derived from tax, or assumed gross). */
+    netMonthly: number;
+    /** Counted planned lines on the assumed-gross basis. */
+    netAssumedCount: number;
     unconverted: UnconvertedTally;
   };
   actual: {
@@ -133,10 +144,14 @@ export interface IncomeReadModelData {
   };
   combined: {
     grossMonthly: number;
-    /** null when any counted component's net is unknown -- see netKnownMonthly. */
-    netMonthly: number | null;
-    netKnownMonthly: number;
-    netUnknownComponents: number;
+    /** The ONE net-income figure every consumer uses: planned take-home + counted bank credits (net) + variable pay (assumed gross). */
+    netMonthly: number;
+    /** The part of netMonthly that is the GROSS assumed to be take-home. */
+    netAssumedMonthly: number;
+    /** Number of sources (rows + variable pay) on the assumed-gross basis. */
+    assumedNetComponents: number;
+    /** Those sources, by name, for the "gross is being treated as take-home" disclosures. */
+    assumedNetSources: AssumedNetSource[];
     /** True when bank credits (net-only) are inside grossMonthly as a floor (D-07). */
     grossIncludesNetFloor: boolean;
   };
@@ -183,9 +198,10 @@ export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
   const plannedUnconverted = emptyUnconverted();
   const planned: PlannedIncomeLine[] = input.sources.map((row) => {
     const grossNative = Number(row.amount);
-    const netNative = row.net_amount == null ? null : Number(row.net_amount);
+    const resolved = resolveNetBasis(grossNative, row.net_amount, row.tax_amount);
+    const netNative = resolved.net;
     const grossMonthly = toReporting(r(toMonthly(grossNative, row.frequency as Frequency) || 0), row.currency_code, fx);
-    const netMonthly = netNative == null ? null : toReporting(r(toMonthly(netNative, row.frequency as Frequency) || 0), row.currency_code, fx);
+    const netMonthly = toReporting(r(toMonthly(netNative, row.frequency as Frequency) || 0), row.currency_code, fx);
     let excludedReason: PlannedIncomeExclusion | null = null;
     if (row.superseded_by_bank_import) excludedReason = 'superseded_by_bank_import';
     else if (!isHouseholdOwner(row.owner)) excludedReason = 'smsf_owned';
@@ -193,7 +209,8 @@ export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
     if (excludedReason === 'unconverted') addUnconverted(plannedUnconverted, row.currency_code, grossNative);
     return {
       id: row.id, name: row.source_name, incomeType: row.income_type, masterItemKey: row.master_item_key, employerName: row.employer_name,
-      owner: row.owner, frequency: row.frequency, currency: row.currency_code, grossNative, netNative, grossMonthly, netMonthly, excludedReason,
+      owner: row.owner, frequency: row.frequency, currency: row.currency_code, grossNative, netNative, taxNative: row.tax_amount == null ? null : Number(row.tax_amount),
+      netBasis: resolved.basis, grossMonthly, netMonthly, excludedReason,
       provenance: row.source_type === 'payslip_import' ? provenance('payslip_import') : provenance('manual'),
     };
   });
@@ -329,15 +346,20 @@ export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
   const variableGrossMonthly = r(variablePay.reduce((s, v) => s + (v.grossReporting ?? 0), 0) / windowMonths);
 
   const plannedGross = r(countedPlanned.reduce((s, p) => s + (p.grossMonthly ?? 0), 0));
-  const plannedNetKnown = r(countedPlanned.reduce((s, p) => s + (p.netMonthly ?? 0), 0));
-  const plannedNetUnknown = countedPlanned.filter((p) => p.netMonthly === null).length;
-  const netUnknownComponents = plannedNetUnknown + (variableGrossMonthly > 0 ? 1 : 0);
-  const netKnownMonthly = r(plannedNetKnown + countedMonthly);
+  const plannedNet = r(countedPlanned.reduce((s, p) => s + (p.netMonthly ?? 0), 0));
+  const assumedPlanned = countedPlanned.filter((p) => p.netBasis === 'assumed_gross');
+  // PO decision 16-10-2026: variable pay has no take-home figure either, so its gross is assumed to be take-home too.
+  const assumedNetSources: AssumedNetSource[] = [
+    ...assumedPlanned.map((p) => ({ name: p.name, grossMonthly: p.grossMonthly ?? 0 })),
+    ...(variableGrossMonthly > 0 ? [{ name: 'Variable pay (payslip)', grossMonthly: variableGrossMonthly }] : []),
+  ];
+  const netAssumedMonthly = r(assumedNetSources.reduce((s, a) => s + a.grossMonthly, 0));
+  const netMonthly = r(plannedNet + countedMonthly + variableGrossMonthly);
 
   return {
     window: ledger.window,
     reportingCurrency: fx.reportingCurrency,
-    planned: { lines: planned, grossMonthly: plannedGross, netKnownMonthly: plannedNetKnown, netUnknownCount: plannedNetUnknown, unconverted: plannedUnconverted },
+    planned: { lines: planned, grossMonthly: plannedGross, netMonthly: plannedNet, netAssumedCount: assumedPlanned.length, unconverted: plannedUnconverted },
     actual: {
       lines: actualLines,
       countedMonthly,
@@ -348,9 +370,10 @@ export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
     },
     combined: {
       grossMonthly: r(plannedGross + countedMonthly + variableGrossMonthly),
-      netMonthly: netUnknownComponents > 0 ? null : netKnownMonthly,
-      netKnownMonthly,
-      netUnknownComponents,
+      netMonthly,
+      netAssumedMonthly,
+      assumedNetComponents: assumedNetSources.length,
+      assumedNetSources,
       grossIncludesNetFloor: countedMonthly > 0,
     },
     flags: { hasPlanned: countedPlanned.length > 0, hasActual: counted.length > 0 || variablePay.length > 0, hasAny: countedPlanned.length > 0 || counted.length > 0 || variablePay.length > 0 },
@@ -361,15 +384,29 @@ export function computeIncome(input: ComputeIncomeInput): IncomeReadModelData {
 // Loaders
 // ---------------------------------------------------------------------------
 
+const INCOME_BASE_COLUMNS = 'id, source_name, income_type, amount, net_amount, frequency, currency_code, owner, master_item_key, employer_name, source_type, superseded_by_bank_import';
+
 export async function loadIncomeInputs(userId: string, client: ReadModelClient): Promise<Pick<ComputeIncomeInput, 'sources' | 'payrollEvents' | 'applications'>> {
-  const sources = await fetchAllRows<IncomeSourceRow>('income_sources', (from, to) =>
-    client
-      .from('income_sources')
-      .select('id, source_name, income_type, amount, net_amount, frequency, currency_code, owner, master_item_key, employer_name, source_type, superseded_by_bank_import')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('id', { ascending: true })
-      .range(from, to));
+  const page = (columns: string) =>
+    fetchAllRows<IncomeSourceRow>('income_sources', (from, to) =>
+      client
+        .from('income_sources')
+        .select(columns)
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .range(from, to));
+  let sources: IncomeSourceRow[];
+  try {
+    sources = await page(`${INCOME_BASE_COLUMNS}, tax_amount`);
+  } catch (error) {
+    // Deployment-order safety: this code can reach an environment before migration 0281 (income_sources.tax_amount) is
+    // applied there. Net Worth, the Dashboard and the report must never go offline for that: retry with the columns
+    // every environment has (no tax amount entered means the gross is assumed, exactly as for a blank take-home).
+    // A genuine failure fails again here and propagates unchanged.
+    if (!(error instanceof ReadModelUnavailableError)) throw error;
+    sources = await page(INCOME_BASE_COLUMNS);
+  }
   const payrollEvents = await fetchAllRows<PayrollEventRow>('fdh_payroll_events', (from, to) =>
     client
       .from('fdh_payroll_events')

@@ -23,6 +23,9 @@ export const incomeSchema = z.object({
   income_type: z.enum(['salary', 'business', 'rental', 'investment', 'other']).default('other'),
   amount: z.number().min(0),
   net_amount: z.number().min(0).nullable().optional(),
+  // PO decision 16-10-2026: tax per pay period (the SAME frequency as amount). When no take-home (net_amount) is
+  // entered, net = amount - tax_amount. With neither, the gross is treated as take-home and the app says so.
+  tax_amount: z.number().min(0).nullable().optional(),
   frequency: z.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'one_off']),
   currency_code: z.enum(['AUD', 'INR']),
   // G6 Contract 2 (docs/country-programme/g6-data-contracts.md) — new
@@ -40,3 +43,13 @@ export const incomeSchema = z.object({
 });
 
 export type IncomeInput = z.infer<typeof incomeSchema>;
+
+/**
+ * Tax per period can never exceed the gross it is a part of. A cross-field rule, so it lives beside the schema (the
+ * PATCH route parses `incomeSchema.partial()`, which a schema-level refine would break). The database carries the same
+ * rule as a CHECK constraint (migration 0281) for the PATCH that sends only one of the two.
+ */
+export function incomeTaxProblem(data: { amount?: number; tax_amount?: number | null }): string | null {
+  if (data.tax_amount == null || data.amount == null) return null;
+  return data.tax_amount > data.amount ? 'Tax per period cannot be more than the gross amount.' : null;
+}

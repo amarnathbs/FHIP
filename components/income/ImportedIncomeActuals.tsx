@@ -117,8 +117,18 @@ export function IncomeActualsBody({ data }: { data: IncomeActualsOk }) {
           {data.combined.grossIncludesNetFloor && <dd className="text-xs text-muted">Includes bank deposits at their take-home amount (gross unknown)</dd>}
         </div>
       </dl>
-      {data.combined.netMonthly === null && (
-        <p className="text-xs text-muted" data-testid="income-net-unknown">Take-home pay is not known for every entry, so no net total is shown.</p>
+      <p className="text-sm" data-testid="income-net-total">
+        Household take-home (monthly): <span className="font-medium">{money(data.combined.netMonthly, cur)}</span>
+      </p>
+      {data.combined.assumedNetSources.length > 0 && (
+        <div role="note" className="rounded-card border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-testid="income-net-assumed">
+          <p className="font-medium">Gross is being treated as take-home: no tax has been deducted.</p>
+          <p className="mt-1">
+            {data.combined.assumedNetSources.length} income source{data.combined.assumedNetSources.length === 1 ? '' : 's'} ha{data.combined.assumedNetSources.length === 1 ? 's' : 've'} no take-home pay
+            or tax entered: {data.combined.assumedNetSources.map((s) => `${s.name} (${money(s.grossMonthly, cur)} a month)`).join('; ')}.
+            Enter the take-home pay, or the tax, on the Income page so your net income, surplus or deficit and scores use your real figure.
+          </p>
+        </div>
       )}
 
       {data.actual.lines.length > 0 && (

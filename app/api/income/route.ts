@@ -1,6 +1,6 @@
 import { ok, bad, badValidation } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
-import { incomeSchema } from '@/lib/validation/income';
+import { incomeSchema, incomeTaxProblem } from '@/lib/validation/income';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
 import { createClient } from '@/lib/supabase/server';
 import { requireModuleCapability } from '@/lib/services/appCapability';
@@ -32,6 +32,8 @@ export async function POST(req: Request) {
   if (!user) return blocked!;
   const parsed = incomeSchema.safeParse(await req.json());
   if (!parsed.success) return badValidation(parsed.error, 422);
+  const taxProblem = incomeTaxProblem(parsed.data);
+  if (taxProblem) return bad(taxProblem, 422);
 
   const supabase = await createClient();
   const gate = await assertItemCreationAllowedForUser({
