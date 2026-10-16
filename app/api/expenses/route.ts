@@ -1,6 +1,7 @@
 import { ok, bad, badValidation } from '@/lib/api';
 import { makeRegistry } from '@/lib/services/registry';
 import { expenseSchema } from '@/lib/validation/expense';
+import { defaultIsEssentialForExpenseItem } from '@/lib/engines/dashboard';
 import { requireModuleCapability } from '@/lib/services/appCapability';
 
 const registry = makeRegistry('expense_items');
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
   if (!user) return blocked!;
   const parsed = expenseSchema.safeParse(await req.json());
   if (!parsed.success) return badValidation(parsed.error, 422);
-  const { data, error } = await registry.save(user.id, parsed.data);
+  const row = { ...parsed.data, is_essential: parsed.data.is_essential ?? defaultIsEssentialForExpenseItem(parsed.data.master_item_key) };
+  const { data, error } = await registry.save(user.id, row);
   return error ? bad(error.message) : ok(data);
 }

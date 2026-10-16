@@ -62,7 +62,7 @@ describe('payslip + matching bank salary credit = ONE income event', () => {
 });
 
 describe('PO D-06: variable pay is a dated one-off actual', () => {
-  it('bonus 3,000 on an Applied payslip dated in the window -> +1,000/month gross (3,000 over 3 months); net unknown', async () => {
+  it('bonus 3,000 on an Applied payslip dated in the window -> +1,000/month gross (3,000 over 3 months); its take-home is unknown so the gross is assumed (PO decision 16-10-2026)', async () => {
     const e = await run(tables(bankAug(), {
       income_sources: [appliedSource()],
       fdh_payroll_events: [payrollEvent({ bonus_pay: 3000, gross_pay: 9500, net_pay: 7100 })],
@@ -71,8 +71,9 @@ describe('PO D-06: variable pay is a dated one-off actual', () => {
     expect(e.actual.variablePay.lines).toHaveLength(1);
     expect(e.actual.variablePay.grossMonthly).toBe(1000);
     expect(e.combined.grossMonthly).toBe(7500);
-    expect(e.combined.netMonthly).toBeNull();
-    expect(e.combined.netKnownMonthly).toBe(5000);
+    expect(e.combined.netMonthly).toBe(6000); // 5,000 planned take-home + the 1,000 variable pay taken at its gross
+    expect(e.combined.netAssumedMonthly).toBe(1000);
+    expect(e.combined.assumedNetSources).toEqual([{ name: 'Variable pay (payslip)', grossMonthly: 1000 }]);
     expect(e.actual.representedCount).toBe(1); // the 7,100 credit is not added again
   });
 });
@@ -84,12 +85,34 @@ describe('PO D-07 and GAP-09', () => {
     expect(e.actual.lines[0].possibleDuplicateOf).toEqual([{ sourceId: 'm1', name: 'My salary' }]);
   });
 
-  it('a null net_amount is UNKNOWN, never the gross', async () => {
+  // PO decision 16-10-2026 deliberately REVERSES the certified GAP-09 rule ("a null net_amount is UNKNOWN, never the
+  // gross"): a blank take-home now uses the gross, is flagged 'assumed_gross', and is named for disclosure.
+  it('a null net_amount with no tax uses the GROSS as take-home, flagged and named (reverses GAP-09)', async () => {
     const e = await run({ income_sources: [incomeSource('m1', 'Salary', 8000, 'monthly')] });
-    expect(e.planned.lines[0].netMonthly).toBeNull();
-    expect(e.combined.netMonthly).toBeNull();
-    expect(e.combined.netKnownMonthly).toBe(0);
+    expect(e.planned.lines[0].netBasis).toBe('assumed_gross');
+    expect(e.planned.lines[0].netMonthly).toBe(8000);
+    expect(e.combined.netMonthly).toBe(8000);
+    expect(e.combined.netAssumedMonthly).toBe(8000);
+    expect(e.combined.assumedNetComponents).toBe(1);
+    expect(e.combined.assumedNetSources).toEqual([{ name: 'Salary', grossMonthly: 8000 }]);
     expect(e.combined.grossMonthly).toBe(8000);
+  });
+
+  it('a tax amount per period gives net = gross - tax on the SAME period base (fortnightly 7,576.71 - 1,800 tax = 5,776.71 -> x 26 / 12)', async () => {
+    const e = await run({ income_sources: [incomeSource('m1', 'Salary', 7576.71, 'fortnightly', { tax_amount: 1800 })] });
+    expect(e.planned.lines[0].netBasis).toBe('derived_from_tax');
+    expect(e.planned.lines[0].netNative).toBe(5776.71);
+    expect(e.planned.lines[0].netMonthly).toBeCloseTo(12516.2, 1); // 5,776.71 x 26 / 12 = 12,516.205
+    expect(e.combined.assumedNetComponents).toBe(0);
+  });
+
+  it('an entered take-home wins over a tax amount; a tax above the gross is ignored (gross assumed, flagged)', async () => {
+    const both = await run({ income_sources: [incomeSource('m1', 'Salary', 8000, 'monthly', { net_amount: 6000, tax_amount: 500 })] });
+    expect(both.planned.lines[0].netBasis).toBe('entered');
+    expect(both.combined.netMonthly).toBe(6000);
+    const bad = await run({ income_sources: [incomeSource('m2', 'Salary', 8000, 'monthly', { tax_amount: 9000 })] });
+    expect(bad.planned.lines[0].netBasis).toBe('assumed_gross');
+    expect(bad.combined.netMonthly).toBe(8000);
   });
 
   it('superseded and SMSF-owned planned rows are excluded and say why; INR is converted', async () => {
