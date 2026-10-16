@@ -141,6 +141,21 @@ describe('migration 0284 -- shape', () => {
     expect(a.reserved).toBe(true);
   });
 
+  it('LOCK ORDER (found on DEV 16-10-2026): the ledger row is locked FOR UPDATE BEFORE the claim row is inserted', () => {
+    // The claim insert references the ledger row by foreign key, which takes a shared KEY SHARE lock on it. If a transaction
+    // holds that shared lock and THEN asks for FOR UPDATE, any two concurrent callers wait on each other (deadlock, resolved
+    // only by aborting one after the deadlock timeout). On DEV, 22 simultaneous requests for different keys admitted 2 and
+    // timed out 20 at the statement timeout. PGlite is one session so it cannot show the deadlock; this pins the ordering
+    // that prevents it, and scripts/aie_user_cap_live_dev_check.ts P1 is the real proof.
+    const body = migrationSql.slice(migrationSql.indexOf('as $fn$'));
+    const lockAt = body.indexOf('from aie_ai_cost_ledger where id = p_ledger_id for update');
+    const claimAt = body.indexOf('insert into aie_ai_cost_attempt');
+    expect(lockAt).toBeGreaterThan(-1);
+    expect(claimAt).toBeGreaterThan(-1);
+    expect(lockAt, 'ledger lock must come before the claim insert').toBeLessThan(claimAt);
+    expect(body.match(/for update/g)).toHaveLength(1);
+  });
+
   it('only the service role may execute the v2 function (anon and authenticated may not)', async () => {
     const r = await db.query<{ anon: boolean; authenticated: boolean; service: boolean }>(
       `select has_function_privilege('anon', 'aie_reserve_ai_cost_v2(text,numeric,numeric,text,uuid,numeric)', 'execute') as anon,

@@ -167,6 +167,11 @@ export function mergeSavedRows(masterItems: MasterItem[], savedRecords: SavedRec
   return [...merged, ...extraRows, ...orphanedRows, ...customRows];
 }
 
+/** The "What are you adding?" menu: every catalogue item that is not already on the page (custom rows are the last entry). */
+export function catalogPickerItems(rows: readonly Row[]): Row[] {
+  return rows.filter((r) => !r.is_custom && !r.included);
+}
+
 // R3 spec section 38/40 — direct-edit protection + source provenance badge.
 // Fields Investment Intelligence certifies from a source document must not
 // become independently editable here (matches the server-side enforcement
@@ -749,7 +754,7 @@ export function FinancialDataGrid({
     [included, search]
   );
   // Catalogue items not yet added — the Add form's picker choices.
-  const availableCatalogItems = useMemo(() => (rows ?? []).filter((r) => !r.is_custom && !r.included), [rows]);
+  const availableCatalogItems = useMemo(() => catalogPickerItems(rows ?? []), [rows]);
 
   // PO decision 16-10-2026 (personal basis): on the balance-sheet registers listed in PERSONAL_TOTAL_GRID_CATEGORIES the
   // footer total is the PERSONAL total, and rows held by an entity (owner SMSF / family trust / company) are shown on
@@ -1014,6 +1019,9 @@ export function FinancialDataGrid({
                     <div>
                       <label className="block text-xs text-muted">Item</label>
                       <p className="text-sm font-medium text-ink">{draft.item_label}</p>
+                      {config.itemHint?.(draft.master_item_key) && (
+                        <p className="mt-1 max-w-xl text-xs text-muted" data-testid="grid-item-hint">{config.itemHint(draft.master_item_key)}</p>
+                      )}
                     </div>
                   )}
 

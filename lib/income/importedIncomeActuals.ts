@@ -90,6 +90,16 @@ export interface VariablePayLineDto {
   grossReporting: number | null;
 }
 
+/** A payslip's bonus / overtime / commission left out because the household recorded the same kind of pay itself. */
+export interface LeftOutVariablePayDto {
+  payrollEventId: string;
+  kind: 'bonus' | 'overtime' | 'commission';
+  date: string;
+  grossNative: number;
+  currency: string;
+  recordedSourceName: string;
+}
+
 export interface IncomeActualsOk {
   status: 'ok';
   reportingCurrency: string;
@@ -109,7 +119,7 @@ export interface IncomeActualsOk {
     possibleDuplicateCount: number;
     unconverted: { count: number; byCurrency: Record<string, number> };
   };
-  variablePay: { lines: VariablePayLineDto[]; grossMonthly: number };
+  variablePay: { lines: VariablePayLineDto[]; grossMonthly: number; leftOut: LeftOutVariablePayDto[] };
   combined: {
     grossMonthly: number;
     /** The one net-income figure (entered, derived from tax, or the gross assumed as take-home). */
@@ -196,6 +206,14 @@ export function toIncomeActualsDto(data: IncomeReadModelData): IncomeActualsOk {
         grossReporting: v.grossReporting,
       })),
       grossMonthly: data.actual.variablePay.grossMonthly,
+      leftOut: data.actual.variablePay.leftOut.map((v) => ({
+        payrollEventId: v.payrollEventId,
+        kind: v.kind,
+        date: v.date,
+        grossNative: v.grossNative,
+        currency: v.currency,
+        recordedSourceName: v.recordedSourceName,
+      })),
     },
     combined: {
       grossMonthly: data.combined.grossMonthly,
