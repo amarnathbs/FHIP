@@ -99,8 +99,8 @@ describe('reserveConservativeAiCost with the per-user cap', () => {
     expect((await reserveConservativeAiCost('gpt-4o-mini', 'a', { userId: USER })).refusalReason).toBe('replay');
   });
 
-  it('NO USER, NO CALL: a missing, blank or malformed user id is refused without touching the database', async () => {
-    for (const userId of [undefined, '', '   ', 'not-a-uuid', "11111111-2222-4333-8444-5555555555zz'; drop table x;--"]) {
+  it('NO USER, NO CALL: a missing or blank user id is refused without touching the database', async () => {
+    for (const userId of [undefined, '', '   ']) {
       const r = await reserveConservativeAiCost('gpt-4o-mini', 'attempt-x', { userId });
       expect(r, String(userId)).toMatchObject({ admitted: false, reservedUsd: 0, refusalReason: 'unavailable' });
     }
@@ -112,6 +112,12 @@ describe('reserveConservativeAiCost with the per-user cap', () => {
     const r = await reserveConservativeAiCost('gpt-4o-mini', 'attempt-4', { userId: USER });
     expect(r).toMatchObject({ admitted: false, refusalReason: 'unavailable' });
     expect(rpcCalls.map((c) => c.fn)).toEqual(['aie_reserve_ai_cost_v2']);
+  });
+
+  it('a malformed (non-uuid) user id is rejected by the typed database parameter, which is a refusal too', async () => {
+    rpcImpl = async () => ({ data: null, error: { code: '22P02', message: 'invalid input syntax for type uuid' } });
+    const r = await reserveConservativeAiCost('gpt-4o-mini', 'a', { userId: "not-a-uuid'; drop table x;--" });
+    expect(r).toMatchObject({ admitted: false, refusalReason: 'unavailable' });
   });
 
   it('FAILS CLOSED on any database error or an empty answer', async () => {

@@ -67,7 +67,6 @@ export interface ReservationSizing {
   userId?: string;
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Conservative token estimate for a prompt: one token per 3 characters (real
@@ -96,8 +95,9 @@ export async function reserveConservativeAiCost(model: string, idempotencyKey: s
   const refused = (refusalReason: CostRefusalReason): CostReservation => ({ admitted: false, remainingUsd: 0, reservedUsd: 0, refusalReason });
   // Fail closed: a spend that cannot be attributed to a user cannot be capped
   // per user, so it is not admitted at all.
-  if (typeof sizing.userId !== 'string' || !UUID_PATTERN.test(sizing.userId)) {
-    console.error('aie cost admission refused: no valid user id supplied for the per-user daily cap');
+  // (A value that is not a uuid is rejected by the database function, whose parameter is typed uuid, and that error is a refusal too.)
+  if (typeof sizing.userId !== 'string' || sizing.userId.trim().length === 0) {
+    console.error('aie cost admission refused: no user id supplied for the per-user daily cap');
     return refused('unavailable');
   }
   const admin = createAdminClient();

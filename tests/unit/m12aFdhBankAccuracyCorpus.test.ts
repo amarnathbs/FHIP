@@ -275,7 +275,7 @@ vi.mock('@/lib/supabase/admin', () => ({
     // `admin.rpc is not a function` here, and the unset-masking-key case
     // recorded a throw for the wrong reason until this was added.)
     rpc: async (fn: string) => {
-      if (fn === 'aie_reserve_ai_cost') return { data: [{ reserved: true, remaining_usd: 10 }], error: null };
+      if (fn === 'aie_reserve_ai_cost' || fn === 'aie_reserve_ai_cost_v2') return { data: [{ reserved: true, remaining_usd: 10 }], error: null };
       return { data: null, error: null };
     },
   }),
