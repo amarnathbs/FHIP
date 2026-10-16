@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { computeDashboard, type DashboardSummary, type LiabilityRow as DashboardLiabilityRow } from '@/lib/engines/dashboard';
 import { loadBusinessEntitiesForValuation } from '@/lib/services/businessEntityData';
 import { loadNetWorthLevels } from '@/lib/services/netWorthLevelsData';
+import { buildNetWorthBasisInfo, personalBasisRows } from '@/lib/engines/netWorthBasis';
 import { applySmsfPropertyLoanLinkOverride } from '@/lib/engines/householdContext';
 import { allUnavailableCashFlow, toCanonicalCashFlow } from '@/lib/services/dashboardCanonicalAdapter';
 import { buildCanonicalFinancialSnapshot, type CanonicalFinancialSnapshotResult } from '@/lib/read-models/snapshot';
@@ -9,6 +10,7 @@ import { computeMonthCashFlow } from '@/lib/read-models/monthlyCashFlow';
 import { ECONOMIC_TRANSACTION_TYPES, ECONOMIC_TYPE_BUCKET, type EconomicTransactionType } from '@/lib/read-models/core/spendingRules';
 import { DEFAULT_FX_RATE_AUD_INR } from '@/lib/read-models/core/currency';
 import { monthStart as monthStartOf } from '@/lib/read-models/core/window';
+import { memoClientId, memoInRequest } from '@/lib/services/requestMemo';
 
 export type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -137,6 +139,11 @@ async function writeFinancialSnapshots(
   // Error != 0 (security/integrity review): a section the snapshot could not
   // read is carried in the summary as a 0 stand-in. Stored history must not
   // turn that into a real zero, so its columns are written as null (unknown).
+  const historyBasis = summary.netWorthBasis?.history ?? {
+    netWorth: summary.netWorth,
+    totalAssets: summary.totalAssets + summary.totalInvestments + summary.totalRetirement,
+    totalLiabilities: summary.totalLiabilities,
+  };
   const unavailable = new Set((summary.dataStatus?.unavailable ?? []).map((u) => u.section));
   const incomeKnown = !unavailable.has('income');
   const outflowKnown = !unavailable.has('expenses') && !unavailable.has('liabilities');
@@ -144,9 +151,12 @@ async function writeFinancialSnapshots(
     {
       user_id: userId,
       snapshot_month: current,
-      total_assets: summary.totalAssets + summary.totalInvestments + summary.totalRetirement,
-      total_liabilities: summary.totalLiabilities,
-      net_worth: summary.netWorth,
+      // History basis (PO decision 16-10-2026): stored months stay on the figure net worth was reported as
+      // before the personal-basis decision (all entity amounts included) so history is never silently mixed
+      // with the personal figure and no stored month is rewritten. Entity-free households: identical.
+      total_assets: historyBasis.totalAssets,
+      total_liabilities: historyBasis.totalLiabilities,
+      net_worth: historyBasis.netWorth,
       monthly_income: incomeKnown ? summary.grossMonthlyIncome : null,
       monthly_expenses: outflowKnown ? summary.totalMonthlyExpenses + summary.debtMonthlyRepayments : null,
       monthly_surplus: incomeKnown && outflowKnown ? summary.monthlySurplus : null,
@@ -195,6 +205,11 @@ async function writeFinancialSnapshots(
 // (which has no per-request cookie session) can pass a service-role client.
 export async function loadDashboardContext(userId: string, client?: SupabaseServerClient): Promise<DashboardContext> {
   const supabase = client ?? (await createClient());
+  // Inside a request-memo scope (report generation only) the dashboard context is built once; see requestMemo.ts.
+  return memoInRequest(`dashboardContext:${userId}:${memoClientId(supabase)}`, () => loadDashboardContextUncached(userId, supabase));
+}
+
+async function loadDashboardContextUncached(userId: string, supabase: SupabaseServerClient): Promise<DashboardContext> {
 
   // THE one snapshot for this request: income, expenses, debt service,
   // investments, retirement and assets, each 'ok' or explicitly 'unavailable'.
@@ -221,7 +236,7 @@ export async function loadDashboardContext(userId: string, client?: SupabaseServ
   // from these rows any more.
   const [assets, liabilities, investments, retirement, insurance, goals, snapshotsRes, businessEntitiesResult] = await Promise.all([
     fetchAllRows((from, to) =>
-      supabase.from('assets').select('current_value, asset_name, asset_class, master_item_key, country_code, currency_code').eq('user_id', userId).eq('is_active', true).range(from, to)
+      supabase.from('assets').select('current_value, asset_name, asset_class, master_item_key, country_code, currency_code, owner').eq('user_id', userId).eq('is_active', true).range(from, to)
     ),
     fetchAllRows<DashboardLiabilityRow & { id: string }>((from, to) =>
       supabase
@@ -234,7 +249,7 @@ export async function loadDashboardContext(userId: string, client?: SupabaseServ
     fetchAllRows((from, to) =>
       supabase
         .from('investments')
-        .select('current_value, cost_base, investment_type, master_item_key, country_code, annual_contribution, institution, currency_code')
+        .select('current_value, cost_base, investment_type, master_item_key, country_code, annual_contribution, institution, currency_code, owner')
         .eq('user_id', userId)
         .eq('is_active', true)
         .range(from, to)
@@ -242,7 +257,7 @@ export async function loadDashboardContext(userId: string, client?: SupabaseServ
     fetchAllRows((from, to) =>
       supabase
         .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, currency_code')
+        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, currency_code, owner, master_item_key')
         .eq('user_id', userId)
         .eq('is_active', true)
         .range(from, to)
@@ -303,24 +318,53 @@ export async function loadDashboardContext(userId: string, client?: SupabaseServ
     canonical.otherUnavailable.push({ section: 'business_entities', reason: 'query_failed', source: 'business_entities' });
   }
 
+  // PO decision 16-10-2026 (personal basis): the summary every personal-facing reader consumes (cards, report,
+  // Health Score, Resilience, Forecast opening balances, Twin, DNA, What-if, AI) is computed from PERSONAL rows
+  // only. Entity-held rows (owner smsf / family_trust / company), the fund's own SMSF property loan (its owner is
+  // already forced to 'smsf' above) and registered Companies / Trusts / HUFs are left out here and appear ONLY
+  // in the entity blocks and the consolidated family figure (netWorthLevels). The previous all-rows figure is
+  // still computed once, because stored monthly history is kept on that basis and must be compared like for like.
+  const sharedInput = {
+    // Cash flow comes from `canonical`; the raw income / expense rows are not read.
+    income: [],
+    expenses: [],
+    insurance,
+    goals,
+    snapshots: snapshotsRes.error ? [] : snapshotsRes.data ?? [],
+    canonical,
+  };
+  const personalAssets = personalBasisRows(assets);
+  const personalLiabilities = personalBasisRows(liabilitiesForHouseholdContext);
+  const personalInvestments = personalBasisRows(investments);
+  const personalRetirement = personalBasisRows(retirement);
+  const registeredEntities = businessEntitiesResult.data ?? [];
+  const hasEntityHeldRows =
+    personalAssets.length !== assets.length ||
+    personalLiabilities.length !== liabilitiesForHouseholdContext.length ||
+    personalInvestments.length !== investments.length ||
+    personalRetirement.length !== retirement.length ||
+    registeredEntities.length > 0;
   const summary = computeDashboard(
     {
-      // Cash flow comes from `canonical`; the raw income / expense rows are not read.
-      income: [],
-      expenses: [],
-      assets,
-      liabilities: liabilitiesForHouseholdContext,
-      investments,
-      retirement,
-      insurance,
-      goals,
-      snapshots: snapshotsRes.error ? [] : snapshotsRes.data ?? [],
-      businessEntities: businessEntitiesResult.data ?? [],
-      canonical,
+      ...sharedInput,
+      assets: personalAssets,
+      liabilities: personalLiabilities,
+      investments: personalInvestments,
+      retirement: personalRetirement,
+      businessEntities: [],
     },
     currency,
     fxRateAudInr
   );
+  // An entity-free household has nothing left out, so the two bases are the same summary (computed once).
+  const historyBasisSummary = hasEntityHeldRows
+    ? computeDashboard(
+        { ...sharedInput, assets, liabilities: liabilitiesForHouseholdContext, investments, retirement, businessEntities: registeredEntities },
+        currency,
+        fxRateAudInr
+      )
+    : summary;
+  summary.netWorthBasis = buildNetWorthBasisInfo(summary, historyBasisSummary);
 
   // PO decision 16-10-2026: Net Worth at two levels (personal / consolidated family), built ONCE here from
   // the same canonical snapshot so Dashboard, Report and the Net Worth section read one model. Fail-soft:
@@ -331,7 +375,8 @@ export async function loadDashboardContext(userId: string, client?: SupabaseServ
       supabase,
       snapshot,
       businessEntities: businessEntitiesResult.error || !businessEntitiesResult.data ? null : businessEntitiesResult.data,
-      previouslyReported: summary.netWorth,
+      previouslyReported: historyBasisSummary.netWorth,
+      personalSummaryNet: summary.netWorth,
     });
   } catch {
     summary.netWorthLevels = null;

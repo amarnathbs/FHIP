@@ -27,6 +27,8 @@ import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmar
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
+import { POSTGREST_PAGE_SIZE, NAV_PAGE_CONCURRENCY } from './pagination';
+import { loadNavHistoryByFund, sharedNavReadEnabled, sortLikePerformanceQuery } from './navHistoryRead';
 import { loadCategoryReferenceMappings } from './benchmarkData/categoryReferenceLoader';
 import { accessAllows, blockedReason, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
 import { buildUnitWeightedValuationSeries } from './unitWeightedValuation';
@@ -211,28 +213,22 @@ export async function loadAnalyticsDataset(
     quality_status: string | null;
     currency_code: string | null;
   }
-  // NAV2 RELEASE CANDIDATE (B3): one paged read per instrument, ten instruments at a time, instead of ONE read that pages through every instrument's rows
-  // one page after another (a person holding 22 funds with 13 years of prices waited for about 75 pages in sequence). The rows are then put back in the
-  // order the single read returned them (price_date, then id), so every consumer below sees exactly what it saw before, including which row is "last".
-  const navRowsById: Array<NavRow & { id: string }> = [];
-  for (let g = 0; g < instrumentIds.length; g += 10) {
-    const parts = await Promise.all(
-      instrumentIds.slice(g, g + 10).map((instrumentId) =>
-        fetchAllRows<NavRow & { id: string }>(() =>
-          supabase
-            .from('ii_prices_nav')
-            .select('id, instrument_id, price_date, price, data_version, quality_status, currency_code')
-            .eq('instrument_id', instrumentId)
-            // Secondary order on id: price_date alone is not unique, so a tie
-            // needs a deterministic sort to page reliably.
-            .order('price_date', { ascending: true })
-            .order('id', { ascending: true })
-        )
-      )
-    );
-    for (const p of parts) navRowsById.push(...p);
-  }
-  const navRows: NavRow[] = navRowsById.sort((a, b) => (a.price_date < b.price_date ? -1 : a.price_date > b.price_date ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // 16-10-2026: one shared per-fund read (see navHistoryRead.ts); the rows come back in the order this query produced.
+  const navRows: NavRow[] = sharedNavReadEnabled()
+    ? sortLikePerformanceQuery(await loadNavHistoryByFund(supabase, instrumentIds), instrumentIds)
+    : await fetchAllRows<NavRow>(() =>
+    supabase
+      .from('ii_prices_nav')
+      .select('instrument_id, price_date, price, data_version, quality_status, currency_code')
+      .in('instrument_id', instrumentIds)
+      // Secondary order on id: price_date alone is not unique once several
+      // instruments are queried together, so a tie needs a deterministic
+      // sort to page reliably.
+      .order('price_date', { ascending: true })
+      .order('id', { ascending: true }),
+    POSTGREST_PAGE_SIZE,
+    { concurrency: NAV_PAGE_CONCURRENCY }
+  );
 
   const navByInstrument = new Map<string, SeriesPoint[]>();
   // Document2 Finding #5: every NAV row (any quality, any currency) as a

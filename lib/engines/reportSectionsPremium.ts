@@ -15,6 +15,7 @@ import { convertToReportingCurrency, type SupportedCurrency } from './fx';
 import { entityExclusionNote, ownerBreakupNarrative } from './reportOwnerBreakup';
 import { isDomesticRecord, isKnownCountry, type CountryCode } from '@/lib/services/jurisdiction';
 import { isCanonicalAppendix } from './reportCanonicalAppendix';
+import { netWorthForHistoryComparison } from './netWorthBasis';
 
 const STRESS_SCENARIOS: StressScenarioType[] = [
   'income_stops',
@@ -108,7 +109,7 @@ function buildTwelveMonthTrends(source: ReportSourceData, premium: PremiumSource
     sourceReferences: {},
     confidenceLevel: null,
     limitationText: hasAnyHistory
-      ? 'Trend charts only display periods for which a snapshot or score was actually recorded — gaps are not interpolated or estimated.'
+      ? `Trend charts only display periods for which a snapshot or score was actually recorded — gaps are not interpolated or estimated.${netWorthForHistoryComparison(source.dashboard).note ? ` ${netWorthForHistoryComparison(source.dashboard).note}` : ''}`
       : 'At least two recorded periods are required before a trend can be shown.',
   };
 }

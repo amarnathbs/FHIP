@@ -39,6 +39,9 @@
 /** PostgREST's configured `db-max-rows` on this project. */
 export const POSTGREST_PAGE_SIZE = 1000;
 
+/** Pages requested together for the very large NAV-history reads (see fetchAllRows `concurrency`). */
+export const NAV_PAGE_CONCURRENCY = 4;
+
 /**
  * Hard ceiling on a single logical read. Chosen well above any realistic
  * household dataset (a 50-fund portfolio of daily 20-year NAV history is
@@ -74,29 +77,41 @@ export class PaginationCeilingExceededError extends Error {
  */
 export async function fetchAllRows<T>(
   build: () => RangeableQuery<T>,
-  pageSize: number = POSTGREST_PAGE_SIZE
+  pageSize: number = POSTGREST_PAGE_SIZE,
+  options: { concurrency?: number } = {}
 ): Promise<T[]> {
   if (!Number.isInteger(pageSize) || pageSize <= 0) {
     throw new Error(`fetchAllRows: pageSize must be a positive integer, received ${pageSize}`);
   }
+  const concurrency = options.concurrency ?? 1;
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error(`fetchAllRows: concurrency must be a positive integer, received ${concurrency}`);
+  }
 
   const out: T[] = [];
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await build().range(from, from + pageSize - 1);
-    // Failure propagation: never swallow a PostgREST error into a short page,
-    // which would be indistinguishable from "end of data".
-    if (error) throw new Error(error.message);
+  // concurrency 1 (the default) is the original strictly sequential walk. With concurrency N the next N pages are
+  // requested together and consumed IN ORDER, so the rows and their order are identical to the sequential walk;
+  // pages past the first short page are simply discarded (they are empty). 16-10-2026: the report reads every
+  // NAV row of every held fund (about 50 sequential 1,000-row pages for 17 funds), twice.
+  for (let from = 0; ; ) {
+    const starts = Array.from({ length: concurrency }, (_, i) => from + i * pageSize);
+    const settled = await Promise.all(starts.map(async (start) => build().range(start, start + pageSize - 1)));
+    for (const { data, error } of settled) {
+      // Failure propagation: never swallow a PostgREST error into a short page,
+      // which would be indistinguishable from "end of data".
+      if (error) throw new Error(error.message);
 
-    const page = data ?? [];
-    out.push(...page);
+      const page = data ?? [];
+      out.push(...page);
 
-    // Explicit termination: a page shorter than the requested size is the
-    // last page. A full page always triggers one more request, so a dataset
-    // that is an exact multiple of pageSize terminates on the following
-    // empty page rather than stopping one page early.
-    if (page.length < pageSize) break;
+      // Explicit termination: a page shorter than the requested size is the
+      // last page. A full page always triggers one more request, so a dataset
+      // that is an exact multiple of pageSize terminates on the following
+      // empty page rather than stopping one page early.
+      if (page.length < pageSize) return out;
 
-    if (out.length >= FETCH_ALL_ROWS_CEILING) throw new PaginationCeilingExceededError(FETCH_ALL_ROWS_CEILING);
+      if (out.length >= FETCH_ALL_ROWS_CEILING) throw new PaginationCeilingExceededError(FETCH_ALL_ROWS_CEILING);
+    }
+    from += concurrency * pageSize;
   }
-  return out;
 }

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import type { SupabaseServerClient } from './dashboardData';
 import { loadDashboard } from './dashboardData';
+import { isPersonalBasisRow } from '@/lib/engines/netWorthBasis';
 import { type DashboardSummary, computeInsuranceAdequacy } from '@/lib/engines/dashboard';
 import { loadHealthScore, type HealthScorePayload } from './healthScoreData';
 import { loadResilience, type ResiliencePayload } from './resilienceData';
@@ -22,6 +23,9 @@ export interface TwinRetirementRow {
   country_code: string | null;
   target_retirement_age: number | null;
   account_type: string;
+  /** Used only to keep entity-held rows (owner smsf / family_trust / company) out of the personal Twin. */
+  owner?: string | null;
+  master_item_key?: string | null;
 }
 export interface TwinInsuranceRow {
   cover_amount: number;
@@ -173,7 +177,11 @@ export function twinRemittanceMonthly(snapshot: Pick<CanonicalFinancialSnapshot,
   );
 }
 
-/** The Twin's balance-sheet rows, all owners (as Net Worth), reporting currency, unconverted rows left out. */
+/**
+ * The Twin's balance-sheet rows on the PERSONAL basis (PO decision 16-10-2026: entity-held rows -- owner smsf /
+ * family_trust / company, and an SMSF fund's own property loan -- are not personal), reporting currency, unconverted
+ * rows left out. The same rule the Dashboard summary the Twin is shown beside uses (netWorthBasis.ts).
+ */
 export function twinBalanceSheetRows(snapshot: Pick<CanonicalFinancialSnapshot, 'assets' | 'investments' | 'liabilities'>): {
   rawAssets: TwinAssetRow[];
   rawInvestments: TwinInvestmentRow[];
@@ -184,13 +192,13 @@ export function twinBalanceSheetRows(snapshot: Pick<CanonicalFinancialSnapshot, 
   const liabilities = requireSection(snapshot.liabilities, 'liabilities');
   return {
     rawAssets: assets.lines
-      .filter((l) => l.value.amountReporting !== null)
+      .filter((l) => isPersonalBasisRow(l) && l.value.amountReporting !== null)
       .map((l) => ({ current_value: l.value.amountReporting as number, asset_class: l.assetClass ?? 'other', master_item_key: l.masterItemKey, country_code: l.countryCode, currency_code: l.value.currency })),
     rawInvestments: investments.lines
-      .filter((l) => l.value.amountReporting !== null)
+      .filter((l) => isPersonalBasisRow(l) && l.value.amountReporting !== null)
       .map((l) => ({ current_value: l.value.amountReporting as number, investment_type: l.investmentType ?? 'other', master_item_key: l.masterItemKey, country_code: l.countryCode, currency_code: l.value.currency })),
     rawLiabilities: liabilities.lines
-      .filter((l) => l.balance.amountReporting !== null)
+      .filter((l) => isPersonalBasisRow(l, { smsfLinkedLoan: l.smsfPropertyLoanLinked }) && l.balance.amountReporting !== null)
       .map((l) => ({ balance: l.balance.amountReporting as number, debt_type: l.debtType, master_item_key: l.masterItemKey, interest_rate: l.interestRate, country_code: l.countryCode, currency_code: l.balance.currency })),
   };
 }
@@ -276,7 +284,7 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
     fetchAllRows<TwinRetirementRow>('retirement_accounts', (from, to) =>
       supabase
         .from('retirement_accounts')
-        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type')
+        .select('current_balance, employer_contribution, personal_contribution, contribution_frequency, country_code, target_retirement_age, account_type, owner, master_item_key')
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('id', { ascending: true })
@@ -325,10 +333,13 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
 
   if (snapshotsRes.error) throw new ReadModelUnavailableError('query_failed', 'twin:financial_snapshots');
   if (retirementMembersRes.error) throw new ReadModelUnavailableError('query_failed', 'twin:retirement_members');
+  // Stored months are on the history basis (every entity amount included). With entity amounts the personal Net Worth
+  // metric cannot be trended against them, so those points are left unknown (never mixed bases, never zero).
+  const historyUsable = dashboard.netWorthBasis ? dashboard.netWorthBasis.history.comparableToPersonal : true;
   const snapshotRows = (snapshotsRes.data ?? []) as { snapshot_month: string; net_worth: number | null; monthly_income: number | null; monthly_expenses: number | null; monthly_surplus: number | null }[];
   const snapshots12m: TwinSnapshotPoint[] = [...snapshotRows].reverse().map((s) => ({
     month: s.snapshot_month,
-    netWorth: nullableNumber(s.net_worth),
+    netWorth: historyUsable ? nullableNumber(s.net_worth) : null,
     monthlyIncome: nullableNumber(s.monthly_income),
     monthlyExpenses: nullableNumber(s.monthly_expenses),
     monthlySurplus: nullableNumber(s.monthly_surplus),
@@ -369,7 +380,7 @@ export async function loadTwinSourceData(userId: string, client?: SupabaseServer
       resilience,
       dna,
       goals,
-      rawRetirement: retirementRows,
+      rawRetirement: retirementRows.filter((r) => isPersonalBasisRow(r)),
       selfTargetRetirementAge: selfMember?.target_retirement_age ?? null,
       rawInsurance: insuranceRows,
       rawInvestments,

@@ -33,6 +33,7 @@ import {
   type ReportReviewData,
 } from '@/lib/services/investmentIntelligenceReportData';
 import { loadIndiaMfReportForReport, type ReportIndiaMfData } from '@/lib/services/investment-intelligence/indiaMfReportData';
+import { runWithRequestMemo } from '@/lib/services/requestMemo';
 
 export interface ReportProfile {
   fullName: string | null;
@@ -282,6 +283,16 @@ function previousMonthStart(month: string): string {
 // re-querying the underlying score/DNA/resilience/goal tables directly
 // (Rule 15 — the report module never recalculates core intelligence).
 export async function resolveReportSourceData(
+  userId: string,
+  reportMonth?: string,
+  client?: SupabaseServerClient
+): Promise<ReportSourceData> {
+  // 16-10-2026: one scope for the whole assembly, so the canonical snapshot and the dashboard context are each
+  // built ONCE here (they were built 24 and 20 times). See lib/services/requestMemo.ts.
+  return runWithRequestMemo(() => resolveReportSourceDataUnscoped(userId, reportMonth, client));
+}
+
+async function resolveReportSourceDataUnscoped(
   userId: string,
   reportMonth?: string,
   client?: SupabaseServerClient
