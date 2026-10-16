@@ -249,3 +249,17 @@ Folder `docs/nav2/po_apply_production/` (README.md is the runbook; every SQL fil
 | Rollback | README section 10, `sql/rollback`, switches OFF, previous Amplify build |
 
 Also on production: the migrations of other workstreams on main (0272 to 0274, 0283 to 0286) have their own packs; this pack neither needs nor blocks them.
+
+### Production partial state found on 17-10-2026 (step 1b added to the package)
+
+The production pre-checks found a partial earlier attempt: exactly the objects of 0260 parts a, b and c (six risk-free tables, two `admin_users` columns, four functions; series table holds the 2 seed rows, every other table is empty), and nothing of part d, part e, 0261 onward or any switch row. Findings and proofs (PGlite, not production evidence):
+
+| Question | Answer |
+|---|---|
+| Which part produces these objects? | Parts a (permission columns, two permission functions, series table with seeds, batches table), b (append-only function, batch triggers, rates table and guard) and c (review items, corrections ledger, state log) - nothing in part d or e creates a table, so the found state is exactly a plus b plus c. |
+| Is it safe to continue from here? | Yes, proved: starting from a+b+c and applying only parts d, e and 0261 to 0282 gives a database identical (same checksum over 136 columns, 154 constraints, 29 indexes, 12 RLS flags, 8 policies, 9 triggers, 18 functions, 4 switch keys, 2 seed rows) to a clean run; applying every part again on top (a to c re-run) also gives the identical database and raises no error. |
+| Do the "if not exists" statements prove the existing shape? | No. They check names only. Hence the read-only reconciliation P1z, which compares 51 object/aspect fingerprints computed by running the migration itself, and which flips to named differences for twelve injected single faults. It also matched on a full production-like ledger replay with default grants. |
+| What must be preserved? | Nothing but the 2 seed rows (P1y: other tables 0). B1b copies all six tables anyway because production has no managed backups. |
+| What does the PO do? | README section 2.0: P1x, P1y, P1z summary (detail only if it differs), B1 + B1b, then skip parts a to c only if `all_match` is true, apply part d onward, push the code only after `C_final_all.sql` is all true. |
+
+Compare mode for the catalog inventory the PO exports: `node scripts/nav2_reconcile_0260.mjs compare <file>` (accepts the jsonb or its one-cell CSV export; NOT NULL entries of `pg_constraint` are ignored because only Postgres 18 has them; the catalog inventory carries no `enabled` flag, so P1z is the check for that). Tests: `tests/unit/nav2/nav2ProductionPartialStateReconciliation.test.ts`.

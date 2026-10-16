@@ -20,6 +20,7 @@ Release in one sentence: you take a manual backup of the few existing things the
 | Step | What | Where it runs | Needs the new code? |
 |---|---|---|---|
 | 1 | Read-only pre-checks P1 to P7, then the manual backup B1 and its check B2 | SQL editor, production | no |
+| 1b | **Partial state reconciliation (17-10-2026: production already holds 0260 parts a, b and c).** Read-only P1x, P1y, P1z, then the extra backup B1b and its check B2b. See section 2.0 | SQL editor, production | no |
 | 2 | Migrations: 0260 parts a to e, 0261, 0262, 0263, 0269, 0270, 0271, 0281, 0282, final check | SQL editor, production | no |
 | 3 | Push the code and wait for the deploy | your machine, then Amplify | n/a |
 | 4 | Smoke checks with every NAV2 switch OFF | browser | yes |
@@ -40,7 +41,7 @@ Run each file from `sql/prechecks/`.
 
 | File | Expect | Paste back |
 |---|---|---|
-| `P1_nav2_not_yet_applied.sql` | one row, four values, all `true` | the row |
+| `P1_nav2_not_yet_applied.sql` | on a clean database: one row, four values, all `true`. **On production as found on 17-10-2026 (partial earlier attempt): `no_nav2_tables` false, `no_capability_columns` false, `no_nav2_functions` false, `no_nav2_switch_rows` true. Exactly this pattern is expected; any other pattern means the state changed, stop and tell me.** Then do step 1b (section 2.0) | the row |
 | `P2_foundations_exist.sql` | one row, six values, all `true` | the row |
 | `P3_retention_function_fingerprint.sql` | one row: `body_is_0219` true and `service_only` true | the row (including `body_md5`) |
 | `P3b_retention_function_text.sql` | only if `body_is_0219` is false: the live function text | the text |
@@ -56,7 +57,8 @@ Run each file from `sql/prechecks/`.
 
 | Question | File |
 |---|---|
-| Is this the production database, and is there NO partial NAV2 attempt (tables, columns, functions, switch rows)? | P1 (all four true) |
+| Is this the production database, and is there NO partial NAV2 attempt (tables, columns, functions, switch rows)? | P1 (all four true on a clean database; on production the known partial state shows `no_nav2_switch_rows` true and the other three false, then step 1b) |
+| Is the partial state exactly parts a, b and c of 0260 (which objects, how many rows, same shape, same seed rows)? | P1x (the list), P1y (row counts), P1z summary and detail (shape of every column, constraint, index, policy, grant, trigger, function body, seed row) |
 | Is the migration lineage the one this release builds on (the price correction ledger, the retention function, the NAV 1 tables, the reference data admin function, the Premium function)? | P2 (all six true) and P5 (the ledger rows, when the ledger is kept) |
 | Which text does the retention function `pc6_nav_row_is_candidate` hold: production likely has the 0219 text, not the 0261 text; 0261's own first statement accepts either and refuses anything else? | P3, P3c (`is_0219` or `is_0261` true), P3d (behaviour on real rows), P3b only if both are false |
 | Which switch rows exist today (including the existing price fetch switch)? | P7, and P1 for the four NAV2 rows (must be absent) |
@@ -65,7 +67,36 @@ Run each file from `sql/prechecks/`.
 
 **Stop rules.** P1 not all true: wrong database or NAV2 partly there, stop. P2 any false: a migration NAV2 depends on is missing, stop. **P3 `body_is_0219` false, and P3c `is_0219` false: stop.** Migration 0261 redefines the retention function `pc6_nav_row_is_candidate` and was written against the 0219 text. 0261 now carries its own guard: its first statement compares the live function (normalized checksum, so formatting does not matter) with the 0219 text and the 0261 text and STOPS the whole file with nothing changed if it is neither. A raw-text difference alone (P3 false, P3c `is_0219` true) is a formatting difference and is not a stop. Send me the P3, P3c and P3b output and I will compare.
 
+### 2.0 Step 1b: partial state reconciliation (found 17-10-2026)
+
+**What was found.** An earlier attempt left on production exactly the objects that 0260 parts a, b and c create: six tables (`ii_risk_free_series` with its two seed rows, `ii_risk_free_batches`, `ii_risk_free_observations`, `ii_risk_free_review_items`, `ii_risk_free_corrections`, `ii_risk_free_series_state_log`), the two columns `can_upload_risk_free_data` and `can_switch_risk_free_series` on `admin_users`, and the four functions `is_risk_free_data_admin`, `is_risk_free_series_switch_admin`, `ii_risk_free_append_only`, `ii_risk_free_obs_guard`. Part d (the upload and refresh write functions), part e (review, correct, switch functions and the four switch rows) and everything from 0261 on are absent. Row counts (P1y on 17-10-2026): series 2 (the seed rows), every other table 0.
+
+**Why this is not enough to skip anything blindly.** `create table if not exists` and `add column if not exists` check only the NAME. A table that exists with a different column type, default, constraint, policy or trigger would be silently kept. So the parts a to c are skipped ONLY if the reconciliation below shows the existing objects are exactly what 0260 creates.
+
+**Run, in this order (all read only except B1b).**
+
+| File | Expect | Paste back |
+|---|---|---|
+| `sql/prechecks/P1x_list_existing_nav2_objects.sql` | exactly 12 rows: 6 tables, 2 columns (kind `column`), 4 functions, no `switch row` | the rows |
+| `sql/prechecks/P1y_existing_nav2_row_counts.sql` | series 2, every other table 0. **If any other table holds a row: stop. Data would have to be reviewed and preserved first.** | the rows |
+| `sql/prechecks/P1z_reconcile_partial_0260_summary.sql` | ONE row: `all_match` true, `differing` 0, `checks` 51, `series_rows` 2, `data_rows_in_the_other_five_tables` 0, `administrators_holding_a_permission` 0 | the row |
+| `sql/prechecks/P1z_reconcile_partial_0260_detail.sql` | run it ONLY if the summary shows `differing` above 0: one row per object and aspect, `matches` false rows show what the database holds | the rows with `matches` false |
+
+P1z compares, for each of the six tables: every column (type, nullability, default, length, precision), every constraint (name and full definition), every index, row level security, every policy, any INSERT, UPDATE, DELETE or TRUNCATE grant to the application roles (must be none), every trigger; for each of the four functions: arguments, result type, security mode, volatility, fixed search path, the body (comments and white space ignored, compared by checksum) and who may execute it; for the two seed rows: every field, including `enabled` true and `terms_review_status` `po_accepted_2026-10-03` (`RBI_91D_TBILL_CUTOFF_YIELD` primary, weekly_auction, 21 days; `RBI_POLICY_REPO_RATE` secondary, policy_change, 90 days); and that the part d and part e functions are absent. The expected values are not typed by hand: they are computed by running 0260 parts a to c on an empty in-memory database with the same query (`scripts/nav2_reconcile_0260.mjs generate`, readable text in `inventory/expected_0260_abc_fingerprints.json`). Proof on PGlite: the exact state matches; twelve named single-fault breaks (column type, default, missing policy, trigger, function body, row level security off, write grant, changed seed value, disabled seed row, missing constraint, missing index, part d already there) each flip the summary and name the aspect.
+
+**Decision.**
+
+1. **Summary `all_match` true and P1y as expected:** the existing objects ARE the 0260 version. Take the backup (section 2.1, both B1 and B1b), then SKIP parts a, b and c (steps 2.1 to 2.3 of section 3) and apply from part d (step 2.4) in the listed order. Re-running parts a to c would also be harmless (proved: the final database is identical whether parts a to c are skipped or run again), but skipping them avoids touching existing objects at all.
+2. **`all_match` false, or any pattern in P1x / P1y different from the above:** STOP. Do not run any part. Send me the summary row and the detail rows with `matches` false. I then write an explicit repair for exactly the differing aspect (never a blind re-run) and you apply it after the backup.
+3. **Rows in any table other than the series table:** STOP (data to preserve). The backup B1b copies them, but nothing is applied until we have reviewed them.
+
+**Optional second opinion (read only).** The catalog inventory (`inventory/nav2_catalog_inventory.sql`, section 3.1) returns one jsonb for all NAV2 objects. Compare it with the expected 0260 parts a to c shape by `node scripts/nav2_reconcile_0260.mjs compare actual.json` (the one cell CSV export of the jsonb is accepted as well). Objects of part d and e and of 0261 onward must be absent; a difference is listed per object.
+
+**Push gating.** The NAV2 code is NOT pushed until this reconciliation is done, every remaining migration (part d, part e, 0261, 0262, 0263, 0269, 0270, 0271, 0281, 0282) is applied and `C_final_all.sql` is all true. The new code on a database without 0281 or without the report tables is safe for ordinary users but useless and can issue duplicate reports on retried requests, so the order stays: database first, code second.
+
 ### 2.1 The manual backup (production has NO managed backups)
+
+**If step 1b found the six existing risk-free tables, also take the backup B1b first or together with B1:** `sql/backup/B1b_backup_existing_nav2_tables.sql` copies the rows of those six tables (they are existing data of a previous attempt, not new objects), then `sql/backup/B2b_backup_existing_nav2_check.sql` must show each `..._saved` equal to its `..._now` and `copies_locked_to_service_role` true. Remove them after the pilot with `sql/backup/B3b_drop_existing_nav2_backups_after_release.sql`.
 
 After P1 to P7 are all as expected and BEFORE any migration: paste `sql/backup/B1_backup_altered_tables.sql`, then `sql/backup/B2_backup_check.sql` and paste the row back (expect equal counts, `function_text_saved` true, `backups_locked_to_service_role` true). B1 copies the three things the release alters (the administrator permissions table, the switch table, the retention function text) and records the size of the price correction ledger (a trigger is added to it, no row is changed). It writes four small tables named `nav2_backup_20261016_*`, locked to the service role, safe to run twice. Nothing else is copied because nothing else existing is altered; the NAV2 tables are new and empty. Remove the copies with `sql/backup/B3_drop_backups_after_release.sql` after the pilot has run a week. The price tables are NOT copied: no file here writes, updates or deletes a price row.
 
@@ -74,6 +105,8 @@ Disk space: NAV2 adds twelve small empty tables and seventeen functions. It adds
 ## 3. Step 2: the migrations (database first)
 
 For each line: paste the file, Run, expect "Success. No rows returned", then run the check file and expect one row of all `true`. Paste the check row back.
+
+**On production (state found 17-10-2026) lines 2.1, 2.2 and 2.3 are already there: skip them ONLY if the step 1b summary (`P1z_reconcile_partial_0260_summary.sql`) returned `all_match` true (section 2.0). Then start at line 2.4.** Part d, part e and every later migration do not depend on anything that part a, b or c would change when the existing objects match (proved on PGlite: starting from the partial state and applying only parts d and e and the later migrations gives the same final database as applying everything from an empty database, `scripts/nav2_schema_inventory.mjs prove`, states 5 and 6). `C_final_all.sql` at the end checks the whole result either way.
 
 | # | Paste | Check | What it adds |
 |---|---|---|---|

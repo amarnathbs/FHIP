@@ -1,0 +1,308 @@
+[
+ {
+  "object": "admin_users",
+  "aspect": "columns",
+  "text": "can_switch_risk_free_series / boolean / NO / false , can_upload_risk_free_data / boolean / NO / false",
+  "md5": "5865c16ba1fb373e68970c60aa41d667"
+ },
+ {
+  "object": "commit_risk_free_upload",
+  "aspect": "absent",
+  "text": "0",
+  "md5": "cfcd208495d565ef66e7dff9f98764da"
+ },
+ {
+  "object": "correct_risk_free_observation",
+  "aspect": "absent",
+  "text": "0",
+  "md5": "cfcd208495d565ef66e7dff9f98764da"
+ },
+ {
+  "object": "ii_risk_free_append_only",
+  "aspect": "function",
+  "text": " / trigger / definer false / v / none / body d88cb383bc0db54ca68ec9b4350e4299 / anon true / authenticated true / service true",
+  "md5": "ea3670e487bb4959c1ff05543d9d6f15"
+ },
+ {
+  "object": "ii_risk_free_batches",
+  "aspect": "columns",
+  "text": "attestation_text / text / YES / none / 0 / 0 / 0 , attested / boolean / NO / false / 0 / 0 / 0 , attested_at / timestamp with time zone / YES / none / 0 / 0 / 0 , created_at / timestamp with time zone / NO / now() / 0 / 0 / 0 , date_from / date / YES / none / 0 / 0 / 0 , date_to / date / YES / none / 0 / 0 / 0 , file_name / text / YES / none / 0 / 0 / 0 , file_sha256 / text / YES / none / 0 / 0 / 0 , id / uuid / NO / gen_random_uuid() / 0 / 0 / 0 , rows_identical_skipped / integer / NO / 0 / 0 / 32 / 0 , rows_inserted / integer / NO / none / 0 / 32 / 0 , rows_review_queued / integer / NO / 0 / 0 / 32 / 0 , rows_submitted / integer / NO / none / 0 / 32 / 0 , series_id / text / NO / none / 0 / 0 / 0 , source_kind / text / NO / none / 0 / 0 / 0 , uploader_user_id / uuid / YES / none / 0 / 0 / 0",
+  "md5": "753624a88044ca22f58b50ecf9a15b2a"
+ },
+ {
+  "object": "ii_risk_free_batches",
+  "aspect": "constraints",
+  "text": "ii_risk_free_batches_csv_attested = CHECK (((source_kind <> 'admin_csv'::text) OR ((attested = true) AND (uploader_user_id IS NOT NULL) AND (file_sha256 IS NOT NULL) AND (attested_at IS NOT NULL) AND (attestation_text IS NOT NULL) AND (length(TRIM(BOTH FROM attestation_text)) >= 20)))) , ii_risk_free_batches_file_sha256_check = CHECK (((file_sha256 IS NULL) OR (file_sha256 ~ '^[0-9a-f]{64}$'::text))) , ii_risk_free_batches_pkey = PRIMARY KEY (id) , ii_risk_free_batches_rows_identical_skipped_check = CHECK ((rows_identical_skipped >= 0)) , ii_risk_free_batches_rows_inserted_check = CHECK ((rows_inserted >= 0)) , ii_risk_free_batches_rows_review_queued_check = CHECK ((rows_review_queued >= 0)) , ii_risk_free_batches_rows_submitted_check = CHECK ((rows_submitted >= 0)) , ii_risk_free_batches_series_id_fkey = FOREIGN KEY (series_id) REFERENCES ii_risk_free_series(series_id) , ii_risk_free_batches_source_kind_check = CHECK ((source_kind = ANY (ARRAY['admin_csv'::text, 'weekly_refresh'::text])))",
+  "md5": "38e9e2c0ea3873cd4d67824d0e67cbdc"
+ },
+ {
+  "object": "ii_risk_free_batches",
+  "aspect": "indexes",
+  "text": "idx_ii_risk_free_batches_recent = CREATE INDEX idx_ii_risk_free_batches_recent ON ii_risk_free_batches USING btree (series_id, created_at DESC) , ii_risk_free_batches_pkey = CREATE UNIQUE INDEX ii_risk_free_batches_pkey ON ii_risk_free_batches USING btree (id) , uidx_ii_risk_free_batches_csv_file = CREATE UNIQUE INDEX uidx_ii_risk_free_batches_csv_file ON ii_risk_free_batches USING btree (series_id, file_sha256) WHERE (source_kind = 'admin_csv'::text)",
+  "md5": "143105ec212b1b6152088edb75deaff4"
+ },
+ {
+  "object": "ii_risk_free_batches",
+  "aspect": "policies",
+  "text": "capability_read_ii_risk_free_batches / SELECT / {public} / (is_risk_free_data_admin() OR is_risk_free_series_switch_admin()) / none",
+  "md5": "5030eb373c91a282869b824df663ffee"
+ },
+ {
+  "object": "ii_risk_free_batches",
+  "aspect": "rls",
+  "text": "true",
+  "md5": "b326b5062b2f0e69046810717534cb09"
+ },
+ {
+  "object": "ii_risk_free_batches",
+  "aspect": "triggers",
+  "text": "trg_ii_risk_free_batches_no_change = CREATE TRIGGER trg_ii_risk_free_batches_no_change BEFORE DELETE OR UPDATE ON ii_risk_free_batches FOR EACH ROW EXECUTE FUNCTION ii_risk_free_append_only() , trg_ii_risk_free_batches_no_truncate = CREATE TRIGGER trg_ii_risk_free_batches_no_truncate BEFORE TRUNCATE ON ii_risk_free_batches FOR EACH STATEMENT EXECUTE FUNCTION ii_risk_free_append_only()",
+  "md5": "fb653ed1beaad1dc3a3846cbb7ba05f0"
+ },
+ {
+  "object": "ii_risk_free_batches",
+  "aspect": "write_grants",
+  "text": "none",
+  "md5": "334c4a4c42fdb79d7ebc3e73b517e6f8"
+ },
+ {
+  "object": "ii_risk_free_corrections",
+  "aspect": "columns",
+  "text": "actor_user_id / uuid / NO / none / 0 / 0 / 0 , created_at / timestamp with time zone / NO / now() / 0 / 0 / 0 , id / uuid / NO / gen_random_uuid() / 0 / 0 / 0 , new_value_percent / numeric / NO / none / 0 / 9 / 4 , observation_date / date / NO / none / 0 / 0 / 0 , observation_id / uuid / NO / none / 0 / 0 / 0 , previous_value_percent / numeric / YES / none / 0 / 9 / 4 , reason / text / NO / none / 0 / 0 / 0 , series_id / text / NO / none / 0 / 0 / 0",
+  "md5": "21423064394580ed06dd99bba1885895"
+ },
+ {
+  "object": "ii_risk_free_corrections",
+  "aspect": "constraints",
+  "text": "ii_risk_free_corrections_observation_id_fkey = FOREIGN KEY (observation_id) REFERENCES ii_risk_free_observations(id) , ii_risk_free_corrections_pkey = PRIMARY KEY (id) , ii_risk_free_corrections_reason_check = CHECK ((length(TRIM(BOTH FROM reason)) >= 20))",
+  "md5": "f22f86be5e1b7abc3e15f86f22ca2714"
+ },
+ {
+  "object": "ii_risk_free_corrections",
+  "aspect": "indexes",
+  "text": "ii_risk_free_corrections_pkey = CREATE UNIQUE INDEX ii_risk_free_corrections_pkey ON ii_risk_free_corrections USING btree (id)",
+  "md5": "2d8cd876d9a715bd60392d4106dd0d24"
+ },
+ {
+  "object": "ii_risk_free_corrections",
+  "aspect": "policies",
+  "text": "capability_read_ii_risk_free_corrections / SELECT / {public} / is_risk_free_data_admin() / none",
+  "md5": "dc257635ecf9e498cc4fced2244dba3f"
+ },
+ {
+  "object": "ii_risk_free_corrections",
+  "aspect": "rls",
+  "text": "true",
+  "md5": "b326b5062b2f0e69046810717534cb09"
+ },
+ {
+  "object": "ii_risk_free_corrections",
+  "aspect": "triggers",
+  "text": "trg_ii_risk_free_corrections_no_change = CREATE TRIGGER trg_ii_risk_free_corrections_no_change BEFORE DELETE OR UPDATE ON ii_risk_free_corrections FOR EACH ROW EXECUTE FUNCTION ii_risk_free_append_only()",
+  "md5": "6a818473043ce4847fed44a014f54fd3"
+ },
+ {
+  "object": "ii_risk_free_corrections",
+  "aspect": "write_grants",
+  "text": "none",
+  "md5": "334c4a4c42fdb79d7ebc3e73b517e6f8"
+ },
+ {
+  "object": "ii_risk_free_obs_guard",
+  "aspect": "function",
+  "text": " / trigger / definer false / v / none / body 6ed5ffee3ba836bd405e7b4bec92ffdf / anon true / authenticated true / service true",
+  "md5": "86bcea24cf557e5257a8795df627022f"
+ },
+ {
+  "object": "ii_risk_free_observations",
+  "aspect": "columns",
+  "text": "batch_id / uuid / YES / none / 0 / 0 / 0 , created_at / timestamp with time zone / NO / now() / 0 / 0 / 0 , entry_kind / text / NO / none / 0 / 0 / 0 , extraction / jsonb / YES / none / 0 / 0 / 0 , gap_reason / text / YES / none / 0 / 0 / 0 , id / uuid / NO / gen_random_uuid() / 0 / 0 / 0 , kind / text / NO / 'value'::text / 0 / 0 / 0 , notes / text / YES / none / 0 / 0 / 0 , observation_date / date / NO / none / 0 / 0 / 0 , retrieved_on / date / NO / none / 0 / 0 / 0 , series_id / text / NO / none / 0 / 0 / 0 , source_document / text / NO / none / 0 / 0 / 0 , source_url / text / YES / none / 0 / 0 / 0 , value_percent / numeric / YES / none / 0 / 9 / 4",
+  "md5": "4978d83f1ddacabbdc6835aafbf8731e"
+ },
+ {
+  "object": "ii_risk_free_observations",
+  "aspect": "constraints",
+  "text": "ii_risk_free_obs_kind_consistent = CHECK ((((kind = 'value'::text) AND (value_percent IS NOT NULL) AND (gap_reason IS NULL)) OR ((kind = 'gap'::text) AND (value_percent IS NULL) AND (gap_reason IS NOT NULL)))) , ii_risk_free_obs_not_future = CHECK ((observation_date <= retrieved_on)) , ii_risk_free_obs_unique = UNIQUE (series_id, observation_date) , ii_risk_free_obs_value_range = CHECK (((value_percent IS NULL) OR ((value_percent >= (0)::numeric) AND (value_percent <= (100)::numeric)))) , ii_risk_free_observations_batch_id_fkey = FOREIGN KEY (batch_id) REFERENCES ii_risk_free_batches(id) , ii_risk_free_observations_entry_kind_check = CHECK ((entry_kind = ANY (ARRAY['first_load_csv'::text, 'admin_upload'::text, 'weekly_refresh_job'::text]))) , ii_risk_free_observations_gap_reason_check = CHECK (((gap_reason IS NULL) OR (gap_reason = ANY (ARRAY['no_accepted_bids'::text, 'no_auction_held'::text, 'no_row_in_source'::text])))) , ii_risk_free_observations_kind_check = CHECK ((kind = ANY (ARRAY['value'::text, 'gap'::text]))) , ii_risk_free_observations_pkey = PRIMARY KEY (id) , ii_risk_free_observations_series_id_fkey = FOREIGN KEY (series_id) REFERENCES ii_risk_free_series(series_id) , ii_risk_free_observations_source_document_check = CHECK ((length(TRIM(BOTH FROM source_document)) > 0))",
+  "md5": "953c472f1b7721fc808ac92de806cd34"
+ },
+ {
+  "object": "ii_risk_free_observations",
+  "aspect": "indexes",
+  "text": "idx_ii_risk_free_obs_series_date = CREATE INDEX idx_ii_risk_free_obs_series_date ON ii_risk_free_observations USING btree (series_id, observation_date DESC) , ii_risk_free_obs_unique = CREATE UNIQUE INDEX ii_risk_free_obs_unique ON ii_risk_free_observations USING btree (series_id, observation_date) , ii_risk_free_observations_pkey = CREATE UNIQUE INDEX ii_risk_free_observations_pkey ON ii_risk_free_observations USING btree (id)",
+  "md5": "45047f93d9ed6bca29d7f58a8595e31b"
+ },
+ {
+  "object": "ii_risk_free_observations",
+  "aspect": "policies",
+  "text": "read_ii_risk_free_observations / SELECT / {public} / true / none",
+  "md5": "3f1f07d3806273d9b0af1faae63853a4"
+ },
+ {
+  "object": "ii_risk_free_observations",
+  "aspect": "rls",
+  "text": "true",
+  "md5": "b326b5062b2f0e69046810717534cb09"
+ },
+ {
+  "object": "ii_risk_free_observations",
+  "aspect": "triggers",
+  "text": "trg_ii_risk_free_obs_guard = CREATE TRIGGER trg_ii_risk_free_obs_guard BEFORE DELETE OR UPDATE ON ii_risk_free_observations FOR EACH ROW EXECUTE FUNCTION ii_risk_free_obs_guard() , trg_ii_risk_free_obs_no_truncate = CREATE TRIGGER trg_ii_risk_free_obs_no_truncate BEFORE TRUNCATE ON ii_risk_free_observations FOR EACH STATEMENT EXECUTE FUNCTION ii_risk_free_append_only()",
+  "md5": "180545a8d49f8a82e3a07c1cf97dedd3"
+ },
+ {
+  "object": "ii_risk_free_observations",
+  "aspect": "write_grants",
+  "text": "none",
+  "md5": "334c4a4c42fdb79d7ebc3e73b517e6f8"
+ },
+ {
+  "object": "ii_risk_free_review_items",
+  "aspect": "columns",
+  "text": "batch_id / uuid / YES / none / 0 / 0 / 0 , candidate / jsonb / YES / none / 0 / 0 / 0 , created_at / timestamp with time zone / NO / now() / 0 / 0 / 0 , evidence / jsonb / YES / none / 0 / 0 / 0 , id / uuid / NO / gen_random_uuid() / 0 / 0 / 0 , observation_date / date / YES / none / 0 / 0 / 0 , reasons / ARRAY / NO / '{}'::text[] / 0 / 0 / 0 , resolution_note / text / YES / none / 0 / 0 / 0 , resolved_at / timestamp with time zone / YES / none / 0 / 0 / 0 , resolved_by / uuid / YES / none / 0 / 0 / 0 , series_id / text / NO / none / 0 / 0 / 0 , status / text / NO / 'open'::text / 0 / 0 / 0",
+  "md5": "1438d3a7ee743d9de9d9dc00fb130ef3"
+ },
+ {
+  "object": "ii_risk_free_review_items",
+  "aspect": "constraints",
+  "text": "ii_risk_free_review_items_batch_id_fkey = FOREIGN KEY (batch_id) REFERENCES ii_risk_free_batches(id) , ii_risk_free_review_items_pkey = PRIMARY KEY (id) , ii_risk_free_review_items_series_id_fkey = FOREIGN KEY (series_id) REFERENCES ii_risk_free_series(series_id) , ii_risk_free_review_items_status_check = CHECK ((status = ANY (ARRAY['open'::text, 'accepted'::text, 'rejected'::text]))) , ii_risk_free_review_resolved_has_actor = CHECK (((status = 'open'::text) OR ((resolved_at IS NOT NULL) AND (resolved_by IS NOT NULL))))",
+  "md5": "def32c292ada391b588e69d3f11c661a"
+ },
+ {
+  "object": "ii_risk_free_review_items",
+  "aspect": "indexes",
+  "text": "ii_risk_free_review_items_pkey = CREATE UNIQUE INDEX ii_risk_free_review_items_pkey ON ii_risk_free_review_items USING btree (id) , uidx_ii_risk_free_review_open = CREATE UNIQUE INDEX uidx_ii_risk_free_review_open ON ii_risk_free_review_items USING btree (series_id, COALESCE(observation_date, '0001-01-01'::date)) WHERE (status = 'open'::text)",
+  "md5": "d89c8846b152d4c16fb94fbb1fa4d002"
+ },
+ {
+  "object": "ii_risk_free_review_items",
+  "aspect": "policies",
+  "text": "capability_read_ii_risk_free_review_items / SELECT / {public} / is_risk_free_data_admin() / none",
+  "md5": "8fddd49a204fa1568235e01ef859fd07"
+ },
+ {
+  "object": "ii_risk_free_review_items",
+  "aspect": "rls",
+  "text": "true",
+  "md5": "b326b5062b2f0e69046810717534cb09"
+ },
+ {
+  "object": "ii_risk_free_review_items",
+  "aspect": "write_grants",
+  "text": "none",
+  "md5": "334c4a4c42fdb79d7ebc3e73b517e6f8"
+ },
+ {
+  "object": "ii_risk_free_series",
+  "aspect": "columns",
+  "text": "attribution_text / text / NO / none / 0 / 0 / 0 , cadence / text / NO / none / 0 / 0 / 0 , enabled / boolean / NO / true / 0 / 0 / 0 , max_staleness_days / integer / NO / none / 0 / 32 / 0 , role / text / NO / none / 0 / 0 / 0 , series_id / text / NO / none / 0 / 0 / 0 , series_name / text / NO / none / 0 / 0 / 0 , source / text / NO / none / 0 / 0 / 0 , terms_review_status / text / NO / 'po_accepted_2026-10-03'::text / 0 / 0 / 0 , updated_at / timestamp with time zone / NO / now() / 0 / 0 / 0 , verified_through_date / date / YES / none / 0 / 0 / 0",
+  "md5": "893816630323a23f019e2abf45b7fca5"
+ },
+ {
+  "object": "ii_risk_free_series",
+  "aspect": "constraints",
+  "text": "ii_risk_free_series_cadence_check = CHECK ((cadence = ANY (ARRAY['weekly_auction'::text, 'policy_change'::text]))) , ii_risk_free_series_max_staleness_days_check = CHECK (((max_staleness_days >= 1) AND (max_staleness_days <= 400))) , ii_risk_free_series_pkey = PRIMARY KEY (series_id) , ii_risk_free_series_role_check = CHECK ((role = ANY (ARRAY['primary'::text, 'secondary'::text]))) , ii_risk_free_series_series_id_check = CHECK ((series_id = ANY (ARRAY['RBI_91D_TBILL_CUTOFF_YIELD'::text, 'RBI_POLICY_REPO_RATE'::text]))) , ii_risk_free_series_terms_review_status_check = CHECK ((terms_review_status = ANY (ARRAY['po_accepted_2026-10-03'::text, 'confirmed_in_writing'::text, 'pending_confirmation'::text, 'declined'::text])))",
+  "md5": "cf4fd751f361a781ab0f0018c9a6faeb"
+ },
+ {
+  "object": "ii_risk_free_series",
+  "aspect": "indexes",
+  "text": "ii_risk_free_series_pkey = CREATE UNIQUE INDEX ii_risk_free_series_pkey ON ii_risk_free_series USING btree (series_id)",
+  "md5": "8dc22cccfa1f3260255ddc87db58f9f3"
+ },
+ {
+  "object": "ii_risk_free_series",
+  "aspect": "policies",
+  "text": "read_ii_risk_free_series / SELECT / {public} / true / none",
+  "md5": "7327e7ebd863f1a6e80ce6d92616ed9d"
+ },
+ {
+  "object": "ii_risk_free_series",
+  "aspect": "rls",
+  "text": "true",
+  "md5": "b326b5062b2f0e69046810717534cb09"
+ },
+ {
+  "object": "ii_risk_free_series",
+  "aspect": "seed_rows",
+  "text": "RBI_91D_TBILL_CUTOFF_YIELD / RBI 91-day Treasury bill auction cut-off yield / primary / Reserve Bank of India / Source: Reserve Bank of India / weekly_auction / 21 / enabled true / po_accepted_2026-10-03 / verified none , RBI_POLICY_REPO_RATE / RBI policy repo rate / secondary / Reserve Bank of India / Source: Reserve Bank of India / policy_change / 90 / enabled true / po_accepted_2026-10-03 / verified none",
+  "md5": "d2cf77eba0c2fa13bdc888e2f38c3f79"
+ },
+ {
+  "object": "ii_risk_free_series",
+  "aspect": "write_grants",
+  "text": "none",
+  "md5": "334c4a4c42fdb79d7ebc3e73b517e6f8"
+ },
+ {
+  "object": "ii_risk_free_series_state_log",
+  "aspect": "columns",
+  "text": "actor_user_id / uuid / NO / none / 0 / 0 / 0 , created_at / timestamp with time zone / NO / now() / 0 / 0 / 0 , id / uuid / NO / gen_random_uuid() / 0 / 0 / 0 , new_enabled / boolean / NO / none / 0 / 0 / 0 , new_terms_status / text / NO / none / 0 / 0 / 0 , previous_enabled / boolean / NO / none / 0 / 0 / 0 , previous_terms_status / text / NO / none / 0 / 0 / 0 , reason / text / NO / none / 0 / 0 / 0 , series_id / text / NO / none / 0 / 0 / 0",
+  "md5": "e8bf9207dbd4cac7525d2fe476372ee5"
+ },
+ {
+  "object": "ii_risk_free_series_state_log",
+  "aspect": "constraints",
+  "text": "ii_risk_free_series_state_log_pkey = PRIMARY KEY (id) , ii_risk_free_series_state_log_reason_check = CHECK ((length(TRIM(BOTH FROM reason)) >= 20))",
+  "md5": "dc063690fdf75b22197d98dca8b7bf31"
+ },
+ {
+  "object": "ii_risk_free_series_state_log",
+  "aspect": "indexes",
+  "text": "ii_risk_free_series_state_log_pkey = CREATE UNIQUE INDEX ii_risk_free_series_state_log_pkey ON ii_risk_free_series_state_log USING btree (id)",
+  "md5": "9d8612d7f38b63597ffa4010a7dfa1e1"
+ },
+ {
+  "object": "ii_risk_free_series_state_log",
+  "aspect": "policies",
+  "text": "capability_read_ii_risk_free_series_state_log / SELECT / {public} / (is_risk_free_data_admin() OR is_risk_free_series_switch_admin()) / none",
+  "md5": "a600a79a590d39457841d55c29e9fe9f"
+ },
+ {
+  "object": "ii_risk_free_series_state_log",
+  "aspect": "rls",
+  "text": "true",
+  "md5": "b326b5062b2f0e69046810717534cb09"
+ },
+ {
+  "object": "ii_risk_free_series_state_log",
+  "aspect": "triggers",
+  "text": "trg_ii_risk_free_state_log_no_change = CREATE TRIGGER trg_ii_risk_free_state_log_no_change BEFORE DELETE OR UPDATE ON ii_risk_free_series_state_log FOR EACH ROW EXECUTE FUNCTION ii_risk_free_append_only()",
+  "md5": "1c0189c54218b1e4e6f934b848b526d7"
+ },
+ {
+  "object": "ii_risk_free_series_state_log",
+  "aspect": "write_grants",
+  "text": "none",
+  "md5": "334c4a4c42fdb79d7ebc3e73b517e6f8"
+ },
+ {
+  "object": "is_risk_free_data_admin",
+  "aspect": "function",
+  "text": " / boolean / definer true / s / search_path=public / body 055041689c413da79025a156b8d8444e / anon false / authenticated true / service true",
+  "md5": "bfa75943f110ce0cb2f179092a7b753c"
+ },
+ {
+  "object": "is_risk_free_series_switch_admin",
+  "aspect": "function",
+  "text": " / boolean / definer true / s / search_path=public / body b8711b2faa5ddfd78f4daf7cb892a15e / anon false / authenticated true / service true",
+  "md5": "bd3428cc232fdf12ab842638b3cb8d3b"
+ },
+ {
+  "object": "record_risk_free_refresh_results",
+  "aspect": "absent",
+  "text": "0",
+  "md5": "cfcd208495d565ef66e7dff9f98764da"
+ },
+ {
+  "object": "resolve_risk_free_review_item",
+  "aspect": "absent",
+  "text": "0",
+  "md5": "cfcd208495d565ef66e7dff9f98764da"
+ },
+ {
+  "object": "set_risk_free_series_state",
+  "aspect": "absent",
+  "text": "0",
+  "md5": "cfcd208495d565ef66e7dff9f98764da"
+ }
+]

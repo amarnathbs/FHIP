@@ -131,10 +131,19 @@ async function prove() {
     await applyParts(db); await applyRest(db);
     try { await applyParts(db); await applyRest(db); await db.exec(read(path.join(MIG, NAV2_FILES[0]))); } catch (e) { setErr(e.message); }
   });
+  await run('5. from the PRODUCTION PARTIAL state (0260 parts a, b, c only), then ONLY parts d, e and 0261-0282 (parts a-c skipped)', async (db) => {
+    await applyParts(db, partFiles.slice(0, 3));
+    // the read-only reconciliation precheck P1z must call this state an exact match on a database with the full production-like ledger (default grants, extensions)
+    const z = (await db.query(fs.readFileSync(path.join(REPO, 'docs', 'nav2', 'po_apply_production', 'sql', 'prechecks', 'P1z_reconcile_partial_0260_summary.sql'), 'utf8'))).rows[0];
+    console.log(`     P1z on the partial state in the full-ledger database: checks ${z.checks}, differing ${z.differing}, all_match ${z.all_match}${z.differing_aspects ? `, differing ${z.differing_aspects}` : ''}`);
+    if (z.all_match !== true) throw new Error('P1z does not match the partial state on the full-ledger database');
+    await applyParts(db, partFiles.slice(3)); await applyRest(db);
+  });
+  await run('6. from the PRODUCTION PARTIAL state, then EVERY part again (a-c re-run on top of existing tables), then 0261-0282', async (db) => { await applyParts(db, partFiles.slice(0, 3)); await applyParts(db); await applyRest(db); });
   const base = hash(results[0].inv);
   const same = results.every((r) => hash(r.inv) === base);
   const noErr = results.every((r) => r.rerun === null);
-  console.log(`\nidentical inventory in all four states: ${same ? 'YES' : 'NO'}; second apply raised no error: ${noErr ? 'YES' : 'NO'}`);
+  console.log(`\nidentical inventory in all six states: ${same ? 'YES' : 'NO'}; second apply raised no error: ${noErr ? 'YES' : 'NO'}`);
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUT_DIR, 'expected_inventory.json'), JSON.stringify(results[0].inv, null, 1));
   fs.writeFileSync(path.join(OUT_DIR, 'nav2_catalog_inventory.sql'), `-- Read only. Run it in the Supabase SQL editor of the project you are checking (DEV or production). It returns ONE jsonb value named inventory.\n-- Save that value as actual.json, then the agent runs the compare command of scripts/nav2_schema_inventory.mjs on it.\n${catalogSql()};\n`);
