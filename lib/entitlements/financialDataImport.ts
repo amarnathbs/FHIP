@@ -26,9 +26,10 @@
  * WHAT IT NEVER DOES
  *   - trusts the browser: no plan, price, country or Premium flag in a body, query string, header, cookie or
  *     localStorage is ever read. The id passed in is the AUTHENTICATED session user's id.
- *   - treats an Admin / Super Admin as Premium. Staff and system jobs are governed by admin capabilities on
- *     admin routes (which never call this) -- not by a consumer subscription; and an admin testing as a
- *     customer needs a customer entitlement like anyone else.
+ *   - looks at an Admin / Super Admin / Resources role at all (there is no role shortcut, and tests/unit/staffPremiumNoRoleShortcut.test.ts
+ *     fails if one is added). Staff accounts ARE Premium as consumers (PO decision 16-10-2026), but only because the database writes
+ *     them a REAL entitlement row (entitlement_source 'staff_admin', migration 0283) that this file reads exactly like any other
+ *     row. Admin routes are still governed by admin capabilities, which never call this.
  *   - caches. Every call reads the row (one indexed single-row select), so an upgrade is usable on the next
  *     request and a downgrade stops NEW admissions on the next request. There is nothing to invalidate.
  *

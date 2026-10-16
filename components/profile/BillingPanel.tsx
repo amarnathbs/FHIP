@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { formatDateShort } from '@/lib/engines/date';
 import { REGISTRATION_COUNTRY_OPTIONS } from '@/lib/services/countryGate';
 import type { CountryCode } from '@/lib/services/jurisdiction';
+import { STAFF_PREMIUM_PROMO_NOTE } from '@/lib/services/staffPremium';
 
 interface PaymentStatus {
   billingCountry: CountryCode | null;
@@ -21,7 +22,7 @@ interface PaymentStatus {
   planTier: 'free' | 'premium';
   /** Server-composed, honest plan wording (e.g. "Premium (granted by FHIP admin, ends 12/10/2026)"). */
   planLabel?: string;
-  entitlementSource?: 'payment' | 'admin_grant' | 'promo_code' | null;
+  entitlementSource?: 'payment' | 'admin_grant' | 'promo_code' | 'staff_admin' | null;
   adminGrantEndsOn?: string | null;
   adminGrantLapsed?: boolean;
   promoEndsOn?: string | null;
@@ -204,7 +205,7 @@ export function BillingPanel() {
       <div>
         <p className="text-sm text-ink">
           Plan: <span className="font-medium">{status.planLabel ?? (status.planTier === 'premium' ? 'Premium' : 'Free')}</span>
-          {status.subscriptionStatus && status.entitlementSource !== 'admin_grant' && status.entitlementSource !== 'promo_code' && (
+          {status.subscriptionStatus && status.entitlementSource !== 'admin_grant' && status.entitlementSource !== 'promo_code' && status.entitlementSource !== 'staff_admin' && (
             <span className="ml-2 text-muted">({SUBSCRIPTION_STATUS_LABEL[status.subscriptionStatus] ?? status.subscriptionStatus})</span>
           )}
         </p>
@@ -230,45 +231,51 @@ export function BillingPanel() {
         </div>
       )}
 
-      <div>
-        <label htmlFor="promo-code-input" className="block text-xs font-medium text-muted">
-          Promo code
-        </label>
-        <p id="promo-code-helper" className="mt-1 text-xs text-muted">
-          Have a promo code? Enter it to get Premium for the period the code allows (never more than 365 days, counting today). A code cannot be
-          applied on top of a paid subscription, and it will not shorten Premium you already have.
+      {status.entitlementSource === 'staff_admin' ? (
+        <p className="text-sm text-muted" data-testid="staff-premium-note">
+          {STAFF_PREMIUM_PROMO_NOTE}
         </p>
-        <form
-          className="mt-2 flex flex-wrap items-center gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void redeemPromo();
-          }}
-        >
-          <input
-            id="promo-code-input"
-            value={promoCode}
-            onChange={(e) => setPromoCode(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-            maxLength={64}
-            aria-describedby="promo-code-helper"
-            className="rounded border px-3 py-2 text-sm uppercase"
-          />
-          <button
-            type="submit"
-            disabled={promoBusy || promoCode.trim().length === 0}
-            className="rounded-full border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5 disabled:opacity-50"
-          >
-            {promoBusy ? 'Applying…' : 'Apply code'}
-          </button>
-        </form>
-        {promoResult && (
-          <p role={promoResult.ok ? 'status' : 'alert'} className={`mt-2 text-sm ${promoResult.ok ? 'text-trust' : 'text-risk'}`}>
-            {promoResult.text}
+      ) : (
+        <div>
+          <label htmlFor="promo-code-input" className="block text-xs font-medium text-muted">
+            Promo code
+          </label>
+          <p id="promo-code-helper" className="mt-1 text-xs text-muted">
+            Have a promo code? Enter it to get Premium for the period the code allows (never more than 365 days, counting today). A code cannot be
+            applied on top of a paid subscription, and it will not shorten Premium you already have.
           </p>
-        )}
-      </div>
+          <form
+            className="mt-2 flex flex-wrap items-center gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void redeemPromo();
+            }}
+          >
+            <input
+              id="promo-code-input"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={64}
+              aria-describedby="promo-code-helper"
+              className="rounded border px-3 py-2 text-sm uppercase"
+            />
+            <button
+              type="submit"
+              disabled={promoBusy || promoCode.trim().length === 0}
+              className="rounded-full border border-trust px-4 py-2 text-sm font-medium text-trust hover:bg-trust/5 disabled:opacity-50"
+            >
+              {promoBusy ? 'Applying…' : 'Apply code'}
+            </button>
+          </form>
+          {promoResult && (
+            <p role={promoResult.ok ? 'status' : 'alert'} className={`mt-2 text-sm ${promoResult.ok ? 'text-trust' : 'text-risk'}`}>
+              {promoResult.text}
+            </p>
+          )}
+        </div>
+      )}
 
       <div>
         <label htmlFor="billing-country-select" className="block text-xs font-medium text-muted">

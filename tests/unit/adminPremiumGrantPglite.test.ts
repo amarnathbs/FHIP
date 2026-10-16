@@ -648,13 +648,22 @@ describe('cross-user isolation — granting A never changes B', () => {
     await assertIsolation();
   });
   it('NEGATIVE CONTROL — if the grant UPDATE lost its WHERE user_id clause B would be upgraded (assertion "B row must be byte-identical" goes red)', async () => {
-    await withMutation(
-      MANAGE_FN,
-      (s) => s.replace(/updated_at = now\(\)\n     where user_id = p_target_user_id;\n\n  elsif p_action = 'extend'/, "updated_at = now()\n     where true;\n\n  elsif p_action = 'extend'"),
-      async () => {
-        await expectAssertionFails(assertIsolation, 'B row must be byte-identical');
-      }
-    );
+    // Staff Premium (0283): the fixture admins in this file are staff accounts, and the staff guard trigger REFUSES the broken
+    // statement the moment it touches one of their rows (STAFF_PREMIUM_PROTECTED). That second line of defence makes the original
+    // control fail for a different reason, so the guard is switched off for this one control (it then measures exactly the isolation
+    // rule it is named after) and switched back on straight afterwards.
+    await db.exec('alter table user_entitlements disable trigger trg_staff_premium_guard');
+    try {
+      await withMutation(
+        MANAGE_FN,
+        (s) => s.replace(/updated_at = now\(\)\n     where user_id = p_target_user_id;\n\n  elsif p_action = 'extend'/, "updated_at = now()\n     where true;\n\n  elsif p_action = 'extend'"),
+        async () => {
+          await expectAssertionFails(assertIsolation, 'B row must be byte-identical');
+        }
+      );
+    } finally {
+      await db.exec('alter table user_entitlements enable trigger trg_staff_premium_guard');
+    }
   });
 });
 

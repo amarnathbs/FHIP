@@ -24,9 +24,11 @@
  *   - It never looks at an e-mail address, a user-id list, an environment
  *     allowlist, or whether the user is in a former pilot. Pilot membership
  *     neither grants nor denies anything.
- *   - It never treats an Admin / Super Admin / Analyst role as Premium. Admin
- *     status is not an entitlement; a staff member who wants consumer Premium
- *     features needs a consumer Premium entitlement like anyone else.
+ *   - It never looks at an Admin / Super Admin / Analyst role (there is no role
+ *     shortcut, and tests/unit/staffPremiumNoRoleShortcut.test.ts fails if one is
+ *     added). Staff accounts ARE Premium as consumers (PO decision 16-10-2026),
+ *     but only because the database writes them a REAL entitlement row (source
+ *     'staff_admin', migration 0283) that this reads like any other row.
  *   - It never trusts a caller-supplied Premium flag, user id or tenant: the
  *     caller passes the id of the AUTHENTICATED session user, and this reads
  *     the entitlement itself, server-side, with the service-role client.

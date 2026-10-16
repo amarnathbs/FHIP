@@ -81,9 +81,11 @@ export async function GET() {
         ? 'admin_grant'
         : plan.kind === 'premium_promo' || plan.kind === 'promo_lapsed'
           ? 'promo_code'
-          : entitlement
-            ? 'payment'
-            : null,
+          : plan.kind === 'premium_staff'
+            ? 'staff_admin'
+            : entitlement
+              ? 'payment'
+              : null,
     adminGrantEndsOn: plan.kind === 'premium_admin_grant' || plan.kind === 'admin_grant_lapsed' ? plan.grantEndsOn : null,
     adminGrantLapsed: plan.kind === 'admin_grant_lapsed',
     promoEndsOn: plan.kind === 'premium_promo' || plan.kind === 'promo_lapsed' ? plan.grantEndsOn : null,

@@ -17,12 +17,18 @@ import { OVERRIDE_REASON_MIN_LENGTH, PREMIUM_GRANT_LIFETIME_CEILING, REASON_MIN_
 import { AdminActionStatus, type AdminActionOutcome } from '@/components/admin/AdminActionStatus';
 import { parseAdminCapabilities } from '@/lib/admin/adminNav';
 import { DataTable } from '@/components/ui/DataTable';
+import {
+  SOURCE_LABEL_STAFF,
+  STAFF_PREMIUM_STATE_LABEL,
+  isStaffPremiumSource,
+  type StaffPremiumListRow,
+} from '@/lib/services/staffPremium';
 
 interface UserRow {
   user_id: string;
   email: string | null;
   plan_tier: 'free' | 'premium';
-  entitlement_source: 'payment' | 'admin_grant' | 'promo_code';
+  entitlement_source: 'payment' | 'admin_grant' | 'promo_code' | 'staff_admin';
   effective_from: string | null;
   effective_to: string | null;
   admin_grant_ends_on: string | null;
@@ -55,7 +61,7 @@ interface Summary {
   rows: SummaryRow[];
 }
 
-const SOURCE_LABEL: Record<string, string> = { admin_grant: 'Admin grant', promo_code: 'Promo code', payment: 'Paid / other' };
+const SOURCE_LABEL: Record<string, string> = { admin_grant: 'Admin grant', promo_code: 'Promo code', payment: 'Paid / other', staff_admin: SOURCE_LABEL_STAFF };
 
 interface GrantRow {
   user_id: string;
@@ -87,6 +93,26 @@ interface HistoryRow {
 
 type GrantFilter = 'expiring' | 'active' | 'lapsed';
 
+interface StaffHistoryRow {
+  id: string;
+  created_at: string;
+  action: 'start' | 'end' | 'paid_over';
+  origin: string;
+  replaced_source: string | null;
+}
+
+const STAFF_ACTION_LABEL: Record<StaffHistoryRow['action'], string> = {
+  start: 'Staff Premium started',
+  end: 'Staff Premium ended (no staff role left)',
+  paid_over: 'A paid subscription took over',
+};
+const STAFF_ORIGIN_LABEL: Record<string, string> = {
+  admin_users: 'Super Admin row changed',
+  resource_user_roles: 'Resources role changed',
+  backfill: 'Backfill run by the operator',
+  direct_write: 'Direct database write',
+};
+
 /** Carries the stable error code so the screen can tell a limit refusal from any other refusal. */
 class ApiError extends Error {
   constructor(
@@ -114,6 +140,9 @@ function fmt(isoDate: string | null): string {
 }
 
 function describeState(u: UserRow): string {
+  if (isStaffPremiumSource(u.entitlement_source)) {
+    return 'Premium — FHIP staff account (automatic, no end date; it is not a paid subscription and cannot be granted, extended or revoked here)';
+  }
   if (u.entitlement_source === 'admin_grant' || u.entitlement_source === 'promo_code') {
     const what = u.entitlement_source === 'promo_code' ? 'promo code' : 'admin grant';
     const ext = u.extensions_remaining > 0 ? `${u.extensions_remaining} extension(s) left` : 'extension limit reached';
@@ -157,6 +186,14 @@ export function PremiumEntitlementsClient() {
 
   const [selected, setSelected] = useState<UserRow | null>(null);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
+  const [staffHistory, setStaffHistory] = useState<StaffHistoryRow[] | null>(null);
+
+  // Staff Premium (automatic). Read only: the database writes it when a staff role is assigned or removed.
+  const [staffReload, setStaffReload] = useState(0);
+  const [loadedStaff, setLoadedStaff] = useState<{ key: number; rows: StaffPremiumListRow[] } | null>(null);
+  const [staffFailure, setStaffFailure] = useState<{ key: number; message: string } | null>(null);
+  const staff = loadedStaff && loadedStaff.key === staffReload ? loadedStaff.rows : null;
+  const staffError = staffFailure && staffFailure.key === staffReload ? staffFailure.message : null;
 
   // The end date is typed day-first (DD-MM-YYYY); the API gets the ISO value.
   const [endsOn, setEndsOn] = useState(formatDateInput(maxEnd));
@@ -217,6 +254,21 @@ export function PremiumEntitlementsClient() {
     };
   }, [summarySource, summaryReload]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchJson<{ staff: StaffPremiumListRow[] }>('/api/admin/entitlements/staff');
+        if (!cancelled) setLoadedStaff({ key: staffReload, rows: data.staff });
+      } catch (e) {
+        if (!cancelled) setStaffFailure({ key: staffReload, message: e instanceof Error ? e.message : 'Could not load the staff list' });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [staffReload]);
+
   async function search(q: string) {
     setSearching(true);
     setSearchError(null);
@@ -241,6 +293,7 @@ export function PremiumEntitlementsClient() {
       const row = rows.find((r) => r.user_id === userId) ?? null;
       setSelected(row);
       setHistory(row ? await fetchJson<HistoryRow[]>(`/api/admin/entitlements/users/${userId}/history`) : null);
+      setStaffHistory(row && isStaffPremiumSource(row.entitlement_source) ? await fetchJson<StaffHistoryRow[]>(`/api/admin/entitlements/staff?history=${userId}`) : null);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Could not load this user');
     }
@@ -285,9 +338,11 @@ export function PremiumEntitlementsClient() {
   const endsIso = parseDateInput(endsOn);
   const dateOk = endsIso !== null && endsIso >= today && endsIso <= maxEnd;
   // "Managed" = an admin grant OR a promo-code entitlement (both are time-limited and admin-extendable).
-  const isAdminGrant = !!selected && selected.entitlement_source !== 'payment';
+  // Staff Premium (0283) is neither a grant nor a paid plan: automatic, no end date, never managed from this screen.
+  const isStaffPremium = !!selected && isStaffPremiumSource(selected.entitlement_source);
+  const isAdminGrant = !!selected && !isStaffPremium && selected.entitlement_source !== 'payment';
   const extensionsExhausted = isAdminGrant && !!selected && selected.extensions_remaining <= 0;
-  const protectedPaid = !!selected && selected.entitlement_active && !isAdminGrant;
+  const protectedPaid = !!selected && selected.entitlement_active && !isAdminGrant && !isStaffPremium;
 
   return (
     <div className="space-y-8">
@@ -297,7 +352,8 @@ export function PremiumEntitlementsClient() {
           Allocate Premium to a user who has not paid online. A grant lasts at most {ENTITLEMENT_GRANT_MAX_DAYS} days counting the day you
           allocate it, and can be extended later (each extension is again capped at {ENTITLEMENT_GRANT_MAX_DAYS} days counting the day of the
           extension). One user can receive at most {PREMIUM_GRANT_LIFETIME_CEILING} admin grants and extensions in their lifetime; revoking and granting again does not
-          reset that. Every change needs a reason and is recorded in an audit trail.
+          reset that. Every change needs a reason and is recorded in an audit trail. FHIP staff accounts also hold Premium automatically; they are
+          listed under Staff Premium below and are not part of these limits.
         </p>
       </div>
 
@@ -424,6 +480,51 @@ export function PremiumEntitlementsClient() {
         )}
       </section>
 
+      <section aria-labelledby="staff-heading" className="space-y-3">
+        <h2 id="staff-heading" className="text-lg font-medium text-ink">
+          Staff Premium (automatic)
+        </h2>
+        <p className="text-xs text-muted">
+          Accounts that hold a Super Admin or Resources role get Premium automatically while the role lasts. It has no end date, is not a paid
+          subscription, never uses up a grant, extension or promo limit, and cannot be granted, extended or revoked here: it starts and ends with the
+          role. A paid subscription, if the person has one, takes precedence and Staff Premium resumes if it ends.
+        </p>
+        {staffError && <p role="alert" className="text-sm text-risk">{staffError}</p>}
+        {staff === null && !staffError && <p className="text-sm text-muted">Loading…</p>}
+        {staff !== null && staff.length === 0 && <p className="text-sm text-muted">No staff accounts found.</p>}
+        {staff !== null && staff.length > 0 && (
+          <DataTable label="Staff Premium table" wrapperClassName="rounded-card border" className="min-w-full">
+            <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+              <tr>
+                <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Staff role</th>
+                <th className="px-3 py-2">Since</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staff.map((r) => (
+                <tr key={r.user_id} className="border-t">
+                  <td className="px-3 py-2">{r.email ?? '(no email)'}</td>
+                  <td className="px-3 py-2">{r.roles ?? '—'}</td>
+                  <td className="px-3 py-2">{r.state === 'staff_premium' ? fmt(r.effective_from) : '—'}</td>
+                  <td className="px-3 py-2">{STAFF_PREMIUM_STATE_LABEL[r.state] ?? r.state}</td>
+                  <td className="px-3 py-2">
+                    <button type="button" onClick={() => void selectUser(r.user_id)} className="text-xs font-medium text-trust hover:underline">
+                      History
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
+        )}
+        <button type="button" onClick={() => setStaffReload((k) => k + 1)} className="text-xs font-medium text-trust hover:underline">
+          Refresh the staff list
+        </button>
+      </section>
+
       <section aria-labelledby="search-heading" className="space-y-3">
         <h2 id="search-heading" className="text-lg font-medium text-ink">
           Find a user
@@ -490,7 +591,13 @@ export function PremiumEntitlementsClient() {
             <p className="mt-1 text-sm text-muted">{describeState(selected)}</p>
           </div>
 
-          {protectedPaid ? (
+          {isStaffPremium ? (
+            <p className="text-sm text-ink" data-testid="staff-premium-manage-note">
+              This account has Premium because it is an FHIP staff account. It is automatic and has no end date, so there is nothing to grant,
+              extend or revoke here. It ends when the account no longer holds a staff role. To change who is staff, change their Super Admin or
+              Resources role.
+            </p>
+          ) : protectedPaid ? (
             <p className="text-sm text-ink">
               This user already has Premium that was not allocated by an admin. It is protected: no grant, extension or revocation is
               possible from this screen.
@@ -620,6 +727,36 @@ export function PremiumEntitlementsClient() {
               >
                 {busy ? 'Working…' : isAdminGrant ? 'Override the limit and extend' : 'Override the limit and grant'}
               </button>
+            </div>
+          )}
+
+          {isStaffPremium && (
+            <div>
+              <h3 className="text-sm font-medium text-ink">Staff Premium history</h3>
+              {staffHistory === null && <p className="mt-1 text-sm text-muted">Loading…</p>}
+              {staffHistory !== null && staffHistory.length === 0 && <p className="mt-1 text-sm text-muted">No staff Premium events recorded.</p>}
+              {staffHistory !== null && staffHistory.length > 0 && (
+                <DataTable label="Staff Premium history table" wrapperClassName="mt-2 rounded-card border" className="min-w-full">
+                  <thead className="bg-gray-50 text-left text-xs uppercase text-muted">
+                    <tr>
+                      <th className="px-3 py-2">When</th>
+                      <th className="px-3 py-2">Event</th>
+                      <th className="px-3 py-2">Cause</th>
+                      <th className="px-3 py-2">Replaced</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {staffHistory.map((h) => (
+                      <tr key={h.id} className="border-t align-top">
+                        <td className="px-3 py-2 whitespace-nowrap">{formatDateTimeShort(h.created_at, 'AUD')}</td>
+                        <td className="px-3 py-2">{STAFF_ACTION_LABEL[h.action] ?? h.action}</td>
+                        <td className="px-3 py-2 text-muted">{STAFF_ORIGIN_LABEL[h.origin] ?? h.origin}</td>
+                        <td className="px-3 py-2 text-muted">{h.replaced_source ? (SOURCE_LABEL[h.replaced_source] ?? h.replaced_source) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </DataTable>
+              )}
             </div>
           )}
 

@@ -21,4 +21,4 @@ If it still says Free after a few minutes, check their plan in Admin -> Premium 
 
 **If a customer sees "We could not confirm your plan just now".** This is a temporary check failure, not a payment problem. Ask them to retry in a minute. If it persists, escalate; manual entry keeps working meanwhile.
 
-**Admin staff** uploading Resources, Benchmarks, Recommendations or market data do **not** need a Premium plan; those screens are governed by Admin roles only.
+**Admin staff** uploading Resources, Benchmarks, Recommendations or market data do **not** need a Premium plan; those screens are governed by Admin roles only. Separately, since the Product Owner decision of 16-10-2026, staff accounts (Super Admin, or any Resources role) also hold **Premium as consumers**, automatically: a real entitlement row with source `staff_admin` that starts when the role is assigned and ends when the last staff role is removed. It shows in Admin -> Premium Access under "Staff Premium (automatic)", is not a paid subscription, cannot be granted, extended or revoked there, and never counts against grant, extension or promo limits. See `docs/admin/STAFF_ADMIN_PREMIUM_REPORT.md`.

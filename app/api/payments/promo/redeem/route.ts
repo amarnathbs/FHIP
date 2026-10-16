@@ -31,11 +31,24 @@ import { hashClientIp } from '@/lib/services/promoCodeIp';
 import { keyedAddressHash } from '@/lib/services/promoCodeEmail';
 import { digestCandidates } from '@/lib/services/promoCodeDigest';
 import { promoDigestKeys, promoSecretProblems } from '@/lib/services/promoSecrets';
+import { STAFF_PREMIUM_PROMO_REFUSAL, STAFF_PREMIUM_SOURCE } from '@/lib/services/staffPremium';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_INPUT_LENGTH = 64;
 const UNAVAILABLE = 'Promo codes are unavailable right now. Please try again later.';
+
+// Staff Premium (migration 0283). A staff account already holds an automatic Premium entitlement that has no end date, and the database
+// refuses to put a promo over it (STAFF_PREMIUM_PROTECTED). Answer plainly BEFORE any code is looked up, so no attempt is counted and no
+// code is consumed. Fail soft: a read problem here is simply "not staff"; the database guard is the control, this is the courtesy.
+async function holdsStaffPremium(userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await createAdminClient().from('user_entitlements').select('entitlement_source').eq('user_id', userId).maybeSingle();
+    return !error && (data as { entitlement_source?: string } | null)?.entitlement_source === STAFF_PREMIUM_SOURCE;
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(req: Request) {
   const { user, unauthenticated } = await requireUser();
@@ -47,6 +60,10 @@ export async function POST(req: Request) {
   if (problems.missing.length > 0 || problems.reused.length > 0 || !keys) {
     console.error('promo redeem refused: server secrets not configured', { missing: problems.missing, reused: problems.reused });
     return bad(UNAVAILABLE, 503, 'PROMO_UNAVAILABLE');
+  }
+
+  if (await holdsStaffPremium(user.id)) {
+    return bad(STAFF_PREMIUM_PROMO_REFUSAL.message, STAFF_PREMIUM_PROMO_REFUSAL.status, STAFF_PREMIUM_PROMO_REFUSAL.code);
   }
 
   const body = (await req.json().catch(() => null)) as { code?: unknown } | null;
