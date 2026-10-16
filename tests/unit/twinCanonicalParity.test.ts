@@ -65,9 +65,11 @@ describe('WP-05 Twin parity with the Dashboard (M and I)', () => {
       expect(tw.dashboard.totalMonthlyExpenses).toBe(db.totalMonthlyExpenses);
       expect(tw.dashboard.monthlySurplus).toBe(db.monthlySurplus);
       expect(tw.dashboard.netWorth).toBe(db.netWorth);
-      // Business entities are inside the ONE Net Worth figure (the private
-      // Twin copy left them out): 50% of 100,000.
-      expect(tw.dashboard.netWorth - (tw.dashboard.totalAssets + tw.dashboard.totalInvestments + tw.dashboard.totalRetirement - tw.dashboard.totalLiabilities)).toBe(50000);
+      // PO decision 16-10-2026 (personal basis): registered entities are NOT in the personal Net Worth figure any more
+      // (50% of 100,000 is held in the entity block / family level); the history basis still carries them.
+      expect(tw.dashboard.netWorth - (tw.dashboard.totalAssets + tw.dashboard.totalInvestments + tw.dashboard.totalRetirement - tw.dashboard.totalLiabilities)).toBe(0);
+      expect(tw.dashboard.netWorthBasis!.entityHeld.registeredEntityValue).toBe(50000);
+      expect(tw.dashboard.netWorthBasis!.history.netWorth - tw.dashboard.netWorth).toBe(50000);
     });
   }
 
@@ -131,13 +133,26 @@ describe('WP-05 Twin-only inputs come from the canonical read models', () => {
         net_worth: n === 13 ? null : 1000 * (n + 1), monthly_income: 100, monthly_expenses: 50, monthly_surplus: 50,
       };
     });
-    const tw = await twin(tables(householdM(), { financial_snapshots: snaps }));
+    // Entity-free household: stored months are on the same basis as the live personal figure.
+    const entityFree = householdM();
+    entityFree.business_entities = [];
+    const tw = await twin(tables(entityFree, { financial_snapshots: snaps }));
     expect(tw.snapshots12m).toHaveLength(12);
     expect(tw.snapshots12m[0].month).toBe('2025-03-01');
     expect(tw.snapshots12m[11].month).toBe('2026-02-01');
     expect(tw.snapshots12m[11].netWorth).toBeNull();
     // Growth uses the known points only: 3,000 -> 13,000 (never "-> 0").
     expect(computeTwinMetricValues(tw).net_worth_growth_12m.value).toBeCloseTo(((13000 - 3000) / 3000) * 100, 6);
+  });
+
+  it('a household with entity amounts: stored net worth months are on another basis, so they are left unknown (never mixed, never 0)', async () => {
+    const snaps: Row[] = Array.from({ length: 3 }, (_, n) => ({
+      user_id: USER, snapshot_month: new Date(Date.UTC(2026, n, 1)).toISOString().slice(0, 10),
+      net_worth: 1000 * (n + 1), monthly_income: 100, monthly_expenses: 50, monthly_surplus: 50,
+    }));
+    const tw = await twin(tables(householdM(), { financial_snapshots: snaps }));
+    expect(tw.snapshots12m.map((s) => s.netWorth)).toEqual([null, null, null]);
+    expect(tw.snapshots12m.map((s) => s.monthlyIncome)).toEqual([100, 100, 100]);
   });
 
   it('a failed canonical read fails the Twin closed -- never a benchmark computed from zeros (DC-14)', async () => {

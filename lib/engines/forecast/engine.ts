@@ -26,7 +26,10 @@ import type { ForecastType, MonthlyForecastOutput } from './types';
 // with an already-cached run under the old version get a genuinely fresh
 // computation reflecting these fixes on their next visit, rather than
 // silently reusing pre-fix output because their input data didn't change.
-export const FORECAST_ENGINE_VERSION = 'forecast-1.6.0';
+// 1.7.0 (PO decision 16-10-2026, personal basis): every opening balance comes from the PERSONAL position (entity-held
+// rows left out), so earlier cached runs are not reused and the variance table knows which basis a run was built on
+// (lib/engines/forecast/varianceBasis.ts).
+export const FORECAST_ENGINE_VERSION = 'forecast-1.7.0';
 
 // Registry of calculators — all 7 non-Premium forecast types from the
 // roadmap are now registered (Premium/Monte Carlo simulation is explicitly

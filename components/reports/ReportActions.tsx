@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { describeFailure, NETWORK_FAILURE, readApiResponse } from '@/lib/reports/apiClient';
 
 export function ReportActions({ reportId }: { reportId: string }) {
   const [exporting, setExporting] = useState<'pdf' | 'csv' | null>(null);
@@ -16,23 +17,32 @@ export function ReportActions({ reportId }: { reportId: string }) {
     setMessage(null);
     setReadyExportId(null);
     try {
-      const res = await fetch(`/api/reports/${reportId}/exports`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setMessage(json.error ?? 'Export request failed');
+      let res: Response;
+      try {
+        res = await fetch(`/api/reports/${reportId}/exports`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ format }),
+        });
+      } catch {
+        setMessage(NETWORK_FAILURE.message);
         return;
       }
-      if (json.data?.status === 'ready') {
+      // Never res.json(): an empty or non-JSON body (a platform cut-off, a gateway page) is a plain message, not a parser error.
+      const read = await readApiResponse(res);
+      if (!read.ok) {
+        const failure = describeFailure(read);
+        setMessage(failure.correlationId ? `${failure.message} (reference ${failure.correlationId})` : failure.message);
+        return;
+      }
+      const data = (read.json?.data ?? null) as { status?: string; id?: string } | null;
+      if (data?.status === 'ready' && data.id) {
         setMessage('Your PDF is ready.');
-        setReadyExportId(json.data.id);
-      } else if (json.data?.status === 'failed') {
+        setReadyExportId(data.id);
+      } else if (data?.status === 'failed') {
         setMessage('This export format is not available yet in this release. You can still view and print this report.');
       } else {
-        setMessage('Export requested.');
+        setMessage(data ? 'Export requested.' : 'The export answer could not be read. Please try again.');
       }
     } finally {
       setExporting(null);
@@ -59,7 +69,11 @@ export function ReportActions({ reportId }: { reportId: string }) {
           Download PDF
         </a>
       )}
-      {message && <p className="text-xs text-gray-500">{message}</p>}
+      {message && (
+        <p role="status" aria-live="polite" className="text-xs text-gray-500">
+          {message}
+        </p>
+      )}
     </div>
   );
 }

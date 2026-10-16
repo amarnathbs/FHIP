@@ -9,6 +9,7 @@ import { percentChange, type DashboardSummary, type AllocationBucket } from '@/l
 import { DataTable } from '@/components/ui/DataTable';
 import { NetWorthLevelsPanel } from './NetWorthLevelsPanel';
 import { netWorthHeadline } from './netWorthHeadline';
+import { netWorthForHistoryComparison } from '@/lib/engines/netWorthBasis';
 
 function titleCase(s: string): string {
   return s
@@ -61,7 +62,8 @@ function snapshotSeries(summary: DashboardSummary, field: 'net_worth' | 'monthly
 export function ExecutiveSummary({ summary }: { summary: DashboardSummary }) {
   const netWorthSeries = snapshotSeries(summary, 'net_worth');
   const prevSnapshot = summary.snapshots.length > 1 ? summary.snapshots[summary.snapshots.length - 2] : null;
-  const netWorthChange = prevSnapshot ? percentChange(summary.netWorth, prevSnapshot.net_worth) : null;
+  // Stored months are on the history basis; compare like with like (PO decision 16-10-2026).
+  const netWorthChange = prevSnapshot ? percentChange(netWorthForHistoryComparison(summary).value, prevSnapshot.net_worth) : null;
   const headline = netWorthHeadline(summary);
 
   return (
@@ -192,8 +194,8 @@ export function NetWorthSection({ summary }: { summary: DashboardSummary }) {
         <div>
           <p className="mb-2 text-sm font-medium text-gray-700">Net Worth Trend</p>
           <TrendLineChart data={netWorthSeries} currency={summary.currency} />
-          {summary.netWorthLevels && (
-            <p className="mt-1 text-xs text-muted">History is kept on the basis net worth was previously reported, which includes all of your entities.</p>
+          {netWorthForHistoryComparison(summary).note && (
+            <p className="mt-1 text-xs text-muted" data-testid="net-worth-history-basis-note">{netWorthForHistoryComparison(summary).note}</p>
           )}
         </div>
         <div>
@@ -351,6 +353,11 @@ export function RetirementSection({ summary }: { summary: DashboardSummary }) {
         <Stat label="Personal Contributions" value={formatMoney(summary.retirementPersonalMonthlyContribution * 12, summary.currency)} sub="per year" />
         <Stat label="Projected Balance" value="—" sub="Create a retirement goal for a projection" />
       </div>
+      {summary.netWorthBasis && Math.abs(summary.netWorthBasis.entityHeld.retirement) >= 0.005 && (
+        <p className="mt-3 text-xs text-muted" data-testid="retirement-entity-held-note">
+          Personal figure. It leaves out {formatMoney(summary.netWorthBasis.entityHeld.retirement, summary.currency)} held at SMSF fund level (rows owned by the SMSF); that amount appears only in the SMSF block and the family net worth.
+        </p>
+      )}
       <p className="mt-4 text-xs text-gray-400">
         Required balance, funding gap, and forecast completion date are available once you create a retirement goal on
         the Financial Goals page. Full retirement-income modelling arrives with a future forecasting update.

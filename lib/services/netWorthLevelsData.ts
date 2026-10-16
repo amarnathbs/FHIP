@@ -49,8 +49,10 @@ export async function loadNetWorthLevels(args: {
   supabase: Client;
   snapshot: CanonicalFinancialSnapshotResult;
   businessEntities: readonly BusinessEntityWithLineItems[] | null;
-  /** The Dashboard's previously reported net worth (summary.netWorth), to prove the bridge. */
+  /** The Dashboard's history-basis net worth (all entities included), to prove the bridge. */
   previouslyReported: number;
+  /** The Dashboard summary's personal-basis net worth (summary.netWorth), to prove personal parity. */
+  personalSummaryNet?: number;
 }): Promise<NetWorthLevels | null> {
   const { userId, supabase, snapshot } = args;
   if (snapshot.status !== 'ok') return null;
@@ -101,7 +103,7 @@ export async function loadNetWorthLevels(args: {
 
   const rows: NetWorthRowInput[] = [];
   for (const l of assets.lines) {
-    rows.push({ id: l.id, register: 'assets', name: l.name, owner: l.owner, amountReporting: l.value.amountReporting, currencyCode: l.value.currency });
+    rows.push({ id: l.id, register: 'assets', name: l.name, owner: l.owner, masterItemKey: l.masterItemKey, amountReporting: l.value.amountReporting, currencyCode: l.value.currency });
   }
   for (const l of investments.lines) {
     const shares: NetWorthJointShare[] | null =
@@ -113,7 +115,7 @@ export async function loadNetWorthLevels(args: {
     rows.push({ id: l.id, register: 'investments', name: l.name, owner: l.owner, amountReporting: l.value.amountReporting, currencyCode: l.value.currency, jointShares: usable });
   }
   for (const l of retirement.lines) {
-    rows.push({ id: l.id, register: 'retirement', name: l.name, owner: l.owner, amountReporting: l.balance.amountReporting, currencyCode: l.balance.currency });
+    rows.push({ id: l.id, register: 'retirement', name: l.name, owner: l.owner, masterItemKey: l.masterItemKey, amountReporting: l.balance.amountReporting, currencyCode: l.balance.currency });
   }
   for (const l of liabilities.lines) {
     rows.push({
@@ -138,6 +140,6 @@ export async function loadNetWorthLevels(args: {
     }
   }
 
-  return computeNetWorthLevels({ currency, rows, entities, previouslyReported: args.previouslyReported, unavailable });
+  return computeNetWorthLevels({ currency, rows, entities, previouslyReported: args.previouslyReported, personalSummaryNet: args.personalSummaryNet, unavailable });
 }
 

@@ -49,7 +49,10 @@ describe('POST /api/reports/generate', () => {
 
   it('a real failure is still an error, and a generated report is still 200', async () => {
     generateReport.mockRejectedValue(new Error('boom'));
-    expect((await post()).status).toBe(400);
+    // 16-10-2026: an unexpected failure is a typed 500 (it was a 400 carrying the raw message).
+    const failed = await post();
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toMatchObject({ code: 'REPORT_GENERATION_FAILED', retryable: true });
     generateReport.mockResolvedValue({ report: { id: 'r1', status: 'ready' }, sections: [], alreadyExisted: false });
     expect((await post()).status).toBe(200);
   });

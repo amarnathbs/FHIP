@@ -22,6 +22,13 @@ import { ProvenanceBadge } from '@/components/grid/ProvenanceBadge';
 import { DateInput } from '@/components/ui/DateInput';
 import { isFieldHiddenOnRow, isImportSourceType } from '@/lib/grid/provenance';
 import { DataTable } from '@/components/ui/DataTable';
+import { isEntityOwnerTag } from '@/lib/engines/netWorthBasis';
+
+/**
+ * Registers whose footer total is split into PERSONAL and entity-held (PO decision 16-10-2026). Includes Retirement:
+ * a row owned by the SMSF itself (fund-level amount) is not a member balance and is not in the personal total.
+ */
+const PERSONAL_TOTAL_GRID_CATEGORIES: ReadonlySet<string> = new Set(['asset', 'investment', 'liability', 'retirement']);
 
 interface MasterItem {
   item_key: string;
@@ -749,8 +756,19 @@ export function FinancialDataGrid({
   // Catalogue items not yet added — the Add form's picker choices.
   const availableCatalogItems = useMemo(() => catalogPickerItems(rows ?? []), [rows]);
 
+  // PO decision 16-10-2026 (personal basis): on the balance-sheet registers listed in PERSONAL_TOTAL_GRID_CATEGORIES the
+  // footer total is the PERSONAL total, and rows held by an entity (owner SMSF / family trust / company) are shown on
+  // their own labelled line, so the register footer agrees with the Net Worth figures. Other registers are unchanged.
+  const splitsEntityHeld = PERSONAL_TOTAL_GRID_CATEGORIES.has(config.category);
+  let entityHeldTotal = 0;
+  let entityHeldCount = 0;
   const total = included.reduce((sum, r) => {
     const value = Number(r[config.valueField] ?? 0);
+    if (splitsEntityHeld && isEntityOwnerTag(r.owner)) {
+      entityHeldTotal += value;
+      entityHeldCount += 1;
+      return sum;
+    }
     if (config.isFlow && config.frequencyField) {
       return sum + toMonthly(value, r[config.frequencyField] as Frequency) * 12;
     }
@@ -1288,6 +1306,11 @@ export function FinancialDataGrid({
           <div>
             <p className="text-muted">{config.isFlow ? 'Total annual value' : 'Total value'}</p>
             <p className="font-semibold text-ink">{formatMoneyWhole(total, defaultCurrency)}</p>
+            {splitsEntityHeld && entityHeldCount > 0 && (
+              <p className="text-xs text-muted" data-testid="grid-entity-held-total">
+                Personal total. Held by an entity (SMSF, trust or company), not in your personal net worth: {formatMoneyWhole(entityHeldTotal, defaultCurrency)} ({entityHeldCount} item{entityHeldCount === 1 ? '' : 's'}).
+              </p>
+            )}
           </div>
           <div>
             <p className="text-muted">Missing fields</p>

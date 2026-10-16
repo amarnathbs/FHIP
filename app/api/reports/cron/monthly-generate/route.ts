@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateReport } from '@/lib/services/reportsData';
+import { ReportPreparingError } from '@/lib/services/reportGenerationErrors';
 import { ReportWaitingForPriceHistoryError } from '@/lib/services/investment-intelligence/pc6/reportNavHistoryGate';
 import { ok, bad } from '@/lib/api';
 
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
       results.push({ userId: row.user_id, status: result.report.status });
     } catch (e) {
       // Held for price history (PO 2026-10-03): not an error. The fetch was kicked; the next run, or the user, generates it.
-      results.push({ userId: row.user_id, status: e instanceof ReportWaitingForPriceHistoryError ? 'waiting_for_price_history' : 'error' });
+      results.push({ userId: row.user_id, status: e instanceof ReportWaitingForPriceHistoryError ? 'waiting_for_price_history' : e instanceof ReportPreparingError ? 'already_preparing' : 'error' });
     }
   }
 

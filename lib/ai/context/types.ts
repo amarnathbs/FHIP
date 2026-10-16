@@ -131,7 +131,12 @@ export interface CashFlowSection {
 export interface BalanceSheetSection {
   total_assets: number;
   total_liabilities: number;
+  /** PERSONAL net worth (PO decision 16-10-2026): SMSF fund-level, trust and company amounts are not in it. */
   net_worth: number;
+  /** Always 'personal'. Lets an explanation say which net worth it is explaining. */
+  net_worth_basis?: 'personal';
+  /** Consolidated family net worth (personal + entities), when the household has entity amounts. null otherwise. */
+  family_net_worth?: number | null;
   liquid_assets: number;
   property_assets: number | null;
   investment_assets: number;

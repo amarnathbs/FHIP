@@ -401,6 +401,8 @@ export async function buildFinancialContextObject(userId: string, options: Build
         total_assets: dashboard.totalAssetsCombined,
         total_liabilities: dashboard.totalLiabilities,
         net_worth: dashboard.netWorth,
+        net_worth_basis: 'personal' as const,
+        family_net_worth: dashboard.netWorthLevels?.hasEntities ? dashboard.netWorthLevels.family.net : null,
         liquid_assets: dashboard.liquidAssets,
         property_assets: dashboard.netWorthAllocation.find((a) => a.bucket === 'property')?.value ?? null,
         investment_assets: dashboard.totalInvestments,

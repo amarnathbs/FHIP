@@ -174,12 +174,13 @@ export function ReportPreview({
   const cashFlow = byCode('cash_flow');
   const netWorth = byCode('net_worth');
   // PO decision 16-10-2026: the two-level model rides in the section data (absent on reports generated before it).
-  // Every total in the Net Worth section reads the FAMILY level from that one model so the section agrees with itself;
-  // the personal level is shown beside it by NetWorthLevelsPanel.
+  // PO decision 16-10-2026 (personal basis): the headline totals in the Net Worth section are the PERSONAL level, so they
+  // agree with the wealth chart, the liquid / property percentages and the Health Score, which are all personal. The
+  // family level (SMSF, trusts, HUFs, companies) is shown as its own labelled line and in NetWorthLevelsPanel.
   const nwLevels = (netWorth?.sectionData?.levels ?? null) as NetWorthLevels | null;
-  const nwTotalAssets = nwLevels ? nwLevels.family.totalAssets : netWorth?.sectionData.totalAssets;
-  const nwTotalLiabilities = nwLevels ? nwLevels.family.liabilities : netWorth?.sectionData.totalLiabilities;
-  const nwNet = nwLevels ? nwLevels.family.net : netWorth?.sectionData.netWorth;
+  const nwTotalAssets = nwLevels ? nwLevels.personal.total.totalAssets : netWorth?.sectionData.totalAssets;
+  const nwTotalLiabilities = nwLevels ? nwLevels.personal.total.liabilities : netWorth?.sectionData.totalLiabilities;
+  const nwNet = nwLevels ? nwLevels.personal.total.net : netWorth?.sectionData.netWorth;
   const healthScore = byCode('health_score');
   const financialDna = byCode('financial_dna');
   const resilience = byCode('resilience');
@@ -503,17 +504,23 @@ export function ReportPreview({
                 </div>
               )}
               <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Stat label={nwLevels ? 'Total assets (family level)' : 'Total assets'} value={fmt(nwTotalAssets)} />
-                <Stat label="— Property, cash & other" value={fmt(nwLevels ? nwLevels.family.assets : netWorth.sectionData.coreAssets)} />
-                <Stat label="— Investments" value={fmt(nwLevels ? nwLevels.family.investments : netWorth.sectionData.totalInvestments)} />
-                <Stat label="— Retirement" value={fmt(nwLevels ? nwLevels.family.retirement : netWorth.sectionData.totalRetirement)} />
-                {nwLevels && nwLevels.family.entityValue !== 0 && (
-                  <Stat label="— Company, trust & HUF net value" value={fmt(nwLevels.family.entityValue)} />
+                <Stat label={nwLevels ? 'Total assets (personal)' : 'Total assets'} value={fmt(nwTotalAssets)} />
+                <Stat label="— Property, cash & other" value={fmt(nwLevels ? nwLevels.personal.total.assets : netWorth.sectionData.coreAssets)} />
+                <Stat label="— Investments" value={fmt(nwLevels ? nwLevels.personal.total.investments : netWorth.sectionData.totalInvestments)} />
+                <Stat label="— Retirement" value={fmt(nwLevels ? nwLevels.personal.total.retirement : netWorth.sectionData.totalRetirement)} />
+                <Stat label={nwLevels ? 'Total liabilities (personal)' : 'Total liabilities'} value={fmt(nwTotalLiabilities)} />
+                <Stat label={nwLevels ? 'Net worth (personal)' : 'Net worth'} value={fmt(nwNet)} />
+                {nwLevels && nwLevels.hasEntities && (
+                  <Stat label="Family net worth (incl. SMSF, trusts, HUF, companies)" value={fmt(nwLevels.family.net)} />
                 )}
-                <Stat label={nwLevels ? 'Total liabilities (family level)' : 'Total liabilities'} value={fmt(nwTotalLiabilities)} />
-                <Stat label={nwLevels ? 'Net worth (family level)' : 'Net worth'} value={fmt(nwNet)} />
               </div>
-              <p className="mt-2 text-xs text-gray-400">Total assets = property, cash & other + investments + retirement{nwLevels ? ' + entity net value' : ''}.</p>
+              <p className="mt-2 text-xs text-gray-400">
+                Total assets = property, cash & other + investments + retirement.
+                {nwLevels && nwLevels.hasEntities ? ' Entity amounts (SMSF, trusts, HUFs, companies) are not in the personal figures; they are shown in the family reconciliation above.' : ''}
+              </p>
+              {typeof netWorth.sectionData.historyBasisNote === 'string' && (
+                <p className="mt-1 text-xs text-gray-500" data-testid="report-net-worth-history-basis-note">{netWorth.sectionData.historyBasisNote}</p>
+              )}
               {typeof netWorth.sectionData.groupingNote === 'string' && (
                 <p className="mt-1 text-xs text-gray-500">{netWorth.sectionData.groupingNote}</p>
               )}
@@ -659,7 +666,7 @@ export function ReportPreview({
               />
               <MetricExplainer label="Assets" value={netWorth ? fmt(nwTotalAssets) : '—'} meaning={content.coreFigureDefinition('assets')} />
               <MetricExplainer label="Liabilities" value={netWorth ? fmt(nwTotalLiabilities) : '—'} meaning={content.coreFigureDefinition('liabilities')} />
-              <MetricExplainer label={nwLevels ? 'Net worth (family level)' : 'Net worth'} value={netWorth ? fmt(nwNet) : '—'} meaning={content.coreFigureDefinition('netWorth')} />
+              <MetricExplainer label={nwLevels ? 'Net worth (personal)' : 'Net worth'} value={netWorth ? fmt(nwNet) : '—'} meaning={content.coreFigureDefinition('netWorth')} />
               <MetricExplainer
                 label="Emergency-fund months"
                 value={emergencyFundChart?.months !== null && emergencyFundChart?.months !== undefined ? `${emergencyFundChart.months.toFixed(1)} months` : 'Not available'}

@@ -110,7 +110,11 @@ describe('generateReport honours the gate', () => {
   });
 
   it('an up-to-date existing report is returned as before, without consulting the gate', async () => {
-    reportWorld({ reports: [{ id: 'r1', user_id: USER, report_type_code: 'monthly_financial_health', report_month: '2026-10-01', status: 'ready', generated_at: '2026-10-02T00:00:00Z', created_at: '2026-10-02T00:00:00Z', version_number: 1 }] });
+    // 16-10-2026: a finished report has saved sections (a ready report with none is rebuilt, see reportGenerateAtomicIdempotent.test.ts).
+    reportWorld({
+      reports: [{ id: 'r1', user_id: USER, report_type_code: 'monthly_financial_health', report_month: '2026-10-01', status: 'ready', generated_at: '2026-10-02T00:00:00Z', created_at: '2026-10-02T00:00:00Z', version_number: 1 }],
+      report_sections: [{ id: 's1', report_id: 'r1', user_id: USER, section_code: 'executive_summary', section_title: 'Summary', display_order: 1, section_status: 'included', section_data_json: {}, narrative_text: 'Saved.' }],
+    });
     const g = vi.fn(async () => holdGate);
     const res = await generate(g as never);
     expect(res.alreadyExisted).toBe(true);
@@ -195,9 +199,12 @@ describe('waiting response and the waiting UI', () => {
 
   it('the Generate button retries on its own (and drives the fetch) while held; the Performance page is wrapped by the same gate and fails open', () => {
     const btn = read('components/reports/GenerateReportButton.tsx');
-    expect(btn).toContain('res.status === 202');
+    // 16-10-2026: the 202 handling and the bounded wait moved into lib/reports/apiClient.ts (the button never calls response.json()).
+    const client = read('lib/reports/apiClient.ts');
+    expect(client).toContain('r.status === 202');
+    expect(client).toContain('maxWaitingPolls');
     expect(btn).toContain('/api/investment-intelligence/nav-history');
-    expect(btn).toContain('MAX_POLLS');
+    expect(btn).toContain('driveHistory');
     const page = read('app/(app)/investment-intelligence/performance/page.tsx');
     expect(page).toMatch(/<PriceHistoryGate>[\s\S]*<PerformanceClient \/>[\s\S]*<\/PriceHistoryGate>/);
     expect(read('components/investment-intelligence/PriceHistoryGate.tsx')).toContain('failedOpen');
