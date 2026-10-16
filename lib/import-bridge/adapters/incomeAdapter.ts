@@ -49,6 +49,7 @@ import type {
   RecommendedApplyMode,
 } from '../types';
 import { serialiseValue, deserialiseValue } from '../proposalEngine';
+import { isVariablePayItemKey } from '@/lib/engines/incomeVariablePay';
 
 /** The subset of a canonical `income_sources` row this adapter reads. */
 export interface ExistingIncomeRow {
@@ -303,8 +304,13 @@ export function hasVariablePay(evidence: IncomeEvidence): boolean {
  */
 export function findDuplicateIncome(
   evidence: IncomeEvidence,
-  existing: readonly ExistingIncomeRow[],
+  allExisting: readonly ExistingIncomeRow[],
 ): ExistingIncomeRow | null {
+  // A household's own Bonus / Overtime / Commission source (catalogue items) is never the row a payslip updates, even
+  // when it carries the employer's name: the payslip's regular pay would overwrite the yearly bonus amount. A
+  // payslip's own bonus is carried as one-off pay and is not added again beside a recorded Bonus source
+  // (lib/read-models/income.ts, lib/engines/incomeVariablePay.ts).
+  const existing = allExisting.filter((row) => !isVariablePayItemKey(row.master_item_key));
   const employer = foldEmployer(evidence.employerName);
   if (employer) {
     const byEmployer = existing.find((row) => foldEmployer(row.employer_name) === employer);

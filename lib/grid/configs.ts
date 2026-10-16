@@ -2,6 +2,7 @@ import { FREQUENCY_OPTIONS } from '@/lib/engines/money';
 import { COUNTRY_OPTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
 import { getAssetFieldMetadata } from './assetFieldMetadata';
 import { defaultIsEssentialForExpenseItem } from '@/lib/engines/dashboard';
+import { incomeDefaultsForMasterItem, incomeItemHint } from '@/lib/engines/incomeVariablePay';
 import type { GridConfig } from './types';
 
 export const incomeGridConfig: GridConfig = {
@@ -18,6 +19,10 @@ export const incomeGridConfig: GridConfig = {
   // no longer offered for a brand-new row on any of the 7 registers — see
   // LEGACY_ENTITY_OWNER_RESTRICTIONS' own doc comment (lib/constants.ts).
   restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  // PO request 16-10-2026: Bonus is its own income source, paid once a year, so a new Bonus row starts as Annually
+  // (taxable like salary, from the field default below). The user can change any value.
+  defaultsForMasterItem: incomeDefaultsForMasterItem,
+  itemHint: incomeItemHint,
   fields: [
     { name: 'amount', label: 'Gross Amount', type: 'number', step: '0.01', required: true },
     { name: 'net_amount', label: 'Net Amount (take-home pay)', type: 'number', step: '0.01' },
