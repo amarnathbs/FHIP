@@ -1,34 +1,44 @@
 # Monthly Report net worth and surplus audit - PO production queries (16-10-2026)
 
-All six files are READ ONLY (line 1 says so). They change nothing. Run each one on its own in the Supabase SQL editor of the
-PRODUCTION project, one statement at a time, and send back the result grid (copy as text or screenshot). Output carries record
-ids, the names you see on the screens, amounts and groups only. No email, no address, no document content.
+Part 1 (files 01-06) is READ ONLY and you have already run it. Part 2 (files 10-16) repairs and measures the salary record.
+Run each file on its own in the Supabase SQL editor of the PRODUCTION project, one statement at a time. Output carries record
+ids, names you see on the screens, amounts and groups only, never an email or an address.
 
-Every file looks the user up from the sign-in email inside the query, so nothing needs editing.
+## Part 1 - what the first results showed (already run)
 
-| Order | File | What it answers |
+| File | Result |
+|---|---|
+| `02_cashflow_reproduction.sql` | 19,782 gross / 3,574 net / 4,535 discretionary / 8,362 debt / -9,324. Matches the report. No blank take-home. |
+| `01_income_records.sql` | The Employment Salary record (payslip import, `annually`) has gross 196,994.48 a year but net 3,975.43: the net of ONE fortnightly payslip. |
+| `05_networth_reproduction.sql`, `04_asset_and_liability_records.sql` | Net worth reconciles exactly. The 565,000 Investment Property sits in the investments register as property. |
+| `06_imported_not_in_net_worth.sql` | 17 imported INR fund holdings (statement dated 04/09/2026), about 14,406, not yet added to Net Worth (rule D-05). |
+
+The first reading of the report (a blank take-home on the salary) was wrong for this household: the cause is a record whose gross
+and take-home are on different pay periods.
+
+## Part 2 - repair the salary record (do the steps in order)
+
+You confirmed: pay is FORTNIGHTLY and 3,975.43 is the take-home of ONE payslip, so the take-home for the year is
+3,975.43 x 26 = 103,361.18 (8,613.43 a month). Expected report afterwards: net income about 11,856 a month and a deficit of about
+1,041 a month instead of 9,324.
+
+| Step | File | Writes? |
 |---|---|---|
-| 1 | `02_cashflow_reproduction.sql` | One row. Rebuilds gross income, net income, deductions, expenses, debt and the deficit from the raw records. Compare with the report: 19,782 / 3,574 / 0 / 4,535 / 8,362 / -9,324. |
-| 2 | `01_income_records.sql` | Every income record: gross, take-home, frequency, currency, manual or imported, and `net_known` / `counted_in_report`. Shows which record causes the gap between gross and net. |
-| 3 | `03_expense_and_debt_records.sql` | Every expense and loan repayment behind the 12,897 monthly outflow. |
-| 4 | `05_networth_reproduction.sql` | One row. Rebuilds assets by register (Property cash and other / Investments / Retirement), liabilities, net worth and the wealth-chart groups. Compare with 1,670,298 / 590,000 / 636,000 / 1,385,857 / 1,510,441 and chart 1,960,000 / 21,798 / 25,000 / 636,000 / 253,500. |
-| 5 | `04_asset_and_liability_records.sql` | Every asset, investment, retirement and loan record with its register and chart group. Look for one real property recorded twice (assets and investments). |
-| 6 | `06_imported_not_in_net_worth.sql` | The 17 imported holdings worth 14,406 that the report lists as not in net worth. |
+| 1 | `10_repair_preview.sql` | No. Shows the record, which fields the last payslip apply wrote, and the payslip. Every `ok_` column must say yes. |
+| 2 | `11_repair_backup.sql` | Creates ONE backup table with a copy of the row (production has no managed backups). |
+| 3 | `12_repair_apply.sql` | Changes ONE value in ONE row (net_amount 3,975.43 to 103,361.18). Only fires when the row still holds the confirmed values; running it twice changes nothing. |
+| 4 | `13_repair_verify.sql` | No. Net income and surplus rebuilt from the four income records. Then regenerate the report. |
+| 5 | `14_repair_rollback.sql` | Only if you want it undone: restores the saved value. |
 
-## How to read the first result
+The same repair without SQL: open the Income page, edit Employment Salary and set **Net Amount (take-home pay)** to 103,361.18
+(frequency stays annually). The new **Tax per period** box is an alternative once migration 0285 is applied: enter the tax for a
+whole year because this record is annual.
 
-- `income_sources_with_blank_take_home` above 0: those sources are in gross income but their take-home pay was never entered, so
-  they are left out of net income (rule GAP-09, kept on purpose: a missing take-home is never replaced by the gross). The gap
-  `deductions_gross_less_net_known` is then mostly not tax. Enter the take-home pay on the Income page and the net income, the
-  deficit, the savings rate, the debt-service ratio and the Cash Flow and Debt pillar scores all move together.
-- `surplus_or_deficit_if_all_gross_were_take_home` is the best case if nothing were taken out. Reality sits between the two.
-- `essential_expenses` 0 means no expense row is marked essential. That is why the report shows essential expenses 0 and the
-  emergency-fund months as not available.
+## Part 3 - how many other records look like this (read only, counts only)
 
-## Why the report still shows 17 imported items as "not in net worth"
+| File | Answers |
+|---|---|
+| `15_prevalence_net_to_gross.sql` | Wage records by take-home share of gross (under 10%, 10-30%, plausible, over 100%) and how many have a blank take-home. |
+| `16_prevalence_payslip_frequency_mismatch.sql` | Records written by a payslip apply whose frequency differs from the payslip's pay frequency. |
 
-Rule D-05 (PO decision): a holding read from an uploaded statement is shown on the Investments tab as "Imported, not yet in Net
-Worth" and is added to net worth only when you choose "Add to Net Worth". File 6 lists them. If you want them counted, add them
-there; the report then moves them from the disclosure line into Investments.
-
-If a query reports a missing column, send the exact error text and nothing else is needed.
+If a query reports a missing column, send the exact error text.

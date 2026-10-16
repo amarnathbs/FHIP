@@ -458,7 +458,7 @@ export function ReportPreview({
               </div>
               {/* PO review 16-10-2026: the Dashboard's "take-home pay is unknown" notice, so net income / deficit are never read as complete. */}
               {typeof cashFlow.sectionData.netIncomeNote === 'string' && (
-                <p className="mt-3 text-xs text-gray-600" data-testid="report-net-income-note">{cashFlow.sectionData.netIncomeNote}</p>
+                <p className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900" role="note" data-testid="report-net-income-note">{cashFlow.sectionData.netIncomeNote}</p>
               )}
             </SectionCard>
           </>
@@ -641,6 +641,9 @@ export function ReportPreview({
             className="report-section"
             explain={reportExplain('REPORT_CASH_FLOW', 'Explain the cash-flow figures in this report')}
           >
+            {typeof cashFlow?.sectionData.netIncomeNote === 'string' && (
+              <p className="mb-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900" role="note" data-testid="report-core-net-income-note">{cashFlow.sectionData.netIncomeNote}</p>
+            )}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <MetricExplainer label="Net monthly income" value={fmt(cashFlowChart?.netMonthlyIncome)} meaning={content.coreFigureDefinition('netIncome')} />
               <MetricExplainer label="Monthly expenses" value={fmt(cashFlowChart?.totalMonthlyOutflow)} meaning={content.coreFigureDefinition('expenses')} />
@@ -702,6 +705,11 @@ export function ReportPreview({
         </p>
         {healthScore?.sectionStatus === 'included' && (
           <SectionCard title="Score pillars" className="report-section">
+            {typeof cashFlow?.sectionData.netIncomeNote === 'string' && (
+              <p className="mb-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900" role="note" data-testid="report-score-net-income-note">
+                The Cash Flow, Savings and Debt pillars use net income. {cashFlow.sectionData.netIncomeNote}
+              </p>
+            )}
             <PillarBars pillars={(healthScore.chartData?.pillars as PillarRow[]) ?? []} />
           </SectionCard>
         )}

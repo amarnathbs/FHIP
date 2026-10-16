@@ -142,6 +142,47 @@ export interface GrossBasisComponent {
 
 const cents = (n: number) => Math.round(n * 100);
 
+/** Pays per year of each canonical Income frequency (one_off has no rate and is never converted). */
+const PERIODS_PER_YEAR: Record<string, number> = { weekly: 52, fortnightly: 26, monthly: 12, quarterly: 4, annually: 1 };
+
+/**
+ * PO production audit 16-10-2026. An income row stores gross AND net under ONE `frequency`. A payslip carries ONE
+ * pay's amounts, so proposing them onto an existing row of a different frequency (a fortnightly net of 3,975.43
+ * onto an ANNUAL salary of 196,994.48) mixes two period bases: the row then reads as an annual net of 3,975.43.
+ * Returns the factor that re-expresses one `payFrequency` amount per `rowFrequency`, or null when no conversion
+ * applies (same frequency, or either side has no per-year rate).
+ */
+export function periodConversionFactor(payFrequency: string, rowFrequency: string): number | null {
+  if (payFrequency === rowFrequency) return null;
+  const pay = PERIODS_PER_YEAR[payFrequency];
+  const row = PERIODS_PER_YEAR[rowFrequency];
+  return pay && row ? pay / row : null;
+}
+
+/**
+ * Defence in depth for proposals generated before the conversion above existed (and for any non-convertible
+ * frequency): the amounts of a proposal are expressed in the PROPOSED frequency, so on an existing row they may only
+ * be written together with that frequency, and the frequency only together with both amounts. Returns the problem,
+ * or null when the selection keeps one basis.
+ */
+export function incomePeriodBasisViolation(
+  fields: readonly { fieldName: string; proposedValue: string | null; existingValue: string | null }[],
+  selected: readonly string[],
+): string | null {
+  const freq = fields.find((f) => f.fieldName === 'frequency');
+  if (!freq || freq.existingValue === null || freq.proposedValue === null || freq.proposedValue === freq.existingValue) return null;
+  const chosen = new Set(selected);
+  const amountFields = fields.filter((f) => (f.fieldName === 'amount' || f.fieldName === 'net_amount') && f.proposedValue !== f.existingValue);
+  const anyAmount = amountFields.some((f) => chosen.has(f.fieldName));
+  if (anyAmount && !chosen.has('frequency')) {
+    return `These amounts are per ${freq.proposedValue} but this income entry is ${freq.existingValue}. Apply the frequency with them, or leave the amounts unchanged, so gross and net stay on the same pay period.`;
+  }
+  if (chosen.has('frequency') && amountFields.some((f) => !chosen.has(f.fieldName))) {
+    return `Changing the frequency to ${freq.proposedValue} also needs the payslip gross and net amounts, otherwise the existing amounts would be read as per ${freq.proposedValue}.`;
+  }
+  return null;
+}
+
 /** Pure. See `GrossBasis`. Current-period lines only; YTD is never arithmetic. */
 export function deriveGrossBasis(input: {
   grossPay?: number;
@@ -317,12 +358,20 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     const choice = evidence.frequencyChoice ?? null;
     const scale = choice?.scale ?? 1;
     const scaled = (n: number | undefined) => (n === undefined ? undefined : Number((n * scale).toFixed(2)));
+    // One period basis per row: when updating an existing row of a DIFFERENT frequency, express the payslip's
+    // one-pay amounts in the row's frequency and leave the row's frequency alone (see periodConversionFactor).
+    const payFrequency = choice?.frequency ?? evidence.canonicalFrequency;
+    const basisFactor = target && payFrequency ? periodConversionFactor(payFrequency, target.frequency) : null;
+    const toRowBasis = (n: number | undefined) => (n === undefined || basisFactor === null ? n : Number((n * basisFactor).toFixed(2)));
+    const convertedNeedsConfirmation = basisFactor !== null && !(evidence.frequencyStated || choice);
     const baseRecurringGross = computeRecurringGross(evidence);
-    const recurringGross = scaled(baseRecurringGross);
+    const recurringGross = toRowBasis(scaled(baseRecurringGross));
     const variable = hasVariablePay(evidence);
     const reviewReasons = [...evidence.reviewReasons];
     if (evidence.excludedCurrencyCandidate) reviewReasons.push('existing_income_in_other_currency');
     if (evidence.revises) reviewReasons.push('revised_payslip');
+    if (basisFactor !== null) reviewReasons.push('amounts_converted_to_existing_frequency');
+    if (convertedNeedsConfirmation) reviewReasons.push('frequency_uncertain');
     if (evidence.grossBasis?.reimbursementBasis === 'assumed_included') reviewReasons.push('reimbursement_inclusion_assumed');
     if (evidence.grossBasis?.salarySacrificeBasis === 'unknown') reviewReasons.push('salary_sacrifice_basis_unknown');
     if (target && target.master_item_key === 'employment_salary' && !foldEmployer(target.employer_name)
@@ -352,7 +401,8 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     // --- amount: GROSS recurring, never net ---------------------------------
     if (recurringGross !== undefined) {
       fields.push(field('amount', recurringGross, target, {
-        reasonCode: variable ? 'recurring_gross_excludes_variable_pay' : 'gross_from_payslip',
+        reasonCode: basisFactor !== null ? 'gross_converted_to_existing_frequency' : variable ? 'recurring_gross_excludes_variable_pay' : 'gross_from_payslip',
+        requiresConfirmation: convertedNeedsConfirmation,
       }));
       if (variable) {
         reviewReasons.push('variable_pay_excluded_from_recurring');
@@ -365,7 +415,10 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     // A period containing a bonus has an unrepresentative net, so proposing it
     // as the ongoing net would be misleading.
     if (evidence.netPay !== undefined && !variable) {
-      fields.push(field('net_amount', scaled(evidence.netPay), target, { reasonCode: scale !== 1 ? 'net_converted_to_chosen_frequency' : 'net_from_payslip' }));
+      fields.push(field('net_amount', toRowBasis(scaled(evidence.netPay)), target, {
+        reasonCode: basisFactor !== null ? 'net_converted_to_existing_frequency' : scale !== 1 ? 'net_converted_to_chosen_frequency' : 'net_from_payslip',
+        requiresConfirmation: convertedNeedsConfirmation,
+      }));
     } else if (evidence.netPay !== undefined && variable) {
       reviewReasons.push('net_not_proposed_period_includes_variable_pay');
     }
@@ -375,7 +428,9 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     // marked requires_confirmation unless the payslip literally stated it
     // (spec section 27). WP-09 (GAP-12): a frequency the user CHOSE for a
     // semimonthly / irregular / unknown payslip is proposed as confirmed.
-    if (choice) {
+    if (basisFactor !== null) {
+      // The row keeps its own frequency; the amounts above were converted to it. Nothing to propose here.
+    } else if (choice) {
       fields.push(field('frequency', choice.frequency, target, {
         reasonCode: scale !== 1 ? 'semimonthly_converted_to_chosen_frequency' : 'frequency_chosen_by_user',
       }));
@@ -405,7 +460,7 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
       recommendedApplyMode,
       duplicateOfEntityId: duplicate?.id ?? null,
       fields,
-      summary: buildSummary(evidence, recurringGross, variable, target, reviewReasons),
+      summary: buildSummary(evidence, recurringGross, variable, target, reviewReasons, basisFactor !== null && target ? target.frequency : null),
     };
   },
 
@@ -433,6 +488,9 @@ export const incomeAdapter: ImportDomainAdapter<IncomeEvidence, ExistingIncomeRo
     for (const name of selected) {
       if (!known.has(name)) return { ok: false, error: `Field ${name} is not part of this proposal.` };
     }
+    // Gross and net share one frequency: never write them on different pay-period bases.
+    const basisProblem = incomePeriodBasisViolation(fields, selected);
+    if (basisProblem) return { ok: false, error: basisProblem };
     return { ok: true };
   },
 };
@@ -455,6 +513,7 @@ function buildSummary(
   variable: boolean,
   target: ExistingIncomeRow | null,
   reviewReasons: string[],
+  convertedToFrequency: string | null = null,
 ): ImportProposalDraft['summary'] {
   const lines: { label: string; value: string; note?: string }[] = [];
   const money = (n: number | undefined) =>
@@ -477,8 +536,13 @@ function buildSummary(
   lines.push({
     label: 'Ordinary gross pay',
     value: money(recurringGross),
-    note: variable ? 'Bonus, overtime and commission are left out of your regular income' : undefined,
+    note: convertedToFrequency
+      ? `Converted from one pay to ${convertedToFrequency} so it matches your existing entry (its frequency is not changed)`
+      : variable ? 'Bonus, overtime and commission are left out of your regular income' : undefined,
   });
+  if (convertedToFrequency && evidence.netPay !== undefined && !variable) {
+    lines.push({ label: 'Take-home pay (same basis)', value: money(Number((evidence.netPay * (periodConversionFactor(evidence.frequencyChoice?.frequency ?? evidence.canonicalFrequency ?? '', convertedToFrequency) ?? 1) * (evidence.frequencyChoice?.scale ?? 1)).toFixed(2))), note: `Per ${convertedToFrequency}, on the same basis as the gross above` });
+  }
   const basis = evidence.grossBasis;
   if (basis && basis.reimbursementBasis !== 'none') {
     lines.push({

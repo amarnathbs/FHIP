@@ -22,6 +22,7 @@
  */
 import type { IncomeReadModelData, PlannedIncomeExclusion } from '@/lib/read-models/income';
 import type { ProvenanceKind } from '@/lib/read-models/core/types';
+import { NET_BASIS_LABELS, type NetBasis } from '@/lib/engines/incomeNetBasis';
 import { fdhPages } from '@/lib/import-bridge/fdhRoutes';
 
 export const PLANNED_EXCLUSION_LABELS: Record<PlannedIncomeExclusion, string> = {
@@ -39,8 +40,12 @@ export interface PlannedIncomeLineDto {
   frequency: string;
   currency: string;
   grossNative: number;
-  /** null = net unknown (never the gross). */
-  netNative: number | null;
+  /** The take-home used: entered, gross minus tax, or the gross assumed as take-home (see netBasis). */
+  netNative: number;
+  taxNative: number | null;
+  netBasis: NetBasis;
+  /** Plain words for netBasis, e.g. "Gross treated as take-home: no tax deducted". */
+  netBasisLabel: string;
   grossMonthly: number | null;
   netMonthly: number | null;
   counted: boolean;
@@ -92,8 +97,8 @@ export interface IncomeActualsOk {
   planned: {
     lines: PlannedIncomeLineDto[];
     grossMonthly: number;
-    netKnownMonthly: number;
-    netUnknownCount: number;
+    netMonthly: number;
+    netAssumedCount: number;
     unconverted: { count: number; byCurrency: Record<string, number> };
   };
   actual: {
@@ -107,9 +112,11 @@ export interface IncomeActualsOk {
   variablePay: { lines: VariablePayLineDto[]; grossMonthly: number };
   combined: {
     grossMonthly: number;
-    /** null when some counted component's net is unknown -- never guessed. */
-    netMonthly: number | null;
-    netKnownMonthly: number;
+    /** The one net-income figure (entered, derived from tax, or the gross assumed as take-home). */
+    netMonthly: number;
+    netAssumedMonthly: number;
+    /** Sources whose gross is being treated as take-home (no tax deducted), by name. */
+    assumedNetSources: { name: string; grossMonthly: number }[];
     grossIncludesNetFloor: boolean;
   };
   hasPlanned: boolean;
@@ -136,6 +143,9 @@ export function toIncomeActualsDto(data: IncomeReadModelData): IncomeActualsOk {
         currency: p.currency,
         grossNative: p.grossNative,
         netNative: p.netNative,
+        taxNative: p.taxNative,
+        netBasis: p.netBasis,
+        netBasisLabel: NET_BASIS_LABELS[p.netBasis],
         grossMonthly: p.grossMonthly,
         netMonthly: p.netMonthly,
         counted: p.excludedReason === null,
@@ -145,8 +155,8 @@ export function toIncomeActualsDto(data: IncomeReadModelData): IncomeActualsOk {
         hasPayslipDetails: p.provenance.kind === 'payslip_import',
       })),
       grossMonthly: data.planned.grossMonthly,
-      netKnownMonthly: data.planned.netKnownMonthly,
-      netUnknownCount: data.planned.netUnknownCount,
+      netMonthly: data.planned.netMonthly,
+      netAssumedCount: data.planned.netAssumedCount,
       unconverted: { count: data.planned.unconverted.count, byCurrency: { ...data.planned.unconverted.byCurrency } },
     },
     actual: {
@@ -190,7 +200,8 @@ export function toIncomeActualsDto(data: IncomeReadModelData): IncomeActualsOk {
     combined: {
       grossMonthly: data.combined.grossMonthly,
       netMonthly: data.combined.netMonthly,
-      netKnownMonthly: data.combined.netKnownMonthly,
+      netAssumedMonthly: data.combined.netAssumedMonthly,
+      assumedNetSources: data.combined.assumedNetSources,
       grossIncludesNetFloor: data.combined.grossIncludesNetFloor,
     },
     hasPlanned: data.flags.hasPlanned,
