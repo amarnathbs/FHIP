@@ -1,6 +1,6 @@
 # Entity-level assets and liabilities (SMSF, Family Trust, HUF, Company): design and plan (16-10-2026)
 
-Status: DESIGN AND PLAN, plus one small read-only slice (section 12). No migration is written, nothing is applied anywhere. Branch `feat/entity-level-assets-liabilities-design-20261016`, based on origin/main `984ac2b`. Not pushed.
+Status: DESIGN AND PLAN, plus one small read-only slice (section 12). Updated 17-10-2026: origin/main `f2831a7` (personal net worth basis `a2a0f24`) merged in; production diagnosis folded in (section 8); interim click-by-click path added (section 8.2). No migration is written, nothing is applied anywhere. Branch `feat/entity-level-assets-liabilities-design-20261016`, based on origin/main `984ac2b`. Not pushed.
 
 Admin Architecture Standard: not engaged (no `app/(app)/admin/**`, `app/api/admin/**`, Admin role, capability, RLS/RPC consumed by Admin, or Admin report is created or changed). If Phase 5 adds an Admin diagnostic, the standard applies at that point.
 
@@ -32,8 +32,8 @@ Evidence labels used below: READ (code read in this branch), UNIT-TESTED (vitest
 ## 3. Exactly why a personal-level liability assigned to an SMSF double counts (and the other two ways the SMSF is wrong)
 
 1. DOUBLE DEDUCTION (the debt counted twice). The SMSF fund value is a NET figure in both modes (0084: Summary = net by definition; Detailed = holdings minus linked loans). If the same loan is also a personal `liabilities` row (owner `smsf`, or linked), `computeDashboard` subtracts it AGAIN, because `totalLiabilities` has no owner filter. Example from the netWorth note: an SMSF with a 500,000 property and a 365,000 loan reports -230,000 instead of 135,000. Main's levels model avoids this ONLY when the loan is linked to an active fund; an unlinked `owner='smsf'` liability is deducted once at the SMSF block, which is again a second deduction if the fund value the user typed was already net.
-2. DOUBLE ASSET (the fund counted twice). The PO household: fund row 503,000 (owner self, in the SMSF section) AND grid row "Other Retirement Assets" 133,000 (owner smsf). Both are active retirement rows; the family figure adds 636,000 for one fund whose real net is 133,000. The 503,000 is the property GROSS typed into a field that means NET; the 133,000 is the real net typed again as a second row; the 370,000 loan is nowhere. Overstatement 503,000 (1,510,441 shown vs 1,007,441 correct).
-3. PERSONAL BASIS LEAK. The fund row has owner self, so any "exclude entity rows by owner tag" rule keeps it in the PERSONAL figure (the PO's 874,441 only holds once the 503,000 row is out). See overlap O1 (section 14).
+2. DOUBLE ASSET (the fund counted twice). The PO household: fund row 503,000 (owner self, in the SMSF section) AND grid row "Other Retirement Assets" 133,000 (owner smsf). Both are active retirement rows; before the personal-basis change the family figure added 636,000 for one fund whose real net is 133,000 (1,510,441 shown vs 1,007,441 correct, overstatement 503,000). The production diagnosis (section 8.1) shows why the fund row reads 503,000: the fund is itemised (holdings 503,000) and its property loan is inactive and unlinked, so the fund's own net computes to 503,000; the 133,000 is the real net typed by hand as a second row. On main today the model counts only the 133,000 row while both exist (fund record shown, not counted), so the family figure is 1,007,441 by offsetting, not by design.
+3. PERSONAL BASIS LEAK (RESOLVED on main by `a2a0f24`). The fund row has owner self, so an owner-tag rule alone would keep it in the PERSONAL figure; main now classifies `master_item_key='smsf'` as entity-held (`isSmsfFundRow`, `lib/engines/netWorthBasis.ts`), so personal is 874,441 with the row present. See O1 (section 14).
 
 All three are the same root cause: entity money is stored in personal registers and kept apart only by a runtime filter on an `owner` text tag that seven separate read models and several engines each have to remember. Migration 0134's header already named this class of defect and chose structural separation (dedicated tables the personal engine never reads) for Company/Trust/HUF. SMSF is the one entity that was never given that treatment for its liabilities.
 
@@ -103,7 +103,7 @@ Legacy shapes and their handling (every action is user-confirmed, logged and rev
 | Entity with a typed net AND itemised lines | SQL section `DATA QUALITY: entity with both ...`; same check in the app | Notice with a two-button choice (keep itemised: retire the net; keep the net: retire the lines), through the switch RPCs so history is kept. |
 | Register rows tagged `company` / `family_trust` (legacy tags) | existing `duplicateRisk` warning | Unchanged this phase; the move action is extended to them in Phase 3. |
 
-Counting rule that makes the double count structurally impossible: once an SMSF has an entity-level figure (a fund record with a net source), register rows tagged `smsf` are NOT counted in the SMSF block; they are listed as "legacy rows not counted" with the adopt/archive action. Until the fund record exists they keep counting as they do today. Creating the fund therefore adopts the legacy rows in the same step, so the family figure never dips or doubles between steps.
+Counting rule that makes the double count structurally impossible: once an SMSF has an entity-level figure (a fund record with a net source), register rows tagged `smsf` are NOT counted in the SMSF block; they are listed as "legacy rows not counted" with the adopt/archive action. Until the fund record exists they keep counting as they do today. Creating the fund therefore adopts the legacy rows in the same step, so the family figure never dips or doubles between steps. NOTE (17-10-2026): main today does the OPPOSITE while both exist: it counts the fund-level row (owner smsf) and shows the SMSF section's fund record uncounted (`suppressedFundRecord`). That is a sound stop-gap against double counting, but it hides every SMSF edit until the row is removed (trap T5, section 8.2). Phase 3 reverses the precedence so the entity record wins.
 
 ## 7. UX
 
@@ -140,31 +140,82 @@ Tables collapse to stacked cards below 640 px (no page-level horizontal scroll);
 
 ## 8. Household repair plan (PO household, AUD). Nothing here is run by this agent.
 
-### 8.1 Diagnose first (read-only, safe, run now)
+### 8.1 Production diagnosis (read-only, reported by the coordinator 17-10-2026) and what it changes in this design
 
-`docs/architecture/entity_level_assets_liabilities_2026-10-16/01_diagnose_entity_rows_READ_ONLY.sql`: one select statement (PGLITE-tested to be read-only and to show only the named user). It lists the retirement register, `smsf_funds`, holdings, the liabilities register with link status, entity-tagged assets/investments, registered entities, and four data-quality/total rows. The PO household should return: fund row 503,000 owner self; "Other Retirement Assets" 133,000 owner smsf; personal assets plus investments 2,260,298; personal liabilities 1,385,857; no SMSF-related liability; "SMSF recorded twice" 636,000. The statements about the production rows (that 503,000 is the SMSF-section fund row, that 133,000 is a grid row) are INFERRED from the PO's description and the code; the diagnosis is what proves them. NOT VERIFIED against production.
+The read-only run (`01b`, user `d03a4dcc...`) returned:
 
-### 8.2 Interim shape the PO can use now (so personal = 874,441 and family = 1,007,441)
+| Register | Row | Detail |
+|---|---|---|
+| Retirement | `SMSF` 503,000 | owner self, `master_item_key` smsf, ACTIVE: the fund row |
+| Retirement | `Other Retirement Assets` 133,000 | owner smsf |
+| Retirement | `Spouse Contribution` 0 | owner spouse |
+| `smsf_funds` | one fund | mode DETAILED, `summary_balance` 138,000, `detailed_net_value` 503,000; the fund row is the 503,000 retirement row |
+| `smsf_holdings` | residential property 475,000 ("250 Elizebth st Melbourne 3000 "), Bank Australia cash 3,000, "Secured finance" cash_account 25,000 | sum 503,000 |
+| Liabilities | personal `SMSF property loan`, joint, 365,000 | INACTIVE and not linked to the fund (the PO says the loan is 370,000: to be confirmed) |
+| Assets | `Trust Assets` 495,000 | owner smsf, INACTIVE |
+| Data quality | "SMSF recorded twice" | 636,000 (503,000 + 133,000) |
 
-The PO's stated interim: remove the 503,000 owner-self SMSF row; keep the 133,000 owner-smsf row as the fund's net.
+Corrections to my earlier inferences (section 3): the 503,000 is NOT a gross value typed into a net field. The fund is already itemised on the asset side (Detailed mode, three holdings); the stored `summary_balance` 138,000 is 503,000 minus the 365,000 loan from when the loan was active and linked. The loan was later deactivated, and the existing trigger recomputed the fund net to 503,000 (PGLITE-reproduced). So the real gap is the one the PO described: the debt is not attached to the fund. The earlier Option B (set the fund's value to 0) is NOT available here (the fund is in Detailed mode; the balance is derived and guarded by migration 0090). Option A (SQL archive of the fund row, files 02-04) still runs but is no longer recommended: it archives a fund that has holdings, and an archived `smsf` row blocks re-creating the fund.
 
-- There is no way to delete the fund row in the UI (the Retirement grid excludes it and the SMSF card has no archive). Two ways, both reversible:
-  - Option A (the PO's words), SQL: `02_interim_option_a_PREVIEW_READ_ONLY.sql`, then `03_interim_option_a_APPLY.sql` (guarded, one transaction, makes its own copy tables with row level security on because production has no managed backups, archives rather than deletes), `04_interim_option_a_ROLLBACK.sql`. PGLITE-tested including two negative controls (wrong amount and unknown e-mail refuse and change nothing) and a rollback. HAZARD (found in the code, section 2): an archived fund row keeps the unique key, so "Create SMSF" will fail until migration 0289 makes fund creation reuse the archived row.
-  - Option B (recommended, no SQL): in Retirement > SMSF, set the fund's summary value to 0. Same effect on every total, no archived row, nothing to repair later, undone by typing the value back. Not browser-tested.
-- Expected effect (hand calculation, UNIT-TESTED in `tests/unit/entityLevelSqlPackPglite.test.ts` for the personal side): personal 2,260,298 - 1,385,857 = 874,441; family 874,441 + 133,000 = 1,007,441. Today's reported 1,510,441 falls by exactly 503,000.
+With the personal-basis change now on main (`a2a0f24`, merged here with origin/main `f2831a7`) production shows personal 874,441 and family 1,007,441. That 1,007,441 is not because the fund is counted at its net: main's model counts the fund-level row (owner smsf, 133,000) and shows the SMSF section's fund record (503,000) as "shown but not counted" while both exist (`suppressedFundRecord` in `lib/engines/netWorthLevels.ts`). The family figure is right today because the 133,000 row happens to equal the true net; it becomes right for the correct reason after the steps below.
 
-### 8.3 Cutover to entity-level rows once built (asset 503,000 + liability 370,000 at the SMSF)
+### 8.2 Interim path using ONLY the existing UI (click by click)
 
-Invariant at EVERY step: family net worth stays 1,007,441 and the SMSF contributes 133,000 exactly once.
+Goal: the SMSF's own net (503,000 minus the loan) is computed by the fund itself (migration 0084, Detailed mode), and the duplicate `Other Retirement Assets` 133,000 row is removed. The loan amount you type decides the fund net.
 
-1. Take the diagnosis again and keep the output (also the "before" evidence). Take a backup copy of the SMSF-related rows with the pattern of `03` (copy tables with row level security on).
-2. Open the new SMSF fund screen. The fund exists (Option B) or is re-activated (Option A, thanks to the 0289 reuse fix). Choose "Use these existing SMSF rows as the starting net value": the 133,000 grid row is archived and the fund records net-only 133,000 in one step (logged). Family stays 1,007,441.
-3. Choose "Itemised (recommended)". Enter, inside the switch dialog: asset "Property" 503,000 AUD; liability "Property loan" 370,000 AUD. The dialog shows derived net 133,000, variance 0, and "the typed net value of 133,000 will be kept in history and removed from the figures". Confirm. Family stays 1,007,441; the net input is gone.
-4. Check: the diagnosis shows no `SMSF recorded twice`, no SMSF-owned active retirement row, no SMSF-related personal liability; the Net Worth panel reconciles personal 874,441 + SMSF 133,000 = family 1,007,441.
-5. Rollback at any time: "Undo last mode change" (restores the typed net 133,000 and retires the lines); the adopted grid row is restored from its log entry; the SQL copy tables remain.
-6. If the PO keeps an Option A archived fund row: step 2 uses the reuse path; if the fund record was created fresh, the archived row is reused, not duplicated (tested in Phase 1).
+Before you start: have the loan amount confirmed (365,000 or 370,000). Do the steps in one sitting, in this order, and do not open the Dashboard or the Monthly Report between steps 1 and 3 (the Dashboard stores this month's history point every time it loads).
 
-DEV rehearsal first (the PO household's shape seeded on DEV with the PO attending), then production. No production access is requested or used by this agent.
+| Step | Where and what to click | What it does to Personal / SMSF / Family |
+|---|---|---|
+| 0 | Dashboard: note personal 874,441 and family 1,007,441. | Nothing changes. |
+| 1 | Sidebar "Liabilities" > "+ Add Liability" > "What are you adding?" choose "Custom item..." > Name "SMSF property loan" (add the lender to the name if it is refused as a duplicate) > Owner "SMSF" > Outstanding Balance **0** > Currency AUD > Save. | Nothing moves (a zero loan changes nothing). If the form refuses 0, see T3. |
+| 2 | Sidebar "Investment & Retirement" > "Retirement" tab > "SMSF" section (the fund card already reads "Detailed Mode - Active valuation") > "Associated Debt" > in the "Link existing liability..." list choose the new "SMSF property loan" > "Link". | Personal: unchanged (a linked loan is the fund's debt, not yours). Fund net: still 503,000. Family: unchanged 1,007,441. |
+| 3 | Sidebar "Liabilities" > "Edit" on "SMSF property loan" > set Outstanding Balance to the confirmed amount (365,000 or 370,000) > Save. | The database recomputes the fund: Detailed Net Value = holdings 503,000 minus the linked loan: 365,000 gives 138,000; 370,000 gives 133,000. The fund row in Retirement follows the new net. **Personal 874,441 (unchanged). Family still 1,007,441**: while the 133,000 row exists, main counts only that row for the SMSF and shows the fund record without counting it, so this step is invisible in the family figure (T5). Check the SMSF card: "Detailed Net Value" 138,000 (or 133,000) and "Linked SMSF Liabilities" the loan. |
+| 4 | "Investment & Retirement" > "Retirement" tab > in the grid find "Other Retirement Assets" (133,000, owner SMSF) > "Remove". | The duplicate is archived (soft; nothing is deleted). The fund record is no longer suppressed: SMSF block = the fund net. **Loan 365,000: SMSF 138,000, family 874,441 + 138,000 = 1,012,441. Loan 370,000: SMSF 133,000, family 874,441 + 133,000 = 1,007,441.** Personal 874,441 either way. The "possible double count" note disappears. |
+| 5 | Dashboard: confirm personal 874,441 and family 1,012,441 (365,000) or 1,007,441 (370,000). | Done. |
+
+Outcomes (UNIT-TESTED in `tests/unit/entityLevelInterimPathNetWorth.test.ts` with the real `computeNetWorthLevels`; the fund recompute is PGLITE-tested in `tests/unit/entityLevelSqlPackPglite.test.ts` against the real migration ledger):
+
+| State | Personal | SMSF block | Family |
+|---|---|---|---|
+| Today (fund record 503,000 + 133,000 row, no loan) | 874,441 | 133,000 (503,000 shown, not counted) | 1,007,441 |
+| After step 3, loan 365,000 | 874,441 | 133,000 (the row still masks the fund) | 1,007,441 |
+| After step 4, loan 365,000 (fund net 138,000) | 874,441 | 138,000 | **1,012,441** |
+| After step 4, loan 370,000 (fund net 133,000) | 874,441 | 133,000 | **1,007,441** |
+
+The 5,000 between the two loan amounts is real money: confirm the amount rather than choose it by the family number.
+
+What the personal-basis model does once the 133,000 row is removed and the fund row's balance is the computed net: the fund row (`master_item_key='smsf'`) is classified as the SMSF entity whoever owns it, so it is never in the personal figure; it counts once in the SMSF block at its balance (the computed net); the linked loan is recognised as already inside that balance (netted memo, not deducted again) and is excluded from personal figures, from personal DTI/DSR and from the family deduction. Nothing is counted twice.
+
+Traps (all found in the code; none needs a code change):
+
+- T1 ORDER. Removing the 133,000 row BEFORE the loan is linked and entered makes the fund record count at its gross 503,000: family 1,377,441 until the loan is linked (tested). Do step 4 last.
+- T2 TRANSIENT DIP. A loan entered with a real balance and not yet linked is deducted at the SMSF (owner SMSF) or from you personally (owner joint/self): family 642,441, and personal 509,441 in the joint case (tested). That is why step 1 enters the loan at 0, links it, then sets the amount. Do not open the Dashboard during a dip.
+- T3 ZERO BALANCE. The API accepts 0 (`balance` min 0). If the Add form refuses 0, enter 1, link, then Edit to the real amount; the arithmetic is the same (not browser-tested).
+- T4 ARCHIVED ROWS AND UNIQUE KEYS. The inactive "SMSF property loan" (joint, 365,000) and inactive "Trust Assets" (495,000) cannot be reactivated from the UI (the grids list active rows only; custom rows are never resurrected). Leave them inactive: reactivating "Trust Assets" would add 495,000 to the SMSF. Step 1 creates a NEW loan row. Removing "Other Retirement Assets" archives it and its `master_item_key` stays reserved by `unique(user_id, master_item_key)`, so adding that item again later reuses the same row. The `smsf` key is held by the existing fund row: never archive the fund row (an archived one blocks "Create SMSF" until migration 0289).
+- T5 THE 133,000 ROW WINS WHILE IT EXISTS. With both a fund-level row and the fund record, main counts only the fund-level row and shows the fund record uncounted. So SMSF edits (holdings, the loan) do not move the family figure until step 4; step 3 looks like it did nothing. Expected, not a fault. (This precedence is the opposite of what section 6 recommends for the build: the entity record should win and legacy rows be listed. Phase 3 reverses it.)
+- T6 SUMMARY VALUE STAYS 138,000. The fund card's "Summary Value" is a recorded reference that cannot be edited in Detailed mode. With a 370,000 loan the Reconciliation panel shows "Difference -5,000" in red against it. Informational only (the mode is already Detailed and nothing blocks); do not switch the fund back to Summary to "fix" it.
+- T7 HISTORY BASIS (the one defect-like effect on this path). The stored monthly history point and the history chart are kept on the pre-decision all-rows basis, which still subtracts a linked loan a second time (the known P0-1 behaviour). For the 365,000 loan this month's stored point is 647,441 (874,441 + 138,000 - 365,000) while the headline family figure is 1,012,441; the bridge line "SMSF loan counted once" (-365,000) explains it exactly (tested). It affects only the history chart and month-on-month movement, never the headline, and is labelled on screen. Not changed here (the history basis is a certified, PO-owned choice, item 2 of the net-worth note); reported.
+- T8 THE LINKED LOAN STAYS LISTED. After linking, the loan is still listed on the Liabilities page but is not in personal totals; the grid footer shows it on the entity-held line. Expected.
+- T9 OWNER TAG. Choosing Owner "SMSF" for the new loan is optional once linked (the link already makes it the fund's debt); it keeps the loan out of personal figures even if the link is ever removed. Phase 4 will stop offering "SMSF" on NEW rows; this row is already entered.
+
+Rollback at any time: Retirement > SMSF card > Associated Debt > "Unlink" returns the fund net to 503,000; add "Other Retirement Assets" 133,000 again (owner SMSF) to restore today's counting. Nothing was deleted.
+
+### 8.3 Diagnose again after the steps (read-only)
+
+`docs/architecture/entity_level_assets_liabilities_2026-10-16/01_diagnose_entity_rows_READ_ONLY.sql` (PGLITE-tested read-only): expect the fund row at 138,000 (or 133,000), "Other Retirement Assets" shown inactive, one active SMSF-linked liability, and no "SMSF recorded twice" row.
+
+### 8.4 Cutover to entity-level rows once built (asset 503,000 + liability 370,000 at the SMSF)
+
+Invariant at EVERY step: family net worth equals the interim result (1,007,441 for 370,000) and the SMSF contributes its net exactly once.
+
+1. Re-run the diagnosis; keep the output.
+2. Open the new SMSF screen: the fund already has three itemised holdings (503,000) and one linked loan. The "Move to SMSF" action turns the linked personal liability into an `smsf_liabilities` row (370,000) and archives and unlinks the personal one in one logged transaction. Fund net stays 133,000; family stays 1,007,441.
+3. The fund is already itemised (Detailed): there is no typed net to retire. The stale `summary_balance` (138,000) is cleared into the mode log by the first mode-rule step, with the user's confirmation, never silently.
+4. Re-run the diagnosis: no SMSF-related personal liability, no SMSF-owned active retirement row.
+5. Rollback: "Undo last change" from the mode log; the archived personal loan row and any copy tables remain.
+
+Because this household is already itemised on the asset side, Phase 1 is smaller for the PO than for a net-only fund; the interim links above are exactly what the build converts.
 
 ## 9. PO decisions, with recommendation (answer these before Phase 1)
 
@@ -177,7 +228,7 @@ DEV rehearsal first (the PO household's shape seeded on DEV with the PO attendin
 | D5 | Switching mode when the new net differs from the old | Allowed ONLY with an explicit confirmation showing the variance; zero variance needs no extra step. (Alternative: keep the current 0084 hard $0-variance gate for SMSF; stricter, but it blocks a user whose old typed net was simply wrong, as the PO's 503,000 was.) |
 | D6 | New personal-register rows with owner SMSF (and other registers' entity owners) | Block in UI and API now (Phase 4); DB trigger only after writers are audited. Existing rows get a "Move to SMSF" action. |
 | D7 | SMSF loans entered via personal liability + link | Keep readable; stop offering "link a liability" once the fund is itemised; offer "Move into the fund". |
-| D8 | Interim now: Option A (SQL) or B (set fund value to 0) | B: no SQL, no archived-row trap. |
+| D8 | Interim now | SUPERSEDED by the production diagnosis: use the existing-UI path of section 8.2 (add the loan at 0, link it in the SMSF card, enter the amount, remove the 133,000 row). Options A and B are withdrawn (B is impossible in Detailed mode; A archives a fund that has holdings). Confirm the loan amount (365,000 or 370,000): it changes family net worth by 5,000. |
 | D9 | More than one SMSF per person | Not supported by the schema today (one `smsf` row per user). Confirm one is enough; supporting two means changing the unique key and the fund-row model (own phase). |
 | D10 | Underwater entity (net negative) | Show and count as negative; no clamping. |
 | D11 | Company: ownership share applied; Trust and HUF: full (already decided 16-10-2026) | Keep as decided; hide the percentage field for Trust/HUF (open item 6 of the net-worth note). |
@@ -222,7 +273,7 @@ READ-ONLY diagnostic that tells a user their personal registers may double count
 - `components/entities/EntityRegisterNotice.tsx`: fetches the existing `/api/retirement`, `/api/liabilities`, `/api/smsf` and `/api/smsf/{id}/property-loan`, renders an amber `role="note"` box, renders NOTHING when there is nothing to say and nothing on any read failure.
 - Mounted with one line each in `app/(app)/retirement/page.tsx` and `app/(app)/liabilities/page.tsx`.
 - Why not "block assigning a personal liability to an entity" as the slice: today the SMSF-owned or linked personal liability is the ONLY way to record an SMSF loan; blocking it before the replacement exists would remove the user's only route. The block is Phase 4.
-- Tests: `tests/unit/entityRegisterDiagnostics.test.ts` (12, UNIT-TESTED; PO oracle 503,000 + 133,000 = 636,000; quiet on the interim and corrected shapes; mixed currencies never added; input not mutated; pages wired; sabotage run: reversing the owner test and the linked test made 6 named tests fail, restored, 12 pass). `tests/unit/entityLevelSqlPackPglite.test.ts` (11, PGLITE replay of the real ledger 0001..0285; PO fixture; personal assets 2,260,298, personal liabilities 1,385,857, net 874,441, family 1,007,441; read-only proof; cross-user isolation; apply/rollback with two negative controls).
+- Tests: `tests/unit/entityRegisterDiagnostics.test.ts` (12, UNIT-TESTED; PO oracle 503,000 + 133,000 = 636,000; quiet on the interim and corrected shapes; mixed currencies never added; input not mutated; pages wired; sabotage run: reversing the owner test and the linked test made 6 named tests fail, restored, 12 pass). `tests/unit/entityLevelSqlPackPglite.test.ts` (17, PGLITE replay of the real ledger 0001..0285: the SQL pack on the PO fixture, plus six tests that rebuild the production fund shape - Detailed, summary 138,000, holdings 475,000 + 3,000 + 25,000, loan inactive - and prove the interim path: unlinked loan changes nothing, linking at 0 keeps 503,000, 365,000 gives net 138,000, 370,000 gives 133,000, unlinking returns 503,000). `tests/unit/entityLevelInterimPathNetWorth.test.ts` (10, UNIT-TESTED against the real post-merge `computeNetWorthLevels`: every step of section 8.2, both loan amounts, the wrong-order and transient traps, the history-basis bridge, one negative control).
 - Not done and not claimed: a browser check of the notice (no signed-in session; no passwords typed), DEV or production verification.
 
 ## 13. Tests required for the build phases (hand oracles first)
@@ -243,17 +294,17 @@ Other required suites: RLS and tenant isolation on the new tables as the real ro
 
 ## 14. Overlap with the other agent (`feat/personal-networth-excludes-smsf-fund-20261016`, worktree `D:/FHIP/.claude/worktrees/personal-networth`)
 
-Its uncommitted changes touch: `lib/engines/netWorthLevels.ts`, `lib/services/netWorthLevelsData.ts`, `lib/engines/dashboard.ts`, `lib/services/dashboardData.ts`, `lib/engines/financialDna.ts`, `lib/engines/forecast/engine.ts`, `lib/services/forecastCanonicalInputs.ts`, `lib/services/forecastData.ts`, `lib/services/twinData.ts`, `lib/engines/reportSections.ts`, `lib/engines/reportSectionsPremium.ts`, the Dashboard components, `ReportPreview.tsx`, and new `lib/engines/netWorthBasis.ts`, `lib/engines/forecast/varianceBasis.ts`.
+(Historical, as of 16-10-2026; that branch has since merged to main as `a2a0f24`.) Its changes touched: `lib/engines/netWorthLevels.ts`, `lib/services/netWorthLevelsData.ts`, `lib/engines/dashboard.ts`, `lib/services/dashboardData.ts`, `lib/engines/financialDna.ts`, `lib/engines/forecast/engine.ts`, `lib/services/forecastCanonicalInputs.ts`, `lib/services/forecastData.ts`, `lib/services/twinData.ts`, `lib/engines/reportSections.ts`, `lib/engines/reportSectionsPremium.ts`, the Dashboard components, `ReportPreview.tsx`, and new `lib/engines/netWorthBasis.ts`, `lib/engines/forecast/varianceBasis.ts`.
 
 This round touches NONE of those. Files this round changed: two one-line mounts (`app/(app)/retirement/page.tsx`, `app/(app)/liabilities/page.tsx`) plus new files only. Future overlaps to coordinate:
 
-- O1 (decision, not yet a conflict): `netWorthBasis.ts` classifies "entity-held" by OWNER TAG only (`smsf`, `family_trust`, `company`), and its own comment says "an SMSF member balance recorded against a person (owner self/spouse/joint) is personal". The SMSF section's fund row is owner self by construction (`smsf_create_fund`, `lib/validation/smsf.ts`), so after that branch merges the fund row stays in the PERSONAL figure unless the row is removed (as in the PO's interim). Recommend that branch (or Phase 3 here, D3) classify `master_item_key='smsf'` as entity-held. This matters for every household with a fund, not only the PO's.
+- O1 RESOLVED by that branch (merged on main as `a2a0f24`): the SMSF section's fund row is now classified as entity-held by `master_item_key='smsf'` (`isSmsfFundRow`), so it is not in the personal figure whoever owns it. My D3 therefore only needs to be kept when Phase 3 moves the SMSF block to the `EntityBalanceSheet` loader. A related behaviour to revisit in Phase 3: while a fund-level row (owner smsf) and the fund record both exist, main counts only the fund-level row (section 6 note, trap T5).
 - O2: Phase 3 replaces the SMSF block's source inside `netWorthLevels.ts` and its loader: sequence after that branch merges.
 - O3: the retirement grid and any "register grid applies the same basis" work there may touch `components/grid/FinancialDataGrid.tsx`; this design needs only `restrictedOwnerValues` (`lib/grid/types.ts`, `lib/grid/configs.ts`) in Phase 4.
 
 ## 15. Verification summary (honest)
 
 - tsc: one error in `tests/unit/canonicalCertResidueAllSql.test.ts(127,75)` (`s.preUpdates` unknown), a file this branch does not touch (so present on origin/main `984ac2b`). No error in any changed or new file. eslint: clean on all changed and new files.
-- New tests: 12 + 11 pass. Related suites run: `dataTableGuard`, `dateFormatVisibleTextGuard`, `dateFormatsDayFirstSourceContract`, `fdh12Isolation`, `fdh12FinancialIntegrity`, SMSF tests, `canonicalIntegrationCrossPackage`: pass, except two failures in files this branch does not touch: `countryGateAccessMatrix` MC-15 ("no account-deletion route under app/api" found one) and `smsfHouseholdIsolation` ("loadDashboard selects `owner` on all four cash-flow registers", income_sources). They read `app/api/**` and `lib/services/dashboardData.ts`, which this branch does not change; not compared against a separate clean checkout run.
+- New tests: 12 + 17 + 10 pass (after merging origin/main `f2831a7`). Related suites run before the merge: `dataTableGuard`, `dateFormatVisibleTextGuard`, `dateFormatsDayFirstSourceContract`, `fdh12Isolation`, `fdh12FinancialIntegrity`, SMSF tests, `canonicalIntegrationCrossPackage`: pass, except two failures in files this branch does not touch (`countryGateAccessMatrix` MC-15 and `smsfHouseholdIsolation` owner-select); re-run after the merge, see the final report.
 - `scripts/` artifacts restored with `git checkout -- scripts/` after the run.
 - Not done: any DEV or production access, browser verification, any migration, any push.

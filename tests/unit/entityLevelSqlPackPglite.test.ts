@@ -196,3 +196,79 @@ describe('02-04 interim option A: preview, apply, rollback', () => {
     expect(bySection(await diag(), 'DATA QUALITY: SMSF recorded twice')).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// The PO household's REAL production shape (diagnosis 01b reported by the coordinator, 17-10-2026): fund in DETAILED mode, summary_balance
+// 138,000, holdings 475,000 + 3,000 + 25,000 = 503,000, the personal "SMSF property loan" (joint, 365,000) INACTIVE and NOT linked, so the
+// fund's own net computes to 503,000. The interim path using only the existing UI: add the loan (balance 0), link it to the fund in the SMSF
+// section, then enter the loan amount. These tests run the real triggers and functions of migration 0084 (and its successors).
+// ---------------------------------------------------------------------------------------------------------------------------------
+describe('interim path (existing UI only): link the SMSF loan so the fund net computes', () => {
+  const V = 'cccccccc-0000-0000-0000-000000000003';
+  let fundId = '';
+  let fundRow = '';
+  let loanId = '';
+  const fundBalance = async () => Number(((await db.query(`select current_balance from retirement_accounts where id='${fundRow}'`)).rows[0] as Row).current_balance);
+  const fundNet = async () => Number(((await db.query(`select detailed_net_value from smsf_funds where id='${fundId}'`)).rows[0] as Row).detailed_net_value);
+
+  beforeAll(async () => {
+    await db.exec(`insert into auth.users(id,email) values ('${V}','prod-shape@pg.test');`);
+    await db.exec(`insert into user_profiles(user_id, country_of_residence, country_confirmed_at) values ('${V}','AU', now()) on conflict (user_id) do update set country_of_residence='AU', country_confirmed_at=now();`);
+    await db.exec(`insert into retirement_accounts(user_id, account_name, account_type, current_balance, currency_code, country_code, owner, master_item_key, is_active)
+      values ('${V}','SMSF','super',138000,'AUD','AU','self','smsf',true);`);
+    fundRow = ((await db.query(`select id from retirement_accounts where user_id='${V}' and master_item_key='smsf'`)).rows[0] as Row).id as string;
+    await db.exec(`insert into smsf_funds(user_id, retirement_account_id, fund_name, mode, summary_balance, currency_code) values ('${V}','${fundRow}','PO SMSF','summary',138000,'AUD');`);
+    fundId = ((await db.query(`select id from smsf_funds where user_id='${V}'`)).rows[0] as Row).id as string;
+    const holding = (cls: string, type: string, name: string, v: number) =>
+      `insert into smsf_holdings(user_id, smsf_fund_id, holding_class, holding_type, holding_name, value, currency_code) values ('${V}','${fundId}','${cls}','${type}','${name}',${v},'AUD');`;
+    // The original loan, active and linked, so the fund could be switched to Detailed with a zero variance (503,000 - 365,000 = 138,000).
+    await db.exec(`insert into liabilities(user_id, liability_name, debt_type, balance, currency_code, owner) values ('${V}','SMSF property loan','mortgage',365000,'AUD','joint');`);
+    loanId = ((await db.query(`select id from liabilities where user_id='${V}'`)).rows[0] as Row).id as string;
+    await db.exec(`insert into property_liability_links(user_id, linked_retirement_id, liability_id, link_type) values ('${V}','${fundRow}','${loanId}','smsf_property_loan');`);
+    await db.exec([holding('property', 'residential_property', '250 Elizebth st Melbourne 3000', 475_000), holding('cash', 'cash_account', 'Bank Australia', 3_000), holding('cash', 'cash_account', 'Secured finance', 25_000)].join('\n'));
+    await db.exec(`select smsf_switch_to_detailed('${fundId}');`);
+  }, 60_000);
+
+  it('baseline = the production shape after the loan went inactive and unlinked: mode detailed, summary 138,000, net 503,000', async () => {
+    expect(await fundBalance()).toBe(138_000);
+    await db.exec(`update liabilities set is_active=false where id='${loanId}';`);
+    await db.exec(`update property_liability_links set is_active=false where liability_id='${loanId}';`);
+    const f = (await db.query(`select mode, summary_balance, detailed_net_value from smsf_funds where id='${fundId}'`)).rows[0] as Row;
+    expect(f.mode).toBe('detailed');
+    expect(Number(f.summary_balance)).toBe(138_000);
+    expect(Number(f.detailed_net_value)).toBe(503_000);
+    expect(await fundBalance()).toBe(503_000);
+  });
+
+  it('adding the loan with balance 0 and NOT yet linked changes nothing in the fund (still 503,000)', async () => {
+    await db.exec(`insert into liabilities(user_id, liability_name, debt_type, balance, currency_code, owner) values ('${V}','SMSF property loan (new)','mortgage',0,'AUD','smsf');`);
+    loanId = ((await db.query(`select id from liabilities where user_id='${V}' and liability_name='SMSF property loan (new)'`)).rows[0] as Row).id as string;
+    expect(await fundBalance()).toBe(503_000);
+  });
+
+  it('linking it (still balance 0) keeps 503,000; then entering 365,000 makes the fund net 138,000 (the retirement row follows)', async () => {
+    await db.exec(`insert into property_liability_links(user_id, linked_retirement_id, liability_id, link_type) values ('${V}','${fundRow}','${loanId}','smsf_property_loan');`);
+    expect(await fundBalance()).toBe(503_000);
+    await db.exec(`update liabilities set balance=365000 where id='${loanId}';`);
+    expect(await fundNet()).toBe(138_000);
+    expect(await fundBalance()).toBe(138_000);
+  });
+
+  it('with the confirmed 370,000 the fund net is 133,000', async () => {
+    await db.exec(`update liabilities set balance=370000 where id='${loanId}';`);
+    expect(await fundNet()).toBe(133_000);
+    expect(await fundBalance()).toBe(133_000);
+  });
+
+  it('NEGATIVE CONTROL: an UNLINKED loan of 370,000 would NOT reduce the fund (it stays 503,000); the link is what does it', async () => {
+    await db.exec(`update property_liability_links set is_active=false where liability_id='${loanId}';`);
+    expect(await fundBalance()).toBe(503_000);
+    await db.exec(`update property_liability_links set is_active=true where liability_id='${loanId}';`);
+    expect(await fundBalance()).toBe(133_000);
+  });
+
+  it('the Summary value stays 138,000 in Detailed mode (cosmetic "Difference" of -5,000 against 370,000; not an error)', async () => {
+    const f = (await db.query(`select summary_balance from smsf_funds where id='${fundId}'`)).rows[0] as Row;
+    expect(Number(f.summary_balance)).toBe(138_000);
+  });
+});

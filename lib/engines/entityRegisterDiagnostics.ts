@@ -97,7 +97,7 @@ export function diagnoseEntityRegisters(input: EntityRegisterDiagnosticsInput): 
       title: 'Your SMSF may be recorded twice',
       message:
         currency && fundValue !== undefined && owned !== undefined && combined !== undefined
-          ? `Retirement holds an SMSF fund value of ${money(fundValue, currency)} and also ${ownedRows.length === 1 ? 'a row' : `${ownedRows.length} rows`} owned by the SMSF worth ${money(owned, currency)}. Together they add ${money(combined, currency)} to your family net worth. If these describe the same fund, keep only one of them, and make sure it is the fund's net value (its assets minus its debts).`
+          ? `Retirement holds an SMSF fund value of ${money(fundValue, currency)} and also ${ownedRows.length === 1 ? 'a row' : `${ownedRows.length} rows`} owned by the SMSF worth ${money(owned, currency)}. Together they record ${money(combined, currency)} for what may be one fund. While both exist, your family net worth counts only the SMSF-owned ${ownedRows.length === 1 ? 'row' : 'rows'} (${money(owned, currency)}) and shows the fund value without counting it, so changes you make in the SMSF section do not move that figure. If these describe the same fund, keep only one of them, and make sure it is the fund's net value (its assets minus its debts).`
           : `Retirement holds an SMSF fund value and also ${ownedRows.length === 1 ? 'a row' : `${ownedRows.length} rows`} owned by the SMSF, in more than one currency. If these describe the same fund, keep only one of them, and make sure it is the fund's net value (its assets minus its debts).`,
       rowIds: all.map((r) => r.id),
       currency,

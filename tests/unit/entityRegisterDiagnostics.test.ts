@@ -38,6 +38,7 @@ describe('diagnoseEntityRegisters: PO household', () => {
     expect(f.rowIds.sort()).toEqual(['other-ret', 'smsf-row']);
     expect(f.pages).toEqual(['retirement']);
     expect(f.message).toContain('$636,000');
+    expect(f.message).toContain('counts only the SMSF-owned row');
     expect(f.message).toContain('net value');
   });
 
