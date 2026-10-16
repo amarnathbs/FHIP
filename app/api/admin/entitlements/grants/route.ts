@@ -20,11 +20,13 @@ import {
   callListGrants,
   callManageEntitlement,
   callSearchUsers,
+  isStaffPremiumTarget,
   mapEntitlementRpcError,
   parseManageRequest,
   MAX_EXTENSIONS_PER_GRANT,
 } from '@/lib/services/premiumGrantAdmin';
 import { utcToday } from '@/lib/services/entitlementWindow';
+import { STAFF_PREMIUM_NOT_MANAGEABLE } from '@/lib/services/staffPremium';
 import { createClient } from '@/lib/supabase/server';
 import { ok, bad } from '@/lib/api';
 
@@ -87,6 +89,10 @@ export const POST = adminRoute(async (req: Request) => {
 
   const { data, error } = await callManageEntitlement(supabase, parsed.value);
   if (error) {
+    // Staff Premium (0283) is automatic: say so instead of the generic "paid or set manually" refusal.
+    if ((error.message ?? '').includes('ENTITLEMENT_PAID_ACTIVE') && (await isStaffPremiumTarget(supabase, parsed.value.userId))) {
+      return bad(STAFF_PREMIUM_NOT_MANAGEABLE.message, STAFF_PREMIUM_NOT_MANAGEABLE.status, STAFF_PREMIUM_NOT_MANAGEABLE.code);
+    }
     const mapped = mapEntitlementRpcError(error);
     if (mapped) return bad(mapped.message, mapped.status, mapped.code);
     return safeDbError(error, 'admin entitlements manage');

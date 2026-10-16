@@ -7,8 +7,9 @@
 
 import { effectivePlanTier, type EntitlementWindowRow } from '@/lib/services/entitlementWindow';
 import { dateFormatKeyForCountry, formatDateShort } from '@/lib/engines/date';
+import { STAFF_PREMIUM_PLAN_LABEL, STAFF_PREMIUM_SOURCE } from '@/lib/services/staffPremium';
 
-export type PlanStatusKind = 'free' | 'premium_paid' | 'premium_admin_grant' | 'admin_grant_lapsed' | 'premium_promo' | 'promo_lapsed';
+export type PlanStatusKind = 'free' | 'premium_paid' | 'premium_admin_grant' | 'admin_grant_lapsed' | 'premium_promo' | 'promo_lapsed' | 'premium_staff';
 
 export interface PlanStatusInput extends EntitlementWindowRow {
   entitlement_source?: string | null;
@@ -39,9 +40,14 @@ export function describePlanStatus(row: PlanStatusInput | null | undefined, toda
   const planTier = effectivePlanTier(row, today);
   const isAdminGrant = row?.entitlement_source === 'admin_grant';
   const isPromo = row?.entitlement_source === 'promo_code';
+  const isStaff = row?.entitlement_source === STAFF_PREMIUM_SOURCE;
   const endsOn = row?.effective_to ?? row?.admin_grant_ends_on ?? null;
 
   if (planTier === 'premium') {
+    // Staff Premium is automatic and open ended (migration 0283). It must never read as a purchase, and has no end date to show.
+    if (isStaff) {
+      return { kind: 'premium_staff', planTier, label: STAFF_PREMIUM_PLAN_LABEL, grantEndsOn: null };
+    }
     if (isAdminGrant && endsOn) {
       return {
         kind: 'premium_admin_grant',

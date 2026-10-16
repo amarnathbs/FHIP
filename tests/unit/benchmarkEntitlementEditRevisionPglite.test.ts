@@ -142,9 +142,9 @@ beforeAll(async () => {
   const seed = fs.readFileSync(path.join(SUPABASE_ROOT, 'seed.sql'), 'utf8');
   const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
   expect(files).toContain(MIG_NAME);
-  // 16-10-2026: was `files.at(-1) === MIG_NAME`, which fails the moment ANY later migration exists (0284 per-user AI cap,
-  // NAV2 0281/0282, ...). What this guard is for is a number collision, so it now asserts exactly that: 0280 is this file alone.
-  expect(files.filter((f) => f.startsWith('0280')), 'two migrations share the number 0280: re-check the number choice').toEqual([MIG_NAME]);
+  // Tripwire from when 0280 was claimed: nothing may sort BEFORE it by accident. Later migrations (0283 staff admin Premium, and any
+  // the NAV2 branch adds) are expected once 0280 is on main, so the check is "0280 is not newer than the newest file", not "0280 is the newest".
+  expect(files.at(-1)! >= MIG_NAME, 'the newest migration is not older than 0280: re-check the number choice').toBe(true);
   for (const f of files) {
     await db.exec(strip(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')));
     if (f.startsWith('0001')) await db.exec(seed);

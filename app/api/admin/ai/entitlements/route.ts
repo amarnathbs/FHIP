@@ -32,7 +32,7 @@ export const GET = adminRoute(async () => {
   const admin = createAdminClient();
   const period = currentBillingPeriod();
 
-  const [controls, usage, premiumCount, allCount] = await Promise.all([
+  const [controls, usage, premiumCount, allCount, staffCount] = await Promise.all([
     getPlatformControls(),
     summariseUsageForPeriod(period),
     // Admin Premium grant (0231): count users who are Premium TODAY (inside the
@@ -40,6 +40,9 @@ export const GET = adminRoute(async () => {
     // reported as Premium. 'free' is every entitlement row that is not.
     countEffectivePremium(admin),
     admin.from('user_entitlements').select('user_id', { count: 'exact', head: true }),
+    // Staff admin Premium (0283): how many of the Premium subjects are FHIP staff accounts rather than customers, so the
+    // Premium head-count is not read as a paying-customer count. Fail soft: an unreadable count is reported as null.
+    admin.from('user_entitlements').select('user_id', { count: 'exact', head: true }).eq('entitlement_source', 'staff_admin').eq('plan_tier', 'premium'),
   ]);
 
   const allowance = controls?.monthly_custom_question_allowance ?? 0;
@@ -68,6 +71,8 @@ export const GET = adminRoute(async () => {
     capabilities: AI_SUB_CAPABILITIES.map((c) => ({ capability: c, implemented: AI_CAPABILITY_IMPLEMENTED[c] })),
     subjects: {
       premium: premiumCount.count ?? 0,
+      // Of those, FHIP staff accounts (automatic Staff Premium). Not paying customers.
+      premium_of_which_staff: staffCount.error ? null : (staffCount.count ?? 0),
       free: Math.max((allCount.count ?? 0) - (premiumCount.count ?? 0), 0),
       with_usage_this_period: usage.perUser.length,
       at_quota_this_period: allowance > 0 ? usage.perUser.filter((u) => u.custom_question_count >= allowance).length : 0,

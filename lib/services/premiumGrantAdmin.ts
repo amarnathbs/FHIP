@@ -12,6 +12,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ENTITLEMENT_GRANT_MAX_DAYS, accessEndDate, isValidIsoDate } from '@/lib/services/entitlementWindow';
 import { formatDateShort } from '@/lib/engines/date';
+import { STAFF_PREMIUM_SOURCE } from '@/lib/services/staffPremium';
 
 export const MANAGE_ACTIONS = ['grant', 'extend', 'revoke'] as const;
 export type ManageAction = (typeof MANAGE_ACTIONS)[number];
@@ -206,7 +207,7 @@ export interface ManageResult {
   target_user_id: string;
   as_of: string;
   plan_tier: 'free' | 'premium';
-  entitlement_source: 'payment' | 'admin_grant';
+  entitlement_source: 'payment' | 'admin_grant' | 'promo_code' | 'staff_admin';
   effective_from: string | null;
   effective_to: string | null;
   admin_grant_ends_on: string | null;
@@ -233,6 +234,22 @@ export function callManageEntitlement(client: RpcClient, req: ManageRequest) {
 
 export function callSearchUsers(client: RpcClient, query: string) {
   return client.rpc('admin_search_premium_entitlement_users', { p_query: query });
+}
+
+/**
+ * Staff Premium (migration 0283). The grant function refuses a staff row with ENTITLEMENT_PAID_ACTIVE (the staff source is neither an
+ * admin grant nor a promo), which would read as "paid" to an admin. The route asks this to tell the two apart and answer truthfully.
+ * Fails soft: an unreadable lookup is "not known to be staff" and the original refusal stands.
+ */
+export async function isStaffPremiumTarget(client: RpcClient, userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await callSearchUsers(client, userId);
+    if (error || !Array.isArray(data)) return false;
+    const row = (data as { user_id?: string; entitlement_source?: string }[]).find((r) => r.user_id === userId);
+    return row?.entitlement_source === STAFF_PREMIUM_SOURCE;
+  } catch {
+    return false;
+  }
 }
 
 export function callListGrants(client: RpcClient, filter: 'expiring' | 'active' | 'lapsed', withinDays: number) {
