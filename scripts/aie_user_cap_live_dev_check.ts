@@ -34,6 +34,8 @@ import { randomBytes } from 'node:crypto';
 
 const DEV_HOST = 'vqycarelcoijzwlpkpcz.supabase.co';
 const REAL = process.argv.includes('--real');
+/** --serial: the burst steps send their requests one after another instead of simultaneously. It proves the arithmetic only and is labelled as such. */
+const SERIAL = process.argv.includes('--serial');
 
 for (const line of fs.readFileSync('D:/FHIP/.env.local', 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)) {
   const i = line.indexOf('=');
@@ -149,18 +151,31 @@ async function main() {
   const lBefore = await ledger();
   try {
     const keysA: string[] = [];
-    const burst = async (user: string, n: number, keys: string[]) =>
-      Promise.all(
-        Array.from({ length: n }, () => {
-          const k = nextKey('burst');
-          keys.push(k);
-          return reserveV2(k, STEP, user).then((r) => ({ key: k, row: r.json?.[0], status: r.status }));
-        }),
-      );
+    const burst = async (user: string, n: number, keys: string[]) => {
+      const one = () => {
+        const k = nextKey('burst');
+        keys.push(k);
+        return reserveV2(k, STEP, user).then((r) => ({ key: k, row: r.json?.[0], status: r.status, text: r.text.slice(0, 120) }));
+      };
+      if (SERIAL) {
+        const out: Array<Awaited<ReturnType<typeof one>>> = [];
+        for (let i = 0; i < n; i += 1) out.push(await one());
+        return out;
+      }
+      return Promise.all(Array.from({ length: n }, one));
+    };
+    const statusSummary = (rs: Array<{ status: number; text: string }>) => {
+      const m: Record<string, number> = {};
+      for (const r of rs) {
+        const k = r.status === 200 ? '200' : `${r.status} ${r.text}`;
+        m[k] = (m[k] ?? 0) + 1;
+      }
+      return JSON.stringify(m);
+    };
 
     const resA = await burst(A, expectA + 12, keysA);
     const admittedA = resA.filter((r) => r.row?.reserved === true);
-    check(`P1 ${resA.length} simultaneous reservations for user A: exactly the headroom (${expectA}) admitted, no overshoot`, admittedA.length === expectA && resA.every((r) => r.status === 200), `admitted=${admittedA.length} refused=${resA.length - admittedA.length}`);
+    check(`P1 ${resA.length} ${SERIAL ? "serial" : "simultaneous"} reservations for user A: exactly the headroom (${expectA}) admitted, no overshoot`, admittedA.length === expectA && resA.every((r) => r.status === 200), `mode=${SERIAL ? 'SERIAL (arithmetic only)' : 'PARALLEL'} admitted=${admittedA.length} responses=${statusSummary(resA)}`);
     const refusedReasons = new Set(resA.filter((r) => r.row?.reserved === false).map((r) => r.row.refusal_reason));
     check('P1b every refusal carries the typed per-user reason', refusedReasons.size === 1 && refusedReasons.has('user_daily_cap'), JSON.stringify([...refusedReasons]));
     const usedA = await usedToday(A);
@@ -168,15 +183,16 @@ async function main() {
 
     const keysB: string[] = [];
     const resB = await burst(B, expectB + 5, keysB);
-    check('P2 user B is independent of user A being at the cap', resB.filter((r) => r.row?.reserved === true).length === expectB, `admitted=${resB.filter((r) => r.row?.reserved === true).length} expected=${expectB}`);
+    check('P2 user B is independent of user A being at the cap', resB.filter((r) => r.row?.reserved === true).length === expectB, `admitted=${resB.filter((r) => r.row?.reserved === true).length} expected=${expectB} responses=${statusSummary(resB)}`);
 
+    if (admittedA.length === 0) throw new Error('P1 admitted nothing, so the remaining steps cannot run (see the P1 detail above)');
     const dupKey = admittedA[0].key;
     const lMid = await ledger();
     const dup = await reserveV2(dupKey, STEP, A);
     const lAfterDup = await ledger();
     check('P3 a replayed key is refused as a replay and charges nothing', dup.json?.[0]?.reserved === false && dup.json?.[0]?.refusal_reason === 'replay' && Number(lAfterDup.reserved_usd) === Number(lMid.reserved_usd), JSON.stringify(dup.json));
 
-    const refusedKey = resA.find((r) => r.row?.reserved === false)!.key;
+    const refusedKey = resA.find((r) => r.row?.reserved === false)?.key ?? '';
     const attemptRow = (await http(`/rest/v1/aie_ai_cost_attempt?idempotency_key=eq.${refusedKey}&select=admission_outcome,reserved_usd,user_id`)).json?.[0];
     check('P4 a refused request is recorded as user_daily_cap_reached, nothing reserved, attributed to the user', attemptRow?.admission_outcome === 'user_daily_cap_reached' && Number(attemptRow?.reserved_usd) === 0 && attemptRow?.user_id === A, JSON.stringify(attemptRow));
     const lAfterBursts = await ledger();
@@ -193,6 +209,8 @@ async function main() {
     const rolled = await reserveV2(nextKey('rollover'), STEP * Math.max(expectA - 1, 1), A);
     check('P6 attempts from the previous UTC day do not count (rollover)', rolled.json?.[0]?.reserved === true && usedAfterShift < usedA, `used before shift=${usedA.toFixed(4)} after=${usedAfterShift.toFixed(4)} reserve=${JSON.stringify(rolled.json?.[0])}`);
 
+    // P7 needs a user WITH headroom (the per-user reason wins when both would refuse): move every probe row to yesterday first.
+    await http(`/rest/v1/aie_ai_cost_attempt?idempotency_key=like.${PREFIX}-*`, { method: 'PATCH', body: { created_at: yesterday } });
     const lowAllowance = await reserveV2(nextKey('global'), 0.0001, B, { allowance: 0.00000001 });
     check('P7 the global allowance still refuses a user under their own cap (reason budget_exhausted)', lowAllowance.json?.[0]?.reserved === false && lowAllowance.json?.[0]?.refusal_reason === 'budget_exhausted', JSON.stringify(lowAllowance.json));
 

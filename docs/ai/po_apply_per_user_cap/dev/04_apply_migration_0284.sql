@@ -24,8 +24,8 @@
 --     keeps working during the roll-out. The application code that ships with
 --     this change calls only the v2 function and refuses (fails closed) when it
 --     is missing, so there is no path that silently skips the per-user check.
---   * Concurrency. The v2 function takes the ledger row lock BEFORE it reads the
---     user total and holds it until the end of the same transaction, so two
+--   * Concurrency. The v2 function takes the ledger row lock FIRST (before even
+--     claiming its key) and holds it until the end of the same transaction, so two
 --     simultaneous requests for one user are decided one after the other and the
 --     second one sees the first reservation. This is the same lock the global
 --     check already needs. No extra lock and no new lock order.
@@ -90,9 +90,21 @@ begin
     raise exception 'aie_reserve_ai_cost_v2: a user id is required';
   end if;
 
-  -- CLAIM THE KEY FIRST (as 0195 does). The primary key serialises concurrent
-  -- callers that share a key. The row carries the user so the total below can
-  -- see it, and counts for nothing until it is admitted (reserved stays 0).
+  -- LOCK THE LEDGER ROW FIRST. The claim insert below references this row by
+  -- foreign key, which takes a shared lock on it. Taking that shared lock and
+  -- only then asking for the exclusive lock makes any two concurrent callers
+  -- wait on each other (found on DEV 16-10-2026: 22 simultaneous requests
+  -- admitted 2 and timed out 20). Locking first means callers simply queue.
+  -- Everything below is decided under this lock, so the user total read next
+  -- cannot be stale by the time it is acted on.
+  select * into v_row from aie_ai_cost_ledger where id = p_ledger_id for update;
+  if not found then
+    raise exception 'aie_reserve_ai_cost_v2: unknown ledger id';
+  end if;
+
+  -- CLAIM THE KEY (as 0195 does). The primary key still refuses a second claim
+  -- of the same key. The row carries the user so the total below can see it,
+  -- and counts for nothing until it is admitted (reserved stays 0).
   insert into aie_ai_cost_attempt (idempotency_key, ledger_id, reserved_usd, remaining_usd_at_reserve, admission_outcome, user_id)
   values (p_idempotency_key, p_ledger_id, 0, 0, 'claimed', p_user_id)
   on conflict (idempotency_key) do nothing;
@@ -100,7 +112,6 @@ begin
 
   if v_claimed = 0 then
     -- REPLAY: never admitted again, never reserves again, never charges again.
-    select * into v_row from aie_ai_cost_ledger where id = p_ledger_id;
     select coalesce(sum(coalesce(a.settled_usd, a.reserved_usd)), 0) into v_user_used
       from aie_ai_cost_attempt a
      where a.user_id = p_user_id and a.created_at >= v_day_start;
@@ -112,12 +123,6 @@ begin
     return;
   end if;
 
-  -- Lock the ledger row. Everything below is decided under this lock, so the
-  -- user total read next cannot be stale by the time it is acted on.
-  select * into v_row from aie_ai_cost_ledger where id = p_ledger_id for update;
-  if not found then
-    raise exception 'aie_reserve_ai_cost_v2: unknown ledger id';
-  end if;
   v_effective_allowance := least(coalesce(p_allowance_usd, v_row.allowance_usd), v_row.allowance_usd);
   v_effective_user_cap := greatest(least(coalesce(p_user_daily_cap_usd, v_row.user_daily_cap_usd), v_row.user_daily_cap_usd), 0);
 
