@@ -147,6 +147,14 @@ export function NetWorthLevelsPanel({ levels }: { levels: NetWorthLevels }) {
         )}
       </section>
 
+      {levels.bridge.personalParityOk === false && levels.bridge.personalSummaryNet !== null && (
+        <p className="text-xs font-medium text-ink" role="status" data-testid="net-worth-personal-parity-check">
+          Check: the personal net worth used by your scores and forecasts ({fmt(levels.bridge.personalSummaryNet)}) differs from the personal level above ({fmt(personal.total.net)}). Please report this.
+        </p>
+      )}
+      {levels.dataStatus.smsfPossibleDoubleCount && (
+        <p className="text-xs font-medium text-ink" role="status" data-testid="net-worth-smsf-double-count">Check: {levels.dataStatus.smsfPossibleDoubleCount}</p>
+      )}
       {levels.dataStatus.duplicateRisk && <p className="text-xs font-medium text-ink" role="status">Check: {levels.dataStatus.duplicateRisk}</p>}
       {levels.dataStatus.unconvertedCount > 0 && (
         <p className="text-xs text-muted" role="status">

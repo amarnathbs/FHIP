@@ -4,6 +4,7 @@ import { computeBusinessEntityOwnershipValue, type BusinessEntityWithLineItems }
 import { householdOperatingCashFlowRows, isHouseholdOperatingCashFlow } from './householdContext';
 import { debtServiceClassFor, isDuplicateDebtServiceExpense, servicedDebtFamilies } from './debtServiceContext';
 import type { NetWorthLevels } from './netWorthLevels';
+import type { NetWorthBasisInfo } from './netWorthBasis';
 import type { PublishedValuationSummary } from './investment-intelligence/valuation/publishedRowRemark';
 import { assessNetToGross, isWageLikeIncome, type NetPlausibilityFlag } from './incomePlausibility';
 import { resolveNetBasis, type AssumedNetSource, type NetBasis } from './incomeNetBasis';
@@ -205,12 +206,12 @@ export interface DashboardDataStatus {
 }
 // LR-FI-1: assets/investments/retirement_accounts carry the same `owner`
 // column as the other four registers (migration 0004), so it is declared here
-// too — but this engine DELIBERATELY never filters on it for these three.
-// They are pure wealth registers: an SMSF-owned asset, investment or
-// retirement balance must keep contributing to totalAssets/totalInvestments/
-// totalRetirement and therefore to Net Worth (spec §5, §28). Declaring the
-// field makes that decision explicit and lets tests assert it directly,
-// rather than leaving "why isn't this filtered?" to inference.
+// too — and this ENGINE still never filters on it for these three: it sums whatever rows it is
+// given. SUPERSEDED IN PART by the PO decision of 16-10-2026 (personal basis): the Dashboard
+// LOADER (lib/services/dashboardData.ts) now passes only PERSONAL rows (lib/engines/netWorthBasis.ts), so an
+// SMSF-owned (fund-level) asset, investment or retirement balance no longer contributes to the
+// personal totals or Net Worth; it lives in the entity block and the consolidated family figure
+// (netWorthLevels). Engine-only callers (unit fixtures) are unchanged; tests assert both facts.
 export interface AssetRow {
   current_value: number;
   asset_name?: string | null;
@@ -251,7 +252,8 @@ export interface RetirementRow {
   contribution_frequency: Frequency | null;
   country_code?: string | null;
   currency_code?: string | null;
-  owner?: string | null; // see AssetRow — declared, deliberately never filtered
+  owner?: string | null; // see AssetRow — the loader filters on it, the engine does not
+  master_item_key?: string | null; // the SMSF section fund row carries the key smsf (entity-held; the loader leaves it out of personal figures)
 }
 export interface InsuranceRow {
   policy_name: string;
@@ -656,10 +658,16 @@ export interface DashboardSummary {
   // entity populations into one opaque number) — 0 for every household with
   // no business entities, identical to every pre-LR-11 result.
   businessEntityOwnershipValue: number;
-  // PO decision 16-10-2026: the previously reported figure below is UNCHANGED and remains the basis for
-  // ratios, scores, forecasts and the stored monthly snapshots. netWorthLevels is the two-level view
-  // (personal / consolidated family) that every Net Worth surface reads; its bridge reproduces netWorth.
-  // Absent in engine-only callers; null when a balance-sheet section was unavailable.
+  // PO decision 16-10-2026 (second ruling, same day): netWorth, totalAssets, totalInvestments, totalRetirement,
+  // totalLiabilities and every figure derived from them are on the PERSONAL basis when the Dashboard loader
+  // built the summary: rows owned by an entity (owner smsf / family_trust / company), the fund's own SMSF
+  // property loan and registered Companies / Trusts / HUFs are NOT in them. Entity amounts live only in
+  // netWorthLevels (entity blocks and the consolidated family figure). netWorthBasis says what was left out
+  // and what basis stored history is on. Absent in engine-only callers (unit fixtures), which pass whatever
+  // rows they choose; the loader (lib/services/dashboardData.ts) is the single place the rows are chosen.
+  netWorthBasis?: NetWorthBasisInfo;
+  // The two-level view (personal / consolidated family) that every Net Worth surface reads. Absent in
+  // engine-only callers; null when a balance-sheet section was unavailable.
   netWorthLevels?: NetWorthLevels | null;
   netWorth: number;
   netWorthAllocation: AllocationSlice[];

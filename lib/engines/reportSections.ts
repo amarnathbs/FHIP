@@ -8,6 +8,7 @@ import { buildPremiumSections } from './reportSectionsPremium';
 import type { FinancialSection } from './financialSectionStatus';
 import type { DashboardSummary, SnapshotRow } from './dashboard';
 import { describeNetWorthLevels } from './netWorthLevels';
+import { netWorthForHistoryComparison } from './netWorthBasis';
 
 // G7 Contract 4 (docs/country-programme/g7-data-contracts.md) — appends a
 // cross-border blending caveat to a consolidated (multi-register) section's
@@ -162,7 +163,27 @@ function previousSnapshotRow(source: ReportSourceData) {
 export function previousDebtToIncome(d: DashboardSummary, prev: SnapshotRow | null): number | null {
   if (!prev || prev.monthly_income <= 0) return null;
   if (d.householdLiabilityBalance !== d.totalLiabilities) return null;
+  // PO decision 16-10-2026: totalLiabilities is now the PERSONAL balance, but stored months are on the history basis
+  // (entity liabilities included). With entity amounts the two bases differ, so the movement is not available.
+  if (d.netWorthBasis && !d.netWorthBasis.history.comparableToPersonal) return null;
   return prev.total_liabilities / (prev.monthly_income * 12);
+}
+
+/**
+ * Net worth movement against the stored previous month, like for like (PO decision 16-10-2026). Stored months are on
+ * the history basis (every entity amount included); for a household with entity amounts the movement is therefore
+ * the FAMILY movement and says so in its label. For an entity-free household it is the personal figure, unchanged.
+ */
+function netWorthMovementFor(d: DashboardSummary, prev: SnapshotRow | null, currency: 'AUD' | 'INR') {
+  const cmp = netWorthForHistoryComparison(d);
+  return computeMetricMovement({
+    label: cmp.basis === 'personal' ? 'Net worth' : 'Family net worth',
+    current: cmp.value,
+    previous: prev?.net_worth ?? null,
+    format: 'currency',
+    goodDirection: 'up',
+    currency,
+  });
 }
 
 function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean): BuiltSection {
@@ -177,14 +198,7 @@ function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean)
     format: 'count',
     goodDirection: 'up',
   });
-  const netWorthMovement = computeMetricMovement({
-    label: 'Net worth',
-    current: d.netWorth,
-    previous: prev?.net_worth ?? null,
-    format: 'currency',
-    goodDirection: 'up',
-    currency,
-  });
+  const netWorthMovement = netWorthMovementFor(d, prev, currency);
   const surplusMovement = computeMetricMovement({
     label: 'Monthly surplus',
     current: d.monthlySurplus,
@@ -382,7 +396,8 @@ function netWorthSummarySentence(d: DashboardSummary, currency: 'AUD' | 'INR'): 
   const fmt = (n: number) => formatMoneyWhole(n, currency);
   if (d.netWorthLevels) {
     const f = d.netWorthLevels.family;
-    return `${describeNetWorthLevels(d.netWorthLevels, fmt)} At family level your recorded assets total ${fmt(f.totalAssets)} and your recorded liabilities total ${fmt(f.liabilities)}.`;
+    const p = d.netWorthLevels.personal.total;
+    return `${describeNetWorthLevels(d.netWorthLevels, fmt)} At personal level your recorded assets total ${fmt(p.totalAssets)} and your recorded liabilities total ${fmt(p.liabilities)}. At family level they total ${fmt(f.totalAssets)} and ${fmt(f.liabilities)}.`;
   }
   return `Your recorded assets total ${fmt(d.totalAssetsCombined)} and your recorded liabilities total ${fmt(d.totalLiabilities)}, resulting in an estimated net worth of ${fmt(d.netWorth)}.`;
 }
@@ -390,14 +405,7 @@ function netWorthSummarySentence(d: DashboardSummary, currency: 'AUD' | 'INR'): 
 function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: string | null): BuiltSection {
   const d = source.dashboard;
   const prev = previousSnapshotRow(source);
-  const netWorthMovement = computeMetricMovement({
-    label: 'Net worth',
-    current: d.netWorth,
-    previous: prev?.net_worth ?? null,
-    format: 'currency',
-    goodDirection: 'up',
-    currency: source.currency,
-  });
+  const netWorthMovement = netWorthMovementFor(d, prev, source.currency);
   return {
     sectionCode: 'net_worth',
     sectionTitle: SECTION_TITLES.net_worth,
@@ -429,13 +437,18 @@ function buildNetWorth(source: ReportSourceData, status: SectionStatus, reason: 
             notInNetWorthNote: importedNotInNetWorthNote(source.notInNetWorth),
             groupingNote: d.totalInvestments > 0 ? WEALTH_GROUPING_NOTE : null,
             // PO decision 16-10-2026: the two-level model (personal / consolidated family) read by every Net Worth surface.
-            // `netWorth` above stays the previously reported basis (movement vs prior snapshots); levels bridges to it.
+            // Every figure above is on the PERSONAL basis (entity-held amounts excluded); the entity blocks and the
+            // consolidated family figure are in `levels` only. `historyBasis` says what the movement is measured on.
             levels: d.netWorthLevels ?? null,
+            basis: 'personal',
+            familyNetWorth: d.netWorthLevels ? d.netWorthLevels.family.net : null,
+            historyBasis: netWorthForHistoryComparison(d).basis,
+            historyBasisNote: netWorthForHistoryComparison(d).note,
           }
         : {},
     narrativeText:
       status === 'included' && netWorthMovement.comparable
-        ? `Net worth ${netWorthMovement.direction === 'positive' ? 'rose' : netWorthMovement.direction === 'negative' ? 'fell' : 'remained stable'} from ${netWorthMovement.previousText} to ${netWorthMovement.currentText}${netWorthMovement.changePercent !== null ? ` (${netWorthMovement.changePercent >= 0 ? '+' : ''}${netWorthMovement.changePercent.toFixed(1)}%)` : ''}.`
+        ? `${netWorthMovement.label} ${netWorthMovement.direction === 'positive' ? 'rose' : netWorthMovement.direction === 'negative' ? 'fell' : 'remained stable'} from ${netWorthMovement.previousText} to ${netWorthMovement.currentText}${netWorthMovement.changePercent !== null ? ` (${netWorthMovement.changePercent >= 0 ? '+' : ''}${netWorthMovement.changePercent.toFixed(1)}%)` : ''}.`
         : null,
     chartData:
       status === 'included'

@@ -29,6 +29,8 @@ export interface RetirementAccountRow {
   contribution_frequency: string | null;
   source_type: string | null;
   retirement_member_id: string | null;
+  /** 'smsf' marks the SMSF section's fund row (entity-held in personal-basis figures). */
+  master_item_key?: string | null;
 }
 
 export interface ContributionFigure {
@@ -44,6 +46,8 @@ export interface RetirementLine {
   name: string;
   accountType: string | null;
   owner: string | null;
+  /** 'smsf' = the SMSF section's fund row. */
+  masterItemKey: string | null;
   household: boolean;
   memberId: string | null;
   balance: MoneyValue;
@@ -88,7 +92,7 @@ export function computeRetirement(rows: readonly RetirementAccountRow[], fx: FxC
     const personal = contribution(row.personal_contribution, row.contribution_frequency, row.currency_code, fx);
     for (const c of [employer, personal]) if (c && !c.frequencyKnown && c.amountNative !== 0) unknownFrequencyCount += 1;
     return {
-      id: row.id, name: row.account_name, accountType: row.account_type, owner: row.owner, household: isHouseholdOwner(row.owner), memberId: row.retirement_member_id,
+      id: row.id, name: row.account_name, accountType: row.account_type, owner: row.owner, masterItemKey: row.master_item_key ?? null, household: isHouseholdOwner(row.owner), memberId: row.retirement_member_id,
       balance: { amountNative: Number(row.current_balance), currency: row.currency_code, amountReporting },
       employerContribution: employer,
       personalContribution: personal,
@@ -114,7 +118,7 @@ export async function loadRetirementAccounts(userId: string, client: ReadModelCl
   return fetchAllRows<RetirementAccountRow>('retirement_accounts', (from, to) =>
     client
       .from('retirement_accounts')
-      .select('id, account_name, account_type, current_balance, currency_code, owner, employer_contribution, personal_contribution, contribution_frequency, source_type, retirement_member_id')
+      .select('id, account_name, account_type, current_balance, currency_code, owner, employer_contribution, personal_contribution, contribution_frequency, source_type, retirement_member_id, master_item_key')
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('id', { ascending: true })
