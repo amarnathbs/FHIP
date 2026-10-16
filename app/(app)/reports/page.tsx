@@ -96,6 +96,11 @@ async function ReportsPageContent() {
         <SectionCard title="Other Reports & Outputs" description="Generated outputs that live in their own modules — opened here, not duplicated here.">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <ReportOutputCard
+              href="/reports/net-worth-statement"
+              title="Net Worth Statement"
+              description="A one-page list of what you own and owe, item by item, with totals: personal, each entity (SMSF, trust, HUF, company) and the family total. Available on every plan."
+            />
+            <ReportOutputCard
               href="/financial-data-hub/activity"
               title="Financial Activity"
               description="Approved income and spending activity, trends and category breakdowns from your connected/imported transactions."

@@ -48,6 +48,8 @@ export const FORECASTING_ITEMS = [
 //     generated outputs rather than the 11 interactive forecast pages.
 export const REPORTS_ITEMS = [
   { label: 'Monthly Report', href: '/reports' },
+  // PO request 16-10-2026: a one-page itemised statement of assets and liabilities (Personal, each entity, Family). Free and Premium.
+  { label: 'Net Worth Statement', href: '/reports/net-worth-statement' },
   { label: 'Financial Activity', href: '/financial-data-hub/activity' },
   { label: 'Consolidated Report', href: '/forecast/report' },
   { label: 'Forecast Variance', href: '/forecast/variance' },

@@ -1,0 +1,85 @@
+# Net Worth Statement: design note (PO request 16-10-2026)
+
+Reports > **Net Worth Statement** (`/reports/net-worth-statement`). Three kinds of one-page A4 statement, selectable on the page and printable together.
+
+## What it is
+
+| Statement | Content |
+|---|---|
+| **Personal** | Assets (item, owner, amount) grouped Property / Cash / Investments / Retirement / Other with a subtotal per group and a total; Liabilities with a total; Personal net worth; a "By person" block (Self, Spouse/Partner, joint divided by the model's joint rule, counted once). |
+| **Entity** (one per entity the model reports: SMSF, Family Trust, HUF, Company) | The entity's own assets, liabilities and net; the ownership share and the amount that goes into the family total (Company by ownership share, SMSF/Trust/HUF in full); an honest "not itemised yet" note where only a net value exists. |
+| **Family (consolidated)** | Personal + each entity's contribution, line by line = family net worth; personal level by group; a reconciliation table to the Dashboard figures (headline, family level, previously reported net worth with the model's bridge lines). |
+| **All statements** | Personal, each entity, Family: one page each (browser print / "Save as PDF"). |
+
+Wording is observational; the footer is the standard report disclaimer (`PAGE1_DISCLAIMER`, "This report" -> "This statement"). Dates are day-first (dd/mm/yyyy AU, dd-mm-yyyy India), amounts whole units, owners shown as the app labels them (Self, Spouse/Partner, Joint), never ids or e-mails. The "Explain" affordance is not used: the Reports page uses it only on the interactive Monthly Report (`enableContextualExplain`), and the print path deliberately omits it.
+
+## Free vs Premium
+
+**Available to Free and Premium.** The statement only presents the person's own entered data and the Reports page already says browser printing is free ("In-app viewing and browser printing are available to everyone"; only server PDF/CSV export is Premium). So there is no plan check on the page, the print route or the loader (pinned by `tests/unit/netWorthStatementUi.test.ts` and `tests/unit/netWorthStatementParity.test.ts`), the PDF path is the browser's print dialog, and no server-side PDF export or render token was built (that would be a Premium Export Centre feature if the PO later wants it). Menu visibility follows the Reports capability like the Monthly Report.
+
+## One source of truth
+
+`lib/engines/netWorthStatement.ts` adds **no figure**. Every total, person split and entity contribution is read from `NetWorthLevels` (`lib/engines/netWorthLevels.ts`), the object the Dashboard builds once as `summary.netWorthLevels` and the Monthly Report carries in its Net Worth section. The loader (`lib/services/netWorthStatementData.ts`) calls `loadDashboardContext` (the Dashboard's own loader) and only adds row detail to *itemise* those totals:
+
+* register lines from the same canonical snapshot (names, owner tag, native + reporting amount);
+* `loadNetWorthLevels({ collect })`: one optional out-parameter added to the model's loader (2 lines) that hands back the exact rows the model used, so which SMSF loans are "already inside the fund balance" is the model's answer, not a second guess;
+* holder name (`user_profiles.full_name`) and registered entities whose value was never entered.
+
+**Where a row goes is decided by the model** (`classifyRow` runs `computeNetWorthLevels` on that one row with a probe amount), so the personal/entity rule is not copied. When `feat/personal-networth-excludes-smsf-fund-20261016` changes the rule, the statement follows with no edit.
+
+**Parity is proven, not assumed.** `parity` compares the itemised lines with the model's totals (personal, each entity), personal + entity contributions with the family total, the Dashboard headline (`netWorthHeadline`) with the personal statement, and the model re-derived from the collected rows with the Dashboard's object. Any difference is shown as a red alert on screen (hidden in print) and in `parity.messages`; nothing is forced to agree. Optional fields the other branch adds (`smsfPossibleDoubleCount`, `bridge.personalParityOk`) are read through a tolerant accessor and shown/checked when present.
+
+## Entity statements: today's data and the future shape
+
+Entity-level asset/liability input does not exist yet (branch `feat/entity-level-assets-liabilities-design-20261016` is designing it; nothing is built here). The builder works on a stable input type:
+
+```ts
+interface EntityStatementInput {
+  entityId: string;            // NetWorthEntityBlock.id, e.g. 'tag:smsf' or 'entity:<registry id>'
+  kind: 'smsf' | 'family_trust' | 'huf' | 'company';
+  name: string;
+  assets: StatementSourceRow[];
+  liabilities: StatementSourceRow[];
+  net: number | null;          // the model's figure at 100%, never recomputed here
+  source: 'entity_level_rows' | 'owner_tagged_rows' | 'registry_detail' | 'registry_summary';
+}
+```
+
+Today it is assembled from: owner-tagged register rows (SMSF fund rows, legacy Family Trust / Company tags) and registered entities (Summary mode = one net value; Detailed mode = assets and liabilities totals, no line names exist in the model). A caller can pass `entityInputs` to override an entity with itemised rows; when entity-level rows ship (or the model emits them as `assets`/`liabilities` register rows owned by the entity, which already works), the entity page itemises automatically and the parity check proves the lines add to the model's entity totals.
+
+Itemisation states shown honestly: `itemised` (asset and liability rows), `totals_only` (Detailed-mode registry entity), `net_only` ("Entity assets and liabilities are not itemised yet. Only the entity's net value has been entered...", with the register row(s) it was entered as). A registered entity with no value entered is **Not provided**, adds nothing to the family total, and is never zero.
+
+## Hand oracles (PO household, AUD)
+
+Personal level: assets 2,260,298 (Property 1,522,500, Cash 21,798, Investments 590,000, Other 126,000), liabilities 1,385,857, net **874,441**. By person (joint 50/50, counted once): Self 1,044,667.50, Spouse/Partner -170,226.50.
+
+| Shape | Rows | Personal | SMSF | Family |
+|---|---|---|---|---|
+| A today | SMSF 503,000 owner self + 133,000 owner smsf | 1,377,441 | 133,000 | 1,510,441 |
+| B interim | the 503,000 personal row removed | 874,441 | 133,000 | 1,007,441 |
+| C future | SMSF asset 503,000 + liability 370,000 itemised | 874,441 | 503,000 - 370,000 = 133,000 | 1,007,441 |
+
+Company by share: 500,000 net at 40% -> 200,000 into the family total; Trust 300,000 recorded at 50% is counted in full.
+
+## One page when printed
+
+`.nws-root` rules in `app/globals.css` (scoped, nothing else changes): named `@page nws` (A4, 10mm/12mm margins), 8.5pt body, 8pt tables, one page break per statement, `thead` repeats, rows never split, totals are the *last rows* of their table (not a repeating `tfoot`), the table-wide `break-inside: avoid` of the report print rule is relaxed so a very large household flows onto a second/third page with repeated headings and totals at the end. The print route is bare (`app/(print)/reports/net-worth-statement/print`), the Print button opens it and calls `window.print()`.
+
+Verified with Playwright/Chromium `page.pdf` (render to PDF, rasterised with PyMuPDF and inspected) on a synthetic fixture rendering the real components:
+
+| Case | Pages |
+|---|---|
+| PO-style household, 18 items, all notes | 1 |
+| 31 items + FX note + imported-not-in-net-worth note + Not provided + not-converted item | 1 |
+| 118 assets + 28 liabilities | 3 (headings repeat, totals at the end) |
+| All statements (Personal, SMSF, Company, Family) | 4 (one each) |
+| SMSF itemised (shape C) | 1 |
+
+Evidence files: `docs/reports/net_worth_statement_2026-10-16/` (PDFs and page images; evidence label: fixture-rendered, not DEV data). Mobile at 390px: no page-level horizontal scroll, tables scroll inside their labelled, focusable regions, first column sticky (the shared DataTable rules).
+
+## Files
+
+* `lib/engines/netWorthStatement.ts` (pure builder), `lib/services/netWorthStatementData.ts` (loader), `lib/services/netWorthLevelsData.ts` (+2 lines, `collect`)
+* `components/reports/netWorthStatement/*`, `app/(app)/reports/net-worth-statement/page.tsx`, `app/(print)/reports/net-worth-statement/print/page.tsx`
+* Menu: `lib/nav/appNavGroups.ts` (Reports group, after Monthly Report), `lib/nav/appNavCapability.ts` (REPORTS), card on `/reports`, `components/ui/AppShell.tsx` (the most specific Reports item is the current one, so Monthly Report does not light up on the statement page)
+* No migration. No Admin surface touched (the Admin Architecture Standard clauses do not apply; the new routes are customer routes under the signed-in user's session and RLS).
