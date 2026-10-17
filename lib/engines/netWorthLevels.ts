@@ -689,7 +689,7 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       duplicateRisk,
       smsfPossibleDoubleCount: smsfSheet
         ? legacyRows.length > 0
-          ? `Your SMSF records its own assets and liabilities, so ${legacyRows.length} register row${legacyRows.length === 1 ? '' : 's'} owned by the SMSF ${legacyRows.length === 1 ? 'is' : 'are'} listed but not counted (${legacyRows.map((r) => `"${r.name}"`).join(', ')}). Archive ${legacyRows.length === 1 ? 'it' : 'them'} once you have checked the SMSF figures.`
+          ? `Your SMSF records its own assets and liabilities, so ${legacyRows.length} register row${legacyRows.length === 1 ? '' : 's'} owned by the SMSF ${legacyRows.length === 1 ? 'is' : 'are'} listed but not counted (${legacyRows.map((r) => `"${r.name}"`).join(', ')}). ${legacyRows.some((r) => r.register === 'liabilities') ? 'A debt listed here is not deducted either, so add it to the own liabilities of the fund. ' : ''}Archive ${legacyRows.length === 1 ? 'it' : 'them'} once you have checked the SMSF figures.`
           : null
         : detectSmsfPossibleDoubleCount(input.rows, input.currency),
     },

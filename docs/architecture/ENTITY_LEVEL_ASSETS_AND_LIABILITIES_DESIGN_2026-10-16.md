@@ -1,6 +1,6 @@
 # Entity-level assets and liabilities (SMSF, Family Trust, HUF, Company): design and plan (16-10-2026)
 
-Status: DESIGN AND PLAN, plus one small read-only slice (section 12). Updated 17-10-2026: origin/main `f2831a7` (personal net worth basis `a2a0f24`) merged in; production diagnosis folded in (section 8); interim click-by-click path added (section 8.2). No migration is written, nothing is applied anywhere. Branch `feat/entity-level-assets-liabilities-design-20261016`, based on origin/main `984ac2b`. Not pushed.
+Status: PHASE 1 IMPLEMENTED on this branch (17-10-2026, after the PO's GO and decisions D1-D15 accepted): SMSF itemised-or-net-only with fund liabilities, migrations 0289 and 0290, API, SMSF screens, the family-view read model, the DEV and production packs. Phases 2-6 are not started. Nothing is pushed, merged, or applied to DEV or production. The loan amount is decided: 370,000 (fund net 133,000, family 1,007,441, personal 874,441). Section 16 is the Phase 1 record; sections 1-15 are the design it follows (sections 8.2-8.4 are superseded for the cutover by section 16.5).
 
 Admin Architecture Standard: not engaged (no `app/(app)/admin/**`, `app/api/admin/**`, Admin role, capability, RLS/RPC consumed by Admin, or Admin report is created or changed). If Phase 5 adds an Admin diagnostic, the standard applies at that point.
 
@@ -161,6 +161,8 @@ With the personal-basis change now on main (`a2a0f24`, merged here with origin/m
 
 ### 8.2 Interim path using ONLY the existing UI (click by click)
 
+SUPERSEDED for the cutover by section 16.5 (the pack does the same retirement in one guarded, backed-up transaction and also retires the leftover typed net). Kept because it is the only route on today's main before the Phase 1 code is deployed, and because its numbers (365,000 gives 138,000 and family 1,012,441, 370,000 gives 133,000 and family 1,007,441) are still the oracles. After Phase 1, linking a personal liability to an itemised fund is refused by the API.
+
 Goal: the SMSF's own net (503,000 minus the loan) is computed by the fund itself (migration 0084, Detailed mode), and the duplicate `Other Retirement Assets` 133,000 row is removed. The loan amount you type decides the fund net.
 
 Before you start: have the loan amount confirmed (365,000 or 370,000). Do the steps in one sitting, in this order, and do not open the Dashboard or the Monthly Report between steps 1 and 3 (the Dashboard stores this month's history point every time it loads).
@@ -217,7 +219,7 @@ Invariant at EVERY step: family net worth equals the interim result (1,007,441 f
 
 Because this household is already itemised on the asset side, Phase 1 is smaller for the PO than for a net-only fund; the interim links above are exactly what the build converts.
 
-## 9. PO decisions, with recommendation (answer these before Phase 1)
+## 9. PO decisions, with recommendation (ALL ACCEPTED by the PO on 17-10-2026; the loan amount 370,000 is decided)
 
 | # | Decision | Recommendation |
 |---|---|---|
@@ -239,7 +241,7 @@ Because this household is already itemised on the asset side, Phase 1 is smaller
 
 ## 10. Phased delivery plan, migrations and numbering
 
-Migration numbering (checked across origin/main, every local and remote branch, and every worktree directory on 16-10-2026): main ends at `0285_income_sources_tax_amount.sql`. `0286_module11_prompt_v3_coach_and_pack.sql` exists on `integration/module11-0-to-11-7-20261014` only. `0281_nav2_report_idempotency_key.sql` and `0282_nav2_ambiguity_case_summary.sql` exist only on NAV2 branches (not on main: main goes 0280 then 0283; a file named `0281_income_sources_tax_amount.sql` exists on a branch while main carries the same change as 0285). `0287` and `0288` are reserved by other work. No `0289` or above exists anywhere. This design therefore proposes `0289` onward, and every migration must re-run `node scripts/check-migration-versions.mjs` and `scripts/check-migration-versions-against-branch.mjs --against=origin/main` immediately before it is written (both are blind to unmerged siblings, so also repeat the all-branches scan used here).
+Migration numbering (re-checked 17-10-2026 across origin/main, every local and remote branch via `git log --all`, and every worktree directory): main ends at `0285_income_sources_tax_amount.sql`. `0286_module11_prompt_v3_coach_and_pack.sql` exists on `integration/module11-0-to-11-7-20261014`. `0281_nav2_report_idempotency_key.sql` and `0282_nav2_ambiguity_case_summary.sql` exist only on NAV2 branches. `0287` and `0288` are reserved by other work. **`0292_property_use_and_rent.sql` and `0293_income_rental_derived_from_properties.sql` exist in the worktree `property-use`** (found 17-10-2026). Used by Phase 1: **0289 and 0290**. Free for the next phases: `0291`, then `0294` and above. Every new migration must re-run the all-branches scan immediately before it is written (the two checker scripts are blind to unmerged siblings).
 
 | Phase | Scope | Migrations | Agent sessions (estimate) |
 |---|---|---|---|
@@ -265,7 +267,7 @@ Total through Phase 5 about 8 to 11 agent sessions. The PO pushes; production mi
 8. User confusion between personal member balance and fund net: the copy in 7.4 and the single recording-mode choice are the mitigation; test with the PO household wording.
 9. Unique `smsf` fund per user: a household with two SMSFs cannot be modelled (D9).
 
-## 12. Delivered now: the small, safe first slice (code, on this branch)
+## 12. The first slice (delivered 16-10-2026, extended in Phase 1): the read-only register notice
 
 READ-ONLY diagnostic that tells a user their personal registers may double count the SMSF. It changes no figure, hides nothing, writes nothing, touches no migration.
 
@@ -308,3 +310,52 @@ This round touches NONE of those. Files this round changed: two one-line mounts 
 - New tests: 12 + 17 + 10 pass (after merging origin/main `f2831a7`). Related suites run before the merge: `dataTableGuard`, `dateFormatVisibleTextGuard`, `dateFormatsDayFirstSourceContract`, `fdh12Isolation`, `fdh12FinancialIntegrity`, SMSF tests, `canonicalIntegrationCrossPackage`: pass, except two failures in files this branch does not touch (`countryGateAccessMatrix` MC-15 and `smsfHouseholdIsolation` owner-select); re-run after the merge, see the final report.
 - `scripts/` artifacts restored with `git checkout -- scripts/` after the run.
 - Not done: any DEV or production access, browser verification, any migration, any push.
+
+## 16. Phase 1 as built (17-10-2026)
+
+### 16.1 What was built
+
+| Piece | Where | Notes |
+|---|---|---|
+| `smsf_liabilities` (the fund's own debts) | `supabase/migrations/0289_smsf_fund_liabilities.sql` | Same RLS shape as `smsf_holdings`. Recompute trigger is security definer (account deletion cascades through it). `smsf_compute_detailed_net_value` is now holdings minus fund liabilities minus any still-linked legacy loans. |
+| Mirror floor | 0289 | `retirement_accounts.current_balance` has `CHECK >= 0` (migration 0003), so a fund that owes more than it owns would have broken every holding insert. `smsf_recompute_fund` now floors only the register mirror at zero; the true (possibly negative) net lives in `smsf_funds.detailed_net_value` and `smsf_fund_counted_net()`. Found by a failing test. |
+| `smsf_create_fund` reuses an archived fund row | 0289 | The 7-argument version is dropped and replaced by an 8-argument version with `p_mode` (default itemised). Closes the unique-key trap of section 2. |
+| Either-or rule in the database | `0290_smsf_either_or_mode_rule_and_switch_rpcs.sql` | `trg_smsf_funds_mode_rule` (mode changes only inside a switch function, an itemised fund cannot carry a typed net), `trg_smsf_holdings_mode_rule` and `trg_smsf_liabilities_mode_rule` (an active line needs an itemised fund). They act on a change of mode, typed net or `is_active` only, so legacy rows (the PO fund with a stale typed 138,000) are not broken by ordinary maintenance. |
+| Switch, undo, retire, move, adopt | 0290 | `smsf_entity_switch_mode` (preview-first, atomic: inserts the new representation, archives the old, writes the history), `smsf_entity_undo_last_switch`, `smsf_entity_retire_typed_net`, `smsf_entity_move_linked_loan`, `smsf_entity_adopt_register_rows`. All security definer, scoped to `auth.uid()`, execute revoked from public and anon. |
+| History | 0290 `entity_figure_mode_log` | Append-only (update raises, the owner cannot delete under RLS), owner-readable. |
+| Data-quality function | 0290 `smsf_mode_rule_violations()` | Lists funds holding both representations. |
+| API | `app/api/smsf/[id]/{switch-mode,undo-switch,retire-typed-net,move-loan,adopt-register-rows,history,liabilities}` | Preview is the default (`confirm` false). `lib/services/smsfErrors.ts` maps the rule to 409 `ENTITY_BOTH_REPRESENTATIONS`. The earlier `switch-to-detailed` and `switch-to-summary` routes are removed. Linking a personal liability to an itemised fund returns 409 `ENTITY_USE_FUND_LIABILITIES`. |
+| Family view | `lib/engines/entityBalanceSheet.ts`, `lib/services/entityBalanceSheetData.ts`, `lib/engines/netWorthLevels.ts` | The SMSF block reads the fund's own sheet (itemised: assets and liabilities, net derived; net-only: the typed net). The fund record in the register, linked personal loans (they are inside the sheet) and register rows owned by the SMSF are not added a second time; the latter are listed as `legacyRowsNotCounted`. Block `source` is `entity_record`; `block.sheet` carries the lines. The bridge to the previously reported figure gained `smsf_legacy_rows_not_counted` and `smsf_fund_row_differs`. |
+| Screens | `components/retirement/smsf/` (`SmsfModeSwitch`, `SmsfDetailedWorkspace`, `SmsfLiabilityForm`, `SmsfNetPosition`, `SmsfFundCard`, `SmsfCreateForm`) | Radio choice with the "hides the structure" note; itemised shows Assets, Liabilities and a derived net with no input for it; net-only shows one value and no lines; preview then confirm; Undo; Mode history; "Move into the fund" for a legacy linked loan; "Retire the typed value" for the stale net. |
+| Register notice | `components/entities/EntityRegisterNotice.tsx`, `lib/engines/entityRegisterDiagnostics.ts` | Now three findings, worded to match the new counting. |
+| SMSF P&L | `lib/services/smsfReportData.ts` | Fund liabilities feed the P&L and cash flow beside any still-linked loan (typed, not unit-tested). |
+| Packs | `sql_parts/`, `dev_pack/`, `production_pack/`, `README_PO_STEPS.md` | Section 16.5. |
+
+### 16.2 Counting rules now in force (family view)
+
+- The SMSF is counted from ONE source: its own sheet. Fund record in the register: not added (it mirrors the same net, floored at zero). Personal loan linked to the fund: inside the sheet, not deducted again. Register rows owned by the SMSF (for example "Other Retirement Assets" 133,000): listed, not counted, with a plain notice. This reverses main's stop-gap (where the fund-level row won and hid every SMSF edit, trap T5): the entity record now wins, as section 6 recommended.
+- A debt owned by the SMSF in the personal Liabilities register and NOT linked is also not deducted; the notice says to add it to the fund's liabilities. Entity-free households (no fund): identical to before.
+- Net-only funds count the typed net; stray lines are ignored. Itemised funds count the lines; a stale typed net is ignored and flagged.
+- Personal figures do not change at all (874,441 for the PO household).
+
+### 16.3 Hand oracles (all UNIT-TESTED or PGLITE-tested, AUD)
+
+Assets 475,000 + 3,000 + 25,000 = 503,000; liability 370,000; derived net 133,000; net-only 133,000; typed 138,000 against the same itemised set is a variance of -5,000; both representations rejected by the database (trigger removed: accepted, proving the rule is the cause); mode switch preview changes nothing, confirm applies, undo restores; underwater fund (assets 100,000, liabilities 150,000) is -50,000 in the family view with the register mirror at 0; personal 874,441, family 1,007,441; 365,000 gives 138,000 and family 1,012,441; joint 60/40 of 1,000,000 splits 600,000 / 400,000 and totals 100% with an SMSF present; Trust 600,000 and HUF in full, Company 40% of 250,000 = 100,000 beside the SMSF; entity-free household unchanged.
+
+### 16.4 Negative controls (each shown to bite)
+
+Engine: itemised net ignoring liabilities, legacy rows counted, loader missing `is_active` made 14 named tests fail, restored, 26 pass. Database: rule trigger disabled accepts the typed net, line trigger disabled accepts an asset on a net-only fund. Pack: wrong expected assets, wrong duplicate total, unknown e-mail, loan 600,000, no backup, second run, all refuse and change nothing. Cross-tenant: another household cannot switch, undo, move or adopt, cannot attach lines, cannot read the history; an unauthenticated caller is refused.
+
+### 16.5 The packs and the PO steps in order
+
+See `docs/architecture/entity_level_assets_liabilities_2026-10-16/README_PO_STEPS.md`. DEV: the eight migration parts, then `dev_pack/D1_build_po_shape_for_rehearsal.sql` on a test account, then the production pack against it, then try the screens. Production: P0 diagnose, migration parts, P1 backup, P2 preview, P3 apply (loan 370,000 default, guarded: assets 503,000, exactly one duplicate row worth 133,000, no fund liabilities yet), P4 verify, then push. P9 rolls the cutover back. The SQL is applied BEFORE the code is deployed (otherwise the family figure reads 1,377,441 until P3 runs; PGLITE-tested). Every SQL file passes `tests/unit/support/sqlEditorHazards.ts` (no dollar-quote pairs, no percent signs, nothing the editor misreads), including the migrations themselves.
+
+### 16.6 What is NOT done or NOT verified
+
+- Phase 2 (Entities hub, Trust/HUF/Company enrichment and the same either-or rule for `business_entities`) is not started. The either-or rule is therefore enforced for the SMSF only; Company / Trust / HUF keep their existing application-level exclusivity.
+- Phase 4 (blocking SMSF and other entity owners on new personal-register rows, and the DB owner trigger) is not started; the personal-register notice remains the only guard.
+- NOT run against DEV or production. NOT checked in a real browser (no signed-in session; layout at 375 / 768 / 1280 px, keyboard focus order and the dd/mm/yyyy date fields are covered only by static render and source contracts).
+- `scripts/db-rebuild-check/smsf_jurisdiction_cert.mjs` and `scripts/smsf_production_readonly_schema_check.mjs` still call the two replaced switch functions; they certify the 0084-0090 ledger and are not part of the vitest suite. They need a deliberate update, not a patch to green.
+- The SMSF report "Reconciliation" panel still shows detailed net against summary; for an itemised fund it shows the typed value as empty. Cosmetic.
+- Net Worth Statement branch (`feat/net-worth-statement-report-20261016`): not edited. It reads `block.id` (`tag:smsf`) and `block.source`; the SMSF block now has `source: 'entity_record'` and `block.sheet` (assets[], liabilities[], net, mode), which maps one-to-one onto its `EntityStatementInput` (`entityInputs` override). Its owner-tag path is skipped for this block, so it shows the correct net now and can itemise from `block.sheet` with a small change on its side.
+- Joint ownership of the SMSF fund row itself, more than one SMSF per person (D9), and SMSF income/expense separation (D14) are unchanged.

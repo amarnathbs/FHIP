@@ -38,7 +38,7 @@ describe('diagnoseEntityRegisters: PO household', () => {
     expect(f.rowIds.sort()).toEqual(['other-ret', 'smsf-row']);
     expect(f.pages).toEqual(['retirement']);
     expect(f.message).toContain('$636,000');
-    expect(f.message).toContain('counts only the SMSF-owned row');
+    expect(f.message).toContain('does NOT add that row');
     expect(f.message).toContain('net value');
   });
 
@@ -93,6 +93,19 @@ describe('diagnoseEntityRegisters: SMSF debt among personal liabilities', () => 
     const f = diagnoseEntityRegisters({ retirement, funds: [FUND], liabilities: [], smsfLinkedLiabilityIds: [] });
     expect(f[0].amounts).toBeNull();
     expect(f[0].currency).toBeNull();
+  });
+});
+
+describe('an itemised fund that still carries a typed net value', () => {
+  it('is flagged with the typed amount (138,000), and only when the fund is itemised and active', () => {
+    const itemised: DiagSmsfFund = { ...FUND, mode: 'detailed', typedNet: 138_000, currency: 'AUD' };
+    const f = diagnoseEntityRegisters({ retirement: [], funds: [itemised], liabilities: [], smsfLinkedLiabilityIds: [] });
+    expect(f.map((x) => x.code)).toEqual(['smsf_itemised_with_typed_net']);
+    expect(f[0].amounts).toEqual({ typedNet: 138_000 });
+    expect(f[0].message).toContain('$138,000');
+    expect(diagnoseEntityRegisters({ retirement: [], funds: [{ ...itemised, mode: 'summary' }], liabilities: [], smsfLinkedLiabilityIds: [] })).toEqual([]);
+    expect(diagnoseEntityRegisters({ retirement: [], funds: [{ ...itemised, isActive: false }], liabilities: [], smsfLinkedLiabilityIds: [] })).toEqual([]);
+    expect(diagnoseEntityRegisters({ retirement: [], funds: [{ ...itemised, typedNet: null }], liabilities: [], smsfLinkedLiabilityIds: [] })).toEqual([]);
   });
 });
 

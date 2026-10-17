@@ -37,6 +37,8 @@ interface FundApiRow {
   retirement_account_id: string;
   mode: 'summary' | 'detailed';
   is_active: boolean;
+  summary_balance?: number | string | null;
+  currency_code?: string;
 }
 interface LoanLinkApiRow {
   liability_id: string;
@@ -77,7 +79,14 @@ export function EntityRegisterNotice({ page }: { page: 'retirement' | 'liabiliti
             currency: l.currency_code,
             isActive: l.is_active !== false,
           })),
-          funds: funds.map<DiagSmsfFund>((f) => ({ id: f.id, retirementAccountId: f.retirement_account_id, mode: f.mode, isActive: f.is_active })),
+          funds: funds.map<DiagSmsfFund>((f) => ({
+            id: f.id,
+            retirementAccountId: f.retirement_account_id,
+            mode: f.mode,
+            isActive: f.is_active,
+            typedNet: f.summary_balance === null || f.summary_balance === undefined ? null : Number(f.summary_balance),
+            currency: f.currency_code,
+          })),
           smsfLinkedLiabilityIds: linked,
         });
         if (!cancelled) setFindings(result.filter((f) => f.pages.includes(page)));

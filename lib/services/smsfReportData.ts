@@ -8,6 +8,7 @@ import {
   listSmsfOwnedIncome,
   listSmsfOwnedExpenses,
   listSmsfPropertyLoanLiabilitiesForPnl,
+  listSmsfLiabilities,
   getSmsfFundContributionSource,
 } from '@/lib/services/smsfData';
 
@@ -50,11 +51,12 @@ export async function loadSmsfFundReportBundle(
     return { data: null, error: fundErr ?? new Error('not found') };
   }
 
-  const [incomeResult, expenseResult, loanLinksResult, contributionResult] = await Promise.all([
+  const [incomeResult, expenseResult, loanLinksResult, contributionResult, fundLiabilitiesResult] = await Promise.all([
     listSmsfOwnedIncome(userId, supabase),
     listSmsfOwnedExpenses(userId, supabase),
     listSmsfPropertyLoanLiabilitiesForPnl(fundId, userId, supabase),
     getSmsfFundContributionSource(fundId, userId, supabase),
+    listSmsfLiabilities(fundId, userId, supabase),
   ]);
   if (incomeResult.error) return { data: null, error: new Error(incomeResult.error.message) };
   if (expenseResult.error) return { data: null, error: new Error(expenseResult.error.message) };
@@ -64,9 +66,20 @@ export async function loadSmsfFundReportBundle(
   const expenseRows = expenseResult.data ?? [];
 
   type LoanLink = { liabilities: Pick<LiabilityRow, 'balance' | 'interest_rate' | 'monthly_repayment' | 'debt_type' | 'master_item_key'> | null };
-  const propertyLoanLiabilities = ((loanLinksResult.data ?? []) as unknown as LoanLink[])
-    .map((link) => link.liabilities)
-    .filter((l): l is NonNullable<typeof l> => l != null);
+  if (fundLiabilitiesResult.error) return { data: null, error: new Error(fundLiabilitiesResult.error.message) };
+  // The fund's OWN liabilities (migration 0289, entity-level) and any personal loan still linked to the fund both service the same P&L; each loan is
+  // in exactly one of the two places (the move action retires the personal side), so nothing is counted twice.
+  const fundOwnLoans: NonNullable<LoanLink['liabilities']>[] = (fundLiabilitiesResult.data ?? []).map((l) => ({
+    balance: Number(l.balance),
+    interest_rate: l.interest_rate === null ? null : Number(l.interest_rate),
+    monthly_repayment: l.monthly_repayment === null ? 0 : Number(l.monthly_repayment),
+    debt_type: l.liability_type === 'property_loan' ? 'mortgage' : l.liability_type === 'other_loan' ? 'other_term_loan' : 'other',
+    master_item_key: null,
+  }));
+  const propertyLoanLiabilities = [
+    ...((loanLinksResult.data ?? []) as unknown as LoanLink[]).map((link) => link.liabilities).filter((l): l is NonNullable<typeof l> => l != null),
+    ...fundOwnLoans,
+  ];
 
   const pnl = computeSmsfPnl({ incomeRows, expenseRows, propertyLoanLiabilities });
 

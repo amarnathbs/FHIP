@@ -8,11 +8,11 @@ import path from 'node:path';
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 export const MIG_DIR = path.join(ROOT, 'supabase', 'migrations');
 
-export async function replayLedger(): Promise<PGlite> {
+export async function replayLedger(opts: { skip?: (file: string) => boolean } = {}): Promise<PGlite> {
   const db = await PGlite.create();
   await db.exec(fs.readFileSync(path.join(ROOT, 'scripts', 'db-rebuild-check', 'shim.sql'), 'utf8'));
   const seed = fs.readFileSync(path.join(ROOT, 'supabase', 'seed.sql'), 'utf8');
-  const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
+  const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql') && !(opts.skip?.(f) ?? false)).sort();
   for (const f of files) {
     await db.exec(fs.readFileSync(path.join(MIG_DIR, f), 'utf8').replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, ''));
     if (f.startsWith('0001')) await db.exec(seed);

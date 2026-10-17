@@ -31,6 +31,9 @@ export interface DiagSmsfFund {
   retirementAccountId: string;
   mode: 'summary' | 'detailed';
   isActive: boolean;
+  /** The typed net value stored on the fund (smsf_funds.summary_balance), if any. */
+  typedNet?: number | null;
+  currency?: string;
 }
 
 export interface DiagLiabilityRow {
@@ -50,7 +53,7 @@ export interface EntityRegisterDiagnosticsInput {
   smsfLinkedLiabilityIds: readonly string[];
 }
 
-export type EntityRegisterFindingCode = 'smsf_recorded_twice' | 'smsf_debt_in_personal_liabilities';
+export type EntityRegisterFindingCode = 'smsf_recorded_twice' | 'smsf_debt_in_personal_liabilities' | 'smsf_itemised_with_typed_net';
 
 export interface EntityRegisterFinding {
   code: EntityRegisterFindingCode;
@@ -61,7 +64,7 @@ export interface EntityRegisterFinding {
   rowIds: string[];
   currency: string | null;
   /** Amounts in `currency`; null when the rows are in more than one currency (never added together). */
-  amounts: { fundValue?: number; smsfOwnedRows?: number; combined?: number; debts?: number } | null;
+  amounts: { fundValue?: number; smsfOwnedRows?: number; combined?: number; debts?: number; typedNet?: number } | null;
 }
 
 const sum = (xs: readonly number[]): number => Math.round(xs.reduce((a, b) => a + b, 0) * 100) / 100;
@@ -94,11 +97,11 @@ export function diagnoseEntityRegisters(input: EntityRegisterDiagnosticsInput): 
     findings.push({
       code: 'smsf_recorded_twice',
       pages: ['retirement'],
-      title: 'Your SMSF may be recorded twice',
+      title: 'Your SMSF is recorded in more than one place',
       message:
         currency && fundValue !== undefined && owned !== undefined && combined !== undefined
-          ? `Retirement holds an SMSF fund value of ${money(fundValue, currency)} and also ${ownedRows.length === 1 ? 'a row' : `${ownedRows.length} rows`} owned by the SMSF worth ${money(owned, currency)}. Together they record ${money(combined, currency)} for what may be one fund. While both exist, your family net worth counts only the SMSF-owned ${ownedRows.length === 1 ? 'row' : 'rows'} (${money(owned, currency)}) and shows the fund value without counting it, so changes you make in the SMSF section do not move that figure. If these describe the same fund, keep only one of them, and make sure it is the fund's net value (its assets minus its debts).`
-          : `Retirement holds an SMSF fund value and also ${ownedRows.length === 1 ? 'a row' : `${ownedRows.length} rows`} owned by the SMSF, in more than one currency. If these describe the same fund, keep only one of them, and make sure it is the fund's net value (its assets minus its debts).`,
+          ? `Retirement holds the SMSF fund (${money(fundValue, currency)}) and also ${ownedRows.length === 1 ? 'a row' : `${ownedRows.length} rows`} owned by the SMSF worth ${money(owned, currency)}: ${money(combined, currency)} recorded for what may be one fund. Your family net worth counts the fund's own figures (its assets and liabilities, or its net value) and does NOT add ${ownedRows.length === 1 ? 'that row' : 'those rows'}, which ${ownedRows.length === 1 ? 'is' : 'are'} listed but not counted. Once you have checked the fund's figures, archive ${ownedRows.length === 1 ? 'the row' : 'the rows'} so the fund is recorded once.`
+          : `Retirement holds the SMSF fund and also ${ownedRows.length === 1 ? 'a row' : `${ownedRows.length} rows`} owned by the SMSF, in more than one currency. Your family net worth counts the fund's own figures and does NOT add ${ownedRows.length === 1 ? 'that row' : 'those rows'}. Once you have checked the fund, archive ${ownedRows.length === 1 ? 'it' : 'them'} so the fund is recorded once.`,
       rowIds: all.map((r) => r.id),
       currency,
       amounts: currency ? { fundValue, smsfOwnedRows: owned, combined } : null,
@@ -118,11 +121,28 @@ export function diagnoseEntityRegisters(input: EntityRegisterDiagnosticsInput): 
       title: 'An SMSF debt is listed among your liabilities',
       message:
         `${debts.length === 1 ? 'This debt is' : 'These debts are'} marked as belonging to your SMSF but ${debts.length === 1 ? 'is' : 'are'} recorded here with your personal liabilities: ${names}${currency && total !== undefined ? ` (${money(total, currency)})` : ''}. ` +
-        `${debts.length === 1 ? 'It belongs' : 'They belong'} to the SMSF, not to you personally. Check that the SMSF value you entered is already net of ${debts.length === 1 ? 'this debt' : 'these debts'}, so ${debts.length === 1 ? 'it is' : 'they are'} not taken off twice in the family figure.`,
+        `${debts.length === 1 ? 'It belongs' : 'They belong'} to the SMSF, not to you personally, so ${debts.length === 1 ? 'it is' : 'they are'} not part of your personal net worth. ` +
+        `Record ${debts.length === 1 ? 'it' : 'them'} on the SMSF itself, under the fund's Liabilities, so the fund's net position is right: a debt that is linked to the fund has a Move into the fund button, and any other debt can be added there and then removed here.`,
       rowIds: debts.map((d) => d.id),
       currency,
       amounts: currency && total !== undefined ? { debts: total } : null,
     });
+  }
+
+  // ---- 3. An itemised fund that still carries a typed net value ----------------------------------------------
+  for (const f of input.funds) {
+    if (f.isActive && f.mode === 'detailed' && f.typedNet !== null && f.typedNet !== undefined) {
+      const cur = f.currency ?? 'AUD';
+      findings.push({
+        code: 'smsf_itemised_with_typed_net',
+        pages: ['retirement'],
+        title: 'Your SMSF holds a net value and itemised figures',
+        message: `The SMSF is recorded as itemised (assets and liabilities), and a net value of ${money(f.typedNet, cur)} typed earlier is still stored on it. Only the itemised figures are counted, so the typed value changes nothing, but a fund should be recorded one way only. Retire the typed value in the SMSF section below (it stays in your history).`,
+        rowIds: [f.id],
+        currency: cur,
+        amounts: { typedNet: f.typedNet },
+      });
+    }
   }
 
   return findings;

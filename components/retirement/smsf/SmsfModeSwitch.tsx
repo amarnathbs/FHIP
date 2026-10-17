@@ -53,8 +53,9 @@ export function SmsfModeSwitch({ fund, refreshKey, onChanged }: { fund: SmsfFund
     }
   }, [fund.id]);
   useEffect(() => {
-    void loadHistory();
-  }, [loadHistory, refreshKey]);
+    // setState happens in the promise callback, not synchronously in the effect body.
+    fetchJson<SmsfModeLogRow[]>(`/api/smsf/${fund.id}/history`).then(setHistory, () => setHistory([]));
+  }, [fund.id, refreshKey]);
 
   const lastSwitch = history[0] && (history[0].action === 'to_itemised' || history[0].action === 'to_net_only') ? history[0] : null;
   const checked = target ?? fund.mode;
