@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getReport, getReportByRenderToken } from '@/lib/services/reportsData';
 import { loadReportContent } from '@/lib/services/reportContentData';
 import { ReportPreview } from '@/components/reports/ReportPreview';
+import { PrintTabToolbar } from '@/components/reports/PrintTabToolbar';
 
 // Bare print view — no AppShell chrome, no nav, no action buttons. Opened
 // two ways: (1) a logged-in user visiting directly to manually print/preview
@@ -14,10 +15,10 @@ export default async function ReportPrintPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string; print?: string }>;
 }) {
   const { id } = await params;
-  const { token } = await searchParams;
+  const { token, print } = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -33,6 +34,9 @@ export default async function ReportPrintPage({
 
   return (
     <div className="mx-auto max-w-3xl p-6">
+      {/* A person (session) gets the shared print-tab toolbar (print, close this tab); the headless PDF renderer (token) never does,
+          and the toolbar is hidden in print anyway, so the PDF is unchanged. */}
+      {user && !token ? <PrintTabToolbar autoPrint={print === '1'} parentHref={`/reports/${id}`} parentLabel="Report" /> : null}
       <ReportPreview
         report={result.report}
         sections={result.sections}

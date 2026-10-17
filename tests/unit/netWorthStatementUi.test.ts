@@ -309,7 +309,7 @@ describe('Free vs Premium access', () => {
 
   it('browser printing is the PDF path (Free), so there is no server export route or render token for the statement', () => {
     const printPage = read('app/(print)/reports/net-worth-statement/print/page.tsx');
-    expect(printPage).toContain('PrintToolbar');
+    expect(printPage).toContain('PrintTabToolbar');
     expect(printPage).not.toMatch(/renderToken|getReportByRenderToken|searchParams.*token/);
   });
 });

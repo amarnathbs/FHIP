@@ -140,7 +140,7 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 | `/reports/[id]` | `app/(app)/reports/[id]/page.tsx` | `/reports`: "Back to Reports" | Done |
 | `/reports/[id]/print` | `app/(print)/reports/[id]/print/page.tsx` | none | Exempt: Print / PDF render target, never navigated to by a person. |
 | `/reports/net-worth-statement` | `app/(app)/reports/net-worth-statement/page.tsx` | `/reports`: "Back to Reports" | Done |
-| `/reports/net-worth-statement/print` | `app/(print)/reports/net-worth-statement/print/page.tsx` | `/reports/net-worth-statement`: "Back to Net Worth Statement" (hidden when printing) | Done |
+| `/reports/net-worth-statement/print` | `app/(print)/reports/net-worth-statement/print/page.tsx` | none | Exempt: Bare print view opened in its own tab by the Print button; its PrintTabToolbar closes the tab after printing (a back link would leave two tabs open). |
 | `/reset-password` | `app/(auth)/reset-password/page.tsx` | none | Exempt: Authentication page. |
 | `/resilience` | `app/(app)/resilience/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/resources` | `app/(marketing)/resources/(browse)/page.tsx` | `/`: "Back to home" | Done |
