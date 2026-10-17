@@ -114,6 +114,8 @@ export interface CashFlowSection {
   monthly_net_income: number;
   monthly_expenses: number;
   essential_monthly_expenses: number;
+  /** PO rule 17-10-2026: the owner-occupied home-loan repayment included in essential_monthly_expenses (also inside debt_repayments; 0 = not applied). */
+  essential_includes_home_loan_monthly?: number;
   discretionary_monthly_expenses: number;
   debt_repayments: number;
   insurance_premiums: number;

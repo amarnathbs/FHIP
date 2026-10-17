@@ -4,6 +4,7 @@ import { PageBackLink } from '@/components/navigation/PageBackLink';
 
 import { useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
+import { EssentialHomeLoanNote } from '@/components/essential/EssentialHomeLoanNote';
 import { expenseGridConfig } from '@/lib/grid/configs';
 import { BankStatementImportPanel } from '@/components/expenses/BankStatementImportPanel';
 import { ImportedExpenseActuals } from '@/components/expenses/ImportedExpenseActuals';
@@ -65,6 +66,9 @@ function ExpensesPageContent() {
       <hr className="border-gray-200" />
 
       <FinancialDataGrid key={`grid-${refreshKey}`} config={expenseGridConfig} moduleKey="EXPENSES" />
+
+      {/* PO rule 17-10-2026: the owner-occupied home-loan repayment is essential when no rent is recorded (read-only line). */}
+      <EssentialHomeLoanNote key={`essential-${refreshKey}`} variant="expenses" />
 
       <PlannedFromActualProposal key={`proposal-${refreshKey}`} disabled={importDisabled} onApplied={() => setRefreshKey((k) => k + 1)} />
 
