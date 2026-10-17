@@ -23,6 +23,9 @@ import { DateInput } from '@/components/ui/DateInput';
 import { isFieldHiddenOnRow, isImportSourceType } from '@/lib/grid/provenance';
 import { DataTable } from '@/components/ui/DataTable';
 import { isEntityOwnerTag } from '@/lib/engines/netWorthBasis';
+import { gridFieldBody, gridInputValue } from '@/lib/grid/saveBody';
+import { TAKE_HOME_LIVE_AFTER_FIELD, incomeTakeHome } from '@/lib/grid/incomeTakeHome';
+import { TakeHomeDisplay, TakeHomeLive } from '@/components/grid/IncomeTakeHome';
 
 /**
  * Registers whose footer total is split into PERSONAL and entity-held (PO decision 16-10-2026). Includes Retirement:
@@ -331,6 +334,12 @@ export function FinancialDataGrid({
   // Empty for every grid that doesn't declare a restriction (every grid but
   // Insurance today) — zero behaviour change for them.
   const [hiddenOwnerValues, setHiddenOwnerValues] = useState<Set<string>>(new Set());
+  // PO report 17-10-2026: the Add / Edit form renders ABOVE the saved-records list, so pressing Edit on a row further down (always on a
+  // phone) changed nothing the user could see. Pressing Edit now brings the form into view and moves focus into it: onto the field asked
+  // for (Add take-home -> Net Amount) or, otherwise, the form heading. `formFocusRequest` counts presses so a second press re-focuses.
+  const formRef = useRef<HTMLDivElement | null>(null);
+  const focusFieldRef = useRef<string | null>(null);
+  const [formFocusRequest, setFormFocusRequest] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -413,6 +422,16 @@ export function FinancialDataGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.resource, config.category]);
 
+  useEffect(() => {
+    if (formFocusRequest === 0 || !formRef.current) return;
+    const el = formRef.current;
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'start' });
+    const wanted = focusFieldRef.current ? document.getElementById(`grid-field-${focusFieldRef.current}`) : null;
+    const target = wanted ?? el.querySelector<HTMLElement>('[data-grid-form-heading]');
+    target?.focus({ preventScroll: true });
+    focusFieldRef.current = null;
+  }, [formFocusRequest]);
+
   // Race-safe save for a single, fully-formed row — reused by the form's
   // explicit Save button. Takes the row directly (rather than looking it up
   // from `rows`/`rowsRef`) so it never depends on a render having completed
@@ -458,10 +477,15 @@ export function FinancialDataGrid({
     // and by the same code path every other register sharing this
     // component). `== null` (loose, deliberate) catches both `null` and
     // `undefined` without touching `0`, `false`, or `''` (already handled).
-    for (const f of config.fields) {
-      body[f.name] =
-        !isFieldApplicableForRow(row, f.name, config) || row[f.name] === '' || row[f.name] == null ? undefined : row[f.name];
-    }
+    // gridFieldBody (lib/grid/saveBody.ts): the rule above, plus an explicit null for a `clearable` field the user emptied on a saved row
+    // (Income take-home / tax), so a cleared take-home is cleared, not saved as 0.
+    Object.assign(
+      body,
+      gridFieldBody(config, row, {
+        original: rowsRef.current?.find((r) => r.key === row.key),
+        applicable: (fieldName) => isFieldApplicableForRow(row, fieldName, config),
+      })
+    );
 
     // A saved row that is not its catalogue item's own row (a second record
     // under the same master_item_key, or one whose catalogue item is gone --
@@ -652,12 +676,14 @@ export function FinancialDataGrid({
   // applied before LR-2, never a fresh insert.
   // NEG-05 (owner reset on edit): the draft is a full copy of the existing
   // row (`{ ...row }`), so owner/every other field starts exactly as saved.
-  function openEditForm(row: Row) {
+  function openEditForm(row: Row, focusField?: string) {
     setFormOpen(true);
     setEditingKey(row.key);
     setPickedKey(row.is_custom ? 'custom' : row.key);
     setDraft({ ...row, included: true });
     setFormError(null);
+    focusFieldRef.current = focusField ?? null;
+    setFormFocusRequest((n) => n + 1);
   }
 
   // NEG-03 (cancel retains stale values): `draft` is never written into
@@ -809,6 +835,19 @@ export function FinancialDataGrid({
   }
   const totalWarnings = Array.from(warningsByRow.values()).reduce((s, w) => s + w.length, 0);
 
+  // Income only (PO request 17-10-2026): the take-home of every active row by the ONE net-basis rule (lib/grid/incomeTakeHome.ts), as a
+  // year like "Total annual value" above, with the sources whose take-home is only the assumed gross counted for the note under it.
+  let takeHomeAnnualTotal = 0;
+  let takeHomeAssumedCount = 0;
+  if (config.takeHome) {
+    for (const r of included) {
+      const t = incomeTakeHome(r);
+      if (!t) continue;
+      takeHomeAnnualTotal += t.annualNet;
+      if (t.basis === 'assumed_gross') takeHomeAssumedCount += 1;
+    }
+  }
+
   // Live validation for the row currently open in the form.
   const draftDuplicateNames = draft
     ? findDuplicateCustomNames([...(rows ?? []).filter((r) => r.key !== draft.key), draft])
@@ -955,15 +994,16 @@ export function FinancialDataGrid({
 
           {/* --- The manual Add/Edit form --------------------------------- */}
           {formOpen && (
-            <div className="rounded-card border border-line bg-white p-4">
-              <h2 className="text-sm font-semibold text-ink">
+            <div ref={formRef} className="scroll-mt-4 rounded-card border border-line bg-white p-4">
+              <h2 data-grid-form-heading tabIndex={-1} className="text-sm font-semibold text-ink focus:outline-none">
                 {editingKey === null ? `Add ${SINGULAR_ITEM_LABEL[config.category]}` : `Edit ${draft?.item_label || SINGULAR_ITEM_LABEL[config.category]}`}
               </h2>
 
               {editingKey === null && (
                 <div className="mt-3">
-                  <label className="block text-xs text-muted">What are you adding?</label>
+                  <label htmlFor="grid-field-picker" className="block text-xs text-muted">What are you adding?</label>
                   <select
+                    id="grid-field-picker"
                     value={pickedKey}
                     onChange={(e) => handlePickCatalogItem(e.target.value)}
                     className="mt-1 w-full max-w-sm rounded border px-3 py-2 text-sm sm:w-auto"
@@ -998,13 +1038,15 @@ export function FinancialDataGrid({
                     <div className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800">
                       <ProvenanceBadge row={draft} />{' '}
                       You can still edit it here; a later import will offer to update it again.
+                      {config.takeHome && ' Your take-home pay (Net Amount) and tax can be changed below.'}
                     </div>
                   )}
 
                   {draft.is_custom ? (
                     <div>
-                      <label className="block text-xs text-muted">Name</label>
+                      <label htmlFor="grid-field-item_label" className="block text-xs text-muted">Name</label>
                       <input
+                        id="grid-field-item_label"
                         type="text"
                         value={draft.item_label}
                         placeholder="Item name"
@@ -1026,8 +1068,9 @@ export function FinancialDataGrid({
                   )}
 
                   <div>
-                    <label className="block text-xs text-muted">Owner</label>
+                    <label htmlFor="grid-field-owner" className="block text-xs text-muted">Owner</label>
                     <select
+                      id="grid-field-owner"
                       value={draft.owner}
                       disabled={isIiPublished(draft)}
                       onChange={(e) => updateDraftField('owner', e.target.value)}
@@ -1045,12 +1088,13 @@ export function FinancialDataGrid({
                     .filter((f) => isFieldApplicableForRow(draft, f.name, config))
                     .map((f) => (
                       <div key={f.name}>
-                        <label className="block text-xs text-muted">
+                        <label htmlFor={`grid-field-${f.name}`} className="block text-xs text-muted">
                           {f.label}
                           {f.required && <span className="text-risk"> *</span>}
                         </label>
                         {f.type === 'checkbox' ? (
                           <input
+                            id={`grid-field-${f.name}`}
                             type="checkbox"
                             checked={Boolean(draft[f.name] ?? false)}
                             disabled={isFieldLockedForRow(draft, f.name)}
@@ -1059,6 +1103,7 @@ export function FinancialDataGrid({
                           />
                         ) : f.type === 'select' ? (
                           <select
+                            id={`grid-field-${f.name}`}
                             value={String(draft[f.name] ?? '')}
                             disabled={isFieldLockedForRow(draft, f.name)}
                             onChange={(e) => updateDraftField(f.name, e.target.value)}
@@ -1074,6 +1119,7 @@ export function FinancialDataGrid({
                         ) : f.type === 'date' ? (
                           // Day-first typed date (PO review F13): the native date picker renders in the browser's locale.
                           <DateInput
+                            id={`grid-field-${f.name}`}
                             value={String(draft[f.name] ?? '')}
                             disabled={isFieldLockedForRow(draft, f.name)}
                             onChange={(e) => updateDraftField(f.name, e.target.value)}
@@ -1081,20 +1127,33 @@ export function FinancialDataGrid({
                           />
                         ) : (
                           <input
+                            id={`grid-field-${f.name}`}
                             type={f.type}
                             step={f.step}
                             value={String(draft[f.name] ?? '')}
                             disabled={isFieldLockedForRow(draft, f.name)}
-                            onChange={(e) => updateDraftField(f.name, f.type === 'number' ? Number(e.target.value) : e.target.value)}
+                            aria-describedby={f.helpText ? `grid-field-${f.name}-help` : undefined}
+                            onChange={(e) => updateDraftField(f.name, gridInputValue(f, e.target.value))}
                             className="mt-1 w-full max-w-xs rounded border px-3 py-2 text-sm disabled:bg-gray-50"
                           />
+                        )}
+                        {f.helpText && (
+                          <p id={`grid-field-${f.name}-help`} className="mt-1 max-w-xl text-xs text-muted">
+                            {f.helpText}
+                          </p>
+                        )}
+                        {config.takeHome && f.name === TAKE_HOME_LIVE_AFTER_FIELD && (
+                          <div className="mt-2">
+                            <TakeHomeLive draft={draft} />
+                          </div>
                         )}
                       </div>
                     ))}
 
                   <div>
-                    <label className="block text-xs text-muted">Currency</label>
+                    <label htmlFor="grid-field-currency_code" className="block text-xs text-muted">Currency</label>
                     <select
+                      id="grid-field-currency_code"
                       value={draft.currency_code}
                       disabled={isIiPublished(draft)}
                       onChange={(e) => updateDraftField('currency_code', e.target.value)}
@@ -1191,6 +1250,7 @@ export function FinancialDataGrid({
               <input
                 type="text"
                 placeholder="Search your saved items..."
+                aria-label="Search your saved items"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-56 rounded border px-3 py-2 text-sm"
@@ -1202,9 +1262,10 @@ export function FinancialDataGrid({
           <DataTable label="Financial items" wrapperClassName="hidden rounded-card border bg-white md:block" className="w-full">
             <thead className="border-b bg-gray-50 text-left text-xs uppercase text-muted">
               <tr>
-                <th className="px-3 py-2">Item</th>
+                <th className={config.takeHome ? 'min-w-[11rem] px-3 py-2' : 'px-3 py-2'}>Item</th>
                 <th className="px-3 py-2">Owner</th>
                 <th className={`px-3 py-2 ${NUM_HEADER_CLASS}`}>{config.title === 'Income' || config.title === 'Expenses' ? 'Amount' : 'Value'}</th>
+                {config.takeHome && <th className={`px-3 py-2 ${NUM_HEADER_CLASS}`}>Take-home</th>}
                 <th className="px-3 py-2">Currency</th>
                 <th className="px-3 py-2"></th>
               </tr>
@@ -1212,7 +1273,7 @@ export function FinancialDataGrid({
             <tbody>
               {visibleIncluded.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-muted">
+                  <td colSpan={config.takeHome ? 6 : 5} className="px-3 py-6 text-center text-muted">
                     {included.length === 0 ? `No ${config.title.toLowerCase()} added yet — use "+ Add" above to get started.` : 'No items match your search.'}
                   </td>
                 </tr>
@@ -1228,9 +1289,21 @@ export function FinancialDataGrid({
                   </td>
                   <td className="px-3 py-2">{ownerDisplayLabel(row.owner)}</td>
                   <td className={`px-3 py-2 ${NUM_CELL_CLASS}`}>{formatMoneyWhole(Number(row[config.valueField] ?? 0), row.currency_code as 'AUD' | 'INR')}</td>
+                  {config.takeHome && (
+                    // text-right without the nowrap that NUM_CELL_CLASS carries: the basis label below the figure may wrap in a squeezed column.
+                    <td className="px-3 py-2 text-right">
+                      <TakeHomeDisplay
+                        row={row}
+                        currency={row.currency_code}
+                        itemLabel={row.item_label}
+                        layout="cell"
+                        onAddTakeHome={() => openEditForm(row, 'net_amount')}
+                      />
+                    </td>
+                  )}
                   <td className="px-3 py-2">{row.currency_code}</td>
-                  <td className="px-3 py-2 text-right">
-                    <button onClick={() => openEditForm(row)} className="text-xs font-medium text-trust hover:underline">
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <button onClick={() => openEditForm(row)} className="inline-flex min-h-[24px] items-center text-xs font-medium text-trust hover:underline">
                       Edit
                     </button>
                     <button
@@ -1243,7 +1316,7 @@ export function FinancialDataGrid({
                             ? "Removing isn't available for your country yet"
                             : undefined
                       }
-                      className="ml-3 text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
+                      className="ml-3 inline-flex min-h-[24px] items-center text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Remove
                     </button>
@@ -1272,9 +1345,18 @@ export function FinancialDataGrid({
                     {warningsByRow.has(row.key) && (
                       <p className="mt-1 text-xs text-caution">{warningsByRow.get(row.key)!.join('; ')}</p>
                     )}
+                    {config.takeHome && (
+                      <TakeHomeDisplay
+                        row={row}
+                        currency={row.currency_code}
+                        itemLabel={row.item_label}
+                        layout="card"
+                        onAddTakeHome={() => openEditForm(row, 'net_amount')}
+                      />
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    <button onClick={() => openEditForm(row)} className="text-xs font-medium text-trust hover:underline">
+                    <button onClick={() => openEditForm(row)} className="inline-flex min-h-[24px] items-center text-xs font-medium text-trust hover:underline">
                       Edit
                     </button>
                     <button
@@ -1287,7 +1369,7 @@ export function FinancialDataGrid({
                             ? "Removing isn't available for your country yet"
                             : undefined
                       }
-                      className="text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-[24px] items-center text-xs text-risk disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Remove
                     </button>
@@ -1312,6 +1394,17 @@ export function FinancialDataGrid({
               </p>
             )}
           </div>
+          {config.takeHome && (
+            <div>
+              <p className="text-muted">Total take-home (annual)</p>
+              <p className="font-semibold text-ink" data-testid="grid-take-home-total">{formatMoneyWhole(takeHomeAnnualTotal, defaultCurrency)}</p>
+              {takeHomeAssumedCount > 0 && (
+                <p className="text-xs text-amber-900" data-testid="grid-take-home-assumed-note">
+                  {takeHomeAssumedCount} source{takeHomeAssumedCount === 1 ? '' : 's'} use{takeHomeAssumedCount === 1 ? 's' : ''} the gross as take-home.
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <p className="text-muted">Missing fields</p>
             <p className="font-semibold text-ink">{missingRequiredCount}</p>
