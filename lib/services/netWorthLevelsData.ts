@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CanonicalFinancialSnapshotResult } from '@/lib/read-models/snapshot';
 import type { BusinessEntityWithLineItems } from '@/lib/engines/businessEntityValuation';
+import { loadSmsfBalanceSheets } from '@/lib/services/entityBalanceSheetData';
 import {
   computeNetWorthLevels,
   toNetWorthEntityInput,
@@ -140,6 +141,10 @@ export async function loadNetWorthLevels(args: {
     }
   }
 
-  return computeNetWorthLevels({ currency, rows, entities, previouslyReported: args.previouslyReported, personalSummaryNet: args.personalSummaryNet, unavailable });
+  // An SMSF that records its own assets and liabilities (or a typed net) is read from that record; a failed read falls back to the register-row path and says so.
+  const sheetResult = await loadSmsfBalanceSheets({ userId, supabase, snapshot });
+  if (sheetResult.sheets === null) unavailable.push({ section: 'smsf_balance_sheet', reason: 'query_failed' });
+
+  return computeNetWorthLevels({ currency, rows, entities, entitySheets: sheetResult.sheets ?? [], previouslyReported: args.previouslyReported, personalSummaryNet: args.personalSummaryNet, unavailable });
 }
 

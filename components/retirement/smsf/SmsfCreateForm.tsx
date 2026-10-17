@@ -14,6 +14,8 @@ import type { SmsfFundRow } from './types';
 export function SmsfCreateForm({ onCreated, onCancel }: { onCreated: (fund: SmsfFundRow) => void; onCancel: () => void }) {
   const [accountName, setAccountName] = useState('');
   const [fundName, setFundName] = useState('');
+  // Recording mode (PO decision 17-10-2026): itemised is the recommended default; a net value only is the alternative. Never both.
+  const [mode, setMode] = useState<'detailed' | 'summary'>('detailed');
   const [balance, setBalance] = useState('');
   const [balanceDate, setBalanceDate] = useState('');
   const [owner, setOwner] = useState<'self' | 'spouse' | 'joint'>('self');
@@ -21,7 +23,7 @@ export function SmsfCreateForm({ onCreated, onCancel }: { onCreated: (fund: Smsf
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = accountName.trim() !== '' && fundName.trim() !== '' && balance !== '' && Number(balance) >= 0;
+  const canSubmit = accountName.trim() !== '' && fundName.trim() !== '' && (mode === 'detailed' || (balance !== '' && Number(balance) >= 0));
 
   async function submit() {
     if (!canSubmit) return;
@@ -34,8 +36,8 @@ export function SmsfCreateForm({ onCreated, onCancel }: { onCreated: (fund: Smsf
         body: JSON.stringify({
           account_name: accountName,
           fund_name: fundName,
-          summary_balance: Number(balance),
-          summary_balance_date: balanceDate || null,
+          mode,
+          ...(mode === 'summary' ? { summary_balance: Number(balance), summary_balance_date: balanceDate || null } : {}),
           owner,
           currency_code: currency,
           country_code: 'AU',
@@ -55,6 +57,26 @@ export function SmsfCreateForm({ onCreated, onCancel }: { onCreated: (fund: Smsf
   return (
     <div className="rounded-card border border-line bg-app p-4">
       <h3 className="text-sm font-semibold text-ink">Add an SMSF</h3>
+      <fieldset className="mt-3">
+        <legend className="text-xs font-semibold text-ink">How do you want to record this fund?</legend>
+        <div className="mt-1 space-y-2">
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input type="radio" name="smsf-create-mode" checked={mode === 'detailed'} onChange={() => setMode('detailed')} className="mt-1" />
+            <span>
+              <strong>Itemised assets and liabilities (recommended)</strong>
+              <span className="block text-xs text-muted">You enter what the fund owns and owes next. FHIP works out the net, so there is no net value to type.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input type="radio" name="smsf-create-mode" checked={mode === 'summary'} onChange={() => setMode('summary')} className="mt-1" />
+            <span>
+              <strong>Net value only</strong>
+              <span className="block text-xs text-muted">A single net value hides what the fund owns and owes. FHIP cannot show its debts or how it changes when a loan is repaid.</span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor="smsf-account-name" className="block text-xs text-muted">
@@ -82,31 +104,35 @@ export function SmsfCreateForm({ onCreated, onCancel }: { onCreated: (fund: Smsf
             className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
           />
         </div>
-        <div>
-          <label htmlFor="smsf-balance" className="block text-xs text-muted">
-            Current SMSF Value
-          </label>
-          <input
-            id="smsf-balance"
-            type="number"
-            step="0.01"
-            min={0}
-            value={balance}
-            onChange={(e) => setBalance(e.target.value)}
-            className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div>
-          <label htmlFor="smsf-balance-date" className="block text-xs text-muted">
-            Valuation Date
-          </label>
-          <DateInput
-            id="smsf-balance-date"
-            value={balanceDate}
-            onChange={(e) => setBalanceDate(e.target.value)}
-            className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
-          />
-        </div>
+        {mode === 'summary' && (
+          <>
+            <div>
+              <label htmlFor="smsf-balance" className="block text-xs text-muted">
+                Net value (assets minus debts)
+              </label>
+              <input
+                id="smsf-balance"
+                type="number"
+                step="0.01"
+                min={0}
+                value={balance}
+                onChange={(e) => setBalance(e.target.value)}
+                className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="smsf-balance-date" className="block text-xs text-muted">
+                Valuation Date
+              </label>
+              <DateInput
+                id="smsf-balance-date"
+                value={balanceDate}
+                onChange={(e) => setBalanceDate(e.target.value)}
+                className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
+              />
+            </div>
+          </>
+        )}
         <div>
           <label htmlFor="smsf-owner" className="block text-xs text-muted">
             Owner
@@ -139,9 +165,9 @@ export function SmsfCreateForm({ onCreated, onCancel }: { onCreated: (fund: Smsf
       </div>
 
       <p className="mt-3 text-xs text-muted">
-        This creates your SMSF in <strong>Summary Mode</strong> — FHIP will use this value in your retirement and Net Worth
-        calculations. You can optionally set up Detailed Holdings later; Summary Mode remains a complete, valid way to track
-        your SMSF indefinitely.
+        {mode === 'detailed'
+          ? 'This creates your SMSF with no figures yet. Add its assets and liabilities next; the net position is worked out for you and used in your family net worth.'
+          : 'This creates your SMSF with a single net value, which FHIP uses in your retirement and family net worth. You can switch to itemised assets and liabilities at any time; what you had is kept in your history.'}
       </p>
 
       {error && <p className="mt-2 text-sm text-risk">{error}</p>}

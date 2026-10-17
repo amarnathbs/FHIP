@@ -5,17 +5,17 @@ import { useState } from 'react';
 import { fetchJson, formatMoneySafe, formatDateSafe } from './format';
 import { SmsfMembers } from './SmsfMembers';
 import { SmsfDetailedWorkspace } from './SmsfDetailedWorkspace';
+import { SmsfModeSwitch } from './SmsfModeSwitch';
 import { SmsfReportsPanel } from './SmsfReportsPanel';
 import type { SmsfFundRow } from './types';
 
-// One SMSF fund's card (spec s.4-9, s.32-33). Summary Mode is rendered as a
-// complete, valid, permanent state here — nothing about this card implies
-// Detailed Holdings are required or that Summary is "incomplete" (spec s.9:
-// "not an incomplete state").
+// One SMSF fund's card. The fund is recorded in exactly ONE of two ways (PO decision 17-10-2026): ITEMISED (assets and liabilities, the net
+// is worked out for you and cannot be typed) or a NET VALUE ONLY (one typed value, no assets or liabilities). The mode chooser below changes
+// it safely: preview first, history kept, undo available. The database enforces the rule (migration 0290).
 export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfFundRow; onFundChanged: () => void }) {
   const [fund, setFund] = useState(initialFund);
   const [editingSummary, setEditingSummary] = useState(false);
-  const [showDetailedSetup, setShowDetailedSetup] = useState(fund.mode === 'detailed');
+  const [refreshKey, setRefreshKey] = useState(0);
   const [fundNameDraft, setFundNameDraft] = useState(fund.fund_name);
   const [balanceDraft, setBalanceDraft] = useState(fund.summary_balance != null ? String(fund.summary_balance) : '');
   const [dateDraft, setDateDraft] = useState(fund.summary_balance_date ?? '');
@@ -25,10 +25,20 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
 
   const badge =
     fund.mode === 'detailed'
-      ? { text: 'Detailed Mode — Active valuation', cls: 'bg-progress/10 text-progress' }
-      : showDetailedSetup
-        ? { text: 'Detailed Setup — Not yet active', cls: 'bg-attention/10 text-attention' }
-        : { text: 'Summary Mode — Active valuation', cls: 'bg-trust/10 text-trust' };
+      ? { text: 'Itemised: assets and liabilities, net worked out', cls: 'bg-progress/10 text-progress' }
+      : { text: 'Net value only', cls: 'bg-trust/10 text-trust' };
+
+  async function afterModeChange() {
+    try {
+      const fresh = await fetchJson<SmsfFundRow>(`/api/smsf/${fund.id}`);
+      setFund((f) => ({ ...f, ...fresh, retirement_accounts: f.retirement_accounts }));
+      setBalanceDraft(fresh.summary_balance != null ? String(fresh.summary_balance) : '');
+    } catch {
+      /* the parent reload below refreshes the list anyway */
+    }
+    setRefreshKey((k) => k + 1);
+    onFundChanged();
+  }
 
   async function saveSummary() {
     setSaving(true);
@@ -72,123 +82,79 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
         <SmsfMembers fundId={fund.id} currency={fund.currency_code} />
       </div>
 
-      {/* Summary Mode figures + inline edit (spec s.8-9). Always shown and
-          editable regardless of current mode — spec s.19-21: even while
-          Detailed is active, Summary remains a recorded figure users can
-          revisit when they switch back. */}
       <div className="mt-3 border-t border-line pt-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Summary</h4>
-          {!editingSummary && fund.mode === 'summary' && (
-            <button onClick={() => setEditingSummary(true)} className="text-xs text-trust hover:underline">
-              Edit
-            </button>
-          )}
-        </div>
+        <SmsfModeSwitch fund={fund} refreshKey={refreshKey} onChanged={afterModeChange} />
+      </div>
 
-        {editingSummary ? (
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div>
-              <label htmlFor={`fund-name-${fund.id}`} className="block text-xs text-muted">
-                Fund Name
-              </label>
-              <input
-                id={`fund-name-${fund.id}`}
-                type="text"
-                value={fundNameDraft}
-                onChange={(e) => setFundNameDraft(e.target.value)}
-                className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor={`fund-balance-${fund.id}`} className="block text-xs text-muted">
-                Current SMSF Value
-              </label>
-              <input
-                id={`fund-balance-${fund.id}`}
-                type="number"
-                step="0.01"
-                min={0}
-                value={balanceDraft}
-                onChange={(e) => setBalanceDraft(e.target.value)}
-                className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor={`fund-date-${fund.id}`} className="block text-xs text-muted">
-                Valuation Date
-              </label>
-              <DateInput
-                id={`fund-date-${fund.id}`}
-                value={dateDraft}
-                onChange={(e) => setDateDraft(e.target.value)}
-                className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor={`fund-notes-${fund.id}`} className="block text-xs text-muted">
-                Notes
-              </label>
-              <input
-                id={`fund-notes-${fund.id}`}
-                type="text"
-                value={notesDraft}
-                onChange={(e) => setNotesDraft(e.target.value)}
-                className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
-              />
-            </div>
-            {error && <p className="text-sm text-risk sm:col-span-2">{error}</p>}
-            <div className="flex items-center gap-3 sm:col-span-2">
-              <button
-                onClick={saveSummary}
-                disabled={saving || balanceDraft === ''}
-                className="rounded bg-trust px-4 py-1.5 text-sm text-white disabled:opacity-60"
-              >
-                {saving ? 'Saving…' : 'Save'}
+      {fund.mode === 'summary' && (
+        <div className="mt-3 border-t border-line pt-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Net value</h4>
+            {!editingSummary && (
+              <button onClick={() => setEditingSummary(true)} className="text-xs text-trust hover:underline">
+                Edit
               </button>
-              <button onClick={() => setEditingSummary(false)} className="text-sm text-muted hover:underline">
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-            <div>
-              <dt className="text-xs text-muted">Current SMSF Value</dt>
-              <dd className="font-semibold tabular-nums text-ink">{formatMoneySafe(fund.summary_balance, fund.currency_code)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">Valuation Date</dt>
-              <dd className="text-ink">{formatDateSafe(fund.summary_balance_date)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">Currency</dt>
-              <dd className="text-ink">{fund.currency_code}</dd>
-            </div>
-            {fund.notes && (
-              <div className="col-span-2 sm:col-span-4">
-                <dt className="text-xs text-muted">Notes</dt>
-                <dd className="text-ink">{fund.notes}</dd>
-              </div>
             )}
-          </dl>
-        )}
-        <p className="mt-2 text-[11px] text-muted">
-          FHIP is currently using the SMSF {fund.mode === 'detailed' ? 'detailed' : 'summary'} value in your retirement and Net
-          Worth calculations.
-        </p>
-      </div>
+          </div>
+          {editingSummary ? (
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <label htmlFor={`fund-name-${fund.id}`} className="block text-xs text-muted">Fund Name</label>
+                <input id={`fund-name-${fund.id}`} type="text" value={fundNameDraft} onChange={(e) => setFundNameDraft(e.target.value)} className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label htmlFor={`fund-balance-${fund.id}`} className="block text-xs text-muted">Net value (assets minus debts)</label>
+                <input id={`fund-balance-${fund.id}`} type="number" inputMode="decimal" step="0.01" min={0} value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label htmlFor={`fund-date-${fund.id}`} className="block text-xs text-muted">Valuation Date</label>
+                <DateInput id={`fund-date-${fund.id}`} value={dateDraft} onChange={(e) => setDateDraft(e.target.value)} className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label htmlFor={`fund-notes-${fund.id}`} className="block text-xs text-muted">Notes</label>
+                <input id={`fund-notes-${fund.id}`} type="text" value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm" />
+              </div>
+              {error && <p role="alert" className="text-sm text-risk sm:col-span-2">{error}</p>}
+              <div className="flex items-center gap-3 sm:col-span-2">
+                <button onClick={saveSummary} disabled={saving || balanceDraft === ''} className="rounded bg-trust px-4 py-1.5 text-sm text-white disabled:opacity-60">
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+                <button onClick={() => setEditingSummary(false)} className="text-sm text-muted hover:underline">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+              <div>
+                <dt className="text-xs text-muted">Net value</dt>
+                <dd className="font-semibold tabular-nums text-ink">{formatMoneySafe(fund.summary_balance, fund.currency_code)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Valuation Date</dt>
+                <dd className="text-ink">{formatDateSafe(fund.summary_balance_date)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Currency</dt>
+                <dd className="text-ink">{fund.currency_code}</dd>
+              </div>
+              {fund.notes && (
+                <div className="col-span-2 sm:col-span-4">
+                  <dt className="text-xs text-muted">Notes</dt>
+                  <dd className="text-ink">{fund.notes}</dd>
+                </div>
+              )}
+            </dl>
+          )}
+          <p className="mt-2 text-[11px] text-muted">
+            This fund is recorded as a net value only, so assets and liabilities cannot be added to it. Choose &quot;Itemised assets and liabilities&quot; above to enter them.
+          </p>
+        </div>
+      )}
 
-      {/* Staged Detailed Holdings entry point (spec s.10-11). */}
-      <div className="mt-3 border-t border-line pt-3">
-        {!showDetailedSetup ? (
-          <button onClick={() => setShowDetailedSetup(true)} className="text-sm font-medium text-trust hover:underline">
-            Set up Detailed Holdings
-          </button>
-        ) : (
-          <SmsfDetailedWorkspace fund={fund} onFundUpdated={handleFundUpdated} />
-        )}
-      </div>
+      {fund.mode === 'detailed' && (
+        <div className="mt-3 border-t border-line pt-3">
+          <SmsfDetailedWorkspace key={refreshKey} fund={fund} onFundUpdated={handleFundUpdated} />
+        </div>
+      )}
 
       <SmsfReportsPanel fund={fund} />
     </div>

@@ -2,6 +2,7 @@ import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } fr
 import { createClient } from '@/lib/supabase/server';
 import { listSmsfHoldings, createSmsfHolding } from '@/lib/services/smsfData';
 import { smsfHoldingSchema } from '@/lib/validation/smsf';
+import { smsfRpcError } from '@/lib/services/smsfErrors';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,5 +28,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const supabase = await createClient();
   const { data, error } = await createSmsfHolding(id, user.id, parsed.data, supabase);
-  return error ? bad(error.message) : ok(data);
+  if (error) {
+    // A net-value-only fund refuses assets (ENTITY_BOTH_REPRESENTATIONS, migration 0290): 409 with a plain message.
+    const e = smsfRpcError(error);
+    return bad(e.message, e.status, e.errorCode);
+  }
+  return ok(data);
 }

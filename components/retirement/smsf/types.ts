@@ -63,6 +63,63 @@ export interface SmsfMemberRow {
   retirement_members: { id: string; member_type: 'self' | 'spouse' } | null;
 }
 
+export interface SmsfLiabilityRow {
+  id: string;
+  user_id: string;
+  smsf_fund_id: string;
+  liability_name: string;
+  liability_type: 'property_loan' | 'other_loan' | 'tax_payable' | 'other';
+  lender: string | null;
+  balance: number;
+  interest_rate: number | null;
+  monthly_repayment: number | null;
+  currency_code: CurrencyCode;
+  country_code: CountryCode | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const LIABILITY_TYPE_LABELS: Record<SmsfLiabilityRow['liability_type'], string> = {
+  property_loan: 'Property loan',
+  other_loan: 'Other loan',
+  tax_payable: 'Tax payable',
+  other: 'Other debt',
+};
+
+/** What the switch function reports before anything changes (confirm = false) and after (confirm = true). */
+export interface SmsfSwitchResult {
+  status: 'preview' | 'applied';
+  from_mode?: SmsfMode;
+  to_mode?: SmsfMode;
+  net_before: number | null;
+  net_after: number | null;
+  variance: number;
+  undoes?: string;
+}
+
+export interface SmsfModeLogRow {
+  id: string;
+  action: 'to_itemised' | 'to_net_only' | 'retire_typed_net' | 'move_loan' | 'adopt_register_rows' | 'undo';
+  from_mode: SmsfMode | null;
+  to_mode: SmsfMode | null;
+  net_before: number | null;
+  net_after: number | null;
+  variance: number | null;
+  created_at: string;
+  undoes_log_id: string | null;
+}
+
+export const MODE_LOG_LABELS: Record<SmsfModeLogRow['action'], string> = {
+  to_itemised: 'Switched to itemised assets and liabilities',
+  to_net_only: 'Switched to a net value only',
+  retire_typed_net: 'Retired a leftover typed net value',
+  move_loan: 'Moved a personal loan into the fund',
+  adopt_register_rows: 'Archived duplicate Retirement rows',
+  undo: 'Undid the previous change',
+};
+
 export interface LiabilityOption {
   id: string;
   liability_name: string;
@@ -123,6 +180,7 @@ export function holdingTypeOptionsFor(holdingClass: HoldingClass) {
 export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Request to ${url} failed`);
+  // Coded errors arrive as { error: CODE, message }: show the plain message, never the code.
+  if (!res.ok) throw new Error(json.message ?? json.error ?? `Request to ${url} failed`);
   return json.data as T;
 }

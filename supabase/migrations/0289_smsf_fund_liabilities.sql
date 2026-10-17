@@ -1,20 +1,20 @@
 -- 0289 -- SMSF fund liabilities (entity-level assets AND liabilities, part 1 of 2).
 --
 -- WHY. An SMSF could record its assets (smsf_holdings) but had NO place for its own debts: the only route was a
--- PERSONAL liabilities row linked with property_liability_links (smsf_property_loan). That put the fund's debt in the
+-- PERSONAL liabilities row linked with property_liability_links (smsf_property_loan). That put the funds debt in the
 -- personal register, where it was deducted a second time (the fund balance is already a NET figure). The PO decision of
 -- 17-10-2026: enter assets and liabilities separately at entity level and DERIVE the net. Design:
 -- docs/architecture/ENTITY_LEVEL_ASSETS_AND_LIABILITIES_DESIGN_2026-10-16.md (section 5).
 --
--- WHAT THIS MIGRATION DOES (additive; nothing is dropped, nothing is backfilled, no existing figure moves):
---   1. smsf_liabilities: the fund's own debts, a child of smsf_funds exactly like smsf_holdings (same RLS shape).
+-- WHAT THIS MIGRATION DOES (additive, nothing is dropped, nothing is backfilled, no existing figure moves):
+--   1. smsf_liabilities: the funds own debts, a child of smsf_funds exactly like smsf_holdings (same RLS shape).
 --   2. smsf_liabilities_total_aud(): same conversion convention as smsf_holdings_total_aud() in migration 0084.
---   3. smsf_compute_detailed_net_value() now returns holdings minus the fund's own liabilities minus any still-linked
+--   3. smsf_compute_detailed_net_value() now returns holdings minus the funds own liabilities minus any still-linked
 --      legacy personal loans (each loan is counted once: a loan lives in smsf_liabilities OR as a linked personal
 --      row, never both, because the move action in migration 0290 retires the personal side in the same transaction).
 --      PREDECESSOR (defined by migration 0084, no later migration redefines it): return holdings total minus linked
 --      loans total. Only the second term list changes.
---   3b. smsf_recompute_fund() floors only the Retirement-register mirror at zero (a CHECK there forbids negatives); the
+--   3b. smsf_recompute_fund() floors only the Retirement-register mirror at zero (a CHECK there forbids negatives), the
 --      true net, possibly negative, stays in smsf_funds.detailed_net_value and smsf_fund_counted_net().
 --   4. Recompute triggers on smsf_liabilities, security definer with a pinned search_path, exactly the shape migration
 --      0137 gave the holdings trigger (account deletion cascades through these tables).
@@ -22,8 +22,8 @@
 --      p_mode (default detailed = itemised, the recommended way to record a fund). The old 7-argument version is
 --      dropped and replaced by the 8-argument one (named-argument callers keep working).
 --
--- ROLLBACK (safe while no smsf_liabilities row exists; otherwise archive the rows first):
---   drop trigger trg_smsf_liabilities_recompute on smsf_liabilities; drop table smsf_liabilities;
+-- ROLLBACK (safe while no smsf_liabilities row exists, otherwise archive the rows first):
+--   drop trigger trg_smsf_liabilities_recompute on smsf_liabilities, drop table smsf_liabilities,
 --   then re-create smsf_compute_detailed_net_value() and smsf_create_fund() using the bodies in migration 0084.
 
 begin;
@@ -47,15 +47,15 @@ create table if not exists smsf_liabilities (
 );
 
 comment on table smsf_liabilities is
-  'Entity-level SMSF debts (migration 0289). Counted only while the fund is itemised (smsf_funds.mode = detailed); the fund net is derived as holdings minus these rows (and any still-linked legacy personal loans). Never read by the personal liabilities, DTI or DSR formulas: the exclusion is structural, this is a different table. Soft-retired with is_active, never hard-deleted by the app.';
-comment on column smsf_liabilities.balance is 'Outstanding amount, in currency_code. A fund debt is always non-negative; a fund that owes more than it owns shows a negative NET, never a negative liability.';
+  'Entity-level SMSF debts (migration 0289). Counted only while the fund is itemised (smsf_funds.mode = detailed), the fund net is derived as holdings minus these rows (and any still-linked legacy personal loans). Never read by the personal liabilities, DTI or DSR formulas: the exclusion is structural, this is a different table. Soft-retired with is_active, never hard-deleted by the app.';
+comment on column smsf_liabilities.balance is 'Outstanding amount, in currency_code. A fund debt is always non-negative, a fund that owes more than it owns shows a negative NET, never a negative liability.';
 
 create index if not exists idx_smsf_liabilities_fund on smsf_liabilities(smsf_fund_id) where is_active;
 create index if not exists idx_smsf_liabilities_user on smsf_liabilities(user_id);
 
 alter table smsf_liabilities enable row level security;
-drop policy if exists "own rows - smsf liabilities" on smsf_liabilities;
-create policy "own rows - smsf liabilities" on smsf_liabilities
+drop policy if exists own_rows_smsf_liabilities on smsf_liabilities;
+create policy own_rows_smsf_liabilities on smsf_liabilities
   for all using (auth.uid() = user_id)
   with check (
     auth.uid() = user_id
@@ -63,7 +63,7 @@ create policy "own rows - smsf liabilities" on smsf_liabilities
   );
 
 -- Same fx convention as smsf_holdings_total_aud() (migration 0084): INR per 1 AUD, AUD = INR / rate.
-create or replace function smsf_liabilities_total_aud(p_fund_id uuid) returns numeric as $$
+create or replace function smsf_liabilities_total_aud(p_fund_id uuid) returns numeric as $fn$
 declare
   fx numeric;
   total numeric;
@@ -80,28 +80,28 @@ begin
 
   return total;
 end;
-$$ language plpgsql stable;
+$fn$ language plpgsql stable;
 
-create or replace function smsf_compute_detailed_net_value(p_fund_id uuid) returns numeric as $$
+create or replace function smsf_compute_detailed_net_value(p_fund_id uuid) returns numeric as $fn$
 begin
   return smsf_holdings_total_aud(p_fund_id) - smsf_liabilities_total_aud(p_fund_id) - smsf_linked_loans_total_aud(p_fund_id);
 end;
-$$ language plpgsql stable;
+$fn$ language plpgsql stable;
 
 comment on function smsf_compute_detailed_net_value(uuid) is
   'Itemised SMSF net = active holdings minus the fund''s own active liabilities (smsf_liabilities, 0289) minus any still-linked legacy personal loans (property_liability_links, 0084). Derived, never typed.';
 
 -- The fund row in the Retirement register mirrors the derived net, but retirement_accounts.current_balance carries a
 -- CHECK (current_balance >= 0) (migration 0003). A fund that owes more than it owns has a genuinely NEGATIVE net, which
--- smsf_funds.detailed_net_value keeps exactly (PO decision: a negative entity net flows through as negative); only the
+-- smsf_funds.detailed_net_value keeps exactly (PO decision: a negative entity net flows through as negative), only the
 -- retirement mirror is floored at zero. Anything that wants the true net reads smsf_fund_counted_net(), never the mirror.
--- PREDECESSOR: smsf_recompute_fund() as re-declared by migration 0148 (security definer, certified balance bracket); the
+-- PREDECESSOR: smsf_recompute_fund() as re-declared by migration 0148 (security definer, certified balance bracket), the
 -- only change is greatest(v_net, 0) on the mirror write.
 create or replace function smsf_recompute_fund(p_fund_id uuid) returns numeric
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_mode text;
   v_retirement_account_id uuid;
@@ -127,24 +127,24 @@ begin
 
   return v_net;
 end;
-$$;
+$fn$;
 
 -- The net that is COUNTED for a fund: the derived net while itemised (may be negative), the typed net while net value only.
-create or replace function smsf_fund_counted_net(p_fund_id uuid) returns numeric as $$
+create or replace function smsf_fund_counted_net(p_fund_id uuid) returns numeric as $fn$
   select case when f.mode = 'detailed' then coalesce(f.detailed_net_value, 0) else coalesce(f.summary_balance, 0) end
   from smsf_funds f where f.id = p_fund_id;
-$$ language sql stable;
+$fn$ language sql stable;
 
 create or replace function trg_smsf_recompute_from_liability_row() returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 begin
   perform smsf_recompute_fund(coalesce(new.smsf_fund_id, old.smsf_fund_id));
   return coalesce(new, old);
 end;
-$$;
+$fn$;
 
 drop trigger if exists trg_smsf_liabilities_recompute on smsf_liabilities;
 create trigger trg_smsf_liabilities_recompute
@@ -164,7 +164,7 @@ create or replace function smsf_create_fund(
   p_currency_code char(3) default 'AUD',
   p_country_code char(2) default 'AU',
   p_mode text default 'detailed'
-) returns table (retirement_account_id uuid, smsf_fund_id uuid) as $$
+) returns table (retirement_account_id uuid, smsf_fund_id uuid) as $fn$
 declare
   v_uid uuid := auth.uid();
   v_ra_id uuid;
@@ -186,7 +186,7 @@ begin
   where ra.user_id = v_uid and ra.master_item_key = 'smsf';
 
   if v_ra_id is not null and v_ra_active then
-    raise exception 'smsf: you already have an SMSF fund; edit it instead of creating another' using errcode = '23505';
+    raise exception 'smsf: you already have an SMSF fund, edit it instead of creating another' using errcode = '23505';
   end if;
 
   if v_ra_id is not null then
@@ -220,7 +220,7 @@ begin
 
   return query select v_ra_id, v_fund_id;
 end;
-$$ language plpgsql;
+$fn$ language plpgsql;
 
 comment on function smsf_create_fund(text, text, numeric, date, text, char(3), char(2), text) is
   'Atomic SMSF fund creation (retirement_accounts + smsf_funds together), 0289. p_mode detailed (default) = itemised: no typed net, assets and liabilities are entered afterwards and the net is derived. p_mode summary = a typed net value only. An archived fund row is reused (it holds unique(user_id, master_item_key)). Runs as the invoking role: RLS, the AU gate (migration 0084) and the balance guard (0090) apply exactly as for a direct insert.';

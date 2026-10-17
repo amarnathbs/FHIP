@@ -4,7 +4,7 @@
 -- The copy tables are created with row level security ON and no policy, so they are NOT readable through the API.
 begin;
 
-do $$
+do $fn$
 declare
   v_user uuid;
   v_n int;
@@ -14,7 +14,7 @@ begin
   if v_user is null then raise exception 'no such user: check the e-mail'; end if;
   select count(*) into v_n from retirement_accounts
    where user_id = v_user and master_item_key = 'smsf' and owner <> 'smsf' and is_active and current_balance = v_expected;
-  if v_n <> 1 then raise exception 'expected exactly 1 active SMSF fund row of % but found %: stop and re-run 02', v_expected, v_n; end if;
+  if v_n <> 1 then raise exception using message = 'expected exactly 1 active SMSF fund row of ' || v_expected::text || ' but found ' || v_n::text || ', stop and re-run 02'; end if;
   if to_regclass('public.zz_backup_20261016_retirement_accounts') is not null then
     raise exception 'a backup left by an earlier run already exists: do not overwrite it, rename or drop it deliberately first';
   end if;
@@ -31,7 +31,7 @@ begin
    where retirement_account_id in (select id from public.zz_backup_20261016_retirement_accounts);
   update retirement_accounts set is_active = false, updated_at = now()
    where id in (select id from public.zz_backup_20261016_retirement_accounts);
-end $$;
+end $fn$;
 
 -- Check before committing: the copies must hold 1 row each and the fund row must now be inactive.
 select (select count(*) from public.zz_backup_20261016_retirement_accounts) as retirement_copies,

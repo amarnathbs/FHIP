@@ -1,10 +1,10 @@
 -- 01 DIAGNOSE (READ ONLY): lists every row that decides how your SMSF is counted.
 -- Run in the PRODUCTION Supabase SQL editor. It is ONE select statement: it cannot change anything.
--- Before running: replace PUT_YOUR_LOGIN_EMAIL_HERE (the only edit; keep the quotes) with the e-mail you log in with.
--- Expected for the PO household (AUD): the 'SMSF' fund row 503,000 (owner self), 'Other Retirement Assets'
+-- Before running: replace PUT_YOUR_LOGIN_EMAIL_HERE (the only edit, keep the quotes) with the e-mail you log in with.
+-- Expected for the PO household (AUD): the SMSF fund row 503,000 (owner self), Other Retirement Assets
 -- 133,000 (owner smsf), no SMSF liability, personal liabilities 1,385,857, personal assets + investments 2,260,298.
 --
--- Read the 'section' column top to bottom. 'detail' says how FHIP counts each row.
+-- Read the section column top to bottom. detail says how FHIP counts each row.
 with u as (
   select id from auth.users where lower(email) = lower('PUT_YOUR_LOGIN_EMAIL_HERE')
 ),
@@ -19,15 +19,15 @@ out_rows as (
   select 10 as ord, 'retirement register (all rows)' as section, r.id::text as row_id, r.account_name::text as name,
          r.owner::text as owner, r.master_item_key::text as master_item_key, r.current_balance::numeric as amount,
          r.currency_code::text as currency, r.is_active as active,
-         (case when r.master_item_key = 'smsf' then 'SMSF FUND ROW: managed in the SMSF section; its balance is the fund NET value'
+         (case when r.master_item_key = 'smsf' then 'SMSF FUND ROW: managed in the SMSF section, its balance is the fund NET value'
                when r.owner = 'smsf' then 'owned by the SMSF: counted in the SMSF block of the family net worth'
                else 'personal' end)::text as detail
   from ret r
   union all
   select 20, 'smsf_funds', f.id::text, f.fund_name::text, null::text, null::text, coalesce(f.summary_balance, 0)::numeric,
          f.currency_code::text, f.is_active,
-         ('mode=' || f.mode || '; summary_balance=' || coalesce(f.summary_balance::text, 'none') || '; detailed_net_value='
-          || coalesce(f.detailed_net_value::text, 'none') || '; fund row=' || f.retirement_account_id::text)::text
+         ('mode=' || f.mode || ', summary_balance=' || coalesce(f.summary_balance::text, 'none') || ', detailed_net_value='
+          || coalesce(f.detailed_net_value::text, 'none') || ', fund row=' || f.retirement_account_id::text)::text
   from fund f
   union all
   select 30, 'smsf_holdings', h.id::text, h.holding_name::text, null::text, h.holding_type::text, h.value::numeric,
@@ -51,14 +51,14 @@ out_rows as (
   union all
   select 60, 'registered entities (Companies and Trusts page)', e.id::text, e.name::text, e.entity_type::text, null::text,
          coalesce(e.summary_net_asset_value, 0)::numeric, e.currency_code::text, e.is_active,
-         ('ownership ' || e.ownership_percentage::text || '%; valuation_mode=' || e.valuation_mode)::text
+         ('ownership ' || e.ownership_percentage::text || ' percent, valuation_mode=' || e.valuation_mode)::text
   from ent e
   union all
   -- Both representations at once: an entity that has a typed net value AND itemised lines.
   select 65, 'DATA QUALITY: entity with both a net value and itemised lines', e.id::text, e.name::text, e.entity_type::text, null::text,
          null::numeric, e.currency_code::text, e.is_active,
-         ('mode=' || e.valuation_mode || '; net value=' || coalesce(e.summary_net_asset_value::text, 'none') || '; itemised assets='
-          || (select count(*) from business_entity_assets x where x.business_entity_id = e.id)::text || '; itemised liabilities='
+         ('mode=' || e.valuation_mode || ', net value=' || coalesce(e.summary_net_asset_value::text, 'none') || ', itemised assets='
+          || (select count(*) from business_entity_assets x where x.business_entity_id = e.id)::text || ', itemised liabilities='
           || (select count(*) from business_entity_liabilities x where x.business_entity_id = e.id)::text)::text
   from ent e
   where e.summary_net_asset_value is not null

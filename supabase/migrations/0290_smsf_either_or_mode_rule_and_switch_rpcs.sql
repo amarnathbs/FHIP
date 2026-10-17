@@ -1,28 +1,28 @@
--- 0290 -- SMSF "itemised OR net value only, never both" enforced in the database, the entity_figure_mode_log history,
+-- 0290 -- SMSF itemised OR net value only, never both enforced in the database, the entity_figure_mode_log history,
 -- and the atomic switch / undo / move / adopt functions (entity-level assets and liabilities, part 2 of 2).
 --
 -- THE RULE (PO decision 17-10-2026). A fund is recorded in exactly one of two ways:
---   itemised (smsf_funds.mode = detailed): assets and liabilities are entered; the net is DERIVED; no typed net exists.
---   net value only (mode = summary): one typed net; no itemised line is active.
+--   itemised (smsf_funds.mode = detailed): assets and liabilities are entered, the net is DERIVED, no typed net exists.
+--   net value only (mode = summary): one typed net, no itemised line is active.
 -- Never both counted. This migration makes that true in the database, not only in the screens:
 --   a. trg_smsf_funds_mode_rule: the recording mode can change only inside a switch function (a transaction-local
---      certified bracket, the technique migration 0090 uses for the balance); an itemised fund cannot carry a typed net.
+--      certified bracket, the technique migration 0090 uses for the balance), an itemised fund cannot carry a typed net.
 --   b. trg_smsf_holdings_mode_rule / trg_smsf_liabilities_mode_rule: an ACTIVE line needs an itemised fund.
 --   Existing rows that already break the rule (for example the PO fund: itemised with a stale typed net of 138,000) are
 --   NOT touched and are NOT stopped during ordinary maintenance: the triggers act on a change of the mode, the typed net or
---   the is_active flag only. smsf_mode_rule_violations() lists them so the user decides; the functions below retire the
+--   the is_active flag only. smsf_mode_rule_violations() lists them so the user decides, the functions below retire the
 --   other representation with a confirmation and a history row. A later migration can express the rule as CHECK
 --   constraints, validated once no violating row remains.
 --
 -- NUMBERS. Mode changes go through smsf_entity_switch_mode(), which is PREVIEW-FIRST: called with p_confirm = false it
--- changes nothing and returns the before/after net; called with p_confirm = true it applies, in one transaction, the new
+-- changes nothing and returns the before/after net, called with p_confirm = true it applies, in one transaction, the new
 -- representation AND the retirement of the old one, and writes one entity_figure_mode_log row. Nothing is deleted:
 -- lines are archived (is_active = false), the typed net is kept in the log. Undo restores the previous representation.
 --
 -- The earlier two-step functions smsf_switch_to_detailed() (0090) and smsf_switch_to_summary() (0089) staged lines in a
--- Summary fund, which the rule forbids; they are replaced by versions that refuse with a pointer to the new function.
+-- Summary fund, which the rule forbids, they are replaced by versions that refuse with a pointer to the new function.
 --
--- ROLLBACK: drop the three triggers, the functions and entity_figure_mode_log; re-create the two old switch functions from
+-- ROLLBACK: drop the three triggers, the functions and entity_figure_mode_log, re-create the two old switch functions from
 -- migrations 0090 and 0089. Safe while entity_figure_mode_log is empty or its history is exported first.
 
 begin;
@@ -47,20 +47,20 @@ create table if not exists entity_figure_mode_log (
 );
 
 comment on table entity_figure_mode_log is
-  'Append-only history of every change of how an entity''s figure is recorded (migration 0290): who, which entity, what was retired (typed net or the full set of lines), net before and after. Written only by the smsf_entity_* functions; the owner can read it and can neither update nor delete it.';
+  'Append-only history of every change of how an entity''s figure is recorded (migration 0290): who, which entity, what was retired (typed net or the full set of lines), net before and after. Written only by the smsf_entity_* functions, the owner can read it and can neither update nor delete it.';
 
 create index if not exists idx_entity_figure_mode_log_entity on entity_figure_mode_log(entity_id, created_at desc);
 create index if not exists idx_entity_figure_mode_log_user on entity_figure_mode_log(user_id);
 
 alter table entity_figure_mode_log enable row level security;
-drop policy if exists "own rows - entity figure mode log read" on entity_figure_mode_log;
-create policy "own rows - entity figure mode log read" on entity_figure_mode_log for select using (auth.uid() = user_id);
+drop policy if exists own_rows_entity_figure_mode_log_read on entity_figure_mode_log;
+create policy own_rows_entity_figure_mode_log_read on entity_figure_mode_log for select using (auth.uid() = user_id);
 
-create or replace function entity_figure_mode_log_append_only() returns trigger as $$
+create or replace function entity_figure_mode_log_append_only() returns trigger as $fn$
 begin
   raise exception 'entity_figure_mode_log is append-only' using errcode = '42501';
 end;
-$$ language plpgsql;
+$fn$ language plpgsql;
 
 drop trigger if exists trg_entity_figure_mode_log_no_update on entity_figure_mode_log;
 create trigger trg_entity_figure_mode_log_no_update
@@ -70,7 +70,7 @@ create trigger trg_entity_figure_mode_log_no_update
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 2. The rule, in the database
 -- ---------------------------------------------------------------------------------------------------------------------
-create or replace function smsf_funds_mode_rule() returns trigger as $$
+create or replace function smsf_funds_mode_rule() returns trigger as $fn$
 declare
   v_switching boolean := coalesce(current_setting('fhip.entity_mode_switch', true), '') = 'certified';
 begin
@@ -85,27 +85,27 @@ begin
   end if;
   return new;
 end;
-$$ language plpgsql;
+$fn$ language plpgsql;
 
 drop trigger if exists trg_smsf_funds_mode_rule on smsf_funds;
 create trigger trg_smsf_funds_mode_rule
   before insert or update of mode, summary_balance on smsf_funds
   for each row execute function smsf_funds_mode_rule();
 
-create or replace function smsf_lines_mode_rule() returns trigger as $$
+create or replace function smsf_lines_mode_rule() returns trigger as $fn$
 declare
   v_mode text;
 begin
   if new.is_active then
     select f.mode into v_mode from smsf_funds f where f.id = new.smsf_fund_id;
     if v_mode is distinct from 'detailed' then
-      raise exception 'ENTITY_BOTH_REPRESENTATIONS: this fund is recorded as a net value only, so assets and liabilities cannot be added to it; switch it to itemised first'
+      raise exception 'ENTITY_BOTH_REPRESENTATIONS: this fund is recorded as a net value only, so assets and liabilities cannot be added to it, switch it to itemised first'
         using errcode = '23514';
     end if;
   end if;
   return new;
 end;
-$$ language plpgsql;
+$fn$ language plpgsql;
 
 drop trigger if exists trg_smsf_holdings_mode_rule on smsf_holdings;
 create trigger trg_smsf_holdings_mode_rule
@@ -119,7 +119,7 @@ create trigger trg_smsf_liabilities_mode_rule
 
 -- Data quality: funds that already hold both representations. Security invoker, so each user sees only their own funds.
 create or replace function smsf_mode_rule_violations()
-returns table (fund_id uuid, fund_name text, kind text, detail text) as $$
+returns table (fund_id uuid, fund_name text, kind text, detail text) as $fn$
   select f.id, f.fund_name, 'itemised_with_typed_net'::text,
          ('typed net value ' || f.summary_balance::text || ' is still recorded on an itemised fund')::text
   from smsf_funds f
@@ -132,7 +132,7 @@ returns table (fund_id uuid, fund_name text, kind text, detail text) as $$
   where f.is_active and f.mode = 'summary'
     and (exists (select 1 from smsf_holdings h where h.smsf_fund_id = f.id and h.is_active)
          or exists (select 1 from smsf_liabilities l where l.smsf_fund_id = f.id and l.is_active));
-$$ language sql stable;
+$fn$ language sql stable;
 
 comment on function smsf_mode_rule_violations() is
   'Lists funds that hold BOTH an itemised set and a typed net (itemised_with_typed_net, net_only_with_active_lines). Only one of them is ever counted (the mode decides), but the user is asked to retire the other, through smsf_entity_retire_typed_net() or smsf_entity_switch_mode().';
@@ -152,10 +152,10 @@ create or replace function smsf_entity_switch_mode(
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_fund smsf_funds%rowtype;
+  v_fund record;
   v_net_before numeric;
   v_net_after numeric;
   v_snapshot jsonb := '{}'::jsonb;
@@ -172,13 +172,13 @@ begin
   end if;
   select * into v_fund from smsf_funds where id = p_fund_id and user_id = v_uid and is_active;
   if not found then
-    raise exception 'smsf: fund % not found (or not visible to the current user)', p_fund_id using errcode = 'P0002';
+    raise exception using message = 'smsf: fund ' || p_fund_id::text || ' not found or not visible to the current user', errcode = 'P0002';
   end if;
   if p_to_mode not in ('detailed', 'summary') then
     raise exception 'smsf: p_to_mode must be detailed (itemised) or summary (net value only)' using errcode = '22023';
   end if;
   if v_fund.mode = p_to_mode then
-    raise exception 'smsf: fund % is already recorded that way', p_fund_id using errcode = '55000';
+    raise exception using message = 'smsf: fund ' || p_fund_id::text || ' is already recorded that way', errcode = '55000';
   end if;
   if p_to_mode = 'detailed' and jsonb_array_length(coalesce(p_assets, '[]'::jsonb)) = 0 and jsonb_array_length(coalesce(p_liabilities, '[]'::jsonb)) = 0 then
     raise exception 'smsf: enter at least one asset or liability to record the fund as itemised' using errcode = '22023';
@@ -258,7 +258,7 @@ begin
                             'net_before', v_net_before, 'net_after', v_net_after,
                             'variance', round(coalesce(v_net_after, 0) - coalesce(v_net_before, 0), 2));
 end;
-$$;
+$fn$;
 
 comment on function smsf_entity_switch_mode(uuid, text, jsonb, jsonb, numeric, date, boolean) is
   'Atomic, preview-first change of how an SMSF fund is recorded (0290). p_to_mode detailed = itemised: p_assets (holding_class, holding_type, holding_name, value, currency_code, ...) and p_liabilities (liability_name, balance, ...) are inserted, the typed net is retired to entity_figure_mode_log and cleared. p_to_mode summary = net value only: p_net is typed, every active line is archived. p_confirm false changes nothing and returns net_before/net_after/variance. Security definer with every query scoped to auth.uid().';
@@ -270,11 +270,11 @@ create or replace function smsf_entity_undo_last_switch(p_fund_id uuid, p_confir
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_fund smsf_funds%rowtype;
-  v_last entity_figure_mode_log%rowtype;
+  v_fund record;
+  v_last record;
   v_newest_id uuid;
   v_net_before numeric;
   v_net_after numeric;
@@ -286,7 +286,7 @@ begin
   end if;
   select * into v_fund from smsf_funds where id = p_fund_id and user_id = v_uid and is_active;
   if not found then
-    raise exception 'smsf: fund % not found (or not visible to the current user)', p_fund_id using errcode = 'P0002';
+    raise exception using message = 'smsf: fund ' || p_fund_id::text || ' not found or not visible to the current user', errcode = 'P0002';
   end if;
 
   select l.id into v_newest_id from entity_figure_mode_log l
@@ -341,7 +341,7 @@ begin
   return jsonb_build_object('status', 'applied', 'log_id', v_log_id, 'undid', v_last.action, 'net_before', v_net_before, 'net_after', v_net_after,
                             'variance', round(coalesce(v_net_after, 0) - coalesce(v_net_before, 0), 2));
 end;
-$$;
+$fn$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 5. Retire a stale typed net on an itemised fund (the legacy shape), keeping it in the history
@@ -350,10 +350,10 @@ create or replace function smsf_entity_retire_typed_net(p_fund_id uuid, p_confir
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_fund smsf_funds%rowtype;
+  v_fund record;
   v_net numeric;
   v_log_id uuid;
 begin
@@ -362,7 +362,7 @@ begin
   end if;
   select * into v_fund from smsf_funds where id = p_fund_id and user_id = v_uid and is_active;
   if not found then
-    raise exception 'smsf: fund % not found (or not visible to the current user)', p_fund_id using errcode = 'P0002';
+    raise exception using message = 'smsf: fund ' || p_fund_id::text || ' not found or not visible to the current user', errcode = 'P0002';
   end if;
   if v_fund.mode <> 'detailed' or v_fund.summary_balance is null then
     raise exception 'smsf: nothing to retire (the fund is not itemised, or has no typed net value)' using errcode = '55000';
@@ -382,7 +382,7 @@ begin
   returning id into v_log_id;
   return jsonb_build_object('status', 'applied', 'log_id', v_log_id, 'typed_net', v_fund.summary_balance, 'counted_net', v_net, 'variance', 0);
 end;
-$$;
+$fn$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 6. Move a linked personal loan across to the fund (the fund net does not change: the loan is counted once, before and after)
@@ -391,12 +391,12 @@ create or replace function smsf_entity_move_linked_loan(p_fund_id uuid, p_liabil
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_fund smsf_funds%rowtype;
-  v_liab liabilities%rowtype;
-  v_link property_liability_links%rowtype;
+  v_fund record;
+  v_liab record;
+  v_link record;
   v_net_before numeric;
   v_net_after numeric;
   v_new_id uuid;
@@ -407,7 +407,7 @@ begin
   end if;
   select * into v_fund from smsf_funds where id = p_fund_id and user_id = v_uid and is_active;
   if not found then
-    raise exception 'smsf: fund % not found (or not visible to the current user)', p_fund_id using errcode = 'P0002';
+    raise exception using message = 'smsf: fund ' || p_fund_id::text || ' not found or not visible to the current user', errcode = 'P0002';
   end if;
   if v_fund.mode <> 'detailed' then
     raise exception 'smsf: record the fund as itemised first, then move the loan across' using errcode = '55000';
@@ -452,7 +452,7 @@ begin
   return jsonb_build_object('status', 'applied', 'log_id', v_log_id, 'smsf_liability_id', v_new_id, 'net_before', v_net_before, 'net_after', v_net_after,
                             'variance', round(coalesce(v_net_after, 0) - coalesce(v_net_before, 0), 2));
 end;
-$$;
+$fn$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 7. Adopt (archive) register rows that duplicate the fund: Retirement rows owned by the SMSF
@@ -461,10 +461,10 @@ create or replace function smsf_entity_adopt_register_rows(p_fund_id uuid, p_ret
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_uid uuid := auth.uid();
-  v_fund smsf_funds%rowtype;
+  v_fund record;
   v_rows jsonb;
   v_total numeric;
   v_net numeric;
@@ -476,7 +476,7 @@ begin
   end if;
   select * into v_fund from smsf_funds where id = p_fund_id and user_id = v_uid and is_active;
   if not found then
-    raise exception 'smsf: fund % not found (or not visible to the current user)', p_fund_id using errcode = 'P0002';
+    raise exception using message = 'smsf: fund ' || p_fund_id::text || ' not found or not visible to the current user', errcode = 'P0002';
   end if;
   if p_retirement_row_ids is null or cardinality(p_retirement_row_ids) = 0 then
     raise exception 'smsf: name the register rows to archive' using errcode = '22023';
@@ -488,8 +488,7 @@ begin
   from retirement_accounts r
   where r.id = any (p_retirement_row_ids) and r.user_id = v_uid and r.is_active and r.owner = 'smsf' and coalesce(r.master_item_key, '') <> 'smsf';
   if v_n <> cardinality(p_retirement_row_ids) then
-    raise exception 'smsf: only active Retirement rows owned by the SMSF (and not the fund record itself) can be archived this way; % of % qualify', v_n, cardinality(p_retirement_row_ids)
-      using errcode = '55000';
+    raise exception using message = 'smsf: only active Retirement rows owned by the SMSF (and not the fund record itself) can be archived this way, ' || v_n::text || ' of ' || cardinality(p_retirement_row_ids)::text || ' qualify', errcode = '55000';
   end if;
 
   v_net := smsf_fund_counted_net(p_fund_id);
@@ -505,24 +504,24 @@ begin
   returning id into v_log_id;
   return jsonb_build_object('status', 'applied', 'log_id', v_log_id, 'rows', v_rows, 'register_total', v_total, 'fund_net', v_net);
 end;
-$$;
+$fn$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 8. The two earlier two-step switch functions stage lines in a net-value fund, which the rule forbids.
 -- ---------------------------------------------------------------------------------------------------------------------
-create or replace function smsf_switch_to_detailed(p_fund_id uuid) returns numeric as $$
+create or replace function smsf_switch_to_detailed(p_fund_id uuid) returns numeric as $fn$
 begin
-  raise exception 'smsf: use smsf_entity_switch_mode() to record the fund as itemised; assets and liabilities are entered as part of the switch'
+  raise exception 'smsf: use smsf_entity_switch_mode() to record the fund as itemised, assets and liabilities are entered as part of the switch'
     using errcode = '0A000';
 end;
-$$ language plpgsql;
+$fn$ language plpgsql;
 
-create or replace function smsf_switch_to_summary(p_fund_id uuid, p_new_summary_balance numeric, p_new_summary_balance_date date) returns numeric as $$
+create or replace function smsf_switch_to_summary(p_fund_id uuid, p_new_summary_balance numeric, p_new_summary_balance_date date) returns numeric as $fn$
 begin
   raise exception 'smsf: use smsf_entity_switch_mode() to record the fund as a net value only'
     using errcode = '0A000';
 end;
-$$ language plpgsql;
+$fn$ language plpgsql;
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 9. Who may call what
@@ -532,7 +531,7 @@ revoke all on function smsf_entity_undo_last_switch(uuid, boolean) from public, 
 revoke all on function smsf_entity_retire_typed_net(uuid, boolean) from public, anon;
 revoke all on function smsf_entity_move_linked_loan(uuid, uuid, boolean) from public, anon;
 revoke all on function smsf_entity_adopt_register_rows(uuid, uuid[], boolean) from public, anon;
-do $$
+do $fn$
 begin
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
     grant execute on function smsf_entity_switch_mode(uuid, text, jsonb, jsonb, numeric, date, boolean) to authenticated;
@@ -541,6 +540,6 @@ begin
     grant execute on function smsf_entity_move_linked_loan(uuid, uuid, boolean) to authenticated;
     grant execute on function smsf_entity_adopt_register_rows(uuid, uuid[], boolean) to authenticated;
   end if;
-end $$;
+end $fn$;
 
 commit;
