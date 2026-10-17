@@ -12,7 +12,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { hazards } from '../support/sqlEditorHazards';
-// @ts-expect-error plain .mjs tool without types
 import { stubDb, applyPartsAC, expectedFingerprints, detailSql, summarySql, compareInventories, parseInventory } from '../../../scripts/nav2_reconcile_0260.mjs';
 
 const PACK = path.resolve(__dirname, '..', '..', '..', 'docs', 'nav2', 'po_apply_production', 'sql');
