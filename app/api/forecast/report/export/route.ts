@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireCountryConfirmedUser as requireUser, bad } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { canExportReports } from '@/lib/services/entitlements';
-import { renderForecastReportToPdf } from '@/lib/services/forecastReportPdfRenderer';
+import { newCorrelationId, typedError } from '@/lib/services/reportApiResponses';
+import { classifyRenderFailure, REPORT_EXPORT_FAILURES, ReportExportError } from '@/lib/services/reportExportFailure';
 
 // Streams the rendered PDF straight back — unlike the Free/Premium report's
 // export route (app/api/reports/[id]/exports/route.ts), there's no
@@ -28,7 +29,13 @@ export async function GET(req: Request) {
 
   const scenario = new URL(req.url).searchParams.get('scenario') ?? undefined;
 
+  // 17-10-2026: the renderer (and `playwright` with it) is loaded on demand, inside this try, never at route load. A
+  // server that cannot load it used to fail the whole route with the platform's bare "Internal Server Error".
+  const correlationId = newCorrelationId();
   try {
+    const { renderForecastReportToPdf } = await import('@/lib/services/forecastReportPdfRenderer').catch((e) => {
+      throw new ReportExportError('renderer_unavailable', `renderer module could not be loaded: ${e instanceof Error ? e.message : String(e)}`);
+    });
     const buffer = await renderForecastReportToPdf(user.id, scenario);
     // LR-8 WP-07 — the filename was a static literal for every user/scenario/
     // period ("consolidated-forecasting-report.pdf"), genuinely collision-
@@ -50,7 +57,11 @@ export async function GET(req: Request) {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'PDF rendering failed';
-    return NextResponse.json({ error: message.slice(0, 300) }, { status: 500 });
+    // Typed JSON with a reference; the underlying message goes to the server log only. `error` stays the user sentence
+    // the client already displays.
+    const step = classifyRenderFailure(err);
+    const spec = REPORT_EXPORT_FAILURES[step];
+    console.error('[forecast-report] pdf render failed', { correlationId, step, message: (err instanceof Error ? err.message : String(err)).slice(0, 300) });
+    return typedError(spec.status, spec.code, spec.message, correlationId, spec.retryable, step);
   }
 }

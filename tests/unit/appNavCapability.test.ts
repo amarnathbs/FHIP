@@ -54,6 +54,7 @@ describe('NAV_HREF_MODULE_MAP', () => {
       '/forecast/history',
       '/recommendations',
       '/reports',
+      '/reports/net-worth-statement',
       '/ai-insights',
       '/profile',
     ];

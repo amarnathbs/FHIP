@@ -20,6 +20,12 @@ export interface GridFieldDef {
   // WP-07: neither shown nor submitted on a row an import wrote
   // (source_type is an import value — lib/grid/provenance.ts).
   hiddenOnImportedRows?: boolean;
+  // Short guidance shown under the field in the Add / Edit form (linked to the input with aria-describedby).
+  helpText?: string;
+  // A nullable number column the user may need to EMPTY again (Income take-home and tax). While the input is empty the draft keeps '' (not
+  // 0), and a save that finds the field emptied, where the saved row had a value, sends an explicit null. Without this flag a number input
+  // that is emptied becomes 0 (the behaviour every other register keeps). See lib/grid/saveBody.ts.
+  clearable?: boolean;
 }
 
 export interface GridConfig {
@@ -31,6 +37,9 @@ export interface GridConfig {
   valueField: string; // primary amount/value field for totals + validation
   isFlow?: boolean; // true = recurring amount that needs a frequency to annualise
   frequencyField?: string;
+  // Income only (PO request 17-10-2026): show each row's TAKE-HOME next to its gross, with how it was arrived at, a live result in the
+  // Add / Edit form, and a "Total take-home (annual)" footer. Always the lib/engines/incomeNetBasis.ts rule (lib/grid/incomeTakeHome.ts).
+  takeHome?: boolean;
   fields: GridFieldDef[]; // extra editable columns beyond item name/owner/currency
   // Per-catalogue-item defaults applied when a NEW row is created from a catalogue item (e.g. Expenses pre-ticks Essential
   // for the necessities). Applied after the field defaults; the user can change any value. Never touches saved rows.

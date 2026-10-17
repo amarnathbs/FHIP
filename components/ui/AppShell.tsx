@@ -31,6 +31,13 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+// Inside a dropdown, only the MOST SPECIFIC matching item is current: /reports/net-worth-statement must not also light up
+// "Monthly Report" (/reports), whose prefix it shares.
+function isActiveInGroup(pathname: string, href: string, items: readonly { href: string }[]): boolean {
+  if (!isActive(pathname, href)) return false;
+  return !items.some((other) => other.href.length > href.length && isActive(pathname, other.href));
+}
+
 // Stable identifiers for the forecasting E2E suite's required selectors —
 // keyed by href since these links are shared between the desktop sidebar
 // and the mobile drawer and must carry the same testid in both.
@@ -265,7 +272,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         className="ml-2 space-y-0.5 border-l border-white/10 pl-3"
                       >
                         {entry.items.map((item) => {
-                          const itemActive = isActive(pathname, item.href);
+                          const itemActive = isActiveInGroup(pathname, item.href, entry.items);
                           return (
                             <li key={item.href} role="none">
                               <Link

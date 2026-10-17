@@ -14,6 +14,8 @@ export const incomeGridConfig: GridConfig = {
   valueField: 'amount',
   isFlow: true,
   frequencyField: 'frequency',
+  // PO request 17-10-2026: a Take-home column (and card line, form result and footer total) on the Income register only.
+  takeHome: true,
   reviewSection: 'income',
   // LR-11B: 'company'/'family_trust' are legacy cosmetic-only owner tags,
   // no longer offered for a brand-new row on any of the 7 registers — see
@@ -25,11 +27,27 @@ export const incomeGridConfig: GridConfig = {
   itemHint: incomeItemHint,
   fields: [
     { name: 'amount', label: 'Gross Amount', type: 'number', step: '0.01', required: true },
-    { name: 'net_amount', label: 'Net Amount (take-home pay)', type: 'number', step: '0.01' },
+    // PO request 17-10-2026: the pay period comes right after the gross, so the take-home and tax below are read as "for the same period",
+    // and the live result under Tax (components/grid/IncomeTakeHome.tsx) can say it per year.
+    { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
+    {
+      name: 'net_amount',
+      label: 'Net Amount (take-home pay)',
+      type: 'number',
+      step: '0.01',
+      clearable: true,
+      helpText: 'Take-home pay for the same period as the gross. Leave blank to use gross minus tax; with neither, gross is treated as take-home',
+    },
     // PO decision 16-10-2026: if you do not know your take-home pay, enter the TAX per pay period instead and the
     // take-home is worked out as gross minus tax. With neither, the gross is treated as take-home (no tax deducted).
-    { name: 'tax_amount', label: 'Tax per period (if no net amount)', type: 'number', step: '0.01' },
-    { name: 'frequency', label: 'Frequency', type: 'select', options: FREQUENCY_OPTIONS, required: true },
+    {
+      name: 'tax_amount',
+      label: 'Tax per period (if no net amount)',
+      type: 'number',
+      step: '0.01',
+      clearable: true,
+      helpText: 'Tax for the same period as the gross. Used only when no take-home pay is entered.',
+    },
     { name: 'is_taxable', label: 'Taxable', type: 'checkbox', defaultValue: true },
     { name: 'employer_name', label: 'Employer', type: 'text' },
     // LR-3: explicit, user-declared opt-out so this row stops counting once
