@@ -84,6 +84,48 @@ export const NETWORK_FAILURE: ApiFailure = {
 };
 
 // ---------------------------------------------------------------------------
+// Export PDF (17-10-2026)
+// ---------------------------------------------------------------------------
+
+export interface ExportFailureView {
+  /** The sentence shown under the buttons. */
+  message: string;
+  /** Show the Print / Save as PDF button next to it. True for every failure: the browser print route always works. */
+  offerPrint: boolean;
+  code: string | null;
+  /** Short reason code from the server (renderer_unavailable, token_failed, render_timeout, ...). */
+  reason: string | null;
+  correlationId: string | null;
+}
+
+/**
+ * A plain, actionable message for a failed "Export PDF" answer. Typed answers keep the server's own sentence plus its
+ * code, reason and reference so support can find the log line; a bare platform 500 ("Internal Server Error", an empty
+ * body, a gateway page) is explained as "temporarily unavailable". Never a parser or database message.
+ */
+export function describeExportFailure(r: ReadResponse): ExportFailureView {
+  const f = describeFailure(r);
+  const j = r.json;
+  const reason = j && typeof j.detail === 'string' && /^[a-z_]{3,40}$/.test(j.detail) ? j.detail : null;
+  const typed = r.bodyKind === 'json' && f.code !== null && f.code !== 'UNREADABLE_ANSWER' && f.code !== 'NO_ANSWER';
+  if (r.status === 401) return { message: f.message, offerPrint: false, code: null, reason: null, correlationId: null };
+  if (typed && r.status === 403 && f.code === 'EXPORT_PREMIUM_REQUIRED') {
+    return { message: f.message, offerPrint: true, code: f.code, reason, correlationId: f.correlationId };
+  }
+  const base = typed
+    ? f.message
+    : 'PDF export is temporarily unavailable. You can still view this report and use Print, then choose Save as PDF.';
+  const tags = [typed ? f.code : r.status >= 400 ? `HTTP_${r.status}` : null, reason, f.correlationId ? `reference ${f.correlationId}` : null].filter(Boolean);
+  return {
+    message: tags.length ? `${base} (${tags.join(', ')})` : base,
+    offerPrint: true,
+    code: f.code,
+    reason,
+    correlationId: f.correlationId,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Generate report
 // ---------------------------------------------------------------------------
 

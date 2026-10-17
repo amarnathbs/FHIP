@@ -1,6 +1,10 @@
 import { chromium } from 'playwright';
 import crypto from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { ReportExportError } from '@/lib/services/reportExportFailure';
+
+// NOTE: this file is loaded on demand by lib/services/reportPdfRendererLoader.ts, never imported by the route
+// directly, so a server that cannot load `playwright` answers with a typed error instead of a platform 500.
 
 // Same base-URL convention as the test harnesses' HARNESS_BASE_URL — this
 // server always renders against itself, so a plain env var (not
@@ -15,21 +19,32 @@ const RENDER_TOKEN_TTL_MS = 5 * 60 * 1000;
 // standing up a second rendering stack. The render_token is single-use:
 // minted just before navigation, cleared immediately after (success or
 // failure) regardless of its 5-minute TTL.
-export async function renderReportToPdf(reportId: string, exportId: string): Promise<{ buffer: Buffer; checksum: string }> {
+export async function renderReportToPdf(
+  reportId: string,
+  exportId: string,
+  /** Epoch milliseconds by which the whole render must be finished; every browser wait is capped to what is left. */
+  deadlineAt: number = Date.now() + 22_000
+): Promise<{ buffer: Buffer; checksum: string }> {
+  const remaining = (reserveMs = 0) => Math.max(1000, deadlineAt - Date.now() - reserveMs);
+  // Launch the browser FIRST and write nothing until it is running: Amplify's build installs Chromium on the build
+  // machine (amplify.yml), which is not part of the deployed artifact, so on the compute runtime the launch is the step
+  // that fails. Failing here means no database row is touched and no token is left behind.
+  const browser = await chromium.launch({ timeout: remaining(8000) }).catch((e) => {
+    throw new ReportExportError('renderer_unavailable', `browser launch failed: ${e instanceof Error ? e.message : String(e)}`);
+  });
   const admin = createAdminClient();
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + RENDER_TOKEN_TTL_MS).toISOString();
-  const { error: tokenError } = await admin
-    .from('report_exports')
-    .update({ render_token: token, render_token_expires_at: expiresAt })
-    .eq('id', exportId);
-  if (tokenError) throw new Error(`Could not prepare render token: ${tokenError.message}`);
-
-  const browser = await chromium.launch();
   try {
+    const { error: tokenError } = await admin
+      .from('report_exports')
+      .update({ render_token: token, render_token_expires_at: expiresAt })
+      .eq('id', exportId);
+    if (tokenError) throw new ReportExportError('token_failed', `Could not prepare render token: ${tokenError.message}`);
     const page = await browser.newPage();
+    page.setDefaultTimeout(remaining(2000));
     const url = `${BASE_URL}/reports/${reportId}/print?token=${token}`;
-    const response = await page.goto(url, { waitUntil: 'networkidle' });
+    const response = await page.goto(url, { waitUntil: 'networkidle', timeout: remaining(6000) });
     if (!response || !response.ok()) {
       throw new Error(`Print route returned ${response?.status() ?? 'no response'} for ${url}`);
     }
@@ -89,7 +104,7 @@ export async function renderReportToPdf(reportId: string, exportId: string): Pro
         // wait exists to prevent. A longer ceiling only costs time in
         // exactly the slow case that needs it — the fast case still exits
         // as soon as the stability streak is satisfied.
-        { timeout: 20000, polling: 100 }
+        { timeout: Math.min(20000, remaining(4000)), polling: 100 }
       )
       .catch(() => {});
     // Real running page numbers require Playwright's own header/footer
@@ -108,7 +123,12 @@ export async function renderReportToPdf(reportId: string, exportId: string): Pro
     const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
     return { buffer, checksum };
   } finally {
-    await browser.close();
-    await admin.from('report_exports').update({ render_token: null, render_token_expires_at: null }).eq('id', exportId);
+    // Cleanup must never replace the real failure (or a finished PDF) with its own error.
+    await browser.close().catch(() => {});
+    try {
+      await admin.from('report_exports').update({ render_token: null, render_token_expires_at: null }).eq('id', exportId);
+    } catch {
+      /* the token expires on its own after RENDER_TOKEN_TTL_MS */
+    }
   }
 }
