@@ -112,7 +112,8 @@ export function computeTwinMetricValues(source: TwinSourceData): Record<string, 
   set('housing_cost_ratio', d.grossMonthlyIncome > 0 ? (source.expenseHousingMonthly / d.grossMonthlyIncome) * 100 : null);
   set(
     'fixed_commitment_ratio',
-    incomeBase > 0 ? ((d.essentialMonthlyExpenses + d.debtMonthlyRepayments) / incomeBase) * 100 : null
+    // The owner-occupied home-loan repayment is inside BOTH essential (PO rule 17-10-2026) and debt repayments: count it once.
+    incomeBase > 0 ? ((d.essentialMonthlyExpenses - (d.essentialHomeLoan?.monthly ?? 0) + d.debtMonthlyRepayments) / incomeBase) * 100 : null
   );
   // Same underlying cash-flow-surplus figure as surplus_margin (7.1) — this
   // app doesn't separately track "money actually moved into savings/

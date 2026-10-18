@@ -4,6 +4,7 @@ import { loadBusinessEntitiesForValuation } from '@/lib/services/businessEntityD
 import { loadNetWorthLevels } from '@/lib/services/netWorthLevelsData';
 import { buildNetWorthBasisInfo, personalBasisRows } from '@/lib/engines/netWorthBasis';
 import { applySmsfPropertyLoanLinkOverride } from '@/lib/engines/householdContext';
+import type { PropertyLinkPurpose } from '@/lib/engines/essentialHousing';
 import { allUnavailableCashFlow, toCanonicalCashFlow } from '@/lib/services/dashboardCanonicalAdapter';
 import { buildCanonicalFinancialSnapshot, type CanonicalFinancialSnapshotResult } from '@/lib/read-models/snapshot';
 import { computeMonthCashFlow } from '@/lib/read-models/monthlyCashFlow';
@@ -203,6 +204,27 @@ async function writeFinancialSnapshots(
 
 // Accepts an optional pre-built client so the scheduled report-generation job
 // (which has no per-request cookie session) can pass a service-role client.
+async function loadLiabilityLinkPurposes(userId: string, supabase: SupabaseServerClient): Promise<Map<string, PropertyLinkPurpose[]>> {
+  const byLiability = new Map<string, PropertyLinkPurpose[]>();
+  try {
+    const links = await fetchAllRows<{ liability_id: string; link_type: string }>((from, to) =>
+      supabase
+        .from('property_liability_links')
+        .select('liability_id, link_type')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .range(from, to)
+    );
+    for (const link of links) {
+      const purpose: PropertyLinkPurpose = link.link_type === 'owner_occupied_mortgage' ? 'owner_occupied' : 'other';
+      byLiability.set(link.liability_id, [...(byLiability.get(link.liability_id) ?? []), purpose]);
+    }
+  } catch {
+    // Best effort, see the call site: no links known, the catalogue-item fallback applies.
+  }
+  return byLiability;
+}
+
 export async function loadDashboardContext(userId: string, client?: SupabaseServerClient): Promise<DashboardContext> {
   const supabase = client ?? (await createClient());
   // Inside a request-memo scope (report generation only) the dashboard context is built once; see requestMemo.ts.
@@ -241,7 +263,7 @@ async function loadDashboardContextUncached(userId: string, supabase: SupabaseSe
     fetchAllRows<DashboardLiabilityRow & { id: string }>((from, to) =>
       supabase
         .from('liabilities')
-        .select('id, balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code, owner')
+        .select('id, liability_name, balance, interest_rate, monthly_repayment, debt_type, master_item_key, interest_rate_type, fixed_rate_expiry, credit_limit, country_code, currency_code, owner')
         .eq('user_id', userId)
         .eq('is_active', true)
         .range(from, to)
@@ -309,7 +331,15 @@ async function loadDashboardContextUncached(userId: string, supabase: SupabaseSe
     );
     smsfLinkedLiabilityIds = new Set(links.map((l) => l.liability_id));
   }
-  const liabilitiesForHouseholdContext = applySmsfPropertyLoanLinkOverride(liabilities, smsfLinkedLiabilityIds);
+  // PO rule 17-10-2026 (essentialHousing.ts): the owner-occupied home loan is recognised from its property link when it
+  // has one (link_type 'owner_occupied_mortgage' = the principal residence's loan), else from the 'Home Loan' catalogue
+  // item. The link read is best-effort: if it fails, the catalogue-item fallback applies (it is what a household with no
+  // links gets anyway) and the figure is still produced rather than the whole Dashboard failing.
+  const linkPurposesByLiability = await loadLiabilityLinkPurposes(userId, supabase);
+  const liabilitiesForHouseholdContext = applySmsfPropertyLoanLinkOverride(liabilities, smsfLinkedLiabilityIds).map((l) => {
+    const purposes = l.id ? linkPurposesByLiability.get(l.id) : undefined;
+    return purposes ? { ...l, link_purposes: purposes } : l;
+  });
 
   const canonical = toCanonicalCashFlow(snapshot);
   // DC-14: a failed history or business-entity read is reported, not zeroed silently.

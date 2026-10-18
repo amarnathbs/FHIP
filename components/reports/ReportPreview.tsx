@@ -461,6 +461,13 @@ export function ReportPreview({
               {typeof cashFlow.sectionData.netIncomeNote === 'string' && (
                 <p className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900" role="note" data-testid="report-net-income-note">{cashFlow.sectionData.netIncomeNote}</p>
               )}
+              {/* PO rule 17-10-2026: essentials include the owner-occupied home-loan repayment when no rent is recorded. */}
+              {typeof cashFlow.sectionData.essentialHomeLoanNote === 'string' && (
+                <p className="mt-3 text-xs text-gray-600" role="note" data-testid="report-essential-home-loan-note">
+                  {cashFlow.sectionData.essentialHomeLoanNote}
+                  {Number(cashFlow.sectionData.essentialHomeLoanMonthly ?? 0) > 0 ? ' The same repayment also appears under debt repayments and is counted once in your surplus.' : ''}
+                </p>
+              )}
             </SectionCard>
           </>
         )}

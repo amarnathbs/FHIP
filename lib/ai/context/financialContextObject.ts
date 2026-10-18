@@ -380,6 +380,7 @@ export async function buildFinancialContextObject(userId: string, options: Build
         monthly_net_income: dashboard.netMonthlyIncome,
         monthly_expenses: dashboard.totalMonthlyExpenses,
         essential_monthly_expenses: dashboard.essentialMonthlyExpenses,
+        essential_includes_home_loan_monthly: dashboard.essentialHomeLoan?.monthly ?? 0,
         discretionary_monthly_expenses: dashboard.lifestyleMonthlyExpenses,
         debt_repayments: dashboard.debtMonthlyRepayments,
         insurance_premiums: dashboard.totalAnnualPremium / 12,

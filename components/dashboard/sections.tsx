@@ -10,6 +10,7 @@ import { DataTable } from '@/components/ui/DataTable';
 import { NetWorthLevelsPanel } from './NetWorthLevelsPanel';
 import { netWorthHeadline } from './netWorthHeadline';
 import { netWorthForHistoryComparison } from '@/lib/engines/netWorthBasis';
+import { essentialHomeLoanNote } from '@/lib/engines/essentialHousing';
 
 function titleCase(s: string): string {
   return s
@@ -85,7 +86,7 @@ export function ExecutiveSummary({ summary }: { summary: DashboardSummary }) {
       <MetricCard
         label="Monthly Expenses"
         value={formatMoney(summary.totalMonthlyExpenses + summary.debtMonthlyRepayments, summary.currency)}
-        trend={`Essential ${formatMoney(summary.essentialMonthlyExpenses, summary.currency)} · Debt ${formatMoney(summary.debtMonthlyRepayments, summary.currency)}`}
+        trend={`Essential ${formatMoney(summary.essentialMonthlyExpenses, summary.currency)}${(summary.essentialHomeLoan?.monthly ?? 0) > 0 ? ` (includes your home loan repayment, also inside Debt)` : ''} · Debt ${formatMoney(summary.debtMonthlyRepayments, summary.currency)}`}
       />
       <MetricCard
         label={summary.monthlySurplus >= 0 ? 'Monthly Surplus' : 'Monthly Deficit'}
@@ -213,6 +214,8 @@ export function NetWorthSection({ summary }: { summary: DashboardSummary }) {
 
 export function SavingsAnalyticsSection({ summary }: { summary: DashboardSummary }) {
   const recommendedBuffer = summary.essentialMonthlyExpenses * 6;
+  // PO rule 17-10-2026: where the essentials behind the Emergency Fund months include the home loan repayment, say so.
+  const essentialNote = essentialHomeLoanNote(summary.essentialHomeLoan, summary.currency);
   const fiRatio = summary.ratios.find((r) => r.key === 'financial_independence_ratio');
   return (
     <SectionCard
@@ -231,6 +234,11 @@ export function SavingsAnalyticsSection({ summary }: { summary: DashboardSummary
           sub="Passive income vs expenses"
         />
       </div>
+      {essentialNote && (
+        <p className="mt-3 text-xs text-muted" role="note" data-testid="emergency-fund-essential-home-loan-note">
+          {essentialNote}
+        </p>
+      )}
     </SectionCard>
   );
 }

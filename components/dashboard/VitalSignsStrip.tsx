@@ -2,6 +2,7 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { formatMoneyWhole } from '@/lib/engines/money';
 import type { DashboardSummary } from '@/lib/engines/dashboard';
 import { netWorthHeadline } from './netWorthHeadline';
+import { essentialHomeLoanNote } from '@/lib/engines/essentialHousing';
 
 function ratioStatus(summary: DashboardSummary, key: string): 'good' | 'caution' | 'risk' | 'neutral' {
   return summary.ratios.find((r) => r.key === key)?.status ?? 'neutral';
@@ -55,6 +56,8 @@ export function VitalSignsStrip({ summary, contextLinks }: { summary: DashboardS
         label="Emergency Fund"
         value={summary.emergencyFundMonths === null ? '—' : `${summary.emergencyFundMonths.toFixed(1)} mo`}
         status={ratioStatus(summary, 'emergency_fund_ratio')}
+        // PO rule 17-10-2026: say what the months are measured against when it includes the home loan repayment.
+        trend={summary.essentialHomeLoan?.status === 'counted' ? essentialHomeLoanNote(summary.essentialHomeLoan, summary.currency) ?? undefined : undefined}
         contextResolved={contextLinks?.['dashboard.emergency_fund']}
       />
       <MetricCard
