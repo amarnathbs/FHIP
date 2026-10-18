@@ -8,8 +8,7 @@ import { OpenPrintTabLink } from '@/components/reports/OpenPrintTabLink';
 import { StatementPicker } from '@/components/reports/netWorthStatement/StatementPicker';
 
 // Net Worth Statement (PO request 16-10-2026). Reports > Net Worth Statement. Available to every signed-in plan (Free and
-// Premium): it only presents the person's own entered data, and browser printing is free for everyone (the Export Centre
-// rule on /reports). No plan check here on purpose; tests/unit/netWorthStatementAccess.test.ts pins that.
+// Premium): it only presents the person's own entered data, and browser printing is free for everyone (the rule on /reports). No plan check here on purpose; tests/unit/netWorthStatementAccess.test.ts pins that.
 async function NetWorthStatementPageContent({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const { view: rawView } = await searchParams;
   const supabase = await createClient();
