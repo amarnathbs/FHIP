@@ -119,6 +119,9 @@ Before/after, MEASURED on the same machine and method (modelled bytes):
 | same, plus the 45,489,684 calibration gap (INFERRED) | 88,070,756 | 100,769,600 | |
 | Linux-normalised, plus the gap (INFERRED) | 93,610,019 | 106,308,863 | |
 
+After merging the newer origin/main `8ba4048` (report print-flow UI changes only) the rebuilt guard reads 84,415,025 bytes
+(margin 146,271,695), routes-manifest still byte-identical; the table above is the pre-merge measurement.
+
 Under hypothesis H the real saving on Amplify is larger (libvips 18.2 MB would also disappear, and pdf-parse maps
 10.7 MB); under no hypothesis is it smaller than what is measured.
 
