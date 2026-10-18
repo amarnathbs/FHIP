@@ -93,6 +93,7 @@ export async function buildForecastReportData(userId: string, requestedScenarioI
     resolveForecastPageContext(userId, requestedScenarioId, supabase),
   ]);
   const scenarioId = activeScenario.id;
+  const retirementEssentialMonthly = dashboard.essentialMonthlyExpenses - (dashboard.essentialHomeLoan?.monthly ?? 0);
 
   const [variances, netWorthRun, retirementRun, goalRun, debtRun, investmentRun, crossBorderRun, resilienceRun, scenarioComparison, assumptions, actionPlan] =
     await Promise.all([
@@ -122,7 +123,8 @@ export async function buildForecastReportData(userId: string, requestedScenarioI
           scenarioId,
           forecastType: 'retirement',
           retirementTargetMethod: 'desired_income',
-          retirementDesiredAnnualIncome: dashboard.essentialMonthlyExpenses > 0 ? dashboard.essentialMonthlyExpenses * 12 : undefined,
+          // PO rule 17-10-2026: essentials WITHOUT the owner-occupied home-loan repayment (see forecastData.ts, expense_replacement).
+          retirementDesiredAnnualIncome: retirementEssentialMonthly > 0 ? retirementEssentialMonthly * 12 : undefined,
         },
         supabase
       ),

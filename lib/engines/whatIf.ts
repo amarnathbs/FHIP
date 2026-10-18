@@ -20,11 +20,15 @@ export const SCENARIO_LABELS: Record<ScenarioType, string> = {
 // self-consistent (if hypothetical) picture rather than stale ratios.
 export function recomputeDerived(d: DashboardSummary): void {
   const income = d.netMonthlyIncome || d.grossMonthlyIncome;
-  d.totalMonthlyExpenses = d.essentialMonthlyExpenses + d.lifestyleMonthlyExpenses;
+  // PO rule 17-10-2026: essentialMonthlyExpenses includes the owner-occupied home-loan repayment, which is ALSO in
+  // debtMonthlyRepayments and never in totalMonthlyExpenses. Take it out once here so the total, the surplus and
+  // disposable income keep counting it a single time.
+  const homeLoanEssential = d.essentialHomeLoan?.monthly ?? 0;
+  d.totalMonthlyExpenses = d.essentialMonthlyExpenses - homeLoanEssential + d.lifestyleMonthlyExpenses;
   d.monthlySurplus = income - d.totalMonthlyExpenses - d.debtMonthlyRepayments;
   d.savingsRate = income > 0 ? d.monthlySurplus / income : null;
   d.operatingCashFlow = income - d.essentialMonthlyExpenses;
-  d.disposableIncome = d.operatingCashFlow - d.debtMonthlyRepayments;
+  d.disposableIncome = d.operatingCashFlow - (d.debtMonthlyRepayments - homeLoanEssential);
   const totalOutflow = d.totalMonthlyExpenses + d.debtMonthlyRepayments;
   d.cashFlowRatio = totalOutflow > 0 ? d.monthlySurplus / totalOutflow : null;
   d.emergencyFundMonths = d.essentialMonthlyExpenses > 0 ? d.liquidAssets / d.essentialMonthlyExpenses : null;
@@ -65,6 +69,14 @@ export function applyScenario(base: DashboardSummary, type: ScenarioType): Dashb
       const householdPayoff = Math.min(payoff, d.householdLiabilityBalance);
       const householdProportion = d.householdLiabilityBalance > 0 ? householdPayoff / d.householdLiabilityBalance : 0;
       d.householdLiabilityBalance -= householdPayoff;
+      // The owner-occupied home-loan repayment is part of this repayment AND of essential/core-survival expenses: it
+      // shrinks by the same proportion, in all three places.
+      const homeLoanDrop = (d.essentialHomeLoan?.monthly ?? 0) * householdProportion;
+      if (d.essentialHomeLoan && homeLoanDrop > 0) {
+        d.essentialHomeLoan = { ...d.essentialHomeLoan, monthly: d.essentialHomeLoan.monthly - homeLoanDrop };
+        d.essentialMonthlyExpenses -= homeLoanDrop;
+        d.coreSurvivalMonthlyExpenses -= homeLoanDrop;
+      }
       d.debtMonthlyRepayments -= d.debtMonthlyRepayments * householdProportion;
       d.totalLiabilityMonthlyRepayments -= d.totalLiabilityMonthlyRepayments * proportion;
       break;

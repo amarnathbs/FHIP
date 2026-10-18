@@ -49,6 +49,8 @@ export async function loadNetWorthLevels(args: {
   supabase: Client;
   snapshot: CanonicalFinancialSnapshotResult;
   businessEntities: readonly BusinessEntityWithLineItems[] | null;
+  /** Optional out-parameter: receives the exact rows the model was computed from (used by the Net Worth Statement to itemise). */
+  collect?: { rows?: NetWorthRowInput[] };
   /** The Dashboard's history-basis net worth (all entities included), to prove the bridge. */
   previouslyReported: number;
   /** The Dashboard summary's personal-basis net worth (summary.netWorth), to prove personal parity. */
@@ -129,6 +131,8 @@ export async function loadNetWorthLevels(args: {
       nettedInFundBalance: nettedLiabilityIds.has(l.id),
     });
   }
+
+  if (args.collect) args.collect.rows = rows;
 
   const entities: NetWorthEntityInput[] = [];
   if (args.businessEntities === null) {

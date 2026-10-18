@@ -51,6 +51,7 @@ export const NAV_HREF_MODULE_MAP: Record<string, ModuleKey> = {
   '/recommendations': 'RECOMMENDATIONS',
   '/reports': 'REPORTS',
   '/reports/fund-analytics': 'REPORTS',
+  '/reports/net-worth-statement': 'REPORTS',
   '/ai-insights': 'AI_INSIGHTS',
   '/profile': 'PROFILE',
 };

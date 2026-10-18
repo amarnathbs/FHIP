@@ -92,14 +92,14 @@ describe('report read routes', () => {
 describe('export route', () => {
   const post = () => exportPOST(new Request('http://t/x', { method: 'POST', body: JSON.stringify({ format: 'pdf' }) }), ctx);
 
-  it('NC-R1: a renderer that throws is a typed 500 naming the cause for support, and the browser can still print', async () => {
+  it('NC-R1: a renderer that throws is a typed answer naming a safe reason code for support, and the browser can still print', async () => {
     renderReportToPdf.mockRejectedValue(new Error('Executable doesn\'t exist at /var/task/chromium'));
     const res = await post();
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(503);
     const body = await parsed(res);
-    expect(body).toMatchObject({ code: 'EXPORT_RENDER_FAILED', retryable: true });
-    expect(body.error).toMatch(/view and print/);
-    expect(body.detail).toContain('Executable');
+    expect(body).toMatchObject({ code: 'EXPORT_RENDER_FAILED', detail: 'renderer_unavailable' });
+    expect(body.error).toMatch(/Print/);
+    expect(JSON.stringify(body)).not.toContain('/var/task'); // the internal message stays in the server log
     expect(body.correlationId).toMatch(/^rpt-/);
   });
 

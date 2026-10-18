@@ -55,6 +55,7 @@ describe('NAV_HREF_MODULE_MAP', () => {
       '/recommendations',
       '/reports',
       '/reports/fund-analytics',
+      '/reports/net-worth-statement',
       '/ai-insights',
       '/profile',
     ];

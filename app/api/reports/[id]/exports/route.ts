@@ -1,10 +1,19 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { canExportReports } from '@/lib/services/entitlements';
 import { isExportFormatImplemented, requiresPremiumEntitlement, type ExportFormat } from '@/lib/engines/reportExport';
-import { renderReportToPdf } from '@/lib/services/reportPdfRenderer';
 import { newCorrelationId, typedError } from '@/lib/services/reportApiResponses';
+import { loadReportPdfRenderer } from '@/lib/services/reportPdfRendererLoader';
+import {
+  EXPORT_DEADLINE_MS,
+  REPORT_EXPORT_FAILURES,
+  ReportExportError,
+  classifyRenderFailure,
+  isReportExportError,
+  withExportDeadline,
+  type ReportExportStep,
+} from '@/lib/services/reportExportFailure';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,15 +34,32 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 // CSV has no renderer yet — recorded honestly as failed rather than faking a
 // working pipeline. The in-app report and browser print stylesheet remain
 // fully functional regardless (Persona I).
+//
+// 17-10-2026 (production): this route answered a bare 21-byte "Internal Server Error". The renderer, and with it the
+// `playwright` package, used to be imported at the top of this file, so a server that could not load it failed while
+// LOADING the route -- before any handler or try/catch could run. The renderer is now imported on demand
+// (reportPdfRendererLoader.ts) inside the handler. EVERY failure below is typed JSON with a stable `code`, a
+// correlation id and a short safe reason code in `detail` (renderer_unavailable, token_failed, render_timeout,
+// render_failed, storage_failed, record_failed, entitlement); the underlying message goes to the server log only.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const correlationId = newCorrelationId();
   try {
     return await handleExportPost(req, params, correlationId);
   } catch (e) {
-    // Nothing may escape as an empty body: an unexpected throw is a typed JSON answer with a reference.
-    console.error('[reports] export failed unexpectedly', { correlationId, message: e instanceof Error ? e.message : String(e) });
-    return typedError(500, 'EXPORT_FAILED', 'The export could not be prepared just now. You can still view and print this report. Please try again later.', correlationId, true, e instanceof Error ? e.message : undefined);
+    // Nothing may escape as an empty or plain-text body: an unexpected throw is a typed JSON answer with a reference.
+    const message = e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300);
+    if (isReportExportError(e)) {
+      console.error('[reports] export failed', { correlationId, step: e.step, message });
+      return exportFailureResponse(e.step, correlationId);
+    }
+    console.error('[reports] export failed unexpectedly', { correlationId, message });
+    return typedError(500, 'EXPORT_FAILED', 'The export could not be prepared just now. You can still view this report and use Print, then choose Save as PDF.', correlationId, true, 'unexpected');
   }
+}
+
+function exportFailureResponse(step: ReportExportStep, correlationId: string, detailOverride?: string): Response {
+  const spec = REPORT_EXPORT_FAILURES[step];
+  return typedError(spec.status, spec.code, spec.message, correlationId, spec.retryable, detailOverride ?? step);
 }
 
 async function handleExportPost(req: Request, params: Promise<{ id: string }>, correlationId: string): Promise<Response> {
@@ -42,12 +68,12 @@ async function handleExportPost(req: Request, params: Promise<{ id: string }>, c
   if (!user) return unauthenticated!;
   const body = await req.json().catch(() => ({}));
   const format = body?.format as ExportFormat | undefined;
-  if (!format || !['pdf', 'print', 'csv'].includes(format)) return bad('Invalid export format', 422);
+  if (!format || !['pdf', 'print', 'csv'].includes(format)) return typedError(422, 'EXPORT_FORMAT_INVALID', 'Invalid export format.', correlationId, false, 'format');
 
   const supabase = await createClient();
 
   if (requiresPremiumEntitlement(format) && !(await canExportReports(user.id, supabase))) {
-    return bad('Exporting reports requires a premium plan. You can still view and print this report.', 403);
+    return typedError(403, 'EXPORT_PREMIUM_REQUIRED', 'Exporting reports requires a premium plan. You can still view and print this report.', correlationId, false, 'entitlement');
   }
 
   // Ownership check before any write — report_exports grants SELECT-own
@@ -55,7 +81,7 @@ async function handleExportPost(req: Request, params: Promise<{ id: string }>, c
   // admin client; this explicit check replaces what the RLS WITH CHECK used
   // to enforce.
   const { data: ownedReport } = await supabase.from('reports').select('id').eq('id', id).eq('user_id', user.id).maybeSingle();
-  if (!ownedReport) return bad('Report not found', 404);
+  if (!ownedReport) return typedError(404, 'REPORT_NOT_FOUND', 'That report could not be found.', correlationId, false, 'not_found');
 
   const isImplemented = isExportFormatImplemented(format);
 
@@ -76,17 +102,28 @@ async function handleExportPost(req: Request, params: Promise<{ id: string }>, c
     })
     .select('*')
     .single();
-  if (insertError) return bad(insertError.message);
+  if (insertError || !exportRow) {
+    console.error('[reports] export record could not be written', { correlationId, reportId: id, message: (insertError?.message ?? 'no row returned').slice(0, 300) });
+    return exportFailureResponse('record_failed', correlationId);
+  }
   if (!isImplemented) return ok(exportRow);
 
+  let step: ReportExportStep = 'render_failed';
   try {
-    const { buffer, checksum } = await renderReportToPdf(id, exportRow.id);
+    const deadlineAt = Date.now() + EXPORT_DEADLINE_MS;
+    const { buffer, checksum } = await withExportDeadline(
+      (async () => {
+        const { renderReportToPdf } = await loadReportPdfRenderer();
+        return renderReportToPdf(id, exportRow.id, deadlineAt);
+      })()
+    );
     const fileName = `${id}.pdf`;
     const storagePath = `${user.id}/${id}/${exportRow.id}.pdf`;
+    step = 'storage_failed';
     const { error: uploadError } = await admin.storage
       .from('report-exports')
       .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true });
-    if (uploadError) throw new Error(uploadError.message);
+    if (uploadError) throw new ReportExportError('storage_failed', uploadError.message);
 
     const { data: updated, error: updateError } = await admin
       .from('report_exports')
@@ -102,15 +139,21 @@ async function handleExportPost(req: Request, params: Promise<{ id: string }>, c
       .eq('id', exportRow.id)
       .select('*')
       .single();
-    if (updateError) throw new Error(updateError.message);
+    if (updateError) throw new ReportExportError('storage_failed', updateError.message);
     return ok(updated);
   } catch (err) {
+    const failedStep = isReportExportError(err) ? err.step : step === 'storage_failed' ? 'storage_failed' : classifyRenderFailure(err);
     const message = err instanceof Error ? err.message : 'PDF rendering failed';
-    await admin
-      .from('report_exports')
-      .update({ status: 'failed', error_code: 'render_failed', completed_at: new Date().toISOString() })
-      .eq('id', exportRow.id);
-    console.error('[reports] pdf render failed', { correlationId, reportId: id, exportId: exportRow.id, message: message.slice(0, 300) });
-    return typedError(500, 'EXPORT_RENDER_FAILED', 'The PDF could not be produced just now. You can still view and print this report in your browser.', correlationId, true, message);
+    // Best effort: a failure to record the failure must not replace the typed answer.
+    try {
+      await admin
+        .from('report_exports')
+        .update({ status: 'failed', error_code: failedStep, completed_at: new Date().toISOString() })
+        .eq('id', exportRow.id);
+    } catch {
+      /* logged below with the original cause */
+    }
+    console.error('[reports] pdf render failed', { correlationId, reportId: id, exportId: exportRow.id, step: failedStep, message: message.slice(0, 300) });
+    return exportFailureResponse(failedStep, correlationId);
   }
 }

@@ -497,7 +497,11 @@ describe('LR-FI-1 §33 — mixed household, independent oracle', () => {
   });
 
   it('Household Expenses — SMSF audit fee and SMSF rates excluded', () => {
-    expect(d.essentialMonthlyExpenses).toBe(5000);
+    // PO rule 17-10-2026 (essentialHousing.ts): the personal 3,000 Home Loan repayment is an essential housing cost when no
+    // rent is recorded, so essential = 5,000 ordinary essentials + 3,000 = 8,000. It is NOT in totalMonthlyExpenses (still 5,900)
+    // and stays in debtMonthlyRepayments (3,000), so the surplus below is unchanged. The SMSF loan and SMSF rows never count.
+    expect(d.essentialMonthlyExpenses).toBe(8000);
+    expect(d.essentialHomeLoan?.monthly).toBe(3000);
     expect(d.lifestyleMonthlyExpenses).toBe(900);
     expect(d.totalMonthlyExpenses).toBe(5900);
   });

@@ -220,7 +220,9 @@ function scoreEmergencyFund(
         committed90d > 0
           ? `Accessible cash covers ${essentialMonths.toFixed(1)} months of essential expenses, after setting aside known commitments due in the next 90 days.`
           : `Accessible cash covers ${essentialMonths.toFixed(1)} months of essential expenses.`,
-      currentValue: { accessibleResources: accessible, committed90d, essentialMonths, coreSurvivalMonths },
+      // essentialHomeLoanMonthly: PO rule 17-10-2026 (essentialHousing.ts), the owner-occupied home-loan repayment inside the
+      // essential and core-survival expenses these months are measured against (0 = the rule did not apply).
+      currentValue: { accessibleResources: accessible, committed90d, essentialMonths, coreSurvivalMonths, essentialHomeLoanMonthly: d.essentialHomeLoan?.monthly ?? 0 },
       benchmarkValue: { recommendedMonths: 6 },
     },
     accessible,

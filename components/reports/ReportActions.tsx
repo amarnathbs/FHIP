@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { describeFailure, NETWORK_FAILURE, readApiResponse } from '@/lib/reports/apiClient';
+import { describeExportFailure, NETWORK_FAILURE, readApiResponse } from '@/lib/reports/apiClient';
 
 export function ReportActions({ reportId }: { reportId: string }) {
   const [exporting, setExporting] = useState<'pdf' | 'csv' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [readyExportId, setReadyExportId] = useState<string | null>(null);
+  const [offerPrint, setOfferPrint] = useState(false);
 
   function print() {
     window.print();
@@ -16,6 +17,7 @@ export function ReportActions({ reportId }: { reportId: string }) {
     setExporting(format);
     setMessage(null);
     setReadyExportId(null);
+    setOfferPrint(false);
     try {
       let res: Response;
       try {
@@ -26,13 +28,17 @@ export function ReportActions({ reportId }: { reportId: string }) {
         });
       } catch {
         setMessage(NETWORK_FAILURE.message);
+        setOfferPrint(true);
         return;
       }
       // Never res.json(): an empty or non-JSON body (a platform cut-off, a gateway page) is a plain message, not a parser error.
       const read = await readApiResponse(res);
       if (!read.ok) {
-        const failure = describeFailure(read);
-        setMessage(failure.correlationId ? `${failure.message} (reference ${failure.correlationId})` : failure.message);
+        // Typed answers carry their own sentence, code and reference; a bare platform 500 is explained as
+        // "temporarily unavailable". Either way the browser print route stays offered.
+        const failure = describeExportFailure(read);
+        setMessage(failure.message);
+        setOfferPrint(failure.offerPrint);
         return;
       }
       const data = (read.json?.data ?? null) as { status?: string; id?: string } | null;
@@ -68,6 +74,11 @@ export function ReportActions({ reportId }: { reportId: string }) {
         >
           Download PDF
         </a>
+      )}
+      {offerPrint && (
+        <button onClick={print} className="rounded border border-trust px-3 py-1.5 text-sm font-medium text-trust hover:bg-trust hover:text-white">
+          Print / Save as PDF
+        </button>
       )}
       {message && (
         <p role="status" aria-live="polite" className="text-xs text-gray-500">

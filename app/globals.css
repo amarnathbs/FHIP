@@ -348,3 +348,98 @@
   .fa-doc { width: 100%; max-width: 100%; margin: 0; padding: 0; box-shadow: none; }
   @page { size: A4; margin: 22mm 16mm 20mm 16mm; }
 }
+
+/* Net Worth Statements (PO request 16-10-2026): one A4 portrait page per statement. Scoped to .nws-root so nothing else changes.
+   A typical household (about 30 rows) fits one page; a very large one continues on the next page with the column headings
+   repeated (thead is a table-header-group) and the totals as the LAST rows, so they appear once, at the end. */
+@media screen {
+  /* Table cells have no padding by default (Tailwind preflight); a statement needs room between a name, an owner and an amount. */
+  .nws-root .nws-table :is(th, td) {
+    padding: 3px 8px;
+  }
+}
+@media print {
+  /* A named page: the browser print path for the statements uses slimmer margins than the report PDF renderer, so a typical
+     household (about 30 items) fits one A4 page. Other pages keep the global @page rule. */
+  @page nws {
+    size: A4;
+    margin: 10mm 12mm;
+  }
+  .nws-root {
+    page: nws;
+    color: #000;
+    font-size: 8.5pt;
+    line-height: 1.2;
+  }
+  .nws-root .nws-statement {
+    break-after: page;
+    page-break-after: always;
+  }
+  .nws-root .nws-statement:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .nws-root .nws-block {
+    margin-top: 5pt;
+  }
+  /* The global print rule keeps a whole table on one page; here a long table may flow across pages, rows stay whole. */
+  .nws-root table {
+    break-inside: auto;
+  }
+  .nws-root thead {
+    display: table-header-group;
+  }
+  .nws-root tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .nws-root .nws-table {
+    font-size: 8pt;
+    line-height: 1.1;
+  }
+  .nws-root .nws-table :is(th, td) {
+    padding: 0.4pt 6pt;
+  }
+  .nws-root h2 {
+    font-size: 14pt;
+  }
+  .nws-root .nws-head {
+    padding-bottom: 2pt;
+  }
+  .nws-root h3 {
+    font-size: 9.5pt;
+    margin-bottom: 2pt;
+    break-after: avoid;
+  }
+  .nws-root .nws-networth {
+    margin-top: 4pt;
+    padding-top: 1pt;
+    padding-bottom: 1pt;
+    break-inside: avoid;
+  }
+  .nws-root .nws-notes,
+  .nws-root .nws-disclaimer,
+  .nws-root .nws-notincluded {
+    font-size: 7pt;
+    line-height: 1.15;
+  }
+  .nws-root .text-xs,
+  .nws-root .nws-small {
+    font-size: 7.5pt;
+    line-height: 1.15;
+  }
+  .nws-root .nws-notincluded :is(h3, ul) {
+    font-size: 7pt;
+  }
+  .nws-root .nws-notes {
+    margin-top: 4pt;
+  }
+  .nws-root .nws-disclaimer {
+    margin-top: 4pt;
+    padding-top: 3pt;
+  }
+  .nws-root .text-gray-600,
+  .nws-root .text-gray-700 {
+    color: #333;
+  }
+}
