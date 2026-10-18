@@ -4,11 +4,11 @@ import { createClient } from '@/lib/supabase/server';
 import { loadNetWorthStatementData } from '@/lib/services/netWorthStatementData';
 import { parseStatementView, statementViewKey, statementsForView, type NetWorthStatementSet } from '@/lib/engines/netWorthStatement';
 import { NetWorthStatementView } from '@/components/reports/netWorthStatement/NetWorthStatementView';
+import { OpenPrintTabLink } from '@/components/reports/OpenPrintTabLink';
 import { StatementPicker } from '@/components/reports/netWorthStatement/StatementPicker';
 
 // Net Worth Statement (PO request 16-10-2026). Reports > Net Worth Statement. Available to every signed-in plan (Free and
-// Premium): it only presents the person's own entered data, and browser printing is free for everyone (the Export Centre
-// rule on /reports). No plan check here on purpose; tests/unit/netWorthStatementAccess.test.ts pins that.
+// Premium): it only presents the person's own entered data, and browser printing is free for everyone (the rule on /reports). No plan check here on purpose; tests/unit/netWorthStatementAccess.test.ts pins that.
 async function NetWorthStatementPageContent({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const { view: rawView } = await searchParams;
   const supabase = await createClient();
@@ -46,14 +46,13 @@ function StatementContent({ data, rawView }: { data: NetWorthStatementSet; rawVi
     <>
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <StatementPicker set={data} view={view} />
-        <a
+        <OpenPrintTabLink
           href={`/reports/net-worth-statement/print?view=${encodeURIComponent(key)}&print=1`}
-          target="_blank"
-          rel="noopener noreferrer"
+          windowName="net-worth-statement"
           className="rounded border px-3 py-1.5 text-sm text-gray-700 hover:border-trust"
         >
           Print / Save as PDF{key === 'all' ? ' (one page each)' : ''}
-        </a>
+        </OpenPrintTabLink>
       </div>
       <NetWorthStatementView statements={statements} parityMessages={data.parity.ok ? [] : data.parity.messages} />
     </>

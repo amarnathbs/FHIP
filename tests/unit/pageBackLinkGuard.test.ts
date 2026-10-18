@@ -30,6 +30,7 @@ export const BACK_LINK_EXEMPT: Record<string, string> = {
   '/forecast/report/print': 'Print / PDF render target, never navigated to by a person.',
   '/reports/[id]/print': 'Print / PDF render target, never navigated to by a person.',
   '/reports/fund-analytics/print': 'Print / PDF render target (Fund analytics report), opened by the PDF renderer or a Print button, never navigated to as a page.',
+  '/reports/net-worth-statement/print': 'Bare print view opened in its own tab by the Print button; its PrintTabToolbar closes the tab after printing (a back link would leave two tabs open).',
 };
 
 function walk(rel: string, acc: string[] = []): string[] {

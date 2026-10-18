@@ -81,8 +81,8 @@ async function ReportsPageContent() {
           <ReportHistoryTable reports={reports} currency={currency} />
         </SectionCard>
 
-        <SectionCard title="Export Centre" description="Report exports (PDF, CSV) require a premium plan. In-app viewing and browser printing are available to everyone.">
-          <p className="text-sm text-muted">Open a report to request an export or print it.</p>
+        <SectionCard title="Save as PDF" description="In-app viewing, printing and saving a report as a PDF from your browser are free on every plan.">
+          <p className="text-sm text-muted">Open a report and choose Print / Save as PDF. Server-generated PDF and CSV downloads are not available yet.</p>
         </SectionCard>
 
         {/* LR-8 WP-02/03/04/06 — Reports Hub consolidation. Interactive

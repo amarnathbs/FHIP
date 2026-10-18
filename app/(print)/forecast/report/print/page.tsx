@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildForecastReportData, resolveForecastReportRenderToken } from '@/lib/services/forecastReportData';
 import { ForecastReportContent } from '@/components/forecast/ForecastReportContent';
+import { PrintTabToolbar } from '@/components/reports/PrintTabToolbar';
 
 // Bare print view — no AppShell chrome, no nav, no action buttons. Opened
 // two ways: (1) a logged-in user visiting directly to manually
@@ -10,8 +11,8 @@ import { ForecastReportContent } from '@/components/forecast/ForecastReportConte
 // (lib/services/forecastReportPdfRenderer.ts), which has no session and
 // instead presents a short-lived ?token= — same pattern as
 // app/(app)/reports/[id]/print.
-export default async function ForecastReportPrintPage({ searchParams }: { searchParams: Promise<{ token?: string; scenario?: string }> }) {
-  const { token, scenario } = await searchParams;
+export default async function ForecastReportPrintPage({ searchParams }: { searchParams: Promise<{ token?: string; scenario?: string; print?: string }> }) {
+  const { token, scenario, print } = await searchParams;
 
   if (token) {
     const resolved = await resolveForecastReportRenderToken(token);
@@ -34,6 +35,7 @@ export default async function ForecastReportPrintPage({ searchParams }: { search
   const data = await buildForecastReportData(user.id, scenario, supabase);
   return (
     <div className="mx-auto max-w-3xl p-6">
+      <PrintTabToolbar autoPrint={print === '1'} parentHref="/forecast/report" parentLabel="Forecasting Report" />
       <ForecastReportContent data={data} />
     </div>
   );
