@@ -115,7 +115,7 @@ describe('F6 guard: every page has the shared back link', () => {
       expect(ROUTES.has(route), `${route}: ${why}`).toBe(true);
       expect(why.length).toBeGreaterThan(10);
     }
-    expect(Object.keys(BACK_LINK_EXEMPT).length).toBeLessThanOrEqual(11);
+    expect(Object.keys(BACK_LINK_EXEMPT).length).toBeLessThanOrEqual(12); // 11 on main plus the Fund analytics PDF render target
   });
 
   it('every page parent target is a real route (a back link to a page that does not exist is a defect)', () => {
