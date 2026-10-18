@@ -70,7 +70,7 @@ describe('production hand-over pack: the hand written SQL', () => {
       'sql/checks/C0260a.sql', 'sql/checks/C0260e.sql', 'sql/checks/C0261.sql', 'sql/checks/C0262.sql', 'sql/checks/C0263.sql', 'sql/checks/C0269.sql', 'sql/checks/C0270_0271.sql', 'sql/checks/C0281.sql', 'sql/checks/C0282.sql', 'sql/checks/C_final_all.sql', 'sql/prechecks/P3c_retention_function_identity.sql', 'sql/prechecks/P3d_retention_function_behaviour.sql', 'sql/rollback/rollback_0281.sql', 'sql/rollback/rollback_0282.sql',
       'sql/prechecks/P1x_list_existing_nav2_objects.sql', 'sql/prechecks/P1y_existing_nav2_row_counts.sql', 'sql/prechecks/P1z_reconcile_partial_0260_summary.sql', 'sql/prechecks/P1z_reconcile_partial_0260_detail.sql',
       'sql/backup/B1b_backup_existing_nav2_tables.sql', 'sql/backup/B2b_backup_existing_nav2_check.sql', 'sql/backup/B3b_drop_existing_nav2_backups_after_release.sql',
-      'sql/grants/grant_upload.sql', 'sql/grants/grant_switch.sql', 'sql/switches/switch_on_fund_analytics.sql', 'sql/switches/switch_off_all_nav2.sql',
+      'sql/grants/grant_upload.sql', 'sql/grants/grant_switch.sql', 'sql/grants/revoke_switch.sql', 'sql/switches/switch_on_fund_analytics.sql', 'sql/switches/switch_off_all_nav2.sql',
       'sql/rollback/rollback_0260.sql', 'sql/rollback/rollback_0261_restore_0219_function.sql', 'sql/rollback/rollback_0261_drop_tables.sql', 'sql/rollback/rollback_0262.sql', 'sql/rollback/rollback_0263.sql', 'sql/rollback/rollback_0269.sql',
     ]) expect(ALL_SQL, f).toContain(f);
     expect(HAND_WRITTEN.length).toBeGreaterThanOrEqual(35);

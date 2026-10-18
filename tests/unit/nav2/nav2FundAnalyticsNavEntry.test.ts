@@ -41,8 +41,8 @@ const ENABLED: Record<string, CapabilityDecision> = { REPORTS: 'ENABLED' };
 const HREF = '/reports/fund-analytics';
 
 describe('the sidebar entry (data)', () => {
-  it('NC-N1: Fund Analytics is in the Reports dropdown right after the Monthly Report, and the other entries are unchanged', () => {
-    expect(REPORTS_ITEMS.map((i) => i.label)).toEqual(['Monthly Report', 'Fund Analytics', 'Financial Activity', 'Consolidated Report', 'Forecast Variance']);
+  it('NC-N1: Fund Analytics is in the Reports dropdown right after the Monthly Report, and the other entries are unchanged (main added Net Worth Statement after it)', () => {
+    expect(REPORTS_ITEMS.map((i) => i.label)).toEqual(['Monthly Report', 'Fund Analytics', 'Net Worth Statement', 'Financial Activity', 'Consolidated Report', 'Forecast Variance']);
     expect(REPORTS_ITEMS.find((i) => i.label === 'Fund Analytics')?.href).toBe(HREF);
     const reports = NAV_GROUPS.flatMap((g) => g.items).find((e) => e.type === 'dropdown' && e.id === 'reports');
     expect(reports && reports.type === 'dropdown' ? reports.items.some((i) => i.href === HREF) : false).toBe(true);

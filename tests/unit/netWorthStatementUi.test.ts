@@ -54,7 +54,7 @@ const html = (set: ReturnType<typeof fixture>, which: 'personal' | 'entity' | 'f
 describe('Reports menu entry', () => {
   it('Net Worth Statement is in the Reports group of the sidebar, after Monthly Report, with a real page behind it', () => {
     const reports = NAV_GROUPS.flatMap((g) => g.items).find((e) => e.type === 'dropdown' && e.id === 'reports');
-    expect(reports && reports.type === 'dropdown' ? reports.items.map((i) => i.label) : []).toEqual(['Monthly Report', 'Net Worth Statement', 'Financial Activity', 'Consolidated Report', 'Forecast Variance']);
+    expect(reports && reports.type === 'dropdown' ? reports.items.map((i) => i.label) : []).toEqual(['Monthly Report', 'Fund Analytics', 'Net Worth Statement', 'Financial Activity', 'Consolidated Report', 'Forecast Variance']);
     expect(REPORTS_ITEMS.find((i) => i.label === 'Net Worth Statement')?.href).toBe('/reports/net-worth-statement');
     expect(() => read('app/(app)/reports/net-worth-statement/page.tsx')).not.toThrow();
     expect(() => read('app/(print)/reports/net-worth-statement/print/page.tsx')).not.toThrow();

@@ -169,7 +169,10 @@ describe('static chart geometry (pure)', () => {
 
 describe('print stylesheet and renderer settings (source contract)', () => {
   const css = read('app/globals.css');
-  const block = css.slice(css.indexOf('.fa-doc {'));
+  // the Fund analytics section only: it ends where main's Net Worth Statement rules (.nws-root, a different document) begin
+  const faStart = css.indexOf('.fa-doc {');
+  const nwsStart = css.indexOf('/* Net Worth Statements', faStart);
+  const block = css.slice(faStart, nwsStart > 0 ? nwsStart : undefined);
   it('headings keep with what follows; a row never splits; a WHOLE table may split with its header row repeated', () => {
     expect(block).toMatch(/\.fa-doc h3 \{[^}]*break-after: avoid/);
     expect(block).toMatch(/\.fa-doc h2\.fa-fund-name \{[^}]*break-after: avoid/);
