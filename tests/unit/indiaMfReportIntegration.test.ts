@@ -210,11 +210,17 @@ describe('rendering and print contract', () => {
     expect(out.match(/not available/g)!.length).toBe(2);
     expect(out).not.toContain('84,021');
   });
-  it('the section opts into the landscape named page and the stylesheet defines it (the wide table must fit the PDF)', () => {
-    expect(html).toContain('india-mf-landscape');
+  it('PO 18-10-2026: the section prints PORTRAIT (no landscape named page); each holding is a two-line block with every column captioned', () => {
+    expect(html).toContain('india-mf-section');
+    expect(html).not.toContain('india-mf-landscape');
+    // every one of the sixteen columns is still printed: the cells carry their caption for the paper layout
+    for (const label of ['Scheme', 'Folio', 'Start date', 'Units', 'Avg NAV', 'Latest NAV', 'Invested', 'Switch in', 'Red / SWP', 'Switch out', 'Dividend', 'Avg days', 'Curr value', 'Unrealised', 'Realised', 'XIRR']) {
+      expect(html).toContain(`data-label="${label}"`);
+    }
     const css = fs.readFileSync(path.join(ROOT, 'app/globals.css'), 'utf8');
-    expect(css).toMatch(/@page india-mf-landscape\s*\{[^}]*size:\s*A4 landscape/);
-    expect(css).toMatch(/\.india-mf-landscape\s*\{[^}]*page:\s*india-mf-landscape/);
+    expect(css).not.toMatch(/@page india-mf-landscape/);
+    expect(css).not.toMatch(/size:\s*A4 landscape/);
+    expect(css).toMatch(/\.india-mf-table tr\.imf-row\s*\{[^}]*display:\s*grid/);
     const preview = fs.readFileSync(path.join(ROOT, 'components/reports/ReportPreview.tsx'), 'utf8');
     expect(preview).toContain('IndiaMfInvestmentReportSection');
     expect(preview).toContain("byCode('india_mf_investment_report')");

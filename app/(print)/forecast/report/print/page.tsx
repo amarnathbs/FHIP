@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { buildForecastReportData, resolveForecastReportRenderToken } from '@/lib/services/forecastReportData';
 import { ForecastReportContent } from '@/components/forecast/ForecastReportContent';
 import { PrintTabToolbar } from '@/components/reports/PrintTabToolbar';
+import { ReportPrintFrame } from '@/components/reports/ReportPrintFrame';
 
 // Bare print view — no AppShell chrome, no nav, no action buttons. Opened
 // two ways: (1) a logged-in user visiting directly to manually
@@ -20,9 +21,9 @@ export default async function ForecastReportPrintPage({ searchParams }: { search
     const admin = createAdminClient();
     const data = await buildForecastReportData(resolved.userId, scenario ?? resolved.scenarioId ?? undefined, admin);
     return (
-      <div className="mx-auto max-w-3xl p-6">
+      <ReportPrintFrame identity="Consolidated Forecasting Report" serverRender>
         <ForecastReportContent data={data} />
-      </div>
+      </ReportPrintFrame>
     );
   }
 
@@ -34,9 +35,9 @@ export default async function ForecastReportPrintPage({ searchParams }: { search
 
   const data = await buildForecastReportData(user.id, scenario, supabase);
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <ReportPrintFrame identity="Consolidated Forecasting Report">
       <PrintTabToolbar autoPrint={print === '1'} parentHref="/forecast/report" parentLabel="Forecasting Report" />
       <ForecastReportContent data={data} />
-    </div>
+    </ReportPrintFrame>
   );
 }

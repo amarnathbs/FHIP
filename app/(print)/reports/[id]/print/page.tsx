@@ -4,6 +4,8 @@ import { getReport, getReportByRenderToken } from '@/lib/services/reportsData';
 import { loadReportContent } from '@/lib/services/reportContentData';
 import { ReportPreview } from '@/components/reports/ReportPreview';
 import { PrintTabToolbar } from '@/components/reports/PrintTabToolbar';
+import { ReportPrintFrame } from '@/components/reports/ReportPrintFrame';
+import { localeForReportingCurrency } from '@/lib/engines/money';
 
 // Bare print view — no AppShell chrome, no nav, no action buttons. Opened
 // two ways: (1) a logged-in user visiting directly to manually print/preview
@@ -31,18 +33,21 @@ export default async function ReportPrintPage({
     notFound();
   }
   const content = await loadReportContent('en', supabase);
+  const currency = result.report.reporting_currency as 'AUD' | 'INR';
+  // The running header of the printed pages: the report's name and its month (a month name, never a numeric date).
+  const month = new Date(result.report.report_month).toLocaleDateString(localeForReportingCurrency(currency), { month: 'long', year: 'numeric' });
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <ReportPrintFrame identity={`Household Financial Health Report - ${month}`} serverRender={Boolean(token)}>
       {/* A person (session) gets the shared print-tab toolbar (print, close this tab); the headless PDF renderer (token) never does,
           and the toolbar is hidden in print anyway, so the PDF is unchanged. */}
       {user && !token ? <PrintTabToolbar autoPrint={print === '1'} parentHref={`/reports/${id}`} parentLabel="Report" /> : null}
       <ReportPreview
         report={result.report}
         sections={result.sections}
-        currency={result.report.reporting_currency as 'AUD' | 'INR'}
+        currency={currency}
         content={content}
       />
-    </div>
+    </ReportPrintFrame>
   );
 }

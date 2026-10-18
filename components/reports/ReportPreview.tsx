@@ -24,6 +24,8 @@ import type { ReportContent } from '@/lib/services/reportContentData';
 import { ContextualExplain } from '@/components/aiExplain/ContextualExplain';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { isCanonicalAppendix } from '@/lib/engines/reportCanonicalAppendix';
+import { twinComparisonGroups, type StoredTwinMetric } from '@/lib/reports/twinComparisonRows';
+import { chartMonthLabel } from '@/lib/reports/chartMonthLabel';
 import { taxTableRows, type TaxDisposalLike } from '@/lib/engines/reportTaxTable';
 import { unavailableSentence, XRAY_NO_DATA_NOTE } from '@/lib/ui/reportNotes';
 import { IndiaMfInvestmentReportSection } from '@/components/reports/IndiaMfInvestmentReportSection';
@@ -954,7 +956,7 @@ export function ReportPreview({
           {/* Page 8 — 12-month trends. Only forces its own page break when
               there's an actual chart to show — an unavailable-trends notice
               alone shouldn't consume a full page. */}
-          <div className={twelveMonthTrends?.sectionStatus === 'included' ? 'report-page-break space-y-6' : 'space-y-6'}>
+          <div className={twelveMonthTrends?.sectionStatus === 'included' ? 'space-y-6' : 'space-y-6'}>
             {twelveMonthTrends?.sectionStatus === 'included' && (
               <SectionCard title={twelveMonthTrends.sectionTitle} className="report-section">
                 <p className="mb-4 text-justify text-sm text-gray-600">{twelveMonthTrends.narrativeText}</p>
@@ -963,7 +965,7 @@ export function ReportPreview({
                     <p className="mb-1 text-xs font-medium uppercase text-gray-400">Net worth</p>
                     <TrendLineChart
                       data={(twelveMonthTrends.sectionData.netWorthHistory as { month: string; netWorth: number }[]).map((r) => ({
-                        month: r.month,
+                        month: chartMonthLabel(r.month),
                         value: r.netWorth,
                       }))}
                       currency={currency}
@@ -976,7 +978,7 @@ export function ReportPreview({
                     <p className="mb-1 text-xs font-medium uppercase text-gray-400">Financial Health Score</p>
                     <ScoreTrendChart
                       data={(twelveMonthTrends.sectionData.healthScoreHistory as { score_month: string; rounded_score: number }[]).map((r) => ({
-                        month: r.score_month,
+                        month: chartMonthLabel(r.score_month),
                         value: r.rounded_score,
                       }))}
                     />
@@ -987,7 +989,7 @@ export function ReportPreview({
                     <p className="mb-1 text-xs font-medium uppercase text-gray-400">Financial Resilience Score</p>
                     <ScoreTrendChart
                       data={(twelveMonthTrends.sectionData.resilienceHistory as { score_month: string; rounded_score: number }[]).map((r) => ({
-                        month: r.score_month,
+                        month: chartMonthLabel(r.score_month),
                         value: r.rounded_score,
                       }))}
                     />
@@ -1004,7 +1006,7 @@ export function ReportPreview({
 
           {/* Page 9 — Full score diagnostic */}
           {scoreDiagnosticFull?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={scoreDiagnosticFull.sectionTitle} className="report-section">
                 <p className="mb-4 text-justify text-sm text-gray-600">{scoreDiagnosticFull.narrativeText}</p>
                 <DataTable label="Score pillars and their weights" className="w-full">
@@ -1053,7 +1055,7 @@ export function ReportPreview({
 
           {/* Page 10 — Full Financial DNA */}
           {financialDnaFull?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={financialDnaFull.sectionTitle} className="report-section">
                 <p className="text-sm text-gray-700">
                   Primary profile: <span className="font-medium">{financialDnaFull.sectionData.primaryProfileLabel as string}</span>
@@ -1113,7 +1115,7 @@ export function ReportPreview({
 
           {/* Page 11 — Investment analysis */}
           {investmentAnalysis?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={investmentAnalysis.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{investmentAnalysis.narrativeText}</p>
                 <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -1141,7 +1143,7 @@ export function ReportPreview({
 
           {/* Page 12 — Retirement readiness */}
           {retirementReadiness?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={retirementReadiness.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{retirementReadiness.narrativeText}</p>
                 <div className="mt-4">
@@ -1168,7 +1170,7 @@ export function ReportPreview({
 
           {/* Page 13 — Insurance analysis */}
           {insuranceAnalysis?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={insuranceAnalysis.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{insuranceAnalysis.narrativeText}</p>
                 <Stat label="Total monthly premium (all policies)" value={fmt(insuranceAnalysis.sectionData.totalMonthlyPremium)} />
@@ -1214,7 +1216,7 @@ export function ReportPreview({
 
           {/* Page 14 — Detailed goal forecasting */}
           {goalForecastDetail?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={goalForecastDetail.sectionTitle} className="report-section">
                 <p className="mb-4 text-justify text-sm text-gray-600">{goalForecastDetail.narrativeText}</p>
                 <div className="space-y-4">
@@ -1264,7 +1266,7 @@ export function ReportPreview({
 
           {/* Page 15 — Scenario forecasting */}
           {scenarioForecasting?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={scenarioForecasting.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{scenarioForecasting.narrativeText}</p>
                 {((scenarioForecasting.sectionData.scenarioComparison as unknown[]) ?? []).length > 0 && (
@@ -1295,34 +1297,32 @@ export function ReportPreview({
 
           {/* Page 16 — Full Financial Twin */}
           {financialTwinFull?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={financialTwinFull.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{financialTwinFull.narrativeText}</p>
-                <div className="mt-4">
-                  <BulletChart
-                    rows={(
-                      financialTwinFull.sectionData.metrics as {
-                        metricCode: string;
-                        label: string;
-                        unit: 'currency' | 'percentage' | 'months' | 'ratio' | 'count' | 'days';
-                        userValue: number | null;
-                        peerValue: number | null;
-                        healthyMin: number | null;
-                        healthyMax: number | null;
-                        comparisonStatus: string | null;
-                      }[]
-                    ).map(
-                      (m): BulletRow => ({
-                        label: m.label,
-                        userValue: m.userValue,
-                        peerValue: m.peerValue,
-                        healthyMin: m.healthyMin,
-                        healthyMax: m.healthyMax,
-                        comparisonStatus: m.comparisonStatus,
-                        displayValue: m.userValue === null ? undefined : formatByMetricUnit(m.userValue, m.unit, currency),
-                      })
-                    )}
-                  />
+                {/* The stored metrics carry a code, not a name or a unit: both come from the metric catalogue (lib/reports/twinComparisonRows.ts),
+                    grouped by category as the introduction above says. Without this every row printed a bare number. */}
+                <div className="mt-4 space-y-4">
+                  {twinComparisonGroups(financialTwinFull.sectionData.metrics as StoredTwinMetric[]).map((group) => (
+                    <div key={group.categoryCode} className="report-twin-group">
+                      <h3 className="text-sm font-semibold text-gray-900">{group.categoryLabel}</h3>
+                      <div className="mt-2">
+                        <BulletChart
+                          rows={group.rows.map(
+                            (m): BulletRow => ({
+                              label: m.label,
+                              userValue: m.userValue,
+                              peerValue: m.peerValue,
+                              healthyMin: m.healthyMin,
+                              healthyMax: m.healthyMax,
+                              comparisonStatus: m.comparisonStatus,
+                              displayValue: m.userValue === null || m.unit === null ? undefined : formatByMetricUnit(m.userValue, m.unit, currency),
+                            })
+                          )}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 <p className="mt-3 text-justify text-xs text-gray-400">{financialTwinFull.limitationText}</p>
               </SectionCard>
@@ -1331,7 +1331,7 @@ export function ReportPreview({
 
           {/* Page 17 — Full cross-border wealth */}
           {crossBorderFull?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={crossBorderFull.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{crossBorderFull.narrativeText}</p>
               </SectionCard>
@@ -1353,7 +1353,7 @@ export function ReportPreview({
 
           {/* Page 18 — Stress testing */}
           {stressTesting?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={stressTesting.sectionTitle} className="report-section">
                 <p className="mb-4 text-justify text-sm text-gray-600">{stressTesting.narrativeText}</p>
                 <DataTable label="Stress test scenarios" className="w-full">
@@ -1399,7 +1399,7 @@ export function ReportPreview({
 
           {/* Page 19 — Personal action plan */}
           {personalActionPlan?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={personalActionPlan.sectionTitle} className="report-section">
                 <p className="mb-4 text-justify text-sm text-gray-600">{personalActionPlan.narrativeText}</p>
                 <div className="space-y-4">
@@ -1431,7 +1431,7 @@ export function ReportPreview({
 
           {/* II-R10 continuation — Investment Performance (II-R4) */}
           {investmentPerformance?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={investmentPerformance.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{investmentPerformance.narrativeText}</p>
                 <DataTable label="Investment performance by currency" className="mt-4 w-full">
@@ -1467,7 +1467,7 @@ export function ReportPreview({
 
           {/* II-R10 continuation — Contribution/SIP behaviour (II-R5) */}
           {sipContribution?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={sipContribution.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{sipContribution.narrativeText}</p>
                 {((sipContribution.chartData?.observations as { classification: string; text: string }[] | undefined) ?? []).length > 0 && (
@@ -1489,7 +1489,7 @@ export function ReportPreview({
 
           {/* II-R10 continuation — Portfolio X-Ray & Diversification (II-R5) */}
           {portfolioXray?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={portfolioXray.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{portfolioXray.narrativeText}</p>
                 {(() => {
@@ -1531,7 +1531,7 @@ export function ReportPreview({
 
           {/* II-R10 continuation — Tax & Cost Intelligence (II-R6) */}
           {taxAndCost?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={taxAndCost.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{taxAndCost.narrativeText}</p>
                 <DataTable label="Realised gains and tax" className="mt-4 w-full">
@@ -1581,7 +1581,7 @@ export function ReportPreview({
 
           {/* II-R10 continuation — Priority Review Items (II-R9 Review Centre) */}
           {priorityReviewItems?.sectionStatus === 'included' && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={priorityReviewItems.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{priorityReviewItems.narrativeText}</p>
                 <div className="mt-4 space-y-3">
@@ -1609,7 +1609,7 @@ export function ReportPreview({
 
           {/* Page 20 — Appendices */}
           {appendices && (
-            <div className="report-page-break space-y-6">
+            <div className="space-y-6">
               <SectionCard title={appendices.sectionTitle} className="report-section">
                 <p className="text-justify text-sm text-gray-600">{appendices.narrativeText}</p>
               </SectionCard>
@@ -1740,7 +1740,7 @@ export function ReportPreview({
           (previously the case for Premium reports only; Free reports
           already rendered this correctly since they have no Premium
           pages to fall in front of). */}
-      <div className="report-page-break space-y-6">
+      <div className="space-y-6">
         <p className="report-section text-justify text-sm text-gray-600">
           The accuracy of this report depends on the completeness, quality and timing of the information available to FHIP. This
           page identifies information that may affect the calculations or interpretation of the report.

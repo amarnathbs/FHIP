@@ -315,7 +315,7 @@ function bulletStatus(status: string | null): 'good' | 'caution' | 'risk' | 'neu
 export function BulletChart({ rows }: { rows: BulletRow[] }) {
   if (rows.length === 0) return null;
   return (
-    <div className="space-y-4">
+    <div className="report-bullet-list space-y-4">
       {rows.map((r, i) => {
         const candidates = [r.userValue, r.peerValue, r.healthyMax, r.healthyMin].filter((v): v is number => v !== null);
         const max = candidates.length > 0 ? Math.max(...candidates) * 1.15 || 1 : 1;
@@ -325,8 +325,8 @@ export function BulletChart({ rows }: { rows: BulletRow[] }) {
         const healthyWidth =
           r.healthyMin !== null && r.healthyMax !== null ? `calc(${pct(r.healthyMax)} - ${pct(r.healthyMin)})` : null;
         return (
-          <div key={i}>
-            <div className="flex items-center justify-between text-sm">
+          <div key={i} className="report-bullet-row">
+            <div className="flex items-center justify-between gap-2 text-sm">
               <span className="font-medium text-gray-900">{r.label}</span>
               <span style={{ color: STATUS_COLORS[status] }}>
                 {r.displayValue ?? (r.userValue !== null ? r.userValue.toLocaleString() : 'Not available')}
