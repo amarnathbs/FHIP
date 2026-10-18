@@ -124,6 +124,25 @@ const nextConfig = {
       './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
     ],
   },
+  // 18-10-2026 deploy-artifact slimming (docs/ops/AMPLIFY_ARTIFACT_SLIM_2026-10-18.md). Files the output tracer packs
+  // into the deployment that no code path of this app can reach:
+  //  - sharp and its @img/* native packages: pulled in only by Next's image optimizer (/_next/image). The app uses
+  //    no next/image and no ImageResponse (tests/unit/deployTraceExcludes.test.ts fails if that ever changes). Next
+  //    applies the very same two ignores itself on hosts it manages (collect-build-traces.js, `hasNextSupport`),
+  //    because there the optimizer is not served by next-server. If the optimizer is ever used, remove this entry.
+  //  - playwright and playwright-core (about 11.5MB): imported only by the two lazily loaded PDF renderers
+  //    (lib/services/reportPdfRenderer.ts, forecastReportPdfRenderer.ts). Measured on the build output: the tracer
+  //    cannot see playwright-core's computed `require(path.join(packageRoot, "browsers.json"))`, so the traced copy
+  //    never contained browsers.json and `require('playwright')` throws at LOAD time on the deployed server; no
+  //    browser binary is shipped either. The package was dead weight. At runtime the result is unchanged: the loader
+  //    (reportPdfRendererLoader.ts) turns the module-not-found into the typed `renderer_unavailable` error. To bring
+  //    server-side PDF back, remove this entry and add outputFileTracingIncludes for the package plus its
+  //    browsers.json and a Lambda-compatible Chromium (proposal in the doc above).
+  // The key '*' matches every route and the `next-server` entry. The globs use the `**/node_modules/` form that
+  // Next's own ignore list uses, which matches the same on Windows and Linux.
+  outputFileTracingExcludes: {
+    '*': ['**/node_modules/sharp/**/*', '**/node_modules/@img/**/*', '**/node_modules/playwright/**/*', '**/node_modules/playwright-core/**/*'],
+  },
   // Multi-worktree dev-server disambiguation (found during LR-1's
   // live-autonomy proof, 2026-09-06): any worktree nested under
   // D:\FHIP\.claude\worktrees\... sits alongside D:\FHIP itself (the main
