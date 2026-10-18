@@ -7,7 +7,7 @@ import { PrintTabToolbar } from '@/components/reports/PrintTabToolbar';
 
 // Bare print view (no AppShell chrome): A4 portrait, one page per statement. Session auth only; there is no render token
 // because browser printing is the Free path. Opened by OpenPrintTabLink in its own tab; PrintTabToolbar closes it after printing
-// (lib/reports/printTab.ts). A bare print page has no back link by design (see the back-link guard allow-list). (A server-side PDF export would be a Premium Export Centre feature.)
+// (lib/reports/printTab.ts). A bare print page has no back link by design (see the back-link guard allow-list). (A server-side PDF would need a hosted renderer: Amplify has no Chromium at runtime.)
 export default async function NetWorthStatementPrintPage({ searchParams }: { searchParams: Promise<{ view?: string; print?: string }> }) {
   const { view: rawView, print } = await searchParams;
   const supabase = await createClient();
