@@ -377,10 +377,16 @@ async function main() {
   const ledgerStart = (await rows('aie_ai_cost_ledger', 'id=eq.global'))[0];
   const evidence: Record<string, any> = { run: RUN, app: APP, startedAt: new Date().toISOString(), ledgerStart: { settled: ledgerStart?.settled_usd, reserved: ledgerStart?.reserved_usd } };
   try {
-    const p1 = await makeUser('P1', `pdfroutes-p1-${Date.now()}@fhip-test.invalid`);
-    const p2 = await makeUser('P2', `pdfroutes-p2-${Date.now()}@fhip-test.invalid`);
-    const f1 = await makeUser('F1', `pdfroutes-f1-${Date.now()}@fhip-test.invalid`);
-    await setPlan(p1, 'premium'); await setPlan(p2, 'premium'); await setPlan(f1, 'free');
+    // One Premium person per class: the upload lifecycle allows 20 upload sessions per person per hour and the corpus has 25 documents.
+    const byClass = {
+      liability: await makeUser('P-liability', `pdfroutes-pl-${Date.now()}@fhip-test.invalid`),
+      retirement: await makeUser('P-retirement', `pdfroutes-pr-${Date.now()}@fhip-test.invalid`),
+      au_investment: await makeUser('P-investment', `pdfroutes-pa-${Date.now()}@fhip-test.invalid`),
+    } as const;
+    const p2 = await makeUser('P2-other-tenant', `pdfroutes-p2-${Date.now()}@fhip-test.invalid`);
+    const f1 = await makeUser('F1-free', `pdfroutes-f1-${Date.now()}@fhip-test.invalid`);
+    for (const u of Object.values(byClass)) await setPlan(u, 'premium');
+    await setPlan(p2, 'premium'); await setPlan(f1, 'free');
 
     // ---------------- Free refusal: before the body is stored, scanned, read or sent anywhere
     for (const cls of ['liability', 'retirement', 'au_investment'] as const) {
@@ -396,13 +402,14 @@ async function main() {
 
     // ---------------- the corpus, as P1
     const docResults: Array<{ rec: any; documentId: string } | undefined> = [];
-    for (const d of ALL_CORPUS_DOCS.filter(want)) docResults.push(await runDoc(p1, d));
+    for (const d of ALL_CORPUS_DOCS.filter(want)) docResults.push(await runDoc(byClass[d.cls], d));
     evidence.results = results;
 
     // ---------------- replay, identical re-upload, cross-tenant (first AI document that ran)
     const firstAi = docResults.find((x) => x?.rec.path === 'ai');
     if (firstAi) {
       const d = ALL_CORPUS_DOCS.find((x) => x.id === firstAi.rec.id)!;
+      const p1 = byClass[d.cls];
       const beforeCalls = (await attemptsFor(p1.id)).length;
       const again = await uploadAndResolve(p1, d);
       const afterCalls = (await attemptsFor(p1.id)).length;
@@ -415,7 +422,7 @@ async function main() {
     }
 
     // ---------------- spend summary for the run
-    const att = await attemptsFor(p1.id);
+    const att = (await Promise.all(Object.values(byClass).map((u) => attemptsFor(u.id)))).flat();
     evidence.spend = { attempts: att.length, settledUsd: att.reduce((a, x) => a + Number(x.settled_usd ?? 0), 0), models: [...new Set(att.map((x) => x.model))], tokens: att.reduce((a, x) => a + Number(x.input_tokens ?? 0) + Number(x.output_tokens ?? 0), 0), keyPrefixes: [...new Set(att.map((x) => String(x.idempotency_key).split(':')[0]))] };
     check('SPEND: every model call was gpt-4o-mini, attributed to a PDF-route key prefix, and cost well under the US$1 daily cap', att.every((x) => x.model === 'gpt-4o-mini' && /-pdf-ai-fallback$/.test(String(x.idempotency_key).split(':')[0])) && evidence.spend.settledUsd < 1, JSON.stringify(evidence.spend));
   } finally {

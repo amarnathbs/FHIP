@@ -33,8 +33,11 @@ export function figureIsPrinted(value: number, text: string): boolean {
   const fixed = Math.abs(value).toFixed(2);
   const [intPart, dec] = fixed.split('.');
   const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  const candidates = new Set([`${intPart}.${dec}`, `${grouped}.${dec}`]);
-  if (dec === '00') { candidates.add(intPart); candidates.add(grouped); }
+  // Indian lakh grouping (3,45,210.00): last three digits, then groups of two. Found on the PDF routes: an India provident fund
+  // passbook prints its balances this way and every one was judged "not printed" and dropped.
+  const lakh = intPart.length > 3 ? `${intPart.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${intPart.slice(-3)}` : intPart;
+  const candidates = new Set([`${intPart}.${dec}`, `${grouped}.${dec}`, `${lakh}.${dec}`]);
+  if (dec === '00') { candidates.add(intPart); candidates.add(grouped); candidates.add(lakh); }
   const isDigit = (c: string | undefined) => c !== undefined && c >= '0' && c <= '9';
   for (const c of candidates) {
     let from = 0;
