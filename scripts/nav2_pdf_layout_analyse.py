@@ -10,6 +10,8 @@ import json
 import os
 import sys
 
+HEADER_LABELS = {'Fund', 'Fund A', 'Fund B', 'Category', 'Correlation', 'Common returns', 'Period', 'Rank', 'CAGR', 'Common', 'returns', '1 year', '3 year', '5 year'}
+
 import collections
 
 import pymupdf
@@ -90,7 +92,8 @@ def main() -> None:
         text = page.get_text()
         # EVERY span on the page, the running header and footer included (they are Chromium templates and sit outside the text area)
         all_sizes = [round(sp['size'], 1) for b in page.get_text('dict')['blocks'] if b.get('type') == 0 for ln in b['lines'] for sp in ln['spans'] if sp['text'].strip()]
-        named = [n for n in fund_names if n in text]
+        text_flat = ' '.join(text.split())  # a long fund name wraps over lines in the PDF text
+        named = [n for n in fund_names if ' '.join(n.split()) in text_flat]
         overflow = [l['text'][:60] for l in lines if l['x1'] > W - RIGHT + 2 or l['x0'] < LEFT - 2]
         # SPLIT ROWS: a table row that continues on the next page shows its last wrapped line(s) at the top of that page, i.e. one of the first
         # lines is the trailing part of a longer table-cell text. (Fund pages and the comparison page start with their own title: not checked.)
@@ -99,6 +102,8 @@ def main() -> None:
         if i > 0 and not starts_page:
             for l in ordered[:4]:
                 t = l['text']
+                if t in HEADER_LABELS:
+                    continue  # a repeated table header row (a table may split between rows, its header repeating) is not a split row
                 if any(len(c) > len(t) + 1 and c.endswith(t) and c[-len(t) - 1] == ' ' for c in cell_texts):
                     split_rows.append(t[:60])
         continued = '(continued)' in text
@@ -115,6 +120,7 @@ def main() -> None:
             'overlaps': overlaps[:10],
             'split_rows': split_rows,
             'continued': continued,
+            'has_comparison': 'Comparing your funds' in text,
             'min_size': min(sizes) if sizes else None,
             'min_size_all': min(all_sizes) if all_sizes else None,
             'body_size': sizes.most_common(1)[0][0] if sizes else None,

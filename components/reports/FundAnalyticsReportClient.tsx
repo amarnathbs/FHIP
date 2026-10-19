@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import FundAnalyticsReportView from '@/components/reports/FundAnalyticsReportView';
 import { OpenPrintTabLink } from '@/components/reports/OpenPrintTabLink';
-import { ActionMessage, Btn, CheckField, Notice, SelectField } from '@/components/admin/benchmarkData/ui';
-import { rupees } from '@/lib/engines/nav2/presentation';
+import { FundPickPanel } from '@/components/reports/FundPickPanel';
+import { ActionMessage, Btn, Notice, SelectField } from '@/components/admin/benchmarkData/ui';
+import type { PickState } from '@/lib/reports/fundPicker';
 import { REPORT_PERIOD_CHOICES, REPORT_PERIOD_LABELS, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
 import type { FundAnalyticsReport } from '@/lib/engines/nav2/fundAnalyticsReport';
-import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
+import { formatDateShort, formatDateTimeShort, viewerTimeZone } from '@/lib/engines/date';
 import { FUND_ANALYTICS_SAVED_REPORT_SENTENCE, versionMadeLine } from '@/lib/engines/nav2/reportWording';
 
 // Interactive shell of the Fund analytics report: choose a period, generate the next version, switch between earlier
@@ -32,12 +33,7 @@ interface Waiting {
 }
 
 /** The funds a person can choose from when they hold more than one report covers (the API's 409 answer). */
-interface FundPick {
-  max: number;
-  heldFundCount: number;
-  candidates: Array<{ instrumentId: string; schemeName: string; currentValue: number | null }>;
-  chosen: string[];
-}
+type FundPick = PickState;
 
 /** An opaque key for one intended report: a UUID (the server accepts 16 to 64 letters, digits, underscores or hyphens). */
 function newAttemptKey(): string {
@@ -137,7 +133,7 @@ export default function FundAnalyticsReportClient() {
         preselect.current = null;
         fundIds.current = null;
         setWaiting(null);
-        setPick({ max: d.max, heldFundCount: d.heldFundCount, candidates: d.candidates, chosen: (wanted.length > 0 ? wanted : d.suggestedIds).slice(0, d.max) });
+        setPick({ max: d.max, heldFundCount: d.heldFundCount, candidates: d.candidates, chosen: (wanted.length > 0 ? wanted : d.suggestedIds).slice(0, d.max), suggested: d.suggestedIds });
         setNotice(d.message);
         return;
       }
@@ -182,6 +178,8 @@ export default function FundAnalyticsReportClient() {
     return () => clearTimeout(t);
   }, [waiting, generate]);
 
+  // the viewer's time zone travels in the print address, so the printed "made" time is the one this screen shows (the print page renders on the server)
+  const viewerTz = viewerTimeZone();
   const sel = versions?.find((v) => v.id === selectedId) ?? null;
   const periodOptions = REPORT_PERIOD_CHOICES.map((c) => ({ value: c, label: REPORT_PERIOD_LABELS[c] }));
   const versionOptions = (versions ?? []).map((v) => ({ value: v.id, label: `Version ${v.versionNumber} - as at ${formatDateShort(v.asOfDate, 'INR')} (made ${formatDateTimeShort(v.createdAt, 'INR')})` }));
@@ -206,7 +204,7 @@ export default function FundAnalyticsReportClient() {
                   click and prints, and the tab closes itself afterwards. NO server PDF call (Amplify has no Chromium at runtime). */}
               {selectedId && (
                 <OpenPrintTabLink
-                  href={`/reports/fund-analytics/print?id=${encodeURIComponent(selectedId)}&print=1`}
+                  href={`/reports/fund-analytics/print?id=${encodeURIComponent(selectedId)}&print=1${viewerTz ? `&tz=${encodeURIComponent(viewerTz)}` : ''}`}
                   windowName={`fund-analytics-${selectedId}`}
                   className="rounded border px-3 py-1.5 text-sm text-gray-700 hover:border-trust"
                 >
@@ -225,42 +223,7 @@ export default function FundAnalyticsReportClient() {
           {notice}
         </Notice>
       )}
-      {pick && (
-        <fieldset className="rounded-card border border-line p-4 text-sm text-ink" data-testid="fund-pick">
-          <legend className="px-1 font-medium">Choose up to {pick.max} funds for this report</legend>
-          <p className="text-muted">
-            You hold {pick.heldFundCount} funds. The {pick.max} largest by current value are ticked; untick some and tick others if you prefer. You can make a second report for the rest.
-          </p>
-          <ul className="mt-3 space-y-1">
-            {pick.candidates.map((c) => {
-              const on = pick.chosen.includes(c.instrumentId);
-              return (
-                <li key={c.instrumentId}>
-                  <CheckField
-                    label={
-                      <>
-                        {c.schemeName}
-                        {c.currentValue !== null && <span className="text-muted"> - {rupees(c.currentValue)}</span>}
-                      </>
-                    }
-                    checked={on}
-                    disabled={!on && pick.chosen.length >= pick.max}
-                    onChange={(v) => setPick({ ...pick, chosen: v ? [...pick.chosen, c.instrumentId] : pick.chosen.filter((x) => x !== c.instrumentId) })}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-3 text-muted" aria-live="polite" data-testid="fund-pick-count">
-            {pick.chosen.length} of {pick.max} chosen
-          </p>
-          <div className="mt-2">
-            <Btn kind="primary" busy={busy} disabled={pick.chosen.length === 0} onClick={() => void generate(pick.chosen)}>
-              Generate a report for these funds
-            </Btn>
-          </div>
-        </fieldset>
-      )}
+      {pick && <FundPickPanel pick={pick} onChange={setPick} busy={busy} onGenerate={(ids) => void generate(ids)} />}
       {report?.selection && report.selection.heldFundCount > report.selection.max && !pick && (
         <div className="no-print flex flex-wrap items-center gap-3 text-sm text-ink" data-testid="rest-of-funds">
           <span>

@@ -9,6 +9,17 @@ export function versionMadeLine(versionNumber: number, createdAt: string, curren
   return `Version ${versionNumber}, made ${formatDateTimeMinutes(createdAt, currency)}`;
 }
 
+/**
+ * The same line for the PRINTED report, which is rendered on the server (it has no browser zone of its own). `viewerTimeZone` is the viewer's zone, passed
+ * from the screen that opened the print tab, so the printed time is the time the screen shows. Without one (a headless render, a typed address) the time
+ * is UTC and says so, never a bare time in an unknown zone.
+ */
+export function versionMadeLinePrint(versionNumber: number, createdAt: string, currency: 'AUD' | 'INR', viewerTimeZone: string | null | undefined): string {
+  return viewerTimeZone
+    ? `Version ${versionNumber}, made ${formatDateTimeMinutes(createdAt, currency, viewerTimeZone)}`
+    : `Version ${versionNumber}, made ${formatDateTimeMinutes(createdAt, currency, 'UTC')} UTC`;
+}
+
 /** The short series label for a risk-free provenance block; a report stored before the label existed gets it from the series id (never a guess: an unknown id has no label). */
 export function riskFreeLabelOf(rf: { seriesId?: string; seriesLabel?: string } | null | undefined): string | null {
   if (!rf) return null;
