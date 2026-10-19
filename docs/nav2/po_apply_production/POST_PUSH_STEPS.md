@@ -26,7 +26,7 @@ B. PREMIUM user (a Premium account that is not the administrator when you have o
 3. Monthly Report, Premium export and the rest work as before.
 
 C. ADMINISTRATOR (you):
-1. Admin menu: the group "Risk-free Rates" is NOT shown yet (it needs the upload permission, step 5). "Reference Data" has a new entry "Fund Analytics Health".
+1. Admin menu: the item "Risk-free Rate Data" (in group "Market Data") is NOT shown yet (it needs the upload permission, step 5). "Reference Data" has a new entry "Fund Analytics Health".
 2. Open "Fund Analytics Health": it loads with figures (price row counts are estimates and say so). No error banner.
 
 D. One user who holds Indian funds: open the Monthly Report and one Investment Intelligence page. Unchanged. (A statement whose ISIN and AMFI code point at two different funds now opens a "needs your decision" item instead of picking the ISIN. If you see one, that is this rule.)
@@ -44,7 +44,7 @@ The order, each file in `sql/grants/`:
 
 ## Step 6. Load the two RBI files through the Admin screen
 
-Needs step 3 (push, deployed) and step 5, item 1 (upload permission). Sign in as yourself, open Admin, group "Risk-free Rates", **Risk-free Rate Data** (`/admin/investment-intelligence/risk-free-data`). The files are in the repository clone on your machine under `docs/nav2/risk_free_first_load/`:
+Needs step 3 (push, deployed) and step 5, item 1 (upload permission). Sign in as yourself, open Admin, group "Market Data", **Risk-free Rate Data** (`/admin/investment-intelligence/risk-free-data`). The files are in the repository clone on your machine under `docs/nav2/risk_free_first_load/`:
 
 | # | Series | File | Preview must show |
 |---|---|---|---|

@@ -159,7 +159,7 @@ Do these in the browser right after the deploy.
 
 1. Sign in as a **free** user. The Reports menu shows Monthly Report, Financial Activity, Consolidated Report and Forecast Variance. **There is no Fund Analytics entry.** Dashboard, Reports and the Monthly Report open as before. Opening `/reports/fund-analytics` by typing the address shows the plain sentence that the report is for Premium people (not an error page).
 2. Sign in as a **Premium** user. There is still no Fund Analytics entry (the switch is OFF), and `/reports/fund-analytics` says the report is not available yet. The Monthly Report, Premium export and everything else work as before.
-3. Sign in as the administrator. Admin menu: the group "Risk-free Rates" is not shown until step 5; "Reference Data" has a new entry "Fund Analytics Health". Open it: the page loads with figures (the price row counts are approximate and say so). It must not show an error.
+3. Sign in as the administrator. Admin menu: the item "Risk-free Rate Data" (in group "Market Data") is not shown until step 5; "Reference Data" has a new entry "Fund Analytics Health". Open it: the page loads with figures (the price row counts are approximate and say so). It must not show an error.
 4. Open the Monthly Report and one Investment Intelligence page for a user who holds Indian funds: unchanged. (This release also changes how a statement is matched to a fund when its ISIN and its AMFI code point at two different funds: it now opens a question for review instead of picking the ISIN. If an upload shows a new "needs your decision" item, that is this rule, see the plan section 5.)
 
 Paste back: "1 ok, 2 ok, 3 ok, 4 ok" or what differed.
@@ -176,7 +176,7 @@ Two separate permissions, so the person who loads rates is not the person who ca
 
 The code from step 3 is needed. Files are in `docs/nav2/risk_free_first_load/` (provenance in `RISK_FREE_FIRST_LOAD_PROVENANCE.md`): `RBI_91DAY_TBILL_CUTOFF_YIELD_HISTORY.csv` (1,060 values, 05-04-2006 to 30-09-2026), `RBI_91DAY_TBILL_GAP_ROWS.csv` (13 documented gap rows) and `RBI_POLICY_REPO_RATE_HISTORY.csv` (61 rows, 26-10-2005 to 05-12-2025).
 
-Sign in as the person who holds the upload permission. Open Admin, Risk-free Rates, **Risk-free Rate Data** (`/admin/investment-intelligence/risk-free-data`). Each load is: choose series, choose the file, tick "This is the first load of the historical file", press Preview, read the result, tick the attestation, press Commit.
+Sign in as the person who holds the upload permission. Open Admin, Market Data, **Risk-free Rate Data** (`/admin/investment-intelligence/risk-free-data`). Each load is: choose series, choose the file, tick "This is the first load of the historical file", press Preview, read the result, tick the attestation, press Commit.
 
 1. Series `RBI_91D_TBILL_CUTOFF_YIELD`, file `RBI_91DAY_TBILL_CUTOFF_YIELD_HISTORY.csv`. Preview expects 1,060 usable rows, 05-04-2006 to 30-09-2026, 1,060 to write, no conflicts, no rejected rows, and two warnings (three week-on-week moves above 1.5 points, first 01-08-2007; three stretches longer than 14 days without a weekly observation). Read them. Commit.
 2. Same series, file `RBI_91DAY_TBILL_GAP_ROWS.csv`. Preview expects 13 usable rows (5 `no_accepted_bids`, 8 `no_row_in_source`), no conflicts, no warnings. Commit. (A gap row means "no cut-off exists for that date". It is never used as a rate.)

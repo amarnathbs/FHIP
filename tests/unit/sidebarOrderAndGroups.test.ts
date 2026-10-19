@@ -119,11 +119,11 @@ describe('F10: Premium Access and Promo Codes share one Admin menu group', () =>
     expect(shouldShowAdminMenu(false, NO_ADMIN_CAPABILITIES)).toBe(false);
   });
 
-  it('the group sits where the two old groups were: after Market Index Data, last', () => {
+  it('the group sits where the two old groups were: after Market Data, last', () => {
     const all = only({ resourcesDashboard: true, marketIndexDataUpload: true, entitlementManagement: true, promoCodeManagement: true });
     const g = labels(buildAdminNavGroups(true, all));
     expect(g[g.length - 1]).toBe('Premium and Promo Codes');
-    expect(g.indexOf('Market Index Data')).toBeLessThan(g.indexOf('Premium and Promo Codes'));
+    expect(g.indexOf('Market Data')).toBeLessThan(g.indexOf('Premium and Promo Codes'));
   });
 
   it('NEGATIVE CONTROL (F10): a menu that put each item back into its own group would FAIL the one-group rule', () => {

@@ -172,10 +172,11 @@ describe('page layer (s4): a direct navigation is redirected, not rendered empty
 describe('navigation layer (s2/s4)', () => {
   it('the group appears with EITHER risk-free capability and with nothing else; it is not implied by isAdmin or any other grant', () => {
     const all = { ...NO_ADMIN_CAPABILITIES, resourcesDashboard: true, resourceContentAdmin: true, resourceWorkflowAdmin: true, resourceDiscoveryAdmin: true, resourceAnalytics: true, referenceDataQuality: true, lookthroughDataQuality: true, marketIndexDataUpload: true, benchmarkDataView: true, benchmarkDataPublish: true, benchmarkDataCorrect: true, benchmarkCatalogueManage: true, benchmarkEntitlementApprove: true, entitlementManagement: true, promoCodeManagement: true };
-    expect(buildAdminNavGroups(true, all).map((g) => g.label)).not.toContain('Risk-free Rates');
+    // all = every OTHER grant (including the index ones, so the Market Data group exists, with the index item only): no risk-free item.
+    expect(buildAdminNavGroups(true, all).flatMap((g) => g.items.map((i) => i.href))).not.toContain('/admin/investment-intelligence/risk-free-data');
     for (const k of ['riskFreeDataUpload', 'riskFreeSeriesSwitch'] as const) {
       const g = buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, [k]: true });
-      expect(g.map((x) => x.label)).toEqual(['Risk-free Rates']);
+      expect(g.map((x) => x.label)).toEqual(['Market Data']); // PO request 19-10-2026: one Market Data group, not a separate Risk-free Rates group
       expect(g[0].items).toEqual([{ label: 'Risk-free Rate Data', href: '/admin/investment-intelligence/risk-free-data' }]);
     }
   });

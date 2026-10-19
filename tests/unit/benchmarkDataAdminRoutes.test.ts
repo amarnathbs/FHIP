@@ -423,12 +423,12 @@ describe('page + nav + /me (s4 layers 3 and 4)', () => {
     adminRow = hasOnly('upload');
     await expect(requireBenchmarkPage('publish')).rejects.toThrow('REDIRECT:/dashboard');
   });
-  it('the Market Index Data nav group shows for each of the six capabilities independently and for none other', () => {
+  it('the Market Data nav group (holding the Market Index Data item) shows for each of the six capabilities independently and for none other', () => {
     const label = (caps: object) => buildAdminNavGroups(false, { ...NO_ADMIN_CAPABILITIES, ...caps }).map((g) => g.label);
     for (const k of ['marketIndexDataUpload', 'benchmarkDataView', 'benchmarkDataPublish', 'benchmarkDataCorrect', 'benchmarkCatalogueManage', 'benchmarkEntitlementApprove', 'referenceDataQuality']) {
-      expect(label({ [k]: true }), k).toContain(k === 'referenceDataQuality' ? 'Reference Data' : 'Market Index Data');
+      expect(label({ [k]: true }), k).toContain(k === 'referenceDataQuality' ? 'Reference Data' : 'Market Data');
     }
-    expect(label({ lookthroughDataQuality: true })).not.toContain('Market Index Data');
+    expect(label({ lookthroughDataQuality: true })).not.toContain('Market Data');
     expect(label({})).toEqual([]);
   });
   it('the parser is strictly === true for the new capabilities and defaults closed', () => {
