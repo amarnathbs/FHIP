@@ -1,6 +1,7 @@
 'use client';
 
 import { TrendLineChart, AllocationPieChart, GroupedBarChart } from '@/components/dashboard/charts';
+import { chartMonthLabel } from '@/lib/reports/chartMonthLabel';
 
 interface ResultRow {
   period_number: number;
@@ -18,7 +19,7 @@ function seriesFromResults(results: ResultRow[], entityId: string | null, maxPoi
   if (rows.length === 0) return [];
   const stride = Math.max(1, Math.ceil(rows.length / maxPoints));
   const out = rows.filter((_, i) => i % stride === 0 || i === rows.length - 1);
-  return out.map((r) => ({ month: r.period_date.slice(0, 7), value: r.closing_value }));
+  return out.map((r) => ({ month: chartMonthLabel(r.period_date.slice(0, 7)), value: r.closing_value }));
 }
 
 // Sums closing_value across every entity for a period (e.g. total remaining
@@ -34,7 +35,7 @@ function summedSeriesFromResults(results: ResultRow[], maxPoints = 24) {
   if (rows.length === 0) return [];
   const stride = Math.max(1, Math.ceil(rows.length / maxPoints));
   const out = rows.filter((_, i) => i % stride === 0 || i === rows.length - 1);
-  return out.map(([, v]) => ({ month: v.date.slice(0, 7), value: v.total }));
+  return out.map(([, v]) => ({ month: chartMonthLabel(v.date.slice(0, 7)), value: v.total }));
 }
 
 export function ReportTrendChart({

@@ -2,7 +2,7 @@ import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { formatMoneyWhole } from '@/lib/engines/money';
 import type { ForecastReportData } from '@/lib/services/forecastReportData';
 import { ReportTrendChart, ReportAllocationChart, ReportScenarioBarChart, ReportVarianceBarChart } from '@/components/forecast/ForecastReportCharts';
-import { formatDateTimeShort } from '@/lib/engines/date';
+import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { DataTable } from '@/components/ui/DataTable';
 
@@ -191,7 +191,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
       </div>
 
       {/* Page 1 continued — Purpose / how to read */}
-      <SectionCard title="About this report" className="report-section report-page-break">
+      <SectionCard title="About this report" className="report-section">
         <p className="text-justify text-sm text-gray-600">
           This report consolidates every Forecasting Engine category — net worth, retirement, goals, debt, investments,
           cross-border wealth and financial resilience — into a single document, generated for scenario{' '}
@@ -207,7 +207,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
       </SectionCard>
 
       {/* Page 2 — One-page summary */}
-      <SectionCard title="One-Page Summary" className="report-section report-page-break">
+      <SectionCard title="One-Page Summary" className="report-section">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label="Current net worth" value={fmt(dashboard.netWorth, currency)} />
           <Stat label="Total assets" value={fmt(dashboard.totalAssetsCombined, currency)} />
@@ -257,8 +257,8 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
       {/* Page 3 — Consolidated variance */}
       <SectionCard
         title="Consolidated Variance"
-        description={`Comparison date: ${data.comparisonDate} (data last updated ${data.dataLastUpdated ?? 'today, live'}; report generated ${generatedAtLabel}). Compares where you were expected to be with where you actually are, both as at the comparison date — not against today's live position or the final long-term forecast.`}
-        className="report-section report-page-break"
+        description={`Comparison date: ${formatDateShort(data.comparisonDate, currency)} (data last updated ${data.dataLastUpdated ? formatDateShort(data.dataLastUpdated, currency) : 'today, live'}; report generated ${generatedAtLabel}). Compares where you were expected to be with where you actually are, both as at the comparison date — not against today's live position or the final long-term forecast.`}
+        className="report-section"
       >
         <DataTable label="Forecast against actual by category" className="w-full min-w-[900px]">
           <thead className="text-left text-xs uppercase text-muted">
@@ -311,7 +311,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
       {/* Net worth + growth drivers */}
       {hasNetWorth && (
-        <SectionCard title="Net Worth Forecast" className="report-section report-page-break">
+        <SectionCard title="Net Worth Forecast" className="report-section">
           <div className="mb-6">
             <ReportTrendChart results={data.netWorthRun!.results} currency={currency} />
           </div>
@@ -321,7 +321,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
       {/* Retirement */}
       {hasRetirement && (
-        <SectionCard title="Retirement Forecast" className="report-section report-page-break">
+        <SectionCard title="Retirement Forecast" className="report-section">
           <div className="mb-6">
             <ReportTrendChart results={data.retirementRun!.results} currency={currency} />
           </div>
@@ -331,7 +331,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
       {/* Goal summary + detail */}
       {hasGoals && (
-        <SectionCard title="Goal Forecasts" className="report-section report-page-break">
+        <SectionCard title="Goal Forecasts" className="report-section">
           <div className="mb-6">
             <p className="mb-2 text-sm font-semibold text-gray-700">Combined value across all goals</p>
             <ReportTrendChart results={data.goalRun!.results} currency={currency} summed />
@@ -342,7 +342,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
       {/* Debt */}
       {hasDebt && (
-        <SectionCard title="Debt Reduction Forecast" className="report-section report-page-break">
+        <SectionCard title="Debt Reduction Forecast" className="report-section">
           <div className="mb-6">
             <p className="mb-2 text-sm font-semibold text-gray-700">Total remaining balance across all debts</p>
             <ReportTrendChart results={data.debtRun!.results} currency={currency} summed />
@@ -353,7 +353,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
       {/* Investment growth */}
       {hasInvestments && (
-        <SectionCard title="Investment Growth Forecast" className="report-section report-page-break">
+        <SectionCard title="Investment Growth Forecast" className="report-section">
           <div className="mb-6">
             <p className="mb-2 text-sm font-semibold text-gray-700">Combined value across all investments</p>
             <ReportTrendChart results={data.investmentRun!.results} currency={currency} summed />
@@ -364,7 +364,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
       {/* Cross-border */}
       {hasCrossBorder && data.crossBorderRun && data.crossBorderRun.results.length > 0 && (
-        <SectionCard title="Cross-Border Forecast" className="report-section report-page-break">
+        <SectionCard title="Cross-Border Forecast" className="report-section">
           <div className="mb-6">
             <ReportTrendChart results={data.crossBorderRun.results} currency={currency} />
           </div>
@@ -374,7 +374,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
       {/* Resilience */}
       {hasResilience && (
-        <SectionCard title="Financial Resilience Forecast" className="report-section report-page-break">
+        <SectionCard title="Financial Resilience Forecast" className="report-section">
           <div className="mb-6">
             <p className="mb-2 text-sm font-semibold text-gray-700">Projected net worth under the modelled stress scenario</p>
             <ReportTrendChart results={data.resilienceRun!.results} currency={currency} />
@@ -385,7 +385,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
 
       {/* Scenario comparison */}
       {data.scenarioComparison.length > 0 && (
-        <SectionCard title="Scenario Comparison" className="report-section report-page-break">
+        <SectionCard title="Scenario Comparison" className="report-section">
           <div className="mb-6">
             <ReportScenarioBarChart scenarios={data.scenarioComparison} currency={currency} />
           </div>
@@ -417,7 +417,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
           replacing what was previously a "major functional gap": no
           recommendations appeared in this report at all. */}
       {data.actionPlan.length > 0 && (
-        <SectionCard title="Recommended Action Plan" className="report-section report-page-break">
+        <SectionCard title="Recommended Action Plan" className="report-section">
           <div className="space-y-3">
             {data.actionPlan.map((action) => (
               <div key={action.id} className="rounded border p-3">
@@ -438,7 +438,7 @@ export function ForecastReportContent({ data }: { data: ForecastReportData }) {
           flows forecasts/recommendations first, then data quality, then
           assumptions/methodology/disclaimer at the very end, matching the
           general-formatting requirement applied report-wide. */}
-      <SectionCard title="Data Quality & Disclaimer" className="report-section report-page-break">
+      <SectionCard title="Data Quality & Disclaimer" className="report-section">
         <p className="text-justify text-sm text-gray-600">
           This report is generated entirely from data you have recorded in FHIP and the assumptions listed below. It is a
           deterministic projection tool, not personalised financial, tax, or legal advice, and does not account for events

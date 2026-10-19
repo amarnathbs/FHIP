@@ -122,79 +122,41 @@
   }
 }
 
-/* Print / PDF-ready layout for Module 9 report previews (spec section 15.1).
-   Scoped to .report-print-root so it never affects any other page. */
+/* Print / PDF layout of the report PRINT views: the Monthly Report and the Forecasting Report (Product Owner 18-10-2026: "the page
+   setting is not right, so much blank space and formatting is also not correct"). Everything for the reports is scoped to
+   .report-print-root and to the named page `report`, so no other printed page changes. Net Worth Statements (.nws-root) and the Fund
+   analytics document (.fa-doc) have their own rules below and are untouched.
+
+   What was wrong, and what each rule below does about it (measured on a synthetic Premium household, scripts/print/printLayoutCheck.ts):
+     * every card was `break-inside: avoid` and nearly every chapter forced a page break, so a card that did not fit moved whole and left
+       the rest of the page empty (pages 15 to 60 percent full) -> cards flow; only small blocks (a table row, a chart, a stat, a pair of
+       charts) are kept whole, headings stay with what follows, and no chapter forces a page break;
+     * the Full Financial Twin table printed a column of bare numbers: no row names (a data defect, fixed in
+       lib/reports/twinComparisonRows.ts) and invisible bars (the print dialog does not print backgrounds) -> print-color-adjust: exact;
+     * a table with `min-w-[900px]` (or the India Mutual Fund table at 1000 px) is wider than the page: it overflowed, was split or was
+       sent to its own landscape page and shrunk to about 5 pt -> tables fit the page width and the Mutual Fund table is reflowed;
+     * Chrome printed its own date, title, address and page counter on every page -> see "Running header and footer" below. */
 @media print {
   .no-print {
     display: none !important;
   }
 
+  /* Every printed page that does not name its own page keeps this set-up. */
   @page {
     size: A4;
     margin: 18mm 14mm;
   }
 
-  /* Note: lib/services/reportPdfRenderer.ts and
-     lib/services/forecastReportPdfRenderer.ts render PDFs via Playwright's
-     own page.pdf({ margin }) option, which governs the ACTUAL PDF output —
-     Chromium's print-to-PDF pipeline does not use this @page margin for
-     that path. Playwright intentionally uses a taller bottom margin
-     (20mm vs this file's 18mm) to leave room for its running
-     page-number footer template, which this CSS-only path (used by
-     manual Ctrl+P / window.print(), e.g. the Forecasting Report's
-     "Print / Save as PDF" button) has no equivalent of. Keep both
-     bottom margins generous enough that footer/page-number text never
-     overlaps report content if either value changes. */
+  /* Note: lib/services/reportPdfRenderer.ts and lib/services/forecastReportPdfRenderer.ts render PDFs via Playwright's own
+     page.pdf({ margin }) option, which governs the ACTUAL server PDF output (no @page rule is consulted there) and draws its own
+     page-number footer. The browser Print / Save as PDF path uses the named page `report` below. */
 
   body {
     background: white !important;
   }
 
-  .report-print-root {
-    color: #000;
-  }
-
-  .report-section {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .report-page-break {
-    break-before: page;
-    page-break-before: always;
-  }
-
-  /* Compaction pass (user feedback: "many pages show empty space... graphs
-     are too big, even the score is shown very large"). SectionCard and the
-     page-level spacing utilities are shared across the whole app (dashboard,
-     score, resilience, goals pages all use the same p-6/gap-6/space-y-6
-     classes) so they can't be changed at the component level without
-     shrinking those live pages too — these overrides are scoped to
-     .report-print-root and only take effect under print/PDF rendering,
-     leaving every other page's on-screen sizing untouched. !important is
-     needed because a plain-class print rule and the original Tailwind
-     utility have equal selector specificity. */
-  .report-print-root .p-8 {
-    padding: 1.25rem !important;
-  }
-  .report-print-root .p-6 {
-    padding: 1rem !important;
-  }
-  .report-print-root .gap-6 {
-    gap: 1rem !important;
-  }
-  .report-print-root .space-y-6 > * + * {
-    margin-top: 1rem !important;
-  }
-  .report-print-root .space-y-4 > * + * {
-    margin-top: 0.75rem !important;
-  }
-  .report-print-root .mt-4 {
-    margin-top: 0.75rem !important;
-  }
-
-  table {
-    break-inside: avoid;
+  a[href]::after {
+    content: '';
   }
 
   /* Printed / PDF tables are not scrolled or sticky: the whole table is laid out on the page. */
@@ -206,37 +168,294 @@
     box-shadow: none !important;
   }
 
-  /* India Mutual Fund Investment Report: a 16-column table is wider than the
-     portrait text area, so this section prints on its own A4 LANDSCAPE page
-     (CSS named page — the rest of the report stays portrait). Verified in the
-     PDF renderer's Chromium: the page after the section returns to portrait.
-     Tables here may span several landscape pages; keep rows whole and repeat
-     the header row. */
-  @page india-mf-landscape {
-    size: A4 landscape;
-    margin: 18mm 14mm;
-  }
-  .india-mf-landscape {
-    page: india-mf-landscape;
-    break-before: page;
-    break-after: page;
-    border: 0 !important;
-    padding: 0 !important;
-  }
-  .india-mf-landscape .india-mf-table {
-    break-inside: auto;
-    min-width: 0 !important;
-    width: 100% !important;
-  }
-  .india-mf-landscape .india-mf-table tr {
+  table {
     break-inside: avoid;
   }
-  .india-mf-landscape [data-testid='india-mf-table-wrap'] {
-    overflow: visible !important;
+
+  /* ---------------------------------------------------------------------------------------------------------------
+     Running header and footer of the report pages.
+
+     Chrome's own header and footer (date, page title, address, "n/N") are drawn in the page margin whenever the margin is at least
+     about 9 mm AND the page declares no margin box of its own. Declaring a header box and a footer box therefore (1) puts the report's
+     name and "Page n of N" where the Product Owner wants them and (2) makes Chrome leave its own out, at a comfortable 12 mm margin
+     and with "Headers and footers" ticked (the default). Measured with Chromium 151: margin 12 mm alone = Chrome's header and footer
+     printed; the same margin with one @top-* and one @bottom-* box = none printed; margin 8 mm or less = none printed either way.
+     Browsers without page margin boxes (Firefox, Safari) ignore these boxes; there the person can untick "Headers and footers".
+     --------------------------------------------------------------------------------------------------------------- */
+  @page report {
+    size: A4 portrait;
+    margin: 13mm 12mm 12mm 12mm;
+    @top-left {
+      content: var(--report-print-identity, 'Financial Health Intelligence Platform');
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #5b677a;
+      vertical-align: bottom;
+      padding-bottom: 2.5mm;
+    }
+    @top-right {
+      content: 'Confidential';
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #5b677a;
+      vertical-align: bottom;
+      padding-bottom: 2.5mm;
+    }
+    @bottom-left {
+      content: 'Financial Health Intelligence Platform';
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #5b677a;
+      vertical-align: top;
+      padding-top: 2.5mm;
+    }
+    @bottom-right {
+      content: 'Page ' counter(page) ' of ' counter(pages);
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #5b677a;
+      vertical-align: top;
+      padding-top: 2.5mm;
+    }
   }
 
-  a[href]::after {
-    content: '';
+  .report-print-root {
+    page: report;
+    color: #172033;
+    /* The print dialog's "Background graphics" box is off by default: without this the score bars, status chips and chart tracks vanish. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-print-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ----- Type scale for paper (a page is read at arm's length, not at 100 percent screen zoom). Nothing below 6.5 pt. ----- */
+  .report-print-root .text-2xl {
+    font-size: 19pt;
+    line-height: 1.2;
+  }
+  .report-print-root .text-lg {
+    font-size: 11.5pt;
+    line-height: 1.3;
+  }
+  .report-print-root .text-base {
+    font-size: 10pt;
+  }
+  .report-print-root .text-sm {
+    font-size: 9.5pt;
+    line-height: 1.4;
+  }
+  .report-print-root .text-xs {
+    font-size: 8pt;
+    line-height: 1.35;
+  }
+  .report-print-root :is(.text-\[10px\], .text-\[9px\], .text-\[8px\]) {
+    font-size: 7pt;
+    line-height: 1.3;
+  }
+
+  /* ----- Flat sections: a thin rule and spacing instead of bordered cards, so the text uses the whole page width. ----- */
+  .report-print-root .rounded-card {
+    border: 0 !important;
+    border-top: 0.6pt solid #c9d2dd !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 7pt 0 0 !important;
+  }
+  /* The cover block keeps its centred look without the rule. */
+  .report-print-root > .rounded-card.text-center {
+    border-top: 0 !important;
+    padding-top: 0 !important;
+  }
+  .report-print-root .p-8 {
+    padding: 0 !important;
+  }
+  .report-print-root .p-6 {
+    padding: 0 !important;
+  }
+  .report-print-root .gap-6 {
+    gap: 12pt !important;
+  }
+  .report-print-root .gap-4 {
+    gap: 8pt !important;
+  }
+  .report-print-root .space-y-6 > * + * {
+    margin-top: 11pt !important;
+  }
+  .report-print-root .space-y-4 > * + * {
+    margin-top: 8pt !important;
+  }
+  .report-print-root .space-y-3 > * + * {
+    margin-top: 5pt !important;
+  }
+  .report-print-root .mt-6 {
+    margin-top: 9pt !important;
+  }
+  .report-print-root .mt-4 {
+    margin-top: 6pt !important;
+  }
+  .report-print-root .mb-6 {
+    margin-bottom: 9pt !important;
+  }
+  .report-print-root .mb-4 {
+    margin-bottom: 6pt !important;
+  }
+
+  /* ----- Page breaks. Cards flow across pages; only small blocks are kept whole. ----- */
+  .report-print-root :is(h1, h2, h3, h4) {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .report-print-root :is(p, li) {
+    orphans: 3;
+    widows: 3;
+  }
+  .report-print-root .report-section {
+    break-inside: auto;
+  }
+  /* A short intro paragraph stays with the card it introduces. */
+  .report-print-root p.report-section {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  /* A pair of charts side by side, and the tiles and stats of a grid, are one block each. */
+  .report-print-root .report-section.grid,
+  .report-print-root .grid > * {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .report-print-root :is(.recharts-responsive-container, .rounded.border, .report-bullet-row, figure) {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* No chapter forces a page break: a forced break after a chapter that ends a line or two onto a page leaves a blank page. The
+     chapters simply follow each other, each heading stays with the text that follows it. */
+
+  /* ----- Tables: the page width, rows whole, header row repeated, a long table may run on to the next page. ----- */
+  .report-print-root table {
+    break-inside: auto;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .report-print-root thead {
+    display: table-header-group;
+  }
+  .report-print-root tfoot {
+    display: table-row-group;
+  }
+  .report-print-root tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .report-print-root .fhip-table {
+    font-size: 8.5pt;
+    line-height: 1.25;
+  }
+  .report-print-root .fhip-table :is(th, td) {
+    padding-top: 2pt !important;
+    padding-bottom: 2pt !important;
+  }
+  /* A long caption under a name may wrap instead of stretching the table. */
+  .report-print-root .fhip-table :is(.max-w-\[20rem\], .max-w-\[16rem\]) {
+    max-width: none !important;
+  }
+
+  /* ----- Financial Twin comparison: 67 rows as two columns, grouped by category, each row whole. ----- */
+  .report-print-root .report-bullet-list {
+    column-count: 2;
+    column-gap: 16pt;
+  }
+  .report-print-root .report-bullet-list > .report-bullet-row {
+    margin-top: 0 !important;
+    margin-bottom: 5pt;
+  }
+  .report-print-root .report-twin-group + .report-twin-group {
+    margin-top: 8pt !important;
+  }
+
+  /* ----- India Mutual Fund Investment Report: portrait. Each holding is a two-line block (see IndiaMfInvestmentReportSection). ----- */
+  .report-print-root .india-mf-section [data-testid='india-mf-tiles'] {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 4pt !important;
+  }
+  .report-print-root .india-mf-section [data-testid='india-mf-tiles'] .text-sm {
+    font-size: 8.5pt;
+  }
+  /* An owner's block may start at the foot of a page: its rows and tiles are already whole blocks (the Tailwind break-inside-avoid on
+     short owners left a quarter of the page empty). */
+  .report-print-root .india-mf-section section {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+  .report-print-root .india-mf-section [data-testid='india-mf-table-wrap'] {
+    overflow: visible !important;
+  }
+  .report-print-root .india-mf-table {
+    display: block;
+  }
+  .report-print-root .india-mf-table :is(colgroup, thead, .imf-empty) {
+    display: none !important;
+  }
+  .report-print-root .india-mf-table :is(tbody, tfoot) {
+    display: block;
+  }
+  .report-print-root .india-mf-table tr.imf-row {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: 3pt;
+    row-gap: 2pt;
+    padding: 3.5pt 0;
+    border-top: 0.5pt solid #d1d5db;
+  }
+  .report-print-root .india-mf-table tr.imf-total {
+    border-top: 1pt solid #6b7280;
+    background: #f5f7fa;
+  }
+  .report-print-root .india-mf-table td {
+    display: block;
+    min-width: 0;
+    padding: 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    font-size: 7.5pt;
+    line-height: 1.25;
+  }
+  .report-print-root .india-mf-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 6.5pt;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+  .report-print-root .india-mf-table td.imf-scheme::before {
+    display: none;
+  }
+  .report-print-root .india-mf-table td.imf-scheme {
+    grid-row: 1;
+    grid-column: 1 / span 6;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+  .report-print-root .india-mf-table td.imf-folio {
+    grid-row: 1;
+    grid-column: 7 / span 2;
+  }
+  .report-print-root .india-mf-table td.imf-start {
+    grid-row: 1;
+    grid-column: 9 / span 2;
+  }
+  .report-print-root .india-mf-table td.imf-xirr {
+    grid-row: 1;
+    grid-column: 11 / span 2;
+  }
+  .report-print-root .india-mf-table td.imf-n {
+    grid-row: 2;
   }
 }
 
