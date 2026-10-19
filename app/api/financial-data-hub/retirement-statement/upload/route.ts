@@ -16,6 +16,8 @@ import {
   resolveUploadOwnerFromUrl,
 } from '@/lib/financial-data-hub/services/documentOwnerRequest';
 import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
+import { FDH_MAX_FILE_SIZE_BYTES, looksLikePdf } from '@/lib/financial-data-hub/domain/fileValidation';
+import { isRetirementPdfRouteEnabled, PDF_ROUTE_DISABLED_MESSAGE } from '@/lib/financial-data-hub/pdf-statements';
 
 // POST /api/financial-data-hub/retirement-statement/upload
 //
@@ -81,6 +83,13 @@ export async function POST(req: Request) {
 
   const bytes = new Uint8Array(await req.arrayBuffer());
   if (bytes.byteLength === 0) return bad('The uploaded file was empty.', 400);
+
+  // PDF statement route (19/10/2026). The bytes decide the kind, never a header. A PDF while this route's own switch is OFF is
+  // refused HERE: no document row, no storage, no scan, no reader, no provider. A CSV is untouched by the switch.
+  if (looksLikePdf(bytes)) {
+    if (!isRetirementPdfRouteEnabled()) return bad(PDF_ROUTE_DISABLED_MESSAGE, 403);
+    if (bytes.byteLength > FDH_MAX_FILE_SIZE_BYTES['application/pdf']) return bad('File too large.', 413);
+  }
 
   try {
     await assertNoIdenticalDocumentWithDifferentOwner(user.id, bytes, ['super_statement', 'epf_statement', 'nps_statement'], ownerRequest.owner);

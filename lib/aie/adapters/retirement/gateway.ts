@@ -44,18 +44,26 @@ export const RETIREMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSystemPr
 );
 
 /**
+ * PDF statement route (19/10/2026): the same reading task, told honestly that the text came out of a PDF. One added instruction about
+ * the thing a flattened PDF text layer loses: of a pair of figures labelled "This period" and "Year to date", the period figure is the
+ * first. Every other sentence is identical; the model, the schema, the cap and the cost ledger are unchanged.
+ */
+export const RETIREMENT_AI_PDF_EXTRACTION_SYSTEM_PROMPT = `${RETIREMENT_AI_EXTRACTION_SYSTEM_PROMPT} The text was extracted from a PDF, so columns may be flattened onto one line. Where a line prints two amounts under the headings "This period" and "Year to date", the first amount is the period figure and the second is the year-to-date figure; never use a year-to-date figure as a period movement.`;
+
+/**
  * Requests a whole-document extraction of `maskedText` — already masked by
  * the caller. This function never sees raw statement text.
  */
-export async function requestRetirementAiExtraction(params: { maskedText: string; requestId?: string; userId: string }): Promise<RetirementAiExtractionOutcome> {
+export async function requestRetirementAiExtraction(params: { maskedText: string; requestId?: string; userId: string; sourceFormat?: 'csv' | 'pdf' }): Promise<RetirementAiExtractionOutcome> {
   registerRetirementDocumentFactsSchema();
   return requestAdapterDocumentFacts({
     schema: retirementDocumentFactsSchema,
     schemaName: AIE_RETIREMENT_FACTS_SCHEMA_NAME,
     schemaVersion: AIE_RETIREMENT_FACTS_SCHEMA_VERSION,
-    systemPrompt: RETIREMENT_AI_EXTRACTION_SYSTEM_PROMPT,
+    systemPrompt: params.sourceFormat === 'pdf' ? RETIREMENT_AI_PDF_EXTRACTION_SYSTEM_PROMPT : RETIREMENT_AI_EXTRACTION_SYSTEM_PROMPT,
     maskedText: params.maskedText,
-    idempotencyPrefix: 'retirement-statement-ai-fallback',
+    // A distinct prefix per route: the cost ledger's idempotency key then attributes spend to the PDF route.
+    idempotencyPrefix: params.sourceFormat === 'pdf' ? 'retirement-statement-pdf-ai-fallback' : 'retirement-statement-ai-fallback',
     requestId: params.requestId,
     userId: params.userId,
     // Activities and positions are arrays — see

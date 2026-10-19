@@ -1815,7 +1815,7 @@ export function ActivityLedgerPreview(props: {
             const split = a.activity_type === 'PAYMENT' && (a.principal_component != null || a.interest_component != null || a.fee_component != null);
             return (
               <tr key={a.id} className="border-b border-gray-100 align-top">
-                <td className="py-1 pr-2 whitespace-nowrap">{formatDateShort(a.activity_date, currency)}</td>
+                <td className="py-1 pr-2 whitespace-nowrap">{formatDateInText(a.activity_date, currency)}</td>
                 <td className="py-1 pr-2">
                   <span className="font-medium">{outcome.label}</span>
                   {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
@@ -1849,11 +1849,11 @@ export function ActivityLedgerPreview(props: {
         const candidates = (a.bank_match_candidate_ids ?? []).map((id) => candidateById.get(id)).filter((c): c is BankCandidate => Boolean(c));
         return (
           <fieldset key={a.id} className="mt-2 space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-            <legend className="font-medium">Which bank payment was the {formatDateShort(a.activity_date, currency)} repayment of {money(a.amount, currency)}?</legend>
+            <legend className="font-medium">Which bank payment was the {formatDateInText(a.activity_date, currency)} repayment of {money(a.amount, currency)}?</legend>
             {candidates.map((c) => (
               <label key={c.id} className="flex items-center gap-2">
                 <input type="radio" name={`candidate-${a.id}`} checked={candidateChoice[a.id] === c.id} onChange={() => onChoose(a.id, c.id)} />
-                {c.transaction_date} — {money(Number(c.amount_original), c.currency_original)}{c.description_clean ? ` — ${c.description_clean}` : ''}
+                {formatDateInText(c.transaction_date, c.currency_original)} — {money(Number(c.amount_original), c.currency_original)}{c.description_clean ? ` — ${c.description_clean}` : ''}
               </label>
             ))}
             <label className="flex items-center gap-2">

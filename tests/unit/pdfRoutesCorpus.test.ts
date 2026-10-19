@@ -39,7 +39,7 @@ describe('corpus files, manifest and sheet are committed and current', () => {
   });
   it('there are at least six documents per class and every required role is covered', () => {
     const need = ['clean', 'needs_fallback', 'wrong_on_page', 'multi', 'trap', 'negative_control'];
-    for (const set of [LIABILITY_DOCS, RETIREMENT_DOCS, INVESTMENT_DOCS] as readonly CorpusDocBase[][]) {
+    for (const set of [LIABILITY_DOCS, RETIREMENT_DOCS, INVESTMENT_DOCS] as unknown as ReadonlyArray<readonly CorpusDocBase[]>) {
       expect(set.length).toBeGreaterThanOrEqual(6);
       for (const role of need) expect(set.some((d) => d.role === role), `${set[0].cls} ${role}`).toBe(true);
     }

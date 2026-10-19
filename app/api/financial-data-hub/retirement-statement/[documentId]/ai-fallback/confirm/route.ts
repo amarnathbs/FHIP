@@ -108,6 +108,10 @@ const bodySchema = z
     tax: moneyField,
     activities: z.array(activitySchema).max(AIE_RETIREMENT_MAX_ACTIVITIES),
     positions: z.array(positionSchema).max(AIE_RETIREMENT_MAX_POSITIONS),
+    // PDF route: the panel posts the draft back as issued. These two are accepted so that is not a 422, and then IGNORED: the PDF
+    // provenance markers are read from the draft the SERVER issued, never from the browser.
+    sourceFormat: z.literal('pdf').optional(),
+    pdfWarnings: z.array(z.string().max(120)).max(40).optional(),
   })
   .strict()
   .refine((v) => v.activities.length > 0 || v.closingBalance != null || v.openingBalance != null, {

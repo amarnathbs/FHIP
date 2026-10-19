@@ -43,7 +43,8 @@ export type AuInvestmentAiExtractionOutcome = AieAdapterExtractionOutcome<AuInve
  * forbids summary/total rows, which are the single most common thing a
  * line-item reader turns into a phantom transaction.
  */
-export const AU_INVESTMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSystemPrompt(
+const AU_INVESTMENT_DOCUMENT_DESCRIPTION = (
+
   'The evidence is an Australian share-broker, share-registry or managed-fund statement export. It may contain a HOLDINGS table (what is owned right now), an ACTIVITY/TRANSACTION table (what happened over a period), or both. ' +
     'Read the statement header (the institution, the statement date, and the period the statement covers). ' +
     'For each HOLDINGS row report the security name exactly as printed, its exchange code if printed, its ISIN if printed, the number of units held, the unit price if printed, the market value if printed, and the valuation date printed for that row if there is one (otherwise null). ' +
@@ -51,7 +52,21 @@ export const AU_INVESTMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSyste
     'If an activity line\'s meaning is not clearly printed, report its type as UNKNOWN rather than choosing the closest-looking type. ' +
     'Never put a holdings row in the activity list or an activity row in the holdings list. ' +
     'Do not report subtotal, total, carried-forward, "opening balance" or "closing balance" summary lines as either a holding or an activity — they are not rows, and including them would double-count. ' +
-    `Report at most ${AIE_AU_INVESTMENT_MAX_HOLDINGS} holdings and at most ${AIE_AU_INVESTMENT_MAX_TRANSACTIONS} activities; if the statement prints more than that, report the first of each and set allRowsListed to false. Set allRowsListed to true only if you have listed every holding and every activity printed in the document.`,
+    `Report at most ${AIE_AU_INVESTMENT_MAX_HOLDINGS} holdings and at most ${AIE_AU_INVESTMENT_MAX_TRANSACTIONS} activities; if the statement prints more than that, report the first of each and set allRowsListed to false. Set allRowsListed to true only if you have listed every holding and every activity printed in the document.`
+);
+
+export const AU_INVESTMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSystemPrompt(AU_INVESTMENT_DOCUMENT_DESCRIPTION);
+
+/**
+ * PDF statement route (19/10/2026): the same reading task, told honestly that the text came out of a PDF (columns may be flattened,
+ * and a statement may print one labelled block per holding instead of a table). Every other sentence is identical to the CSV prompt;
+ * the model, the schema, the cap and the cost ledger are unchanged.
+ */
+export const AU_INVESTMENT_AI_PDF_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSystemPrompt(
+  AU_INVESTMENT_DOCUMENT_DESCRIPTION.replace(
+    'statement export.',
+    'statement whose text was extracted from a PDF (columns may be flattened, and a holding may be printed as a labelled block of lines instead of a table row).',
+  ),
 );
 
 /**
@@ -62,15 +77,16 @@ export const AU_INVESTMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSyste
  * idempotency key and collapses at the gateway's in-flight layer rather than
  * double-billing a statement that is expensive to re-read.
  */
-export async function requestAuInvestmentAiExtraction(params: { maskedText: string; requestId?: string; userId: string }): Promise<AuInvestmentAiExtractionOutcome> {
+export async function requestAuInvestmentAiExtraction(params: { maskedText: string; requestId?: string; userId: string; sourceFormat?: 'csv' | 'pdf' }): Promise<AuInvestmentAiExtractionOutcome> {
   registerAuInvestmentDocumentFactsSchema();
   return requestAdapterDocumentFacts({
     schema: auInvestmentDocumentFactsSchema,
     schemaName: AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME,
     schemaVersion: AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION,
-    systemPrompt: AU_INVESTMENT_AI_EXTRACTION_SYSTEM_PROMPT,
+    systemPrompt: params.sourceFormat === 'pdf' ? AU_INVESTMENT_AI_PDF_EXTRACTION_SYSTEM_PROMPT : AU_INVESTMENT_AI_EXTRACTION_SYSTEM_PROMPT,
     maskedText: params.maskedText,
-    idempotencyPrefix: 'au-investment-statement-ai-fallback',
+    // A distinct prefix per route: the cost ledger's idempotency key then attributes spend to the PDF route.
+    idempotencyPrefix: params.sourceFormat === 'pdf' ? 'au-investment-statement-pdf-ai-fallback' : 'au-investment-statement-ai-fallback',
     requestId: params.requestId,
     userId: params.userId,
     // An investment statement is a line-item document — and one with TWO
