@@ -591,7 +591,7 @@ const PII_PATTERNS: PiiPattern[] = [
     // digit-requiring `valuePredicate` means it declines the name form and
     // leaves it for this rule. Reordering any of the three would break that.
     pattern:
-      /\b((?:investor|account[^\S\r\n]*holder|accountholder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer|employee|member|membership|borrower|customer|client)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
+      /\b((?:investor|account[^\S\r\n]*holder|accountholder|unit[^\S\r\n]*holder|first[^\S\r\n]*holder|second[^\S\r\n]*holder|joint[^\S\r\n]*holder|holder|nominee|beneficiary|applicant|policy[^\S\r\n]*owner|policy[^\S\r\n]*holder|insured[^\S\r\n]*person|insured[^\S\r\n]*name|life[^\S\r\n]*insured|life[^\S\r\n]*assured|proposer|employee|member|membership|borrower|customer|client|card[^\S\r\n]*holder|cardholder)(?:[^\S\r\n]*name)?[^\S\r\n]*[:.\-][^\S\r\n]*)([A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+[A-Za-z][A-Za-z.'-]*){0,4})/gi,
     valueGroup: 2,
     // The label must match case-insensitively (`Investor:`, `INVESTOR:`,
     // `investor:` all occur in real statements), so the value needs its
@@ -599,6 +599,27 @@ const PII_PATTERNS: PiiPattern[] = [
     // name is Title Case or ALL CAPS; requiring at least one capital keeps
     // this from matching prose that happens to follow one of these labels.
     valuePredicate: (value) => /[A-Z]/.test(value),
+  },
+
+  // PDF STATEMENT ROUTES (19/10/2026) — TWO MORE GAPS, found by reading what `maskText` let through on the synthetic PDF corpus
+  // (tests/unit/pdfRoutesMasking.test.ts, the real extracted text of the real PDFs):
+  //
+  // (1) A broker holdings or transaction statement heads the page `Account: <HOLDER NAME>   HIN: X0000 4417`. The holder's NAME follows a
+  //     bare `Account:` label (not covered by `account holder`) and is followed by the HIN label on the same line. Anchored to the line
+  //     start AND to a following HIN/SRN label, so a bank `Account: 1234 5678` (digits, no HIN) and prose are never touched.
+  {
+    type: 'person_name_label',
+    pattern:
+      /^([^\S\r\n]*account[^\S\r\n]*:[^\S\r\n]*)((?!(?:HIN|SRN)\b)[A-Za-z][A-Za-z.'-]*(?:[^\S\r\n]+(?!(?:HIN|SRN)\b)[A-Za-z][A-Za-z.'-]*){0,4})(?=[^\S\r\n]+(?:HIN|SRN)\b)/gim,
+    valueGroup: 2,
+    valuePredicate: (value) => /[A-Z]/.test(value),
+  },
+  // (2) An India provident fund passbook prints the member's UAN (12 digits, often grouped in fours) and a pension account its PRAN.
+  //     Label-anchored; the value is the digit run only, so the label stays for the adapter.
+  {
+    type: 'account_reference',
+    pattern: /\b((?:uan|pran)[^\S\r\n]*(?:no|number)?\.?[^\S\r\n]*[:.\-][^\S\r\n]*)(\d(?:[ -]?\d){9,15})/gi,
+    valueGroup: 2,
   },
 
   // AIE-1 final production completion (2026-09-25) — FOUR MORE GAPS, found by
