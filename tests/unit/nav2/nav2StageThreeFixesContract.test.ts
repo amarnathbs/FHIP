@@ -65,7 +65,7 @@ describe('Print / Save as PDF: the free print flow, no server PDF button (Stage 
   const printPage = read('app/(print)/reports/fund-analytics/print/page.tsx');
   it('ONE button, "Print / Save as PDF", is the shared print-tab link to the print route with print=1 (as the Monthly Report)', () => {
     expect(client).toContain("from '@/components/reports/OpenPrintTabLink'");
-    expect(client).toMatch(/<OpenPrintTabLink[\s\S]*?href=\{`\/reports\/fund-analytics\/print\?id=\$\{encodeURIComponent\(selectedId\)\}&print=1`\}[\s\S]*?>\s*Print \/ Save as PDF\s*<\/OpenPrintTabLink>/);
+    expect(client).toMatch(/<OpenPrintTabLink[\s\S]*?href=\{`\/reports\/fund-analytics\/print\?id=\$\{encodeURIComponent\(selectedId\)\}&print=1\$\{viewerTz \? `&tz=\$\{encodeURIComponent\(viewerTz\)\}` : ''\}`\}[\s\S]*?>\s*Print \/ Save as PDF\s*<\/OpenPrintTabLink>/);
     expect(client).not.toMatch(/<button\b/);
   });
   it('the page makes NO server PDF call: no export route, no fetch of a PDF, no blob address, no View / Download PDF, no window.print() button', () => {

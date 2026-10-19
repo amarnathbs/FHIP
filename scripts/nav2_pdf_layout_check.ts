@@ -5,9 +5,10 @@
 // The print document (components/reports/FundAnalyticsPrintDocument.tsx) is rendered to STATIC HTML on the server side exactly as the print
 // route does (no client-side script at all), styled with the app stylesheet, printed in headless Chromium through printPageToPdf(), the SAME
 // function the export route uses (same page size, margins, running header and footer, same ready wait), rasterised page by page with
-// PyMuPDF, and judged against the PAGE PLAN (lib/config/nav2/printLayout.ts):
-//   * the summary (cover) takes at most 2 pages, then EVERY FUND starts at the top of a fresh page and uses exactly the planned number of
-//     pages (never a spill onto an extra page), then the comparison is exactly ONE page and the last page;
+// PyMuPDF, and judged against the PAGE PLAN (lib/config/nav2/printLayout.ts; PO 19-10-2026 replaced "every fund on a fresh page" with a FLOW):
+//   * the document flows: summary, every fund (head and body, never splitting a chart or a table), the comparison; no page except the last may be
+//     more than MAX_BLANK empty, and a comparison that cannot compare anything is a small block, not a page of its own;
+//   * the two-page fallback plan (sheet A / sheet B) still starts each sheet on a fresh page and uses exactly two pages per fund;
 //   * no table row is split across pages, no page ends with a heading, nothing runs past the right margin;
 //   * no text under 7.5 pt (body, footnotes, chart labels) and no running header / footer text under 7 pt; no two text spans overlap;
 //   * the body text is printed at its designed size: a page that shrank to fit, or grew, FAILS.
@@ -25,8 +26,8 @@ import { oneFundPerPageFits, printPageToPdf } from '../lib/services/investment-i
 import { buildPrintFixture, parseFixtureName } from './nav2_print_fixtures';
 
 const ROOT = path.resolve(__dirname, '..');
-/** A page that is not the last page of the summary may not leave more than this share empty (a summary that stops short for no reason). */
-export const MAX_BLANK = 0.3;
+/** A page that is not the last page of the document may not leave more than this share empty (PO 19-10-2026: "a lot of empty space"). */
+export const MAX_BLANK = 0.35;
 /** The designed body size on a normal page is 9 pt (8 pt on the compact fund page); anything outside this band means the page was scaled. */
 export const BODY_PT_MIN = 7.5;
 export const BODY_PT_MAX = 10.5;
@@ -54,6 +55,8 @@ export interface PageReport {
   min_size_all?: number | null;
   /** The page carries the "(continued)" mark of a second fund page. */
   continued?: boolean;
+  /** The page carries the heading of the comparison section. */
+  has_comparison?: boolean;
   /** Table rows whose wrapped text continues at the top of this page (a row split across a page break). */
   split_rows?: string[];
 }
@@ -62,7 +65,7 @@ export interface LayoutAnalysis {
   cell_overflow?: string[];
   page_count: number;
   pages: PageReport[];
-  /** The fund names in report order. When present the judge also enforces the PAGE PLAN (cover, one fund per fresh page(s), one comparison page). */
+  /** The fund names in report order. When present the judge also enforces the PAGE PLAN (summary first, every fund present, the comparison present, the two-page plan's sheets). */
   fund_names?: string[];
   /** Pages every fund must use (default: the plan in printLayout.ts). */
   pages_per_fund?: number;
@@ -75,42 +78,36 @@ function startsFund(p: PageReport, name: string): boolean {
   return f.length >= 8 && (name.startsWith(f) || f.startsWith(name));
 }
 
-/** The page-plan rules (see the header). Pure. */
+/**
+ * The page-plan rules (see the header). Pure.
+ * One-page plan (the flow): page 1 is the summary, every fund is named somewhere in the document, the comparison section is present, and the
+ * summary never runs over `maxCover` pages before the first fund is named.
+ * Two-page plan: as above, and every fund has exactly two pages, the second named "(continued)", each sheet starting on a fresh page.
+ */
 export function judgePagePlan(a: LayoutAnalysis, maxCover = FUND_ANALYTICS_MAX_COVER_PAGES): string[] {
   const out: string[] = [];
   const names = a.fund_names ?? [];
   const perFund = a.pages_per_fund ?? FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND;
   const pages = a.pages;
-  const isComparison = (p: PageReport) => firstText(p).startsWith(COMPARISON_TITLE);
-  let c = 0;
-  while (c < pages.length && !(names.length > 0 && startsFund(pages[c], names[0])) && !isComparison(pages[c])) c += 1;
-  if (c === 0) out.push('page 1 is not the summary');
-  if (c > maxCover) out.push(`the summary runs over ${c} pages (at most ${maxCover})`);
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i];
-    if (c >= pages.length || !startsFund(pages[c], name) || pages[c].continued) {
-      out.push(`fund "${name}" does not start at the top of a fresh page${c < pages.length ? ` (page ${pages[c].page} begins "${firstText(pages[c]).slice(0, 40)}")` : ' (the document ended)'}`);
-      let k = c;
-      while (k < pages.length && !(startsFund(pages[k], name) && !pages[k].continued)) k += 1;
-      if (k >= pages.length) break;
-      c = k;
-    }
-    c += 1;
-    for (let k = 1; k < perFund; k++) {
-      if (c < pages.length && startsFund(pages[c], name) && pages[c].continued) c += 1;
-      else out.push(`fund "${name}" uses ${k} page(s), the plan is exactly ${perFund}`);
-    }
-    // anything that still belongs to this fund (a spill onto an extra page) or is not the next fund / the comparison
-    const next = c < pages.length ? pages[c] : null;
-    if (next && !isComparison(next) && !(i + 1 < names.length && startsFund(next, names[i + 1]) && !next.continued)) {
-      out.push(`fund "${name}" spills onto an extra page (page ${next.page}); it may use only ${perFund} page(s)`);
-      while (c < pages.length && !isComparison(pages[c]) && !(i + 1 < names.length && startsFund(pages[c], names[i + 1]) && !pages[c].continued)) c += 1;
-    }
+  if (pages.length === 0) return ['the document has no pages'];
+  if (!firstText(pages[0]).startsWith('Fund analytics report')) out.push('page 1 is not the summary');
+  for (const name of names) {
+    if (!pages.some((p) => p.funds_named.includes(name) || startsFund(p, name))) out.push(`fund "${name}" is not on any page`);
   }
-  if (names.length > 0) {
-    if (c < pages.length && isComparison(pages[c])) {
-      if (c + 1 < pages.length) out.push(`the comparison runs over ${pages.length - c} pages (it must be exactly one)`);
-    } else out.push('the comparison page is missing or does not follow the last fund');
+  if (names.length > 0 && !pages.some((p) => p.has_comparison === true || firstText(p).startsWith(COMPARISON_TITLE))) out.push('the comparison section is missing');
+  // the summary: pages before the first one that starts a fund, or carries a fund's sheet title; at most `maxCover` pages unless a fund begins on its own page
+  let c = 0;
+  while (c < pages.length && !(names.length > 0 && names.some((n) => startsFund(pages[c], n))) && !firstText(pages[c]).startsWith(COMPARISON_TITLE) && c < maxCover + 1) c += 1;
+  if (perFund === 1 && c > maxCover && pages.length > maxCover) {
+    const flowing = pages.slice(0, maxCover + 1).some((p) => p.funds_named.length > 0 && p !== pages[0]);
+    if (!flowing) out.push(`the summary runs over ${c} pages (at most ${maxCover})`);
+  }
+  if (perFund === 2) {
+    for (const name of names) {
+      const own = pages.filter((p) => startsFund(p, name));
+      const cont = own.filter((p) => p.continued).length;
+      if (own.length !== 2 || cont !== 1) out.push(`fund "${name}" uses ${own.length} page(s) of its own, the two-page plan is exactly 2 (the second marked continued)`);
+    }
   }
   return out;
 }
@@ -123,11 +120,13 @@ export function judgeLayout(a: LayoutAnalysis, opts: { maxBlank?: number } = {})
   if (planned) out.push(...judgePagePlan(a));
   for (const c of a.cell_overflow ?? []) out.push(`a table cell is narrower than its text and runs into its neighbour ("${c}")`);
   // the pages of the summary: every one but its last may not stop short
+  // the flow (one page per fund, the default): every page but the last. The two-page plan starts each sheet on a fresh page, so only the summary's pages count.
+  const flow = !planned || (a.pages_per_fund ?? FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND) === 1;
   const coverPages = planned ? a.pages.findIndex((p, i) => i > 0 && (startsFundAny(p, a.fund_names!) || firstText(p).startsWith(COMPARISON_TITLE))) : a.pages.length;
   const coverEnd = coverPages < 0 ? a.pages.length : coverPages;
   a.pages.forEach((p, i) => {
     const isLast = i === a.pages.length - 1;
-    const blankApplies = planned ? i < coverEnd - 1 : !isLast;
+    const blankApplies = flow ? !isLast : i < coverEnd - 1;
     if (blankApplies && p.blank_ratio > maxBlank) out.push(`page ${p.page}: ${(p.blank_ratio * 100).toFixed(0)}% blank below its last content (limit ${(maxBlank * 100).toFixed(0)}%)`);
     const l = p.last_line;
     if (!isLast && l && l.bold && l.size >= 10) out.push(`page ${p.page}: ends with a heading ("${l.text}") stranded from what follows it`);
@@ -184,7 +183,8 @@ async function main() {
   execFileSync(process.execPath, [path.join(ROOT, 'node_modules/tailwindcss/lib/cli.js'), '-i', path.join(ROOT, 'app/globals.css'), '-o', path.join(out, 'app.css'), '--minify'], { cwd: ROOT, stdio: 'pipe' });
   // 2. the page: the document rendered to static HTML, no script
   const htmlFor = (plan: FundPagePlan) => {
-    const body = renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report: report as never, version, pagesPerFund: plan }));
+    // serverRender: the headless path (page.pdf with its own margins, header and footer), so the page margin boxes are off, as on the route's token path
+    const body = renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report: report as never, version, pagesPerFund: plan, serverRender: true }));
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Fund analytics report</title><link rel="stylesheet" href="app.css"></head><body class="font-sans text-gray-900 antialiased">${body}</body></html>`;
   };
   const forced = args.includes('--plan') ? (Number(arg('--plan', '1')) as FundPagePlan) : null;

@@ -33,7 +33,7 @@ const TEMPLATE_STYLE = 'width:100%;box-sizing:border-box;padding:0 16mm;gap:4mm;
 
 /** Running header: "FHIP - Fund analytics report" left, "Version N, made 05-10-2026, 9:30 am" right (day-first, minutes). */
 export function pdfHeaderTemplate(meta?: PdfReportMeta): string {
-  const right = meta ? `Version ${meta.versionNumber}, made ${formatDateTimeMinutes(meta.createdAt, 'INR')}` : '';
+  const right = meta ? `Version ${meta.versionNumber}, made ${formatDateTimeMinutes(meta.createdAt, 'INR', 'UTC')} UTC` : '';
   return `<div style="${TEMPLATE_STYLE}"><span>FHIP - Fund analytics report</span><span>${esc(right)}</span></div>`;
 }
 
@@ -82,16 +82,18 @@ export async function printPageToPdf(page: Page, meta?: PdfReportMeta): Promise<
 export const FUND_ANALYTICS_TEXT_AREA_HEIGHT_MM = 255;
 
 /**
- * Does EVERY one-page fund sheet fit the text area of one page? Measured in the browser, at the print text width, before anything is printed.
- * A sheet that does not fit (a fund with many unavailable figures wraps into taller rows and longer footnotes) makes the export print the WHOLE
- * report with the two-page plan, so a fund never spills onto a stray page and the funds of one report never mix layouts.
+ * Does EVERY kept-together piece of a one-page-plan fund fit the text area of one page? Measured in the browser, at the print text width, before
+ * anything is printed. Since the flow layout (PO 19-10-2026) a fund is a HEAD (name, facts, chart) and a BODY (the two columns and the footnotes), each
+ * kept whole and each able to start anywhere on a page, so what must fit one page is each piece, not the whole fund. A piece that does not fit (a fund
+ * with many unavailable figures wraps into taller rows and longer footnotes) makes the export print the WHOLE report with the two-page plan, so
+ * nothing is cut and the funds of one report never mix layouts.
  */
 export async function oneFundPerPageFits(page: Page): Promise<boolean> {
   // 178 mm = 673 px: the width the printed page lays the document out at (the layout does depend on the viewport, so measure at THAT width)
   await page.setViewportSize({ width: 673, height: 1000 });
   await page.emulateMedia({ media: 'print' });
   const limitPx = (FUND_ANALYTICS_TEXT_AREA_HEIGHT_MM * 96) / 25.4 - 6;
-  return page.evaluate((limit) => [...document.querySelectorAll('.fa-doc .fa-one')].every((el) => el.getBoundingClientRect().height <= limit), limitPx);
+  return page.evaluate((limit) => [...document.querySelectorAll('.fa-doc .fa-fund-head, .fa-doc .fa-block')].every((el) => el.getBoundingClientRect().height <= limit), limitPx);
 }
 
 export async function renderFundAnalyticsReportToPdf(admin: SupabaseClient, userId: string, reportId: string, meta?: PdfReportMeta): Promise<Buffer> {
