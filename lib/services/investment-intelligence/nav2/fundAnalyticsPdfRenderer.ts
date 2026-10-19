@@ -10,28 +10,12 @@
 import { chromium, type Page } from 'playwright';
 import { formatDateTimeMinutes } from '@/lib/engines/date';
 import { FUND_ANALYTICS_SAVED_REPORT_SENTENCE } from '@/lib/engines/nav2/reportWording';
-import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createNav2RenderToken } from './fundAnalyticsRenderToken';
 
 const BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
-export const NAV2_RENDER_TOKEN_TTL_MS = 5 * 60 * 1000;
-
-export async function createNav2RenderToken(admin: SupabaseClient, userId: string, reportId: string, nowMs = Date.now()): Promise<string> {
-  const token = crypto.randomBytes(32).toString('hex');
-  const { error } = await admin.from('nav2_report_render_tokens').insert({ token, user_id: userId, report_id: reportId, expires_at: new Date(nowMs + NAV2_RENDER_TOKEN_TTL_MS).toISOString() });
-  if (error) throw new Error('Could not prepare the PDF.');
-  return token;
-}
-
-/** The user and report a token opens, or null when it is unknown or expired. */
-export async function resolveNav2RenderToken(admin: SupabaseClient, token: string, nowMs = Date.now()): Promise<{ userId: string; reportId: string } | null> {
-  if (!/^[0-9a-f]{64}$/.test(token)) return null;
-  const { data } = await admin.from('nav2_report_render_tokens').select('user_id, report_id, expires_at').eq('token', token).maybeSingle();
-  if (!data) return null;
-  const row = data as { user_id: string; report_id: string; expires_at: string | null };
-  if (!row.expires_at || new Date(row.expires_at).getTime() < nowMs) return null;
-  return { userId: row.user_id, reportId: row.report_id };
-}
+// The render token lives in its own browser-free module (the print page must load without playwright); re-exported here for the callers and tests that always imported it from this file.
+export { NAV2_RENDER_TOKEN_TTL_MS, createNav2RenderToken, resolveNav2RenderToken } from './fundAnalyticsRenderToken';
 
 /** What the running header and footer say about the stored report. */
 export interface PdfReportMeta {

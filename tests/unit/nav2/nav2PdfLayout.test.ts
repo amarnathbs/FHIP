@@ -181,6 +181,11 @@ describe('print stylesheet and renderer settings (source contract)', () => {
     expect(block).toMatch(/\.fa-doc \.fa-table thead \{ display: table-header-group/);
     expect(block).toMatch(/table-layout: fixed/);
   });
+  it('NC-L6: the Fund analytics page set-up is a NAMED page (fa), so it cannot change any other printed page (the global @page is main\'s)', () => {
+    expect(block).toMatch(/\.fa-doc \{ page: fa;/);
+    expect(block).toMatch(/@page fa \{ size: A4; margin: 22mm 16mm 20mm 16mm; \}/);
+    expect(block).not.toMatch(/@page \{/);
+  });
   it('NC-L5: only small blocks are kept whole (a row, a chart, a footnote, and a fund or comparison SHEET, which is a page); no multi-row table is forced together', () => {
     const avoids = [...block.matchAll(/([^{}]+)\{[^}]*break-inside: avoid/g)].map((m) => m[1].trim());
     for (const sel of avoids) expect(sel, sel).toMatch(/tr$|\.fa-chart$|\.fa-footnotes p$|\.fa-comparison$/);

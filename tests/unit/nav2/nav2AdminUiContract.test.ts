@@ -109,8 +109,9 @@ describe('NAV2 admin screens: real controls, results shown where they happened',
     const s = code(read(REPORT_CLIENT));
     expect(s.indexOf('<ActionMessage')).toBeGreaterThan(s.indexOf('Generate a new version'));
     expect(s.indexOf('<ActionMessage')).toBeLessThan(s.indexOf('<FundAnalyticsReportView'));
-    expect(s).toContain('Download PDF');
-    expect(s).toContain('View PDF');
+    expect(s).toContain('Print / Save as PDF'); // the free browser print flow (PO decision 18-10-2026), not a server PDF
+    expect(s).not.toContain('Download PDF');
+    expect(s).not.toContain('View PDF');
   });
 
   it('the monitoring page has a Refresh button whose result is shown next to it', () => {

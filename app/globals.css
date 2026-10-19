@@ -564,8 +564,8 @@
   .fa-doc { box-shadow: 0 0 0 1px #dde3ea; padding: 16mm; margin-top: 8mm; margin-bottom: 8mm; }
 }
 @media print {
-  .fa-doc { width: 100%; max-width: 100%; margin: 0; padding: 0; box-shadow: none; }
-  @page { size: A4; margin: 22mm 16mm 20mm 16mm; }
+  .fa-doc { page: fa; width: 100%; max-width: 100%; margin: 0; padding: 0; box-shadow: none; }
+  @page fa { size: A4; margin: 22mm 16mm 20mm 16mm; } /* named page: only the Fund analytics document, so no other printed page changes */
 }
 
 /* Net Worth Statements (PO request 16-10-2026): one A4 portrait page per statement. Scoped to .nws-root so nothing else changes.

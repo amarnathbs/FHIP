@@ -56,7 +56,12 @@ vi.mock('@/lib/services/investment-intelligence/nav2/fundAnalyticsReportService'
 });
 vi.mock('@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer', async (orig) => {
   const actual = await orig<typeof import('@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer')>();
-  return { ...actual, renderFundAnalyticsReportToPdf: (...a: unknown[]) => mockRender(...a), resolveNav2RenderToken: (...a: unknown[]) => mockResolveToken(...a) };
+  return { ...actual, renderFundAnalyticsReportToPdf: (...a: unknown[]) => mockRender(...a) };
+});
+// the print page resolves tokens through the browser-free module (it must load without playwright), so that is where the token lookup is mocked
+vi.mock('@/lib/services/investment-intelligence/nav2/fundAnalyticsRenderToken', async (orig) => {
+  const actual = await orig<typeof import('@/lib/services/investment-intelligence/nav2/fundAnalyticsRenderToken')>();
+  return { ...actual, resolveNav2RenderToken: (...a: unknown[]) => mockResolveToken(...a) };
 });
 
 import { GET as listGET, POST as generatePOST } from '@/app/api/reports/fund-analytics/route';
@@ -225,7 +230,7 @@ describe('read one and export (NC-F2, matrix 46)', () => {
     expect(res.headers.get('Content-Disposition')).toMatch(/^attachment;/);
   });
 
-  it('?disposition=inline serves the same PDF for View PDF (opens in a tab); anything else stays an attachment', async () => {
+  it('?disposition=inline serves the same PDF inline (the route is no longer used by the page: the page offers Print / Save as PDF); anything else stays an attachment', async () => {
     const inline = await exportGET(new Request('http://t/x?disposition=inline'), ctx());
     expect(inline.headers.get('Content-Disposition')).toBe('inline; filename="fund-analytics-report-02-10-2026-v3.pdf"');
     expect(inline.headers.get('Cache-Control')).toBe('private, no-store');
@@ -233,11 +238,21 @@ describe('read one and export (NC-F2, matrix 46)', () => {
     expect(other.headers.get('Content-Disposition')).toMatch(/^attachment;/);
   });
 
-  it('a render failure is a 500 with a plain sentence, not the internal error', async () => {
+  it('a browser that cannot launch is a typed 503 renderer_unavailable with a plain sentence that points to Print, not the internal error', async () => {
     mockRender.mockRejectedValueOnce(new Error('browserType.launch: Executable does not exist at C:/secret/path'));
     const res = await exportGET(new Request('http://t'), ctx());
-    expect(res.status).toBe(500);
-    expect(JSON.stringify(await res.json())).not.toContain('secret');
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toMatchObject({ code: 'EXPORT_RENDER_FAILED', reason: 'renderer_unavailable' });
+    expect(body.error).toMatch(/Print, then choose Save as PDF/);
+    expect(JSON.stringify(body)).not.toContain('secret');
+  });
+
+  it('any other render failure is a typed 502 render_failed, never a bare 500', async () => {
+    mockRender.mockRejectedValueOnce(new Error('something odd'));
+    const res = await exportGET(new Request('http://t'), ctx());
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ reason: 'render_failed' });
   });
 });
 
@@ -295,7 +310,7 @@ describe('render tokens (NC-F4, matrix 61)', () => {
       { token: old, user_id: ME, report_id: ID, expires_at: '2026-10-04T09:00:00.000Z' },
     ]);
     const now = Date.parse('2026-10-04T10:00:00.000Z');
-    const { resolveNav2RenderToken: realResolve } = await vi.importActual<typeof import('@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer')>('@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer');
+    const { resolveNav2RenderToken: realResolve } = await vi.importActual<typeof import('@/lib/services/investment-intelligence/nav2/fundAnalyticsRenderToken')>('@/lib/services/investment-intelligence/nav2/fundAnalyticsRenderToken');
     expect(await realResolve(admin, live, now)).toEqual({ userId: ME, reportId: ID });
     expect(await realResolve(admin, old, now)).toBeNull();
     expect(await realResolve(admin, 'e'.repeat(64), now)).toBeNull();
@@ -333,5 +348,31 @@ describe('static contract', () => {
     expect(page).toMatch(/FUND_ANALYTICS_PREMIUM_MESSAGE/);
     expect(page).toMatch(/FUND_ANALYTICS_DISABLED_MESSAGE/);
     expect(page.indexOf('canViewPremiumReport')).toBeLessThan(page.indexOf('<FundAnalyticsReportClient'));
+  });
+});
+
+describe('the Fund analytics print page and token load WITHOUT a headless browser (Amplify packs none: the 18-10-2026 slimming removed playwright)', () => {
+  const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  it('the print page imports the token module, never the renderer; the token module imports no browser', () => {
+    const page = code(read('app/(print)/reports/fund-analytics/print/page.tsx'));
+    expect(page).toContain("nav2/fundAnalyticsRenderToken'");
+    expect(page).not.toMatch(/fundAnalyticsPdfRenderer|playwright/);
+    expect(code(read('lib/services/investment-intelligence/nav2/fundAnalyticsRenderToken.ts'))).not.toMatch(/playwright|fundAnalyticsPdfRenderer/);
+  });
+  it('NC-PW1: the old import (the page importing the renderer, which imports playwright at its top level) is exactly what the scanner flags', () => {
+    expect(code(read('lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer.ts'))).toMatch(/from 'playwright'/);
+    const old = "import { resolveNav2RenderToken } from '@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer';";
+    expect(old).toMatch(/fundAnalyticsPdfRenderer|playwright/);
+  });
+  it('the export route loads the renderer on demand inside its try (a typed answer, not a failure while the route loads)', () => {
+    const route = code(read('app/api/reports/fund-analytics/[id]/export/route.ts'));
+    expect(route).not.toMatch(/^import .*fundAnalyticsPdfRenderer/m);
+    expect(route).toMatch(/await import\('@\/lib\/services\/investment-intelligence\/nav2\/fundAnalyticsPdfRenderer'\)/);
+  });
+  it('the renderer still exports the token functions for existing callers (re-export)', async () => {
+    const mod = await vi.importActual<typeof import('@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer')>('@/lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer');
+    expect(typeof mod.createNav2RenderToken).toBe('function');
+    expect(typeof mod.resolveNav2RenderToken).toBe('function');
   });
 });

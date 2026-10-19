@@ -88,7 +88,7 @@ Steps:
 | e | 10 funds, first time | seconds, presses, answers (202 / 503) |
 | f | 10 funds again | seconds |
 
-4. For one finished report: open the PDF ("View PDF": about one page per fund and one comparison page). Open Admin, Reference Data, **Fund Analytics Health**: it must load.
+4. For one finished report: press "Print / Save as PDF": it opens the print view in its own tab, the print dialog opens by itself, choose "Save as PDF" as the destination (about one page per fund and one comparison page), and the tab closes itself afterwards. This is the free browser flow, the same as the Monthly Report. There is no server PDF button because Amplify has no Chromium at runtime. Open Admin, Reference Data, **Fund Analytics Health**: it must load.
 5. A free account: still no menu entry, the page says Premium only.
 6. Run `sql/smoke/S1_after_first_reports.sql` and `sql/monitoring/M1_pilot_health.sql`. Paste both rows and the timing table back before you invite anyone else. `duplicate_idempotency_keys` must be 0 and `widest_report` must never exceed 10.
 

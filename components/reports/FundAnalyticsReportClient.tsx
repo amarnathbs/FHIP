@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import FundAnalyticsReportView from '@/components/reports/FundAnalyticsReportView';
+import { OpenPrintTabLink } from '@/components/reports/OpenPrintTabLink';
 import { ActionMessage, Btn, CheckField, Notice, SelectField } from '@/components/admin/benchmarkData/ui';
 import { rupees } from '@/lib/engines/nav2/presentation';
 import { REPORT_PERIOD_CHOICES, REPORT_PERIOD_LABELS, type ReportPeriodChoice } from '@/lib/engines/nav2/analysisSpec';
@@ -10,7 +11,7 @@ import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 import { FUND_ANALYTICS_SAVED_REPORT_SENTENCE, versionMadeLine } from '@/lib/engines/nav2/reportWording';
 
 // Interactive shell of the Fund analytics report: choose a period, generate the next version, switch between earlier
-// versions, download the PDF. Everything shown comes from the Premium-gated API; a 403 / 404 / 5xx is shown as such, never as
+// versions, print it or save it as a PDF (the browser print flow, free: no server PDF). Everything shown comes from the Premium-gated API; a 403 / 404 / 5xx is shown as such, never as
 // an empty report. While price history is still being prepared the API answers 202 and this screen says so and offers to
 // check again (it also checks by itself every 15 seconds for up to 10 minutes).
 
@@ -66,8 +67,6 @@ export default function FundAnalyticsReportClient() {
   // The key is dropped once the report is issued or the request ends in an answer that is not "ask again".
   const attemptKey = useRef<string | null>(null);
   const inFlight = useRef(false);
-  const [exporting, setExporting] = useState<'download' | 'view' | null>(null);
-  const [pdfStatus, setPdfStatus] = useState<string | null>(null);
   const polls = useRef(0);
 
   const loadReport = useCallback(async (id: string) => {
@@ -183,51 +182,6 @@ export default function FundAnalyticsReportClient() {
     return () => clearTimeout(t);
   }, [waiting, generate]);
 
-  // Download PDF saves the file; View PDF opens the same PDF in a new tab. Either way the person is told what happened: preparing,
-  // then "Your PDF is ready", never left wondering where the file went. The blob address is revoked once the tab / download has it.
-  async function getPdf(mode: 'download' | 'view') {
-    if (!selectedId) return;
-    setExporting(mode);
-    setError(null);
-    setPdfStatus('Preparing your PDF. This takes a few seconds.');
-    // A new tab must be opened by the click itself (browsers block a tab opened after the wait): open it blank now, point it at the PDF later.
-    const tab = mode === 'view' ? window.open('', '_blank') : null;
-    try {
-      const res = await fetch(`/api/reports/fund-analytics/${selectedId}/export${mode === 'view' ? '?disposition=inline' : ''}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error ?? `Export failed (${res.status})`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      if (mode === 'view') {
-        if (tab) {
-          tab.location.href = url;
-          setPdfStatus('Your PDF is ready. It opened in a new tab.');
-        } else {
-          setPdfStatus('Your PDF is ready, but your browser blocked the new tab. Allow pop-ups for this site, or use Download PDF.');
-        }
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      } else {
-        const a = document.createElement('a');
-        a.href = url;
-        const cd = res.headers.get('Content-Disposition') ?? '';
-        a.download = /filename="([^"]+)"/.exec(cd)?.[1] ?? 'fund-analytics-report.pdf';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        setPdfStatus('Your PDF is ready. It was saved to your Downloads folder.');
-      }
-    } catch (e) {
-      tab?.close();
-      setPdfStatus(null);
-      setError(e instanceof Error ? e.message : 'The PDF could not be generated.');
-    } finally {
-      setExporting(null);
-    }
-  }
-
   const sel = versions?.find((v) => v.id === selectedId) ?? null;
   const periodOptions = REPORT_PERIOD_CHOICES.map((c) => ({ value: c, label: REPORT_PERIOD_LABELS[c] }));
   const versionOptions = (versions ?? []).map((v) => ({ value: v.id, label: `Version ${v.versionNumber} - as at ${formatDateShort(v.asOfDate, 'INR')} (made ${formatDateTimeShort(v.createdAt, 'INR')})` }));
@@ -248,23 +202,20 @@ export default function FundAnalyticsReportClient() {
           )}
           {report && (
             <>
-              <Btn kind="secondary" busy={exporting === 'view'} busyLabel="Preparing PDF..." disabled={exporting !== null} onClick={() => void getPdf('view')}>
-                View PDF
-              </Btn>
-              <Btn kind="secondary" busy={exporting === 'download'} busyLabel="Preparing PDF..." disabled={exporting !== null} onClick={() => void getPdf('download')}>
-                Download PDF
-              </Btn>
-              <Btn kind="secondary" onClick={() => window.print()}>
-                Print
-              </Btn>
+              {/* PO decision 18-10-2026 (print flow): the same single button as the Monthly Report. It opens the print view in its own tab from the
+                  click and prints, and the tab closes itself afterwards. NO server PDF call (Amplify has no Chromium at runtime). */}
+              {selectedId && (
+                <OpenPrintTabLink
+                  href={`/reports/fund-analytics/print?id=${encodeURIComponent(selectedId)}&print=1`}
+                  windowName={`fund-analytics-${selectedId}`}
+                  className="rounded border px-3 py-1.5 text-sm text-gray-700 hover:border-trust"
+                >
+                  Print / Save as PDF
+                </OpenPrintTabLink>
+              )}
             </>
           )}
         </div>
-        {pdfStatus && (
-          <p role="status" className="mt-2 text-sm text-ink" data-testid="pdf-status">
-            {pdfStatus}
-          </p>
-        )}
         {/* The result of the button just pressed sits right under the buttons, scrolled into view and focused. */}
         <ActionMessage message={error ? { kind: 'error', text: error } : null} />
       </div>

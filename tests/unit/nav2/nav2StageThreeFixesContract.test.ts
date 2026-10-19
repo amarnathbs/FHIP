@@ -1,5 +1,5 @@
 // Stage 3 fix list (05-10-2026), source contracts for what cannot be seen without a browser:
-//   * View PDF opens the PDF in a new tab, Download PDF keeps working, and a plain "Your PDF is ready" status says what happened;
+//   * the PDF is the free browser print flow (PO decision 18-10-2026, replacing the Stage 3 View PDF / Download PDF server buttons): ONE "Print / Save as PDF" link opens the print view in its own tab, no server export call (Amplify has no Chromium at runtime);
 //   * the version and made-on line sits with the saved-report sentence;
 //   * every NAV2 POST route checks who the caller is BEFORE it validates the body (a free user gets 403, never 422);
 //   * Save / Upload / Record correction show a working state at once and stay disabled until the answer returns.
@@ -58,38 +58,40 @@ describe('every NAV2 POST route authorises before it validates (Stage 3 fix 4)',
   });
 });
 
-describe('View PDF, Download PDF and the plain status (Stage 3 fix 3)', () => {
+describe('Print / Save as PDF: the free print flow, no server PDF button (Stage 3 fix 3, replaced 19-10-2026)', () => {
   const client = read('components/reports/FundAnalyticsReportClient.tsx');
+  const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const route = read('app/api/reports/fund-analytics/[id]/export/route.ts');
-  it('both buttons exist and both use the shared button', () => {
-    expect(client).toMatch(/<Btn[\s\S]*?getPdf\('view'\)[\s\S]*?>\s*View PDF\s*<\/Btn>/);
-    expect(client).toMatch(/<Btn[\s\S]*?getPdf\('download'\)[\s\S]*?>\s*Download PDF\s*<\/Btn>/);
+  const printPage = read('app/(print)/reports/fund-analytics/print/page.tsx');
+  it('ONE button, "Print / Save as PDF", is the shared print-tab link to the print route with print=1 (as the Monthly Report)', () => {
+    expect(client).toContain("from '@/components/reports/OpenPrintTabLink'");
+    expect(client).toMatch(/<OpenPrintTabLink[\s\S]*?href=\{`\/reports\/fund-analytics\/print\?id=\$\{encodeURIComponent\(selectedId\)\}&print=1`\}[\s\S]*?>\s*Print \/ Save as PDF\s*<\/OpenPrintTabLink>/);
     expect(client).not.toMatch(/<button\b/);
   });
-  it('View PDF opens the tab from the click (before the wait), points it at a blob address and revokes the address', () => {
-    expect(client.indexOf("window.open('', '_blank')")).toBeGreaterThan(-1);
-    expect(client.indexOf("window.open('', '_blank')")).toBeLessThan(client.indexOf('await fetch(`/api/reports/fund-analytics/${selectedId}/export'));
-    expect(client).toContain('URL.createObjectURL');
-    expect(client).toContain('URL.revokeObjectURL');
-    expect(client).toContain('?disposition=inline');
+  it('the page makes NO server PDF call: no export route, no fetch of a PDF, no blob address, no View / Download PDF, no window.print() button', () => {
+    const c = code(client);
+    expect(c).not.toMatch(/\/export/);
+    expect(c).not.toMatch(/View PDF|Download PDF|Export PDF|getPdf|createObjectURL|pdf-status|Your PDF is ready/);
+    expect(c).not.toMatch(/window\.print\(/);
   });
-  it('a status the person can read says the PDF is ready (role=status), and a blocked tab is explained', () => {
-    expect(client).toContain('Your PDF is ready');
-    expect(client).toMatch(/role="status"[^>]*data-testid="pdf-status"/);
-    expect(client).toContain('blocked the new tab');
+  it('NC-V1: a regression that brings back a server PDF call is caught by the same scanner', () => {
+    const regressed = code(client) + '\nconst res = await fetch(`/api/reports/fund-analytics/${selectedId}/export`);';
+    expect(regressed).toMatch(/\/export/);
   });
-  it('the export route serves the same PDF inline when asked and as an attachment otherwise', () => {
+  it('the print view (the person path) carries the shared toolbar: prints once with print=1 and closes its own tab; the renderer token path stays bare', () => {
+    expect(printPage).toContain("from '@/components/reports/PrintTabToolbar'");
+    expect(printPage).toContain("print === '1'");
+    expect(printPage).toMatch(/<PrintTabToolbar autoPrint=\{print === '1'\} parentHref="\/reports\/fund-analytics" parentLabel="Fund Analytics" \/>/);
+    const tokenBranch = printPage.slice(printPage.indexOf('if (token) {'), printPage.indexOf('const supabase = await createClient()'));
+    expect(tokenBranch).not.toContain('PrintTabToolbar');
+  });
+  it('the server export route stays in place (typed errors) for a hosted renderer later; it is not used by the page', () => {
     expect(route).toContain("searchParams.get('disposition') === 'inline'");
     expect(route).toContain('`${disposition}; filename=');
   });
   it('the version and made-on line sits with the saved-report sentence on the page', () => {
     expect(client).toContain('versionMadeLine(sel.versionNumber, sel.createdAt)');
     expect(client).toContain('FUND_ANALYTICS_SAVED_REPORT_SENTENCE');
-  });
-  it('NC-V1: without the early window.open the new tab would be blocked: the control moves it after the fetch and fails', () => {
-    const mutated = client.replace("const tab = mode === 'view' ? window.open('', '_blank') : null;", '');
-    expect(mutated).not.toBe(client);
-    expect(mutated.indexOf("window.open('', '_blank')")).toBe(-1);
   });
 });
 

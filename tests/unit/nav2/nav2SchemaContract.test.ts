@@ -147,7 +147,7 @@ describe('NEGATIVE CONTROLS: the checker demonstrably catches each defect', () =
   it('SCHEMA-NC-2: an unknown column in a filter, an order and an insert payload is caught', () => {
     const store = 'lib/services/investment-intelligence/nav2/nav2ResultCacheStore.ts';
     expect(checkAll(mutateOne(store, ".order('id', { ascending: true })", ".order('processed_on', { ascending: true })")).violations.some((x) => /order\(\) column "processed_on"/.test(x.detail))).toBe(true);
-    const svc = 'lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer.ts';
+    const svc = 'lib/services/investment-intelligence/nav2/fundAnalyticsRenderToken.ts';
     expect(checkAll(mutateOne(svc, 'insert({ token, user_id: userId,', 'insert({ token, owner_id: userId,')).violations.some((x) => /payload key "owner_id"/.test(x.detail))).toBe(true);
     expect(checkAll(mutateOne(svc, ".eq('token', token).maybeSingle()", ".eq('tok', token).maybeSingle()")).violations.some((x) => /eq\(\) column "tok"/.test(x.detail))).toBe(true);
   });

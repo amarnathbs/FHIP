@@ -111,7 +111,7 @@ describe('outputFileTracingExcludes (deploy artifact slimming)', () => {
     expect(nextConfig.images).toBeUndefined();
   });
 
-  it('proves the Playwright exclusion is safe: only the two lazily loaded renderers import it', () => {
+  it('proves the Playwright exclusion is safe: only the three lazily loaded renderers import it (the two report renderers and the Fund analytics one)', () => {
     const importers: string[] = [];
     const staticImportersOfRenderers: string[] = [];
     for (const top of ['app', 'components', 'lib']) {
@@ -120,10 +120,10 @@ describe('outputFileTracingExcludes (deploy artifact slimming)', () => {
         const rel = path.relative(root, f).split(path.sep).join('/');
         if (/from\s+['"]playwright(-core)?['"]|require\(['"]playwright(-core)?['"]\)|import\(['"]playwright/.test(text)) importers.push(rel);
         // the renderers may only be reached through a dynamic import() so a missing package is a catchable failure
-        if (/from\s+['"]@\/lib\/services\/(reportPdfRenderer|forecastReportPdfRenderer)['"]/.test(text)) staticImportersOfRenderers.push(rel);
+        if (/from\s+['"]@\/lib\/services\/(reportPdfRenderer|forecastReportPdfRenderer|investment-intelligence\/nav2\/fundAnalyticsPdfRenderer)['"]/.test(text)) staticImportersOfRenderers.push(rel);
       }
     }
-    expect(importers.sort()).toEqual(['lib/services/forecastReportPdfRenderer.ts', 'lib/services/reportPdfRenderer.ts']);
+    expect(importers.sort()).toEqual(['lib/services/forecastReportPdfRenderer.ts', 'lib/services/investment-intelligence/nav2/fundAnalyticsPdfRenderer.ts', 'lib/services/reportPdfRenderer.ts']);
     expect(staticImportersOfRenderers).toEqual([]);
   });
 });
