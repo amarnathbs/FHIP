@@ -81,3 +81,17 @@ kill switches, the intake branch in each service and route, the screen wiring, t
 | Australian investment PDF | `AIE_AU_INVESTMENT_PDF_ROUTE_ENABLED` |
 
 The `AIE_` prefix is already forwarded to the server by `amplify.yml`, so no deployment-file change is needed. A switch that is off refuses a PDF at the route before anything is stored; CSV keeps working; the AI fallback of the CSV route has its own, separate switch. Turning a PDF switch off preserves the cap, the ledger, every saved statement and every draft.
+
+## 7. As built: what the implementation adds to or settles beyond the text above
+
+Recorded after the build so the specification and the code cannot drift silently. Each item is tested (see the report).
+
+1. **Deletion of the original happens earlier than for the CSV AI fallback.** The original PDF is deleted and verified absent (a) right after the evidence is written (certified read), (b) right after an AI DRAFT is saved durably, before the person reviews it, and (c) right after any refusal. The 50 minute backstop remains the safety net. A resumed draft never needs the file.
+2. **AI-read holdings are tied to the PRINTED total.** The text is searched by label for the portfolio total and the cash balance (no model involved); they are kept with the saved draft on the server and read back at confirm, so "holdings add up to the total" is checked for an AI-read statement. They are never taken from the model or from the browser.
+3. **Retirement review policy for a PDF is stricter than for a CSV.** A PDF-sourced retirement statement is `review_required` unless its identity reconciles AND no warning remains; every AI-read PDF statement carries the visible warning `read_by_ai_fallback_from_pdf`. The CSV rule is unchanged.
+4. **A line-level check failure stores an investment statement as `variance`** even when the printed lines still add up to the printed total.
+5. **Identifiers are masked before the model sees the page**, so an AI-read statement usually has no card, member or HIN digits; the person types the last four at review. Three masking rules were added after the corpus showed names and numbers reaching the model: `Cardholder:`, a broker `Account: NAME   HIN:` line, and `UAN:` / `PRAN:`.
+6. **Lakh-grouped figures (`3,45,210.00`) count as printed** in the existing "is this figure printed on the page" test, which previously judged every one of them unprinted and dropped it.
+7. **Day-first dates on the touched screens.** The three panels showed ISO dates in places; they now use the shared day-first formatter. Existing tests that pinned the ISO text were updated.
+8. **No migration.** Every error code, status, event type and statement type written already satisfies the existing database constraints (proved on a real engine, `tests/unit/pdfRoutesSchemaPglite.test.ts`).
+9. **Upload limit.** The existing limit of 20 upload sessions per person per hour applies to PDFs too.
