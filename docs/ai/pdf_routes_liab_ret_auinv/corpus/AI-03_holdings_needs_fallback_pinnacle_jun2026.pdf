@@ -1,0 +1,77 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 853 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(Pinnacle Wealth Brokerage) Tj
+0 -12 Td
+(Portfolio summary as at 30 June 2026) Tj
+0 -12 Td
+(Client: SAMPLE INVESTOR TWELVE   HIN: X0000 8052) Tj
+0 -12 Td
+(Email: inv.sample.twelve@example.invalid) Tj
+0 -12 Td
+(Holding 1) Tj
+0 -12 Td
+(Security: ARX - Arrowroot Industries Limited) Tj
+0 -12 Td
+(Units held: 500) Tj
+0 -12 Td
+(Last price: $18.42) Tj
+0 -12 Td
+(Market value: $9,210.00) Tj
+0 -12 Td
+(Holding 2) Tj
+0 -12 Td
+(Security: EQT - Equator Telecom Limited) Tj
+0 -12 Td
+(Units held: 1,500) Tj
+0 -12 Td
+(Last price: $3.20) Tj
+0 -12 Td
+(Market value: $4,800.00) Tj
+0 -12 Td
+(Holding 3) Tj
+0 -12 Td
+(Security: FBM - Fernbank Managed Growth Fund) Tj
+0 -12 Td
+(Units held: 10,000) Tj
+0 -12 Td
+(Last price: $1.2345) Tj
+0 -12 Td
+(Market value: $12,345.00) Tj
+0 -12 Td
+(Cash account balance: $500.00) Tj
+0 -12 Td
+(Total: $26,855.00) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000001151 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1248
+%%EOF
