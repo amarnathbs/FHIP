@@ -138,7 +138,7 @@ async function uploadAndResolve(u: U, d: CorpusDocBase, bytesOverride?: Uint8Arr
   const owner = await ownerQuery(u, FLOW[d.cls]);
   const q = uploadQuery(d, owner);
   const base = `/api/financial-data-hub/${ROUTE[d.cls]}`;
-  const up = await app(u, `${base}/upload?${q.toString()}`, { method: 'POST', body: bytes, headers: { 'Content-Type': 'application/pdf', 'Content-Length': String(bytes.length) } });
+  const up = await app(u, `${base}/upload?${q.toString()}`, { method: 'POST', body: bytes as unknown as BodyInit, headers: { 'Content-Type': 'application/pdf', 'Content-Length': String(bytes.length) } });
   let data = up.json?.data ?? null;
   const documentId = data?.document_id as string | undefined;
   if (documentId) recordArtefact({ kind: 'fdh_statement_uploads', id: documentId, userId: u.id, run: RUN });

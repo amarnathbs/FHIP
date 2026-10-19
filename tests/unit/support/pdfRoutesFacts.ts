@@ -112,7 +112,7 @@ export interface InvestmentFactsTweaks {
 }
 
 export function investmentFacts(e: InvestmentExpected, tweaks: InvestmentFactsTweaks = {}): AuInvestmentDocumentFacts {
-  const holdings = e.holdings.map((h) => ({
+  const holdings: Array<{ securityNameRaw: string; tickerRaw: string | null; isin: string | null; quantity: string; unitPrice: string | null; marketValue: string | null; valuationDate: string | null }> = e.holdings.map((h) => ({
     securityNameRaw: h.name,
     tickerRaw: h.code,
     isin: null,
