@@ -42,6 +42,8 @@ import {
 } from '@/components/financial-data-hub/WaitingImports';
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { LiabilityStatementFileField, LiabilityUploadIntro } from '@/components/financial-data-hub/PdfAwareStatementCopy';
+import { parsePdfRouteVisible } from '@/lib/financial-data-hub/pdf-statements/uiVisibility';
 import { DataTable } from '@/components/ui/DataTable';
 
 type StatementType = 'credit_card' | 'loan';
@@ -466,6 +468,9 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Whether the server's liability PDF route is switched on: presentation only (the words and the file chooser). Fail closed --
+  // CSV-only wording until the upload-status read says `true`; the upload route refuses a PDF while its switch is off.
+  const [pdfRouteEnabled, setPdfRouteEnabled] = useState(false);
   // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
   // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
   const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
@@ -491,10 +496,16 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
     fetch('/api/financial-data-hub/upload-status')
       .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
       .then((json) => {
-        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+        if (!cancelled) {
+          setUploadEnabled(Boolean(json.data?.enabled));
+          setPdfRouteEnabled(parsePdfRouteVisible(json, 'liability'));
+        }
       })
       .catch(() => {
-        if (!cancelled) setUploadEnabled(false);
+        if (!cancelled) {
+          setUploadEnabled(false);
+          setPdfRouteEnabled(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -1132,11 +1143,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
 
       {phase === 'form' && (
         <div className="mt-4 space-y-4">
-          <p className="text-sm text-muted">
-            Upload your {isCreditCard ? 'credit card' : 'loan'} statement (PDF or CSV) and FHIP will extract the details for you to
-            review before updating your Liabilities. A PDF is read for its own balances and lines; the original file is deleted
-            as soon as the details are saved.
-          </p>
+          <LiabilityUploadIntro pdfRouteEnabled={pdfRouteEnabled} isCreditCard={isCreditCard} />
           <div className="grid grid-cols-2 gap-4">
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Country</span>
@@ -1204,10 +1211,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
           <div className="max-w-md">
             <OwnerSelector flow="liability" idPrefix="liability-owner" value={uploadOwner} onChange={setUploadOwner} disabled={busy} />
           </div>
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted">Statement file (PDF or CSV)</span>
-            <input type="file" accept="application/pdf,.pdf,text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
+          <LiabilityStatementFileField pdfRouteEnabled={pdfRouteEnabled} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           {isPdfFile && (
             <p className="text-xs text-muted" data-testid="liability-pdf-note">
               This PDF is read for the balances, dates and lines it prints, so you do not need to type them. If it is in a layout we do not know, an AI
