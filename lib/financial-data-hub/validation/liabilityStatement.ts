@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { fdhCountryCode, fdhCurrencyCode } from './primitives';
 import { fdhSanitisedFilename } from './filename';
+import { LIABILITY_FACILITY_TYPES } from '../liability/types';
 
 /** Body of `POST /liability-statement/upload` — metadata alongside the
  * streamed bytes (the file itself is the request body, same pattern as
@@ -32,5 +33,8 @@ export const liabilityStatementUploadMetadataSchema = z.object({
   credit_limit: z.coerce.number().nonnegative().nullish(),
   minimum_payment: z.coerce.number().nonnegative().nullish(),
   interest_rate: z.coerce.number().nonnegative().nullish(),
+  /** PDF route only: the loan type the person chose before uploading (never read from the page or a model). A card is always a
+   * card, so `credit_card` is not accepted here. */
+  facility_type: z.enum(LIABILITY_FACILITY_TYPES.filter((t) => t !== 'credit_card') as [string, ...string[]]).nullish(),
 });
 export type LiabilityStatementUploadMetadataInput = z.infer<typeof liabilityStatementUploadMetadataSchema>;
