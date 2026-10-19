@@ -317,7 +317,7 @@ describe('the print page title names the report (the browser proposes it as the 
     expect(src).toContain('export async function generateMetadata');
     const meta = src.slice(src.indexOf('export async function generateMetadata'), src.indexOf('export default async function'));
     expect(meta).toContain('fundAnalyticsPrintTitle(found.report.asOfDate, found.summary.versionNumber)');
-    expect(meta).toContain('if (token || !id) return fallback;');
+    expect(meta).toContain('if (token || (!id && ids === undefined)) return fallback;');
     expect(meta).not.toContain('resolveNav2RenderToken');
     expect(meta).toContain('title: { absolute:');
   });

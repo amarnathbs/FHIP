@@ -477,7 +477,7 @@ const NO_MARGIN_BOXES = '@media print{@page fa{@top-left{content:none}@top-right
 /** Plain text only (a version line has no quote, brace, angle bracket or backslash): the value goes into a CSS string. */
 const cssText = (t: string): string => t.replace(/[<>"'{};\\\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
 
-export default function FundAnalyticsPrintDocument({ report, version, pagesPerFund = FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND, serverRender = false, timeZone = null }: { report: FundAnalyticsReport; version?: { versionNumber: number; createdAt: string }; pagesPerFund?: FundPagePlan; serverRender?: boolean; timeZone?: string | null }) {
+export default function FundAnalyticsPrintDocument({ report, version, pagesPerFund = FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND, serverRender = false, timeZone = null, combinedPart = false }: { report: FundAnalyticsReport; version?: { versionNumber: number; createdAt: string }; pagesPerFund?: FundPagePlan; serverRender?: boolean; timeZone?: string | null; combinedPart?: boolean }) {
   const ctx: Nav2Context = { policy: NAV2_POLICY, currency: report.displayCurrency };
   const names = new Map(report.schemes.map((s) => [s.instrumentId, s.schemeName]));
   const nm = (id: string) => names.get(id) ?? 'Unknown fund';
@@ -508,10 +508,11 @@ export default function FundAnalyticsPrintDocument({ report, version, pagesPerFu
     // Everything below is server-rendered HTML (no client-only chart): the print renderer waits for this marker and then checks that every
     // expected chart is in the page, so a missing chart can never be printed as a blank rectangle.
     <div className="fa-doc" data-fa-print-ready="true" data-fa-expected-charts={expectedCharts} data-fa-pages-per-fund={pagesPerFund}>
-      {/* The running header (report name, version line) for the browser print path: read by the margin boxes of @page fa in app/globals.css. */}
+      {/* The running header (report name, version line) for the browser print path: read by the margin boxes of @page fa in app/globals.css.
+          A report that is one part of a COMBINED document (components/reports/FundAnalyticsCombinedPrintDocument.tsx) sets none: each part has its own named page with its own version line. */}
       {/* dangerouslySetInnerHTML: React escapes a quote inside a <style> child to &quot; when it renders on the server, which a browser does not decode in CSS (the
           custom property would be invalid and the header empty). The text is plain (cssText removes every character that could end the rule or the element). */}
-      <style dangerouslySetInnerHTML={{ __html: `${version ? `html{--fa-print-version:"${cssText(versionMadeLinePrint(version.versionNumber, version.createdAt, report.displayCurrency, timeZone))}"}` : ''}${serverRender ? NO_MARGIN_BOXES : ''}` }} />
+      <style dangerouslySetInnerHTML={{ __html: `${version && !combinedPart ? `html{--fa-print-version:"${cssText(versionMadeLinePrint(version.versionNumber, version.createdAt, report.displayCurrency, timeZone))}"}` : ''}${serverRender ? NO_MARGIN_BOXES : ''}` }} />
       <section className="fa-cover">
         <h1>Fund analytics report</h1>
         <p className="fa-lead">
