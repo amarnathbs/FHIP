@@ -299,6 +299,16 @@ describe('liability PDF route', () => {
     expect(originalIsGone()).toBe(true);
   });
 
+  it('a password-protected PDF is refused (never opened, never sent anywhere), the document rejected and the original deleted', async () => {
+    h.db.tables.fdh_statement_uploads = [{ id: 'doc-p', user_id: U, document_type: 'credit_card_statement', processing_status: 'queued', error_code: 'password_required', raw_document_storage_reference: 'k/p', raw_document_purge_status: 'not_required', malware_scan_status: 'clean', mime_type: 'application/pdf', file_hash: 'hp' }];
+    h.files.set('k/p', pdf(byId(LIABILITY_DOCS, 'LB-01')));
+    const r = await continueLiabilityStatementProcessing(U, 'doc-p', LIAB_META_CARD);
+    expect(r).toMatchObject({ pipelineStatus: 'extraction_failed', failureKind: 'password_required' });
+    expect(h.log).not.toContain('download');
+    expect(h.providerCalls).toEqual([]);
+    expect(docs()[0]).toMatchObject({ processing_status: 'rejected', error_code: 'password_required', raw_document_purge_status: 'purged' });
+  });
+
   it('a document held back by the malware scan is never read (the PDF branch sits behind the same admission check)', async () => {
     h.db.tables.fdh_statement_uploads = [{ id: 'doc-m', user_id: U, document_type: 'credit_card_statement', processing_status: 'queued', raw_document_storage_reference: 'k/m', malware_scan_status: 'infected', mime_type: 'application/pdf', file_hash: 'hm' }];
     h.files.set('k/m', pdf(byId(LIABILITY_DOCS, 'LB-01')));
@@ -540,6 +550,15 @@ describe('australian investment PDF route', () => {
   it('AI-04 (wrong on the page): stored as variance, never reconciled', async () => {
     const d = byId(INVESTMENT_DOCS, 'AI-04');
     await uploadAndProcessAuInvestmentStatement(U, INV_META('portfolio'), pdf(d));
+    expect(rows('fdh_investment_statements')[0]).toMatchObject({ reconciliation_status: 'variance' });
+  });
+
+  it('a line that is wrong on the page while the printed lines STILL add up to the printed total is stored as variance (the line check, not the total, catches it)', async () => {
+    const d = byId(INVESTMENT_DOCS, 'AI-01');
+    // DLK printed 4,398.19 instead of 4,398.15 (units x price is 4,398.15) and the total re-added to match: 137,021.69
+    const pages = d.pages.map((p) => p.map((l) => l.replace('4,398.15', '4,398.19').replace('137,021.65', '137,021.69')));
+    const r = await uploadAndProcessAuInvestmentStatement(U, INV_META('portfolio'), new Uint8Array(buildMinimalTextPdf(pages)));
+    expect(r.pipelineStatus).toBe('ok');
     expect(rows('fdh_investment_statements')[0]).toMatchObject({ reconciliation_status: 'variance' });
   });
 
