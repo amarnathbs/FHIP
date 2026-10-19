@@ -15,6 +15,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const PACK = path.join(ROOT, 'docs', 'ai', 'po_apply_premium_ai_production_proof');
 const SQL = path.join(PACK, 'sql');
 const CLEAN = path.join(SQL, 'cleanup');
+const OPS = path.join(SQL, 'ops');
 const M11 = path.join(PACK, 'module11', 'sql');
 const ZERO = '00000000-0000-0000-0000-000000000000';
 const U1 = '00000000-0000-4000-8000-0000000000c1';
@@ -54,12 +55,14 @@ describe('every pack file is editor-safe and the READ-ONLY files really are read
   const all = [
     ...files(SQL).map((f) => path.join(SQL, f)),
     ...files(CLEAN).map((f) => path.join(CLEAN, f)),
+    ...files(OPS).map((f) => path.join(OPS, f)),
     ...files(M11).map((f) => path.join(M11, f)),
   ];
   it('there are files to check (A, E and cleanup families, and the Module 11 files)', () => {
     expect(files(SQL).filter((f) => /^A0\d_/.test(f)).length).toBeGreaterThanOrEqual(4);
     expect(files(SQL).filter((f) => /^E\d\d_/.test(f)).length).toBeGreaterThanOrEqual(10);
     expect(files(CLEAN).length).toBe(6);
+    expect(files(OPS).length).toBe(4);
     expect(files(M11).length).toBeGreaterThanOrEqual(8);
   });
   it('pass the repository editor-safety lint (and the lint bites)', async () => {
@@ -168,7 +171,7 @@ describe('cleanup sequence: backup first, only registered accounts of the declar
       s.replace("'00000000-0000-0000-0000-000000000001'", `'${U1}'`).replace("'00000000-0000-0000-0000-000000000002'", `'${U2}'`).replace("  ('00000000-0000-0000-0000-000000000003', 'F1 free')\n", '')
         .replace("'P2 second premium'),", "'P2 second premium')")));
     const reg = await db.query('select user_id from private.aiproof_ids order by user_id');
-    expect(reg.rows.map((r: any) => r.user_id)).toEqual([U1, U2]);
+    expect(reg.rows.map((r: { user_id: string }) => r.user_id)).toEqual([U1, U2]);
     await db.exec(stmt('C01_backup_proof_rows_WRITE.sql'));
     const ver = await db.query<{ check_name: string; ok: boolean; live_rows: string }>(stmt('C02_verify_backup_READONLY.sql').replace(/;\s*$/, ''));
     expect(ver.rows.every((r) => r.ok)).toBe(true);
@@ -197,7 +200,7 @@ describe('cleanup sequence: backup first, only registered accounts of the declar
     expect(Number(r.audit_events_kept_detached)).toBe(1);
     expect(Number(r.cost_attempts_kept_detached)).toBe(1);
     const attempt = await db.query('select user_id from aie_ai_cost_attempt where idempotency_key = $1', ['abcdef0123456789']);
-    expect((attempt.rows[0] as any).user_id).toBeNull();
+    expect((attempt.rows[0] as { user_id: string | null }).user_id).toBeNull();
     // the shared ledger kept the spend
     const l = await db.query<{ settled_usd: string }>(`select settled_usd from aie_ai_cost_ledger where id = 'global'`);
     expect(Number(l.rows[0].settled_usd)).toBeGreaterThan(0);
@@ -206,6 +209,40 @@ describe('cleanup sequence: backup first, only registered accounts of the declar
   it('C05 removes the copies and the register', async () => {
     await db.exec(stmt('C05_drop_backups_WRITE.sql'));
     const r = await db.query(`select count(*) as n from information_schema.tables where table_schema = 'private' and (left(table_name, 11) = 'bkp_aiproof' or table_name = 'aiproof_ids')`);
-    expect(Number((r.rows[0] as any).n)).toBe(0);
+    expect(Number((r.rows[0] as { n: string }).n)).toBe(0);
+  });
+});
+
+describe('ops files: the stop switch, the restore and the allowance change work and keep the cap objects', () => {
+  const stmt = (f: string, edit: (s: string) => string = (s) => s) => edit(read(path.join(OPS, f))).replace(/;\s*$/, '');
+  const reserveAmount = async (user: string, amount: number) => {
+    const k = `ops-${Math.random().toString(36).slice(2)}`;
+    const r = await db.query<{ reserved: boolean; refusal_reason: string | null }>(`select * from aie_reserve_ai_cost_v2('global', $1::numeric, 10, $2, $3::uuid, null)`, [amount, k, user]);
+    return r.rows[0];
+  };
+  it('O02a (stop) refuses every new reading with the per-user reason, and the function and column still exist', async () => {
+    await db.exec(stmt('O02a_stop_all_new_ai_spend_WRITE.sql'));
+    const r = await reserveAmount(U2, 0.001);
+    expect(r.reserved).toBe(false);
+    expect(r.refusal_reason).toBe('user_daily_cap');
+    expect((await db.query(`select 1 from pg_proc where proname = 'aie_reserve_ai_cost_v2'`)).rows).toHaveLength(1);
+  });
+  it('O02b (restore) admits again', async () => {
+    await db.exec(stmt('O02b_restore_per_user_cap_WRITE.sql'));
+    expect((await reserveAmount(U2, 0.001)).reserved).toBe(true);
+  });
+  it('O03 (DEV only, tiny cap) refuses a statement-sized reservation, and is named DEV_ONLY', async () => {
+    expect(path.basename(files(OPS).find((f) => f.startsWith('O03'))!)).toMatch(/DEV_ONLY/);
+    await db.exec(stmt('O03_DEV_ONLY_tiny_cap_for_refusal_check_WRITE.sql'));
+    expect((await reserveAmount(REAL_USER, 0.009173)).refusal_reason).toBe('user_daily_cap');
+    await db.exec(stmt('O02b_restore_per_user_cap_WRITE.sql'));
+  });
+  it('O01 takes a backup copy of the ledger row first, then changes the stored allowance (the real ceiling)', async () => {
+    await db.exec(stmt('O01_change_global_allowance_WRITE.sql', (s) => s.replace('allowance_usd = 10.00', 'allowance_usd = 12.50')).split('select id,')[0]);
+    const l = await db.query<{ allowance_usd: string }>(`select allowance_usd from aie_ai_cost_ledger where id = 'global'`);
+    expect(Number(l.rows[0].allowance_usd)).toBe(12.5);
+    const b = await db.query<{ allowance_usd: string }>(`select allowance_usd from private.bkp_aiops_ledger where id = 'global'`);
+    expect(Number(b.rows[0].allowance_usd)).toBe(10); // the copy holds the figure from before the change
+    await db.exec(`update aie_ai_cost_ledger set allowance_usd = 10 where id = 'global'; drop table private.bkp_aiops_ledger;`);
   });
 });
