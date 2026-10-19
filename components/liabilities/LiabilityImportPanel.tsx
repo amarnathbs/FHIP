@@ -1,7 +1,7 @@
 'use client';
 
 import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
-import { formatDateShort } from '@/lib/engines/date';
+import { formatDateInText, formatDateShort } from '@/lib/engines/date';
 import { DateInput } from '@/components/ui/DateInput';
 /**
  * FDH-10 — Credit Cards & Loans Intelligence: the Liabilities-tab statement
@@ -423,6 +423,10 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  // PDF statement route (19/10/2026): the file's own kind decides what the form asks for. For a PDF the balances, limit, minimum
+  // payment and rate are READ FROM THE STATEMENT (so the typed boxes are not shown), and a loan needs the loan type up front.
+  const isPdfFile = file !== null && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name));
+  const [pdfLoanType, setPdfLoanType] = useState('');
 
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -677,7 +681,8 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       setDocumentId(data.document_id as string);
       setMessage(data.duplicate_of_document_id ? DUPLICATE_UPLOAD_MESSAGE : null);
       setAiDraft(data.ai_fallback_draft as AiFallbackDraft);
-      setAiFacilityType('');
+      // A loan PDF's type was chosen before uploading; it pre-fills the review choice (the person can still change it).
+      setAiFacilityType(statementType === 'loan' && isPdfFile ? pdfLoanType : '');
       setPhase('ai_fallback_review');
       return;
     }
@@ -711,11 +716,15 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       currency_code: currency,
       institution_name: institutionName || undefined,
       masked_identifier: maskedIdentifier || undefined,
-      opening_balance: openingBalance || undefined,
-      closing_balance: closingBalance || undefined,
-      credit_limit: statementType === 'credit_card' ? (creditLimit || undefined) : undefined,
-      minimum_payment: statementType === 'credit_card' ? (minimumPayment || undefined) : undefined,
-      interest_rate: statementType === 'loan' ? (interestRate || undefined) : undefined,
+      // A PDF is read for its own figures; the typed boxes are not offered for it and are never sent.
+      opening_balance: isPdfFile ? undefined : (openingBalance || undefined),
+      closing_balance: isPdfFile ? undefined : (closingBalance || undefined),
+      credit_limit: statementType === 'credit_card' && !isPdfFile ? (creditLimit || undefined) : undefined,
+      minimum_payment: statementType === 'credit_card' && !isPdfFile ? (minimumPayment || undefined) : undefined,
+      interest_rate: statementType === 'loan' && !isPdfFile ? (interestRate || undefined) : undefined,
+      facility_type: isPdfFile && statementType === 'loan' ? (pdfLoanType || undefined) : undefined,
+      statement_period_start: periodStart && periodEnd && statementPeriodError(periodStart, periodEnd) === null ? periodStart : undefined,
+      statement_period_end: periodStart && periodEnd && statementPeriodError(periodStart, periodEnd) === null ? periodEnd : undefined,
     };
   }
 
@@ -797,13 +806,18 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       ownerSelectionToQuery(params, uploadOwner);
       if (institutionName) params.set('institution_name', institutionName);
       if (maskedIdentifier) params.set('masked_identifier', maskedIdentifier);
-      if (openingBalance) params.set('opening_balance', openingBalance);
-      if (closingBalance) params.set('closing_balance', closingBalance);
-      if (statementType === 'credit_card') {
-        if (creditLimit) params.set('credit_limit', creditLimit);
-        if (minimumPayment) params.set('minimum_payment', minimumPayment);
-      } else if (interestRate) {
-        params.set('interest_rate', interestRate);
+      if (isPdfFile) {
+        // Read from the statement itself. Only the loan type (the person's choice) travels with a loan PDF.
+        if (statementType === 'loan' && pdfLoanType) params.set('facility_type', pdfLoanType);
+      } else {
+        if (openingBalance) params.set('opening_balance', openingBalance);
+        if (closingBalance) params.set('closing_balance', closingBalance);
+        if (statementType === 'credit_card') {
+          if (creditLimit) params.set('credit_limit', creditLimit);
+          if (minimumPayment) params.set('minimum_payment', minimumPayment);
+        } else if (interestRate) {
+          params.set('interest_rate', interestRate);
+        }
       }
       if (periodStart && periodEnd && statementPeriodError(periodStart, periodEnd) === null) {
         params.set('statement_period_start', periodStart);
@@ -813,7 +827,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       setPhase('processing');
       const res = await fetch(`/api/financial-data-hub/liability-statement/upload?${params.toString()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/csv' },
+        headers: { 'Content-Type': isPdfFile ? 'application/pdf' : 'text/csv' },
         body: file,
       });
       const { ok, json } = await readJson(res);
@@ -1119,8 +1133,9 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
       {phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
-            Upload your {isCreditCard ? 'credit card' : 'loan'} statement (CSV) and FHIP will extract the details for you to
-            review before updating your Liabilities.
+            Upload your {isCreditCard ? 'credit card' : 'loan'} statement (PDF or CSV) and FHIP will extract the details for you to
+            review before updating your Liabilities. A PDF is read for its own balances and lines; the original file is deleted
+            as soon as the details are saved.
           </p>
           <div className="grid grid-cols-2 gap-4">
             <label className="block text-sm">
@@ -1146,6 +1161,8 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
               <span className="mb-1 block text-muted">Card / account (masked, e.g. ****1234)</span>
               <input className="w-full rounded border border-gray-300 px-3 py-2" value={maskedIdentifier} onChange={(e) => setMaskedIdentifier(e.target.value)} />
             </label>
+            {!isPdfFile && (
+              <>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">{isCreditCard ? 'Opening balance' : 'Opening principal'}</span>
               <input type="number" step="0.01" className="w-full rounded border border-gray-300 px-3 py-2" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} />
@@ -1171,6 +1188,8 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
                 <input type="number" step="0.01" className="w-full rounded border border-gray-300 px-3 py-2" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
               </label>
             )}
+              </>
+            )}
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Statement period from (recommended)</span>
               <DateInput className="w-full rounded border border-gray-300 px-3 py-2" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
@@ -1186,9 +1205,26 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <OwnerSelector flow="liability" idPrefix="liability-owner" value={uploadOwner} onChange={setUploadOwner} disabled={busy} />
           </div>
           <label className="block text-sm">
-            <span className="mb-1 block text-muted">Statement file (CSV)</span>
-            <input type="file" accept="text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <span className="mb-1 block text-muted">Statement file (PDF or CSV)</span>
+            <input type="file" accept="application/pdf,.pdf,text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
+          {isPdfFile && (
+            <p className="text-xs text-muted" data-testid="liability-pdf-note">
+              This PDF is read for the balances, dates and lines it prints, so you do not need to type them. If it is in a layout we do not know, an AI
+              reading is offered for you to check before anything is saved.
+            </p>
+          )}
+          {isPdfFile && !isCreditCard && (
+            <label className="block max-w-md text-sm">
+              <span className="mb-1 block text-muted">What kind of loan is this statement for?</span>
+              <select className="w-full rounded border border-gray-300 px-3 py-2" value={pdfLoanType} onChange={(e) => setPdfLoanType(e.target.value)}>
+                <option value="">Choose the loan type</option>
+                {LOAN_FACILITY_CHOICES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="flex gap-3">
             <button type="button" onClick={() => setPhase('type_select')} className="rounded border border-gray-300 px-3 py-1 text-sm">
               Back
@@ -1196,7 +1232,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <button
               type="button"
               onClick={handleUpload}
-              disabled={!file || !uploadOwner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed' || statementPeriodError(periodStart, periodEnd) !== null}
+              disabled={!file || !uploadOwner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed' || statementPeriodError(periodStart, periodEnd) !== null || (isPdfFile && !isCreditCard && !pdfLoanType)}
               className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50"
             >
               Upload statement
@@ -1229,7 +1265,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <div>
               <dt className="text-muted">Statement period</dt>
               <dd>
-                {aiDraft.header.statementPeriodStart ?? '?'} to {aiDraft.header.statementPeriodEnd ?? '?'}
+                {aiDraft.header.statementPeriodStart ? formatDateInText(aiDraft.header.statementPeriodStart, currency) : '?'} to {aiDraft.header.statementPeriodEnd ? formatDateInText(aiDraft.header.statementPeriodEnd, currency) : '?'}
               </dd>
             </div>
             <div>
@@ -1398,7 +1434,7 @@ export function LiabilityImportPanel({ onClose, onApplied }: { onClose: () => vo
             <dt className="text-muted">Statement period</dt>
             <dd>
               {statement.statement_period_start && statement.statement_period_end
-                ? `${statement.statement_period_start} – ${statement.statement_period_end}`
+                ? `${formatDateInText(statement.statement_period_start, currency)} – ${formatDateInText(statement.statement_period_end, currency)}`
                 : 'Not identified'}
             </dd>
             {isCreditCard ? (
@@ -1779,7 +1815,7 @@ export function ActivityLedgerPreview(props: {
             const split = a.activity_type === 'PAYMENT' && (a.principal_component != null || a.interest_component != null || a.fee_component != null);
             return (
               <tr key={a.id} className="border-b border-gray-100 align-top">
-                <td className="py-1 pr-2 whitespace-nowrap">{a.activity_date}</td>
+                <td className="py-1 pr-2 whitespace-nowrap">{formatDateInText(a.activity_date, currency)}</td>
                 <td className="py-1 pr-2">
                   <span className="font-medium">{outcome.label}</span>
                   {a.description_raw && <span className="block text-xs text-muted">{a.description_raw}</span>}
@@ -1813,11 +1849,11 @@ export function ActivityLedgerPreview(props: {
         const candidates = (a.bank_match_candidate_ids ?? []).map((id) => candidateById.get(id)).filter((c): c is BankCandidate => Boolean(c));
         return (
           <fieldset key={a.id} className="mt-2 space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-            <legend className="font-medium">Which bank payment was the {a.activity_date} repayment of {money(a.amount, currency)}?</legend>
+            <legend className="font-medium">Which bank payment was the {formatDateInText(a.activity_date, currency)} repayment of {money(a.amount, currency)}?</legend>
             {candidates.map((c) => (
               <label key={c.id} className="flex items-center gap-2">
                 <input type="radio" name={`candidate-${a.id}`} checked={candidateChoice[a.id] === c.id} onChange={() => onChoose(a.id, c.id)} />
-                {c.transaction_date} — {money(Number(c.amount_original), c.currency_original)}{c.description_clean ? ` — ${c.description_clean}` : ''}
+                {formatDateInText(c.transaction_date, c.currency_original)} — {money(Number(c.amount_original), c.currency_original)}{c.description_clean ? ` — ${c.description_clean}` : ''}
               </label>
             ))}
             <label className="flex items-center gap-2">

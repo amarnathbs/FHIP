@@ -125,38 +125,115 @@ export async function purgeRawDocumentAfterAiConfirm(userId: string, documentId:
     if (!(await hasConfirmedAiFallbackDraft(userId, documentId))) {
       return { status: 'skipped', reason: 'no_confirmed_draft' };
     }
-    const admin = createAdminClient();
-    const { data } = await admin.from('fdh_statement_uploads').select('*').eq('id', documentId).eq('user_id', userId).maybeSingle();
-    const doc = data as FdhStatementUpload | null;
-    if (!doc) return { status: 'skipped', reason: 'not_found' };
-    if (!doc.raw_document_storage_reference) return { status: 'skipped', reason: 'no_raw_object' };
-
-    let current = doc;
-    if (doc.raw_document_purge_status === 'not_required' || doc.raw_document_purge_status === 'failed') {
-      const nowIso = new Date().toISOString();
-      assertPurgeTransition(doc.raw_document_purge_status, 'pending');
-      await admin
-        .from('fdh_statement_uploads')
-        .update({
-          raw_document_purge_status: 'pending',
-          raw_document_purge_due_at: nowIso,
-          purge_reason: 'ai_fallback_confirmed_durable_result',
-        })
-        .eq('id', doc.id);
-      await recordDocumentAuditEvent({
-        userId: doc.user_id,
-        documentId: doc.id,
-        eventType: 'document_purge_scheduled',
-        actorType: 'system',
-        metadata: { reason: 'ai_fallback_confirmed' },
-      });
-      current = { ...doc, raw_document_purge_status: 'pending', raw_document_purge_due_at: nowIso };
-    } else if (doc.raw_document_purge_status !== 'pending') {
-      return { status: 'skipped', reason: `purge_status_${doc.raw_document_purge_status}` };
-    }
-    return await runPurgeAttempt(current);
+    return await scheduleAndRunImmediatePurge(userId, documentId, {
+      purgeReason: 'ai_fallback_confirmed_durable_result',
+      auditReason: 'ai_fallback_confirmed',
+    });
   } catch (e) {
     console.error(`purgeRawDocumentAfterAiConfirm failed for document ${documentId}: ${e instanceof Error ? e.message : String(e)}`);
+    return { status: 'skipped', reason: 'error' };
+  }
+}
+
+/**
+ * The shared tail of every "delete the original now" path: owner-scoped read, schedule the purge for this instant, then the SAME
+ * verified `runPurgeAttempt` (delete, then verify absent, then mark purged). Idempotent: a purged, in-progress or already
+ * pending-and-run row is untouched. NEVER throws for a missing object. The CALLER is responsible for the precondition that makes
+ * deleting safe (a durable structured result, a confirmed draft, or a refusal that stored nothing).
+ */
+async function scheduleAndRunImmediatePurge(
+  userId: string,
+  documentId: string,
+  why: { purgeReason: string; auditReason: string },
+): Promise<ConfirmPurgeOutcome> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('fdh_statement_uploads').select('*').eq('id', documentId).eq('user_id', userId).maybeSingle();
+  const doc = data as FdhStatementUpload | null;
+  if (!doc) return { status: 'skipped', reason: 'not_found' };
+  if (!doc.raw_document_storage_reference) return { status: 'skipped', reason: 'no_raw_object' };
+
+  let current = doc;
+  if (doc.raw_document_purge_status === 'not_required' || doc.raw_document_purge_status === 'failed') {
+    const nowIso = new Date().toISOString();
+    assertPurgeTransition(doc.raw_document_purge_status, 'pending');
+    await admin
+      .from('fdh_statement_uploads')
+      .update({
+        raw_document_purge_status: 'pending',
+        raw_document_purge_due_at: nowIso,
+        purge_reason: why.purgeReason,
+      })
+      .eq('id', doc.id);
+    await recordDocumentAuditEvent({
+      userId: doc.user_id,
+      documentId: doc.id,
+      eventType: 'document_purge_scheduled',
+      actorType: 'system',
+      metadata: { reason: why.auditReason },
+    });
+    current = { ...doc, raw_document_purge_status: 'pending', raw_document_purge_due_at: nowIso };
+  } else if (doc.raw_document_purge_status !== 'pending') {
+    return { status: 'skipped', reason: `purge_status_${doc.raw_document_purge_status}` };
+  }
+  return await runPurgeAttempt(current);
+}
+
+/**
+ * PDF statement routes (liability, retirement, Australian investment): the original PDF goes as soon as the structured result is
+ * durable. The deterministic reader writes the evidence in one step, so the precondition here is the evidence row itself: a
+ * `fdh_*_statements` row for THIS document and THIS user must exist. Without it nothing is deleted (the person has nothing else).
+ * Best effort and never throws: the evidence is already saved, and a purge problem must not turn it into a failure. A failure
+ * leaves the row 'pending' or 'failed' (retried by the 5-minute sweep) and the 50-minute backstop as the safety net.
+ */
+export async function purgeRawPdfAfterDurableEvidence(userId: string, documentId: string): Promise<ConfirmPurgeOutcome> {
+  try {
+    const admin = createAdminClient();
+    const found = await documentsWithStatementEvidence(admin, [documentId]);
+    if (!found.has(documentId)) return { status: 'skipped', reason: 'no_durable_evidence' };
+    return await scheduleAndRunImmediatePurge(userId, documentId, {
+      purgeReason: 'pdf_statement_read_durable_result',
+      auditReason: 'pdf_statement_evidence_saved',
+    });
+  } catch (e) {
+    console.error(`purgeRawPdfAfterDurableEvidence failed for document ${documentId}: ${e instanceof Error ? e.message : String(e)}`);
+    return { status: 'skipped', reason: 'error' };
+  }
+}
+
+/**
+ * PDF statement routes: once an AI DRAFT of the statement is saved durably (`fdh_ai_fallback_drafts`, status pending review) the
+ * person reviews the draft, not the file, and a resumed draft never needs the file (the process route returns the pending draft
+ * before it downloads anything). So the original PDF is deleted now, verified absent, instead of waiting for acceptance or the 50
+ * minute backstop. The precondition is the durable draft itself; without one (the table missing, the write failed) nothing is
+ * deleted. Best effort and never throws.
+ */
+export async function purgeRawPdfAfterDurableDraft(userId: string, documentId: string): Promise<ConfirmPurgeOutcome> {
+  try {
+    const pending = await documentsWithPendingAiFallbackDrafts([documentId]);
+    if (!pending.has(documentId)) return { status: 'skipped', reason: 'no_durable_draft' };
+    return await scheduleAndRunImmediatePurge(userId, documentId, {
+      purgeReason: 'pdf_statement_draft_saved',
+      auditReason: 'pdf_statement_draft_saved',
+    });
+  } catch (e) {
+    console.error(`purgeRawPdfAfterDurableDraft failed for document ${documentId}: ${e instanceof Error ? e.message : String(e)}`);
+    return { status: 'skipped', reason: 'error' };
+  }
+}
+
+/**
+ * PDF statement routes: a PDF that was REFUSED (not this class, two accounts, password protected, a scan, unreadable, or unreadable
+ * with the AI reading not usable) stored no structured result and has no further use, so the original goes at once rather than
+ * waiting for the 50 minute backstop. The caller has already moved the document to its terminal or failed state.
+ */
+export async function purgeRawPdfAfterRefusal(userId: string, documentId: string): Promise<ConfirmPurgeOutcome> {
+  try {
+    return await scheduleAndRunImmediatePurge(userId, documentId, {
+      purgeReason: 'pdf_statement_refused',
+      auditReason: 'pdf_statement_refused',
+    });
+  } catch (e) {
+    console.error(`purgeRawPdfAfterRefusal failed for document ${documentId}: ${e instanceof Error ? e.message : String(e)}`);
     return { status: 'skipped', reason: 'error' };
   }
 }

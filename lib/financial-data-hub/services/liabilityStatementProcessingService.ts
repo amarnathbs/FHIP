@@ -53,9 +53,23 @@ import {
 import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { recordDocumentAuditEvent } from './auditLog';
-import { purgeRawDocumentAfterAiConfirm } from './purge';
+import { purgeRawDocumentAfterAiConfirm, purgeRawPdfAfterDurableDraft, purgeRawPdfAfterDurableEvidence, purgeRawPdfAfterRefusal } from './purge';
 import { downloadDocumentObject } from './storage';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
+import { looksLikePdf } from '../domain/fileValidation';
+import {
+  isLiabilityPdfRouteEnabled,
+  isAiEligiblePdfFailure,
+  keepOnlyPrintedAmounts,
+  droppedWarning,
+  pdfFailureMessage,
+  PDF_FAILURE_ERROR_CODE,
+  PDF_ROUTE_DISABLED_MESSAGE,
+  PDF_TERMINAL_REFUSALS,
+  readStatementPdf,
+  type PdfFailureKind,
+} from '../pdf-statements';
+import { readLiabilityPdf } from '../liability/pdfStatement';
 import { extractLiabilityStatement } from '../liability/statementIntake';
 import { computeStatementTotals, reconcileCreditCardStatement, reconcileLoanStatement } from '../liability/statementReconciliation';
 import { toExtractionWarnings } from '../liability/extractionWarnings';
@@ -96,6 +110,8 @@ export interface UploadLiabilityStatementMetadata {
   minimumPayment?: number;
   interestRate?: number;
   originalFilenameSanitised?: string;
+  /** PDF route only: the loan type the PERSON chose before uploading (never read from the page or the model). */
+  facilityType?: LiabilityFacilityType;
 }
 
 /** User-truthful copy for every controlled failure state (same discipline as
@@ -107,6 +123,16 @@ export const LIABILITY_STATEMENT_FAILURE_MESSAGES: Record<string, string> = {
   scanned_document: "We couldn't read text from this file. Scanned statement OCR is not yet supported.",
   ocr_required: "We couldn't read text from this file. Scanned statement OCR is not yet supported.",
   unknown_error: 'Something went wrong while reading this statement.',
+  // PDF statement route (19/10/2026). Plain words; no CSV nagging for a refusal that is not about the layout.
+  not_this_class: pdfFailureMessage('not_this_class', 'credit card or loan statement'),
+  multiple_accounts: pdfFailureMessage('multiple_accounts', 'credit card or loan statement'),
+  image_only: pdfFailureMessage('image_only', 'credit card or loan statement'),
+  password_required: pdfFailureMessage('password_required', 'credit card or loan statement'),
+  corrupt: pdfFailureMessage('corrupt', 'credit card or loan statement'),
+  timeout: pdfFailureMessage('timeout', 'credit card or loan statement'),
+  page_limit: pdfFailureMessage('page_limit', 'credit card or loan statement'),
+  unread_lines: pdfFailureMessage('unread_lines', 'credit card or loan statement'),
+  pdf_route_disabled: PDF_ROUTE_DISABLED_MESSAGE,
 };
 
 export interface UploadLiabilityStatementResult {
@@ -294,13 +320,20 @@ export async function uploadAndProcessLiabilityStatement(
   bytes: Uint8Array,
 ): Promise<UploadLiabilityStatementResult> {
   const documentType = metadata.statementType === 'credit_card' ? 'credit_card_statement' : 'loan_statement';
+  // PDF statement route (19/10/2026): the bytes decide the kind (magic bytes), never a header the browser sent. A PDF is refused
+  // here when its kill switch is off (the route has already refused it before reading the body; this is the service-level guard
+  // behind it) BEFORE a document row, a session or any storage exists.
+  const isPdf = looksLikePdf(bytes);
+  if (isPdf && !isLiabilityPdfRouteEnabled()) {
+    throw new LiabilityStatementProcessingError('invalid_state', PDF_ROUTE_DISABLED_MESSAGE);
+  }
 
   const { session } = await createUploadSession(userId, {
-    source_type: 'csv',
+    source_type: isPdf ? 'pdf_native' : 'csv',
     document_type: documentType,
     country_code: metadata.countryCode,
     currency_code: metadata.currencyCode as 'AUD' | 'INR' | 'USD',
-    declared_mime_type: 'text/csv',
+    declared_mime_type: isPdf ? 'application/pdf' : 'text/csv',
     declared_file_size_bytes: bytes.byteLength,
   });
 
@@ -435,6 +468,11 @@ async function resolveLiabilityStatementDocument(
     return { document, statementId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: ownPending.payload as LiabilityStatementAiFallbackDraft };
   }
 
+  // PDF statement route (19/10/2026): a PDF takes its own reader; the CSV path below is untouched.
+  if (document.mime_type === 'application/pdf') {
+    return resolveLiabilityPdfDocument(userId, document, metadata);
+  }
+
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
   if (!download.ok) throw new LiabilityStatementProcessingError('internal_error', download.message);
 
@@ -511,6 +549,141 @@ async function resolveLiabilityStatementDocument(
   const statementId = await persistLiabilityStatementEvidence(userId, document, extraction.extraction.activities, metadata, extraction.extraction.warnings, extraction.extraction.parserName, extraction.extraction.parserVersion, extraction.extraction.extractionConfidence, extraction.extraction.facilityType);
 
   return { document, statementId, pipelineStatus: 'ok' };
+}
+
+/**
+ * PDF STATEMENT ROUTE (19/10/2026). Everything that happens to an already-uploaded, already-scanned PDF liability statement.
+ *
+ * Order, each step before the next: kill switch, password, download, local text extraction, class check, certified layout read.
+ * ONLY a typed shortfall (`layout_unsupported`, `unread_lines`) can lead to a model call, and then only through the same gates and
+ * the same shared gateway as the CSV fallback (Premium now, kill switches, masking, per-user cap, global ledger, strict schema).
+ * Every refusal stores nothing structured and deletes the original at once (verified); a successful read writes the evidence with
+ * the SAME `persistLiabilityStatementEvidence` the CSV route uses and then deletes the original. Reconciliation, bank matching,
+ * review status and the later apply step are therefore exactly the CSV route's.
+ */
+async function resolveLiabilityPdfDocument(
+  userId: string,
+  document: FdhStatementUpload,
+  metadata: UploadLiabilityStatementMetadata,
+): Promise<UploadLiabilityStatementResult> {
+  if (!isLiabilityPdfRouteEnabled()) return refuseLiabilityPdf(userId, document, 'pdf_route_disabled');
+  if (document.error_code === 'password_required') return refuseLiabilityPdf(userId, document, 'password_required');
+  // A loan's facility type is the person's choice (a wrong one makes the existing liability unfindable); it is required BEFORE
+  // anything is read, and the document stays as it is so the choice can be made and the run repeated.
+  if (metadata.statementType === 'loan' && (!metadata.facilityType || metadata.facilityType === 'credit_card')) {
+    throw new LiabilityStatementProcessingError('invalid_state', 'Choose the type of loan (for example home loan), then try again.');
+  }
+
+  const download = await downloadDocumentObject(document.raw_document_storage_reference!);
+  if (!download.ok) throw new LiabilityStatementProcessingError('internal_error', download.message);
+  assertDocumentTransition(document.processing_status, 'processing');
+  await recordDocumentAuditEvent({
+    userId,
+    documentId: document.id,
+    eventType: 'pdf_native_extraction_started',
+    actorType: 'system',
+    metadata: { document_class: 'liability', source_format: 'pdf' },
+  });
+
+  const text = await readStatementPdf(download.bytes);
+  if (!text.ok) return refuseLiabilityPdf(userId, document, text.kind);
+
+  const read = readLiabilityPdf({ text, statementType: metadata.statementType, currencyCode: metadata.currencyCode });
+  if (!read.ok) {
+    if (!isAiEligiblePdfFailure(read.kind)) return refuseLiabilityPdf(userId, document, read.kind);
+    // The text is there and is a statement of this class, but the certified layouts did not cover it (or one line of it): the ONLY
+    // case a model reading is offered. The draft writes nothing; the document is left exactly where it is until the person confirms.
+    const fallback = await attemptAiLiabilityFallback(userId, document.id, text.text, { sourceFormat: 'pdf' });
+    if (fallback.ok) {
+      // The draft is saved durably (the person reviews it, not the file): the original PDF goes now, verified absent.
+      await purgeRawPdfAfterDurableDraft(userId, document.id);
+      return { document, statementId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: fallback.draft };
+    }
+    await recordDocumentAuditEvent({
+      userId,
+      documentId: document.id,
+      eventType: 'liability_statement_ai_fallback_not_usable',
+      actorType: 'system',
+      metadata: { reason: fallback.reason, nativeFailureKind: read.kind, source_format: 'pdf' },
+    });
+    return refuseLiabilityPdf(userId, document, read.kind, aiFallbackRefusalFromReason(fallback.reason));
+  }
+
+  const h = read.header;
+  const facilityType: LiabilityFacilityType = metadata.statementType === 'credit_card' ? 'credit_card' : (metadata.facilityType as LiabilityFacilityType);
+  // The header figures come from the DOCUMENT. A figure typed on the form is ignored for a PDF (the screen does not offer them);
+  // only the institution, the masked identifier and the period fall back to what the person typed when the page prints none.
+  const documentMetadata: UploadLiabilityStatementMetadata = {
+    statementType: metadata.statementType,
+    countryCode: metadata.countryCode,
+    currencyCode: metadata.currencyCode,
+    facilityType,
+    institutionName: h.institutionName ?? metadata.institutionName,
+    maskedIdentifier: h.maskedIdentifier ?? metadata.maskedIdentifier,
+    statementPeriodStart: h.statementPeriodStart ?? metadata.statementPeriodStart,
+    statementPeriodEnd: h.statementPeriodEnd ?? metadata.statementPeriodEnd,
+    statementDate: h.statementDate,
+    dueDate: h.dueDate,
+    openingBalance: h.openingBalance,
+    closingBalance: h.closingBalance,
+    creditLimit: h.creditLimit,
+    minimumPayment: h.minimumPayment,
+    interestRate: h.interestRate,
+  };
+  const statementId = await persistLiabilityStatementEvidence(
+    userId,
+    document,
+    read.activities,
+    documentMetadata,
+    read.warnings,
+    read.parserName,
+    read.parserVersion,
+    read.extractionConfidence,
+    facilityType,
+    { source_format: 'pdf', layout: read.layout, summary_lines_excluded: read.notes.summaryLinesExcluded, page_markers_skipped: read.notes.pageMarkersSkipped },
+  );
+  // The structured result is durable: the original PDF goes now, and is verified absent (best effort, never throws).
+  await purgeRawPdfAfterDurableEvidence(userId, document.id);
+  return { document, statementId, pipelineStatus: 'ok' };
+}
+
+/**
+ * A PDF that could not become a statement. `rejected` (terminal) when the file can never be this class of statement, `failed`
+ * otherwise; the typed code is stored with an EXISTING error code; the audit event carries the reason code only; and the original
+ * is deleted at once with the verified purge. Nothing structured is written.
+ */
+async function refuseLiabilityPdf(
+  userId: string,
+  document: FdhStatementUpload,
+  kind: PdfFailureKind | 'pdf_route_disabled',
+  aiFallbackRefusal?: AiFallbackRefusal,
+): Promise<UploadLiabilityStatementResult> {
+  const terminal = kind === 'pdf_route_disabled' || PDF_TERMINAL_REFUSALS.includes(kind);
+  const target = terminal ? 'rejected' : 'failed';
+  const errorCode = kind === 'pdf_route_disabled' ? 'layout_unsupported' : PDF_FAILURE_ERROR_CODE[kind];
+  assertDocumentTransition(document.processing_status, target);
+  const supabase = await createClient();
+  await supabase
+    .from('fdh_statement_uploads')
+    .update({ processing_status: target, error_code: errorCode, review_status: 'pending' })
+    .eq('id', document.id)
+    .eq('user_id', userId);
+  await recordDocumentAuditEvent({
+    userId,
+    documentId: document.id,
+    eventType: 'liability_statement_extraction_failed',
+    actorType: 'system',
+    metadata: { reason: kind, source_format: 'pdf' },
+  });
+  await purgeRawPdfAfterRefusal(userId, document.id);
+  return {
+    document,
+    statementId: null,
+    pipelineStatus: 'extraction_failed',
+    // The two shortfall kinds read the same to the person: "we could not read every line".
+    failureKind: kind === 'layout_unsupported' ? 'unread_lines' : kind,
+    ...(aiFallbackRefusal ? { aiFallbackRefusal } : {}),
+  };
 }
 
 /**
@@ -599,6 +772,8 @@ export async function persistLiabilityStatementEvidence(
   // value in `extraction.extraction.facilityType` — it just was never wired
   // through to the INSERT below.
   facilityType: LiabilityFacilityType,
+  /** Codes and counts only (never figures or text): the PDF route records `source_format` and the layout on the completion event. */
+  auditExtra: Record<string, unknown> = {},
 ): Promise<string> {
   assertPersistableLiabilityActivities(activities);
   const supabase = await createClient();
@@ -749,7 +924,7 @@ export async function persistLiabilityStatementEvidence(
     documentId: document.id,
     eventType: 'liability_statement_extraction_completed',
     actorType: 'system',
-    metadata: { statement_id: statementId, reconciliation_status: reconciliation.status },
+    metadata: { statement_id: statementId, reconciliation_status: reconciliation.status, ...auditExtra },
   });
 
   return statementId;
@@ -780,12 +955,22 @@ export type AiLiabilityFallbackOutcome = { ok: true; draft: LiabilityStatementAi
  * Exported so it is independently unit-testable with a faked provider, and so
  * a live-DEV proof can exercise it directly.
  */
-export function attemptAiLiabilityFallback(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
+export function attemptAiLiabilityFallback(
+  userId: string,
+  documentId: string,
+  extractedText: string,
+  options: { sourceFormat?: 'csv' | 'pdf' } = {},
+): Promise<AiLiabilityFallbackOutcome> {
   // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
-  return singleFlight(`liability_statement:${userId}:${documentId}`, () => attemptAiLiabilityFallbackOnce(userId, documentId, extractedText));
+  return singleFlight(`liability_statement:${userId}:${documentId}`, () => attemptAiLiabilityFallbackOnce(userId, documentId, extractedText, options.sourceFormat ?? 'csv'));
 }
 
-async function attemptAiLiabilityFallbackOnce(userId: string, documentId: string, extractedText: string): Promise<AiLiabilityFallbackOutcome> {
+async function attemptAiLiabilityFallbackOnce(
+  userId: string,
+  documentId: string,
+  extractedText: string,
+  sourceFormat: 'csv' | 'pdf',
+): Promise<AiLiabilityFallbackOutcome> {
   const gate = await evaluateAiFallbackGate({
     userId,
     adapterEnabled: isAieLiabilityAiFallbackEnabled(),
@@ -798,8 +983,8 @@ async function attemptAiLiabilityFallbackOnce(userId: string, documentId: string
     return { ok: false, reason: gate.reason };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_attempted', actorType: 'system' });
-  const result = await requestLiabilityAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId });
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_attempted', actorType: 'system', metadata: { source_format: sourceFormat } });
+  const result = await requestLiabilityAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId, sourceFormat });
   if (result.outcome !== 'success') {
     await recordDocumentAuditEvent({
       userId,
@@ -815,7 +1000,15 @@ async function attemptAiLiabilityFallbackOnce(userId: string, documentId: string
   // 2026-09-25: the opening/closing balances anchor the reconciliation, so a
   // figure the page does not print is dropped (see figureIsPrinted) -- the
   // same rule the bank adapter applies after the live finding there.
-  const mapped = read ? keepOnlyPrintedLiabilityBalances(read, extractedText) : null;
+  let mapped = read ? keepOnlyPrintedLiabilityBalances(read, extractedText) : null;
+  // PDF statement route: every drafted LINE must be printed too (an invented line is dropped, visibly; a dropped real line is caught
+  // by the reconciliation arithmetic at confirm). The CSV path keeps its existing, narrower rule.
+  if (mapped && sourceFormat === 'pdf') {
+    const printed = keepOnlyPrintedAmounts(mapped.activities, (a) => a.amount, extractedText);
+    const note = droppedWarning('ai_lines_not_printed_dropped', printed.droppedPositions);
+    mapped = { ...mapped, activities: printed.kept, warnings: note ? [...mapped.warnings, note] : mapped.warnings };
+    if (mapped.activities.length === 0) mapped = null;
+  }
   if (!mapped) {
     await recordDocumentAuditEvent({ userId, documentId, eventType: 'liability_statement_ai_fallback_insufficient_fields', actorType: 'system', metadata: adapterCallEvidenceMetadata(result.evidence) });
     return { ok: false, reason: 'insufficient_fields' };

@@ -2,6 +2,7 @@
 
 import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { DateInput } from '@/components/ui/DateInput';
+import { formatDateInText } from '@/lib/engines/date';
 /**
  * FDH-12 — Retirement Statement Intelligence: the Retirement-tab import
  * journey (spec sections 146-151).
@@ -400,7 +401,8 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
       ownerSelectionToQuery(qs, owner);
       const res = await fetch(`/api/financial-data-hub/retirement-statement/upload?${qs.toString()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/csv' },
+        // The file's own kind (the server decides from the bytes, not this header).
+        headers: { 'Content-Type': file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? 'application/pdf' : 'text/csv' },
         body: await file.arrayBuffer(),
       });
       const body = await readJson(res);
@@ -763,14 +765,15 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
             <OwnerSelector flow="retirement" idPrefix="retirement-owner" value={owner} onChange={setOwner} disabled={busy} />
           </div>
           <label className="flex flex-col text-sm">
-            <span className="mb-1 font-medium">Statement file (CSV)</span>
-            <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
+            <span className="mb-1 font-medium">Statement file (PDF or CSV)</span>
+            <input type="file" accept="application/pdf,.pdf,.csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
             {/* COVERAGE HONESTY (spec section 83). This states the ACTUAL
                 certified scope. It does not say "all Australian super funds
                 supported", because that is not true. */}
             <span className="mt-1 text-xs text-muted">
-              CSV exports only in this release. PDF statements and scanned documents cannot be read
-              automatically yet — you can still add or update the account manually.
+              A PDF is read for the balances and movements it prints, and is deleted as soon as the details are saved. A
+              statement in a layout we do not know is read by AI for you to check before anything is saved. Scanned or
+              photographed documents and password-protected files cannot be read — you can still add or update the account manually.
             </span>
           </label>
           <button
@@ -823,7 +826,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
             <div><dt className="text-muted">Member number</dt><dd>{aiDraft.maskedAccountIdentifier ?? 'Not shown'}</dd></div>
             <div>
               <dt className="text-muted">Period</dt>
-              <dd>{aiDraft.statementStartDate ?? '—'} to {aiDraft.statementEndDate ?? '—'}</dd>
+              <dd>{aiDraft.statementStartDate ? formatDateInText(aiDraft.statementStartDate, aiDraft.currencyCode) : '—'} to {aiDraft.statementEndDate ? formatDateInText(aiDraft.statementEndDate, aiDraft.currencyCode) : '—'}</dd>
             </div>
             <div><dt className="text-muted">Currency</dt><dd>{aiDraft.currencyCode}</dd></div>
           </dl>
@@ -875,7 +878,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
                 <tbody>
                   {aiDraft.activities.map((a, i) => (
                     <tr key={`${a.activityType}-${i}`} className="border-t border-gray-100">
-                      <td className="px-3 py-2 whitespace-nowrap">{a.activityDate ?? '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{a.activityDate ? formatDateInText(a.activityDate, aiDraft.currencyCode) : '—'}</td>
                       <td className="px-3 py-2">{a.activityType}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{money(a.amount, aiDraft.currencyCode)}</td>
                       <td className="px-3 py-2">

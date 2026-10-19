@@ -44,8 +44,20 @@ import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { downloadDocumentObject } from './storage';
 import { recordDocumentAuditEvent } from './auditLog';
-import { purgeRawDocumentAfterAiConfirm } from './purge';
+import { purgeRawDocumentAfterAiConfirm, purgeRawPdfAfterDurableDraft, purgeRawPdfAfterDurableEvidence, purgeRawPdfAfterRefusal } from './purge';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
+import { looksLikePdf } from '../domain/fileValidation';
+import {
+  isRetirementPdfRouteEnabled,
+  isAiEligiblePdfFailure,
+  pdfFailureMessage,
+  PDF_FAILURE_ERROR_CODE,
+  PDF_ROUTE_DISABLED_MESSAGE,
+  PDF_TERMINAL_REFUSALS,
+  readStatementPdf,
+  type PdfFailureKind,
+} from '../pdf-statements';
+import { readRetirementPdf } from '../retirement/pdfStatement';
 import { detectRetirementCsvFormat } from '../retirement/detection';
 import { extractRetirementStatement } from '../retirement/extraction';
 import { detectSmsf } from '../retirement/smsfDetection';
@@ -103,8 +115,17 @@ export const RETIREMENT_STATEMENT_FAILURE_MESSAGES: Record<string, string> = {
     'This file matches more than one known statement layout, so we did not guess. You can add this account manually.',
   layout_unsupported:
     "We couldn't read this file as a retirement statement. You can still add or update this account manually.",
+  // Kept only for statements refused before the PDF route existed; the PDF route has its own plain-words messages below.
   pdf_manual_mapping_required:
-    'PDF super statements are not yet supported for automatic reading. Try a CSV export from your fund, or add the account manually.',
+    'PDF super statements could not be read automatically. Try a CSV export from your fund, or add the account manually.',
+  not_this_class: pdfFailureMessage('not_this_class', 'retirement statement'),
+  multiple_accounts: pdfFailureMessage('multiple_accounts', 'retirement statement'),
+  image_only: pdfFailureMessage('image_only', 'retirement statement'),
+  corrupt: pdfFailureMessage('corrupt', 'retirement statement'),
+  timeout: pdfFailureMessage('timeout', 'retirement statement'),
+  page_limit: pdfFailureMessage('page_limit', 'retirement statement'),
+  unread_lines: pdfFailureMessage('unread_lines', 'retirement statement'),
+  pdf_route_disabled: PDF_ROUTE_DISABLED_MESSAGE,
   ocr_required:
     'This statement looks like a scan rather than a text document, so we could not read the figures from it.',
   password_required:
@@ -221,6 +242,10 @@ export interface RetirementAiDraftForReview {
     marketValue?: string;
     valuationDate?: string;
   }>;
+  /** PDF route only. Kept with the draft the SERVER issued and read back from it at confirm (the browser may echo them; they are
+   * ignored there). `pdfWarnings` are visible codes such as `ai_figure_not_printed_dropped_fees`, never document text or figures. */
+  sourceFormat?: 'pdf';
+  pdfWarnings?: string[];
 }
 
 const RETIREMENT_DRAFT_SCALAR_KEYS = [
@@ -346,12 +371,17 @@ export async function uploadAndProcessRetirementStatement(
   metadata: UploadRetirementStatementMetadata,
   bytes: Uint8Array,
 ): Promise<UploadRetirementStatementResult> {
+  // PDF statement route (19/10/2026): the bytes decide the kind. A PDF with its switch OFF is refused before any row, session or storage exists.
+  const isPdf = looksLikePdf(bytes);
+  if (isPdf && !isRetirementPdfRouteEnabled()) {
+    throw new RetirementStatementProcessingError('invalid_state', PDF_ROUTE_DISABLED_MESSAGE);
+  }
   const { session } = await createUploadSession(userId, {
-    source_type: 'csv',
+    source_type: isPdf ? 'pdf_native' : 'csv',
     document_type: documentTypeFor(metadata.jurisdiction),
     country_code: metadata.jurisdiction,
     currency_code: metadata.currencyCode as 'AUD' | 'INR' | 'USD',
-    declared_mime_type: 'text/csv',
+    declared_mime_type: isPdf ? 'application/pdf' : 'text/csv',
     declared_file_size_bytes: bytes.byteLength,
   });
 
@@ -456,6 +486,11 @@ async function resolveRetirementStatementDocument(
     };
   }
 
+  // PDF statement route (19/10/2026): a PDF takes its own reader (formerly refused here with "try a CSV"); the CSV path is untouched.
+  if (document.mime_type === 'application/pdf') {
+    return resolveRetirementPdfDocument(userId, document, metadata);
+  }
+
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
   if (!download.ok) throw new RetirementStatementProcessingError('internal_error', download.message);
 
@@ -473,14 +508,6 @@ async function resolveRetirementStatementDocument(
       metadata: { reason },
     });
   };
-
-  if (document.mime_type === 'application/pdf') {
-    await failDocument('layout_unsupported', 'pdf_manual_mapping_required');
-    return {
-      document, statementId: null, pipelineStatus: 'extraction_failed',
-      failureKind: 'pdf_manual_mapping_required', ...empty,
-    };
-  }
 
   // --- SMSF ROUTING, BEFORE ANY EXTRACTION (spec sections 10-11) ----------
   // Checked first so an SMSF statement never becomes ordinary-super evidence
@@ -554,6 +581,108 @@ async function resolveRetirementStatementDocument(
   return persistRetirementEvidence({ userId, document, ex, smsf });
 }
 
+/**
+ * PDF STATEMENT ROUTE (19/10/2026). Everything that happens to an already-uploaded, already-scanned PDF retirement statement.
+ * Same shape as the liability route: kill switch, password, download, local text extraction, class check, certified layout read;
+ * ONLY a typed shortfall leads to a model reading (same gates, gateway, cap and ledger as the CSV fallback); a clean read is written
+ * by the SAME `persistRetirementEvidence` (SMSF routing included); every refusal and every durable result deletes the original, verified.
+ */
+async function resolveRetirementPdfDocument(
+  userId: string,
+  document: FdhStatementUpload,
+  metadata: UploadRetirementStatementMetadata,
+): Promise<UploadRetirementStatementResult> {
+  if (!isRetirementPdfRouteEnabled()) return refuseRetirementPdf(userId, document, 'pdf_route_disabled');
+  if (document.error_code === 'password_required') return refuseRetirementPdf(userId, document, 'password_required');
+
+  const download = await downloadDocumentObject(document.raw_document_storage_reference!);
+  if (!download.ok) throw new RetirementStatementProcessingError('internal_error', download.message);
+  assertDocumentTransition(document.processing_status, 'processing');
+  await recordDocumentAuditEvent({
+    userId,
+    documentId: document.id,
+    eventType: 'pdf_native_extraction_started',
+    actorType: 'system',
+    metadata: { document_class: 'retirement', source_format: 'pdf' },
+  });
+
+  const text = await readStatementPdf(download.bytes);
+  if (!text.ok) return refuseRetirementPdf(userId, document, text.kind);
+
+  const read = readRetirementPdf({ text, jurisdiction: metadata.jurisdiction, currencyCode: metadata.currencyCode });
+  if (!read.ok) {
+    if (!isAiEligiblePdfFailure(read.kind)) return refuseRetirementPdf(userId, document, read.kind);
+    const fallback = await attemptAiRetirementFallbackFromText(
+      userId,
+      document.id,
+      text.text,
+      {
+        jurisdiction: metadata.jurisdiction,
+        currencyCode: metadata.currencyCode,
+        statementType: statementTypeFor(metadata.jurisdiction),
+        accountType: 'unknown',
+      },
+      'pdf',
+    );
+    if (fallback.ok) {
+      // The draft is saved durably (the person reviews it, not the file): the original PDF goes now, verified absent.
+      await purgeRawPdfAfterDurableDraft(userId, document.id);
+      return { document, statementId: null, pipelineStatus: 'ai_fallback_available', aiFallbackDraft: fallback.extraction, ...EMPTY_COUNTS };
+    }
+    await recordDocumentAuditEvent({
+      userId,
+      documentId: document.id,
+      eventType: 'retirement_statement_ai_fallback_not_usable',
+      actorType: 'system',
+      metadata: { reason: fallback.reason, nativeFailureKind: read.kind, source_format: 'pdf' },
+    });
+    return refuseRetirementPdf(userId, document, read.kind, aiFallbackRefusalFromReason(fallback.reason));
+  }
+
+  const ex = {
+    ...read.extraction,
+    fundName: read.extraction.fundName ?? metadata.fundName,
+    maskedAccountIdentifier: read.extraction.maskedAccountIdentifier ?? metadata.maskedAccountIdentifier,
+  };
+  // SMSF routing is decided from the fund name and the head of the document text, exactly as for a CSV; never from anything a model said.
+  const smsf = detectSmsf(ex.fundName, text.text.slice(0, 1500));
+  const result = await persistRetirementEvidence({ userId, document, ex, smsf, sourceFormat: 'pdf', auditExtra: { layout: read.layout } });
+  await purgeRawPdfAfterDurableEvidence(userId, document.id);
+  return result;
+}
+
+const EMPTY_COUNTS = { activitiesExtracted: 0, activitiesDeduplicated: 0, positionsExtracted: 0 };
+
+async function refuseRetirementPdf(
+  userId: string,
+  document: FdhStatementUpload,
+  kind: PdfFailureKind | 'pdf_route_disabled',
+  aiFallbackRefusal?: AiFallbackRefusal,
+): Promise<UploadRetirementStatementResult> {
+  const terminal = kind === 'pdf_route_disabled' || PDF_TERMINAL_REFUSALS.includes(kind);
+  const target = terminal ? 'rejected' : 'failed';
+  const errorCode = kind === 'pdf_route_disabled' ? 'layout_unsupported' : PDF_FAILURE_ERROR_CODE[kind];
+  assertDocumentTransition(document.processing_status, target);
+  const admin = createAdminClient();
+  await admin.from('fdh_statement_uploads').update({ processing_status: target, error_code: errorCode, review_status: 'pending' }).eq('id', document.id).eq('user_id', userId);
+  await recordDocumentAuditEvent({
+    userId,
+    documentId: document.id,
+    eventType: 'retirement_statement_extraction_failed',
+    actorType: 'system',
+    metadata: { reason: kind, source_format: 'pdf' },
+  });
+  await purgeRawPdfAfterRefusal(userId, document.id);
+  return {
+    document,
+    statementId: null,
+    pipelineStatus: 'extraction_failed',
+    failureKind: kind === 'layout_unsupported' ? 'unread_lines' : kind,
+    ...EMPTY_COUNTS,
+    ...(aiFallbackRefusal ? { aiFallbackRefusal } : {}),
+  };
+}
+
 export type AiRetirementFallbackOutcome = { ok: true; extraction: RetirementAiDraftForReview } | { ok: false; reason: string };
 
 /**
@@ -594,7 +723,27 @@ async function attemptAiRetirementFallbackOnce(
   } catch {
     return { ok: false, reason: 'could_not_decode_bytes' };
   }
+  return attemptAiRetirementFallbackTextOnce(userId, documentId, text, context, 'csv');
+}
 
+/** PDF statement route: the same gated reading as the CSV fallback, on the text the local PDF extractor produced. */
+export function attemptAiRetirementFallbackFromText(
+  userId: string,
+  documentId: string,
+  text: string,
+  context: { jurisdiction: RetirementJurisdiction; currencyCode: string; statementType: RetirementStatementType; accountType: RetirementAccountType },
+  sourceFormat: 'csv' | 'pdf',
+): Promise<AiRetirementFallbackOutcome> {
+  return singleFlight(`retirement_statement:${userId}:${documentId}`, () => attemptAiRetirementFallbackTextOnce(userId, documentId, text, context, sourceFormat));
+}
+
+async function attemptAiRetirementFallbackTextOnce(
+  userId: string,
+  documentId: string,
+  text: string,
+  context: { jurisdiction: RetirementJurisdiction; currencyCode: string; statementType: RetirementStatementType; accountType: RetirementAccountType },
+  sourceFormat: 'csv' | 'pdf',
+): Promise<AiRetirementFallbackOutcome> {
   const gate = await evaluateAiFallbackGate({ userId, adapterEnabled: isAieRetirementAiFallbackEnabled(), extractedText: text });
   if (!gate.ok) {
     if (gate.reason === 'masking_below_policy') {
@@ -606,8 +755,8 @@ async function attemptAiRetirementFallbackOnce(
     return { ok: false, reason: gate.reason };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_attempted', actorType: 'system' });
-  const result = await requestRetirementAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId });
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_attempted', actorType: 'system', metadata: { source_format: sourceFormat } });
+  const result = await requestRetirementAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId, sourceFormat });
   if (result.outcome !== 'success') {
     await recordDocumentAuditEvent({
       userId, documentId,
@@ -638,7 +787,23 @@ async function attemptAiRetirementFallbackOnce(
     return { ok: false, reason: 'insufficient_fields' };
   }
 
+  // PDF statement route: every drafted figure must be PRINTED (an invented line or total is dropped, visibly; a dropped real line shows
+  // as a variance in the reconciliation at confirm).
+  const pdfWarnings: string[] = [];
+  if (sourceFormat === 'pdf') {
+    for (const key of ['employerContributions', 'personalContributions', 'salarySacrifice', 'governmentContributions', 'rolloversIn', 'rolloversOut', 'withdrawals', 'pensionPayments', 'investmentEarnings', 'fees', 'insurancePremiums', 'tax'] as const) {
+      const v = extraction[key];
+      if (v !== undefined && !figureIsPrinted(Number(v), text)) { extraction[key] = undefined; pdfWarnings.push(`ai_figure_not_printed_dropped_${key}`); }
+    }
+    const keptActivities = extraction.activities.filter((a) => figureIsPrinted(Number(a.amount), text));
+    if (keptActivities.length !== extraction.activities.length) pdfWarnings.push(`ai_lines_not_printed_dropped_${extraction.activities.length - keptActivities.length}`);
+    extraction.activities = keptActivities;
+    const keptPositions = extraction.positions.filter((p) => !p.marketValue || figureIsPrinted(Number(p.marketValue), text));
+    if (keptPositions.length !== extraction.positions.length) pdfWarnings.push(`ai_options_not_printed_dropped_${extraction.positions.length - keptPositions.length}`);
+    extraction.positions = keptPositions;
+  }
   const draft = toRetirementAiDraftForReview(extraction);
+  if (sourceFormat === 'pdf') { draft.sourceFormat = 'pdf'; draft.pdfWarnings = pdfWarnings; }
   const saved = await saveAiFallbackDraft({
     userId,
     documentId,
@@ -723,9 +888,16 @@ export async function confirmAiRetirementFallback(
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'retirement_statement_ai_fallback_confirmed', actorType: 'user' });
 
   const smsf = detectSmsf(smsfContext.fundName ?? extraction.fundName, smsfContext.statementTextSample);
+  // PDF route: the markers come from the draft the SERVER issued (never from the browser). A PDF-sourced AI statement always lands as
+  // review required, with a visible provenance warning and the dropped-figure codes the draft carried.
+  const issued = claim.claimed ? (claim.payload as RetirementAiDraftForReview | null) : null;
+  const fromPdf = issued?.sourceFormat === 'pdf';
+  const toPersist: RetirementStatementExtraction = fromPdf
+    ? { ...extraction, warnings: [...extraction.warnings, 'read_by_ai_fallback_from_pdf', ...(issued?.pdfWarnings ?? [])] }
+    : extraction;
   let confirmed: UploadRetirementStatementResult;
   try {
-    confirmed = await persistRetirementEvidence({ userId, document, ex: extraction, smsf });
+    confirmed = await persistRetirementEvidence({ userId, document, ex: toPersist, smsf, ...(fromPdf ? { sourceFormat: 'pdf' as const, auditExtra: { ai_confirmed: true } } : {}) });
   } catch (e) {
     if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);
     throw e;
@@ -797,8 +969,13 @@ export async function persistRetirementEvidence(params: {
   document: FdhStatementUpload;
   ex: RetirementStatementExtraction;
   smsf: ReturnType<typeof detectSmsf>;
+  /** PDF route: a PDF-sourced statement needs the person unless its identity reconciles AND no warning remains (the CSV rule is unchanged). */
+  sourceFormat?: 'csv' | 'pdf';
+  /** Codes and counts only; merged into the completion audit event. */
+  auditExtra?: Record<string, unknown>;
 }): Promise<UploadRetirementStatementResult> {
   const { userId, document, ex, smsf } = params;
+  const fromPdf = params.sourceFormat === 'pdf';
   const admin = createAdminClient();
   // --- Reconciliation (spec sections 46-49) -------------------------------
   const reconciliation = reconcileStatement(ex);
@@ -843,7 +1020,7 @@ export async function persistRetirementEvidence(params: {
         : minorUnitsToDecimalString(reconciliation.varianceMinorUnits),
       smsf_classification: smsf.classification,
       smsf_evidence: smsf.evidence.length > 0 ? { reason: smsf.reason, evidence: smsf.evidence } : null,
-      review_status: smsf.classification === 'not_smsf' ? 'not_required' : 'pending',
+      review_status: smsf.classification === 'not_smsf' && (!fromPdf || (reconciliation.status === 'reconciled' && ex.warnings.length === 0)) ? 'not_required' : 'pending',
       source_provenance: `${ex.parserName}@${ex.parserVersion}`,
       // WP-13 (GAP-RET-05): what the parser skipped, summed or could not
       // classify is persisted evidence now, shown on review and in the
@@ -962,7 +1139,7 @@ export async function persistRetirementEvidence(params: {
   await recordDocumentAuditEvent({
     userId, documentId: document.id,
     eventType: 'retirement_statement_extraction_completed', actorType: 'system',
-    metadata: { statementId, activitiesExtracted, positionsExtracted, reconciliation: reconciliation.status },
+    metadata: { statementId, activitiesExtracted, positionsExtracted, reconciliation: reconciliation.status, ...(fromPdf ? { source_format: 'pdf' } : {}), ...(params.auditExtra ?? {}) },
   });
   if (reconciliation.status !== 'insufficient_data') {
     await recordDocumentAuditEvent({

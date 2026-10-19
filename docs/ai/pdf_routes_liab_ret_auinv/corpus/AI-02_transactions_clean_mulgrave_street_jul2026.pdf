@@ -1,0 +1,61 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 679 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(Mulgrave Street Securities) Tj
+0 -12 Td
+(TRANSACTION STATEMENT) Tj
+0 -12 Td
+(Account: SAMPLE INVESTOR ELEVEN   HIN: X0000 4417) Tj
+0 -12 Td
+(Statement period: 01/07/2026 to 31/07/2026) Tj
+0 -12 Td
+(Date Type Code Quantity Price Brokerage Amount) Tj
+0 -12 Td
+(02/07/2026 BUY BMT 100.0000 98.1000 19.95 9,829.95) Tj
+0 -12 Td
+(09/07/2026 SELL ARX 200.0000 18.9000 19.95 3,760.05) Tj
+0 -12 Td
+(15/07/2026 DIVIDEND CNP - - - 127.50) Tj
+0 -12 Td
+(22/07/2026 BUY CNP 400.0000 4.2500 19.95 1,719.95) Tj
+0 -12 Td
+(31/07/2026 INTEREST - - - - 3.12) Tj
+0 -12 Td
+(Total buys: $11,549.90) Tj
+0 -12 Td
+(Total sells: $3,760.05) Tj
+0 -12 Td
+(Total brokerage: $59.85) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000977 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1074
+%%EOF

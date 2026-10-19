@@ -34,8 +34,23 @@ import { statementUploadsRepository } from '../repositories';
 import { createUploadSession, completeUpload, FdhUploadLifecycleError } from './uploadLifecycle';
 import { downloadDocumentObject } from './storage';
 import { recordDocumentAuditEvent } from './auditLog';
-import { purgeRawDocumentAfterAiConfirm } from './purge';
+import { purgeRawDocumentAfterAiConfirm, purgeRawPdfAfterDurableDraft, purgeRawPdfAfterDurableEvidence, purgeRawPdfAfterRefusal } from './purge';
 import { assertDocumentTransition } from '../domain/documentLifecycle';
+import { looksLikePdf } from '../domain/fileValidation';
+import {
+  isAuInvestmentPdfRouteEnabled,
+  isAiEligiblePdfFailure,
+  droppedWarning,
+  pdfFailureMessage,
+  PDF_FAILURE_ERROR_CODE,
+  PDF_ROUTE_DISABLED_MESSAGE,
+  PDF_TERMINAL_REFUSALS,
+  readStatementPdf,
+  type PdfFailureKind,
+} from '../pdf-statements';
+import { readAuInvestmentPdf } from '../investment/pdfStatement';
+import { findPrintedPortfolioTotals, type PrintedPortfolioTotals } from '../investment/printedTotals';
+import { figureIsPrinted } from '@/lib/aie/adapters/shared/reviewDraft';
 import { detectAuInvestmentCsvFormat } from '../investment/detection';
 import { extractAuTransactionsFromCsv, extractAuPositionsFromCsv, summariseExtractionWarnings } from '../investment/csvExtraction';
 import { reconcileAuStatementTotals } from '../investment/statementTotals';
@@ -91,6 +106,16 @@ export const AU_INVESTMENT_STATEMENT_FAILURE_MESSAGES: Record<string, string> = 
   layout_unsupported: "We couldn't read this file as a statement export. Please check the file, or add this investment manually.",
   pdf_manual_mapping_required: 'PDF broker statements are not yet supported for automatic reading. Please add this investment manually, or try a CSV export from your broker.',
   unknown_error: 'Something went wrong while reading this statement.',
+  // PDF statement route (19/10/2026).
+  not_this_class: pdfFailureMessage('not_this_class', 'broker or investment statement'),
+  multiple_accounts: pdfFailureMessage('multiple_accounts', 'broker or investment statement'),
+  image_only: pdfFailureMessage('image_only', 'broker or investment statement'),
+  password_required: pdfFailureMessage('password_required', 'broker or investment statement'),
+  corrupt: pdfFailureMessage('corrupt', 'broker or investment statement'),
+  timeout: pdfFailureMessage('timeout', 'broker or investment statement'),
+  page_limit: pdfFailureMessage('page_limit', 'broker or investment statement'),
+  unread_lines: pdfFailureMessage('unread_lines', 'broker or investment statement'),
+  pdf_route_disabled: PDF_ROUTE_DISABLED_MESSAGE,
 };
 
 export interface UploadAuInvestmentStatementMetadata {
@@ -192,6 +217,11 @@ export interface AuInvestmentStatementAiFallbackDraft {
    * reconciliation, run after the confirm, is. */
   allRowsListed: boolean;
   warnings: string[];
+  /** PDF route only. The portfolio total and cash balance the PAGE prints, found in the document text by label (never from the
+   * model and never from the browser). Confirm reads them back from the draft the server issued, so the existing
+   * "holdings add up to the total" check can run on an AI-read statement. */
+  printedTotals?: PrintedPortfolioTotals;
+  sourceFormat?: 'pdf';
 }
 
 const STATEMENT_TYPE_BY_KIND: Record<'transaction' | 'portfolio', AuInvestmentStatementType> = {
@@ -272,12 +302,17 @@ export async function uploadAndProcessAuInvestmentStatement(
   metadata: UploadAuInvestmentStatementMetadata,
   bytes: Uint8Array,
 ): Promise<UploadAuInvestmentStatementResult> {
+  // PDF statement route (19/10/2026): the bytes decide the kind. A PDF with its switch OFF is refused before any row, session or storage exists.
+  const isPdf = looksLikePdf(bytes);
+  if (isPdf && !isAuInvestmentPdfRouteEnabled()) {
+    throw new AuInvestmentStatementProcessingError('invalid_state', PDF_ROUTE_DISABLED_MESSAGE);
+  }
   const { session } = await createUploadSession(userId, {
-    source_type: 'csv',
+    source_type: isPdf ? 'pdf_native' : 'csv',
     document_type: 'investment_statement',
     country_code: 'AU',
     currency_code: metadata.currencyCode as 'AUD' | 'INR' | 'USD',
-    declared_mime_type: 'text/csv',
+    declared_mime_type: isPdf ? 'application/pdf' : 'text/csv',
     declared_file_size_bytes: bytes.byteLength,
   });
 
@@ -379,18 +414,17 @@ async function resolveAuInvestmentStatementDocument(
     return { document, statementId: null, pipelineStatus: 'ai_fallback_available', positionsExtracted: 0, activitiesExtracted: 0, aiFallbackDraft: ownPending.payload as AuInvestmentStatementAiFallbackDraft };
   }
 
+  // PDF statement route (19/10/2026): a PDF takes its own reader (formerly refused here with "try a CSV"); the CSV path is untouched.
+  if (document.mime_type === 'application/pdf') {
+    return resolveAuInvestmentPdfDocument(userId, document, metadata);
+  }
+
   const download = await downloadDocumentObject(document.raw_document_storage_reference!);
   if (!download.ok) throw new AuInvestmentStatementProcessingError('internal_error', download.message);
 
   assertDocumentTransition(document.processing_status, 'processing');
 
   const admin = createAdminClient();
-
-  if (document.mime_type === 'application/pdf') {
-    await admin.from('fdh_statement_uploads').update({ processing_status: 'failed', error_code: 'layout_unsupported', review_status: 'pending' }).eq('id', document.id).eq('user_id', userId);
-    await recordDocumentAuditEvent({ userId, documentId: document.id, eventType: 'investment_statement_extraction_failed', actorType: 'system', metadata: { reason: 'pdf_manual_mapping_required' } });
-    return { document, statementId: null, pipelineStatus: 'extraction_failed', failureKind: 'pdf_manual_mapping_required', positionsExtracted: 0, activitiesExtracted: 0 };
-  }
 
   const detection = detectAuInvestmentCsvFormat(download.bytes);
   const effectiveKind: 'transaction' | 'portfolio' = detection.status === 'detected' && detection.adapter ? detection.adapter.csvKind : metadata.csvKind;
@@ -483,6 +517,117 @@ async function resolveAuInvestmentStatementDocument(
   };
 }
 
+/**
+ * PDF STATEMENT ROUTE (19/10/2026). Everything that happens to an already-uploaded, already-scanned PDF broker statement.
+ * Same shape as the liability route: kill switch, password, download, local text extraction, class check, certified layout read;
+ * ONLY a typed shortfall leads to a model reading (through the same gates, gateway, cap and ledger as the CSV fallback); a clean read
+ * is written by the SAME `persistAuInvestmentEvidence`; every refusal and every durable result deletes the original, verified.
+ */
+async function resolveAuInvestmentPdfDocument(
+  userId: string,
+  document: FdhStatementUpload,
+  metadata: UploadAuInvestmentStatementMetadata,
+): Promise<UploadAuInvestmentStatementResult> {
+  if (!isAuInvestmentPdfRouteEnabled()) return refuseAuInvestmentPdf(userId, document, 'pdf_route_disabled');
+  if (document.error_code === 'password_required') return refuseAuInvestmentPdf(userId, document, 'password_required');
+
+  const download = await downloadDocumentObject(document.raw_document_storage_reference!);
+  if (!download.ok) throw new AuInvestmentStatementProcessingError('internal_error', download.message);
+  assertDocumentTransition(document.processing_status, 'processing');
+  await recordDocumentAuditEvent({
+    userId,
+    documentId: document.id,
+    eventType: 'pdf_native_extraction_started',
+    actorType: 'system',
+    metadata: { document_class: 'au_investment', source_format: 'pdf' },
+  });
+
+  const text = await readStatementPdf(download.bytes);
+  if (!text.ok) return refuseAuInvestmentPdf(userId, document, text.kind);
+
+  const read = readAuInvestmentPdf({ text, currencyCode: metadata.currencyCode, kind: metadata.csvKind });
+  if (!read.ok) {
+    if (!isAiEligiblePdfFailure(read.kind)) return refuseAuInvestmentPdf(userId, document, read.kind);
+    const fallback = await attemptAiAuInvestmentFallback(
+      userId,
+      document.id,
+      text.text,
+      {
+        statementType: metadata.csvKind === 'transaction' ? 'broker_transaction_statement' : 'broker_holdings_statement',
+        currencyCode: metadata.currencyCode,
+        institutionName: metadata.institutionName,
+        maskedAccountIdentifier: metadata.maskedAccountIdentifier,
+        statementDate: metadata.statementDate,
+        statementPeriodStart: metadata.statementPeriodStart,
+        statementPeriodEnd: metadata.statementPeriodEnd,
+        fallbackValuationDate: metadata.statementDate ?? new Date().toISOString().slice(0, 10),
+      },
+      { sourceFormat: 'pdf' },
+    );
+    if (fallback.ok) {
+      // The draft is saved durably (the person reviews it, not the file): the original PDF goes now, verified absent.
+      await purgeRawPdfAfterDurableDraft(userId, document.id);
+      return { document, statementId: null, pipelineStatus: 'ai_fallback_available', positionsExtracted: 0, activitiesExtracted: 0, aiFallbackDraft: fallback.draft };
+    }
+    await recordDocumentAuditEvent({
+      userId,
+      documentId: document.id,
+      eventType: 'investment_statement_ai_fallback_not_usable',
+      actorType: 'system',
+      metadata: { reason: fallback.reason, nativeFailureKind: read.kind, source_format: 'pdf' },
+    });
+    return refuseAuInvestmentPdf(userId, document, read.kind, aiFallbackRefusalFromReason(fallback.reason));
+  }
+
+  // The header the person typed fills only what the page does not print (the CSV rule); figures always come from the document.
+  const ex: AuInvestmentStatementExtraction = {
+    ...read.extraction,
+    institutionName: read.extraction.institutionName ?? metadata.institutionName,
+    maskedAccountIdentifier: read.extraction.maskedAccountIdentifier ?? metadata.maskedAccountIdentifier,
+  };
+  const persisted = await persistAuInvestmentEvidence({
+    userId,
+    documentId: document.id,
+    statementType: ex.statementType,
+    extraction: ex,
+    lineChecksFailed: read.lineChecksFailed,
+    auditExtra: { source_format: 'pdf', layout: read.layout, summary_lines_excluded: read.notes.summaryLinesExcluded, page_markers_skipped: read.notes.pageMarkersSkipped },
+  });
+  await purgeRawPdfAfterDurableEvidence(userId, document.id);
+  return { document, statementId: persisted.statementId, pipelineStatus: 'ok', positionsExtracted: persisted.positionsExtracted, activitiesExtracted: persisted.activitiesExtracted };
+}
+
+async function refuseAuInvestmentPdf(
+  userId: string,
+  document: FdhStatementUpload,
+  kind: PdfFailureKind | 'pdf_route_disabled',
+  aiFallbackRefusal?: AiFallbackRefusal,
+): Promise<UploadAuInvestmentStatementResult> {
+  const terminal = kind === 'pdf_route_disabled' || PDF_TERMINAL_REFUSALS.includes(kind);
+  const target = terminal ? 'rejected' : 'failed';
+  const errorCode = kind === 'pdf_route_disabled' ? 'layout_unsupported' : PDF_FAILURE_ERROR_CODE[kind];
+  assertDocumentTransition(document.processing_status, target);
+  const admin = createAdminClient();
+  await admin.from('fdh_statement_uploads').update({ processing_status: target, error_code: errorCode, review_status: 'pending' }).eq('id', document.id).eq('user_id', userId);
+  await recordDocumentAuditEvent({
+    userId,
+    documentId: document.id,
+    eventType: 'investment_statement_extraction_failed',
+    actorType: 'system',
+    metadata: { reason: kind, source_format: 'pdf' },
+  });
+  await purgeRawPdfAfterRefusal(userId, document.id);
+  return {
+    document,
+    statementId: null,
+    pipelineStatus: 'extraction_failed',
+    failureKind: kind === 'layout_unsupported' ? 'unread_lines' : kind,
+    positionsExtracted: 0,
+    activitiesExtracted: 0,
+    ...(aiFallbackRefusal ? { aiFallbackRefusal } : {}),
+  };
+}
+
 export interface PersistAuInvestmentEvidenceResult {
   statementId: string;
   positionsExtracted: number;
@@ -516,6 +661,11 @@ export async function persistAuInvestmentEvidence(params: {
   documentId: string;
   statementType: AuInvestmentStatementType;
   extraction: AuInvestmentStatementExtraction;
+  /** PDF route: how many line-level arithmetic checks (quantity x price = value, buy/sell amounts) failed on the page. Any failure
+   * stores the statement as `variance`, because a wrong line can leave the printed lines still adding up to the printed total. */
+  lineChecksFailed?: number;
+  /** Codes and counts only; merged into the completion audit event. */
+  auditExtra?: Record<string, unknown>;
 }): Promise<PersistAuInvestmentEvidenceResult> {
   const { userId, documentId, statementType } = params;
   const ex = params.extraction;
@@ -531,7 +681,8 @@ export async function persistAuInvestmentEvidence(params: {
     cashBalance: ex.cashBalance ?? null,
     closingPortfolioValue: ex.closingPortfolioValue ?? null,
   });
-  const extractionWarnings = summariseExtractionWarnings(ex.warnings ?? [], statementType === 'portfolio_csv' ? 'portfolio' : 'transaction');
+  const reconciliationStatus = (params.lineChecksFailed ?? 0) > 0 ? 'variance' : totals.status;
+  const extractionWarnings = summariseExtractionWarnings(ex.warnings ?? [], statementType === 'portfolio_csv' || statementType === 'broker_holdings_statement' ? 'portfolio' : 'transaction');
 
   const { data: statement, error: stmtErr } = await admin
     .from('fdh_investment_statements')
@@ -552,7 +703,7 @@ export async function persistAuInvestmentEvidence(params: {
       parser_version: ex.parserVersion,
       extraction_confidence: ex.extractionConfidence,
       extraction_status: 'extracted',
-      reconciliation_status: totals.status,
+      reconciliation_status: reconciliationStatus,
       extraction_warnings: extractionWarnings,
     })
     .select('id')
@@ -600,7 +751,7 @@ export async function persistAuInvestmentEvidence(params: {
   const positionsExtracted = positionRows.length;
   const activitiesExtracted = activityRows.length;
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_extraction_completed', actorType: 'system', metadata: { statementId, positionsExtracted, activitiesExtracted, warningCodes: extractionWarnings.map((w) => w.code), reconciliation: totals.status } });
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_extraction_completed', actorType: 'system', metadata: { statementId, positionsExtracted, activitiesExtracted, warningCodes: extractionWarnings.map((w) => w.code), reconciliation: reconciliationStatus, ...(params.auditExtra ?? {}) } });
 
   return { statementId, positionsExtracted, activitiesExtracted };
 }
@@ -638,9 +789,10 @@ export function attemptAiAuInvestmentFallback(
   documentId: string,
   extractedText: string,
   context: AuInvestmentMappingContext,
+  options: { sourceFormat?: 'csv' | 'pdf' } = {},
 ): Promise<AiAuInvestmentFallbackOutcome> {
   // Concurrent identical requests share ONE gate + provider call + draft write (see singleFlight.ts).
-  return singleFlight(`investment_statement:${userId}:${documentId}`, () => attemptAiAuInvestmentFallbackOnce(userId, documentId, extractedText, context));
+  return singleFlight(`investment_statement:${userId}:${documentId}`, () => attemptAiAuInvestmentFallbackOnce(userId, documentId, extractedText, context, options.sourceFormat ?? 'csv'));
 }
 
 async function attemptAiAuInvestmentFallbackOnce(
@@ -648,6 +800,7 @@ async function attemptAiAuInvestmentFallbackOnce(
   documentId: string,
   extractedText: string,
   context: AuInvestmentMappingContext,
+  sourceFormat: 'csv' | 'pdf',
 ): Promise<AiAuInvestmentFallbackOutcome> {
   const gate = await evaluateAiFallbackGate({
     userId,
@@ -661,8 +814,8 @@ async function attemptAiAuInvestmentFallbackOnce(
     return { ok: false, reason: gate.reason };
   }
 
-  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_attempted', actorType: 'system' });
-  const result = await requestAuInvestmentAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId });
+  await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_attempted', actorType: 'system', metadata: { source_format: sourceFormat } });
+  const result = await requestAuInvestmentAiExtraction({ maskedText: gate.maskedText, requestId: documentId, userId, sourceFormat });
   if (result.outcome !== 'success') {
     await recordDocumentAuditEvent({
       userId,
@@ -674,7 +827,18 @@ async function attemptAiAuInvestmentFallbackOnce(
     return { ok: false, reason: result.outcome };
   }
 
-  const mapped = mapAuInvestmentFactsToExtraction(result.facts, context);
+  let mapped = mapAuInvestmentFactsToExtraction(result.facts, context);
+  // PDF statement route: every drafted ROW must be printed (an invented holding or transaction is dropped, visibly; a dropped real
+  // row is caught by the totals check at confirm). A holding is printed when its value is printed, or, with no value, when its name is.
+  if (mapped && sourceFormat === 'pdf') {
+    const lower = extractedText.toLowerCase();
+    const keptPositions = mapped.positions.filter((p) => (p.marketValue ? figureIsPrinted(Number(p.marketValue), extractedText) : lower.includes(p.securityNameRaw.toLowerCase())));
+    const keptTransactions = mapped.transactions.filter((t) => figureIsPrinted(Number(t.amount), extractedText));
+    const dropped = mapped.positions.length - keptPositions.length + (mapped.transactions.length - keptTransactions.length);
+    const note = droppedWarning('ai_rows_not_printed_dropped', Array.from({ length: dropped }, (_, i) => i + 1));
+    mapped = { ...mapped, positions: keptPositions, transactions: keptTransactions, warnings: note ? [...mapped.warnings, note] : mapped.warnings };
+    if (mapped.positions.length === 0 && mapped.transactions.length === 0) mapped = null;
+  }
   if (!mapped) {
     await recordDocumentAuditEvent({ userId, documentId, eventType: 'investment_statement_ai_fallback_insufficient_fields', actorType: 'system', metadata: adapterCallEvidenceMetadata(result.evidence) });
     return { ok: false, reason: 'insufficient_fields' };
@@ -711,6 +875,7 @@ async function attemptAiAuInvestmentFallbackOnce(
       statementPeriodEnd: mapped.statementPeriodEnd ?? null,
       allRowsListed: !mapped.warnings.includes('ai_reported_rows_incomplete'),
       warnings: mapped.warnings,
+      ...(sourceFormat === 'pdf' ? { printedTotals: findPrintedPortfolioTotals(extractedText), sourceFormat: 'pdf' as const } : {}),
   };
   // 2026-09-25: persisted BEFORE the user sees it (0197), as for payslips.
   const saved = await saveAiFallbackDraft({
@@ -838,9 +1003,16 @@ export async function confirmAiAuInvestmentFallback(
   // has none — this pipeline is AU-only by construction.
   const currencyCode = document.currency_code ?? 'AUD';
   const fallbackValuationDate = reviewed.statementDate ?? new Date().toISOString().slice(0, 10);
+  // PDF route: the totals the PAGE printed were kept with the draft the server issued (never from the model, never from the
+  // browser), so the existing holdings-add-up-to-the-total check can run on this AI-read statement.
+  const claimedDraft = claim.claimed ? (claim.payload as AuInvestmentStatementAiFallbackDraft | null) : null;
+  const pdfDraft = claimedDraft && claimedDraft.sourceFormat === 'pdf' ? claimedDraft : null;
+  const confirmedStatementType: AuInvestmentStatementType = pdfDraft
+    ? (effectiveKind === 'transaction' ? 'broker_transaction_statement' : 'broker_holdings_statement')
+    : STATEMENT_TYPE_BY_KIND[effectiveKind];
 
   const extraction: AuInvestmentStatementExtraction = {
-    statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
+    statementType: confirmedStatementType,
     country: 'AU',
     currencyCode,
     institutionName: reviewed.institutionName ?? undefined,
@@ -854,8 +1026,8 @@ export async function confirmAiAuInvestmentFallback(
     // reconciliation report "insufficient data" honestly instead of checking
     // the rows against themselves.
     openingPortfolioValue: undefined,
-    closingPortfolioValue: undefined,
-    cashBalance: undefined,
+    closingPortfolioValue: pdfDraft?.printedTotals?.closingPortfolioValue ?? undefined,
+    cashBalance: pdfDraft?.printedTotals?.cashBalance ?? undefined,
     positions: reviewed.holdings.map((h, index) => ({
       securityNameRaw: h.securityNameRaw,
       tickerRaw: h.tickerRaw ?? undefined,
@@ -910,8 +1082,9 @@ export async function confirmAiAuInvestmentFallback(
     persisted = await persistAuInvestmentEvidence({
       userId,
       documentId,
-      statementType: STATEMENT_TYPE_BY_KIND[effectiveKind],
+      statementType: confirmedStatementType,
       extraction,
+      ...(pdfDraft ? { auditExtra: { source_format: 'pdf' } } : {}),
     });
   } catch (e) {
     if (claim.claimed) await releaseClaimedAiFallbackDraftIfNothingWritten(userId, claim.draftId, documentId);

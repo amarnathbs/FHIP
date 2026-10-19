@@ -15,8 +15,12 @@ import {
   resolveUploadOwnerFromUrl,
 } from '@/lib/financial-data-hub/services/documentOwnerRequest';
 import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
+import { looksLikePdf } from '@/lib/financial-data-hub/domain/fileValidation';
+import { isLiabilityPdfRouteEnabled, PDF_ROUTE_DISABLED_MESSAGE } from '@/lib/financial-data-hub/pdf-statements';
+import type { LiabilityFacilityType } from '@/lib/financial-data-hub/liability/types';
 
-const HARD_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['text/csv'];
+const CSV_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['text/csv'];
+const PDF_MAX_BYTES = FDH_MAX_FILE_SIZE_BYTES['application/pdf'];
 
 // POST /api/financial-data-hub/liability-statement/upload?statement_type=credit_card&country_code=AU&currency_code=AUD&...
 // FDH-10 spec sections 2, 15-21, 28. The request body IS the CSV bytes (same
@@ -57,6 +61,7 @@ export async function POST(req: Request) {
     credit_limit: url.searchParams.get('credit_limit') || undefined,
     minimum_payment: url.searchParams.get('minimum_payment') || undefined,
     interest_rate: url.searchParams.get('interest_rate') || undefined,
+    facility_type: url.searchParams.get('facility_type') || undefined,
   };
   const parsed = liabilityStatementUploadMetadataSchema.safeParse(metadataInput);
   if (!parsed.success) return bad(parsed.error.issues[0]?.message ?? 'Invalid request', 422);
@@ -69,11 +74,22 @@ export async function POST(req: Request) {
 
   const contentLength = Number(req.headers.get('content-length') ?? '0');
   if (!contentLength || contentLength <= 0) return bad('File upload incomplete.', 422);
-  if (contentLength > HARD_MAX_BYTES) return bad('File too large.', 413);
+  // The larger (PDF) ceiling bounds the read; the file's own kind, decided from its BYTES below, decides which ceiling applies.
+  if (contentLength > PDF_MAX_BYTES) return bad('File too large.', 413);
 
   const arrayBuffer = await req.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer);
   if (bytes.byteLength === 0) return bad('File upload incomplete.', 422);
+
+  // PDF statement route (19/10/2026). The bytes decide the kind, never a header. A PDF while this route's own switch is OFF is
+  // refused HERE: no document row, no storage, no scan, no reader, no provider. A CSV is untouched by the switch.
+  const isPdf = looksLikePdf(bytes);
+  if (isPdf && !isLiabilityPdfRouteEnabled()) return bad(PDF_ROUTE_DISABLED_MESSAGE, 403);
+  if (!isPdf && bytes.byteLength > CSV_MAX_BYTES) return bad('File too large.', 413);
+  // A loan PDF needs the loan type the person chose (a wrong one makes the existing liability unfindable); asked for BEFORE any row exists.
+  if (isPdf && parsed.data.statement_type === 'loan' && !parsed.data.facility_type) {
+    return bad('Choose the type of loan (for example home loan) before uploading a loan PDF.', 422);
+  }
 
   try {
     await assertNoIdenticalDocumentWithDifferentOwner(user.id, bytes, ['credit_card_statement', 'loan_statement'], ownerRequest.owner);
@@ -94,6 +110,7 @@ export async function POST(req: Request) {
         creditLimit: parsed.data.credit_limit ?? undefined,
         minimumPayment: parsed.data.minimum_payment ?? undefined,
         interestRate: parsed.data.interest_rate ?? undefined,
+        facilityType: (parsed.data.facility_type ?? undefined) as LiabilityFacilityType | undefined,
       },
       bytes,
     );

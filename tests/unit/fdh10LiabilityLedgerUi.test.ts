@@ -80,9 +80,9 @@ describe('import panel: every line and how it will count (G7), and the bank-paym
 
   it('offers the persisted candidates (date, amount, narrative) and "None of these"', () => {
     const html = render(React.createElement(ActivityLedgerPreview, props));
-    expect(html).toContain('Which bank payment was the 2026-08-20 repayment of $220.00?');
-    expect(html).toContain('2026-08-19 — $220.00 — TEST BANK CARD PMT');
-    expect(html).toContain('2026-08-21 — $220.00 — TEST BANK CARD PMT 2');
+    expect(html).toContain('Which bank payment was the 20/08/2026 repayment of $220.00?');
+    expect(html).toContain('19/08/2026 — $220.00 — TEST BANK CARD PMT');
+    expect(html).toContain('21/08/2026 — $220.00 — TEST BANK CARD PMT 2');
     expect(html).toContain('None of these');
   });
 

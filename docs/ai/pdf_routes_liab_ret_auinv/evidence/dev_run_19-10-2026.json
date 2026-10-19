@@ -1,0 +1,1070 @@
+{
+  "run": "pdfroutes-1792407059852",
+  "app": "http://localhost:3993",
+  "startedAt": "2026-10-19T10:51:04.391Z",
+  "ledgerStart": {
+    "settled": 0.034143,
+    "reserved": 0
+  },
+  "results": [
+    {
+      "id": "LB-01",
+      "cls": "liability",
+      "role": "clean",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 34,
+        "total": 34,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "extracted",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 35766,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "LB-02",
+      "cls": "liability",
+      "role": "clean",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 20,
+        "total": 20,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "extracted",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 20721,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "LB-03",
+      "cls": "liability",
+      "role": "needs_fallback",
+      "http": 200,
+      "pipeline": "ai_fallback_available",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "layout_unsupported",
+        "aiRequired": true,
+        "reconciliation": "reconciled",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "draftCounts": {
+        "activities": 5,
+        "holdings": null,
+        "positions": null
+      },
+      "draftWarnings": [
+        "ai_masked_identifier_rejected"
+      ],
+      "originalDeletedWhileDraftPending": true,
+      "confirmHttp": 200,
+      "path": "ai",
+      "reconciliation": "reconciled",
+      "reviewStatus": "pending",
+      "warnings": 2,
+      "score": {
+        "correct": 23,
+        "total": 24,
+        "misses": [
+          "last4"
+        ]
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "extracted",
+      "errorCode": null,
+      "modelCalls": 1,
+      "latencyMs": 54512,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "LB-04",
+      "cls": "liability",
+      "role": "wrong_on_page",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "variance",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "variance",
+      "reviewStatus": "pending",
+      "warnings": 0,
+      "score": {
+        "correct": 22,
+        "total": 22,
+        "misses": []
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "extracted",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 21305,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "LB-05",
+      "cls": "liability",
+      "role": "multi",
+      "http": 200,
+      "pipeline": "extraction_failed",
+      "failureKind": "This PDF contains more than one account. Please upload one account at a time. Nothing was saved.",
+      "expected": {
+        "deterministic": "multiple_accounts",
+        "aiRequired": false,
+        "reconciliation": null,
+        "outcome": "refused"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "refused",
+      "outcome": "refused",
+      "originalDeleted": true,
+      "docStatus": "rejected",
+      "errorCode": "layout_unsupported",
+      "modelCalls": 0,
+      "latencyMs": 28367,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "LB-06",
+      "cls": "liability",
+      "role": "trap",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 28,
+        "total": 28,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "extracted",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 19082,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "LB-07",
+      "cls": "liability",
+      "role": "trap",
+      "http": 200,
+      "pipeline": "ai_fallback_available",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "unread_lines",
+        "aiRequired": true,
+        "reconciliation": "reconciled",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "draftCounts": {
+        "activities": 3,
+        "holdings": null,
+        "positions": null
+      },
+      "draftWarnings": [
+        "ai_masked_identifier_rejected"
+      ],
+      "originalDeletedWhileDraftPending": true,
+      "confirmHttp": 200,
+      "path": "ai",
+      "reconciliation": "reconciled",
+      "reviewStatus": "pending",
+      "warnings": 2,
+      "score": {
+        "correct": 18,
+        "total": 19,
+        "misses": [
+          "last4"
+        ]
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "extracted",
+      "errorCode": null,
+      "modelCalls": 1,
+      "latencyMs": 29718,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "LB-08",
+      "cls": "liability",
+      "role": "negative_control",
+      "http": 200,
+      "pipeline": "extraction_failed",
+      "failureKind": "This does not look like a credit card or loan statement. Nothing was saved and nothing was charged. Please check you chose the right type of statement.",
+      "expected": {
+        "deterministic": "not_this_class",
+        "aiRequired": false,
+        "reconciliation": null,
+        "outcome": "refused"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "refused",
+      "outcome": "refused",
+      "originalDeleted": true,
+      "docStatus": "rejected",
+      "errorCode": "document_type_not_identified",
+      "modelCalls": 0,
+      "latencyMs": 20310,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-01",
+      "cls": "retirement",
+      "role": "clean",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 22,
+        "total": 22,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 30576,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-02",
+      "cls": "retirement",
+      "role": "clean",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 18,
+        "total": 18,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 25484,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-03",
+      "cls": "retirement",
+      "role": "needs_fallback",
+      "http": 200,
+      "pipeline": "ai_fallback_available",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "layout_unsupported",
+        "aiRequired": true,
+        "reconciliation": "reconciled",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "draftCounts": {
+        "activities": 5,
+        "holdings": null,
+        "positions": 0
+      },
+      "draftWarnings": [
+        "ai_figure_not_printed_dropped_employerContributions"
+      ],
+      "originalDeletedWhileDraftPending": true,
+      "confirmHttp": 200,
+      "path": "ai",
+      "reconciliation": "reconciled",
+      "reviewStatus": "pending",
+      "warnings": 2,
+      "score": {
+        "correct": 20,
+        "total": 21,
+        "misses": [
+          "last4"
+        ]
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 1,
+      "latencyMs": 38517,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-04",
+      "cls": "retirement",
+      "role": "wrong_on_page",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "variance",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "variance",
+      "reviewStatus": "pending",
+      "warnings": 0,
+      "score": {
+        "correct": 10,
+        "total": 10,
+        "misses": []
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 23851,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-05",
+      "cls": "retirement",
+      "role": "multi",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 22,
+        "total": 22,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 20897,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-06",
+      "cls": "retirement",
+      "role": "trap",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 11,
+        "total": 11,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 28843,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-07",
+      "cls": "retirement",
+      "role": "negative_control",
+      "http": 200,
+      "pipeline": "extraction_failed",
+      "failureKind": "not_this_class",
+      "expected": {
+        "deterministic": "not_this_class",
+        "aiRequired": false,
+        "reconciliation": null,
+        "outcome": "refused"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "refused",
+      "outcome": "refused",
+      "originalDeleted": true,
+      "docStatus": "rejected",
+      "errorCode": "document_type_not_identified",
+      "modelCalls": 0,
+      "latencyMs": 19161,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-08",
+      "cls": "retirement",
+      "role": "multi",
+      "http": 200,
+      "pipeline": "extraction_failed",
+      "failureKind": "multiple_accounts",
+      "expected": {
+        "deterministic": "multiple_accounts",
+        "aiRequired": false,
+        "reconciliation": null,
+        "outcome": "refused"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "refused",
+      "outcome": "refused",
+      "originalDeleted": true,
+      "docStatus": "rejected",
+      "errorCode": "layout_unsupported",
+      "modelCalls": 0,
+      "latencyMs": 21390,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "RT-09",
+      "cls": "retirement",
+      "role": "needs_fallback",
+      "http": 200,
+      "pipeline": "ai_fallback_available",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "layout_unsupported",
+        "aiRequired": true,
+        "reconciliation": "reconciled",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "draftCounts": {
+        "activities": 3,
+        "holdings": null,
+        "positions": 0
+      },
+      "draftWarnings": [],
+      "originalDeletedWhileDraftPending": true,
+      "confirmHttp": 200,
+      "path": "ai",
+      "reconciliation": "reconciled",
+      "reviewStatus": "pending",
+      "warnings": 1,
+      "score": {
+        "correct": 7,
+        "total": 9,
+        "misses": [
+          "fund",
+          "last4"
+        ]
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 1,
+      "latencyMs": 24173,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "AI-01",
+      "cls": "au_investment",
+      "role": "clean",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 20,
+        "total": 20,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 25898,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "AI-02",
+      "cls": "au_investment",
+      "role": "clean",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "insufficient_data",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "insufficient_data",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 27,
+        "total": 27,
+        "misses": []
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 28205,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "AI-03",
+      "cls": "au_investment",
+      "role": "needs_fallback",
+      "http": 200,
+      "pipeline": "ai_fallback_available",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "layout_unsupported",
+        "aiRequired": true,
+        "reconciliation": "reconciled",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "draftCounts": {
+        "activities": 0,
+        "holdings": 3,
+        "positions": null
+      },
+      "draftWarnings": [
+        "read_by_ai_fallback_not_native_parser"
+      ],
+      "originalDeletedWhileDraftPending": true,
+      "confirmHttp": 200,
+      "path": "ai",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 2,
+      "score": {
+        "correct": 16,
+        "total": 16,
+        "misses": []
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 1,
+      "latencyMs": 28474,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "AI-04",
+      "cls": "au_investment",
+      "role": "wrong_on_page",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "variance",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "variance",
+      "reviewStatus": "not_required",
+      "warnings": 2,
+      "score": {
+        "correct": 12,
+        "total": 12,
+        "misses": []
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 22319,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "AI-05",
+      "cls": "au_investment",
+      "role": "multi",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 32,
+        "total": 32,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 21042,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "AI-06",
+      "cls": "au_investment",
+      "role": "trap",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 16,
+        "total": 16,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "queued",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 21666,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "AI-07",
+      "cls": "au_investment",
+      "role": "negative_control",
+      "http": 200,
+      "pipeline": "extraction_failed",
+      "failureKind": "This does not look like a broker or investment statement. Nothing was saved and nothing was charged. Please check you chose the right type of statement.",
+      "expected": {
+        "deterministic": "not_this_class",
+        "aiRequired": false,
+        "reconciliation": null,
+        "outcome": "refused"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "refused",
+      "outcome": "refused",
+      "originalDeleted": true,
+      "docStatus": "rejected",
+      "errorCode": "document_type_not_identified",
+      "modelCalls": 0,
+      "latencyMs": 26999,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "AI-08",
+      "cls": "au_investment",
+      "role": "multi",
+      "http": 200,
+      "pipeline": "extraction_failed",
+      "failureKind": "This PDF contains more than one account. Please upload one account at a time. Nothing was saved.",
+      "expected": {
+        "deterministic": "multiple_accounts",
+        "aiRequired": false,
+        "reconciliation": null,
+        "outcome": "refused"
+      },
+      "scan": {
+        "status": "clean",
+        "boundToObject": true
+      },
+      "path": "refused",
+      "outcome": "refused",
+      "originalDeleted": true,
+      "docStatus": "rejected",
+      "errorCode": "layout_unsupported",
+      "modelCalls": 0,
+      "latencyMs": 28053,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    }
+  ],
+  "spend": {
+    "attempts": 5,
+    "settledUsd": 0.0028079999999999997,
+    "models": [
+      "gpt-4o-mini"
+    ],
+    "tokens": 12067,
+    "keyPrefixes": [
+      "liability-statement-pdf-ai-fallback",
+      "retirement-statement-pdf-ai-fallback",
+      "au-investment-statement-pdf-ai-fallback"
+    ]
+  },
+  "residueAfterCleanup": {
+    "fdh_statement_uploads": 0,
+    "fdh_liability_statements": 0,
+    "fdh_retirement_statements": 0,
+    "fdh_investment_statements": 0,
+    "fdh_ai_fallback_drafts": 0
+  },
+  "ledgerEnd": {
+    "settled": 0.036951,
+    "reserved": 0
+  },
+  "finishedAt": "2026-10-19T11:03:05.118Z"
+}

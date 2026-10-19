@@ -64,6 +64,16 @@ env | grep -e SUPABASE_SERVICE_ROLE_KEY -e CRON_SECRET -e APP_BASE_URL -e RESEND
 
 Historically, on `origin/main` and every branch checked at the time of the G6-G8 closure programme, **that list had not been updated to include `G4_APP_CAPABILITY_LAYER_ENABLED`, `G5B_GENERIC_WRITE_ENABLED`, `G2_LANDING_LOCALISATION_ENABLED`, or `G2_ALLOW_TEST_DETECTION_HEADER`** (the same is true for `FDH_DOCUMENT_UPLOAD_ENABLED`, though it defaults ON so this happens to be less consequential for it, and for any future `ROLLOUT_<KEY>_*` variable). Per the build script's own stated mechanism, setting one of these four flags in the Amplify console alone may have **zero effect at runtime** — `process.env.G4_APP_CAPABILITY_LAYER_ENABLED` (etc.) could read `undefined` in the actual deployed server process regardless of console configuration, because the value is never copied into `.env.production` at build time. This was found by source inspection during the G6-G8 closure programme and has **not** been confirmed against the live Amplify build logs or a live production `process.env` dump (this session has no such access) — it is reported here as a precise, checkable risk, not a confirmed production incident. An operator with Amplify console/build-log access should confirm one of: (a) this grep list needs updating before any of these four flags can ever take effect in production, or (b) Amplify's Next.js hosting compute forwards console-configured environment variables to the server runtime through some other mechanism this repository's own build script comment does not describe.
 
+## PDF statement routes (19/10/2026): three kill switches, default OFF
+
+| Variable | Secret? | Where used | Purpose |
+|---|---|---|---|
+| `AIE_LIABILITY_PDF_ROUTE_ENABLED` | No | Server only (`liability-statement/upload` route and service) | Literal `true` lets a PDF credit card or loan statement be read. Anything else (unset, empty, `1`, `TRUE`, `yes`) leaves PDFs refused at the route before a document row, storage object, scan, reader or provider exists. CSV is unaffected. |
+| `AIE_RETIREMENT_PDF_ROUTE_ENABLED` | No | Server only (`retirement-statement/upload` route and service) | The same, for PDF super, pension and provident fund statements. |
+| `AIE_AU_INVESTMENT_PDF_ROUTE_ENABLED` | No | Server only (`investment-statement/upload` route and service) | The same, for PDF Australian broker holdings and transaction statements. |
+
+Each switch is independent of the others and of the AI fallback switches (`AIE_AI_FALLBACK_ENABLED` and the per-class `AIE_*_AI_FALLBACK_ENABLED`): a PDF route that is ON with the AI switch OFF reads only the certified layouts and refuses the rest. `amplify.yml` forwards the whole `AIE_` prefix, so a value set in the console reaches the server. Turning a switch off preserves the per-user cap, the global ledger, every saved statement and every pending draft.
+
 ## Classification key
 
 - **Secret**: must be stored only in Amplify's environment-variable store (or another secret manager), never committed, never printed in logs or error messages.

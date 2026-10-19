@@ -1,0 +1,306 @@
+[
+  {
+    "id": "M1",
+    "what": "Premium guard removed from the liability upload route",
+    "file": "app/api/financial-data-hub/liability-statement/upload/route.ts",
+    "tests": [
+      "tests/unit/pdfRoutesRoutes.test.ts"
+    ],
+    "expect": "/Free/",
+    "failedCount": 2,
+    "matchedFailures": [
+      "'liability' PDF upload route Free: 403 PREMIUM_REQUIRED BEFORE the body is read, the service never reached (even with the PDF switch on)",
+      "'liability' PDF upload route Free with a spoofed plan in the query and headers: identical refusal"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M2",
+    "what": "PDF switch check removed from the liability upload route",
+    "file": "app/api/financial-data-hub/liability-statement/upload/route.ts",
+    "tests": [
+      "tests/unit/pdfRoutesRoutes.test.ts"
+    ],
+    "expect": "/switch OFF|literal/",
+    "failedCount": 2,
+    "matchedFailures": [
+      "'liability' PDF upload route Premium + PDF + switch OFF (the default): refused with plain words, the service never reached",
+      "'liability' PDF upload route a switch with any value other than the literal \"true\" leaves the route off"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M3",
+    "what": "PDF switch check removed from the liability service (the guard behind the route)",
+    "file": "lib/financial-data-hub/services/liabilityStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/switch off|literal/",
+    "failedCount": 2,
+    "matchedFailures": [
+      "kill switches: a PDF is refused before anything exists while its switch is off; CSV is untouched liability: switch off -> invalid_state, no session, no row, no object",
+      "kill switches: a PDF is refused before anything exists while its switch is off; CSV is untouched only the literal \"true\" switches a route on (\"1\", \"TRUE\", \"yes\" do not)"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M4",
+    "what": "document-class check removed from the liability reader (a bank statement is no longer refused)",
+    "file": "lib/financial-data-hub/liability/pdfStatement.ts",
+    "tests": [
+      "tests/unit/pdfLiabilityReader.test.ts",
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/LB-08|not this class|negative/",
+    "failedCount": 4,
+    "matchedFailures": [
+      "liability reader: legitimate failures (never forced, never guessed) LB-08 (a bank account statement) is not this class",
+      "liability reader: legitimate failures (never forced, never guessed) a card statement declared as a loan (and a loan declared as a card) is not this class",
+      "liability PDF route LB-08 is refused as not_this_class: nothing written, NO gate, NO model call, nothing charged, document rejected, original deleted"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M5",
+    "what": "AI eligibility widened (every refusal now reaches the model)",
+    "file": "lib/financial-data-hub/services/liabilityStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/NO model call|LB-08|LB-05|refused/",
+    "failedCount": 2,
+    "matchedFailures": [
+      "liability PDF route LB-08 is refused as not_this_class: nothing written, NO gate, NO model call, nothing charged, document rejected, original deleted",
+      "liability PDF route LB-05 is refused as multiple_accounts: nothing written, NO gate, NO model call, nothing charged, document rejected, original deleted"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M6",
+    "what": "strictness removed from the liability reader (an unreadable line is silently dropped)",
+    "file": "lib/financial-data-hub/liability/pdfStatement.ts",
+    "tests": [
+      "tests/unit/pdfLiabilityReader.test.ts"
+    ],
+    "expect": "/LB-07|unread/",
+    "failedCount": 2,
+    "matchedFailures": [
+      "liability reader: legitimate failures (never forced, never guessed) LB-07 (footnote asterisk on an amount) is unread lines, not a dropped line"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M7",
+    "what": "summary-line exclusion removed from the liability reader (totals become activities)",
+    "file": "lib/financial-data-hub/liability/pdfStatement.ts",
+    "tests": [
+      "tests/unit/pdfLiabilityReader.test.ts",
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/LB-06/",
+    "failedCount": 4,
+    "matchedFailures": [
+      "liability reader: the documents the certified layouts cover LB-06 is read line for line and header for header",
+      "liability reader: the documents the certified layouts cover LB-06: the existing certified reconciliation gives the expected verdict (reconciled)",
+      "liability reader: the documents the certified layouts cover LB-06: summary lines are excluded (and counted), the identical genuine pair is kept twice"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M8",
+    "what": "provenance guard removed (an invented AI line is kept)",
+    "file": "lib/financial-data-hub/services/liabilityStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/INVENTED/",
+    "failedCount": 1,
+    "matchedFailures": [
+      "liability PDF route AI fallback (only after a typed shortfall) an INVENTED line (amount not printed anywhere on the page) is dropped from the draft with a visible warning"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M9",
+    "what": "deletion after durable evidence removed",
+    "file": "lib/financial-data-hub/services/liabilityStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/LB-01|original is deleted|clean/",
+    "failedCount": 7,
+    "matchedFailures": [
+      "liability PDF route LB-01 (clean card): read by the certified reader, written by the same writer as CSV, reconciled and not flagged; the original is deleted AFTER the evidence and verified; no model call",
+      "the corpus as a whole: every document ends exactly where its expectation says (deterministic side, AI faked as a faithful reader) LB-01 (clean)",
+      "the corpus as a whole: every document ends exactly where its expectation says (deterministic side, AI faked as a faithful reader) LB-02 (clean)"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M10",
+    "what": "deletion after a refusal removed",
+    "file": "lib/financial-data-hub/services/liabilityStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/original deleted|refused/",
+    "failedCount": 8,
+    "matchedFailures": [
+      "kill switches: a PDF is refused before anything exists while its switch is off; CSV is untouched a switch turned off AFTER the upload stops the run: nothing read, nothing written, the file deleted",
+      "liability PDF route LB-08 is refused as not_this_class: nothing written, NO gate, NO model call, nothing charged, document rejected, original deleted",
+      "liability PDF route LB-05 is refused as multiple_accounts: nothing written, NO gate, NO model call, nothing charged, document rejected, original deleted"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M11",
+    "what": "deletion after a durable draft removed",
+    "file": "lib/financial-data-hub/services/liabilityStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/deleted while the draft is pending|LB-03/",
+    "failedCount": 3,
+    "matchedFailures": [
+      "liability PDF route AI fallback (only after a typed shortfall) LB-03: the model reads it, the person is shown a DRAFT, nothing is written, the original is deleted while the draft is pending; confirm writes it through the same writer; replay is refused",
+      "the corpus as a whole: every document ends exactly where its expectation says (deterministic side, AI faked as a faithful reader) LB-03 (needs_fallback)"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M12",
+    "what": "PDF review policy removed from the retirement writer (a wrong-on-the-page statement needs no review)",
+    "file": "lib/financial-data-hub/services/retirementStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/RT-04|RT-03/",
+    "failedCount": 2,
+    "matchedFailures": [
+      "retirement PDF route RT-04 (wrong on the page): variance and review PENDING for a PDF (the CSV rule is unchanged); never certified",
+      "retirement PDF route RT-03 (transaction history): model draft, original deleted while pending, confirm reconciles, lands as review required with the provenance warning; replay refused"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M13",
+    "what": "line-check variance override removed from the investment writer",
+    "file": "lib/financial-data-hub/services/investmentStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/STILL add up|line check/",
+    "failedCount": 1,
+    "matchedFailures": [
+      "australian investment PDF route a line that is wrong on the page while the printed lines STILL add up to the printed total is stored as variance (the line check, not the total, catches it)"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M14",
+    "what": "printed-total tie removed from the AI investment confirm",
+    "file": "lib/financial-data-hub/services/investmentStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/AI-03/",
+    "failedCount": 2,
+    "matchedFailures": [
+      "australian investment PDF route AI-03 (labelled blocks): model draft carries the PRINTED total and cash, kept on the server; confirm ties the holdings to it; removing a holding makes a variance",
+      "australian investment PDF route AI-03 with one holding removed at review: the holdings no longer add up to the printed total -> variance, not reconciled"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M15",
+    "what": "a hand-computed corpus figure is wrong (LB-01 printed closing 1,407.90 instead of 1,407.80)",
+    "file": "scripts/pdf_routes_corpus.ts",
+    "tests": [
+      "tests/unit/pdfRoutesCorpus.test.ts"
+    ],
+    "expect": "/LB-01/",
+    "failedCount": 3,
+    "matchedFailures": [
+      "liability: independent re-derivation of every expected figure LB-01: opening +/- lines = the closing the lines give; printed closing differs only where the page is wrong",
+      "liability: independent re-derivation of every expected figure LB-01: every expected money figure is printed on the page"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M16",
+    "what": "class-signal threshold lowered to zero",
+    "file": "lib/financial-data-hub/pdf-statements/classify.ts",
+    "tests": [
+      "tests/unit/pdfLiabilityReader.test.ts",
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/LB-08|not this class|negative/",
+    "failedCount": 3,
+    "matchedFailures": [
+      "liability reader: legitimate failures (never forced, never guessed) LB-08 (a bank account statement) is not this class",
+      "liability PDF route LB-08 is refused as not_this_class: nothing written, NO gate, NO model call, nothing charged, document rejected, original deleted"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M17",
+    "what": "multiple-account check removed from the liability reader",
+    "file": "lib/financial-data-hub/liability/pdfStatement.ts",
+    "tests": [
+      "tests/unit/pdfLiabilityReader.test.ts",
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/LB-05|two accounts|multiple/",
+    "failedCount": 4,
+    "matchedFailures": [
+      "liability reader: legitimate failures (never forced, never guessed) LB-05 (two accounts) is refused as multiple accounts",
+      "liability PDF route LB-05 is refused as multiple_accounts: nothing written, NO gate, NO model call, nothing charged, document rejected, original deleted",
+      "the corpus as a whole: every document ends exactly where its expectation says (deterministic side, AI faked as a faithful reader) LB-05 (multi)"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M18",
+    "what": "password check removed from the liability PDF resolver (a protected file is downloaded)",
+    "file": "lib/financial-data-hub/services/liabilityStatementProcessingService.ts",
+    "tests": [
+      "tests/unit/pdfRoutesServices.test.ts"
+    ],
+    "expect": "/password/",
+    "failedCount": 1,
+    "matchedFailures": [
+      "liability PDF route a password-protected PDF is refused (never opened, never sent anywhere), the document rejected and the original deleted"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M19",
+    "what": "cardholder label removed from the masking rule (a cardholder name reaches the model)",
+    "file": "lib/aie/masking/piiMasking.ts",
+    "tests": [
+      "tests/unit/pdfRoutesMasking.test.ts"
+    ],
+    "expect": "/LB-03/",
+    "failedCount": 1,
+    "matchedFailures": [
+      "planted personal details never survive masking (real corpus text, real masker) LB-03: none of 3 planted detail(s) survives; the statement's figures do"
+    ],
+    "killed": true
+  },
+  {
+    "id": "M20",
+    "what": "masking of the broker account-holder line removed",
+    "file": "lib/aie/masking/piiMasking.ts",
+    "tests": [
+      "tests/unit/pdfRoutesMasking.test.ts"
+    ],
+    "expect": "/AI-01|AI-02/",
+    "failedCount": 2,
+    "matchedFailures": [
+      "planted personal details never survive masking (real corpus text, real masker) AI-01: none of 4 planted detail(s) survives; the statement's figures do",
+      "planted personal details never survive masking (real corpus text, real masker) AI-02: none of 2 planted detail(s) survives; the statement's figures do"
+    ],
+    "killed": true
+  }
+]
