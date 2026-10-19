@@ -1,0 +1,46 @@
+{
+  "run": "proofdev-1792396255766",
+  "app": "http://localhost:3991",
+  "startedAt": "2026-10-19T07:50:55.766Z",
+  "ledgerStart": {
+    "id": "global",
+    "allowance_usd": 10,
+    "reserved_usd": 0,
+    "settled_usd": 0.026767,
+    "total_attempts": 71,
+    "total_input_tokens": 96757,
+    "total_output_tokens": 20419,
+    "updated_at": "2026-10-19T07:49:51.969146+00:00",
+    "user_daily_cap_usd": 1
+  },
+  "users": {
+    "P1": "0bb820e0",
+    "P2": "bfe66a1b",
+    "X1-former-pilot": "c25e3463",
+    "F1": "8f291f19"
+  },
+  "payslip": {
+    "documentId": "2f4af718-827a-426c-849a-9e586a1dd740"
+  },
+  "ledgerEnd": {
+    "id": "global",
+    "allowance_usd": 10,
+    "reserved_usd": 0,
+    "settled_usd": 0.027322,
+    "total_attempts": 72,
+    "total_input_tokens": 98854,
+    "total_output_tokens": 20820,
+    "updated_at": "2026-10-19T07:54:14.698333+00:00",
+    "user_daily_cap_usd": 1
+  },
+  "residue": {
+    "fdh_statement_uploads": 0,
+    "fdh_transactions": 0,
+    "fdh_ai_fallback_drafts": 0,
+    "fdh_document_audit_events": 0,
+    "fdh_reconciliation_results": 0,
+    "aie_ai_cost_attempt_user_set": 0,
+    "auth_users": 0
+  },
+  "finishedAt": "2026-10-19T07:54:24.970Z"
+}
