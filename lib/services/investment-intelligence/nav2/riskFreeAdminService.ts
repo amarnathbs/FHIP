@@ -31,6 +31,8 @@ export function isMissingRelation(error: { code?: string; message?: string } | n
 /** A database-function failure as an HTTP response: the function's own authorisation refusal (42501) is an explicit 403; anything else goes through safeDbError (no internal message leaks). */
 export function rpcFailure(error: { code?: string; message?: string }, context: string): Response {
   if (error.code === '42501') return bad('You do not have access to this action.', 403);
+  // The function does not exist yet: the code was deployed before the migration that creates it (deploy-order guard).
+  if (error.code === 'PGRST202' || error.code === '42883') return bad(`This action needs a database update that has not been applied yet (${context}). Ask the person who runs the database steps to apply migration 0294.`, 503);
   return safeDbError(error, context);
 }
 
@@ -160,6 +162,11 @@ export const reviewBodySchema = z.object({ decision: z.enum(['accept', 'reject']
 
 export const correctionBodySchema = z
   .object({ seriesId: SERIES_ID, date: ISO_DATE, newValue: z.number().min(0).max(100), reason: z.string().trim().min(20, 'A reason of at least 20 characters is required.').max(500) })
+  .strict();
+
+/** The dedicated confirmation: the repo rate is still current through a date (migration 0294). */
+export const confirmCurrentBodySchema = z
+  .object({ seriesId: SERIES_ID, throughDate: ISO_DATE, reason: z.string().trim().min(20, 'A reason of at least 20 characters is required.').max(500) })
   .strict();
 
 export const seriesStateBodySchema = z
