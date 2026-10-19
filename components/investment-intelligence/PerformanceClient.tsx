@@ -1,5 +1,6 @@
 'use client';
 
+import { PERFORMANCE_TAB_CAGR_CONVENTION_NOTE } from '@/lib/engines/nav2/reportWording';
 import { useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
@@ -717,6 +718,7 @@ function SchemeDetail({ s }: { s: SchemeBlock }) {
           <p className="mt-2">
             Scheme NAV return is what the fund itself did over the period. Your XIRR differs because it reflects when you actually invested.
           </p>
+          <p className="mt-2" data-testid="cagr-convention-note">{PERFORMANCE_TAB_CAGR_CONVENTION_NOTE}</p>
         </div>
       )}
       <AnnotationList items={s.annotations} />

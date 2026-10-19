@@ -1,0 +1,34 @@
+=== journey 8a (final PDF) 2026-10-16T08:48:33.066Z ===
+--- holder-3funds-redeemed ---
+  PASS  holder-3funds-redeemed: the export route returns a real PDF (200, application/pdf, %PDF header, private no-store)  (200 application/pdf 98019 bytes; attachment; filename="fund-analytics-report-16-10-2026-v12.pdf")
+   3 pages (summary 1-2 + 1 per fund + comparison = 3 to 4); 0 layout failures
+  PASS  holder-3funds-redeemed: page count follows the plan: summary (1 or 2 pages) + one page per fund + one comparison page (3 or 4)  (3)
+  PASS  holder-3funds-redeemed: NO BLANK PAGES, no page more than 30% empty below its content, no heading stranded at a page end, no text past the margin, body text at the designed 8.5-10.5 pt  (judge clean)
+  PASS  holder-3funds-redeemed: every page has selectable text (no image-only page)  (2071,3292,1278)
+  PASS  holder-3funds-redeemed: PAGE NUMBERS "Page n of N" on every page, N equal to the page count  (1/3 2/3 3/3)
+  PASS  holder-3funds-redeemed: AS-OF DATE 16-10-2026 appears, and dates are day-first (no ISO date in the text)
+  PASS  holder-3funds-redeemed: the running header names the report and version
+  PASS  holder-3funds-redeemed: ONE-YEAR CAGR DISCLOSURE (the convention note: 365.2425-day year, annualised on days actually elapsed) and the footnote when a one-year period is annualised over fewer days
+  PASS  holder-3funds-redeemed: OWN-MONEY table present for each fund ("Your own money in this fund")  (1 of 1)
+  PASS  holder-3funds-redeemed: the risk-free series is named in words (not an id)
+  PASS  holder-3funds-redeemed: beta and alpha are shown as plain text ("not available yet" or a typed label), never as 0 or a number  (beta value line: "null")
+  PASS  holder-3funds-redeemed: every fund page has a drawn chart or table structure (charts present)  (16,121,3)
+(node:6956) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+   (no report of the admin fixture user exists: the short-history case is covered by the big-user run)
+--- mixed-ownership ---
+  PASS  mixed-ownership: the export route returns a real PDF (200, application/pdf, %PDF header, private no-store)  (200 application/pdf 122588 bytes; attachment; filename="fund-analytics-report-16-10-2026-v1.pdf")
+   4 pages (summary 1-2 + 1 per fund + comparison = 4 to 5); 0 layout failures
+  PASS  mixed-ownership: page count follows the plan: summary (1 or 2 pages) + one page per fund + one comparison page (4 or 5)  (4)
+  PASS  mixed-ownership: NO BLANK PAGES, no page more than 30% empty below its content, no heading stranded at a page end, no text past the margin, body text at the designed 8.5-10.5 pt  (judge clean)
+  PASS  mixed-ownership: every page has selectable text (no image-only page)  (2379,3282,3319,1528)
+  PASS  mixed-ownership: PAGE NUMBERS "Page n of N" on every page, N equal to the page count  (1/4 2/4 3/4 4/4)
+  PASS  mixed-ownership: AS-OF DATE 16-10-2026 appears, and dates are day-first (no ISO date in the text)
+  PASS  mixed-ownership: the running header names the report and version
+  PASS  mixed-ownership: ONE-YEAR CAGR DISCLOSURE (the convention note: 365.2425-day year, annualised on days actually elapsed) and the footnote when a one-year period is annualised over fewer days
+  PASS  mixed-ownership: OWN-MONEY table present for each fund ("Your own money in this fund")  (2 of 2)
+  PASS  mixed-ownership: the risk-free series is named in words (not an id)
+  PASS  mixed-ownership: beta and alpha are shown as plain text ("not available yet" or a typed label), never as 0 or a number  (beta value line: "null")
+  PASS  mixed-ownership: every fund page has a drawn chart or table structure (charts present)  (21,121,122,8)
+
+=== journey 8a: 24 PASS, 0 FAIL ===

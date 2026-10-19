@@ -156,7 +156,31 @@ export function summariseNavHistory(schemes: readonly SchemeHistoryView[]): NavH
 // ---------------------------------------------------------------------------
 // Reads (every query filtered by user_id: the caller's own funds only)
 // ---------------------------------------------------------------------------
+/**
+ * One of the caller's own funds and the earliest date it is held from, BEFORE the lead days. NAV2 (2026-10-03)
+ * extracted this from loadUserSchemeNeeds so the NAV2 window planner reads the SAME canonical rows by the
+ * SAME rule (usable transactions, user-supplied investment dates, holding snapshots) instead of a second query.
+ */
+export interface HeldFundDate {
+  instrumentId: string;
+  schemeName: string;
+  /** ISO. The earliest transaction / investment / holding date, with no lead days applied. */
+  earliestDate: string;
+  reason: SchemeNeed['reason'];
+}
+
 export async function loadUserSchemeNeeds(db: Db, userId: string): Promise<SchemeNeed[]> {
+  const held = await loadUserHeldFundDates(db, userId);
+  return held.map((h) => ({
+    instrumentId: h.instrumentId,
+    schemeName: h.schemeName,
+    requiredFrom: addDays(h.earliestDate, -NAV_HISTORY_LEAD_DAYS),
+    reason: h.reason,
+  }));
+}
+
+/** The caller's own mutual funds and each one's earliest held date (user_id = caller on every read). Name-sorted. */
+export async function loadUserHeldFundDates(db: Db, userId: string): Promise<HeldFundDate[]> {
   const snapshots = await fetchAllRows<{ instrument_id: string; as_of_date: string }>(() =>
     db.from('ii_holding_snapshots').select('instrument_id, as_of_date').eq('user_id', userId).order('id', { ascending: true }) as never
   );
@@ -180,7 +204,7 @@ export async function loadUserSchemeNeeds(db: Db, userId: string): Promise<Schem
   const { data: masterData } = await db.from('ii_scheme_master').select('instrument_id, scheme_name').in('instrument_id', ids).is('effective_to', null);
   const canonical = new Map(((masterData ?? []) as unknown as Array<{ instrument_id: string; scheme_name: string }>).map((r) => [r.instrument_id, r.scheme_name]));
 
-  const needs: SchemeNeed[] = [];
+  const needs: HeldFundDate[] = [];
   for (const id of ids) {
     const instrument = instruments.get(id);
     if (!instrument || instrument.instrument_class !== 'mutual_fund') continue;
@@ -200,7 +224,7 @@ export async function loadUserSchemeNeeds(db: Db, userId: string): Promise<Schem
     needs.push({
       instrumentId: id,
       schemeName: canonical.get(id) ?? instrument.instrument_name,
-      requiredFrom: addDays(candidates[0].date, -NAV_HISTORY_LEAD_DAYS),
+      earliestDate: candidates[0].date,
       reason: candidates[0].reason,
     });
   }
@@ -211,10 +235,17 @@ export async function loadCoverage(db: Db, instrumentIds: string[]): Promise<Map
   const out = new Map<string, SchemeCoverage>();
   const { data: floors } = instrumentIds.length ? await db.from('ii_nav_history_floors').select('instrument_id, floor_date').in('instrument_id', instrumentIds) : { data: [] };
   const floorBy = new Map(((floors ?? []) as unknown as Array<{ instrument_id: string; floor_date: string }>).map((f) => [f.instrument_id, f.floor_date]));
-  for (const id of instrumentIds) {
-    const { data, error } = await db.from('ii_prices_nav').select('price_date').eq('instrument_id', id).order('price_date', { ascending: true }).limit(1).maybeSingle();
-    if (error) throw new Error(`ii_prices_nav: ${error.message}`);
-    out.set(id, { earliestNav: (data as { price_date?: string } | null)?.price_date ?? null, historyFloor: floorBy.get(id) ?? null });
+  // One small read per fund, run in groups of 10 at a time instead of one after another: for 20 funds that is 2 round trips deep, not 20 (measured on DEV:
+  // 20 funds cost about 4 s in sequence, on a link with a 170 ms round trip, and the gate and the planner each did it). The result is identical.
+  const GROUP = 10;
+  for (let i = 0; i < instrumentIds.length; i += GROUP) {
+    const group = instrumentIds.slice(i, i + GROUP);
+    const reads = await Promise.all(group.map((id) => db.from('ii_prices_nav').select('price_date').eq('instrument_id', id).order('price_date', { ascending: true }).limit(1).maybeSingle()));
+    group.forEach((id, k) => {
+      const { data, error } = reads[k];
+      if (error) throw new Error(`ii_prices_nav: ${error.message}`);
+      out.set(id, { earliestNav: (data as { price_date?: string } | null)?.price_date ?? null, historyFloor: floorBy.get(id) ?? null });
+    });
   }
   return out;
 }
@@ -236,9 +267,26 @@ export interface UserNavHistoryStatus {
   summary: NavHistorySummary;
 }
 
+/**
+ * NAV2 (2026-10-03): per-instrument required-from dates computed by the NAV2 window planner (earliest holding
+ * date, analysis period, rolling / moving-average / risk buffers). A fund's required date can only be moved
+ * EARLIER by an override, never later than its own earliest-holding-date rule, so a planner bug can widen a
+ * request for that fund but can never shrink what the existing path already guarantees. An id that is not one
+ * of the caller's own funds is ignored: an override can never add a fund to the candidate set.
+ */
+export type RequiredFromOverrides = ReadonlyMap<string, string>;
+
+export function applyRequiredFromOverrides(needs: readonly SchemeNeed[], overrides: RequiredFromOverrides | undefined): SchemeNeed[] {
+  if (!overrides || overrides.size === 0) return [...needs];
+  return needs.map((n) => {
+    const o = overrides.get(n.instrumentId);
+    return o !== undefined && o < n.requiredFrom ? { ...n, requiredFrom: o } : n;
+  });
+}
+
 /** Read-only: where each of the user's funds stands. Never fetches. */
-export async function getUserNavHistoryStatus(db: Db, userId: string, today: string): Promise<UserNavHistoryStatus> {
-  const needs = await loadUserSchemeNeeds(db, userId);
+export async function getUserNavHistoryStatus(db: Db, userId: string, today: string, requiredFromOverrides?: RequiredFromOverrides): Promise<UserNavHistoryStatus> {
+  const needs = applyRequiredFromOverrides(await loadUserSchemeNeeds(db, userId), requiredFromOverrides);
   const ids = needs.map((n) => n.instrumentId);
   const [coverage, attempts] = await Promise.all([loadCoverage(db, ids), loadAttempts(db, ids)]);
   const schemes = needs.map((n) => {
@@ -314,10 +362,11 @@ async function runBatchInner(args: {
   deadlineMs: number;
   onlyInstrumentIds?: readonly string[];
   maxPerHour: number;
+  requiredFromOverrides?: RequiredFromOverrides;
 }): Promise<UserNavHistoryBatchResult> {
   const { userId, today, nowIso, runtime } = args;
   const { db } = runtime;
-  const needsAll = await loadUserSchemeNeeds(db, userId);
+  const needsAll = applyRequiredFromOverrides(await loadUserSchemeNeeds(db, userId), args.requiredFromOverrides);
   // Bounded to the caller's own funds: a requested id that is not one of them is simply not in the candidate set.
   const only = args.onlyInstrumentIds ? new Set(args.onlyInstrumentIds) : null;
   const needs = needsAll.filter((n) => only === null || only.has(n.instrumentId));
@@ -367,7 +416,7 @@ async function runBatchInner(args: {
     }
   });
 
-  const status = await getUserNavHistoryStatus(db, userId, today);
+  const status = await getUserNavHistoryStatus(db, userId, today, args.requiredFromOverrides);
   return {
     attempted,
     remaining: status.schemes.filter((s) => s.gap.state === 'gap').length,
@@ -439,6 +488,8 @@ export async function runUserNavHistoryBatch(args: {
   deadlineMs?: number;
   onlyInstrumentIds?: readonly string[];
   maxPerHour?: number;
+  /** NAV2 window-planner output; see RequiredFromOverrides. Omitted = exactly the pre-NAV2 behaviour. */
+  requiredFromOverrides?: RequiredFromOverrides;
 }): Promise<UserNavHistoryBatchResult> {
   const run = singleFlight(`nav-batch:${args.userId}`, () =>
     runBatchInner({
@@ -451,6 +502,7 @@ export async function runUserNavHistoryBatch(args: {
       deadlineMs: args.deadlineMs ?? USER_NAV_FETCH_DEADLINE_MS,
       onlyInstrumentIds: args.onlyInstrumentIds,
       maxPerHour: args.maxPerHour ?? USER_NAV_FETCH_MAX_PER_HOUR,
+      requiredFromOverrides: args.requiredFromOverrides,
     })
   );
   const result = await run.promise;

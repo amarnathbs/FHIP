@@ -96,6 +96,11 @@ export interface ReportNavGate {
   headline: string | null;
   /** One plain sentence per fund that could not be loaded, for the report and the screen. */
   disclosures: string[];
+  /**
+   * NAV2 (B2): true when the gate was NOT evaluated because the person holds more funds than one report covers and has not yet chosen which
+   * funds go in. Nothing is waited for until the choice is made; the choice then scopes the gate. Absent for every other caller.
+   */
+  skippedForChoice?: boolean;
 }
 
 export function unavailableDisclosure(schemeName: string): string {
@@ -237,9 +242,22 @@ export async function checkReportNavHistoryGate(args: {
   kick?: (userId: string) => boolean;
   /** Test seam: reads the kill switch. Default reads ii_reference_job_control. */
   readFetchingEnabled?: () => Promise<boolean | null>;
+  /**
+   * NAV2 (B2): when given, ONLY these funds can hold the report. A fund the person holds but did not select is not waited for, and an id the
+   * person does not hold is simply absent (the gate only ever reads the caller's own funds, so it can never be used to probe another person's).
+   * null / undefined = every fund held (the Monthly Report and the Performance page, unchanged).
+   */
+  onlyInstrumentIds?: readonly string[] | null;
+  /** NAV2 (B2): with no `onlyInstrumentIds`, a person holding MORE funds than this is not gated yet (they must choose first): `skippedForChoice`. */
+  skipIfMoreHeldThan?: number;
 }): Promise<ReportNavGate> {
   const nowIso = args.nowIso ?? new Date().toISOString();
-  const needs = await loadUserSchemeNeeds(args.db, args.userId);
+  const allNeeds = await loadUserSchemeNeeds(args.db, args.userId);
+  const only = args.onlyInstrumentIds ? new Set(args.onlyInstrumentIds) : null;
+  if (!only && args.skipIfMoreHeldThan !== undefined && allNeeds.length > args.skipIfMoreHeldThan) {
+    return { ...evaluateReportNavGate({ schemes: [], heldSinceIso: null, nowIso }), skippedForChoice: true };
+  }
+  const needs = only ? allNeeds.filter((n) => only.has(n.instrumentId)) : allNeeds;
   if (needs.length === 0) return evaluateReportNavGate({ schemes: [], heldSinceIso: null, nowIso });
   const ids = needs.map((n) => n.instrumentId);
   const [coverage, attempts] = await Promise.all([loadCoverage(args.db, ids), loadAttempts(args.db, ids)]);

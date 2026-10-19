@@ -37,7 +37,9 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 | `/admin/investment-intelligence/benchmark-data` | `app/(app)/admin/investment-intelligence/benchmark-data/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/investment-intelligence/lookthrough-data-quality` | `app/(app)/admin/investment-intelligence/lookthrough-data-quality/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/investment-intelligence/market-index-data` | `app/(app)/admin/investment-intelligence/market-index-data/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
+| `/admin/investment-intelligence/nav2-monitoring` | `app/(app)/admin/investment-intelligence/nav2-monitoring/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/investment-intelligence/reference-data-quality` | `app/(app)/admin/investment-intelligence/reference-data-quality/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
+| `/admin/investment-intelligence/risk-free-data` | `app/(app)/admin/investment-intelligence/risk-free-data/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/recommendations` | `app/(app)/admin/recommendations/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/resources` | `app/(app)/admin/resources/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/admin/resources/analytics` | `app/(app)/admin/resources/analytics/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
@@ -139,6 +141,8 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 | `/reports` | `app/(app)/reports/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/reports/[id]` | `app/(app)/reports/[id]/page.tsx` | `/reports`: "Back to Reports" | Done |
 | `/reports/[id]/print` | `app/(print)/reports/[id]/print/page.tsx` | none | Exempt: Print / PDF render target, never navigated to by a person. |
+| `/reports/fund-analytics` | `app/(app)/reports/fund-analytics/page.tsx` | `/reports`: "Back to Reports" | Done |
+| `/reports/fund-analytics/print` | `app/(print)/reports/fund-analytics/print/page.tsx` | none | Exempt: Print / PDF render target (Fund analytics report), opened by the PDF renderer or a Print button, never navigated to as a page. |
 | `/reports/net-worth-statement` | `app/(app)/reports/net-worth-statement/page.tsx` | `/reports`: "Back to Reports" | Done |
 | `/reports/net-worth-statement/print` | `app/(print)/reports/net-worth-statement/print/page.tsx` | none | Exempt: Bare print view opened in its own tab by the Print button; its PrintTabToolbar closes the tab after printing (a back link would leave two tabs open). |
 | `/reset-password` | `app/(auth)/reset-password/page.tsx` | none | Exempt: Authentication page. |

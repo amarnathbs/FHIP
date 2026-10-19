@@ -88,8 +88,8 @@ const FORECASTING_SUBITEMS = [
 // is the pre-existing /reports page, 'Financial Activity' moved here from
 // "Your finances" (confirmed a pure read-only analysis view, never an input
 // register), and 'Consolidated Report'/'Forecast Variance' moved here from
-// Forecasting's own item list above.
-const REPORTS_SUBITEMS = ['Monthly Report', 'Financial Activity', 'Consolidated Report', 'Forecast Variance'];
+// Forecasting's own item list above. 'Fund Analytics' (NAV2 Stage 2) is the Premium Fund analytics report.
+const REPORTS_SUBITEMS = ['Monthly Report', 'Fund Analytics', 'Financial Activity', 'Consolidated Report', 'Forecast Variance'];
 
 // Playwright treats each distinct combination of describe-level test.use()
 // overrides (viewport, storageState) as its own worker context, so this

@@ -66,7 +66,23 @@ export function resolveScheme(
   // 1. ISIN — globally unique, highest trust.
   if (query.isin) {
     const matches = uniq(existing.filter((e) => e.isin && e.isin.toUpperCase() === query.isin!.toUpperCase()).map((e) => e.instrumentId));
-    if (matches.length === 1) return { kind: 'resolved', instrumentId: matches[0], matchedVia: 'isin', confidence: 1 };
+    if (matches.length === 1) {
+      // NAV2-F1 (2026-10-04, PO decision): two EXACT identifiers that point at different instruments (the ISIN of one
+      // plan / option, the AMFI scheme code of another) are a conflict, never a silent win for the ISIN: fail closed so
+      // the caller opens a reconciliation case. Spec 4.3: authoritative identifiers must agree or the match is refused.
+      if (query.amfiSchemeCode) {
+        const amfiMatches = uniq(existing.filter((e) => e.amfiSchemeCode === query.amfiSchemeCode && e.countryCode === query.countryCode).map((e) => e.instrumentId));
+        if (amfiMatches.length > 0 && !(amfiMatches.length === 1 && amfiMatches[0] === matches[0])) {
+          return {
+            kind: 'ambiguous',
+            candidateInstrumentIds: uniq([...matches, ...amfiMatches]),
+            matchedVia: 'isin',
+            reason: `ISIN ${query.isin} and AMFI scheme code ${query.amfiSchemeCode} point at different instruments; the match is refused until a reviewer decides.`,
+          };
+        }
+      }
+      return { kind: 'resolved', instrumentId: matches[0], matchedVia: 'isin', confidence: 1 };
+    }
     if (matches.length > 1) return { kind: 'ambiguous', candidateInstrumentIds: matches, matchedVia: 'isin', reason: `Multiple instruments share ISIN ${query.isin}.` };
   }
 

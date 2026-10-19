@@ -1,0 +1,12 @@
+import { db, USERS, userIdOf, OUT } from './_lib.mjs';
+import fs from 'node:fs';
+const email = process.argv[2] ? USERS[process.argv[2]] : USERS.holder;
+const id = await userIdOf(email);
+const cases = (await db.from('ii_reconciliation_cases').select('*').eq('user_id', id)).data ?? [];
+console.log('cases', cases.length, JSON.stringify(cases.map((c) => ({ type: c.case_type, status: c.status, detail: JSON.stringify(c.details ?? c.detail ?? c.payload ?? {}).slice(0, 300) }))));
+const acc = (await db.from('ii_accounts').select('*').eq('user_id', id)).data ?? [];
+console.log('accounts', JSON.stringify(acc.map((a) => [a.id.slice(0, 8), a.account_identifier ?? a.folio_number ?? a.account_number, a.instrument_id?.slice(0, 8)])));
+const keys = Object.keys(acc[0] ?? {});
+console.log('account columns', keys.join(','));
+const rev = JSON.parse(fs.readFileSync(`${OUT}/j1_review_summary.json`, 'utf8'));
+console.log(JSON.stringify(rev, null, 1).slice(0, 3500));

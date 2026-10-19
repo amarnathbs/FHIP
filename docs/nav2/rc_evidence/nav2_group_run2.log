@@ -1,0 +1,25 @@
+
+ RUN  v4.1.10 D:/FHIP/.claude/worktrees/agent-a4c066c4316765694
+
+···························································································································································································································································································stdout | tests/unit/nav2/nav2PrintScale.test.ts > 25 funds (stress, not a real report): built by the real engine > the report builds (timings recorded), is a few MB at most, and its manifest stays small
+25-fund build: series 1023 ms, report 7827 ms, report JSON 2035176 bytes, manifest 13110 bytes, whole describe 9496 ms
+
+·································stderr | tests/unit/nav2/nav2FundAnalyticsRoutes.test.ts > list and generate > a service failure is a 500 that does not leak its message
+[fund-analytics] generate failed relation nav2_secret does not exist
+
+stderr | tests/unit/nav2/nav2FundAnalyticsRoutes.test.ts > read one and export (NC-F2, matrix 46) > a render failure is a 500 with a plain sentence, not the internal error
+[fund-analytics] pdf failed browserType.launch: Executable does not exist at C:/secret/path
+
+··············································································································································································································stderr | tests/unit/nav2/nav2RiskFreeAdminRoutes.test.ts > writes run under the caller's own session, with the right function and arguments (NC-A3) > a database-layer refusal (42501) is an explicit 403 and an unexpected error does not leak its message
+risk-free series state — unexpected database error: { code: 'XX000', message: 'relation ii_secret_table exploded' }
+
+···················stderr | tests/unit/nav2/nav2RiskFreeAdminRoutes.test.ts > monitoring route > a database refusal is 403; an unapplied migration is unavailable with a reason; any other error is a 500 that does not leak
+nav2 monitoring snapshot error: { code: 'XX000', message: 'secret internals' }
+
+·······················································································································································································································································································································································································································
+
+ Test Files  61 passed (61)
+      Tests  948 passed (948)
+   Start at  05:58:05
+   Duration  220.16s (transform 15.45s, setup 0ms, import 79.13s, tests 378.04s, environment 18ms)
+

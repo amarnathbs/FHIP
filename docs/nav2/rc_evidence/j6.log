@@ -1,0 +1,25 @@
+=== journey 6 2026-10-14T19:15:21.476Z ===
+  PASS  self and spouse members exist for the fixture user
+  PASS  a Family Trust, an HUF and a Company exist for the fixture user  (e3e5d77d b42641e1 c4ea519e)
+  PASS  uploaded under the chosen owner and accepted: personal (Self)  (status 200 )
+  PASS  uploaded under the chosen owner and accepted: personal (Spouse), the same fund A in another folio  (status 200 )
+  PASS  uploaded under the chosen owner and accepted: joint 50/50 Self and Spouse  (status 200 )
+  PASS  uploaded under the chosen owner and accepted: Family Trust  (status 200 )
+  PASS  uploaded under the chosen owner and accepted: HUF  (status 200 )
+  PASS  uploaded under the chosen owner and accepted: Company  (status 200 )
+  PASS  a MANUAL register investment was added (outside Investment Intelligence)  (status 200)
+   account owners: {"NAV2S3W1-F1":[],"NAV2S3W2-F1":[],"NAV2S3W3-F1":["joint(member)","joint(member)"],"NAV2S3W4-F1":["family_trust(entity)"],"NAV2S3W5-F1":["other(entity)"],"NAV2S3W6-F1":["company(entity)"]}
+  PASS  the three entity-owned folios (Trust, HUF, Company) are recorded against their entity, and the Self, Spouse and Joint folios against members  (NAV2S3W4-F1,NAV2S3W5-F1,NAV2S3W6-F1)
+  PASS  the report is generated for the mixed-ownership household  (201 {"data":{"status":"ready","report":{"id":"f4da64f1-a107-4580-bf48-8d0d79ece100","versionNumber":1,"asOfDate":"2026-10-14","schemeCount":2,"createdAt":"2026-10-14T19:19:22.772713+00:00","periodChoice":"since_first_held"}}})
+   report schemes: HDFC Large Cap Fund (575b7dc3) | ICICI Prudential Gilt Fund (2c5322cb) | scope {"priceHistoryUnavailable":[],"otherInstrumentsExcluded":0,"entityHeldSchemesExcluded":2,"statementLinesAwaitingReview":0}
+  PASS  PERSONAL: fund A (Self + Spouse folios) is in the report ONCE
+  PASS  JOINT: fund D held jointly 50/50 by two household members is in the personal report (a joint holding is not entity-held)
+  PASS  ENTITY: the Family Trust fund B and the HUF fund C are NOT in the personal report  (schemes in report: 575b7dc3,2c5322cb)
+  PASS  ENTITY: the report says plainly that entity-held schemes were left out (scope.entityHeldSchemesExcluded counts them)  (entityHeldSchemesExcluded 2)
+  PASS  MANUAL: the manual register entry never appears as a scheme
+  PASS  PERSONAL VALUATION: fund A current value = (Self units + Spouse units) x latest NAV, from the independent sum  (report 50283.245963999994 vs 50283.25 (43.386 units))
+   JOINT valuation observed: report 30943.3576; independent full 61886.72, 50% share 30943.36 -> the 50% share
+  PASS  JOINT VALUATION is one of the two defined bases (full account value or the owner share), not a third number  (the 50% share)
+  PASS  NEGATIVE CONTROL: counting the Company folio of fund D into the personal total would have given a different (wrong) figure  (D units with all folios 894.883 vs personal-only 539.543)
+
+=== journey 6: 19 PASS, 0 FAIL ===

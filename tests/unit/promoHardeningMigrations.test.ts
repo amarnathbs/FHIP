@@ -162,7 +162,9 @@ describe('NC-L1 and NC-L2 lineage: the applied migrations are untouched, the num
     // (Planning Benchmarks, the highest on main when it was added): nothing on any ref or worktree uses 0279 or above.
     for (const m of MIGRATIONS.slice(0, 5)) expect(Number(m.file.slice(0, 4))).toBeGreaterThan(HIGHEST_FOUND_ELSEWHERE);
     expect(Number(MIGRATIONS[5].file.slice(0, 4))).toBeGreaterThan(278);
-    expect(Math.max(...numbers.filter((n) => n < 264))).toBeLessThan(263);
+    // Nothing below 0264 may be above the highest number found elsewhere (0263, NAV2). This used to say "below 263", which holds on main only while the
+    // NAV2 migrations 0260 to 0263 are not there; with NAV2 merged, 0263 itself is present and is exactly the highest number elsewhere.
+    expect(Math.max(...numbers.filter((n) => n < 264))).toBeLessThanOrEqual(HIGHEST_FOUND_ELSEWHERE);
   });
 
   // DEPLOY SAFETY (the crux): 0264 to 0268 must be ADDITIVE. The release that is live today calls the old function shapes,

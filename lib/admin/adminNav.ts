@@ -91,6 +91,9 @@ export const ANALYTICS_ITEMS: { label: string; href: string }[] = [{ label: 'Ana
 // placeholder sub-links are added alongside it.
 export const REFERENCE_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Reference Data Quality', href: '/admin/investment-intelligence/reference-data-quality' },
+  // NAV2 Stage 2: the aggregate-only Fund analytics health view. The SAME capability (a read-only health view of this
+  // surface), so it lives in this group; the snapshot suppresses every user-derived figure below 5 in the database.
+  { label: 'Fund Analytics Health', href: '/admin/investment-intelligence/nav2-monitoring' },
 ];
 
 // PC7/O.9: the Underlying Fund Holdings quality surface. A SEPARATE group from
@@ -108,6 +111,13 @@ export const LOOKTHROUGH_DATA_ITEMS: { label: string; href: string }[] = [
 // to upload index values.
 export const MARKET_INDEX_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Market Index Data', href: '/admin/investment-intelligence/market-index-data' },
+];
+
+// NAV2 Stage 2 (migration 0260): the Risk-free Rate Data surface. A SEPARATE group from Market Index Data and Reference
+// Data because it is its own pair of capabilities: loading the rates (upload / review / correct) and switching a series on
+// or off are different duties held by different people (Standard s3), and neither is implied by any other grant.
+export const RISK_FREE_DATA_ITEMS: { label: string; href: string }[] = [
+  { label: 'Risk-free Rate Data', href: '/admin/investment-intelligence/risk-free-data' },
 ];
 
 // Admin Premium grant (migration 0231): the entitlement-management destination.
@@ -177,6 +187,13 @@ export interface AdminCapabilities {
   benchmarkCatalogueManage: boolean;
   benchmarkEntitlementApprove: boolean;
   /**
+   * NAV2 Stage 2 (migration 0260) - each independently named; neither implies the other, isAdmin, or any other capability.
+   * riskFreeDataUpload   -> admin_users.can_upload_risk_free_data       (upload / review / correct RBI rates)
+   * riskFreeSeriesSwitch -> admin_users.can_switch_risk_free_series     (switch a series on / off, change its terms status)
+   */
+  riskFreeDataUpload: boolean;
+  riskFreeSeriesSwitch: boolean;
+  /**
    * Admin Premium grant (migration 0231) — allocate / extend / revoke admin
    * Premium. Backed by admin_users.can_manage_premium_entitlements and the
    * is_premium_entitlement_admin() predicate. Deliberately NOT implied by
@@ -229,6 +246,8 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   benchmarkDataCorrect: false,
   benchmarkCatalogueManage: false,
   benchmarkEntitlementApprove: false,
+  riskFreeDataUpload: false,
+  riskFreeSeriesSwitch: false,
   entitlementManagement: false,
   promoCodeManagement: false,
   planningBenchmarkUpload: false,
@@ -272,6 +291,8 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     benchmarkDataCorrect: readBooleanField(source, 'benchmarkDataCorrect'),
     benchmarkCatalogueManage: readBooleanField(source, 'benchmarkCatalogueManage'),
     benchmarkEntitlementApprove: readBooleanField(source, 'benchmarkEntitlementApprove'),
+    riskFreeDataUpload: readBooleanField(source, 'riskFreeDataUpload'),
+    riskFreeSeriesSwitch: readBooleanField(source, 'riskFreeSeriesSwitch'),
     entitlementManagement: readBooleanField(source, 'entitlementManagement'),
     promoCodeManagement: readBooleanField(source, 'promoCodeManagement'),
     planningBenchmarkUpload: readBooleanField(source, 'planningBenchmarkUpload'),
@@ -341,6 +362,9 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     // (PREMIUM_AND_PROMO_GROUP_LABEL). The capabilities stay two separately named things (Standard section 2/3): each ITEM
     // is gated by its own field, an operator holding only one sees only that item, and the group is dropped when neither is held.
     ...premiumAndPromoGroup(capabilities),
+    // Risk-free Rate Data (NAV2): shown when EITHER of its two separately named capabilities is held. UX only - every route,
+    // page and RPC enforces its own capability, and the switch is not implied by the upload or the reverse.
+    ...(capabilities.riskFreeDataUpload || capabilities.riskFreeSeriesSwitch ? [{ label: 'Risk-free Rates', items: RISK_FREE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
   ];
 }
 

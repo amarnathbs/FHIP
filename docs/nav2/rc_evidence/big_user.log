@@ -1,0 +1,32 @@
+=== big user (30 funds: 4 with history + 26 without)  mode all  2026-10-14T15:24:49.741Z ===
+  PASS  the funds without history have no stored HISTORY (pre-changeover prices) before the run  (0 history rows)
+nav2rc-big-30 30 funds A 22.21 | B 282.012 | D 252.134
+   upload+process 361910 ms {"ok":true,"step":"process","status":200,"docId":"ab87f48f-9742-4956-a1d8-eeccb96e1802","memberId":"ebef6387-b5ec-4d17-8a2d-979c76582a0d","deduplicated":false}
+  PASS  D1: the 30-fund statement is uploaded, parsed and accepted through the real routes  ({"ok":true,"step":"process","status":200,"docId":"ab87f48f-9742-4956-a1d8-eeccb96e1802","memberId":"ebef6387-b5ec-4d17-8a2d-979c76582a0d","deduplicated":false})
+  PASS  D1: 30 canonical positions exist and are certified  (30 positions, 30 certified)
+  PASS  D1: no reconciliation case was opened for the 30 funds (every ISIN agrees with its AMFI code)  ([])
+  PASS  D1/held-only: accepting 30 funds with fetching OFF stored NO price for the 26 funds without history  (0 rows)
+  "hold": true, |   "total": 22, |   "hold": false, |   "total": 4, | GATE SCOPE: as expected
+  PASS  B2 (real gate, real DEV tables): held 30, 26 without history: UNSCOPED the report would be held, scoped to the 4 funds with history it is not  (available": []
+ },
+ "scoped": {
+  "hold": false,
+  "total": 4,
+  "loaded": 4,
+  "waiting": [],
+  "unavailable": []
+ },
+ "selected": 4
+}
+GATE SCOPE: as expected
+)
+  PASS  B2: a report for the 4 funds with history is ISSUED (201) although the person holds 26 funds without any history  ([{"status":202,"ms":33397,"state":"preparing","loaded":3,"total":4},{"status":202,"ms":5418,"state":"preparing","loaded":3,"total":4},{"status":202,"ms":20082,"state":"in_steps","loaded":0,"total":4},{"status":201,"ms":20157,"state":"ready","loaded":null,"total":null}])
+  PASS  B2: no fetch was started for the 26 unselected funds (their stored prices are still zero)  (0 rows)
+  FAIL  B2: 30 held and NO choice: the answer is the choice (409 select_funds), not "preparing" for the 26 funds without history  (409 {"error":"A report covers up to 20 funds. You hold 22, so generate it in two reports.","data":{"status":"select_funds",")
+  PASS  B2: an instrument the person does not own is rejected with the one plain message (422) and nothing is issued  (422 {"error":"Choose between 1 and 20 of the funds you hold."})
+   S20 first issue: 60 calls, 1100933 ms, statuses 202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,202,503,202,202,202,202,202,202,202,202,202,503,202,202,503
+  FAIL  B2: the choice of 20 is issued (201) after its own missing history was fetched  ([{"status":202,"ms":19100,"state":"preparing","loaded":7,"total":16},{"status":202,"ms":14871,"state":"preparing","loaded":7,"total":16},{"status":503,"ms":32871,"state":"timed_out","loaded":null,"total":null}])
+  PASS  SELECTIVE HYDRATION: the 16 selected funds now have stored prices; before it was zero  (0 -> 7402 rows)
+  PASS  SELECTIVE HYDRATION: the 10 unselected funds still have ZERO stored prices (nothing outside the choice was fetched)  (0 rows)
+  PASS  the wait named only funds inside the choice (total of the waiting body is at most 20, not 30)  ({"status":202,"ms":10853,"state":"preparing","loaded":4,"total":16})
+  FAIL  B2: the 20 selected instrument ids are pinned in the report manifest (sorted) with held 30 and cap 20  ({"max":20,"basis":"chosen","heldFundCount":22,"chosenInstrumentIds":["2c5322cb-cb50-485c-8c9e-216b2dc6b580","31a05b68-05f1-49d8-8d87-334e221e5740","37a3d60e-47d)

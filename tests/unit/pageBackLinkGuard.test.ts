@@ -29,6 +29,7 @@ export const BACK_LINK_EXEMPT: Record<string, string> = {
   '/onboarding': 'Mandatory onboarding gate / redirect.',
   '/forecast/report/print': 'Print / PDF render target, never navigated to by a person.',
   '/reports/[id]/print': 'Print / PDF render target, never navigated to by a person.',
+  '/reports/fund-analytics/print': 'Print / PDF render target (Fund analytics report), opened by the PDF renderer or a Print button, never navigated to as a page.',
   '/reports/net-worth-statement/print': 'Bare print view opened in its own tab by the Print button; its PrintTabToolbar closes the tab after printing (a back link would leave two tabs open).',
 };
 
@@ -114,7 +115,7 @@ describe('F6 guard: every page has the shared back link', () => {
       expect(ROUTES.has(route), `${route}: ${why}`).toBe(true);
       expect(why.length).toBeGreaterThan(10);
     }
-    expect(Object.keys(BACK_LINK_EXEMPT).length).toBeLessThanOrEqual(11);
+    expect(Object.keys(BACK_LINK_EXEMPT).length).toBeLessThanOrEqual(12); // 11 on main plus the Fund analytics PDF render target
   });
 
   it('every page parent target is a real route (a back link to a page that does not exist is a defect)', () => {

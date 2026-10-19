@@ -1,0 +1,27 @@
+=== D3 financial reconciliation  valuation date 2026-10-14  2026-10-14T19:27:28.778Z ===
+independent: [["575b7dc3",63.572,"2026-10-13",73678.3],["31a05b68",1201.39,"2026-10-13",115281.78],["70c403e9",0,"2026-10-13",0]] total 188960.08
+   manual investments (not created by publishing): 3, sum 1120000
+   performance as-of 2026-09-18 | dashboard {"totalInvestments":1193678.3,"netWorth":12935678.3,"totalAssets":13650000} | published lines 1 {"count":1,"marketNavCount":1,"statementCount":0,"redeemedCount":0,"staleCount":0,"oldestAsOf":"2026-10-13","latestAsOf":"2026-10-13"}
+  PASS  HOLDINGS equals units x latest NAV for 575b7dc3 (73678.3)  (surface 73678.295128)
+  PASS  FUND ANALYTICS equals units x latest NAV for 575b7dc3  (surface 73678.295128)
+  PASS  HOLDINGS equals units x latest NAV for 31a05b68 (115281.78)  (surface 115281.78023)
+  PASS  FUND ANALYTICS equals units x latest NAV for 31a05b68  (surface 115281.78023)
+  PASS  HOLDINGS equals units x latest NAV for 70c403e9 (0)  (surface 0)
+  PASS  FUND ANALYTICS equals units x latest NAV for 70c403e9  (surface 0)
+  PASS  HOLDINGS total equals the independent total  (188960.08 vs 188960.08)
+  PASS  PERFORMANCE total equals the independent total  (188960.075358 vs 188960.08)
+  PASS  OVERVIEW total equals the independent total  (188960.075358 vs 188960.08)
+  PASS  FUND ANALYTICS total equals the independent total (personal funds, joint at the user's share)  (188960.08 vs 188960.08)
+  PASS  a fully REDEEMED holding is exactly zero on Holdings and the report
+  PASS  every active holding is valued on the latest market NAV (not the statement)
+  PASS  INVESTMENTS (published valuations) marks the published position at the same NAV-based value  ([{"id":"5b7c5b5c-ae74-4e49-8d4c-691a8ff5a4f6","name":"HDFC Large Cap Fund","owner":"self","currency":"INR","value":73678.3,"valuation":{"basis":"market_nav","asOf":"2026-10-13","units":63.572,"nav":11)
+  PASS  MANUAL investments are byte-identical after the valuations and the report
+  PASS  a future-dated NAV is REFUSED at the database (the rule is enforced before any surface is asked)  (PC6: NAV date 2026-10-17 is in the future (today is 2026-10-14). Reference prices are never forward-)
+  PASS  a synthetic wrong-currency NAV (ten times the price) was inserted for fund 575b7dc3
+  PASS  EXCLUDED: Holdings value of the fund is unchanged by a future-dated and a wrong-currency NAV  (73678.295128 -> 73678.295128)
+  PASS  EXCLUDED: Performance and Overview totals are unchanged  (performance 188960.075358 -> 188960.075358; overview 188960.075358 -> 188960.075358)
+  PASS  EXCLUDED: the Fund Analytics value of the fund is unchanged (and a NEW report was made)  (73678.295128 -> 73678.295128)
+  PASS  EXCLUDED: the Dashboard figures are unchanged
+  PASS  the synthetic NAV rows are removed again  (0 left)
+
+=== D3: 21 PASS, 0 FAIL ===

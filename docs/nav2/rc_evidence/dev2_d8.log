@@ -1,0 +1,15 @@
+=== D8 concurrency and fairness  2026-10-16T08:33:29.457Z  migration 0281 on DEV: true ===
+  PASS  the second user holds funds A and D (statement accepted)  ({"ok":true,"step":"process","status":200,"docId":"36482a9e-2fde-455c-b9ce-07621e13552e","memberId":")
+  PASS  SAME KEY x6 at once: exactly ONE report was issued  (reports 3 -> 4; statuses 200,201,200,200,200,200)
+  PASS  every one of the six answers names that one report
+  PASS  exactly one of them was a 201 (issued) and the rest 200 (replayed)  (200,201,200,200,200,200)
+  PASS  asking again later with the same key replays the report (200, replayed, no new version)
+  PASS  the same key for a DIFFERENT request is refused with 409 and issues nothing  (409)
+  PASS  SIX KEYS x6 at once: six reports with contiguous, unique versions and an unbroken supersedes chain  (statuses 201,201,201,201,200,200; versions 3,4,5,6,7,8,9,10)
+  PASS  TWO USERS at once: each is issued a report that belongs to them alone
+  PASS  the smaller user was not made to wait for the larger one (their time is their own work, not the sum of both)  (holder 19703 ms, other 19309 ms, wall 20595 ms)
+  PASS  a fund the person does not hold in the choice: ONE plain refusal (422), no report, nothing about the other person's funds  (422 {"error":"Choose between 1 and 10 of the funds you hold."})
+  PASS  a choice of one held fund is issued although the person holds more (the others are not waited for)  (201)
+  PASS  REPEATED ACCEPTED-STATEMENT EVENTS (two at once): no new account, transaction, holding or case  ({"acc":3,"tx":22,"snap":3,"cases":0} -> {"acc":3,"tx":22,"snap":3,"cases":0}; statuses 200,200)
+
+=== D8: 12 PASS, 0 FAIL ===
