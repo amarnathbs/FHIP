@@ -58,6 +58,9 @@ select created_at, event_type, metadata from fdh_document_audit_events where doc
 -- B3. its pending or confirmed model draft
 select status, document_type, provider_idempotency_key, confirmed_at from fdh_ai_fallback_drafts where statement_upload_id = '<document id>';
 
+-- B5. the temporary scan copy: the outcome of its deletion (expected: deleted and verified; on DEV it answered access_denied, unverifiable)
+select malware_scan_object_ref -> 's3Purge' as scan_copy_deletion from fdh_statement_uploads where id = '<document id>';
+
 -- B4. the metered model calls of one person (PDF route keys end in -pdf-ai-fallback)
 select idempotency_key, admission_outcome, reserved_usd, settled_usd, model, input_tokens, output_tokens, call_outcome
   from aie_ai_cost_attempt where user_id = '<user id>' order by created_at;

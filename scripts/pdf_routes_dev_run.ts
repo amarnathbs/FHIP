@@ -317,7 +317,7 @@ async function runDoc(p1: U, d: CorpusDocBase) {
   const rec: any = { id: d.id, cls: d.cls, role: d.role, http: r.up.status, pipeline: data?.pipeline_status ?? null, failureKind: data?.failure_kind ?? data?.error_message ?? null, expected: d.route };
   if (!documentId) { rec.verdict = 'NO DOCUMENT'; results.push(rec); check(`${d.id} produced a document`, false, `${r.up.status} ${r.up.text.slice(0, 160)}`); return; }
   const scanDoc = (await row('fdh_statement_uploads', documentId));
-  rec.scan = { status: scanDoc?.malware_scan_status, boundToObject: !!scanDoc?.malware_scan_object_ref?.ref?.versionId && scanDoc.malware_scan_object_ref.ref.versionId === scanDoc.malware_scan_object_ref.expected?.expectedVersionId };
+  rec.scan = { status: scanDoc?.malware_scan_status, s3CopyPurge: scanDoc?.malware_scan_object_ref?.s3Purge ?? null, boundToObject: !!scanDoc?.malware_scan_object_ref?.ref?.versionId && scanDoc.malware_scan_object_ref.ref.versionId === scanDoc.malware_scan_object_ref.expected?.expectedVersionId };
   let path_ = 'refused';
   let aiAttemptDelta = (await attemptsFor(p1.id)).length - before;
   const exp = (d as any).expected;
@@ -442,7 +442,7 @@ async function main() {
     evidence.finishedAt = new Date().toISOString();
     evidence.results = results;
     fs.mkdirSync(OUT_DIR, { recursive: true });
-    const stamp = new Date().toISOString().slice(0, 10).split('-').reverse().join('-');
+    const stamp = new Date().toISOString().slice(0, 10).split('-').reverse().join('-') + (process.env.EVIDENCE_SUFFIX ? `_${process.env.EVIDENCE_SUFFIX}` : '');
     fs.writeFileSync(path.join(OUT_DIR, `dev_run_${stamp}.json`), JSON.stringify(evidence, null, 2) + '\n');
     // per-class accuracy table (printed and saved)
     const lines: string[] = [];

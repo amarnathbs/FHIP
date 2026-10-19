@@ -1,0 +1,140 @@
+{
+  "run": "pdfroutes-1792410174205",
+  "app": "http://localhost:3993",
+  "startedAt": "2026-10-19T11:42:56.020Z",
+  "ledgerStart": {
+    "settled": 0.036951,
+    "reserved": 0
+  },
+  "results": [
+    {
+      "id": "LB-01",
+      "cls": "liability",
+      "role": "clean",
+      "http": 200,
+      "pipeline": "ok",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "reads",
+        "aiRequired": false,
+        "reconciliation": "reconciled",
+        "outcome": "certified"
+      },
+      "scan": {
+        "status": "clean",
+        "s3CopyPurge": {
+          "at": "2026-10-19T11:43:38.659Z",
+          "outcome": "access_denied",
+          "verified": "unverifiable",
+          "httpStatus": 403
+        },
+        "boundToObject": true
+      },
+      "path": "deterministic",
+      "reconciliation": "reconciled",
+      "reviewStatus": "not_required",
+      "warnings": 0,
+      "score": {
+        "correct": 34,
+        "total": 34,
+        "misses": []
+      },
+      "outcome": "certified",
+      "originalDeleted": true,
+      "docStatus": "extracted",
+      "errorCode": null,
+      "modelCalls": 0,
+      "latencyMs": 32505,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    },
+    {
+      "id": "LB-03",
+      "cls": "liability",
+      "role": "needs_fallback",
+      "http": 200,
+      "pipeline": "ai_fallback_available",
+      "failureKind": null,
+      "expected": {
+        "deterministic": "layout_unsupported",
+        "aiRequired": true,
+        "reconciliation": "reconciled",
+        "outcome": "review_required"
+      },
+      "scan": {
+        "status": "clean",
+        "s3CopyPurge": {
+          "at": "2026-10-19T11:44:09.618Z",
+          "outcome": "access_denied",
+          "verified": "unverifiable",
+          "httpStatus": 403
+        },
+        "boundToObject": true
+      },
+      "draftCounts": {
+        "activities": 5,
+        "holdings": null,
+        "positions": null
+      },
+      "draftWarnings": [
+        "ai_masked_identifier_rejected"
+      ],
+      "originalDeletedWhileDraftPending": true,
+      "confirmHttp": 200,
+      "path": "ai",
+      "reconciliation": "reconciled",
+      "reviewStatus": "pending",
+      "warnings": 2,
+      "score": {
+        "correct": 23,
+        "total": 24,
+        "misses": [
+          "last4"
+        ]
+      },
+      "outcome": "review_required",
+      "originalDeleted": true,
+      "docStatus": "extracted",
+      "errorCode": null,
+      "modelCalls": 1,
+      "latencyMs": 37322,
+      "verdict": "MATCHES EXPECTATION",
+      "checks": {
+        "pathOk": true,
+        "outcomeOk": true,
+        "reconOk": true,
+        "callsOk": true,
+        "originalDeleted": true
+      }
+    }
+  ],
+  "spend": {
+    "attempts": 1,
+    "settledUsd": 0.000559,
+    "models": [
+      "gpt-4o-mini"
+    ],
+    "tokens": 2292,
+    "keyPrefixes": [
+      "liability-statement-pdf-ai-fallback"
+    ]
+  },
+  "residueAfterCleanup": {
+    "fdh_statement_uploads": 0,
+    "fdh_liability_statements": 0,
+    "fdh_retirement_statements": 0,
+    "fdh_investment_statements": 0,
+    "fdh_ai_fallback_drafts": 0
+  },
+  "ledgerEnd": {
+    "settled": 0.03751,
+    "reserved": 0
+  },
+  "finishedAt": "2026-10-19T11:45:01.244Z"
+}
