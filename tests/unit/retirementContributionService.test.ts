@@ -187,6 +187,23 @@ describe('F25b: manual contribution is its own action and never a balance', () =
     expect(items.find((i) => i.source === 'payslip')).toMatchObject({ employerName: 'AUSTRALIAN UNITY GROUP SERVICE P/L', accountName: 'SMSF Bekal', destinationKind: 'smsf' });
   });
 
+  it('a statement apply that overwrites the contribution columns of the account is re-derived from the history (one figure, never two)', async () => {
+    const db = world();
+    await recordManualContribution(U1, { accountId: 'acc-rest', type: 'employer', amount: 600, frequency: 'monthly', contributionDate: null }, db.client);
+    const acct = db.tables.retirement_accounts.find((a) => a.id === 'acc-rest')!;
+    acct.employer_contribution = 18000; // what an applied statement writes
+    acct.contribution_frequency = 'annually';
+    const { syncAccountRates } = await import('@/lib/retirement-contributions/service');
+    expect(await syncAccountRates(U1, 'acc-rest', db.client)).toEqual({ employerMonthly: 600, personalMonthly: 0 });
+    expect(acct.employer_contribution).toBe(600);
+    expect(acct.contribution_frequency).toBe('monthly');
+    // an account the history never touched is left exactly as the statement wrote it
+    const untouched = db.tables.retirement_accounts.find((a) => a.id === 'acc-smsf')!;
+    untouched.employer_contribution = 1234;
+    expect(await syncAccountRates(U1, 'acc-smsf', db.client)).toBeNull();
+    expect(untouched.employer_contribution).toBe(1234);
+  });
+
   it('a one-off dated contribution is history only: no monthly rate is invented', async () => {
     const db = world();
     await recordManualContribution(U1, { accountId: 'acc-rest', type: 'personal', amount: 5000, frequency: 'one_off', contributionDate: '2026-06-30' }, db.client);

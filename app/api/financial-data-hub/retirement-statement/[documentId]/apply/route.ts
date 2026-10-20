@@ -3,6 +3,8 @@ import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { getRetirementStatementIdForDocument } from '@/lib/financial-data-hub/services/retirementStatementProcessingService';
 import { applyRetirementProposalAtomic } from '@/lib/import-bridge/applyRetirementProposalAtomic';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
+import { createClient } from '@/lib/supabase/server';
+import { syncAccountRates } from '@/lib/retirement-contributions/service';
 
 // POST /api/financial-data-hub/retirement-statement/{documentId}/apply
 //
@@ -101,7 +103,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     },
   });
 
+  // Document2 (4) F25b / F27: an account whose contributions are tracked in the contribution history keeps ONE contribution figure, the
+  // one derived from that history. A statement apply writes the two contribution columns directly, so they are re-derived here;
+  // otherwise the statement's figure and the history's figure would both stand for the same contribution. The person is told.
+  let contributionNote: string | null = null;
+  if (result.targetEntityId) {
+    try {
+      const synced = await syncAccountRates(user.id, result.targetEntityId, await createClient());
+      if (synced && result.appliedFields.some((f) => /contribution|frequency/.test(f))) {
+        contributionNote = 'The contributions of this account are kept in your contribution history, so the contribution figures from the statement were not used. Your history is unchanged.';
+      }
+    } catch {
+      /* the apply stands; the next contribution change re-derives the figures */
+    }
+  }
+
   return ok({
+    contribution_note: contributionNote,
     outcome: 'applied',
     apply_mode: result.applyMode,
     target_entity_id: result.targetEntityId,
