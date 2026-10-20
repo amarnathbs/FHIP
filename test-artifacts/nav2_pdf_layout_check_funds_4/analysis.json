@@ -1,0 +1,289 @@
+{
+ "page_count": 10,
+ "pages": [
+  {
+   "page": 1,
+   "blank_ratio": 0.354,
+   "lines": 54,
+   "last_line": {
+    "text": "Dates are written day first.",
+    "size": 8.5,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Fund analytics report",
+    "size": 22,
+    "bold": true
+   },
+   "funds_named": [
+    "Aster Large Cap Fund",
+    "Birch Flexi Cap Fund",
+    "Cedar Mid Cap Fund",
+    "Dune Corporate Bond Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8.5,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-01.png"
+  },
+  {
+   "page": 2,
+   "blank_ratio": 0.096,
+   "lines": 96,
+   "last_line": {
+    "text": "page shows the dates actually used. The same applies to every cell carrying this mark.",
+    "size": 8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Aster Large Cap Fund",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Aster Large Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-02.png"
+  },
+  {
+   "page": 3,
+   "blank_ratio": 0.117,
+   "lines": 82,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Aster Large Cap Fund (continued)",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Aster Large Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": true,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-03.png"
+  },
+  {
+   "page": 4,
+   "blank_ratio": 0.096,
+   "lines": 96,
+   "last_line": {
+    "text": "page shows the dates actually used. The same applies to every cell carrying this mark.",
+    "size": 8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Birch Flexi Cap Fund",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Birch Flexi Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-04.png"
+  },
+  {
+   "page": 5,
+   "blank_ratio": 0.117,
+   "lines": 82,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Birch Flexi Cap Fund (continued)",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Birch Flexi Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": true,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-05.png"
+  },
+  {
+   "page": 6,
+   "blank_ratio": 0.096,
+   "lines": 97,
+   "last_line": {
+    "text": "page shows the dates actually used. The same applies to every cell carrying this mark.",
+    "size": 8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Cedar Mid Cap Fund",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Cedar Mid Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-06.png"
+  },
+  {
+   "page": 7,
+   "blank_ratio": 0.117,
+   "lines": 82,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Cedar Mid Cap Fund (continued)",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Cedar Mid Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": true,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-07.png"
+  },
+  {
+   "page": 8,
+   "blank_ratio": 0.096,
+   "lines": 95,
+   "last_line": {
+    "text": "page shows the dates actually used. The same applies to every cell carrying this mark.",
+    "size": 8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Dune Corporate Bond Fund",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Dune Corporate Bond Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-08.png"
+  },
+  {
+   "page": 9,
+   "blank_ratio": 0.117,
+   "lines": 82,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Dune Corporate Bond Fund (continued)",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Dune Corporate Bond Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": true,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-09.png"
+  },
+  {
+   "page": 10,
+   "blank_ratio": 0.324,
+   "lines": 58,
+   "last_line": {
+    "text": "converted to a daily rate as (1 + yield) ^ (1 / 252) - 1. Source: Reserve Bank of India.",
+    "size": 8.5,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Comparing your funds",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Aster Large Cap Fund",
+    "Birch Flexi Cap Fund",
+    "Cedar Mid Cap Fund",
+    "Dune Corporate Bond Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": true,
+   "min_size": 8.5,
+   "min_size_all": 7.1,
+   "body_size": 9,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_4\\png\\page-10.png"
+  }
+ ],
+ "cell_overflow": [],
+ "fund_names": [
+  "Aster Large Cap Fund",
+  "Birch Flexi Cap Fund",
+  "Cedar Mid Cap Fund",
+  "Dune Corporate Bond Fund"
+ ],
+ "pages_per_fund": 2
+}
