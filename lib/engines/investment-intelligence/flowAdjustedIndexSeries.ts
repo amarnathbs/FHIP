@@ -28,6 +28,11 @@
 //     redeem-then-rebuy the index therefore continues from its last pre-exit
 //     level.
 //   * a non-finite r is treated as 0; r is never allowed to reach -100%.
+//   * the portfolio EMPTIES in a period (value after is about zero) and no money was recorded as taken out in it: the value
+//     left without a trace, which is an exit whose proceeds are not on file (a switch leg, a missing redemption), NOT a total
+//     loss. r = 0. Document2 (4) F4: without this rule one such period took the index to about -100% and, because an index
+//     near zero never recovers (every later base is below the minimum), the growth-of-100 line and the drawdown series stayed
+//     flat on zero for the rest of the history.
 //   * flows dated on or before the first observation, or after the last, move
 //     nothing (no period brackets them).
 //
@@ -80,7 +85,9 @@ export function buildFlowAdjustedIndex(values: ReadonlyArray<SeriesPoint>, flows
     largest = Math.max(largest, a.value, b.value);
     const base = a.value + weighted;
     let r = 0;
-    if (base > Math.max(MIN_BASE_ABSOLUTE, MIN_BASE_FRACTION * largest)) {
+    const minBase = Math.max(MIN_BASE_ABSOLUTE, MIN_BASE_FRACTION * largest);
+    const emptiedWithNoRecordedProceeds = b.value <= minBase && -contributed <= minBase;
+    if (base > minBase && !emptiedWithNoRecordedProceeds) {
       r = (b.value - a.value - contributed) / base;
       if (!Number.isFinite(r)) r = 0;
       if (r < MIN_PERIOD_RETURN) r = MIN_PERIOD_RETURN;

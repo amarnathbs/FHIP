@@ -90,6 +90,15 @@ export interface SchemeDataset {
   // Optional so a caller that predates this field (or a fixture) still works:
   // schemeRealFlows() below derives it from externalCashFlows when absent.
   externalCashFlowsExcludingTerminal?: CashFlow[];
+  /**
+   * Document2 (4) F4 (20-10-2026). The scheme's real flows INCLUDING switches, EXCLUDING the synthetic terminal valuation.
+   * Used ONLY by the flow-adjusted index behind the growth-of-100 line, the drawdown series and the risk cards. A switch is
+   * not money entering or leaving the household, but it IS value leaving one fund and entering another; leaving the switch
+   * legs out made the fund switched out of look like a total loss (its value vanished with no offsetting flow) while the fund
+   * switched into entered as a contribution, so the index fell to about -100 per cent and never recovered. Optional: when absent
+   * it is derived from cashFlows by removing the terminal flow (see schemeIndexFlows()).
+   */
+  indexFlows?: CashFlow[];
   currentValue: number;
   currentValueDate: Date;
   navSeries: SeriesPoint[];
@@ -411,6 +420,51 @@ function schemeRealFlows(s: SchemeDataset): CashFlow[] {
 }
 
 /**
+ * The flows the flow-adjusted index uses for one scheme: every real investor flow including switch legs, never the synthetic
+ * terminal valuation. See SchemeDataset.indexFlows.
+ */
+export function schemeIndexFlows(s: SchemeDataset): CashFlow[] {
+  if (s.indexFlows) return s.indexFlows;
+  if (s.currentValue <= 0) return s.cashFlows;
+  const terminalTime = s.currentValueDate.getTime();
+  let removed = false;
+  return s.cashFlows.filter((cf) => {
+    if (!removed && cf.date.getTime() === terminalTime && cf.amount === s.currentValue) {
+      removed = true;
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * The valuation series a scheme contributes to the portfolio value, drawdown and growth-of-100 series. The derived (unit ledger x
+ * NAV) series when it has enough points, else the certified statement points; closed on a zero when nothing is held now; and, when
+ * the scheme is held now, ENDED ON ITS CURRENT MARK-TO-MARKET VALUE (units x latest eligible NAV) so a statement dated earlier than
+ * the latest NAV never leaves the portfolio total, the charts and the as-at date frozen at the statement.
+ */
+export function schemeValuationSeries(s: SchemeDataset): SeriesPoint[] {
+  const base = closeRedeemedSeries(s.reconstructedValuationSeries && s.reconstructedValuationSeries.length >= 2 ? s.reconstructedValuationSeries : s.valuationSeries, s);
+  if (!(s.currentValue > 0)) return base;
+  const last = base.length ? base.reduce((m, p) => (p.date.getTime() > m.getTime() ? p.date : m), base[0].date) : null;
+  if (last !== null && s.currentValueDate.getTime() <= last.getTime()) return base;
+  return [...base, { date: s.currentValueDate, value: s.currentValue }];
+}
+
+/**
+ * Document2 (4) F3. A scheme "lacks an opening investment" when its real flows are empty or its earliest flow is money coming
+ * back to the investor (a redemption, a dividend) with no purchase before it: the cost of what it holds is not on file. Including
+ * it makes the portfolio cash-flow series start with money coming out, for which XIRR has no solution, so the whole portfolio
+ * figure used to read "Not enough history". It is left out of the portfolio XIRR and named, instead of blanking every holding.
+ */
+export function schemeLacksOpeningInvestment(s: SchemeDataset): boolean {
+  // Switch legs count here: a fund first acquired by a switch IN has its opening investment (the money came from the fund switched out of).
+  const flows = [...schemeIndexFlows(s)].filter((f) => f.amount !== 0).sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (flows.length === 0) return s.currentValue > 0;
+  return flows[0].amount > 0;
+}
+
+/**
  * A scheme with nothing held now (currentValue 0) contributes 0 from the day
  * after its last valued point (or its own zero-valuation date, if later) onward.
  * A series that already ends on a zero, or a scheme still holding value, is
@@ -469,11 +523,7 @@ function analysePortfolioCurrency(
   // series and the benchmark blend weights. The unit-ledger reconstruction now
   // writes that zero itself; closeRedeemedSeries() is the safety net for a
   // series that does not (e.g. a lone statement snapshot taken before the exit).
-  const schemeSeries = (s: SchemeDataset): SeriesPoint[] =>
-    closeRedeemedSeries(
-      s.reconstructedValuationSeries && s.reconstructedValuationSeries.length >= 2 ? s.reconstructedValuationSeries : s.valuationSeries,
-      s
-    );
+  const schemeSeries = (s: SchemeDataset): SeriesPoint[] => schemeValuationSeries(s);
 
   const allDates = new Set<number>();
   for (const s of group) for (const p of schemeSeries(s)) allDates.add(p.date.getTime());
@@ -513,7 +563,11 @@ function analysePortfolioCurrency(
   // settlement-date-lag case: exclusion happens by transaction TYPE, not by
   // hoping two dates coincidentally match.
   const netInvestorFlowMap = new Map<number, number>();
-  for (const s of group) {
+  // Document2 (4) F3: schemes whose cost is not on file (no purchase before their first redemption) cannot be placed in a
+  // money-weighted return. They are left out of THIS figure (never out of the value, the charts or the risk cards) and named.
+  const xirrExcluded = group.filter((s) => schemeLacksOpeningInvestment(s));
+  const xirrGroup = group.filter((s) => !xirrExcluded.includes(s));
+  for (const s of xirrGroup) {
     // App Review 2026-09-15, item 2 — ROOT CAUSE of the portfolio XIRR card
     // reading "Could not be calculated — No sign change found for NPV(r)
     // across the search domain."
@@ -547,11 +601,13 @@ function analysePortfolioCurrency(
   // Performance header already show). Placing it here — after netting the
   // real flows — guarantees it is the chronologically last flow whenever the
   // portfolio still holds value, which is precisely the condition XIRR needs.
-  const portfolioCurrentValue = group.reduce((sum, s) => sum + s.currentValue, 0);
-  const portfolioValuationDate = group.reduce<Date | null>(
+  const portfolioCurrentValue = xirrGroup.reduce((sum, s) => sum + s.currentValue, 0);
+  const portfolioValuationDate = xirrGroup.reduce<Date | null>(
     (latest, s) => (s.currentValue > 0 && (!latest || s.currentValueDate > latest) ? s.currentValueDate : latest),
     null
   );
+  // The whole portfolio's current value (every scheme valued now, units x latest eligible NAV), shown in the header.
+  const headerTotalValue = group.reduce((sum, s) => sum + s.currentValue, 0);
   const investorCashFlows: CashFlow[] = [...netInvestorFlowMap.entries()]
     .filter(([, amount]) => amount !== 0)
     .map(([t, amount]) => ({ date: new Date(t), amount }))
@@ -568,7 +624,18 @@ function analysePortfolioCurrency(
   }
 
   const perf = computePortfolioPerformance({ valuations, investorCashFlows });
-  const portfolioXirr = fromXirr(perf.portfolioXirr, () => ({ rate: perf.portfolioXirr.rate! }));
+  let portfolioXirr = fromXirr(perf.portfolioXirr, () => ({ rate: perf.portfolioXirr.rate! }));
+  if (xirrExcluded.length > 0) {
+    const names = xirrExcluded.map((x) => x.instrumentName).join(', ');
+    const what = `${xirrExcluded.length === 1 ? '1 holding has' : `${xirrExcluded.length} holdings have`} no recorded purchase before ${xirrExcluded.length === 1 ? 'its' : 'their'} first redemption or payout (${names})`;
+    if (xirrGroup.length === 0 || portfolioXirr.status !== 'CALCULATED') {
+      portfolioXirr = insufficientHistory('PARTIAL_TRANSACTION_HISTORY', `Your own return cannot be worked out yet: ${what}, so the money you put in is not on file. Upload the statement that covers the first purchase, or add the investment date for ${xirrExcluded.length === 1 ? 'it' : 'them'}.`);
+    }
+    annotations.push({
+      flag: 'PARTIAL_TRANSACTION_HISTORY',
+      detail: `${what}, so ${xirrExcluded.length === 1 ? 'it is' : 'they are'} left out of your return (XIRR) but still counted in the value and the charts. Upload the statement that covers the first purchase to include ${xirrExcluded.length === 1 ? 'it' : 'them'}.`,
+    });
+  }
 
   // ---- Blended benchmark ---------------------------------------------
   const instrumentSeries: InstrumentValuationSeries[] = group.map((s) => ({
@@ -606,7 +673,7 @@ function analysePortfolioCurrency(
   // series (`valuations`) still drives the header total and the blend weights.
   const flowIndex = buildFlowAdjustedIndex(
     valuations,
-    portfolioContributionFlows(group.map((s) => ({ series: schemeSeries(s), realFlows: schemeRealFlows(s) })))
+    portfolioContributionFlows(group.map((s) => ({ series: schemeSeries(s), realFlows: schemeIndexFlows(s) })))
   );
   const monthEnd = toMonthEndSeries(flowIndex);
   const fundReturns = periodicReturnsFromLevels(monthEnd);
@@ -668,7 +735,7 @@ function analysePortfolioCurrency(
   return {
     currencyCode,
     schemeCount: group.length,
-    totalValue: valuations.length ? valuations[valuations.length - 1].value : 0,
+    totalValue: headerTotalValue,
     portfolioXirr,
     blendedBenchmarkReturn: blendedOutcome,
     risk,
