@@ -26,6 +26,9 @@ interface SmsfReportBundle {
   };
   contributions: { employerContributionMonthly: number; personalContributionMonthly: number; totalContributionMonthly: number };
   position: { mode: 'itemised' | 'net_only'; net: number | null };
+  contributionHistory:
+    | { status: 'unavailable'; reason: string }
+    | { status: 'ok'; entries: { id: string; contributionType: string; amount: number; currency: string; frequency: string | null; contributionDate: string | null; source: string; employerName: string | null }[] };
   sources: { entityIncomeCount: number; entityExpenseCount: number; legacyIncomeCount: number; legacyExpenseCount: number; otherCurrencyLeftOutCount: number };
   bankActuals:
     | { status: 'unavailable'; reason: string }
@@ -166,6 +169,27 @@ export function SmsfReportsPanel({ fund }: { fund: SmsfFundRow }) {
                   <Stat label="Total" value={formatMoneySafe(bundle.contributions.totalContributionMonthly, currency)} />
                 </dl>
                 <p className="mt-1 text-[11px] text-muted">Spouse and rollover contribution sources are not separately tracked yet.</p>
+                {bundle.contributionHistory.status === 'ok' && bundle.contributionHistory.entries.length > 0 && (
+                  <div className="mt-2" data-testid="smsf-contribution-history">
+                    <p className="text-xs font-medium text-ink">Recorded contributions to this fund</p>
+                    <ul className="mt-1 space-y-1 text-sm">
+                      {bundle.contributionHistory.entries.map((e) => (
+                        <li key={e.id} className="flex flex-wrap justify-between gap-2">
+                          <span>
+                            {e.contributionType.replace(/_/g, ' ')}
+                            {e.employerName ? ` from ${e.employerName}` : ''}
+                            <span className="text-muted"> · {e.source === 'payslip' ? 'from a payslip' : 'entered by you'}</span>
+                          </span>
+                          <span className="tabular-nums">
+                            {formatMoneySafe(e.amount, e.currency === 'INR' ? 'INR' : 'AUD')}
+                            <span className="text-muted"> {e.frequency ? e.frequency.replace(/_/g, '-') : formatDateSafe(e.contributionDate)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-[11px] text-muted">The monthly totals above are made from these records. Add or change a contribution on the Retirement page.</p>
+                  </div>
+                )}
               </section>
 
               <section aria-labelledby={`smsf-actuals-${fund.id}`} data-testid="smsf-bank-actuals">

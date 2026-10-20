@@ -149,6 +149,7 @@ describe('buildSmsfAccountantExportCsv — WP-09: never corrupts a legitimate ne
     position: { mode: 'net_only', net: 120_000 },
     sources: { entityIncomeCount: 0, entityExpenseCount: 0, legacyIncomeCount: 0, legacyExpenseCount: 0, otherCurrencyLeftOutCount: 0 },
     bankActuals: { status: 'unavailable', reason: 'test' },
+    contributionHistory: { status: 'unavailable', reason: 'test' },
     provenance: { activeHoldingCount: 0, activeMemberCount: 1, generatedAt: '2026-09-08T00:00:00.000Z' },
   };
 

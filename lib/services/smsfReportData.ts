@@ -6,6 +6,7 @@ import { computeSmsfContributions, type SmsfContributionSummary } from '@/lib/en
 import { listEntityIncome, listEntityExpenses } from '@/lib/services/entityCashFlowData';
 import { loadSmsfBankActuals, type SmsfBankActuals } from '@/lib/read-models/smsfBankActuals';
 import type { Frequency } from '@/lib/engines/money';
+import { loadSmsfContributionHistory, type SmsfContributionHistory } from '@/lib/services/smsfContributionDestination';
 import {
   getSmsfFund,
   listSmsfOwnedIncome,
@@ -20,6 +21,11 @@ export interface SmsfFundReportBundle {
   pnl: SmsfPnlResult;
   cashFlow: SmsfCashFlowResult;
   contributions: SmsfContributionSummary;
+  /**
+   * The contribution ledger rows (destination kind smsf, status active) the totals above are made of. Evidence only: NEVER added to the totals,
+   * because the fund account's contribution columns are derived from the same ledger (see smsfContributionDestination.ts).
+   */
+  contributionHistory: SmsfContributionHistory;
   /**
    * The ONE net the fund is worth, as the rest of the app counts it (smsf_fund_counted_net): worked out from the fund's assets and liabilities
    * while it is itemised, the single typed value while it is a net value only. There is no second "summary" figure and no difference between
@@ -132,6 +138,7 @@ export async function loadSmsfFundReportBundle(
     contribution_frequency: null,
   };
   const contributions = computeSmsfContributions(contributionSource);
+  const contributionHistory = await loadSmsfContributionHistory(userId, fund.retirement_account_id, supabase);
 
   const cashFlow = computeSmsfCashFlow({
     incomeRows,
@@ -167,6 +174,7 @@ export async function loadSmsfFundReportBundle(
       pnl,
       cashFlow,
       contributions,
+      contributionHistory,
       position: { mode: fund.mode === 'detailed' ? 'itemised' : 'net_only', net: countedNet },
       sources: {
         entityIncomeCount: entityIncomeUsed.length,
