@@ -19,3 +19,15 @@ The PO screenshots (Document2 (4), images 24 to 28) were taken on the OLD build 
 ## Interface for WP-D (Retirement): the SMSF contribution destination
 
 WP-D builds payslip-super and manual-contribution destinations. The SMSF end is this small, stable read model (defined and tested in this WP, see the report): `lib/services/smsfContributionDestination.ts`, `listSmsfContributionDestinations(userId, supabase)` returning `{ fundId, retirementAccountId, fundName, memberIds, currency }[]` for active funds, plus the documented write target: the fund's own Retirement row contribution columns (`employer_contribution`, `personal_contribution`, `contribution_frequency`, already read by `computeSmsfContributions`). It never counts a contribution as a balance and never changes the fund's net.
+
+## Outcome (added at the end of the work, see DOCUMENT2_4_REPORT_WP-C.md for the detail)
+
+| Finding | Regression test (fails on the old behaviour) | Evidence | DEV proof | Verdict |
+|---|---|---|---|---|
+| F19 | `wpCSmsfDerivedNetOracle.test.ts` (5 named failures with the old report, panel, export and card restored), `wpCEntityFinancePglite.test.ts` F19 block | UNIT-TESTED, PGLITE-VERIFIED | NOT PERFORMED | CONDITIONAL |
+| F20 | `wpCSmsfDerivedNetOracle.test.ts` F20 block, `smsfPnlCashFlowExport.test.ts` | UNIT-TESTED | NOT PERFORMED | CONDITIONAL |
+| F21 | `wpCEntityOwnerRoutes.test.ts` (guard removed: 7 named failures), `wpCEntityFinancePglite.test.ts` F21 block and negative control, `wpCEntitySeparation.test.ts` | UNIT-TESTED, PGLITE-VERIFIED | NOT PERFORMED | CONDITIONAL |
+| F22 | `wpCEntityFinancePglite.test.ts` F22 block (unique index removed: duplicate accepted), `wpCEntityCashFlow.test.ts`, `wpCEntitiesWorkspace.test.ts` | UNIT-TESTED, PGLITE-VERIFIED | NOT PERFORMED | CONDITIONAL |
+| F23 | `wpCEntityCashFlow.test.ts` (principal never an expense, bank actuals in exactly one world), PGlite F23 block | UNIT-TESTED, PGLITE-VERIFIED | NOT PERFORMED, production uploads gated | CONDITIONAL, PRODUCTION-UPLOAD-GATED |
+| F23b | `wpCEntityFinancePglite.test.ts` F23b block and negative controls (rule trigger removed: both representations accepted), `wpCEntitiesWorkspace.test.ts` | UNIT-TESTED, PGLITE-VERIFIED | NOT PERFORMED | CONDITIONAL |
+| F28 | `wpCEntityDashboardSection.test.ts` (company counted in full would add 150,000: the share rule is what is tested) | UNIT-TESTED | NOT PERFORMED | CONDITIONAL |
