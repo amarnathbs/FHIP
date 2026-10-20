@@ -170,6 +170,11 @@ export function mergeSavedRows(masterItems: MasterItem[], savedRecords: SavedRec
   return [...merged, ...extraRows, ...orphanedRows, ...customRows];
 }
 
+/** F17: the "I don't have any ..." declaration cannot be newly ticked while the person has active items. Pure. */
+export function isNotApplicableBlocked(alreadyTicked: boolean, activeItemCount: number): boolean {
+  return !alreadyTicked && activeItemCount > 0;
+}
+
 export function notApplicableBlockedText(title: string, activeItemCount: number): string {
   return `You already have ${activeItemCount} active ${title.toLowerCase()} item${activeItemCount === 1 ? '' : 's'}, so this does not apply. Remove ${activeItemCount === 1 ? 'it' : 'them'} first if you want to say you have none.`;
 }
@@ -601,7 +606,7 @@ export function FinancialDataGrid({
 
   async function handleNotApplicableToggle(checked: boolean) {
     if (!config.notApplicable) return;
-    if (checked && included.length + extraActiveItems > 0) return; // defence in depth: the control is disabled in this state
+    if (checked && isNotApplicableBlocked(false, included.length + extraActiveItems)) return; // defence in depth: the control is disabled in this state
     const previous = notApplicable;
     setNotApplicable(checked);
     try {
@@ -841,7 +846,7 @@ export function FinancialDataGrid({
           : null;
   // Document2 (4) F17: "I don't have any ..." cannot be newly ticked while active items exist (it would contradict them).
   const activeItemCount = included.length + extraActiveItems;
-  const notApplicableBlocked = Boolean(config.notApplicable) && !notApplicable && activeItemCount > 0;
+  const notApplicableBlocked = Boolean(config.notApplicable) && isNotApplicableBlocked(notApplicable, activeItemCount);
   const sectionStatus = effectiveSectionStatus({ hasRows: included.length > 0, explicitConfirmation });
   const completion = computeSectionCompletionPercent({
     status: sectionStatus,
