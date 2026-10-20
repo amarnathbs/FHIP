@@ -80,6 +80,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     });
   } catch (e) {
     if (e instanceof BankPdfProcessingError) {
+      // F15: another run of this same statement is still going; not an error, and not to be started twice.
+      if (e.code === 'in_progress') return bad(e.message, 409, 'statement_in_progress');
       const status = e.code === 'not_found' ? 404 : e.code === 'rate_limited' ? 429 : 400;
       const message =
         e.code === 'account_unresolved'
@@ -91,6 +93,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
               : e.message;
       return bad(message, status);
     }
-    return bad('We could not process this bank statement.', 500);
+    // F15: see the bank-csv route; the failing stage is now in the server log and the answer carries a stable code.
+    console.error('[bank-pdf/process] unexpected failure', { documentIdPrefix: documentId.slice(0, 8), name: e instanceof Error ? e.name : typeof e, message: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300) });
+    return bad('We could not process this bank statement.', 500, 'process_failed');
   }
 }

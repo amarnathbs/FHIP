@@ -61,6 +61,13 @@ import { DateInput } from '@/components/ui/DateInput';
 
 import { useEffect, useRef, useState } from 'react';
 import { bankUploadParams, statementPeriodError } from './bankUploadParams';
+import {
+  isResumableProcessAttempt,
+  PROCESS_RESUME_WAIT_MS,
+  PROCESS_RESUME_MAX_ATTEMPTS,
+  PROCESS_STILL_READING_MESSAGE,
+  PROCESS_TOO_LONG_MESSAGE,
+} from './processResume';
 import { OwnerSelector } from '@/components/ownership/OwnerSelector';
 import type { OwnerSelection } from '@/lib/ownership/ownerSelection';
 import {
@@ -209,6 +216,15 @@ interface ProcessSummary {
 async function readJson(res: Response) {
   const json = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, json };
+}
+
+/** One ask of the process route. A dropped connection is an answer of status 0, never an exception (F15). */
+async function askProcess(url: string, init?: RequestInit) {
+  try {
+    return await readJson(await fetch(url, init));
+  } catch {
+    return { ok: false, status: 0, json: {} as Record<string, any> };
+  }
 }
 
 export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
@@ -378,16 +394,26 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       }
     }
 
-    const processRes = csv
-      ? await fetch(`/api/financial-data-hub/bank-csv/${docId}/process`, { method: 'POST' })
-      : await fetch(`/api/financial-data-hub/bank-pdf/${docId}/process`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pdfPassword ? { password: pdfPassword } : {}),
-        });
-    const { ok: processOk, json: processJson } = await readJson(processRes);
+    // F15: the platform ends a request after about 28 s. When the answer is "no answer yet" (gateway error, dropped connection, or the
+    // server's own 409 "still being read") ask again, boundedly; the server is retry-safe (services/interruptedRun.ts).
+    const processUrl = csv ? `/api/financial-data-hub/bank-csv/${docId}/process` : `/api/financial-data-hub/bank-pdf/${docId}/process`;
+    const processInit: RequestInit = csv
+      ? { method: 'POST' }
+      : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pdfPassword ? { password: pdfPassword } : {}) };
+    let attempt = await askProcess(processUrl, processInit);
+    for (let n = 1; !attempt.ok && isResumableProcessAttempt(attempt) && n < PROCESS_RESUME_MAX_ATTEMPTS; n += 1) {
+      if (scanPollCancelRef.current.cancelled) return;
+      setMessage(PROCESS_STILL_READING_MESSAGE);
+      await new Promise((resolve) => setTimeout(resolve, PROCESS_RESUME_WAIT_MS));
+      attempt = await askProcess(processUrl, processInit);
+    }
+    const { ok: processOk, json: processJson } = attempt;
     if (!processOk) {
-      setMessage(processJson.error ?? 'We could not process this bank statement.');
+      setMessage(
+        isResumableProcessAttempt(attempt)
+          ? PROCESS_TOO_LONG_MESSAGE
+          : (processJson.message as string | undefined) ?? (processJson.error as string | undefined) ?? 'We could not process this bank statement.',
+      );
       setPhase('error');
       return;
     }
@@ -793,7 +819,7 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         <p className="mt-4 text-sm text-muted" role="status">
           {phase === 'uploading' && 'Uploading your statement…'}
           {phase === 'scanning' && (message ?? SCANNING_MESSAGE)}
-          {phase === 'processing' && 'Processing your statement — extracting transactions…'}
+          {phase === 'processing' && (message ?? 'Processing your statement — extracting transactions…')}
         </p>
       )}
 

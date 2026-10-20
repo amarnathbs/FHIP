@@ -81,13 +81,14 @@ import { computeAccountFingerprint, normaliseMaskedIdentifier } from '../bank-cs
 import { encodeUnreadLines, summariseUnreadLines, type UnreadLinesSummary } from '../domain/unreadLines';
 import { AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
 import { moneyEquals } from '../domain/money';
+import { processingRunState, STATEMENT_STILL_BEING_READ_MESSAGE } from './interruptedRun';
 import { checkPasswordAttemptRateLimit } from '../bank-pdf/password';
 import type { FdhStatementUpload } from '../domain/types';
 import type { FdhErrorCode } from '../constants/enums';
 
 export class BankPdfProcessingError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid_state' | 'account_unresolved' | 'rate_limited' | 'internal_error',
+    readonly code: 'not_found' | 'invalid_state' | 'account_unresolved' | 'rate_limited' | 'internal_error' | 'in_progress',
     message: string,
   ) {
     super(message);
@@ -273,7 +274,7 @@ function errorCodeForPipelineStatus(status: PdfPipelineStatus): FdhErrorCode | n
 const AI_FALLBACK_ELIGIBLE_PIPELINE_STATUSES: readonly PdfPipelineStatus[] = ['unsupported_layout', 'ambiguous_layout', 'extraction_low_confidence'];
 
 export async function processBankPdfDocument(userId: string, documentId: string, password?: string): Promise<ProcessBankPdfResult> {
-  const document = await getOwnedDocument(userId, documentId);
+  let document = await getOwnedDocument(userId, documentId);
 
   // IDEMPOTENCY (spec 89-90): already certified/settled — return as-is.
   if (document.certification_status && ['certified', 'review_required', 'rejected'].includes(document.certification_status) && document.processing_completed_at) {
@@ -294,6 +295,19 @@ export async function processBankPdfDocument(userId: string, documentId: string,
   // download, no parse, no password prompt, no second AI call.
   const identical = await findEarlierIdenticalUpload(userId, documentId, IDENTICAL_UPLOAD_SPECS.bank);
   if (identical) return identicalUploadResult(userId, document, identical);
+
+  // Document2 (4) F15: a run the platform killed leaves the document in `processing` (see interruptedRun.ts); before this every retry
+  // was refused with "cannot process while the document is processing". A live run is not started twice; a dead one is cleaned up and
+  // the statement is read again from the top.
+  const runState = processingRunState(document);
+  if (runState === 'live') throw new BankPdfProcessingError('in_progress', STATEMENT_STILL_BEING_READ_MESSAGE);
+  if (runState === 'dead') {
+    await cleanupPriorAttempt(userId, documentId);
+    assertDocumentTransition('processing', 'failed');
+    await adminUpdateStatementUpload(userId, documentId, { processing_status: 'failed', error_code: null });
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'pdf_processing_failed', actorType: 'system', metadata: { reason: 'run_interrupted' } });
+    document = { ...document, processing_status: 'failed' };
+  }
 
   if (!['queued', 'failed'].includes(document.processing_status)) {
     throw new BankPdfProcessingError('invalid_state', `cannot process while the document is ${document.processing_status}`);
