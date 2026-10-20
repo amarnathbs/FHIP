@@ -17,6 +17,7 @@ export function smsfRpcError(error: { message: string; code?: string | null }): 
     case '42501':
       return { status: 403, message };
     case 'P0002':
+      return { status: 404, message };
     case 'PGRST116':
       // no row visible to this household: the same answer as a row that does not exist (non-enumerating)
       return { status: 404, message: 'Not found' };
