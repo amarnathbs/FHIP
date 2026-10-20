@@ -16,6 +16,14 @@
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
   }
+  /* Document2 (4) F2: the mirrored sideways scrollbar above a table that is wider than its box (components/ui/ScrollRegion.tsx). It only carries the bar. */
+  .fhip-table-topscroll {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 14px;
+    margin-bottom: 2px;
+  }
   .fhip-table-wrap:focus-visible {
     outline: 2px solid #1d4ed8;
     outline-offset: 2px;
@@ -162,6 +170,9 @@
   /* Printed / PDF tables are not scrolled or sticky: the whole table is laid out on the page. */
   .fhip-table-wrap {
     overflow: visible !important;
+  }
+  .fhip-table-topscroll {
+    display: none !important;
   }
   .fhip-table :is(th, td) {
     position: static !important;

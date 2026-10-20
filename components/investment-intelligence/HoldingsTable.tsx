@@ -7,6 +7,7 @@ import { TransactionDetailModal } from './TransactionDetailModal';
 import BenchmarkComparisonView from './BenchmarkComparisonView';
 import type { HoldingBenchmarkComparison } from '@/lib/engines/investment-intelligence/holdingBenchmarkComparison';
 import { DataTable, DataTd } from '@/components/ui/DataTable';
+import { valueMissingReason, xirrMissingReason } from '@/lib/engines/investment-intelligence/holdingCellReasons';
 
 // Investment Intelligence — Performance tab Holdings drilldown (2026-09-17).
 //
@@ -239,11 +240,29 @@ export function HoldingsTable({ ownerClass = 'all' }: { ownerClass?: string } = 
                   )}
                 </td>
                 <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{num(h.nav, 4)}</td>
-                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{money(h.marketValue, h.currencyCode)}</td>
+                <td className="py-3 pr-2 text-right tabular-nums text-ink">
+                  <span className="whitespace-nowrap">{money(h.marketValue, h.currencyCode)}</span>
+                  {(() => {
+                    const why = valueMissingReason({ dataQualityStatus: h.dataQuality.status, dataQualityDetail: h.dataQuality.detail, unitBalance: h.unitBalance, marketValue: h.marketValue, nav: h.nav });
+                    return why ? (
+                      <span className="mt-0.5 block text-right text-[11px] font-normal leading-snug text-muted" title={why.long} data-testid="holding-value-missing">
+                        {why.short}
+                      </span>
+                    ) : null;
+                  })()}
+                </td>
                 <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{money(h.gainLoss, h.currencyCode)}</td>
                 <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">{pct(h.returnPct)}</td>
-                <td className="py-3 pr-2 text-right tabular-nums text-ink whitespace-nowrap">
-                  {h.xirr.status === 'CALCULATED' && h.xirr.value ? pct(h.xirr.value.rate) : '—'}
+                <td className="py-3 pr-2 text-right tabular-nums text-ink">
+                  <span className="whitespace-nowrap">{h.xirr.status === 'CALCULATED' && h.xirr.value ? pct(h.xirr.value.rate) : '—'}</span>
+                  {(() => {
+                    const why = xirrMissingReason(h.xirr);
+                    return why ? (
+                      <span className="mt-0.5 block text-right text-[11px] font-normal leading-snug text-muted" title={why.long} data-testid="holding-xirr-missing">
+                        {why.short}
+                      </span>
+                    ) : null;
+                  })()}
                 </td>
                 <td className="min-w-[11rem] py-3 pr-2 align-top">
                   {/* The comparison is over THIS holding's own period and cash flows, money-weighted;
