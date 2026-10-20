@@ -394,7 +394,7 @@ function Comparison({ report, ctx, printMode }: { report: FundAnalyticsReport; c
             {!v && <p className="text-sm text-muted"><Cell c={cell} /></p>}
             {!v && (
               <div className="mt-1 text-sm text-muted" data-testid="ranking-needs">
-                <p className="font-medium text-ink">What is needed for this to show</p>
+                <p className="text-ink font-medium">What is needed for this to show</p>
                 <ul className="list-disc pl-5">
                   {rankingPrerequisites(report, r.horizonId).map((line) => (
                     <li key={line}>{line}</li>

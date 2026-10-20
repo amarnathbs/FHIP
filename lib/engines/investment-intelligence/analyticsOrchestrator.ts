@@ -452,7 +452,7 @@ export function schemeValuationSeries(s: SchemeDataset): SeriesPoint[] {
 }
 
 /**
- * Document2 (4) F3. A scheme "lacks an opening investment" when its real flows are empty or its earliest flow is money coming
+ * Document2 (4) F3. A scheme "lacks an opening investment" when its earliest flow is money coming
  * back to the investor (a redemption, a dividend) with no purchase before it: the cost of what it holds is not on file. Including
  * it makes the portfolio cash-flow series start with money coming out, for which XIRR has no solution, so the whole portfolio
  * figure used to read "Not enough history". It is left out of the portfolio XIRR and named, instead of blanking every holding.
@@ -460,7 +460,8 @@ export function schemeValuationSeries(s: SchemeDataset): SeriesPoint[] {
 export function schemeLacksOpeningInvestment(s: SchemeDataset): boolean {
   // Switch legs count here: a fund first acquired by a switch IN has its opening investment (the money came from the fund switched out of).
   const flows = [...schemeIndexFlows(s)].filter((f) => f.amount !== 0).sort((a, b) => a.date.getTime() - b.date.getTime());
-  if (flows.length === 0) return s.currentValue > 0;
+  // No flows at all is the holdings-only case, which splitHoldingsOnlySchemes() already handles (and discloses) separately.
+  if (flows.length === 0) return false;
   return flows[0].amount > 0;
 }
 
