@@ -660,13 +660,26 @@
 
 /* Several Fund analytics reports as ONE document (components/reports/FundAnalyticsCombinedPrintDocument.tsx). Each report is the unchanged .fa-doc; its print page
    name comes from the generated rules .fa-combined-part-N (lib/reports/fundAnalyticsCombinedPrint.ts), so the inner document must not set its own. */
+.fa-combined-front + .fa-combined-part { margin-top: 12mm; }
 .fa-combined-intro { width: 178mm; max-width: 100%; margin: 8mm auto 0; padding: 2mm 3mm; border-left: 1mm solid #2563eb; background: #f5f7fa; color: #172033; font-size: 9.5pt; line-height: 1.32; font-family: Inter, 'Segoe UI', Arial, system-ui, sans-serif; }
 @media screen {
   .fa-combined-part + .fa-combined-part { margin-top: 12mm; }
 }
 @media print {
+  .fa-combined-front .fa-doc,
   .fa-combined-part .fa-doc { page: auto; }
   .fa-combined-intro { width: 100%; margin: 0 0 3mm; break-after: avoid; page-break-after: avoid; }
+  /* the front section holds a table of EVERY fund of the set: a little tighter than one report's cover so that, for up to about 17 funds, it keeps to one page */
+  .fa-combined-front .fa-doc .fa-cover .fa-table th,
+  .fa-combined-front .fa-doc .fa-cover .fa-table td { padding-top: 0.35mm; padding-bottom: 0.35mm; }
+  .fa-combined-front .fa-doc .fa-cover .fa-version { margin-bottom: 0.4mm; font-size: 9pt; }
+  .fa-combined-front .fa-doc .fa-cover .fa-saved { margin-top: 2mm; margin-bottom: 1.5mm; padding: 1mm 3mm; font-size: 8.5pt; }
+  .fa-combined-front .fa-doc .fa-cover .fa-notes li,
+  .fa-combined-front .fa-doc .fa-cover .fa-howto,
+  .fa-combined-front .fa-doc .fa-cover .fa-howto li { font-size: 8pt; }
+  .fa-combined-front .fa-doc .fa-cover .fa-text { margin-top: 1mm; font-size: 8.5pt; }
+  .fa-combined-front .fa-doc .fa-cover h3 { margin-top: 2mm; }
+  .fa-combined-front .fa-doc .fa-cover .fa-calc .fa-sub { font-size: 8pt; }
 }
 
 /* Net Worth Statements (PO request 16-10-2026): one A4 portrait page per statement. Scoped to .nws-root so nothing else changes.

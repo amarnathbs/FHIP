@@ -32,7 +32,7 @@ export function combinedPrintHref(reportIds: readonly string[], timeZone?: strin
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
 
-function versionsPhrase(versions: readonly number[]): string {
+export function versionsPhrase(versions: readonly number[]): string {
   const v = [...new Set(versions)].sort((a, b) => a - b).map(String);
   return v.length === 1 ? `Version ${v[0]}` : `Versions ${v.length === 2 ? v.join(' and ') : `${v.slice(0, -1).join(', ')} and ${v[v.length - 1]}`}`;
 }
@@ -66,30 +66,31 @@ export function combinedIntroLine(reportCount: number, fundCount: number): strin
 /** Plain text only: the value goes into a CSS string (same rule as the single document's running header). */
 const cssText = (t: string): string => t.replace(/[<>"'{};\\\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
 
-/** The name of the named page of report `n` (1-based) in a combined document. */
+/** The name of the named page of report `n` (1-based) in a combined document; `fa0` is the front section. */
 export const combinedPageName = (n: number): string => `fa${n}`;
 
 const BOX_FONT = "font-family:Inter,'Segoe UI',Arial,sans-serif;font-size:7.5pt;color:#5b677a;";
 
+function pageRule(name: string, rightBox: string): string {
+  return (
+    `@page ${name}{size:A4;margin:22mm 16mm 20mm 16mm;` +
+    `@top-left{content:'Fund analytics report';${BOX_FONT}vertical-align:bottom;padding-bottom:2.5mm}` +
+    `@top-right{content:"${cssText(rightBox)}";${BOX_FONT}vertical-align:bottom;padding-bottom:2.5mm}` +
+    `@bottom-left{content:'Financial Health Intelligence Platform';${BOX_FONT}vertical-align:top;padding-top:2.5mm}` +
+    `@bottom-right{content:'Page ' counter(page) ' of ' counter(pages);${BOX_FONT}vertical-align:top;padding-top:2.5mm}}`
+  );
+}
+
 /**
- * The print rules of a combined document: one NAMED PAGE per report (`fa1`, `fa2`, ...). A change of named page starts a fresh page, so the second and later reports
- * begin on a new page, and each named page carries ITS report's version line in the running header (a page margin box cannot read a value that changes
- * part-way through a document, so each report gets its own page name instead). The page counter is the document's: "Page n of N" runs across all reports.
- * The size, margins and the other margin boxes are exactly those of `@page fa` in app/globals.css (a unit test compares the two).
+ * The print rules of a combined document: one NAMED PAGE per section, so each section starts on a fresh page and carries its own running header (a page margin
+ * box cannot read a value that changes part-way through a document): `fa0` = the front section (header: "Versions 4 and 5"), `fa1`, `fa2`, ... = the reports'
+ * fund pages (header: that report's own version line). The page counter is the document's: "Page n of N" runs across all of it. Size, margins and the other margin
+ * boxes are exactly those of `@page fa` in app/globals.css (a unit test compares the two).
  */
-export function combinedPageRulesCss(versionLines: readonly string[]): string {
-  const rules = versionLines
-    .map((line, i) => {
-      const name = combinedPageName(i + 1);
-      return (
-        `@page ${name}{size:A4;margin:22mm 16mm 20mm 16mm;` +
-        `@top-left{content:'Fund analytics report';${BOX_FONT}vertical-align:bottom;padding-bottom:2.5mm}` +
-        `@top-right{content:"${cssText(line)}";${BOX_FONT}vertical-align:bottom;padding-bottom:2.5mm}` +
-        `@bottom-left{content:'Financial Health Intelligence Platform';${BOX_FONT}vertical-align:top;padding-top:2.5mm}` +
-        `@bottom-right{content:'Page ' counter(page) ' of ' counter(pages);${BOX_FONT}vertical-align:top;padding-top:2.5mm}}` +
-        `.fa-combined-part-${i + 1}{page:${name}${i > 0 ? ';break-before:page;page-break-before:always' : ''}}`
-      );
-    })
-    .join('');
+export function combinedPageRulesCss(frontLine: string, versionLines: readonly string[]): string {
+  const rules =
+    pageRule(combinedPageName(0), frontLine) +
+    '.fa-combined-front{page:fa0}' +
+    versionLines.map((line, i) => `${pageRule(combinedPageName(i + 1), line)}.fa-combined-part-${i + 1}{page:${combinedPageName(i + 1)};break-before:page;page-break-before:always}`).join('');
   return `@media print{${rules}}`;
 }

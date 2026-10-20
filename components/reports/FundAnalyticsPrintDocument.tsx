@@ -9,6 +9,7 @@ import { ownershipSentence, percentLabel } from '@/lib/engines/nav2/ownershipSha
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
+import { calculationMode, coverage, differences, frontRows, mergeNotes, reportsLabel, type CombinedPartInput } from '@/lib/reports/fundAnalyticsCombinedSummary';
 
 // The Fund analytics report as a DOCUMENT (the print route and the PDF). One component, the page layout in app/globals.css under .fa-doc.
 //
@@ -472,100 +473,46 @@ export function comparisonPossible(report: Pick<FundAnalyticsReport, 'comparison
   return ranked || correlated;
 }
 
-/** The page margin boxes (running header and footer) of the named page `fa`, switched off for the headless renderer, which fixes its own margins and draws its own header and footer. */
-const NO_MARGIN_BOXES = '@media print{@page fa{@top-left{content:none}@top-right{content:none}@bottom-left{content:none}@bottom-right{content:none}}}';
-/** Plain text only (a version line has no quote, brace, angle bracket or backslash): the value goes into a CSS string. */
-const cssText = (t: string): string => t.replace(/[<>"'{};\\\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
+/** The summary row of one fund ("Your funds at a glance"): the figures are the report's own saved results, shown by showResult(). One Footnotes list per table, so the letters never repeat. */
+export function summaryRowFor(b: FundAnalyticsSchemeBlock, fn: Footnotes): Row {
+  const inv = b.analytics.investor;
+  const three = b.analytics.scheme.pointToPoint.find((p) => p.id === '3Y');
+  return {
+    key: b.instrumentId,
+    cells: [
+      `${b.schemeName}${b.ownership?.mode === 'share' && b.ownership.jointBasisPoints !== null ? ` (your share ${percentLabel(b.ownership.jointBasisPoints)})` : b.ownership?.mode === 'not_set' ? ' (ownership share not set)' : ''}`,
+      inv ? figure(showResult(inv.currentValue, (v) => rupees(v.value)), fn).node : '',
+      inv ? figure(showResult(inv.gainLoss, (v) => rupees(v.gainLoss)), fn).node : '',
+      inv ? figure(showResult(inv.xirr, (v) => pct(v.rate)), fn).node : '',
+      three ? figure(showResult(three.cagr, (v) => pct(v.cagr)), fn).node : '',
+    ],
+  };
+}
 
-export default function FundAnalyticsPrintDocument({ report, version, pagesPerFund = FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND, serverRender = false, timeZone = null, combinedPart = false }: { report: FundAnalyticsReport; version?: { versionNumber: number; createdAt: string }; pagesPerFund?: FundPagePlan; serverRender?: boolean; timeZone?: string | null; combinedPart?: boolean }) {
-  const ctx: Nav2Context = { policy: NAV2_POLICY, currency: report.displayCurrency };
-  const names = new Map(report.schemes.map((s) => [s.instrumentId, s.schemeName]));
-  const nm = (id: string) => names.get(id) ?? 'Unknown fund';
-  const riskFreeIdx = report.notes.findIndex((n) => /^(Risk-free rate|Sharpe and Sortino compare)/i.test(n));
-  const riskFreeNote = riskFreeIdx >= 0 ? riskFreeIdx + 1 : null;
-  const fnCover = new Footnotes();
-  const latestPriceDate = report.schemes.map((b) => b.navSeriesSummary.lastDate).filter((d): d is string => !!d).sort().slice(-1)[0] ?? null;
-
-  const summaryRows: Row[] = report.schemes.map((b) => {
-    const inv = b.analytics.investor;
-    const three = b.analytics.scheme.pointToPoint.find((p) => p.id === '3Y');
-    return {
-      key: b.instrumentId,
-      cells: [
-        `${b.schemeName}${b.ownership?.mode === 'share' && b.ownership.jointBasisPoints !== null ? ` (your share ${percentLabel(b.ownership.jointBasisPoints)})` : b.ownership?.mode === 'not_set' ? ' (ownership share not set)' : ''}`,
-        inv ? figure(showResult(inv.currentValue, (v) => rupees(v.value)), fnCover).node : '',
-        inv ? figure(showResult(inv.gainLoss, (v) => rupees(v.gainLoss)), fnCover).node : '',
-        inv ? figure(showResult(inv.xirr, (v) => pct(v.rate)), fnCover).node : '',
-        three ? figure(showResult(three.cagr, (v) => pct(v.cagr)), fnCover).node : '',
-      ],
-    };
-  });
-
-  const compactComparison = report.schemes.length > COMPARISON_FULL_MAX_FUNDS;
-  const noComparison = !comparisonPossible(report);
-  const expectedCharts = report.schemes.filter((b) => b.chart.navPoints.length >= 2).length;
+/** "How to read this report": printed once per document (once at the front of a combined document). */
+export function HowToRead() {
   return (
-    // Everything below is server-rendered HTML (no client-only chart): the print renderer waits for this marker and then checks that every
-    // expected chart is in the page, so a missing chart can never be printed as a blank rectangle.
-    <div className="fa-doc" data-fa-print-ready="true" data-fa-expected-charts={expectedCharts} data-fa-pages-per-fund={pagesPerFund}>
-      {/* The running header (report name, version line) for the browser print path: read by the margin boxes of @page fa in app/globals.css.
-          A report that is one part of a COMBINED document (components/reports/FundAnalyticsCombinedPrintDocument.tsx) sets none: each part has its own named page with its own version line. */}
-      {/* dangerouslySetInnerHTML: React escapes a quote inside a <style> child to &quot; when it renders on the server, which a browser does not decode in CSS (the
-          custom property would be invalid and the header empty). The text is plain (cssText removes every character that could end the rule or the element). */}
-      <style dangerouslySetInnerHTML={{ __html: `${version && !combinedPart ? `html{--fa-print-version:"${cssText(versionMadeLinePrint(version.versionNumber, version.createdAt, report.displayCurrency, timeZone))}"}` : ''}${serverRender ? NO_MARGIN_BOXES : ''}` }} />
-      <section className="fa-cover">
-        <h1>Fund analytics report</h1>
-        <p className="fa-lead">
-          As at {showDate(ctx, report.asOfDate)}. Period: {REPORT_PERIOD_LABELS[report.periodChoice]}.
-        </p>
-        {version && <p className="fa-version">{versionMadeLinePrint(version.versionNumber, version.createdAt, report.displayCurrency, timeZone)}</p>}
-        <p className="fa-saved">{FUND_ANALYTICS_SAVED_REPORT_SENTENCE}</p>
-        {report.schemes.length === 0 ? (
-          <p className="fa-text">This report covers Indian mutual funds, and none could be analysed.</p>
-        ) : (
-          <>
-            <p className="fa-text">
-              {report.schemes.length} fund{report.schemes.length === 1 ? '' : 's'} analysed. The fund’s own growth and your own return are different things and are shown separately for each fund.
-            </p>
-            <h3>Your funds at a glance</h3>
-            <FaTable head={['Fund', 'Value now', 'Gain or loss', 'Your return (XIRR)', 'Fund CAGR, 3 year']} widths={[44, 14, 14, 14, 14]} num={[false, true, true, true, true]} rows={summaryRows} />
-            {report.schemes.some((b) => b.ownership) && (
-              <p className="fa-sub">Where a fund is held jointly, the figures about your own money (value now, gain or loss, your return) are your share of it, as the fund sheet states. Your share of each fund is shown beside its name.</p>
-            )}
-            <FootnoteList fn={fnCover} />
-            {latestPriceDate && <p className="fa-text" data-fa-prices-run-to="true">{pricesRunToLine(showDate(ctx, latestPriceDate))}</p>}
-          </>
-        )}
-        {report.notes.length > 0 && (
-          <>
-            <h3>Notes</h3>
-            <ol className="fa-notes">
-              {report.notes.map((n, i) => (
-                <li key={i}>
-                  <span className="fa-note-no">Note {i + 1}</span> {n}
-                </li>
-              ))}
-            </ol>
-          </>
-        )}
-        <h3>How to read this report</h3>
-        <ul className="fa-howto">
-          <li>{SCHEME_CAGR_LABEL}</li>
-          <li>{INVESTOR_XIRR_LABEL}</li>
-          <li>{FUND_ANALYTICS_CAGR_CONVENTION_NOTE}</li>
-          <li>A figure that cannot be worked out is shown as a plain label, never as zero, and a small letter beside it points to the explanation printed once at the foot of that page.</li>
-          <li>Dates are written day first.</li>
-        </ul>
-      </section>
+    <>
+      <h3>How to read this report</h3>
+      <ul className="fa-howto">
+        <li>{SCHEME_CAGR_LABEL}</li>
+        <li>{INVESTOR_XIRR_LABEL}</li>
+        <li>{FUND_ANALYTICS_CAGR_CONVENTION_NOTE}</li>
+        <li>A figure that cannot be worked out is shown as a plain label, never as zero, and a small letter beside it points to the explanation printed once at the foot of that page.</li>
+        <li>Dates are written day first.</li>
+      </ul>
+    </>
+  );
+}
 
-      {report.schemes.map((b) => (
-        <FundSheets key={b.instrumentId} block={b} ctx={ctx} riskFreeNote={riskFreeNote} onePage={pagesPerFund === 1} nameTag={report.schemes.length > 1} />
-      ))}
-
-      {report.schemes.length > 0 && (
-        <section className={`fa-comparison${noComparison ? ' fa-comparison-none' : compactComparison ? ' fa-compact' : ''}`} data-fa-comparison={noComparison ? 'none' : compactComparison ? 'compact' : 'full'}>
+/** The comparison section of one report. `heading` and `includeCalc` are only changed by a combined document (a heading naming the report; the method note printed once elsewhere). */
+export function ComparisonSection({ report, ctx, nm, heading = 'Comparing your funds', includeCalc = true }: { report: FundAnalyticsReport; ctx: Nav2Context; nm: (id: string) => string; heading?: string; includeCalc?: boolean }) {
+  const noComparison = !comparisonPossible(report);
+  const compactComparison = report.schemes.length > COMPARISON_FULL_MAX_FUNDS;
+  return (
+    <section className={`fa-comparison${noComparison ? ' fa-comparison-none' : compactComparison ? ' fa-compact' : ''}`} data-fa-comparison={noComparison ? 'none' : compactComparison ? 'compact' : 'full'}>
           <div className="fa-comparison-head">
-            <h2 className="fa-fund-name">Comparing your funds</h2>
+            <h2 className="fa-fund-name">{heading}</h2>
             <p className="fa-meta">{report.comparison.label}: only the funds you hold are compared with each other, and only against funds of the same category, plan and option.</p>
           </div>
           {compactComparison && !noComparison ? (
@@ -610,7 +557,7 @@ export default function FundAnalyticsPrintDocument({ report, version, pagesPerFu
           </div>
             </>
           )}
-          {report.calculationNotes && report.calculationNotes.length > 0 && (
+          {includeCalc && report.calculationNotes && report.calculationNotes.length > 0 && (
             <div className="fa-calc" data-fa-calc="true">
               <h3>{HOW_CALCULATED_HEADING}</h3>
               {report.calculationNotes.map((n, i) => (
@@ -618,8 +565,189 @@ export default function FundAnalyticsPrintDocument({ report, version, pagesPerFu
               ))}
             </div>
           )}
-        </section>
+    </section>
+  );
+}
+
+/** The page margin boxes (running header and footer) of the named page `fa`, switched off for the headless renderer, which fixes its own margins and draws its own header and footer. */
+const NO_MARGIN_BOXES = '@media print{@page fa{@top-left{content:none}@top-right{content:none}@bottom-left{content:none}@bottom-right{content:none}}}';
+/** Plain text only (a version line has no quote, brace, angle bracket or backslash): the value goes into a CSS string. */
+const cssText = (t: string): string => t.replace(/[<>"'{};\\\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
+
+export default function FundAnalyticsPrintDocument({ report, version, pagesPerFund = FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND, serverRender = false, timeZone = null }: { report: FundAnalyticsReport; version?: { versionNumber: number; createdAt: string }; pagesPerFund?: FundPagePlan; serverRender?: boolean; timeZone?: string | null }) {
+  const ctx: Nav2Context = { policy: NAV2_POLICY, currency: report.displayCurrency };
+  const names = new Map(report.schemes.map((s) => [s.instrumentId, s.schemeName]));
+  const nm = (id: string) => names.get(id) ?? 'Unknown fund';
+  const riskFreeIdx = report.notes.findIndex((n) => /^(Risk-free rate|Sharpe and Sortino compare)/i.test(n));
+  const riskFreeNote = riskFreeIdx >= 0 ? riskFreeIdx + 1 : null;
+  const fnCover = new Footnotes();
+  const latestPriceDate = report.schemes.map((b) => b.navSeriesSummary.lastDate).filter((d): d is string => !!d).sort().slice(-1)[0] ?? null;
+
+  const summaryRows: Row[] = report.schemes.map((b) => summaryRowFor(b, fnCover));
+
+  const expectedCharts = report.schemes.filter((b) => b.chart.navPoints.length >= 2).length;
+  return (
+    // Everything below is server-rendered HTML (no client-only chart): the print renderer waits for this marker and then checks that every
+    // expected chart is in the page, so a missing chart can never be printed as a blank rectangle.
+    <div className="fa-doc" data-fa-print-ready="true" data-fa-expected-charts={expectedCharts} data-fa-pages-per-fund={pagesPerFund}>
+      {/* The running header (report name, version line) for the browser print path: read by the margin boxes of @page fa in app/globals.css. */}
+      {/* dangerouslySetInnerHTML: React escapes a quote inside a <style> child to &quot; when it renders on the server, which a browser does not decode in CSS (the
+          custom property would be invalid and the header empty). The text is plain (cssText removes every character that could end the rule or the element). */}
+      <style dangerouslySetInnerHTML={{ __html: `${version ? `html{--fa-print-version:"${cssText(versionMadeLinePrint(version.versionNumber, version.createdAt, report.displayCurrency, timeZone))}"}` : ''}${serverRender ? NO_MARGIN_BOXES : ''}` }} />
+      <section className="fa-cover">
+        <h1>Fund analytics report</h1>
+        <p className="fa-lead">
+          As at {showDate(ctx, report.asOfDate)}. Period: {REPORT_PERIOD_LABELS[report.periodChoice]}.
+        </p>
+        {version && <p className="fa-version">{versionMadeLinePrint(version.versionNumber, version.createdAt, report.displayCurrency, timeZone)}</p>}
+        <p className="fa-saved">{FUND_ANALYTICS_SAVED_REPORT_SENTENCE}</p>
+        {report.schemes.length === 0 ? (
+          <p className="fa-text">This report covers Indian mutual funds, and none could be analysed.</p>
+        ) : (
+          <>
+            <p className="fa-text">
+              {report.schemes.length} fund{report.schemes.length === 1 ? '' : 's'} analysed. The fund’s own growth and your own return are different things and are shown separately for each fund.
+            </p>
+            <h3>Your funds at a glance</h3>
+            <FaTable head={['Fund', 'Value now', 'Gain or loss', 'Your return (XIRR)', 'Fund CAGR, 3 year']} widths={[44, 14, 14, 14, 14]} num={[false, true, true, true, true]} rows={summaryRows} />
+            {report.schemes.some((b) => b.ownership) && (
+              <p className="fa-sub">Where a fund is held jointly, the figures about your own money (value now, gain or loss, your return) are your share of it, as the fund sheet states. Your share of each fund is shown beside its name.</p>
+            )}
+            <FootnoteList fn={fnCover} />
+            {latestPriceDate && <p className="fa-text" data-fa-prices-run-to="true">{pricesRunToLine(showDate(ctx, latestPriceDate))}</p>}
+          </>
+        )}
+        {report.notes.length > 0 && (
+          <>
+            <h3>Notes</h3>
+            <ol className="fa-notes">
+              {report.notes.map((n, i) => (
+                <li key={i}>
+                  <span className="fa-note-no">Note {i + 1}</span> {n}
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+        <HowToRead />
+      </section>
+
+      {report.schemes.map((b) => (
+        <FundSheets key={b.instrumentId} block={b} ctx={ctx} riskFreeNote={riskFreeNote} onePage={pagesPerFund === 1} nameTag={report.schemes.length > 1} />
+      ))}
+
+      {report.schemes.length > 0 && (
+        <ComparisonSection report={report} ctx={ctx} nm={nm} />
       )}
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// A COMBINED document (several reports, one print job; components/reports/FundAnalyticsCombinedPrintDocument.tsx). ONE front section for all funds, then each
+// report contributes only its fund pages and its own comparison. Everything is read from the reports' saved report_json; no figure or text of a row changes.
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+
+/** The front section: the intro is printed by the caller above it. One table of every fund (largest first), ONE list of notes, ONE "How to read". */
+export function FundAnalyticsCombinedFront({ parts, timeZone = null }: { parts: CombinedPartInput[]; timeZone?: string | null }) {
+  const reports = parts.map((p) => p.report);
+  const ctx: Nav2Context = { policy: NAV2_POLICY, currency: reports[0].displayCurrency };
+  const fn = new Footnotes();
+  const { rows, duplicateFunds } = frontRows(parts);
+  const diff = differences(parts);
+  const mismatch = diff.asOf || diff.period;
+  const { notes } = mergeNotes(parts, duplicateFunds);
+  const latestPriceDate = reports.flatMap((r) => r.schemes.map((b) => b.navSeriesSummary.lastDate)).filter((d): d is string => !!d).sort().slice(-1)[0] ?? null;
+  const fundCount = coverage(parts).covered;
+  const tableRows: Row[] = rows.map((r) => {
+    const row = summaryRowFor(reports[r.partIndex].schemes[r.schemeIndex], fn);
+    return mismatch ? { ...row, cells: [row.cells[0], String(r.partIndex + 1), ...row.cells.slice(1)] } : row;
+  });
+  const head = ['Fund', 'Value now', 'Gain or loss', 'Your return (XIRR)', 'Fund CAGR, 3 year'];
+  return (
+    <div className="fa-doc" data-fa-front="true">
+      <section className="fa-cover">
+        <h1>Fund analytics report</h1>
+        {mismatch ? (
+          <>
+            <p className="fa-lead">These reports were made for different dates or periods, so their figures are not directly comparable:</p>
+            <ul className="fa-howto" data-fa-differences="true">
+              {parts.map((p, i) => (
+                <li key={i}>
+                  {reportsLabel(parts, [i])}: as at {showDate(ctx, p.report.asOfDate)}; period: {REPORT_PERIOD_LABELS[p.report.periodChoice]}.
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="fa-lead">
+            As at {showDate(ctx, reports[0].asOfDate)}. Period: {REPORT_PERIOD_LABELS[reports[0].periodChoice]}.
+          </p>
+        )}
+        {parts.map((p, i) => (
+          <p key={i} className="fa-version">
+            Report {i + 1} of {parts.length}: {versionMadeLinePrint(p.version.versionNumber, p.version.createdAt, p.report.displayCurrency, timeZone)} ({p.report.schemes.length} fund{p.report.schemes.length === 1 ? '' : 's'})
+          </p>
+        ))}
+        <p className="fa-saved">{FUND_ANALYTICS_SAVED_REPORT_SENTENCE}</p>
+        <p className="fa-text">
+          {fundCount} fund{fundCount === 1 ? '' : 's'} analysed in {parts.length} reports. The fund’s own growth and your own return are different things and are shown separately for each fund.
+        </p>
+        <h3>All your funds at a glance</h3>
+        <FaTable
+          head={mismatch ? ['Fund', 'Report', ...head.slice(1)] : head}
+          widths={mismatch ? [44, 8, 12, 12, 12, 12] : [52, 12, 12, 12, 12]}
+          num={mismatch ? [false, false, true, true, true, true] : [false, true, true, true, true]}
+          rows={tableRows}
+        />
+        {reports.some((r) => r.schemes.some((b) => b.ownership)) && (
+          <p className="fa-sub">Where a fund is held jointly, the figures about your own money (value now, gain or loss, your return) are your share of it, as the fund sheet states. Your share of each fund is shown beside its name.</p>
+        )}
+        <FootnoteList fn={fn} />
+        {latestPriceDate && <p className="fa-text" data-fa-prices-run-to="true">{pricesRunToLine(showDate(ctx, latestPriceDate))}</p>}
+        {notes.length > 0 && (
+          <>
+            <h3>Notes</h3>
+            <ol className="fa-notes" data-fa-merged-notes="true">
+              {notes.map((n, i) => (
+                <li key={i}>
+                  <span className="fa-note-no">Note {i + 1}</span> {n.text}
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+        <HowToRead />
+      </section>
+    </div>
+  );
+}
+
+/** One report's contribution to a combined document: only its fund pages and its own comparison (labelled with the report). The method note is printed here only when the reports' texts differ. */
+export function FundAnalyticsCombinedPartBody({ parts, index, riskFreeNote, pagesPerFund = FUND_ANALYTICS_DEFAULT_PAGES_PER_FUND }: { parts: CombinedPartInput[]; index: number; riskFreeNote: number | null; pagesPerFund?: FundPagePlan }) {
+  const report = parts[index].report;
+  const ctx: Nav2Context = { policy: NAV2_POLICY, currency: report.displayCurrency };
+  const names = new Map(report.schemes.map((s) => [s.instrumentId, s.schemeName]));
+  const nm = (id: string) => names.get(id) ?? 'Unknown fund';
+  const expectedCharts = report.schemes.filter((b) => b.chart.navPoints.length >= 2).length;
+  const label = reportsLabel(parts, [index]);
+  // identical method text in every report: printed ONCE, at the start of the first report's pages (a block at the end of the front section would strand a short page whenever the front fills its page)
+  const calcOnce = index === 0 && calculationMode(parts) === 'once' ? report.calculationNotes ?? [] : [];
+  return (
+    <div className="fa-doc" data-fa-print-ready="true" data-fa-expected-charts={expectedCharts} data-fa-pages-per-fund={pagesPerFund}>
+      {calcOnce.length > 0 && (
+        <div className="fa-calc" data-fa-calc="true" data-fa-calc-once="true">
+          <h3>{HOW_CALCULATED_HEADING}</h3>
+          {calcOnce.map((n, i) => (
+            <p key={i} className="fa-sub">{n}</p>
+          ))}
+        </div>
+      )}
+      {report.schemes.map((b) => (
+        <FundSheets key={b.instrumentId} block={b} ctx={ctx} riskFreeNote={riskFreeNote} onePage={pagesPerFund === 1} nameTag={report.schemes.length > 1} />
+      ))}
+      {report.schemes.length > 0 && <ComparisonSection report={report} ctx={ctx} nm={nm} heading={`Comparing the funds in ${label.charAt(0).toLowerCase()}${label.slice(1)}`} includeCalc={calculationMode(parts) === 'per_report'} />}
     </div>
   );
 }
