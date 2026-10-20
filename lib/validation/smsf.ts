@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MASKED_IDENTIFIER_MESSAGE, maskedIdentifierProblem } from '@/lib/validation/maskedIdentifier';
 
 const smsfFundCreateBase = z.object({
   account_name: z.string().min(1),
@@ -114,11 +115,11 @@ const smsfLiabilityBaseSchema = z.object({
   // The canonical liability fields (migration 0295), same values and same masking rule as the personal liabilities register.
   interest_rate_type: z.enum(['fixed', 'variable']).optional().nullable(),
   fixed_rate_expiry: z.string().date().optional().nullable(),
+  // One rule, one message, shared with the personal liabilities register (WP-E, F24).
   masked_identifier: z
     .string()
     .trim()
-    .max(32)
-    .refine((v) => !/[0-9]{7,}/.test(v), { message: 'Enter only the last 4 digits of the account number, not the whole number' })
+    .refine((v) => maskedIdentifierProblem(v) === null, { message: MASKED_IDENTIFIER_MESSAGE })
     .optional()
     .nullable(),
   due_date: z.string().date().optional().nullable(),

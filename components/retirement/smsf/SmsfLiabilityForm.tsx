@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react';
 import { DateInput } from '@/components/ui/DateInput';
+import { MASKED_IDENTIFIER_MAX_LENGTH, MASKED_IDENTIFIER_MESSAGE, maskedIdentifierProblem } from '@/lib/validation/maskedIdentifier';
 import { fetchJson } from './format';
 import { LIABILITY_TYPE_LABELS, type CurrencyCode, type SmsfHoldingRow, type SmsfLiabilityRow } from './types';
 
@@ -41,7 +42,7 @@ export function SmsfLiabilityForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const maskedTooLong = /[0-9]{7,}/.test(masked);
+  const maskedTooLong = maskedIdentifierProblem(masked) !== null;
   const canSubmit = name.trim() !== '' && balance !== '' && Number(balance) >= 0 && !maskedTooLong;
 
   async function submit() {
@@ -128,8 +129,8 @@ export function SmsfLiabilityForm({
         </div>
         <div>
           <label htmlFor={`${uid}-masked`} className="block text-xs text-muted">Account number, last 4 digits (optional)</label>
-          <input id={`${uid}-masked`} type="text" value={masked} onChange={(e) => setMasked(e.target.value)} maxLength={32} aria-invalid={maskedTooLong} aria-describedby={maskedTooLong ? `${uid}-masked-err` : undefined} className={field} />
-          {maskedTooLong && <p id={`${uid}-masked-err`} role="alert" className="mt-1 text-xs text-risk">Enter only the last 4 digits of the account number, not the whole number.</p>}
+          <input id={`${uid}-masked`} type="text" value={masked} onChange={(e) => setMasked(e.target.value)} maxLength={MASKED_IDENTIFIER_MAX_LENGTH} aria-invalid={maskedTooLong} aria-describedby={maskedTooLong ? `${uid}-masked-err` : undefined} className={field} />
+          {maskedTooLong && <p id={`${uid}-masked-err`} role="alert" className="mt-1 text-xs text-risk">{MASKED_IDENTIFIER_MESSAGE}</p>}
         </div>
         {type === 'property_loan' && propertyHoldings.length > 0 && (
           <div>

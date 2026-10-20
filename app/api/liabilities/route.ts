@@ -1,4 +1,5 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, bad, badField, badValidation } from '@/lib/api';
+import { MASKED_IDENTIFIER_MESSAGE, isMaskedIdentifierConstraintError } from '@/lib/validation/maskedIdentifier';
 import { makeRegistry } from '@/lib/services/registry';
 import { liabilitySchema } from '@/lib/validation/liability';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
@@ -36,5 +37,7 @@ export async function POST(req: Request) {
   if (!gate.allowed) return bad(gate.reason, 403);
 
   const { data, error } = await registry.save(user.id, parsed.data);
+  // Defence in depth behind the schema (F24): the database rule answered in its own words before; say what to type.
+  if (error && isMaskedIdentifierConstraintError(error)) return badField('masked_identifier', MASKED_IDENTIFIER_MESSAGE);
   return error ? bad(error.message) : ok(data);
 }
