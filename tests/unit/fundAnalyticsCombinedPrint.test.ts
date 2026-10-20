@@ -11,6 +11,7 @@
 //   NC-CP3  a page that does not pass the signed-in user's id to the report reader would read another person's report (the source scan flags it);
 //   NC-CP4  a document that kept each report's own `html{--fa-print-version}` rule would print the LAST report's version line on every page (the markup check flags it);
 //   NC-CP5  a title that is not made file-name safe would keep a character Windows rejects.
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createElement } from 'react';
@@ -22,7 +23,7 @@ import { FUND_ANALYTICS_TITLE_FALLBACK, fundAnalyticsPrintTitle } from '@/lib/re
 import { COMBINED_MAX_REPORTS, combinedIntroLine, combinedPageName, combinedPageRulesCss, combinedPrintHref, combinedPrintTitle, parseCombinedIds } from '@/lib/reports/fundAnalyticsCombinedPrint';
 import { isPrintTitleFileNameSafe } from '@/lib/reports/printDocumentTitle';
 import { versionMadeLinePrint } from '@/lib/engines/nav2/reportWording';
-import { buildPrintFixture } from '../../scripts/nav2_print_fixtures';
+import { buildPrintFixture, parseFixtureName } from '../../scripts/nav2_print_fixtures';
 
 const mockGetUser = vi.fn();
 const mockCanView = vi.fn();
@@ -111,22 +112,33 @@ describe('the one line at the start', () => {
   });
 });
 
+const GOLDEN_HASHES: Record<string, [string, string, string]> = {
+  'funds-1': ['55eeb2a7384479f2d56c4cade5f40a1031f87fce2bf24d4f3e79448589d08a4d', '503fde6b1d410e05ece0f35b9a416315934f428a60c721e90278f56302b4a5a1', 'c8debef6f7ca627d5398648485c156e1bc55bbda765f3d079e75af0f233474c3'],
+  'funds-2': ['753d6724ad3a8fca6e5733648bd3bb161b529c53064ffcdd02738b8dcf90ba51', '35250c6f9cf309286be8bd1a4dbbfd70fa5a42a282e2fab5a4e16ec8832b08f4', 'f08f6a4c23faaca33ec25f5c8f6a46c9c82f33434acad2baaa02b621a9a93153'],
+  'funds-4': ['ebb04d699d6c3acccb865170aa98282943cd059677244e84a7eb06ded4ba6ebe', 'e89e1d710100ec8dbf1a6b56bd044b32cd5a7b18b4a10aa13ca34d0dba9ce422', '8e08946394227d990a59b18b6bfc8be044754ee8a0f44c3832afe8283ef52460'],
+  'funds-12+unavailable+redeemed+long': ['cab86d1900aab59df33228e64cb7e9aef9b8b62bc178f56b35033b6b04d1bb3b', '31f25c06c57a629c6ec0fbc737a3d0dd70f73af5f9284c642fcdcb9691c4b6a4', '4e1af03e1f08cd5767b6018b9732e98fd18f0e4ad0f025c58414668bdb55f550'],
+  'funds-10+long+young': ['ec2ffefef38493862fc8ad5158e8bae927be514d3f545c39cb0c9099e33075d1', '632512c8431e72355039c80a5eaae575f35ca15ded65a867d5b0859da5c9ae04', 'e604af4e50ed8863cd5e0d98d2a48380be6b1987b2ceadce0f3cb0f00dc73601'],
+};
+
 describe('the page rules', () => {
   const lines = ['Version 4, made 20-10-2026, 11:08 am UTC', 'Version 5, made 20-10-2026, 11:09 am UTC'];
-  const css = combinedPageRulesCss(lines);
-  it('one named page per report, each with ITS OWN version line; reports 2+ start on a fresh page', () => {
+  const css = combinedPageRulesCss('Versions 4 and 5', lines);
+  it('one named page for the front section ("Versions 4 and 5") and one per report with ITS OWN version line; every report starts on a fresh page', () => {
+    expect(combinedPageName(0)).toBe('fa0');
     expect(combinedPageName(1)).toBe('fa1');
-    expect(css).toContain('@page fa1{');
-    expect(css).toContain('@page fa2{');
+    for (const n of ['fa0', 'fa1', 'fa2']) expect(css).toContain(`@page ${n}{`);
+    expect(css).toContain('content:"Versions 4 and 5"');
     expect(css).toContain(`content:"${lines[0]}"`);
     expect(css).toContain(`content:"${lines[1]}"`);
+    expect(css.indexOf('Versions 4 and 5')).toBeLessThan(css.indexOf(lines[0]));
     expect(css.indexOf(lines[0])).toBeLessThan(css.indexOf('@page fa2'));
-    expect(css).toContain('.fa-combined-part-1{page:fa1}');
+    expect(css).toContain('.fa-combined-front{page:fa0}');
+    expect(css).toContain('.fa-combined-part-1{page:fa1;break-before:page;page-break-before:always}');
     expect(css).toContain('.fa-combined-part-2{page:fa2;break-before:page;page-break-before:always}');
     expect(css.startsWith('@media print{')).toBe(true);
   });
   it('the page counter is the document\'s own: "Page n of N" on every named page', () => {
-    expect(count(css, "content:'Page ' counter(page) ' of ' counter(pages)")).toBe(2);
+    expect(count(css, "content:'Page ' counter(page) ' of ' counter(pages)")).toBe(3);
   });
   it('size, margins, fonts and the other margin boxes are exactly those of @page fa in app/globals.css (so a combined page looks like a single report page)', () => {
     const braces = (text: string, from: number): string => {
@@ -138,24 +150,23 @@ describe('the page rules', () => {
       throw new Error('unbalanced');
     };
     const norm = (t: string) => t.replace(/\s+/g, '').replace(/"/g, "'").replace(/;}/g, '}').replace(/'Segoe UI'/g, "'SegoeUI'");
-    // the version box differs on purpose (the single document reads a page-wide variable, a combined part has its own line): compare the rest
+    // the version box differs on purpose (the single document reads a page-wide variable, a combined section has its own line): compare the rest
     const withoutVersionBox = (t: string) => t.replace(/@top-right\{[^}]*\}/, '@top-right{}');
     const globals = read('app/globals.css');
     const fa = norm(braces(globals, globals.indexOf('@page fa {')));
-    const mine = norm(braces(css, css.indexOf('@page fa1{')));
-    expect(withoutVersionBox(mine)).toBe(withoutVersionBox(fa));
+    for (const name of ['fa0', 'fa1', 'fa2']) expect(withoutVersionBox(norm(braces(css, css.indexOf(`@page ${name}{`)))), name).toBe(withoutVersionBox(fa));
     expect(fa).toContain('@top-right{content:var(--fa-print-version');
-    expect(mine).toContain("@top-right{content:'Version4,made20-10-2026,11:08amUTC'");
+    expect(norm(braces(css, css.indexOf('@page fa1{')))).toContain("@top-right{content:'Version4,made20-10-2026,11:08amUTC'");
   });
-  it('a character that could end the rule or the element is removed from a version line', () => {
-    const bad = combinedPageRulesCss(['Version 1 "}</style><script>alert(1)</script>']);
+  it('a character that could end the rule or the element is removed from a header line', () => {
+    const bad = combinedPageRulesCss('Versions 1 "}</style>', ['Version 1 "}</style><script>alert(1)</script>']);
     expect(bad).not.toContain('</style>');
     expect(bad).not.toContain('<script>');
-    expect((bad.match(/"/g) ?? []).length).toBe(2);
+    expect((bad.match(/"/g) ?? []).length).toBe(4);
   });
 });
 
-describe('the combined document (markup)', () => {
+describe('the combined document (markup): ONE front summary, then only each report\'s fund pages', () => {
   const r1 = buildPrintFixture({ funds: 4 }).report;
   // the fixture generator names funds and ids the same way every time: make report 2 a DIFFERENT set of funds (as a second batch is), so mixing would show
   const r2raw = buildPrintFixture({ funds: 2 }).report;
@@ -164,58 +175,135 @@ describe('the combined document (markup)', () => {
   const v2 = { versionNumber: 5, createdAt: '2026-10-20T01:09:00.000Z' };
   const parts = [{ report: r1, version: v1 }, { report: r2, version: v2 }];
   const html = renderToStaticMarkup(createElement(FundAnalyticsCombinedPrintDocument, { parts, timeZone: 'Asia/Kolkata' }));
+  const front = html.slice(html.indexOf('data-fa-front-section'), html.indexOf('data-fa-part="1"'));
+  const body = html.slice(html.indexOf('data-fa-part="1"'));
+  const single = (r: typeof r1, v: typeof v1) => renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report: r, version: v, timeZone: 'Asia/Kolkata' }));
+  /** The fund pages of a single report's markup: everything between its cover and its comparison section. */
+  const fundRegion = (h: string) => h.slice(h.indexOf('</section>') + '</section>'.length, h.indexOf('<section class="fa-comparison'));
+  const comparisonRegion = (h: string) => h.slice(h.indexOf('<section class="fa-comparison'), h.lastIndexOf('</section>') + '</section>'.length);
 
-  it('the explanation is printed ONCE, at the start, before the first report', () => {
+  it('the explanation is printed ONCE, at the start, before the front section', () => {
     const intro = 'This document combines 2 reports covering your 6 funds. Funds are compared only within the same report.';
     expect(count(html, intro)).toBe(1);
-    expect(html.indexOf(intro)).toBeLessThan(html.indexOf('class="fa-doc"'));
     expect(html.indexOf(intro)).toBeLessThan(html.indexOf('<h1>Fund analytics report</h1>'));
+    expect(front).toContain(intro);
   });
-  it('each report is the UNCHANGED single document: its markup appears verbatim, in order, and nothing of it is merged or dropped', () => {
-    const single = (r: typeof r1, v: typeof v1) => renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report: r, version: v, timeZone: 'Asia/Kolkata', combinedPart: true }));
+  it('ONE "All your funds at a glance" with every fund exactly once, largest value first; NO per-report "Your funds at a glance", cover, notes or "How to read" block remains', () => {
+    expect(count(html, 'All your funds at a glance')).toBe(1);
+    expect(count(html, '>Your funds at a glance<')).toBe(0);
+    expect(count(html, 'class="fa-cover"')).toBe(1);
+    expect(count(html, '<h1>Fund analytics report</h1>')).toBe(1);
+    expect(count(html, '>How to read this report<')).toBe(1);
+    expect(count(html, '<h3>Notes</h3>')).toBe(1);
+    expect(count(html, 'This is a saved report')).toBe(1);
+    expect(body).not.toContain('class="fa-cover"');
+    const table = front.slice(front.indexOf('<tbody>'), front.indexOf('</tbody>'));
+    const all = [...r1.schemes, ...r2.schemes];
+    const names = [...table.matchAll(/<th scope="row" class="fa-label">([^<]*)<\/th>/g)].map((m) => m[1]);
+    expect(names.length).toBe(all.length);
+    expect(new Set(names).size).toBe(all.length);
+    expect([...names].sort()).toEqual(all.map((s) => s.schemeName).sort());
+    const value = (n: string) => {
+      const b = all.find((s) => s.schemeName === n)!;
+      const cv = b.analytics.investor?.currentValue;
+      return cv && cv.state === 'available' ? cv.value.value : -Infinity;
+    };
+    for (let i = 1; i < names.length; i++) expect(value(names[i - 1]), `${names[i - 1]} before ${names[i]}`).toBeGreaterThanOrEqual(value(names[i]));
+  });
+  it('the table has the same columns as the per-report one and the same figures: each fund row equals the single report own row (no recomputation), footnote marks carrying the same explanations', () => {
+    const rowsOf = (h: string) => new Map([...h.matchAll(/<tr><th scope="row" class="fa-label">([^<]*)<\/th>.*?<\/tr>/g)].map((m) => [m[1], m[0]]));
+    const footnotes = (h: string) => new Map([...h.matchAll(/<p><sup class="fa-mark">([a-z])<\/sup> ([^<]*)/g)].map((m) => [m[1], m[2].split(' The same applies')[0]]));
+    const marks = (row: string, map: Map<string, string>) => [...row.matchAll(/<sup class="fa-mark">([a-z,]+)<\/sup>/g)].flatMap((m) => m[1].split(',')).map((l) => map.get(l)).sort();
+    const noMarks = (row: string) => row.replace(/<sup class="fa-mark">[a-z,]+<\/sup>/g, '');
     const s1 = single(r1, v1);
-    const s2 = single(r2, v2);
-    expect(html).toContain(s1);
-    expect(html).toContain(s2);
-    expect(html.indexOf(s1)).toBeLessThan(html.indexOf(s2));
-    expect(count(html, 'class="fa-cover"')).toBe(2);
-    expect(count(html, 'Comparing your funds')).toBe(2); // each report keeps its OWN comparison
-    expect(count(html, 'data-fa-comparison=')).toBe(2);
-    // the funds of report 1 are not in report 2's markup and vice versa (no mixing): compare the part markup
-    const part2 = html.slice(html.indexOf('data-fa-part="2"'));
-    for (const s of r1.schemes) if (!r2.schemes.some((x) => x.instrumentId === s.instrumentId)) expect(part2).not.toContain(`>${s.schemeName}<`);
+    const own = rowsOf(s1.slice(0, s1.indexOf('</tbody>') + 8));
+    const mine = rowsOf(front);
+    const ownNotes = footnotes(s1.slice(0, s1.indexOf('How to read')));
+    const myNotes = footnotes(front);
+    expect(front).toContain('Value now');
+    expect(front).toContain('Gain or loss');
+    expect(front).toContain('Your return (XIRR)');
+    expect(front).toContain('Fund CAGR, 3 year');
+    expect(own.size).toBe(r1.schemes.length);
+    for (const [name, row] of own) {
+      expect(noMarks(mine.get(name) ?? ''), name).toBe(noMarks(row));
+      expect(marks(mine.get(name)!, myNotes), name).toEqual(marks(row, ownNotes));
+    }
   });
-  it('part 2 starts on a fresh page and each part sits on its own named page', () => {
+  it('each report contributes ONLY its fund pages (the single document\'s fund markup, verbatim) and its own comparison, labelled with its report', () => {
+    expect(body).toContain(fundRegion(single(r1, v1)));
+    expect(body).toContain(fundRegion(single(r2, v2)));
+    expect(body.indexOf(fundRegion(single(r1, v1)))).toBeLessThan(body.indexOf(fundRegion(single(r2, v2))));
+    expect(count(html, 'data-fa-comparison=')).toBe(2);
+    expect(count(html, 'Comparing your funds')).toBe(0);
+    expect(body).toContain('Comparing the funds in report 1 (Version 4)');
+    expect(body).toContain('Comparing the funds in report 2 (Version 5)');
+    // the comparison itself is the single document's, apart from the heading and the method note (which is printed once, see below)
+    const noCalc = (h: string) => h.replace(/<div class="fa-calc" data-fa-calc="true">.*?<\/div>/, '');
+    expect(body).toContain(noCalc(comparisonRegion(single(r1, v1))).replace('Comparing your funds', 'Comparing the funds in report 1 (Version 4)'));
+    expect(body).toContain(noCalc(comparisonRegion(single(r2, v2))).replace('Comparing your funds', 'Comparing the funds in report 2 (Version 5)'));
+    // no mixing: report 1's fund names are not in report 2's part
+    const part2 = html.slice(html.indexOf('data-fa-part="2"'));
+    for (const sc of r1.schemes) if (!r2.schemes.some((x) => x.instrumentId === sc.instrumentId)) expect(part2).not.toContain(`>${sc.schemeName}<`);
+  });
+  it('the method note ("How this was calculated") is printed ONCE when the reports\' texts are identical, at the start of the first report\'s pages; per report when they differ', () => {
+    expect(r1.calculationNotes?.length).toBeGreaterThan(0);
+    expect(count(html, '>How this was calculated<')).toBe(1);
+    expect(body.indexOf('How this was calculated')).toBeLessThan(body.indexOf('class="fa-fund-head"'));
+    const different = JSON.parse(JSON.stringify(r2)) as typeof r2;
+    different.calculationNotes = ['A different method note for this report only.'];
+    const h2 = renderToStaticMarkup(createElement(FundAnalyticsCombinedPrintDocument, { parts: [parts[0], { report: different, version: v2 }], timeZone: 'Asia/Kolkata' }));
+    expect(count(h2, '>How this was calculated<')).toBe(2);
+    expect(h2).toContain('A different method note for this report only.');
+    expect(h2).toContain(r1.calculationNotes![0]);
+    expect(h2).not.toContain('data-fa-calc-once');
+  });
+  it('every legal / provenance line survives: "information, not a recommendation" and the saved-report sentence are in the front section', () => {
+    expect(front).toContain('This is information, not a recommendation to buy, sell or switch.');
+    expect(front).toContain('This is a saved report: it does not change when prices are later corrected.');
+  });
+  it('the front section and each report sit on their own named page; every report starts on a fresh page', () => {
+    expect(html).toContain('data-fa-front-section="true"');
+    for (const n of ['fa0', 'fa1', 'fa2']) expect(html).toContain(`@page ${n}{`);
     expect(html).toContain('fa-combined-part fa-combined-part-1');
     expect(html).toContain('fa-combined-part fa-combined-part-2');
-    expect(html).toContain('@page fa1{');
-    expect(html).toContain('@page fa2{');
-    expect(html).toContain('break-before:page');
+    expect(count(html, 'break-before:page')).toBe(2);
   });
-  it('the running header names each report\'s own version, in the viewer\'s time zone', () => {
+  it('the running header: the front names both versions, each report\'s pages name their own version, in the viewer\'s time zone', () => {
+    expect(html).toContain('content:"Versions 4 and 5"');
     expect(html).toContain(`content:"${versionMadeLinePrint(4, v1.createdAt, r1.displayCurrency, 'Asia/Kolkata')}"`);
     expect(html).toContain(`content:"${versionMadeLinePrint(5, v2.createdAt, r2.displayCurrency, 'Asia/Kolkata')}"`);
   });
-  it('NC-CP4: no part sets the single document\'s page-wide version variable (it would be the LAST report\'s line on every page); the single document still does', () => {
+  it('NC-CP4: nothing sets the single document\'s page-wide version variable (it would be the LAST report\'s line on every page); the single document still does', () => {
     expect(html).not.toContain('--fa-print-version');
-    const alone = renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report: r1, version: v1 }));
-    expect(alone).toContain('--fa-print-version');
-    const broken = renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report: r1, version: v1, combinedPart: false }));
-    expect(broken).toContain('--fa-print-version'); // what the combined part would print without the flag
+    expect(single(r1, v1)).toContain('--fa-print-version');
   });
-  it('the print stylesheet lets the named page of a part win over the single document\'s own page: ".fa-combined-part .fa-doc { page: auto }"', () => {
-    expect(read('app/globals.css')).toMatch(/\.fa-combined-part \.fa-doc \{ page: auto; \}/);
-  });
-  it('a single document is byte-for-byte what it was (the new prop defaults off)', () => {
-    const a = renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report: r1, version: v1 }));
-    const b = renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report: r1, version: v1, combinedPart: false }));
-    expect(a).toBe(b);
+  it('the print stylesheet lets the named page of a section win over the single document\'s own page', () => {
+    expect(read('app/globals.css')).toMatch(/\.fa-combined-front \.fa-doc,\s*\.fa-combined-part \.fa-doc \{ page: auto; \}/);
   });
 });
 
+describe('GOLDEN: the single-report print document is byte-for-byte what it was before the combined summary existed', () => {
+  // SHA-256 of renderToStaticMarkup(<FundAnalyticsPrintDocument report version={2, 2026-10-19T11:08Z}>) for synthetic fixtures, taken on origin/main 534bfb0 BEFORE
+  // the document was refactored (summary row, "How to read" and the comparison section became functions that the combined document also uses).
+  // Variants: default | timeZone Asia/Kolkata | serverRender + two pages per fund. Regenerate only when a single-report change is intended.
+  const GOLD: Record<string, [string, string, string]> = GOLDEN_HASHES;
+  for (const [name, [plain, tz, server]] of Object.entries(GOLD)) {
+    it(`${name}`, () => {
+      const { report } = buildPrintFixture(parseFixtureName(name));
+      const h = (extra: Record<string, unknown>) => createHash('sha256').update(renderToStaticMarkup(createElement(FundAnalyticsPrintDocument, { report, version: { versionNumber: 2, createdAt: '2026-10-19T11:08:00.000Z' }, ...extra }))).digest('hex');
+      expect(h({})).toBe(plain);
+      expect(h({ timeZone: 'Asia/Kolkata' })).toBe(tz);
+      expect(h({ serverRender: true, pagesPerFund: 2 })).toBe(server);
+    }, 120_000);
+  }
+});
+
 // ---- the print page ---------------------------------------------------------------------------------------------------------------------------
+const fixtureCache = new Map<number, ReturnType<typeof buildPrintFixture>['report']>();
 const mk = (id: string, userId: string, versionNumber: number, funds: number) => {
-  const { report } = buildPrintFixture({ funds });
+  if (!fixtureCache.has(funds)) fixtureCache.set(funds, buildPrintFixture({ funds }).report);
+  const report = fixtureCache.get(funds)!;
   return { userId, id, found: { summary: { id, versionNumber, asOfDate: '2026-10-20', schemeCount: funds, createdAt: '2026-10-20T01:08:00.000Z', periodChoice: 'all_history' }, report, manifestChecksum: 'a'.repeat(64) } };
 };
 const store = new Map<string, ReturnType<typeof mk>['found']>();
