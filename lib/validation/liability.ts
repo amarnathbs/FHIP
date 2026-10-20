@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { OWNER_VALUES } from '@/lib/constants';
 import { AUTHORITATIVE_COUNTRY_CODES } from '@/lib/services/jurisdiction';
 import { currencyMatchesCountry, currencyCountryRefinement } from './currencyCountry';
+import { MASKED_IDENTIFIER_MAX_LENGTH, maskedIdentifierProblem } from './maskedIdentifier';
 
 const liabilityBaseSchema = z.object({
   liability_name: z.string().min(1),
@@ -45,7 +46,16 @@ const liabilityBaseSchema = z.object({
   // FDH-10 additions (migration 0096) — statement-import metadata. All
   // optional so manual liability add/edit is completely unaffected (spec
   // section 129).
-  masked_identifier: z.string().max(32).optional(),
+  // Document2 (4) F24: a full account number is refused here, in plain words, BEFORE the database CHECK
+  // (chk_liabilities_masked_identifier) has to; see lib/validation/maskedIdentifier.ts.
+  masked_identifier: z
+    .string()
+    .max(MASKED_IDENTIFIER_MAX_LENGTH)
+    .superRefine((value, ctx) => {
+      const problem = maskedIdentifierProblem(value);
+      if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+    })
+    .optional(),
   minimum_payment: z.number().min(0).optional(),
   available_credit: z.number().min(0).optional(),
   due_date: z.string().date().optional(),
