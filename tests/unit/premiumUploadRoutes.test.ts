@@ -175,6 +175,7 @@ const ADMISSION_PROBES: Record<string, Probe> = {
   'aie.fdh_bank.intake': { request: (x) => bytesRequest(`/api/aie/fdh-bank/intake?country_code=AU&currency_code=AUD&filename=s.pdf${x?.querySuffix ?? ''}`, x) },
   'aie.investment_intelligence.intake': { request: (x) => bytesRequest(`/api/aie/investment-intelligence/intake?filename=s.pdf${x?.querySuffix ?? ''}`, x) },
   'ii.source_document.upload': { request: (x) => multipartRequest(`/api/investment-intelligence/source-documents${x?.querySuffix ?? ''}`) },
+  'ii.source_document.replacement': { request: (x) => multipartRequest(`/api/investment-intelligence/source-documents/${DOC_ID}/replacement${x?.querySuffix ?? ''}`), params: { id: DOC_ID } },
   'ii.source_document.parse_fixture': { request: (x) => jsonRequest(`/api/investment-intelligence/source-documents/${DOC_ID}/parse${x?.querySuffix ?? ''}`, { not: 'a fixture' }, x?.headers), params: { id: DOC_ID } },
 };
 
@@ -203,6 +204,7 @@ const LOADERS: Record<string, () => Promise<{ POST: RouteHandler }>> = {
   'aie.fdh_bank.intake': () => import('@/app/api/aie/fdh-bank/intake/route'),
   'aie.investment_intelligence.intake': () => import('@/app/api/aie/investment-intelligence/intake/route'),
   'ii.source_document.upload': () => import('@/app/api/investment-intelligence/source-documents/route'),
+  'ii.source_document.replacement': () => import('@/app/api/investment-intelligence/source-documents/[id]/replacement/route'),
   'ii.source_document.parse_fixture': () => import('@/app/api/investment-intelligence/source-documents/[id]/parse/route'),
   'fdh.bank_csv.detect': () => import('@/app/api/financial-data-hub/bank-csv/[documentId]/detect/route'),
   'fdh.bank_csv.map': () => import('@/app/api/financial-data-hub/bank-csv/[documentId]/map/route'),

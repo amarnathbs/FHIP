@@ -188,7 +188,10 @@ describe('documentProcessing / certification readers (structural: the pipeline n
     expect(src).toContain('loadDecidedOwnershipAccountIds');
     // owner_unmatched / joint (no declared owner) loop, and the declared-owner loop
     expect(src.match(/if \(decidedOwnershipAccountIds\.has\(accountId\)\) continue;/g)?.length).toBe(2);
-    expect(src).toContain('ownerUnresolved && !decidedOwnershipAccountIds.has(accountId)');
+    // Document2 (4) WP-B: the certification flag is now per account and uses the explicit-owner set, a SUPERSET of the decided
+    // (entity / joint) set that also counts a sole-member pointer a person chose (see loadExplicitOwnerAccountIds).
+    expect(src).toContain('ownerUnresolved && !explicitOwnerAccountIds.has(accountId)');
+    expect(src).toContain('loadExplicitOwnerAccountIds');
   });
 
   it('recertifyPosition and the AU certification read the EFFECTIVE ownership, not just the pointer', () => {

@@ -14,7 +14,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
-  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'ii.source_document.upload');
+  const importDenied = await refuseUnlessFinancialImportAllowed(user.id, 'ii.source_document.replacement');
   if (importDenied) return importDenied;
 
   const form = await req.formData().catch(() => null);

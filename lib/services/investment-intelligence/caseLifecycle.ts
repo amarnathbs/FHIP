@@ -32,7 +32,7 @@ export interface LifecycleDocumentState {
 }
 
 /** True only when the raw object can still be downloaded. */
-export function hasStoredFile(doc: Pick<LifecycleDocumentState, 'storagePath' | 'storagePurgedAt'> | null | undefined): boolean {
+export function hasStoredFile(doc: Pick<LifecycleDocumentState, 'storagePath' | 'storagePurgedAt'> & Partial<LifecycleDocumentState> | null | undefined): boolean {
   return !!doc && !!doc.storagePath && !doc.storagePurgedAt;
 }
 
