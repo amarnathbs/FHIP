@@ -401,9 +401,9 @@ export function FinancialDataGrid({
       // uneditable — it still exists and still counts financially, just
       // through its own dedicated UI, not here.
       const excludedKeys = new Set(config.excludeMasterItemKeys ?? []);
-      const masterItems = excludedKeys.size
-        ? rawMasterItems.filter((m) => !excludedKeys.has(m.item_key))
-        : rawMasterItems;
+      // F21: items withheld from the picker for NEW rows only; saved rows under such a key are still shown (as orphaned catalogue rows).
+      const withheldKeys = new Set(config.withholdMasterItemKeysFromPicker ?? []);
+      const masterItems = rawMasterItems.filter((m) => !excludedKeys.has(m.item_key) && !withheldKeys.has(m.item_key));
       const savedRecords = excludedKeys.size
         ? rawSavedRecords.filter((r) => !r.master_item_key || !excludedKeys.has(r.master_item_key))
         : rawSavedRecords;
@@ -1116,6 +1116,11 @@ export function FinancialDataGrid({
                         </option>
                       ))}
                     </select>
+                    {hiddenOwnerValues.has('smsf') && (config.category === 'liability' || config.category === 'income' || config.category === 'expense') && (
+                      <p className="mt-1 max-w-xl text-xs text-muted" data-testid="grid-entity-owner-hint">
+                        This page is your personal finances. Items of your SMSF, trust, HUF or company are entered on the entity itself (Investment &amp; Retirement &gt; SMSF, or Companies &amp; Trusts) so they are never counted twice.
+                      </p>
+                    )}
                   </div>
 
                   {config.fields

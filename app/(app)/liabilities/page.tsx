@@ -10,6 +10,7 @@ import { LiabilityImportPanel } from '@/components/liabilities/LiabilityImportPa
 import { LiabilityStatementHistory } from '@/components/liabilities/LiabilityStatementHistory';
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedLink } from '@/components/entitlements/ImportLockedLink';
+import { EntityRegisterNotice } from '@/components/entities/EntityRegisterNotice';
 
 // Liabilities tab layout (FDH-10 spec section 2): a header offering the two
 // entry points into Liabilities — manual entry (the existing grid below,
@@ -74,6 +75,8 @@ function LiabilitiesPageContent() {
           onApplied={() => setGridKey((k) => k + 1)}
         />
       )}
+
+      <EntityRegisterNotice page="liabilities" />
 
       <hr className="border-gray-200" />
 

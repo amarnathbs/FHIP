@@ -304,7 +304,7 @@ describe('Free vs Premium: the same statements for both plans (it only presents 
   });
 });
 
-describe('the PO production household as diagnosed (fund record + fund-level row + Detailed-mode holdings + an inactive personal loan)', () => {
+describe('the PO production household as diagnosed (fund record + fund-level row + Detailed-mode holdings + an inactive personal loan), BEFORE the cutover pack', () => {
   const production = () => {
     const t = household({
       retirement_accounts: [
@@ -322,45 +322,76 @@ describe('the PO production household as diagnosed (fund record + fund-level row
     return t;
   };
 
-  it('personal 874,441 and family 1,007,441, identical to the Dashboard; the inactive personal loan is not a liability anywhere', async () => {
+  // ENTITY-LEVEL ASSETS AND LIABILITIES (17-10-2026): an SMSF fund that records itself is counted from its OWN assets and liabilities. Before the
+  // cutover pack the fund has the three holdings (503,000) and NO liability recorded yet, so it counts at 503,000 and the hand-typed 133,000 row
+  // is listed but not counted (it would count the fund twice). The pack (production_pack/P3) is run BEFORE the deploy for this reason.
+  it('personal 874,441 (identical to the Dashboard); the fund counts at its own record 503,000 (no loan recorded yet), so family 1,377,441; the duplicate 133,000 row is listed, not counted', async () => {
     const { set, levels, netWorth } = await statements(production());
     expect(netWorth).toBe(874_441);
     expect(set.personal.totals).toEqual({ assets: 2_260_298, liabilities: 1_385_857, net: 874_441 });
-    expect(set.family.totals.net).toBe(1_007_441);
+    expect(set.family.totals.net).toBe(1_377_441);
     expect(set.family.totals.net).toBe(levels.family.net);
     expect(set.personal.liabilities.map((l) => l.name)).not.toContain('SMSF property loan');
-    expect(set.parity).toEqual({ ok: true, messages: [] });
+    expect(levels.entities.blocks.find((x) => x.kind === 'smsf')?.legacyRowsNotCounted?.net).toBe(133_000);
+    expect(set.parity.ok).toBe(true);
   });
 
-  it("the SMSF page itemises the fund's holdings: property 475,000 + cash 3,000 + other 25,000 = 503,000; the loan is 'not recorded at the fund'; net stays the model's 133,000", async () => {
+  it("the SMSF page itemises the fund's own record: property 475,000 + cash 3,000 + other 25,000 = 503,000, no liability recorded, and lists the duplicate row as not counted", async () => {
     const { set } = await statements(production());
     const smsf = set.entities[0];
-    expect(smsf).toMatchObject({ source: 'smsf_holdings', itemisation: 'itemised', assetsTotal: 503_000, liabilitiesTotal: null, liabilitiesNotRecorded: true, net: 133_000, contribution: 133_000 });
+    expect(smsf).toMatchObject({ source: 'entity_level_rows', itemisation: 'itemised', assetsTotal: 503_000, net: 503_000, contribution: 503_000 });
     expect(smsf.assets.map((l) => [l.name, l.amount])).toEqual([['Cash', 3_000], ['Investment property', 475_000], ['Other', 25_000]]);
     expect(smsf.liabilities).toEqual([]); // nothing invented
-    expect(smsf.notes.join(' ')).toMatch(/not recorded at the fund/);
-    expect(smsf.notes.join(' ')).toMatch(/holdings add to \$503,000, so \$370,000 of the difference is not itemised/);
-    expect(smsf.notes.join(' ')).toMatch(/entered as: Other Retirement Assets/);
-    expect(smsf.shownNotCounted.map((l) => l.amount)).toEqual([503_000]);
+    expect(smsf.shownNotCounted.map((l) => l.amount)).toEqual([133_000]);
   });
 
-  it('the family page still adds the SMSF at its net 133,000 (not the holdings) and notes the fund record that is not counted', async () => {
-    const { set } = await statements(production());
-    expect(set.family.levels.find((l) => l.key === 'tag:smsf')).toMatchObject({ net: 133_000, netOnly: true });
-    expect(set.family.notes.join(' ')).toMatch(/SMSF fund record "SMSF" \$503,000 is shown but not counted/);
+  it('the family page adds the SMSF at its derived net and the data-quality note names the duplicate row', async () => {
+    const { set, levels } = await statements(production());
+    expect(set.family.levels.find((l) => l.key === 'tag:smsf')).toMatchObject({ net: 503_000 });
+    expect(levels.dataStatus.smsfPossibleDoubleCount).toMatch(/Other Retirement Assets/);
   });
 
-  it('a Summary-mode fund has no holdings to itemise: the SMSF page stays net-only', async () => {
+  it('a Summary-mode fund records a typed net only: the SMSF page is net-only with no lines', async () => {
     const t = production();
-    t.smsf_funds = [{ id: 'f1', user_id: USER, retirement_account_id: 'r-fund', fund_name: 'Rao Super Fund', mode: 'summary', is_active: true }];
+    t.smsf_funds = [{ id: 'f1', user_id: USER, retirement_account_id: 'r-fund', fund_name: 'Rao Super Fund', mode: 'summary', summary_balance: 133_000, currency_code: 'AUD', is_active: true }];
     const { set } = await statements(t);
-    expect(set.entities[0]).toMatchObject({ source: 'owner_tagged_rows', itemisation: 'net_only', liabilitiesNotRecorded: false });
+    expect(set.entities[0]).toMatchObject({ source: 'entity_level_rows', itemisation: 'net_only', net: 133_000 });
     expect(set.entities[0].assets).toEqual([]);
+    expect(set.family.totals.net).toBe(874_441 + 133_000);
   });
 
   it('when the fund tables cannot be read the SMSF page says so and does not guess', async () => {
     const { set } = await statements(production(), { failOn: new Set(['smsf_holdings']) });
     expect(set.entities[0].itemisation).toBe('net_only');
     expect(set.entities[0].notes.join(' ')).toMatch(/holdings could not be read/);
+  });
+});
+
+describe('the PO household AFTER the cutover pack (370,000 loan recorded at the fund, typed net and duplicate row retired)', () => {
+  const after = () =>
+    household({
+      retirement_accounts: [
+        retirement('r-fund', 'SMSF', 133_000, 'self', { master_item_key: 'smsf' }), // the register mirror of the derived net
+        retirement('r-other', 'Other Retirement Assets', 133_000, 'smsf', { is_active: false }),
+      ],
+      smsf_funds: [{ id: 'f1', user_id: USER, retirement_account_id: 'r-fund', fund_name: 'Rao Super Fund', mode: 'detailed', summary_balance: null, is_active: true }],
+      smsf_holdings: [
+        { id: 'h1', user_id: USER, smsf_fund_id: 'f1', holding_class: 'property', holding_type: 'residential_property', holding_name: 'Investment property', value: 475_000, currency_code: 'AUD', is_active: true },
+        { id: 'h2', user_id: USER, smsf_fund_id: 'f1', holding_class: 'cash', holding_type: 'cash_account', holding_name: 'Cash', value: 3_000, currency_code: 'AUD', is_active: true },
+        { id: 'h3', user_id: USER, smsf_fund_id: 'f1', holding_class: 'other', holding_type: 'other_smsf_asset', holding_name: 'Other', value: 25_000, currency_code: 'AUD', is_active: true },
+      ],
+      smsf_liabilities: [{ id: 's1', user_id: USER, smsf_fund_id: 'f1', liability_name: 'SMSF property loan', liability_type: 'property_loan', lender: null, balance: 370_000, currency_code: 'AUD', is_active: true }],
+    });
+
+  it('personal 874,441, SMSF 133,000 derived from assets 503,000 less liability 370,000, family 1,007,441; the page itemises both sides from the fund itself', async () => {
+    const { set, levels, netWorth } = await statements(after());
+    expect(netWorth).toBe(874_441);
+    expect(set.family.totals.net).toBe(1_007_441);
+    expect(set.family.totals.net).toBe(levels.family.net);
+    const smsf = set.entities[0];
+    expect(smsf).toMatchObject({ source: 'entity_level_rows', itemisation: 'itemised', assetsTotal: 503_000, liabilitiesTotal: 370_000, net: 133_000, contribution: 133_000, liabilitiesNotRecorded: false });
+    expect(smsf.liabilities.map((l) => [l.name, l.amount])).toEqual([['SMSF property loan', 370_000]]);
+    expect(smsf.shownNotCounted).toEqual([]);
+    expect(set.parity).toEqual({ ok: true, messages: [] });
   });
 });

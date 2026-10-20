@@ -33,6 +33,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
+  // Entity-level liabilities (migration 0289): an itemised fund records its debts on the fund itself, so a personal liability is no
+  // longer linked to it (that would be a second place for the same debt). Net-value-only funds keep the earlier link.
+  const { data: fund } = await supabase.from('smsf_funds').select('mode').eq('id', id).eq('user_id', user.id).maybeSingle();
+  if (fund?.mode === 'detailed') {
+    return bad(
+      'This fund is recorded as itemised, so its debts are entered on the fund itself under Liabilities. Add the debt there, or use Move to the fund on a debt that is already linked.',
+      409,
+      'ENTITY_USE_FUND_LIABILITIES',
+    );
+  }
   const { data, error } = await linkSmsfPropertyLoan(id, user.id, parsed.data.liability_id, supabase);
   return error ? bad(error.message) : ok(data);
 }

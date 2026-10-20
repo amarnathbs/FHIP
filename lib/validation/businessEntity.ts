@@ -50,7 +50,9 @@ export const businessEntityCreateSchema = z.object({
   country_code: businessEntityCountryCode,
   currency_code: z.enum(['AUD', 'INR']).default('AUD'),
   ownership_percentage: z.number().gt(0).max(100).default(100),
-  valuation_mode: z.enum(['summary', 'detailed']).default('summary'),
+  // PO decision 17-10-2026 (D4): a NEW entity is recorded itemised by default (assets and liabilities, the net is derived). Net value only stays
+  // available. Either-or, never both: the database refuses an itemised entity that also carries a typed net (migration 0297).
+  valuation_mode: z.enum(['summary', 'detailed']).default('detailed'),
   // Required only in Summary mode — enforced by .refine() below, not a bare
   // .optional() the API route would have to remember to re-check.
   summary_net_asset_value: z.number().optional().nullable(),
@@ -70,26 +72,45 @@ export const businessEntityCreateInputSchema = businessEntityCreateSchema.refine
 // the way SMSF's retirement_accounts.current_balance does. A user can PATCH
 // valuation_mode directly through this same schema; there is no dedicated
 // switch endpoint for LR-11's simpler model.
+// PO decision 17-10-2026 / migration 0297: the way an entity is recorded (itemised or net value only) is NOT patchable. It changes only through the
+// preview-first switch (POST /api/business-entities/[id]/switch-mode), which keeps the history and never leaves both representations counted.
 export const businessEntityUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   country_code: businessEntityCountryCode,
   currency_code: z.enum(['AUD', 'INR']).optional(),
   ownership_percentage: z.number().gt(0).max(100).optional(),
-  valuation_mode: z.enum(['summary', 'detailed']).optional(),
   summary_net_asset_value: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
   is_active: z.boolean().optional(),
 });
 export type BusinessEntityUpdateInput = z.infer<typeof businessEntityUpdateSchema>;
 
-const businessEntityLineItemBaseSchema = z.object({
-  label: z.string().min(1),
+// Entity-level lines (migration 0297): what an entity owns and owes, with the detail the PO asked for. A line is retired, never deleted.
+export const BUSINESS_ENTITY_ASSET_TYPES = ['cash', 'property', 'shares_investments', 'business_assets', 'vehicle_equipment', 'other'] as const;
+export const BUSINESS_ENTITY_LIABILITY_TYPES = ['property_loan', 'other_loan', 'tax_payable', 'trade_creditors', 'other'] as const;
+
+const lineCommon = {
+  label: z.string().trim().min(1),
   value: z.number().min(0),
   currency_code: z.enum(['AUD', 'INR']),
+  as_at_date: z.string().date().optional().nullable(),
+  country_code: z.enum(['AU', 'IN']).optional().nullable(),
   notes: z.string().optional().nullable(),
+};
+const businessEntityAssetBaseSchema = z.object({ asset_type: z.enum(BUSINESS_ENTITY_ASSET_TYPES).optional().nullable(), ...lineCommon });
+const businessEntityLiabilityBaseSchema = z.object({
+  liability_type: z.enum(BUSINESS_ENTITY_LIABILITY_TYPES).optional().nullable(),
+  lender: z.string().trim().optional().nullable(),
+  interest_rate: z.number().min(0).max(100).optional().nullable(),
+  monthly_repayment: z.number().min(0).optional().nullable(),
+  ...lineCommon,
 });
-export const businessEntityAssetSchema = businessEntityLineItemBaseSchema;
-export const businessEntityLiabilitySchema = businessEntityLineItemBaseSchema;
-export type BusinessEntityLineItemInput = z.infer<typeof businessEntityLineItemBaseSchema>;
+export const businessEntityAssetSchema = businessEntityAssetBaseSchema;
+export const businessEntityLiabilitySchema = businessEntityLiabilityBaseSchema;
+export type BusinessEntityAssetInput = z.infer<typeof businessEntityAssetSchema>;
+export type BusinessEntityLiabilityInput = z.infer<typeof businessEntityLiabilitySchema>;
+/** Kept for callers that only need the two fields every line has. */
+export type BusinessEntityLineItemInput = BusinessEntityAssetInput | BusinessEntityLiabilityInput;
 
-export const businessEntityLineItemUpdateSchema = businessEntityLineItemBaseSchema.partial();
+export const businessEntityAssetUpdateSchema = businessEntityAssetBaseSchema.partial();
+export const businessEntityLiabilityUpdateSchema = businessEntityLiabilityBaseSchema.partial();

@@ -2,6 +2,7 @@ import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } fr
 import { createClient } from '@/lib/supabase/server';
 import { getSmsfFund, updateSmsfFundSummary } from '@/lib/services/smsfData';
 import { smsfFundUpdateSchema } from '@/lib/validation/smsf';
+import { smsfRpcError } from '@/lib/services/smsfErrors';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,5 +30,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const supabase = await createClient();
   const { data, error } = await updateSmsfFundSummary(id, user.id, parsed.data, supabase);
-  return error ? bad(error.message) : ok(data);
+  if (error) {
+    // An itemised fund refuses a typed net value (ENTITY_BOTH_REPRESENTATIONS, migration 0290): 409 with a plain message.
+    const e = smsfRpcError(error);
+    return bad(e.message, e.status, e.errorCode);
+  }
+  return ok(data);
 }

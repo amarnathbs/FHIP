@@ -8,6 +8,7 @@ import { retirementGridConfig } from '@/lib/grid/configs';
 import { InvestmentsSubNav } from '@/components/investments/InvestmentsSubNav';
 import { RetirementPlanningSection } from '@/components/retirement/RetirementPlanningSection';
 import { SmsfSection } from '@/components/retirement/smsf/SmsfSection';
+import { EntityRegisterNotice } from '@/components/entities/EntityRegisterNotice';
 import { RetirementStatementImportPanel } from '@/components/retirement/RetirementStatementImportPanel';
 import { RetirementStatementHistory } from '@/components/retirement/RetirementStatementHistory';
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
@@ -71,6 +72,7 @@ function RetirementPageContent() {
             </a>
           </nav>
           <RetirementPlanningSection />
+          <EntityRegisterNotice page="retirement" />
           <SmsfSection />
           <RetirementStatementImportPanel onApplied={() => setGridKey((k) => k + 1)} />
           <RetirementStatementHistory refreshKey={gridKey} />

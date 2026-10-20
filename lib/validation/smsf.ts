@@ -1,14 +1,29 @@
 import { z } from 'zod';
+import { MASKED_IDENTIFIER_MESSAGE, maskedIdentifierProblem } from '@/lib/validation/maskedIdentifier';
 
-export const smsfFundCreateSchema = z.object({
+const smsfFundCreateBase = z.object({
   account_name: z.string().min(1),
   fund_name: z.string().min(1),
-  summary_balance: z.number().min(0),
+  // How the fund is recorded (PO decision 17-10-2026): itemised (detailed) = assets and liabilities are entered afterwards and the net is
+  // DERIVED; summary = a typed net value only. Never both. Omitted: a typed value means summary, none means itemised (the recommended default).
+  mode: z.enum(['detailed', 'summary']).optional(),
+  summary_balance: z.number().min(0).optional(),
   summary_balance_date: z.string().optional().nullable(),
   owner: z.enum(['self', 'spouse', 'joint']).default('self'),
   currency_code: z.enum(['AUD', 'INR']).default('AUD'),
   country_code: z.literal('AU').default('AU'),
 });
+export const smsfFundCreateSchema = smsfFundCreateBase
+  .superRefine((v, ctx) => {
+    const mode = v.mode ?? (v.summary_balance !== undefined ? 'summary' : 'detailed');
+    if (mode === 'summary' && v.summary_balance === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['summary_balance'], message: 'a net value is required when the fund is recorded as a net value only' });
+    }
+    if (mode === 'detailed' && v.summary_balance !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['summary_balance'], message: 'an itemised fund derives its net from its assets and liabilities, so it cannot also carry a typed net value' });
+    }
+  })
+  .transform((v) => ({ ...v, mode: v.mode ?? (v.summary_balance !== undefined ? ('summary' as const) : ('detailed' as const)) }));
 export type SmsfFundCreateInput = z.infer<typeof smsfFundCreateSchema>;
 
 // Summary Mode edits only (fund_name/notes/summary_balance/date). Mode
@@ -81,3 +96,63 @@ export const smsfMemberSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 export type SmsfMemberInput = z.infer<typeof smsfMemberSchema>;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Entity-level liabilities (migration 0289) and the itemised-or-net-only switch (migration 0290)
+// ---------------------------------------------------------------------------------------------------------------------
+export const SMSF_LIABILITY_TYPES = ['property_loan', 'other_loan', 'tax_payable', 'other'] as const;
+export type SmsfLiabilityType = (typeof SMSF_LIABILITY_TYPES)[number];
+
+const smsfLiabilityBaseSchema = z.object({
+  liability_name: z.string().trim().min(1),
+  liability_type: z.enum(SMSF_LIABILITY_TYPES),
+  lender: z.string().trim().optional().nullable(),
+  balance: z.number().min(0),
+  interest_rate: z.number().min(0).max(100).optional().nullable(),
+  monthly_repayment: z.number().min(0).optional().nullable(),
+  currency_code: z.enum(['AUD', 'INR']),
+  country_code: z.enum(['AU', 'IN']).optional().nullable(),
+  // The canonical liability fields (migration 0295), same values and same masking rule as the personal liabilities register.
+  interest_rate_type: z.enum(['fixed', 'variable']).optional().nullable(),
+  fixed_rate_expiry: z.string().date().optional().nullable(),
+  // One rule, one message, shared with the personal liabilities register (WP-E, F24).
+  masked_identifier: z
+    .string()
+    .trim()
+    .refine((v) => maskedIdentifierProblem(v) === null, { message: MASKED_IDENTIFIER_MESSAGE })
+    .optional()
+    .nullable(),
+  due_date: z.string().date().optional().nullable(),
+  /** The SMSF property asset this loan funds (a descriptive link, never an amount). */
+  smsf_holding_id: z.string().uuid().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+export const smsfLiabilitySchema = smsfLiabilityBaseSchema.extend({ liability_type: z.enum(SMSF_LIABILITY_TYPES).default('other') });
+export type SmsfLiabilityInput = z.infer<typeof smsfLiabilitySchema>;
+export const smsfLiabilityUpdateSchema = smsfLiabilityBaseSchema.partial();
+
+// The recording-mode switch. `confirm` false = PREVIEW ONLY (nothing changes, the response says what would). The itemised branch carries the
+// whole set of assets and liabilities so the switch is atomic: there is never a moment with neither or both counted.
+export const smsfSwitchModeSchema = z.discriminatedUnion('to_mode', [
+  z.object({
+    to_mode: z.literal('detailed'),
+    assets: z.array(smsfHoldingSchema).default([]),
+    liabilities: z.array(smsfLiabilitySchema).default([]),
+    confirm: z.boolean().default(false),
+  }),
+  z.object({
+    to_mode: z.literal('summary'),
+    net: z.number().min(0),
+    net_date: z.string().min(1).optional().nullable(),
+    confirm: z.boolean().default(false),
+  }),
+]).superRefine((v, ctx) => {
+  if (v.to_mode === 'detailed' && v.assets.length + v.liabilities.length === 0) {
+    ctx.addIssue({ code: 'custom', path: ['assets'], message: 'enter at least one asset or liability to record the fund as itemised' });
+  }
+});
+export type SmsfSwitchModeInput = z.infer<typeof smsfSwitchModeSchema>;
+
+export const smsfConfirmSchema = z.object({ confirm: z.boolean().default(false) });
+export const smsfMoveLoanSchema = z.object({ liability_id: z.string().uuid(), confirm: z.boolean().default(false) });
+export const smsfAdoptRowsSchema = z.object({ retirement_row_ids: z.array(z.string().uuid()).min(1), confirm: z.boolean().default(false) });
