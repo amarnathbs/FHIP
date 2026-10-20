@@ -1,5 +1,5 @@
 import { FREQUENCY_OPTIONS } from '@/lib/engines/money';
-import { COUNTRY_OPTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
+import { COUNTRY_OPTIONS, ENTITY_OWNER_NEW_ROW_RESTRICTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
 import { getAssetFieldMetadata } from './assetFieldMetadata';
 import { defaultIsEssentialForExpenseItem } from '@/lib/engines/dashboard';
 import { incomeDefaultsForMasterItem, incomeItemHint } from '@/lib/engines/incomeVariablePay';
@@ -20,7 +20,7 @@ export const incomeGridConfig: GridConfig = {
   // LR-11B: 'company'/'family_trust' are legacy cosmetic-only owner tags,
   // no longer offered for a brand-new row on any of the 7 registers — see
   // LEGACY_ENTITY_OWNER_RESTRICTIONS' own doc comment (lib/constants.ts).
-  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  restrictedOwnerValues: [...ENTITY_OWNER_NEW_ROW_RESTRICTIONS],
   // PO request 16-10-2026: Bonus is its own income source, paid once a year, so a new Bonus row starts as Annually
   // (taxable like salary, from the field default below). The user can change any value.
   defaultsForMasterItem: incomeDefaultsForMasterItem,
@@ -72,7 +72,7 @@ export const expenseGridConfig: GridConfig = {
   isFlow: true,
   frequencyField: 'frequency',
   reviewSection: 'expenses',
-  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  restrictedOwnerValues: [...ENTITY_OWNER_NEW_ROW_RESTRICTIONS],
   // PO decision 16-10-2026: necessities (rent, mortgage, rates, utilities, groceries, health, fuel, transport, home
   // insurance, body corporate, internet) start ticked Essential when the row is created; the user can untick.
   defaultsForMasterItem: (itemKey) => (defaultIsEssentialForExpenseItem(itemKey) ? { is_essential: true } : {}),
@@ -130,12 +130,15 @@ export const liabilityGridConfig: GridConfig = {
   valueField: 'balance',
   reviewSection: 'liabilities',
   propertyLinkSide: 'liability',
+  // F21: an SMSF property loan is a debt of the fund, entered on the fund (Retirement > SMSF). The catalogue entry is not offered for a NEW
+  // personal liability; a saved row that already uses it stays visible and editable (the grid keeps rows whose key is not in the catalogue).
+  withholdMasterItemKeysFromPicker: ['smsf_property_loan'],
   zeroConfirmation: {
     section: 'liabilities',
     question: 'Do you currently have any debts or financial liabilities?',
     noLabel: 'No, I have no debts or liabilities',
   },
-  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  restrictedOwnerValues: [...ENTITY_OWNER_NEW_ROW_RESTRICTIONS],
   fields: [
     { name: 'lender', label: 'Lender', type: 'text' },
     { name: 'balance', label: 'Outstanding Balance', type: 'number', step: '0.01', required: true },

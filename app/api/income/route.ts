@@ -4,6 +4,7 @@ import { incomeSchema, incomeTaxProblem } from '@/lib/validation/income';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
 import { createClient } from '@/lib/supabase/server';
 import { requireModuleCapability } from '@/lib/services/appCapability';
+import { entityOwnerRefusal, existingOwnerForMasterItem } from '@/lib/services/entityOwnerGuard';
 
 const registry = makeRegistry('income_sources');
 
@@ -34,6 +35,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return badValidation(parsed.error, 422);
   const taxProblem = incomeTaxProblem(parsed.data);
   if (taxProblem) return bad(taxProblem, 422);
+  // F22: an SMSF / trust / HUF / company income is entered on the entity, never in personal Income.
+  const refused = entityOwnerRefusal('income', parsed.data.owner, await existingOwnerForMasterItem(await createClient(), 'income_sources', user.id, parsed.data.master_item_key));
+  if (refused) return refused;
 
   const supabase = await createClient();
   const gate = await assertItemCreationAllowedForUser({

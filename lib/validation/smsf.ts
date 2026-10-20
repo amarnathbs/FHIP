@@ -111,6 +111,19 @@ const smsfLiabilityBaseSchema = z.object({
   monthly_repayment: z.number().min(0).optional().nullable(),
   currency_code: z.enum(['AUD', 'INR']),
   country_code: z.enum(['AU', 'IN']).optional().nullable(),
+  // The canonical liability fields (migration 0295), same values and same masking rule as the personal liabilities register.
+  interest_rate_type: z.enum(['fixed', 'variable']).optional().nullable(),
+  fixed_rate_expiry: z.string().date().optional().nullable(),
+  masked_identifier: z
+    .string()
+    .trim()
+    .max(32)
+    .refine((v) => !/[0-9]{7,}/.test(v), { message: 'Enter only the last 4 digits of the account number, not the whole number' })
+    .optional()
+    .nullable(),
+  due_date: z.string().date().optional().nullable(),
+  /** The SMSF property asset this loan funds (a descriptive link, never an amount). */
+  smsf_holding_id: z.string().uuid().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 export const smsfLiabilitySchema = smsfLiabilityBaseSchema.extend({ liability_type: z.enum(SMSF_LIABILITY_TYPES).default('other') });

@@ -75,6 +75,11 @@ export interface SmsfLiabilityRow {
   monthly_repayment: number | null;
   currency_code: CurrencyCode;
   country_code: CountryCode | null;
+  interest_rate_type: 'fixed' | 'variable' | null;
+  fixed_rate_expiry: string | null;
+  masked_identifier: string | null;
+  due_date: string | null;
+  smsf_holding_id: string | null;
   notes: string | null;
   is_active: boolean;
   created_at: string;

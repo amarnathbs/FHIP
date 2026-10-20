@@ -1,6 +1,6 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
-import { listSmsfLiabilities, createSmsfLiability } from '@/lib/services/smsfData';
+import { listSmsfLiabilities, createSmsfLiability, getSmsfFund } from '@/lib/services/smsfData';
 import { smsfRpcError } from '@/lib/services/smsfErrors';
 import { smsfLiabilitySchema } from '@/lib/validation/smsf';
 
@@ -23,6 +23,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const parsed = smsfLiabilitySchema.safeParse(await req.json());
   if (!parsed.success) return badValidation(parsed.error, 422);
   const supabase = await createClient();
+  // A fund of another household answers exactly like a fund that does not exist (404, non-enumerating), never a revealing policy error.
+  const { data: fund } = await getSmsfFund(id, supabase);
+  if (!fund || fund.user_id !== user.id) return bad('Not found', 404);
   const { data, error } = await createSmsfLiability(id, user.id, parsed.data, supabase);
   if (error) {
     const e = smsfRpcError(error);

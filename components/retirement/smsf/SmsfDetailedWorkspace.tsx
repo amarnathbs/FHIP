@@ -102,6 +102,7 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
   }
 
   const sameCurrency = [...holdings, ...liabilities].every((x) => x.currency_code === fund.currency_code) && links.every((l) => (l.liabilities?.currency_code ?? fund.currency_code) === fund.currency_code);
+  const propertyHoldings = holdings.filter((h) => h.holding_class === 'property');
   const assetTotal = holdings.reduce((s, h) => s + Number(h.value), 0);
   const liabilityTotal = liabilities.reduce((s, l) => s + Number(l.balance), 0) + links.reduce((s, l) => s + Number(l.liabilities?.balance ?? 0), 0);
 
@@ -174,7 +175,7 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
           {liabilities.map((l) =>
             editingLiability?.id === l.id ? (
               <li key={l.id}>
-                <SmsfLiabilityForm fundId={fund.id} currency={fund.currency_code} existing={l} onSaved={() => { setEditingLiability(null); void reloadAll(); }} onCancel={() => setEditingLiability(null)} />
+                <SmsfLiabilityForm fundId={fund.id} currency={fund.currency_code} propertyHoldings={propertyHoldings} existing={l} onSaved={() => { setEditingLiability(null); void reloadAll(); }} onCancel={() => setEditingLiability(null)} />
               </li>
             ) : (
               <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-white p-3 text-sm">
@@ -185,6 +186,7 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
                     {l.lender ? ` · ${l.lender}` : ''}
                     {l.interest_rate != null ? ` · ${l.interest_rate}%` : ''}
                     {l.monthly_repayment != null ? ` · ${formatMoneySafe(l.monthly_repayment, l.currency_code)} a month` : ''}
+                    {l.smsf_holding_id && holdings.find((h) => h.id === l.smsf_holding_id) ? ` · funds ${holdings.find((h) => h.id === l.smsf_holding_id)!.holding_name}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -210,7 +212,7 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
         </ul>
         {showAddLiability && (
           <div className="mt-2">
-            <SmsfLiabilityForm fundId={fund.id} currency={fund.currency_code} onSaved={() => { setShowAddLiability(false); void reloadAll(); }} onCancel={() => setShowAddLiability(false)} />
+            <SmsfLiabilityForm fundId={fund.id} currency={fund.currency_code} propertyHoldings={propertyHoldings} onSaved={() => { setShowAddLiability(false); void reloadAll(); }} onCancel={() => setShowAddLiability(false)} />
           </div>
         )}
       </section>
