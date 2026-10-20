@@ -72,16 +72,14 @@ describe('F25: payslip employer super -> the right destination, after Approve, e
     expect(db.tables.retirement_accounts.find((a) => a.id === 'acc-smsf')!.employer_contribution).toBeCloseTo(FORT, 1);
   });
 
-  it('[NC] a concurrent second insert hits the unique payslip index and still ends with ONE row', async () => {
+  it('[NC] the database index (emulated here, proven in the PGlite test) refuses a second row for the same payslip and type', async () => {
     const db = world();
     await recordPayslipContribution(U1, 'pe-1', db.client);
-    // simulate the race: the service did not see the row on its pre-check, then insert collided
-    const racing = { ...db.client, from: (t: string) => db.client.from(t) } as never;
     const before = db.tables.retirement_contributions.length;
-    const dup = await (db.client as unknown as { from: (t: string) => { insert: (r: unknown) => PromiseLike<{ error: { code: string } | null }> } }).from('retirement_contributions').insert({ user_id: U1, source_payroll_event_id: 'pe-1', contribution_type: 'employer' });
+    const client = db.client as unknown as { from: (t: string) => { insert: (r: unknown) => PromiseLike<{ error: { code: string } | null }> } };
+    const dup = await client.from('retirement_contributions').insert({ user_id: U1, source_payroll_event_id: 'pe-1', contribution_type: 'employer' });
     expect(dup.error?.code).toBe('23505');
     expect(db.tables.retirement_contributions).toHaveLength(before);
-    void racing;
   });
 
   it('two consecutive payslips are ONE contribution flow: the rate is one fortnightly amount, not two', async () => {
