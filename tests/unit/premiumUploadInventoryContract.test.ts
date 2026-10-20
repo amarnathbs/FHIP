@@ -86,8 +86,8 @@ describe('inventory is real', () => {
   it('records the exact counts the Product Owner asked for', () => {
     // Update these deliberately when the estate changes; the point is that the tally is explicit and reviewed.
     expect(inventoryCounts()).toEqual({
-      gatedRoutes: 28,
-      admissionRoutes: 13,
+      gatedRoutes: 29,
+      admissionRoutes: 14,
       runStartRoutes: 15,
       reviewContinuationRoutesExempt: 13,
       adminAndSystemExemptPrefixes: 7,

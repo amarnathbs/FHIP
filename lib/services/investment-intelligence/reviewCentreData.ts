@@ -20,6 +20,8 @@ import {
   type RuleConfig,
 } from '@/lib/engines/investment-intelligence/reviewCentre';
 import type { IiReviewItem } from './types';
+import { loadOpenCasesWithLifecycle, tidyOwnerAndDuplicateCases } from './staleCases';
+import type { CaseLifecycle } from './caseLifecycle';
 
 const PAGE_SIZE = 500;
 async function fetchAllPages<T>(
@@ -291,7 +293,7 @@ function evidenceEquivalent(a: unknown, b: unknown): boolean {
   return JSON.stringify(normalizeForComparison(a)) === JSON.stringify(normalizeForComparison(b));
 }
 
-async function upsertReviewItems(admin: SupabaseClient, userId: string, candidates: ReviewItemCandidate[]): Promise<{ created: number; updated: number; superseded: number }> {
+export async function upsertReviewItems(admin: SupabaseClient, userId: string, candidates: ReviewItemCandidate[]): Promise<{ created: number; updated: number; superseded: number }> {
   let created = 0;
   let updated = 0;
   let superseded = 0;
@@ -301,12 +303,22 @@ async function upsertReviewItems(admin: SupabaseClient, userId: string, candidat
     seenIdentityKeys.add(c.identityKey);
     const { data: existingRows, error: fetchErr } = await admin
       .from('ii_review_items')
-      .select('id, evidence, status')
+      .select('id, evidence, status, updated_at')
       .eq('user_id', userId)
       .eq('identity_key', c.identityKey)
-      .in('status', ['open', 'acknowledged']);
+      .in('status', ['open', 'acknowledged', 'dismissed']);
     if (fetchErr) throw new Error(fetchErr.message);
-    const existing = (existingRows ?? [])[0];
+    const rowsForKey = (existingRows ?? []) as { id: string; evidence: unknown; status: string; updated_at?: string }[];
+    const live = rowsForKey.find((r) => r.status === 'open' || r.status === 'acknowledged');
+    // Document2 (4) WP-B (F7): a DISMISSED item used to be invisible to this lookup, so the very next refresh inserted a fresh
+    // `open` row for the same unchanged condition and the item the person had just dismissed came straight back. A dismissal
+    // now holds for as long as the underlying observation is unchanged; if the evidence really changes it is raised again.
+    const dismissed = live ? undefined : [...rowsForKey].filter((r) => r.status === 'dismissed').sort((a, b) => String(b.updated_at ?? '').localeCompare(String(a.updated_at ?? '')))[0];
+    if (dismissed && evidenceEquivalent(dismissed.evidence, c.evidence)) {
+      seenIdentityKeys.add(c.identityKey);
+      continue;
+    }
+    const existing = live;
 
     if (!existing) {
       const { error: insertErr } = await admin.from('ii_review_items').insert({
@@ -445,4 +457,63 @@ export async function dismissReviewItem(userId: string, id: string, note: string
   if (error) return { error: error.message };
   await emitAuditEvent({ userId, eventType: 'review_dismissed', subjectType: 'ii_review_items', subjectId: id, actorType: 'user', metadata: { note } });
   return { error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Document2 (4) WP-B (F6/F7/F8/F13): keep the materialised Review list honest and give every reconciliation item the LIVE
+// lifecycle of the statement it came from.
+// ---------------------------------------------------------------------------
+
+/**
+ * Review items are a snapshot of ii_reconciliation_cases. A case closed somewhere else (the Data tab, the owner dialog, a
+ * governed close) used to leave its item on the open list until someone clicked "Refresh observations". This resolves the
+ * items whose case is no longer open, and first tidies the exact duplicates and already-answered owner questions that
+ * repeated reprocessing opened (see staleCases.ts). Cheap: touches only ii_reconciliation_cases and ii_review_items.
+ */
+export async function syncReviewItemsWithCases(userId: string): Promise<{ resolvedItems: number; closedExistingOwner: number; closedDuplicates: number }> {
+  const admin = createAdminClient();
+  const tidy = await tidyOwnerAndDuplicateCases(admin, userId);
+  const { data: items, error } = await admin
+    .from('ii_review_items')
+    .select('id, evidence')
+    .eq('user_id', userId)
+    .eq('rule_key', 'reconciliation_open')
+    .in('status', ['open', 'acknowledged']);
+  if (error) throw new Error(error.message);
+  const byCase = new Map<string, string[]>();
+  for (const it of (items ?? []) as { id: string; evidence: { caseId?: string } | null }[]) {
+    const caseId = it.evidence?.caseId;
+    if (typeof caseId !== 'string') continue;
+    byCase.set(caseId, [...(byCase.get(caseId) ?? []), it.id]);
+  }
+  let resolvedItems = 0;
+  if (byCase.size > 0) {
+    const { data: openCases } = await admin.from('ii_reconciliation_cases').select('id').eq('user_id', userId).in('status', ['open', 'user_reviewing']).in('id', [...byCase.keys()]);
+    const stillOpen = new Set(((openCases ?? []) as { id: string }[]).map((c) => c.id));
+    const toResolve = [...byCase.entries()].filter(([caseId]) => !stillOpen.has(caseId)).flatMap(([, ids]) => ids);
+    if (toResolve.length > 0) {
+      const nowIso = new Date().toISOString();
+      const { error: updErr } = await admin.from('ii_review_items').update({ status: 'resolved', resolved_at: nowIso, updated_at: nowIso }).in('id', toResolve).eq('user_id', userId);
+      if (updErr) throw new Error(updErr.message);
+      resolvedItems = toResolve.length;
+    }
+  }
+  return { resolvedItems, closedExistingOwner: tidy.closedExistingOwner.length, closedDuplicates: tidy.closedDuplicates.length };
+}
+
+export type ReviewItemWithLifecycle = IiReviewItem & { lifecycle: CaseLifecycle | null };
+
+/** Adds the live lifecycle (file stored? what does it need? which actions?) to every reconciliation item. */
+export async function attachLifecycleToReviewItems(userId: string, items: IiReviewItem[]): Promise<ReviewItemWithLifecycle[]> {
+  const caseIds = items
+    .filter((i) => i.rule_key === 'reconciliation_open')
+    .map((i) => (i.evidence as { caseId?: unknown } | null)?.caseId)
+    .filter((x): x is string => typeof x === 'string');
+  if (caseIds.length === 0) return items.map((i) => ({ ...i, lifecycle: null }));
+  const loaded = await loadOpenCasesWithLifecycle(createAdminClient(), userId, { caseIds });
+  const byCase = new Map(loaded.map((l) => [l.case.id, l.lifecycle] as const));
+  return items.map((i) => {
+    const caseId = (i.evidence as { caseId?: unknown } | null)?.caseId;
+    return { ...i, lifecycle: typeof caseId === 'string' ? (byCase.get(caseId) ?? null) : null };
+  });
 }

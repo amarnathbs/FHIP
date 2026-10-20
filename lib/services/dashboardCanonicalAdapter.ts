@@ -208,7 +208,15 @@ export function toCanonicalCashFlow(snapshot: CanonicalFinancialSnapshotResult):
     window: { from: s.window.from, to: s.window.to, months: s.window.months, coveredMonths: ledger ? ledger.coverage.coveredMonths : [] },
     otherUnavailable,
     importedNotInNetWorth: s.investments.status === 'ok' && s.investments.unpublished.count > 0
-      ? { label: s.investments.unpublished.label, count: s.investments.unpublished.count, total: s.investments.unpublished.total }
+      ? {
+        label: s.investments.unpublished.label,
+        count: s.investments.unpublished.count,
+        total: s.investments.unpublished.total,
+        where: {
+          documentIds: [...new Set(s.investments.unpublished.holdings.map((h) => h.sourceDocumentId).filter((x): x is string => !!x))].slice(0, 20),
+          currencies: [...new Set(s.investments.unpublished.holdings.map((h) => h.value.currency))],
+        },
+      }
       : null,
     // Only balances NOT yet applied as a cash asset: an applied one is in Net
     // Worth once, through that asset (WP-15 / D-04).

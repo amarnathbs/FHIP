@@ -19,6 +19,8 @@
  */
 
 import { useEffect, useState } from 'react';
+import { fmtDate } from '@/components/investment-intelligence/dateDisplay';
+import { importedNotInNetWorthActions, IMPORTED_DATA_PATH } from '@/lib/investment-intelligence/importedNotInNetWorthLinks';
 
 interface ImportedStatement {
   statementId: string;
@@ -44,7 +46,7 @@ interface UnpublishedBucket {
   count: number;
   total: number;
   reporting_currency: string;
-  holdings: { name: string; as_of_date: string; value: number; currency_code: string }[];
+  holdings: { name: string; as_of_date: string; value: number; currency_code: string; source_document_id?: string | null }[];
 }
 
 const money = (v: number | null | undefined, currency = 'AUD') =>
@@ -103,15 +105,37 @@ export function ImportedInvestmentStatements({ refreshKey, onAddToNetWorth }: { 
           <ul className="mt-1 list-disc pl-5">
             {unpublished.holdings.slice(0, 10).map((h, i) => (
               <li key={`${h.name}-${i}`}>
-                {h.name} — {money(h.value, h.currency_code)} as at {h.as_of_date}
+                {/* Day-first dates (dd-mm-yyyy India, dd/mm/yyyy Australia), never ISO. */}
+                {h.name} — {money(h.value, h.currency_code)} as at {fmtDate(h.as_of_date, h.currency_code)}
+                {h.currency_code === 'INR' && (
+                  <a
+                    href={h.source_document_id ? `${IMPORTED_DATA_PATH}?documentId=${encodeURIComponent(h.source_document_id)}` : IMPORTED_DATA_PATH}
+                    className="ml-2 font-medium text-trust underline"
+                  >
+                    Resolve and publish
+                  </a>
+                )}
               </li>
             ))}
           </ul>
+          {/* Document2 (4) WP-B (F13): India mutual-fund holdings are resolved and published from Statements & data. */}
+          {importedNotInNetWorthActions({
+            documentIds: [...new Set(unpublished.holdings.map((h) => h.source_document_id).filter((x): x is string => !!x))],
+            currencies: [...new Set(unpublished.holdings.map((h) => h.currency_code))],
+          })
+            .filter((a) => a.href.startsWith(IMPORTED_DATA_PATH))
+            .map((a) => (
+              <p key={a.href} className="mt-2">
+                <a href={a.href} className="rounded bg-trust px-3 py-1 text-xs font-medium text-white">
+                  {a.label}
+                </a>
+              </p>
+            ))}
           {withUnpublished.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {withUnpublished.map((s) => (
                 <button key={s.statementId} type="button" onClick={() => onAddToNetWorth(s.documentId as string)} className="rounded bg-trust px-3 py-1 text-xs font-medium text-white">
-                  Add to Net Worth — {s.institutionName ?? 'statement'} {s.statementDate ?? s.periodEnd ?? ''}
+                  Add to Net Worth — {s.institutionName ?? 'statement'} {fmtDate(s.statementDate ?? s.periodEnd ?? '', 'AUD')}
                 </button>
               ))}
             </div>
@@ -133,9 +157,9 @@ export function ImportedInvestmentStatements({ refreshKey, onAddToNetWorth }: { 
                   {s.institutionName ?? 'Broker statement'} — {STATEMENT_TYPE_LABEL[s.statementType] ?? s.statementType}
                 </p>
                 <p className="text-muted">
-                  Imported from a broker statement on {s.importedAt.slice(0, 10)}
-                  {s.statementDate ? ` · statement date ${s.statementDate}` : ''}
-                  {s.periodStart || s.periodEnd ? ` · period ${s.periodStart ?? '?'} to ${s.periodEnd ?? '?'}` : ''}
+                  Imported from a broker statement on {fmtDate(s.importedAt.slice(0, 10), 'AUD')}
+                  {s.statementDate ? ` · statement date ${fmtDate(s.statementDate, 'AUD')}` : ''}
+                  {s.periodStart || s.periodEnd ? ` · period ${s.periodStart ? fmtDate(s.periodStart, 'AUD') : '?'} to ${s.periodEnd ? fmtDate(s.periodEnd, 'AUD') : '?'}` : ''}
                 </p>
                 <p>
                   {s.approvalStatus === 'approved' ? 'Approved' : 'Awaiting your review'} · {s.counts.holdings} holding(s), {s.counts.transactions} transaction(s) · {s.counts.applied} added,{' '}
@@ -150,7 +174,7 @@ export function ImportedInvestmentStatements({ refreshKey, onAddToNetWorth }: { 
                     {s.holdings.map((h, i) => (
                       <li key={`${h.name}-${i}`}>
                         {h.name} — {money(h.value, h.currencyCode)}
-                        {h.asOfDate ? ` as at ${h.asOfDate}` : ''} ·{' '}
+                        {h.asOfDate ? ` as at ${fmtDate(h.asOfDate, h.currencyCode)}` : ''} ·{' '}
                         {h.applyStatus !== 'applied' ? (h.applyStatus === 'skipped' ? 'not added' : 'not yet applied') : h.inNetWorth ? 'in your Net Worth' : 'imported, not yet in Net Worth'}
                       </li>
                     ))}

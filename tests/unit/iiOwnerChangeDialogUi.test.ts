@@ -351,8 +351,12 @@ describe('Review and Resolutions clients (structural contract)', () => {
 
   it('Statements & data no longer offers the generic Resolve on a joint-holding case; it points to the Review tab instead', () => {
     const data = read('components/investment-intelligence/InvestmentIntelligenceClient.tsx');
-    expect(data).toContain("c.discrepancy_type !== 'joint_holding_allocation_required' && c.discrepancy_type !== 'document_password_required'");
-    expect(data).toContain('Split ownership on the Review tab');
+    // Document2 (4) WP-B: the action now comes from the server-derived lifecycle. A joint holding classifies as `choose_owner`
+    // (proved in iiWpbCaseLifecycle) and the only generic Resolve button is drawn for `mark_resolved` cases.
+    expect(data).toContain("lc.primary === 'choose_owner'");
+    expect(data).toContain('Choose the owner on the Review tab');
+    expect(data).toContain("lc.primary === 'mark_resolved'");
+    expect(data).not.toContain('handleResolveCase(c.id)} className');
   });
 
   it('Resolutions uses the dialog for amendments, sends confirm:true, and shows joint / entity decisions', () => {

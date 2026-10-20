@@ -170,6 +170,16 @@ export interface CanonicalDebtServiceFigures {
   loanServiceById?: Record<string, number>;
 }
 
+/**
+ * Document2 (4) WP-B (F13): where the person goes to resolve the holdings that are imported but not yet in Net Worth: the
+ * statements they came from (Investment Intelligence) and the currencies involved (to tell an Australian broker import from an
+ * India mutual-fund statement). Presentation only; never part of a figure.
+ */
+export interface ImportedNotInNetWorthWhere {
+  documentIds: string[];
+  currencies: string[];
+}
+
 export interface CanonicalCashFlowInput {
   income: CanonicalIncomeFigures | CanonicalUnavailable;
   expenses: CanonicalExpenseFigures | CanonicalUnavailable;
@@ -179,7 +189,7 @@ export interface CanonicalCashFlowInput {
   /** Other snapshot sections that could not be read (investments, retirement, assets, ledger). */
   otherUnavailable: { section: string; reason: string; source: string }[];
   /** D-05 / D-04 evidence buckets, shown but never inside Net Worth. */
-  importedNotInNetWorth: { label: string; count: number; total: number } | null;
+  importedNotInNetWorth: { label: string; count: number; total: number; where?: ImportedNotInNetWorthWhere } | null;
   bankBalanceEvidence: { label: string; count: number; total: number } | null;
   /**
    * 2026-10-01: how the published mutual funds inside Net Worth were valued
