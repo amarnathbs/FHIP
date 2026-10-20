@@ -15,7 +15,6 @@
  * SMSF tab and reports through the existing view.
  */
 import type { SupabaseServerClient } from '@/lib/services/dashboardData';
-import { normaliseEmployerName } from '@/lib/financial-data-hub/payslip/normalise';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
 import { resolveAccountRates } from './runRate';
 import { routePayslipContribution, type DestinationCandidate, type RoutingResult } from './routing';
@@ -298,7 +297,8 @@ export async function recordPayslipContribution(
     source_payroll_event_id: payrollEventId,
     source_label: labels.join(' | ').slice(0, 300) || null,
     employer_name: (event.employer_name as string | null) ?? null,
-    employer_normalised: (event.employer_normalised as string | null) ?? normaliseEmployerName(event.employer_name as string | null) ?? null,
+    // The payslip evidence already carries the normalised employer name; the plain lower-case name is only a fallback for the series key.
+    employer_normalised: (event.employer_normalised as string | null) ?? ((event.employer_name as string | null)?.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() || null),
     matched_by: matched ? 'fund_name' : null,
     status: matched ? 'active' : 'needs_destination',
     metadata: matched ? { matched_words: route.kind === 'matched' ? route.matchedWords : [] } : { ask_reason: route.kind === 'ask' ? route.reason : null },

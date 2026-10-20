@@ -6,6 +6,7 @@ import { DateInput } from '@/components/ui/DateInput';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatDateShort } from '@/lib/engines/date';
 import { formatMoney } from '@/lib/engines/money';
+import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
 import { CONTRIBUTION_TYPES, CONTRIBUTION_TYPE_LABEL, type ContributionFrequency, type ContributionType } from '@/lib/retirement-contributions/types';
 
 // Document2 (4) F25b (20-10-2026): manual retirement BALANCE entry and manual CONTRIBUTION entry are separate actions. The balance is
@@ -132,7 +133,7 @@ export function RetirementContributionsView({
                 <th className="pb-2 pr-3 font-medium">Type</th>
                 <th className="pb-2 pr-3 font-medium">Person</th>
                 <th className="pb-2 pr-3 font-medium">Goes to</th>
-                <th className="pb-2 pr-3 text-right font-medium">Amount</th>
+                <th className={`pb-2 pr-3 font-medium ${NUM_HEADER_CLASS}`}>Amount</th>
                 <th className="pb-2 pr-3 font-medium">Source</th>
                 <th className="pb-2 font-medium">Counted</th>
               </tr>
@@ -144,10 +145,15 @@ export function RetirementContributionsView({
                   <td className="py-2 pr-3">{CONTRIBUTION_TYPE_LABEL[i.typeLabelKey]}</td>
                   <td className="py-2 pr-3">{i.memberType === 'spouse' ? 'Spouse/Partner' : i.memberType === 'self' ? 'Self' : '—'}</td>
                   <td className="py-2 pr-3">{i.accountName ? `${i.accountName}${i.destinationKind === 'smsf' ? ' (SMSF)' : ''}` : 'Waiting for you to choose'}</td>
-                  <td className="py-2 pr-3 text-right">{amountText(i)}</td>
+                  <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>
+                    {amountText(i)}
+                    {i.monthlyEquivalent !== null && i.notCountedBecause === null && i.frequency !== 'monthly' && (
+                      <span className="block text-xs text-muted">{`about ${formatMoney(i.monthlyEquivalent, currencyOf(i.currency))} a month`}</span>
+                    )}
+                  </td>
                   <td className="py-2 pr-3">{sourceText(i)}</td>
                   <td className="py-2">
-                    {i.notCountedBecause ?? (i.monthlyEquivalent !== null ? `Yes, about ${formatMoney(i.monthlyEquivalent, currencyOf(i.currency))} a month` : 'History only')}
+                    {i.notCountedBecause ?? (i.monthlyEquivalent !== null ? 'Yes, counted' : 'History only')}
                     {i.kind === 'ledger' && onRemove && (
                       <button type="button" onClick={() => onRemove(i.id)} className="ml-3 text-xs text-risk underline">Remove</button>
                     )}
