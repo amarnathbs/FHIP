@@ -17,11 +17,8 @@ const retirementBaseSchema = z.object({
   // .optional() with no .default() — a default would break every save to
   // this table until the currency_override column migration is applied.
   currency_override: z.boolean().optional(),
-  employer_contribution: z.number().min(0).optional(),
-  personal_contribution: z.number().min(0).optional(),
-  contribution_frequency: z
-    .enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'one_off'])
-    .optional(),
+  // Document2 (4) F25b: contribution amounts and their frequency are NOT accepted here any more (unknown keys are dropped by this
+  // schema). A contribution is a flow with its own route (/api/retirement/contributions) and ledger; the account holds a balance.
   // Legacy per-account field (migration 0004). The Retirement Planning UI
   // no longer sends this — target retirement age is captured once per
   // member (Self/Spouse) via retirement_members / /api/retirement/members
