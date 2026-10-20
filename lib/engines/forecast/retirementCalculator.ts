@@ -25,6 +25,8 @@ export interface RetirementCalculatorInput {
   monthlyContribution: number;
   currentAge: number | null; // null when date_of_birth isn't recorded or isn't plausible
   retirementAge: number;
+  /** Document2 (4) F26: where retirementAge came from (saved on the Retirement page, a what-if for this run, a default). Explanation text only. */
+  retirementAgeSource?: 'what_if' | 'saved' | 'legacy_profile' | 'country_default' | 'missing';
   // Forecasting P1 fix FHIP-FC-RET-001 — set by the caller when a higher- or
   // equal-priority timing signal is available: an explicit retirement_date
   // (tier 1, takes priority over the age-based calculation below) or a
@@ -302,6 +304,8 @@ function runRetirementForecastForEntity(
         assumedReturnPercent: returnRate,
         withdrawalRatePercent: withdrawalRate,
         monthsUntilRetirement,
+        retirementAge: input.retirementAge,
+        retirementAgeSource: input.retirementAgeSource ?? null,
         balanceAtRetirement,
         requiredCorpus,
         fundingGap,

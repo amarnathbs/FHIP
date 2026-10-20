@@ -223,18 +223,21 @@ export const retirementGridConfig: GridConfig = {
   // backed by retirement_members. The legacy retirement_accounts.
   // target_retirement_age column is kept for backward compatibility (spec
   // s.27) but is deliberately no longer surfaced here.
+  // Document2 (4) F25b (20-10-2026): this form records the BALANCE of an account. The employer/personal contribution amounts and
+  // their frequency were removed from it: a contribution is a flow and has its own "Add contribution" action and history
+  // (components/retirement/RetirementContributionsPanel.tsx), so a balance and a contribution are never entered together.
   fields: [
     { name: 'current_balance', label: 'Current Balance', type: 'number', step: '0.01', required: true },
-    { name: 'employer_contribution', label: 'Employer Contribution', type: 'number', step: '0.01' },
-    { name: 'personal_contribution', label: 'Personal Contribution', type: 'number', step: '0.01' },
-    {
-      name: 'contribution_frequency',
-      label: 'Contribution Frequency',
-      type: 'select',
-      options: FREQUENCY_OPTIONS,
-    },
     { name: 'country_code', label: 'Country', type: 'select', options: COUNTRY_OPTIONS },
     { name: 'notes', label: 'Notes', type: 'text' },
+  ],
+  hideFromAddPickerKeys: [
+    'employer_contributions',
+    'salary_sacrifice',
+    'personal_concessional',
+    'non_concessional',
+    'spouse_contribution',
+    'government_co_contribution',
   ],
   // SMSF-UI (spec s.4-38): SMSF has its own dedicated Fund/Members/
   // Summary-Detailed-Holdings management UI (components/retirement/smsf/

@@ -108,6 +108,10 @@ export interface GridConfig {
    * editable (unlike excludeMasterItemKeys, which hides saved rows too). Used for an item whose money now lives on an entity (F21).
    */
   withholdMasterItemKeysFromPicker?: string[];
+  // Document2 (4) F25b: catalogue items that are contribution FLOWS, not balances (Retirement). They are not offered in the
+  // "What are you adding?" picker for a NEW row (contributions have their own Add contribution action); a row already saved
+  // under one of these keys keeps showing and stays editable, so nothing a person entered earlier disappears.
+  hideFromAddPickerKeys?: string[];
   // Education/Children Investment -> Goal Linkage (spec s.24/26-28/57):
   // shows a compact "Goals" control (GoalLinkControl) on each saved row,
   // letting the user link this holding to an existing Goal without leaving

@@ -10,6 +10,7 @@ import type { GoalCalculatorInput } from '@/lib/engines/forecast/goalCalculator'
 import type { InvestmentCalculatorInput } from '@/lib/engines/forecast/investmentCalculator';
 import type { DebtCalculatorInput } from '@/lib/engines/forecast/debtCalculator';
 import type { RetirementCalculatorInput, RetirementMemberLegInput, RetirementTargetMethod } from '@/lib/engines/forecast/retirementCalculator';
+import { resolveRetirementTiming } from '@/lib/engines/forecast/retirementTiming';
 import type { CrossBorderCalculatorInput } from '@/lib/engines/forecast/crossBorderCalculator';
 import type { ResilienceCalculatorInput } from '@/lib/engines/forecast/resilienceCalculator';
 import { applyStressScenario, type StressScenarioType, type StressScenarioParams } from '@/lib/engines/resilienceStress';
@@ -17,7 +18,6 @@ import { isKnownCountry } from '@/lib/services/jurisdiction';
 import { computeAccessibleLiquidResources, type CommitmentRow } from '@/lib/engines/resilience';
 import type { ForecastType, ResolvedAssumptionSet } from '@/lib/engines/forecast/types';
 import type { ForecastAssumptionUpsertInput, ForecastScenarioInput } from '@/lib/validation/forecast';
-import { isPlausibleDob } from '@/lib/engines/age';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
 import { computeAllocatedMonthlyContribution, computeLiveLinkedFundingValue } from '@/lib/services/goalFundingAllocation';
 import { loadLinkedContributionSources, type GoalFundingSourceRow } from '@/lib/services/goalsData';
@@ -272,6 +272,39 @@ async function loadResolvedAssumptionsUncached(
   });
 }
 
+/**
+ * Document2 (4) F26: what the Retirement Forecast page shows for "Retirement timing". Reads the SAME inputs the retirement run reads
+ * (retirement_members, the date of birth, the Spouse/Partner's date of birth, the forecast profile and the resolved retirement-age
+ * assumption) and resolves them with the SAME pure function, so the page states exactly the age and source a run will use.
+ * Read-only; a what-if age is never part of this view.
+ */
+export async function loadRetirementTimingForPage(userId: string, scenarioId: string, client?: SupabaseServerClient) {
+  const supabase = client ?? (await createClient());
+  const profile = await getOrCreateForecastProfile(userId, supabase);
+  const assumptions = await loadResolvedAssumptions(userId, profile.id, scenarioId, profile.country_code, supabase);
+  const baselineDate = profile.forecast_start_date ?? new Date().toISOString().slice(0, 10);
+  const [dobRes, membersRes, spouseDobRes] = await Promise.all([
+    supabase.from('user_profiles').select('date_of_birth').eq('user_id', userId).maybeSingle(),
+    supabase.from('retirement_members').select('member_type, target_retirement_age').eq('user_id', userId).eq('is_active', true),
+    supabase.from('household_members').select('date_of_birth').eq('user_id', userId).eq('is_active', true).in('relationship', ['spouse', 'partner']).limit(1),
+  ]);
+  if (membersRes.error) throw new Error(membersRes.error.message);
+  const members = membersRes.data ?? [];
+  const selfMember = members.find((m) => m.member_type === 'self');
+  const spouseMember = members.find((m) => m.member_type === 'spouse');
+  return resolveRetirementTiming({
+    baselineDate,
+    self: { memberType: 'self', savedTargetAge: selfMember?.target_retirement_age ?? null, dateOfBirth: (dobRes.data?.date_of_birth as string | null | undefined) ?? null },
+    spouse: spouseMember
+      ? { memberType: 'spouse', savedTargetAge: spouseMember.target_retirement_age ?? null, dateOfBirth: ((spouseDobRes.data ?? [])[0]?.date_of_birth ?? null) as string | null }
+      : null,
+    legacyProfileAge: profile.retirement_age ?? null,
+    countryDefaultAge: getAssumptionValue(assumptions, 'retirement_age', 65),
+    exactRetirementDate: profile.retirement_date ?? null,
+    manualMonths: profile.retirement_timing_override_months ?? null,
+  });
+}
+
 export async function getResolvedAssumptions(userId: string, profileId: string, scenarioId: string, client?: SupabaseServerClient) {
   const supabase = client ?? (await createClient());
   const { data: profile } = await supabase.from('forecast_profiles').select('country_code').eq('id', profileId).single();
@@ -337,6 +370,8 @@ interface RetirementRunOptions {
   targetCorpus?: number;
   desiredAnnualIncome?: number;
   replacementPercentage?: number;
+  /** Document2 (4) F26: a what-if target age for THIS run only (never saved to retirement_members). */
+  whatIfRetirementAges?: { self?: number | null; spouse?: number | null };
 }
 
 interface ResilienceRunOptions {
@@ -486,7 +521,7 @@ async function buildCalculatorInput(
   if (forecastType === 'retirement') {
     const retirementReportingCurrency: 'AUD' | 'INR' = profile.base_currency;
     const retirementFxRateAudInr = getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56);
-    const [retirementPosition, dobResult, retirementMembersResult, smsfFundsResult] = await Promise.all([
+    const [retirementPosition, dobResult, retirementMembersResult, smsfFundsResult, spouseDobResult] = await Promise.all([
       // WP-05 (GAP-RET-02 / DC-18): the canonical retirement register loader
       // (paged, fail closed) and the canonical Retirement rules, converted at
       // THIS forecast's own reporting currency and FX assumption. Balances
@@ -509,6 +544,8 @@ async function buildCalculatorInput(
       // (lib/engines/householdContext.ts's own header explains this
       // precisely). retirement_account_id is the only correct discriminator.
       supabase.from('smsf_funds').select('retirement_account_id').eq('user_id', userId).eq('is_active', true),
+      // Document2 (4) F26: the Spouse/Partner's date of birth, when the household record has one (household_members.date_of_birth).
+      supabase.from('household_members').select('date_of_birth, relationship').eq('user_id', userId).eq('is_active', true).in('relationship', ['spouse', 'partner']).limit(1),
     ]);
     if (smsfFundsResult.error) throw new Error(smsfFundsResult.error.message);
     const accounts = retirementPosition.accounts;
@@ -548,35 +585,31 @@ async function buildCalculatorInput(
     // (4) none of the above -> monthsUntilRetirement stays null; the calculator already
     //     surfaces "could not be projected" rather than failing
     const dobRaw = dobResult.data?.date_of_birth as string | null | undefined;
-    const baselineAsOf = new Date(baselineDate + 'T00:00:00Z');
-    const dobPlausible = isPlausibleDob(dobRaw ?? null, baselineAsOf);
-    let currentAge: number | null = null;
-    if (dobRaw && dobPlausible) {
-      const dob = new Date(dobRaw + 'T00:00:00Z');
-      currentAge = (baselineAsOf.getUTCFullYear() - dob.getUTCFullYear()) + (baselineAsOf.getUTCMonth() - dob.getUTCMonth()) / 12;
-    }
-    // Retirement Member UI (spec s.28-29): retirement_members is now the
-    // canonical source for Self's target retirement age. forecast_profiles.
-    // retirement_age (the old Forecasting-settings-page field) is kept only
-    // as a fallback for any pre-existing value not yet migrated to
-    // retirement_members, then the approved country default.
+    // Retirement Member UI (spec s.28-29): retirement_members is the canonical source for each person's target retirement
+    // age. forecast_profiles.retirement_age (the old Forecasting-settings-page field) is kept only as a fallback for any
+    // pre-existing value not yet migrated to retirement_members, then the approved country default.
+    // Document2 (4) F26: the precedence and the plain-words description live in ONE pure resolver
+    // (lib/engines/forecast/retirementTiming.ts) that the Retirement Forecast page also uses, so the page states exactly the
+    // age and source this run uses. A what-if age (retirementOptions.whatIfRetirementAges) applies to this run only.
     const retirementMembers = retirementMembersResult.data ?? [];
     const selfMember = retirementMembers.find((m) => m.member_type === 'self');
     const spouseMember = retirementMembers.find((m) => m.member_type === 'spouse');
-    const retirementAge = selfMember?.target_retirement_age ?? profile.retirement_age ?? getAssumptionValue(assumptions, 'retirement_age', 65);
-
-    let monthsUntilRetirementOverride: number | null = null;
-    if (profile.retirement_date) {
-      const target = new Date(profile.retirement_date + 'T00:00:00Z');
-      monthsUntilRetirementOverride = Math.max(
-        0,
-        (target.getUTCFullYear() - baselineAsOf.getUTCFullYear()) * 12 + (target.getUTCMonth() - baselineAsOf.getUTCMonth())
-      );
-    } else if (currentAge === null && profile.retirement_timing_override_months != null) {
-      monthsUntilRetirementOverride = Math.max(0, profile.retirement_timing_override_months);
-    }
-    const monthsUntilRetirement =
-      monthsUntilRetirementOverride ?? (currentAge !== null ? Math.max(0, Math.round((retirementAge - currentAge) * 12)) : null);
+    const spouseDobRaw = ((spouseDobResult.data ?? [])[0]?.date_of_birth ?? null) as string | null;
+    const timing = resolveRetirementTiming({
+      baselineDate,
+      self: { memberType: 'self', savedTargetAge: selfMember?.target_retirement_age ?? null, dateOfBirth: dobRaw ?? null, whatIfAge: retirementOptions.whatIfRetirementAges?.self ?? null },
+      spouse: spouseMember
+        ? { memberType: 'spouse', savedTargetAge: spouseMember.target_retirement_age ?? null, dateOfBirth: spouseDobRaw, whatIfAge: retirementOptions.whatIfRetirementAges?.spouse ?? null }
+        : null,
+      legacyProfileAge: profile.retirement_age ?? null,
+      countryDefaultAge: getAssumptionValue(assumptions, 'retirement_age', 65),
+      exactRetirementDate: profile.retirement_date ?? null,
+      manualMonths: profile.retirement_timing_override_months ?? null,
+    });
+    const currentAge = timing.self.currentAge;
+    const retirementAge = timing.self.retirementAge ?? getAssumptionValue(assumptions, 'retirement_age', 65);
+    const monthsUntilRetirementOverride = timing.monthsUntilRetirementOverride;
+    const monthsUntilRetirement = timing.monthsUntilRetirement;
     const effectiveMonths =
       monthsUntilRetirement !== null
         ? Math.max(months, Math.min(MAX_FORECAST_MONTHS, monthsUntilRetirement + RETIREMENT_POST_RETIREMENT_BUFFER_MONTHS))
@@ -598,9 +631,12 @@ async function buildCalculatorInput(
     if (
       selfMember &&
       spouseMember &&
-      selfMember.target_retirement_age != null &&
-      spouseMember.target_retirement_age != null &&
-      selfMember.target_retirement_age !== spouseMember.target_retirement_age &&
+      timing.spouse &&
+      timing.self.ageSource !== 'country_default' &&
+      timing.self.ageSource !== 'legacy_profile' &&
+      timing.spouse.retirementAge != null &&
+      timing.self.retirementAge != null &&
+      timing.self.retirementAge !== timing.spouse.retirementAge &&
       nonMemberOwnedAccounts.length === 0
     ) {
       const selfAccounts = accounts.filter((a) => a.owner === 'self');
@@ -614,23 +650,21 @@ async function buildCalculatorInput(
             label: 'Self',
             currentBalance: sumBalance(selfAccounts),
             monthlyContribution: sumContribution(selfAccounts),
-            // Spouse DOB is not captured anywhere in FHIP today (Profile is
-            // Self-only) — Self's own leg still uses Self's real current
-            // age exactly as the household-level calculation always did.
+            // Self's own leg uses Self's real current age exactly as the
+            // household-level calculation always did.
             currentAge,
-            retirementAge: selfMember.target_retirement_age,
+            retirementAge: timing.self.retirementAge,
           },
           {
             memberId: spouseMember.id,
             label: 'Spouse/Partner',
             currentBalance: sumBalance(spouseAccounts),
             monthlyContribution: sumContribution(spouseAccounts),
-            // No spouse DOB exists anywhere in FHIP's data model (spec s.32
-            // "do not invent a retirement date" when DOB is missing) — the
-            // calculator already surfaces "insufficient information" for a
-            // null currentAge rather than fabricating one.
-            currentAge: null,
-            retirementAge: spouseMember.target_retirement_age,
+            // The Spouse/Partner's own date of birth when the household record has one (household_members); null when it does
+            // not (spec s.32 "do not invent a retirement date") — the calculator then surfaces "insufficient information"
+            // for that leg rather than fabricating an age.
+            currentAge: timing.spouse.currentAge,
+            retirementAge: timing.spouse.retirementAge,
           },
         ];
       }
@@ -645,6 +679,7 @@ async function buildCalculatorInput(
       monthlyContribution,
       currentAge,
       retirementAge,
+      retirementAgeSource: timing.self.ageSource,
       monthsUntilRetirementOverride,
       targetMethod: retirementOptions.targetMethod,
       targetCorpus: retirementOptions.targetCorpus,
@@ -949,6 +984,8 @@ export async function runForecast(
     retirementTargetCorpus?: number;
     retirementDesiredAnnualIncome?: number;
     retirementReplacementPercentage?: number;
+    /** Document2 (4) F26: what-if target age(s) for this run only; never written to retirement_members. */
+    whatIfRetirementAges?: { self?: number | null; spouse?: number | null };
     plannedEvents?: PlannedFinancialEvent[];
     resilienceStressScenario?: StressScenarioType;
     resilienceStressParams?: StressScenarioParams;
@@ -983,6 +1020,7 @@ export async function runForecast(
       targetCorpus: params.retirementTargetCorpus,
       desiredAnnualIncome: params.retirementDesiredAnnualIncome,
       replacementPercentage: params.retirementReplacementPercentage,
+      whatIfRetirementAges: params.whatIfRetirementAges,
     },
     params.plannedEvents ?? [],
     {

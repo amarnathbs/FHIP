@@ -170,9 +170,19 @@ export function mergeSavedRows(masterItems: MasterItem[], savedRecords: SavedRec
   return [...merged, ...extraRows, ...orphanedRows, ...customRows];
 }
 
+/** F17: the "I don't have any ..." declaration cannot be newly ticked while the person has active items. Pure. */
+export function isNotApplicableBlocked(alreadyTicked: boolean, activeItemCount: number): boolean {
+  return !alreadyTicked && activeItemCount > 0;
+}
+
+export function notApplicableBlockedText(title: string, activeItemCount: number): string {
+  return `You already have ${activeItemCount} active ${title.toLowerCase()} item${activeItemCount === 1 ? '' : 's'}, so this does not apply. Remove ${activeItemCount === 1 ? 'it' : 'them'} first if you want to say you have none.`;
+}
+
 /** The "What are you adding?" menu: every catalogue item that is not already on the page (custom rows are the last entry). */
-export function catalogPickerItems(rows: readonly Row[]): Row[] {
-  return rows.filter((r) => !r.is_custom && !r.included);
+export function catalogPickerItems(rows: readonly Row[], hiddenKeys: readonly string[] = []): Row[] {
+  const hidden = new Set(hiddenKeys);
+  return rows.filter((r) => !r.is_custom && !r.included && !hidden.has(String(r.key)));
 }
 
 // R3 spec section 38/40 — direct-edit protection + source provenance badge.
@@ -282,6 +292,9 @@ export function FinancialDataGrid({
   config,
   subNav,
   beforeGrid,
+  afterControls,
+  afterGrid,
+  extraActiveItems = 0,
   moduleKey,
 }: {
   config: GridConfig;
@@ -290,6 +303,15 @@ export function FinancialDataGrid({
   // grid itself — used by the Retirement page's member-level "Retirement
   // Planning" section (spec s.6: "before retirement accounts/contributions").
   beforeGrid?: React.ReactNode;
+  // Document2 (4) F16 (20-10-2026): the page order is title -> primary actions and status/declaration controls -> saved items ->
+  // long imported-statement content. `beforeGrid` is for SMALL top controls only (quick links, an import form the person just
+  // opened). `afterControls` renders directly under the status/declaration controls and the Add action (before the saved list);
+  // `afterGrid` renders under the saved list and totals, which is where long imported-statement content belongs.
+  afterControls?: React.ReactNode;
+  afterGrid?: React.ReactNode;
+  // Document2 (4) F17: active items this grid does not list itself (Retirement: the SMSF fund), so the "I don't have any ..."
+  // declaration cannot contradict them either.
+  extraActiveItems?: number;
   // G4 closure item 2 (Product Owner, 2026-09-05): which capability module
   // this grid instance belongs to, so it can ask whether a live create/edit
   // control is safe to show right now (useModuleWriteAvailability()).
@@ -607,6 +629,7 @@ export function FinancialDataGrid({
 
   async function handleNotApplicableToggle(checked: boolean) {
     if (!config.notApplicable) return;
+    if (checked && isNotApplicableBlocked(false, included.length + extraActiveItems)) return; // defence in depth: the control is disabled in this state
     const previous = notApplicable;
     setNotApplicable(checked);
     try {
@@ -814,7 +837,7 @@ export function FinancialDataGrid({
     [included, search]
   );
   // Catalogue items not yet added — the Add form's picker choices.
-  const availableCatalogItems = useMemo(() => catalogPickerItems(rows ?? []), [rows]);
+  const availableCatalogItems = useMemo(() => catalogPickerItems(rows ?? [], config.hideFromAddPickerKeys), [rows, config.hideFromAddPickerKeys]);
 
   // PO decision 16-10-2026 (personal basis): on the balance-sheet registers listed in PERSONAL_TOTAL_GRID_CATEGORIES the
   // footer total is the PERSONAL total, and rows held by an entity (owner SMSF / family trust / company) are shown on
@@ -855,6 +878,9 @@ export function FinancialDataGrid({
         : reviewConfirmed
           ? 'reviewed_with_data'
           : null;
+  // Document2 (4) F17: "I don't have any ..." cannot be newly ticked while active items exist (it would contradict them).
+  const activeItemCount = included.length + extraActiveItems;
+  const notApplicableBlocked = Boolean(config.notApplicable) && isNotApplicableBlocked(notApplicable, activeItemCount);
   const sectionStatus = effectiveSectionStatus({ hasRows: included.length > 0, explicitConfirmation });
   const completion = computeSectionCompletionPercent({
     status: sectionStatus,
@@ -925,20 +951,33 @@ export function FinancialDataGrid({
             it so a write-unavailable user can still see their own data. */}
         <fieldset disabled={writeUnavailable} className="contents border-0 p-0 m-0">
           {config.notApplicable && (
-            <label className="flex items-start gap-2 rounded-card border border-line bg-white p-3 text-sm">
-              <input
-                type="checkbox"
-                checked={notApplicable}
-                onChange={(e) => handleNotApplicableToggle(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="font-medium text-ink">{config.notApplicable.label}</span>
-                <span className="block text-xs text-muted">
-                  {`This excludes ${config.title} from your Financial Health Score instead of counting it as missing data.`}
+            <div className="rounded-card border border-line bg-white p-3 text-sm" data-testid="grid-not-applicable">
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={notApplicable}
+                  disabled={notApplicableBlocked}
+                  onChange={(e) => handleNotApplicableToggle(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium text-ink">{config.notApplicable.label}</span>
+                  <span className="block text-xs text-muted">
+                    {`This excludes ${config.title} from your Financial Health Score instead of counting it as missing data.`}
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+              {notApplicableBlocked && (
+                <p className="mt-2 text-xs text-amber-900" data-testid="grid-not-applicable-blocked">
+                  {notApplicableBlockedText(config.title, activeItemCount)}
+                </p>
+              )}
+              {notApplicable && activeItemCount > 0 && (
+                <p className="mt-2 text-xs text-amber-900" data-testid="grid-not-applicable-contradiction">
+                  {`This is ticked, but you have ${activeItemCount} active ${config.title.toLowerCase()} item${activeItemCount === 1 ? '' : 's'} and they are still counted. Untick it so your answer matches what you have entered.`}
+                </p>
+              )}
+            </div>
           )}
 
           {config.zeroConfirmation && (
@@ -1283,6 +1322,8 @@ export function FinancialDataGrid({
             </div>
           )}
 
+          {afterControls}
+
           {/* --- Saved records list ---------------------------------------- */}
           {included.length > 0 && (
             <div className="flex flex-wrap items-center gap-3">
@@ -1457,6 +1498,8 @@ export function FinancialDataGrid({
             <p className="font-semibold text-ink">{completion}%</p>
           </div>
         </div>
+
+        {afterGrid}
       </div>
     </>
   );

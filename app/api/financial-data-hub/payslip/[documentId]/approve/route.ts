@@ -9,6 +9,8 @@ import {
 import { approvePayrollEventAtomic } from '@/lib/import-bridge/applyIncomeProposalAtomic';
 import { recordDocumentAuditEvent } from '@/lib/financial-data-hub/services/auditLog';
 import { getDocumentOwner, reconcileRequestedOwner } from '@/lib/financial-data-hub/services/documentOwnerRequest';
+import { createClient } from '@/lib/supabase/server';
+import { recordPayslipContribution, supersedePayslipContribution, type PayslipContributionOutcome } from '@/lib/retirement-contributions/service';
 
 // WP-09. Every field is optional so an older client (an empty POST) keeps
 // working: owner defaults to 'self' inside the RPC, and a payslip that needs
@@ -93,6 +95,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     },
   });
 
+  // Document2 (4) F25: the employer super on this payslip is a CONTRIBUTION flow for the right Retirement destination. It is recorded only
+  // here, after the person has approved the payslip (never on upload), exactly once per payslip (a unique index), and never as a balance.
+  // A failure here must not undo the approval, so it is reported in the response instead of thrown.
+  let retirementContribution: PayslipContributionOutcome | null = null;
+  let retirementContributionError: string | null = null;
+  try {
+    retirementContribution = await recordPayslipContribution(user.id, payrollEventId, await createClient());
+  } catch (e) {
+    retirementContributionError = e instanceof Error ? e.message : 'Could not record the super contribution';
+  }
+
   // A revised payslip replaces the earlier one only when the user said so.
   let superseded: { payroll_event_id: string; bank_match_moved: boolean } | null = null;
   let supersedeError: string | null = null;
@@ -100,7 +113,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     const predecessor = await findRevisionPredecessor(user.id, payrollEventId);
     if (predecessor) {
       const s = await supersedePayrollEvent(predecessor.payroll_event_id, payrollEventId);
-      if (s.ok) superseded = { payroll_event_id: predecessor.payroll_event_id, bank_match_moved: s.bankMatchMoved };
+      if (s.ok) {
+        superseded = { payroll_event_id: predecessor.payroll_event_id, bank_match_moved: s.bankMatchMoved };
+        // The earlier payslip's super contribution stops counting (kept as history), so the revised one is not added on top of it.
+        try { await supersedePayslipContribution(user.id, predecessor.payroll_event_id, await createClient()); } catch { /* the approval stands; the history row can be removed by hand */ }
+      }
       else supersedeError = s.code;
     }
   }
@@ -112,5 +129,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     income_owner: result.incomeOwner,
     superseded,
     supersede_error: supersedeError,
+    retirement_contribution: retirementContribution,
+    retirement_contribution_error: retirementContributionError,
   });
 }

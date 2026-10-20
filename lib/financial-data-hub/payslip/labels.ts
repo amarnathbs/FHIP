@@ -40,7 +40,10 @@ export interface LabelRule {
 export const PAYSLIP_LABEL_RULES: LabelRule[] = [
   // ---- Employer-side retirement (must precede employee-side) --------------
   {
-    terms: ['employer superannuation', 'employer super', 'superannuation guarantee', 'super guarantee', 'sg contribution', 'employer contribution super'],
+    // Document2 (4) F25 (20-10-2026): a real payslip printed "SGC Employer Cont. THE TRUSTEE FOR THE BEKAL SUPER FUND" and the
+    // line fell through to "For information" because none of the older phrasings matched: the employer super was never read.
+    // 'sgc' (a whole word, super guarantee charge/contribution) and 'employer cont' (employer contribution, abbreviated or in full) are AU-only.
+    terms: ['employer superannuation', 'employer super', 'superannuation guarantee', 'super guarantee', 'sg contribution', 'employer contribution super', 'sgc', 'employer cont'],
     side: 'employer_contribution', type: 'employer_retirement', countries: ['AU'],
   },
   {
