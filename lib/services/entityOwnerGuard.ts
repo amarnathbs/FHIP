@@ -53,3 +53,16 @@ export async function existingOwnerForMasterItem(
   const { data } = await supabase.from(table).select('owner').eq('user_id', userId).eq('master_item_key', masterItemKey).maybeSingle();
   return (data as { owner?: string | null } | null)?.owner ?? null;
 }
+
+/**
+ * The POST-side check: the database is only asked about an existing row when the request actually carries an entity owner, so an ordinary save
+ * (the overwhelming majority) costs nothing extra.
+ */
+export async function refuseEntityOwnerOnSave(
+  register: EntityOwnerRegister,
+  nextOwner: string | null | undefined,
+  lookupCurrentOwner: () => Promise<string | null>,
+): Promise<Response | null> {
+  if (!introducesEntityOwner(nextOwner)) return null;
+  return entityOwnerRefusal(register, nextOwner, await lookupCurrentOwner());
+}

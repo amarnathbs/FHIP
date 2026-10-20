@@ -6,6 +6,8 @@ import { hazards } from './support/sqlEditorHazards';
 
 const DIR = path.resolve(__dirname, '..', '..', 'supabase', 'migrations');
 const WPC = fs.readdirSync(DIR).filter((f) => /^029[5-9]_/.test(f));
+const PACK = path.resolve(__dirname, '..', '..', 'docs', 'reviews', 'po_apply_wp_c');
+const PACK_SQL = fs.existsSync(PACK) ? fs.readdirSync(PACK).filter((f) => f.endsWith('.sql')) : [];
 
 describe('WP-C migrations: editor safety and forward-only', () => {
   it('uses only the reserved numbers 0295-0299 and leaves 0289/0290 untouched in name', () => {
@@ -24,5 +26,23 @@ describe('WP-C migrations: editor safety and forward-only', () => {
     expect(sql).not.toMatch(/drop\s+table\s+(?!if exists\s+_)/);
     expect(sql).not.toMatch(/\btruncate\b/);
     expect(sql).not.toMatch(/delete\s+from\s+(?!entity_)/);
+  });
+});
+
+describe('the PO SQL pack (docs/reviews/po_apply_wp_c): editor safe, and read only where it says so', () => {
+  it('has the read only checks, the backup and the verification', () => {
+    expect(PACK_SQL).toEqual(expect.arrayContaining(['00_readonly_checks.sql', '01_backup.sql', '03_verify_after.sql']));
+  });
+  it.each(PACK_SQL)('%s has no editor hazard', (f) => {
+    expect(hazards(fs.readFileSync(path.join(PACK, f), 'utf8'))).toEqual([]);
+  });
+  it.each(['00_readonly_checks.sql', '03_verify_after.sql'])('%s changes nothing', (f) => {
+    const sql = fs.readFileSync(path.join(PACK, f), 'utf8').toLowerCase().replace(/--.*$/gm, '');
+    expect(sql).not.toMatch(/(insert|update|delete|drop|alter|create|truncate|grant|revoke)/);
+  });
+  it('the backup only ever creates copies, it never changes or removes a source row', () => {
+    const sql = fs.readFileSync(path.join(PACK, '01_backup.sql'), 'utf8').toLowerCase().replace(/--.*$/gm, '');
+    expect(sql).not.toMatch(/(update|delete|drop|truncate)/);
+    expect(sql.match(/create table if not exists backup_wpc_/g)!.length).toBeGreaterThanOrEqual(9);
   });
 });

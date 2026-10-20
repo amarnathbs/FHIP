@@ -4,6 +4,8 @@
 //
 // HAND ORACLES (AUD): SMSF assets 475,000 + 3,000 + 25,000 = 503,000, fund liability 370,000, derived net 133,000. Trust assets 1,000,000 less
 // liabilities 400,000 = 600,000. Company net value only 250,000.
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { PGlite } from '@electric-sql/pglite';
 import { asUser, expectSqlError, replayLedger, seedUser } from './support/entityLevelPgliteHarness';
@@ -440,5 +442,37 @@ describe('NEGATIVE CONTROLS: each rule is shown to be the cause, not a coinciden
       await db.exec(`update smsf_liabilities set masked_identifier = null where smsf_fund_id='${fundId}'`);
       await db.exec(`alter table smsf_liabilities add constraint chk_smsf_liabilities_masked_identifier check (masked_identifier is null or masked_identifier !~ '[0-9]{7,}')`);
     }
+  });
+});
+
+describe('the PO pack (docs/reviews/po_apply_wp_c) runs on the real ledger replay', () => {
+  const PACK = path.resolve(__dirname, '..', '..', 'docs', 'reviews', 'po_apply_wp_c');
+  const sql = (f: string) => fs.readFileSync(path.join(PACK, f), 'utf8');
+
+  it('the read only checks run and report the legacy shapes they are meant to find (an itemised entity with a typed net, a personal row tagged SMSF)', async () => {
+    const u = await newUser('pk');
+    await createFund(u);
+    await db.exec(`insert into income_sources(user_id, source_name, income_type, amount, frequency, currency_code, owner) values ('${u}','Old rent','rental',600,'weekly','AUD','smsf')`);
+    const co = await newEntity(u, 'company', 'summary', 5);
+    await db.exec(`alter table business_entities disable trigger trg_business_entities_mode_rule; update business_entities set valuation_mode='detailed' where id='${co}'; alter table business_entities enable trigger trg_business_entities_mode_rule;`);
+    const rows = (await q(sql('00_readonly_checks.sql'))) as Row[];
+    const byName = new Map(rows.map((r) => [`${r.check_name}`, num(r.n)]));
+    expect(byName.get('personal income tagged SMSF')).toBeGreaterThanOrEqual(1);
+    expect(byName.get('entity holds BOTH a typed net and itemised lines')).toBeGreaterThanOrEqual(1);
+  });
+
+  it('the backup copies every table, changes no source row, and is safe to run twice', async () => {
+    const before = num((await q(`select count(*) c from smsf_funds`))[0].c);
+    await db.exec(sql('01_backup.sql'));
+    await db.exec(sql('01_backup.sql'));
+    expect(num((await q(`select count(*) c from smsf_funds`))[0].c)).toBe(before);
+    expect(num((await q(`select count(*) c from backup_wpc_20261021_smsf_funds`))[0].c)).toBe(before);
+    expect((await q(`select relrowsecurity from pg_class where relname = 'backup_wpc_20261021_smsf_funds'`))[0].relrowsecurity).toBe(true);
+  });
+
+  it('the verification says ok for every check after the three migrations', async () => {
+    const rows = await q(sql('03_verify_after.sql'));
+    expect(rows.length).toBeGreaterThanOrEqual(13);
+    expect(rows.filter((r) => r.ok !== true).map((r) => r.check_name)).toEqual([]);
   });
 });

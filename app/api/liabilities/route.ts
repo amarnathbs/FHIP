@@ -3,7 +3,7 @@ import { makeRegistry } from '@/lib/services/registry';
 import { liabilitySchema } from '@/lib/validation/liability';
 import { assertItemCreationAllowedForUser } from '@/lib/services/jurisdiction';
 import { createClient } from '@/lib/supabase/server';
-import { entityOwnerRefusal, existingOwnerForMasterItem } from '@/lib/services/entityOwnerGuard';
+import { refuseEntityOwnerOnSave, existingOwnerForMasterItem } from '@/lib/services/entityOwnerGuard';
 
 const registry = makeRegistry('liabilities');
 
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const parsed = liabilitySchema.safeParse(await req.json());
   if (!parsed.success) return badValidation(parsed.error, 422);
   // F21: a debt of an SMSF / trust / HUF / company is never a personal liability (it is entered on the entity).
-  const refused = entityOwnerRefusal('liabilities', parsed.data.owner, await existingOwnerForMasterItem(await createClient(), 'liabilities', user.id, parsed.data.master_item_key));
+  const refused = await refuseEntityOwnerOnSave('liabilities', parsed.data.owner, async () => existingOwnerForMasterItem(await createClient(), 'liabilities', user.id, parsed.data.master_item_key));
   if (refused) return refused;
 
   const supabase = await createClient();
