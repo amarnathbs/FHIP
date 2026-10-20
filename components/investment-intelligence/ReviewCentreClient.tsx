@@ -6,6 +6,8 @@ import { OwnerChangeDialog, type OwnerSubmitExtra, type OwnerSubmitResult } from
 import { apiErrorMessage, type OwnerSelectionBody } from './ownerChange';
 import { fmtDate } from './dateDisplay';
 import { ProbableDuplicateReview } from './ProbableDuplicateReview';
+import { ReplacementCopyControl } from './ReplacementCopyControl';
+import type { CaseLifecycle } from '@/lib/services/investment-intelligence/caseLifecycle';
 
 // R9 — Review Centre UX (spec sections 56, 59, 134). Sections mirror the
 // spec's suggested layout: Overview (severity counts) + a filterable list.
@@ -27,6 +29,8 @@ interface ReviewItem {
   as_of_date: string;
   status: string;
   created_at: string;
+  /** Live lifecycle of the statement behind a reconciliation item (server-derived): is the raw file stored, what is really needed. */
+  lifecycle?: CaseLifecycle | null;
 }
 
 /** The Review item whose owner dialog is open. Everything the dialog needs, resolved from the item's own evidence. */
@@ -110,6 +114,14 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
   const [selectedClassificationByItem, setSelectedClassificationByItem] = useState<Record<string, string>>({});
   const [resolvingClassificationItemId, setResolvingClassificationItemId] = useState<string | null>(null);
   const [resolveClassificationError, setResolveClassificationError] = useState<Record<string, string>>({});
+  // Document2 (4) WP-B (F6/F7): per-item busy / outcome state for Acknowledge, Dismiss and the governed stale close, plus the
+  // replacement-copy disclosure. A failure used to be swallowed (`act` ignored the response) and a success changed nothing visible.
+  const [actingItemId, setActingItemId] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [closingStaleItemId, setClosingStaleItemId] = useState<string | null>(null);
+  const [bulkClosing, setBulkClosing] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [replacementOpenForItem, setReplacementOpenForItem] = useState<string | null>(null);
 
   const load = useCallback(async (status: string) => {
     setLoading(true);
@@ -129,6 +141,9 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Resolve items whose case was closed elsewhere (Data tab, owner dialog, governed close) and tidy duplicate cases that
+      // repeated reprocessing opened, so the list never shows a stale snapshot. Cheap; a failure must never block the list.
+      await fetch('/api/investment-intelligence/review/sync', { method: 'POST' }).catch(() => undefined);
       const result = await load(statusFilter);
       if (cancelled) return;
       void result;
@@ -149,8 +164,66 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
   }
 
   async function act(id: string, action: 'acknowledge' | 'dismiss') {
-    await fetch(`/api/investment-intelligence/review/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-    await load(statusFilter);
+    if (actingItemId) return; // duplicate-submission guard
+    setActingItemId(id);
+    setActionNotice((prev) => ({ ...prev, [id]: { ok: true, text: '' } }));
+    try {
+      const res = await fetch(`/api/investment-intelligence/review/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? `Could not ${action} this item.`);
+      await load(statusFilter);
+    } catch (e) {
+      setActionNotice((prev) => ({ ...prev, [id]: { ok: false, text: e instanceof Error ? e.message : `Could not ${action} this item.` } }));
+    } finally {
+      setActingItemId(null);
+    }
+  }
+
+  async function closeStale(itemId: string, caseId: string) {
+    if (closingStaleItemId || bulkClosing) return;
+    if (!window.confirm('Close this item? Its original statement file no longer exists, so it cannot be re-checked. The item stays in your history; nothing is deleted.')) return;
+    setClosingStaleItemId(itemId);
+    setActionNotice((prev) => ({ ...prev, [itemId]: { ok: true, text: '' } }));
+    try {
+      const res = await fetch(`/api/investment-intelligence/reconciliation-cases/${encodeURIComponent(caseId)}/close-stale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not close this item.');
+      await fetch('/api/investment-intelligence/review/sync', { method: 'POST' }).catch(() => undefined);
+      await load(statusFilter);
+    } catch (e) {
+      setActionNotice((prev) => ({ ...prev, [itemId]: { ok: false, text: e instanceof Error ? e.message : 'Could not close this item.' } }));
+    } finally {
+      setClosingStaleItemId(null);
+    }
+  }
+
+  async function closeAllStale(caseIds: string[]) {
+    if (bulkClosing || closingStaleItemId) return;
+    if (!window.confirm(`Close ${caseIds.length} item${caseIds.length === 1 ? '' : 's'} whose original statement file no longer exists? They cannot be re-checked. Each stays in your history; nothing is deleted.`)) return;
+    setBulkClosing(true);
+    setBulkNotice(null);
+    try {
+      const res = await fetch('/api/investment-intelligence/reconciliation-cases/close-stale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true, caseIds }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not close these items.');
+      const closed = (json.data?.closedCaseIds ?? []).length as number;
+      const notClosed = (json.data?.notClosed ?? []).length as number;
+      setBulkNotice({ ok: notClosed === 0, text: `Closed ${closed} item${closed === 1 ? '' : 's'}${notClosed ? `; ${notClosed} could not be closed` : ''}. They are kept in your history.` });
+      await fetch('/api/investment-intelligence/review/sync', { method: 'POST' }).catch(() => undefined);
+      await load(statusFilter);
+    } catch (e) {
+      setBulkNotice({ ok: false, text: e instanceof Error ? e.message : 'Could not close these items.' });
+    } finally {
+      setBulkClosing(false);
+    }
   }
 
   async function submitOwner(target: OwnerDialogTarget, owner: OwnerSelectionBody, extra?: OwnerSubmitExtra): Promise<OwnerSubmitResult> {
@@ -192,6 +265,14 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not resolve this instrument.');
+      // The choice is saved. Applying it re-reads the statement, which needs the original file; when that was deleted (by
+      // design) say so plainly instead of leaving the person thinking the statement was updated.
+      if (json.data?.needsReplacementCopy) {
+        setResolveInstrumentError((prev) => ({ ...prev, [itemId]: '' }));
+        setActionNotice((prev) => ({ ...prev, [itemId]: { ok: true, text: 'Your choice is saved. The original statement file was deleted after processing, so it is applied the next time you upload a replacement copy of this statement.' } }));
+      } else if (json.data?.reprocessError) {
+        setActionNotice((prev) => ({ ...prev, [itemId]: { ok: false, text: `Your choice is saved, but re-checking the statement did not finish: ${String(json.data.reprocessError)}` } }));
+      }
       // Same reason submitOwner()/discardDocument() above hit /review/refresh
       // before reloading -- ii_review_items is a materialised snapshot, not
       // the same table as ii_reconciliation_cases, so resolving the case (and
@@ -296,6 +377,42 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!loading && !error && bySeverity.length === 0 && <p className="text-sm text-muted">No {statusFilter} review items right now.</p>}
 
+      {/* Document2 (4) WP-B: one honest, governed way to clear the items whose statement file no longer exists. */}
+      {statusFilter === 'open' && (() => {
+        const staleIds = bySeverity
+          .filter((i) => i.lifecycle?.staleClosable && typeof i.evidence?.caseId === 'string')
+          .map((i) => i.evidence.caseId as string);
+        if (staleIds.length === 0 && !bulkNotice) return null;
+        return (
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" data-testid="stale-banner">
+            {staleIds.length > 0 && (
+              <>
+                <p className="font-medium">
+                  {staleIds.length} item{staleIds.length === 1 ? '' : 's'} belong{staleIds.length === 1 ? 's' : ''} to statements whose original file no longer exists.
+                </p>
+                <p className="mt-1 text-xs">
+                  Statement files are deleted shortly after processing, by design, so these cannot be re-checked. Upload a replacement copy on an item to re-check it, or close
+                  them here. Closed items stay in your history; nothing is deleted.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => closeAllStale(staleIds)}
+                  disabled={bulkClosing || closingStaleItemId !== null}
+                  className="mt-2 rounded-md border border-amber-400 bg-white px-3 py-1 text-xs font-medium text-amber-900 disabled:opacity-50"
+                >
+                  {bulkClosing ? 'Closing…' : `Close all ${staleIds.length} stale item${staleIds.length === 1 ? '' : 's'}`}
+                </button>
+              </>
+            )}
+            {bulkNotice && (
+              <p role="status" className={`mt-2 text-xs ${bulkNotice.ok ? 'text-green-800' : 'text-red-700'}`}>
+                {bulkNotice.text}
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       {ownerNotice && (
         <p role="status" className="mb-3 rounded-md bg-green-50 p-2 text-sm text-green-800">
           {ownerNotice}
@@ -354,6 +471,10 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
           // the user it existed -- so this is guidance to the existing flow,
           // not a new one.
           const isPasswordRequiredDocument = discrepancyType === 'document_password_required' && !!sourceDocumentId;
+          // Document2 (4) WP-B: live lifecycle of the statement behind this item (server-derived). When the case needs the raw
+          // file and the file is gone, the file-dependent guidance is replaced by a replacement copy / governed close.
+          const lifecycle = item.lifecycle ?? null;
+          const isStaleFileCase = !!lifecycle && !lifecycle.fileStored && (lifecycle.need === 'information_no_longer_exists' || lifecycle.need === 'corrected_file') && lifecycle.primary !== 'choose_owner';
           // These three are permanently dead ends for the uploaded file (see
           // the discard route's header) -- a genuine "Discard" action is
           // offered instead of the generic Acknowledge/Dismiss, which never
@@ -438,10 +559,55 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
                       Review statement
                     </Link>
                   )}
-                  {statusFilter === 'open' && isPasswordRequiredDocument && (
+                  {statusFilter === 'open' && isPasswordRequiredDocument && lifecycle?.fileStored !== false && (
                     <p className="mt-2 text-xs text-amber-800">
                       This statement is password-protected. Open it from Statements &amp; data above, enter the password and click &quot;Submit password &amp; process&quot; —
                       this issue clears automatically once the document opens successfully.
+                    </p>
+                  )}
+                  {/* Document2 (4) WP-B: the original file is deleted shortly after processing, by design. "Enter the password
+                      and reprocess the stored document" is then impossible, so it is not offered: a replacement copy (attached to
+                      this same statement) or a governed close is. */}
+                  {statusFilter === 'open' && isStaleFileCase && (
+                    <div className="mt-2 flex flex-col items-start gap-2" data-testid="stale-file-actions">
+                      <p className="text-xs text-amber-800">{lifecycle?.explanation}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {sourceDocumentId && (
+                          <button
+                            type="button"
+                            onClick={() => setReplacementOpenForItem((cur) => (cur === item.id ? null : item.id))}
+                            aria-expanded={replacementOpenForItem === item.id}
+                            className="rounded-md border px-2 py-1 text-xs font-medium text-primary"
+                          >
+                            Upload replacement copy
+                          </button>
+                        )}
+                        {lifecycle?.staleClosable && caseId && (
+                          <button
+                            type="button"
+                            onClick={() => closeStale(item.id, caseId)}
+                            disabled={closingStaleItemId !== null || bulkClosing}
+                            className="rounded-md border px-2 py-1 text-xs font-medium text-gray-700 disabled:opacity-50"
+                          >
+                            {closingStaleItemId === item.id ? 'Closing…' : 'Close — I no longer have the file'}
+                          </button>
+                        )}
+                      </div>
+                      {sourceDocumentId && replacementOpenForItem === item.id && (
+                        <ReplacementCopyControl
+                          documentId={sourceDocumentId}
+                          forceReparse={false}
+                          onDone={async () => {
+                            await fetch('/api/investment-intelligence/review/sync', { method: 'POST' }).catch(() => undefined);
+                            await load(statusFilter);
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+                  {actionNotice[item.id]?.text && (
+                    <p role="status" className={`mt-2 text-xs ${actionNotice[item.id].ok ? 'text-green-700' : 'text-red-700'}`}>
+                      {actionNotice[item.id].text}
                     </p>
                   )}
                   {statusFilter === 'open' && isDiscardableDocument && (
@@ -595,10 +761,10 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
                 {statusFilter === 'open' && (
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <div className="flex gap-2">
-                      <button onClick={() => act(item.id, 'acknowledge')} className="rounded-md border px-2 py-1 text-xs text-muted">
-                        Acknowledge
+                      <button onClick={() => act(item.id, 'acknowledge')} disabled={actingItemId !== null} className="rounded-md border px-2 py-1 text-xs text-muted disabled:opacity-50">
+                        {actingItemId === item.id ? 'Saving…' : 'Acknowledge'}
                       </button>
-                      <button onClick={() => act(item.id, 'dismiss')} className="rounded-md border px-2 py-1 text-xs text-muted">
+                      <button onClick={() => act(item.id, 'dismiss')} disabled={actingItemId !== null} className="rounded-md border px-2 py-1 text-xs text-muted disabled:opacity-50">
                         Dismiss
                       </button>
                     </div>

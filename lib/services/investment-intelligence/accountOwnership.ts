@@ -88,6 +88,22 @@ export async function loadDecidedOwnershipAccountIds(client: Db, userId: string,
   return out;
 }
 
+/**
+ * Document2 (4) WP-B (F8): accounts whose owner was EXPLICITLY chosen by a person -- either a sole household member
+ * (`ii_accounts.owner_member_id`, which only the upload-time owner choice, the owner PATCH / amend routes or the AU bridge
+ * ever write; nothing assigns Self automatically) or an active entity / joint allocation. A reprocess must not re-open
+ * `owner_unmatched` for such an account and must not call it "unresolved" in certification. Never inferred, never guessed.
+ */
+export async function loadExplicitOwnerAccountIds(client: Db, userId: string, accountIds: readonly string[]): Promise<Set<string>> {
+  const out = await loadDecidedOwnershipAccountIds(client, userId, accountIds);
+  if (accountIds.length === 0) return out;
+  const { data } = await client.from('ii_accounts').select('id, owner_member_id').eq('user_id', userId).in('id', [...accountIds]);
+  for (const r of (data ?? []) as { id: string; owner_member_id: string | null }[]) {
+    if (r.owner_member_id) out.add(r.id);
+  }
+  return out;
+}
+
 /** Accounts with ANY active entity share. Their holdings must never be offered to personal Net Worth. */
 export async function loadEntityOwnedAccountIds(client: Db, userId: string): Promise<Set<string>> {
   const out = new Set<string>();

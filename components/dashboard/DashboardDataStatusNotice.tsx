@@ -1,6 +1,7 @@
 import { formatMoney } from '@/lib/engines/money';
 import { fmtDate } from '@/components/investment-intelligence/dateDisplay';
 import type { DashboardDataStatus } from '@/lib/engines/dashboard';
+import { importedNotInNetWorthActions } from '@/lib/investment-intelligence/importedNotInNetWorthLinks';
 
 const SECTION_LABELS: Record<string, string> = {
   income: 'income',
@@ -40,8 +41,13 @@ export function DashboardDataStatusNotice({ status, currency }: { status: Dashbo
   if (status.retirementContributionFrequencyUnknown > 0) {
     notes.push('Some retirement contributions have no frequency recorded, so they are not counted as a monthly amount.');
   }
+  const actionsByNote = new Map<string, { href: string; label: string }[]>();
   if (status.importedNotInNetWorth) {
-    notes.push(`${status.importedNotInNetWorth.label}: ${status.importedNotInNetWorth.count} holding${status.importedNotInNetWorth.count === 1 ? '' : 's'} worth ${formatMoney(status.importedNotInNetWorth.total, currency)}.`);
+    const text = `${status.importedNotInNetWorth.label}: ${status.importedNotInNetWorth.count} holding${status.importedNotInNetWorth.count === 1 ? '' : 's'} worth ${formatMoney(status.importedNotInNetWorth.total, currency)}.`;
+    notes.push(text);
+    // Document2 (4) WP-B (F13): a direct link to where it is resolved. The note clears by itself once the holdings are published
+    // (it is recomputed from the live data on every load), so there is nothing to dismiss here.
+    actionsByNote.set(text, importedNotInNetWorthActions(status.importedNotInNetWorth.where));
   }
   if (status.publishedValuation && status.publishedValuation.count > 0) {
     const v = status.publishedValuation;
@@ -85,7 +91,14 @@ export function DashboardDataStatusNotice({ status, currency }: { status: Dashbo
         <section aria-label="About these figures" className="rounded-card border border-line bg-white p-4 text-sm text-muted">
           <ul className="list-disc space-y-1 pl-5">
             {notes.map((n) => (
-              <li key={n}>{n}</li>
+              <li key={n}>
+                {n}
+                {(actionsByNote.get(n) ?? []).map((a) => (
+                  <a key={a.href} href={a.href} className="ml-2 font-medium text-primary hover:underline">
+                    {a.label}
+                  </a>
+                ))}
+              </li>
             ))}
           </ul>
         </section>

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { describeDocumentOwner } from '@/lib/services/investment-intelligence/documentOwner';
+import { classifyCase, hasStoredFile } from '@/lib/services/investment-intelligence/caseLifecycle';
 
 // R2 — "retrieve parse summary" (spec section 51). Shows exactly what
 // spec section 31 requires the minimal UI to display: statement source,
@@ -15,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const supabase = await createClient();
   const { data: doc, error: docErr } = await supabase
     .from('ii_source_documents')
-    .select('id, status, source_detected, source_confidence, document_type_detected, statement_period_start, statement_period_end, statement_as_of_date, original_filename, uploaded_at')
+    .select('id, status, source_detected, source_confidence, document_type_detected, statement_period_start, statement_period_end, statement_as_of_date, original_filename, uploaded_at, storage_path, storage_purged_at')
     .eq('id', id)
     .eq('user_id', user.id)
     .maybeSingle();
@@ -97,15 +98,27 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const distinctInstruments = new Set((transactions ?? []).map((t) => t.instrument_id)).size;
 
+  // Document2 (4) WP-B: the raw file is temporary by design, so the screen must be told whether it still exists and what each
+  // case really needs (see caseLifecycle.ts). The storage path itself never leaves the server.
+  const { storage_path: storagePath, storage_purged_at: storagePurgedAt, ...documentPublic } = doc as typeof doc & { storage_path: string | null; storage_purged_at: string | null };
+  const documentState = {
+    status: (doc.status as string | null) ?? null,
+    storagePath: storagePath ?? null,
+    storagePurgedAt: storagePurgedAt ?? null,
+    hasRetainedData: (holdings ?? []).length > 0 || (transactions ?? []).length > 0,
+  };
+  const casesWithLifecycle = (cases ?? []).map((c) => ({ ...c, lifecycle: classifyCase(c.discrepancy_type as string, documentState) }));
+
   return ok({
-    document: doc,
+    document: documentPublic,
+    hasStoredFile: hasStoredFile(documentState),
     accountsFound: (accounts ?? []).length,
     accounts: accounts ?? [],
     schemesFound: distinctInstruments,
     transactionsFound: (transactions ?? []).length,
     holdingsFound: (holdings ?? []).length,
     holdings: holdings ?? [],
-    reconciliationCases: cases ?? [],
+    reconciliationCases: casesWithLifecycle,
     openReconciliationCaseCount: (cases ?? []).filter((c) => c.status === 'open' || c.status === 'user_reviewing').length,
     portfolioTruthStatuses: truthStatuses,
     owner: ownerSummary,

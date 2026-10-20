@@ -20,7 +20,7 @@ export async function GET() {
   try {
     const supabase = await createClient();
     const [statements, investments] = await Promise.all([listImportedAuStatements(user.id), selectInvestments(user.id, { client: supabase })]);
-    let unpublished: { label: string; count: number; total: number; reporting_currency: string; holdings: { name: string; as_of_date: string; value: number; currency_code: string }[] } | null = null;
+    let unpublished: { label: string; count: number; total: number; reporting_currency: string; holdings: { name: string; as_of_date: string; value: number; currency_code: string; source_document_id: string | null }[] } | null = null;
     if (investments.status === 'ok') {
       const names = new Map((await describeInstruments([...new Set(investments.unpublished.holdings.map((h) => h.instrumentId))])).map((i) => [i.instrumentId, i.name] as const));
       unpublished = {
@@ -28,7 +28,7 @@ export async function GET() {
         count: investments.unpublished.count,
         total: investments.unpublished.total,
         reporting_currency: investments.reportingCurrency,
-        holdings: investments.unpublished.holdings.map((h) => ({ name: names.get(h.instrumentId) ?? 'Holding', as_of_date: h.asOfDate, value: h.value.amountNative, currency_code: h.value.currency })),
+        holdings: investments.unpublished.holdings.map((h) => ({ name: names.get(h.instrumentId) ?? 'Holding', as_of_date: h.asOfDate, value: h.value.amountNative, currency_code: h.value.currency, source_document_id: h.sourceDocumentId })),
       };
     }
     return ok({ statements, unpublished, unpublished_unavailable: investments.status !== 'ok' });
