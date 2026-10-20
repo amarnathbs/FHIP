@@ -7,6 +7,7 @@ import { SmsfMembers } from './SmsfMembers';
 import { SmsfDetailedWorkspace } from './SmsfDetailedWorkspace';
 import { SmsfModeSwitch } from './SmsfModeSwitch';
 import { SmsfReportsPanel } from './SmsfReportsPanel';
+import { userVisibleFundNotes } from '@/lib/engines/smsf/smsfNotes';
 import type { SmsfFundRow } from './types';
 
 // One SMSF fund's card. The fund is recorded in exactly ONE of two ways (PO decision 17-10-2026): ITEMISED (assets and liabilities, the net
@@ -19,7 +20,7 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
   const [fundNameDraft, setFundNameDraft] = useState(fund.fund_name);
   const [balanceDraft, setBalanceDraft] = useState(fund.summary_balance != null ? String(fund.summary_balance) : '');
   const [dateDraft, setDateDraft] = useState(fund.summary_balance_date ?? '');
-  const [notesDraft, setNotesDraft] = useState(fund.notes ?? '');
+  const [notesDraft, setNotesDraft] = useState(userVisibleFundNotes(fund.notes) ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,10 +137,10 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
                 <dt className="text-xs text-muted">Currency</dt>
                 <dd className="text-ink">{fund.currency_code}</dd>
               </div>
-              {fund.notes && (
+              {userVisibleFundNotes(fund.notes) && (
                 <div className="col-span-2 sm:col-span-4">
                   <dt className="text-xs text-muted">Notes</dt>
-                  <dd className="text-ink">{fund.notes}</dd>
+                  <dd className="text-ink">{userVisibleFundNotes(fund.notes)}</dd>
                 </div>
               )}
             </dl>

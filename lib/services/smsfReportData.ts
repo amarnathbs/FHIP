@@ -17,7 +17,12 @@ export interface SmsfFundReportBundle {
   pnl: SmsfPnlResult;
   cashFlow: SmsfCashFlowResult;
   contributions: SmsfContributionSummary;
-  reconciliation: { detailedNetValue: number | null; summaryBalance: number | null; variance: number | null };
+  /**
+   * The ONE net the fund is worth, as the rest of the app counts it (smsf_fund_counted_net): worked out from the fund's assets and liabilities
+   * while it is itemised, the single typed value while it is a net value only. There is no second "summary" figure and no difference between
+   * two figures here (PO review 20-10-2026, F19/F20).
+   */
+  position: { mode: 'itemised' | 'net_only'; net: number | null };
   /** WP-10 auditor pack — structured metadata only, never a raw source document. */
   provenance: {
     activeHoldingCount: number;
@@ -97,10 +102,9 @@ export async function loadSmsfFundReportBundle(
     contributionsMonthly: contributions.totalContributionMonthly,
   });
 
-  // Reconciliation reuses the already-certified RPC (migration 0084) rather
-  // than recomputing detailed-vs-summary net value a second way.
-  const [reconciliationResult, holdingsCountResult, membersCountResult] = await Promise.all([
-    supabase.rpc('smsf_compute_detailed_net_value', { p_fund_id: fundId }),
+  // The counted net comes from the ONE database function the rest of the app reads (migration 0289), never recomputed a second way.
+  const [netResult, holdingsCountResult, membersCountResult] = await Promise.all([
+    supabase.rpc('smsf_fund_counted_net', { p_fund_id: fundId }),
     supabase
       .from('smsf_holdings')
       .select('id', { count: 'exact', head: true })
@@ -109,12 +113,9 @@ export async function loadSmsfFundReportBundle(
       .eq('is_active', true),
     supabase.from('smsf_fund_members').select('id', { count: 'exact', head: true }).eq('smsf_fund_id', fundId).eq('user_id', userId),
   ]);
-  if (reconciliationResult.error) return { data: null, error: new Error(reconciliationResult.error.message) };
+  if (netResult.error) return { data: null, error: new Error(netResult.error.message) };
 
-  const detailedNetValue = reconciliationResult.data ?? null;
-  const summaryBalance = fund.summary_balance ?? null;
-  const variance =
-    detailedNetValue !== null && summaryBalance !== null ? Math.round((detailedNetValue - summaryBalance) * 100) / 100 : null;
+  const countedNet = netResult.data === null || netResult.data === undefined ? null : Number(netResult.data);
 
   return {
     data: {
@@ -128,7 +129,7 @@ export async function loadSmsfFundReportBundle(
       pnl,
       cashFlow,
       contributions,
-      reconciliation: { detailedNetValue, summaryBalance, variance },
+      position: { mode: fund.mode === 'detailed' ? 'itemised' : 'net_only', net: countedNet },
       provenance: {
         activeHoldingCount: holdingsCountResult.count ?? 0,
         activeMemberCount: membersCountResult.count ?? 0,

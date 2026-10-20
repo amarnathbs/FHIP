@@ -17,7 +17,7 @@
 // This module also carries the WP-10 Auditor pack: rather than a wholly
 // separate export type, the same CSV includes a clearly labelled
 // "Provenance / audit metadata" section (fund identity, mode, holding/member
-// counts, reconciliation variance, generated-at) — structured metadata only,
+// counts, generated-at) — structured metadata only,
 // explicitly never a raw source document, matching the PO lock verbatim
 // ("Accountant/auditor export is structured data plus minimal provenance.
 // No raw-document evidence vault.").
@@ -90,14 +90,8 @@ export function buildSmsfAccountantExportCsv(bundle: SmsfFundReportBundle, perio
   out += csvRow(['Spouse / rollover contributions', 'Not modelled in this release']);
   out += csvRow([]);
 
-  out += csvRow(['Balance Reconciliation']);
-  if (bundle.provenance.activeHoldingCount === 0) {
-    out += csvRow(['Detailed Holdings has not been set up for this fund yet — nothing to reconcile against Summary Mode']);
-  } else {
-    out += csvRow(['Detailed net value', bundle.reconciliation.detailedNetValue ?? 'N/A']);
-    out += csvRow(['Summary balance', bundle.reconciliation.summaryBalance ?? 'N/A']);
-    out += csvRow(['Variance', bundle.reconciliation.variance ?? 'N/A']);
-  }
+  out += csvRow(['Fund net position']);
+  out += csvRow([bundle.position.mode === 'itemised' ? 'Net - assets less liabilities (worked out by FHIP)' : 'Net value (recorded as one figure)', bundle.position.net ?? 'N/A']);
   out += csvRow([]);
 
   out += csvRow(['Provenance / audit metadata (structured only — no source documents included)']);

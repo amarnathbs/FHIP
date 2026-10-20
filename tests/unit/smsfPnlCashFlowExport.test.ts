@@ -146,7 +146,7 @@ describe('buildSmsfAccountantExportCsv — WP-09: never corrupts a legitimate ne
       debtServiceBreakdown: { estimatedInterestMonthly: 1800, estimatedPrincipalMonthly: 200 },
     },
     contributions: { employerContributionMonthly: 0, personalContributionMonthly: 0, totalContributionMonthly: 0, spouseAndRolloverNotModelled: true },
-    reconciliation: { detailedNetValue: null, summaryBalance: null, variance: null },
+    position: { mode: 'net_only', net: 120_000 },
     provenance: { activeHoldingCount: 0, activeMemberCount: 1, generatedAt: '2026-09-08T00:00:00.000Z' },
   };
 
@@ -162,29 +162,19 @@ describe('buildSmsfAccountantExportCsv — WP-09: never corrupts a legitimate ne
     expect(csv).toContain("'=HYPERLINK");
   });
 
-  it('never shows a raw balance-reconciliation variance for a fund with no Detailed Holdings yet — matches the UI\'s own honest framing (NEG-04)', () => {
-    // reconciliation.variance is populated (-120000, say) even before Detailed
-    // Holdings exists — smsf_compute_detailed_net_value() legitimately
-    // returns 0 for a fund with zero holdings, which would otherwise render
-    // as an alarming, misleading "variance" for a fund the app itself treats
-    // as complete in Summary Mode alone.
-    const zeroHoldingsBundle: SmsfFundReportBundle = {
+  it('F19/F20 (PO review 20-10-2026): the export carries ONE fund net and no summary-vs-detailed difference, whatever the mode', () => {
+    const itemised: SmsfFundReportBundle = {
       ...bundle,
-      reconciliation: { detailedNetValue: 0, summaryBalance: 120000, variance: -120000 },
-      provenance: { ...bundle.provenance, activeHoldingCount: 0 },
+      fund: { ...bundle.fund, mode: 'detailed' },
+      position: { mode: 'itemised', net: 133_000 },
+      provenance: { ...bundle.provenance, activeHoldingCount: 3 },
     };
-    const csv = buildSmsfAccountantExportCsv(zeroHoldingsBundle, period);
-    expect(csv).not.toContain('-120000');
-    expect(csv.toLowerCase()).toContain('not been set up');
-  });
-
-  it('shows the real variance once Detailed Holdings has at least one active holding', () => {
-    const withHoldingsBundle: SmsfFundReportBundle = {
-      ...bundle,
-      reconciliation: { detailedNetValue: 0, summaryBalance: 120000, variance: -120000 },
-      provenance: { ...bundle.provenance, activeHoldingCount: 1 },
-    };
-    const csv = buildSmsfAccountantExportCsv(withHoldingsBundle, period);
-    expect(csv).toContain('Variance,-120000');
+    const csv = buildSmsfAccountantExportCsv(itemised, period);
+    expect(csv).toContain('Fund net position');
+    expect(csv).toContain('Net - assets less liabilities (worked out by FHIP),133000');
+    for (const word of ['Reconciliation', 'Variance', 'Summary balance', 'Difference']) expect(csv).not.toContain(word);
+    const netOnly = buildSmsfAccountantExportCsv(bundle, period);
+    expect(netOnly).toContain('Net value (recorded as one figure),120000');
+    for (const word of ['Reconciliation', 'Variance', 'Summary balance', 'Difference']) expect(netOnly).not.toContain(word);
   });
 });

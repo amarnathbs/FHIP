@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { fetchJson, formatMoneySafe } from './format';
 import type { SmsfFundRow } from './types';
 
-// LR-6 — SMSF P&L, Cash Flow, Contributions, Balance Reconciliation and
+// LR-6 — SMSF P&L, Cash Flow, Contributions, the fund net position and the
 // Accountant/Auditor export (WP-02/03/04/06/08/09/10). A read-only reports
 // surface: nothing here writes to any table. Figures come from
 // GET /api/smsf/[id]/report, which is the exact same computation the CSV
@@ -25,7 +25,7 @@ interface SmsfReportBundle {
     netCashFlowMonthly: number;
   };
   contributions: { employerContributionMonthly: number; personalContributionMonthly: number; totalContributionMonthly: number };
-  reconciliation: { detailedNetValue: number | null; summaryBalance: number | null; variance: number | null };
+  position: { mode: 'itemised' | 'net_only'; net: number | null };
   provenance: { activeHoldingCount: number; activeMemberCount: number; generatedAt: string };
   period: { label: string; startDate: string; endDate: string };
   availablePeriods: string[];
@@ -155,30 +155,21 @@ export function SmsfReportsPanel({ fund }: { fund: SmsfFundRow }) {
                 <p className="mt-1 text-[11px] text-muted">Spouse and rollover contribution sources are not separately tracked yet.</p>
               </section>
 
-              <section aria-labelledby={`smsf-recon-${fund.id}`}>
-                <h4 id={`smsf-recon-${fund.id}`} className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Balance Reconciliation
+              <section aria-labelledby={`smsf-position-${fund.id}`}>
+                <h4 id={`smsf-position-${fund.id}`} className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Fund net position
                 </h4>
-                {bundle.provenance.activeHoldingCount === 0 ? (
-                  <p className="mt-2 text-sm text-muted">
-                    Detailed Holdings has not been set up for this fund yet, so there is nothing to reconcile against
-                    Summary Mode. This is expected — Summary Mode is a complete way to track your SMSF on its own.
-                  </p>
-                ) : (
-                  <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                    <Stat label="Detailed net value" value={formatMoneySafe(bundle.reconciliation.detailedNetValue, currency)} />
-                    <Stat label="Summary balance" value={formatMoneySafe(bundle.reconciliation.summaryBalance, currency)} />
-                    <Stat
-                      label="Variance"
-                      value={
-                        bundle.reconciliation.variance === null
-                          ? '—'
-                          : formatMoneySafe(bundle.reconciliation.variance, currency)
-                      }
-                      emphasise={!!bundle.reconciliation.variance}
-                    />
-                  </dl>
-                )}
+                <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                  <Stat
+                    label={bundle.position.mode === 'itemised' ? 'Net (assets less liabilities)' : 'Net value'}
+                    value={bundle.position.net === null ? '—' : formatMoneySafe(bundle.position.net, currency)}
+                  />
+                </dl>
+                <p className="mt-1 text-[11px] text-muted">
+                  {bundle.position.mode === 'itemised'
+                    ? 'Worked out from the fund’s assets and liabilities. It is the same figure everywhere in FHIP.'
+                    : 'Recorded as one net value. It is the same figure everywhere in FHIP.'}
+                </p>
               </section>
             </div>
           )}
