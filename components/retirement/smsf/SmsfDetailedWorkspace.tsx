@@ -10,7 +10,6 @@ import {
   HOLDING_CLASS_LABELS,
   HOLDING_TYPE_LABELS,
   LIABILITY_TYPE_LABELS,
-  type IncomeOption,
   type SmsfFundRow,
   type SmsfHoldingRow,
   type SmsfLiabilityRow,
@@ -31,7 +30,6 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
   const [holdings, setHoldings] = useState<SmsfHoldingRow[] | null>(null);
   const [liabilities, setLiabilities] = useState<SmsfLiabilityRow[] | null>(null);
   const [links, setLinks] = useState<LinkedLoan[] | null>(null);
-  const [incomeOptions, setIncomeOptions] = useState<IncomeOption[]>([]);
   const [showAddHolding, setShowAddHolding] = useState(false);
   const [editingHolding, setEditingHolding] = useState<SmsfHoldingRow | null>(null);
   const [archiveHolding, setArchiveHolding] = useState<SmsfHoldingRow | null>(null);
@@ -43,17 +41,15 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
   const [error, setError] = useState<string | null>(null);
 
   async function reloadAll() {
-    const [h, l, links2, income, freshFund] = await Promise.all([
+    const [h, l, links2, freshFund] = await Promise.all([
       fetchJson<SmsfHoldingRow[]>(`/api/smsf/${fund.id}/holdings`),
       fetchJson<SmsfLiabilityRow[]>(`/api/smsf/${fund.id}/liabilities`),
       fetchJson<LinkedLoan[]>(`/api/smsf/${fund.id}/property-loan`),
-      fetchJson<IncomeOption[]>('/api/income'),
       fetchJson<SmsfFundRow>(`/api/smsf/${fund.id}`),
     ]);
     setHoldings(h);
     setLiabilities(l);
     setLinks(links2);
-    setIncomeOptions(income);
     onFundUpdated({ ...freshFund, retirement_accounts: fund.retirement_accounts });
   }
 
@@ -138,7 +134,7 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
           {holdings.map((h) =>
             editingHolding?.id === h.id ? (
               <li key={h.id}>
-                <SmsfHoldingForm fundId={fund.id} currency={fund.currency_code} incomeOptions={incomeOptions} existing={h} onSaved={() => { setEditingHolding(null); void reloadAll(); }} onCancel={() => setEditingHolding(null)} />
+                <SmsfHoldingForm fundId={fund.id} currency={fund.currency_code} existing={h} onSaved={() => { setEditingHolding(null); void reloadAll(); }} onCancel={() => setEditingHolding(null)} />
               </li>
             ) : (
               <li key={h.id} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-white p-3 text-sm">
@@ -157,7 +153,7 @@ export function SmsfDetailedWorkspace({ fund, onFundUpdated }: { fund: SmsfFundR
         </ul>
         {showAddHolding && (
           <div className="mt-2">
-            <SmsfHoldingForm fundId={fund.id} currency={fund.currency_code} incomeOptions={incomeOptions} onSaved={() => { setShowAddHolding(false); void reloadAll(); }} onCancel={() => setShowAddHolding(false)} />
+            <SmsfHoldingForm fundId={fund.id} currency={fund.currency_code} onSaved={() => { setShowAddHolding(false); void reloadAll(); }} onCancel={() => setShowAddHolding(false)} />
           </div>
         )}
       </section>

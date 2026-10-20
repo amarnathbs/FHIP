@@ -3,6 +3,9 @@ import type { LiabilityRow } from '@/lib/engines/dashboard';
 import { computeSmsfPnl, type SmsfPnlResult } from '@/lib/engines/smsf/smsfPnl';
 import { computeSmsfCashFlow, type SmsfCashFlowResult } from '@/lib/engines/smsf/smsfCashFlow';
 import { computeSmsfContributions, type SmsfContributionSummary } from '@/lib/engines/smsf/smsfContributions';
+import { listEntityIncome, listEntityExpenses } from '@/lib/services/entityCashFlowData';
+import { loadSmsfBankActuals, type SmsfBankActuals } from '@/lib/read-models/smsfBankActuals';
+import type { Frequency } from '@/lib/engines/money';
 import {
   getSmsfFund,
   listSmsfOwnedIncome,
@@ -23,6 +26,20 @@ export interface SmsfFundReportBundle {
    * two figures here (PO review 20-10-2026, F19/F20).
    */
   position: { mode: 'itemised' | 'net_only'; net: number | null };
+  /**
+   * Where the planned (recurring) income and expense figures come from (F22 / F23). The fund's OWN records (migration 0296) are the source; a
+   * record entered the earlier way (a personal row tagged SMSF) still counts until it is moved, and is listed so it is never hidden or doubled.
+   */
+  sources: {
+    entityIncomeCount: number;
+    entityExpenseCount: number;
+    legacyIncomeCount: number;
+    legacyExpenseCount: number;
+    /** Records in a currency other than the fund currency: left out of the figures and counted, never zeroed silently. */
+    otherCurrencyLeftOutCount: number;
+  };
+  /** Actuals from approved bank statements of the fund's own accounts. Shown beside the planned figures, never added to them. */
+  bankActuals: SmsfBankActuals;
   /** WP-10 auditor pack — structured metadata only, never a raw source document. */
   provenance: {
     activeHoldingCount: number;
@@ -56,19 +73,40 @@ export async function loadSmsfFundReportBundle(
     return { data: null, error: fundErr ?? new Error('not found') };
   }
 
-  const [incomeResult, expenseResult, loanLinksResult, contributionResult, fundLiabilitiesResult] = await Promise.all([
+  const scope = { kind: 'smsf', fundId } as const;
+  const [incomeResult, expenseResult, loanLinksResult, contributionResult, fundLiabilitiesResult, entityIncomeResult, entityExpenseResult, bankActuals] = await Promise.all([
     listSmsfOwnedIncome(userId, supabase),
     listSmsfOwnedExpenses(userId, supabase),
     listSmsfPropertyLoanLiabilitiesForPnl(fundId, userId, supabase),
     getSmsfFundContributionSource(fundId, userId, supabase),
     listSmsfLiabilities(fundId, userId, supabase),
+    listEntityIncome(scope, userId, supabase),
+    listEntityExpenses(scope, userId, supabase),
+    loadSmsfBankActuals(userId, supabase),
   ]);
+  if (entityIncomeResult.error) return { data: null, error: new Error(entityIncomeResult.error.message) };
+  if (entityExpenseResult.error) return { data: null, error: new Error(entityExpenseResult.error.message) };
   if (incomeResult.error) return { data: null, error: new Error(incomeResult.error.message) };
   if (expenseResult.error) return { data: null, error: new Error(expenseResult.error.message) };
   if (loanLinksResult.error) return { data: null, error: new Error(loanLinksResult.error.message) };
 
-  const incomeRows = incomeResult.data ?? [];
-  const expenseRows = expenseResult.data ?? [];
+  const fundCurrency = fund.currency_code ?? 'AUD';
+  const sameCurrency = <T extends { currency_code: string }>(rows: T[]) => rows.filter((r) => r.currency_code === fundCurrency);
+  const entityIncome = entityIncomeResult.data ?? [];
+  const entityExpenses = entityExpenseResult.data ?? [];
+  const entityIncomeUsed = sameCurrency(entityIncome as { currency_code: string }[]) as typeof entityIncome;
+  const entityExpensesUsed = sameCurrency(entityExpenses as { currency_code: string }[]) as typeof entityExpenses;
+  const legacyIncome = incomeResult.data ?? [];
+  const legacyExpenses = expenseResult.data ?? [];
+  // The fund's own records first, then anything still recorded the earlier way. Each flow is in exactly ONE place: moving a legacy row retires it.
+  const incomeRows = [
+    ...entityIncomeUsed.map((r) => ({ amount: Number(r.amount), frequency: r.frequency as Frequency })),
+    ...legacyIncome,
+  ];
+  const expenseRows = [
+    ...entityExpensesUsed.map((r) => ({ amount: Number(r.amount), frequency: r.frequency as Frequency, master_item_key: null, expense_category: null })),
+    ...legacyExpenses,
+  ];
 
   type LoanLink = { liabilities: Pick<LiabilityRow, 'balance' | 'interest_rate' | 'monthly_repayment' | 'debt_type' | 'master_item_key'> | null };
   if (fundLiabilitiesResult.error) return { data: null, error: new Error(fundLiabilitiesResult.error.message) };
@@ -130,6 +168,14 @@ export async function loadSmsfFundReportBundle(
       cashFlow,
       contributions,
       position: { mode: fund.mode === 'detailed' ? 'itemised' : 'net_only', net: countedNet },
+      sources: {
+        entityIncomeCount: entityIncomeUsed.length,
+        entityExpenseCount: entityExpensesUsed.length,
+        legacyIncomeCount: legacyIncome.length,
+        legacyExpenseCount: legacyExpenses.length,
+        otherCurrencyLeftOutCount: entityIncome.length - entityIncomeUsed.length + (entityExpenses.length - entityExpensesUsed.length),
+      },
+      bankActuals,
       provenance: {
         activeHoldingCount: holdingsCountResult.count ?? 0,
         activeMemberCount: membersCountResult.count ?? 0,

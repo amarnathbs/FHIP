@@ -7,6 +7,7 @@ import { SmsfMembers } from './SmsfMembers';
 import { SmsfDetailedWorkspace } from './SmsfDetailedWorkspace';
 import { SmsfModeSwitch } from './SmsfModeSwitch';
 import { SmsfReportsPanel } from './SmsfReportsPanel';
+import { SmsfCashFlowSection } from './SmsfCashFlowSection';
 import { userVisibleFundNotes } from '@/lib/engines/smsf/smsfNotes';
 import type { SmsfFundRow } from './types';
 
@@ -17,6 +18,8 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
   const [fund, setFund] = useState(initialFund);
   const [editingSummary, setEditingSummary] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  // bumped when the fund's own income, expenses or statements change, so the reports below read the new figures
+  const [reportKey, setReportKey] = useState(0);
   const [fundNameDraft, setFundNameDraft] = useState(fund.fund_name);
   const [balanceDraft, setBalanceDraft] = useState(fund.summary_balance != null ? String(fund.summary_balance) : '');
   const [dateDraft, setDateDraft] = useState(fund.summary_balance_date ?? '');
@@ -157,7 +160,14 @@ export function SmsfFundCard({ fund: initialFund, onFundChanged }: { fund: SmsfF
         </div>
       )}
 
-      <SmsfReportsPanel fund={fund} />
+      <div className="mt-3 border-t border-line pt-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Income, expenses and bank statements</h4>
+        <div className="mt-3">
+          <SmsfCashFlowSection key={`${fund.mode}-${refreshKey}`} fund={fund} onChanged={() => setReportKey((k) => k + 1)} />
+        </div>
+      </div>
+
+      <SmsfReportsPanel key={reportKey} fund={fund} />
     </div>
   );
 }

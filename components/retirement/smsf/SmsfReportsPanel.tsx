@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchJson, formatMoneySafe } from './format';
+import { fetchJson, formatDateSafe, formatMoneySafe } from './format';
 import type { SmsfFundRow } from './types';
 
 // LR-6 — SMSF P&L, Cash Flow, Contributions, the fund net position and the
@@ -26,6 +26,19 @@ interface SmsfReportBundle {
   };
   contributions: { employerContributionMonthly: number; personalContributionMonthly: number; totalContributionMonthly: number };
   position: { mode: 'itemised' | 'net_only'; net: number | null };
+  sources: { entityIncomeCount: number; entityExpenseCount: number; legacyIncomeCount: number; legacyExpenseCount: number; otherCurrencyLeftOutCount: number };
+  bankActuals:
+    | { status: 'unavailable'; reason: string }
+    | {
+        status: 'ok';
+        window: { from: string; to: string };
+        months: { month: string; incomeReporting: number; spendingReporting: number; costOfDebtReporting: number; netReporting: number }[];
+        totals: { incomeReporting: number; spendingReporting: number; costOfDebtReporting: number; netReporting: number };
+        lineCount: number;
+        otherLineCount: number;
+        unconvertedCount: number;
+        pendingApprovalCount: number;
+      };
   provenance: { activeHoldingCount: number; activeMemberCount: number; generatedAt: string };
   period: { label: string; startDate: string; endDate: string };
   availablePeriods: string[];
@@ -154,6 +167,44 @@ export function SmsfReportsPanel({ fund }: { fund: SmsfFundRow }) {
                 </dl>
                 <p className="mt-1 text-[11px] text-muted">Spouse and rollover contribution sources are not separately tracked yet.</p>
               </section>
+
+              <section aria-labelledby={`smsf-actuals-${fund.id}`} data-testid="smsf-bank-actuals">
+                <h4 id={`smsf-actuals-${fund.id}`} className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  From the fund&apos;s bank statements
+                </h4>
+                {bundle.bankActuals.status === 'unavailable' ? (
+                  <p className="mt-2 text-sm text-muted">The fund&apos;s approved bank statements could not be read just now, so no actuals are shown. Try again in a moment.</p>
+                ) : bundle.bankActuals.lineCount === 0 ? (
+                  <p className="mt-2 text-sm text-muted">
+                    No approved bank statement lines for the fund yet. Upload a statement under Income, expenses and bank statements, review it and approve it, and the fund&apos;s actual money in and out appears here.
+                    {bundle.bankActuals.pendingApprovalCount > 0 ? ` ${bundle.bankActuals.pendingApprovalCount} line(s) are waiting for your approval.` : ''}
+                  </p>
+                ) : (
+                  <>
+                    <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                      <Stat label="Money in" value={formatMoneySafe(bundle.bankActuals.totals.incomeReporting, currency)} />
+                      <Stat label="Money out" value={formatMoneySafe(bundle.bankActuals.totals.spendingReporting, currency)} />
+                      <Stat label="Cost of debt" value={formatMoneySafe(bundle.bankActuals.totals.costOfDebtReporting, currency)} />
+                      <Stat label="Net" value={formatMoneySafe(bundle.bankActuals.totals.netReporting, currency)} emphasise />
+                    </dl>
+                    <p className="mt-1 text-[11px] text-muted">
+                      Approved lines from {formatDateSafe(bundle.bankActuals.window.from)} to {formatDateSafe(bundle.bankActuals.window.to)}. These are what actually went through the fund&apos;s bank accounts. They are shown beside the recurring figures above and are not added to them, because they describe the same money. A loan&apos;s principal is cash flow, it is never shown as spending.
+                      {bundle.bankActuals.otherLineCount > 0 ? ` ${bundle.bankActuals.otherLineCount} transfer or investment line(s) are not counted.` : ''}
+                    </p>
+                  </>
+                )}
+              </section>
+
+              {(bundle.sources.legacyIncomeCount > 0 || bundle.sources.legacyExpenseCount > 0 || bundle.sources.otherCurrencyLeftOutCount > 0) && (
+                <p className="text-[11px] text-muted" data-testid="smsf-report-sources-note">
+                  {bundle.sources.legacyIncomeCount + bundle.sources.legacyExpenseCount > 0
+                    ? `${bundle.sources.legacyIncomeCount + bundle.sources.legacyExpenseCount} income or expense record(s) are still in your personal pages and are counted here until you move them into the fund. `
+                    : ''}
+                  {bundle.sources.otherCurrencyLeftOutCount > 0
+                    ? `${bundle.sources.otherCurrencyLeftOutCount} record(s) in another currency are left out of these figures, not counted as zero.`
+                    : ''}
+                </p>
+              )}
 
               <section aria-labelledby={`smsf-position-${fund.id}`}>
                 <h4 id={`smsf-position-${fund.id}`} className="text-xs font-semibold uppercase tracking-wide text-muted">

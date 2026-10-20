@@ -33,6 +33,8 @@ const tables = () => ({
   smsf_fund_members: [],
   property_liability_links: [],
   income_sources: [],
+  entity_income_items: [],
+  entity_expense_items: [],
   expense_items: [],
   retirement_accounts: [{ id: 'ra1', user_id: U, employer_contribution: null, personal_contribution: null, contribution_frequency: null }],
 });

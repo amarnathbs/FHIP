@@ -211,13 +211,18 @@ async function readJson(res: Response) {
   return { ok: res.ok, status: res.status, json };
 }
 
-export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
+/**
+ * `fixedOwner` (DOCUMENT2 (4) review, WP-C, F23): the SMSF tab reuses THIS panel (the same Financial Data Hub lifecycle, owner-before-upload,
+ * Premium admission and approval) with the owner fixed to the fund. The user is not asked who the statement belongs to, the choice is made by the
+ * screen it is opened from, and the server still validates it exactly as for any other upload. Without it the panel behaves as before.
+ */
+export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () => void; fixedOwner?: OwnerSelection }) {
   const [country, setCountry] = useState<'AU' | 'IN'>('AU');
   const [currency, setCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [maskedIdentifier, setMaskedIdentifier] = useState('');
   // Owner-before-upload (Phase 1; WP-08 D-10 before it): no default -- the user
   // says who the statement belongs to, with the shared OwnerSelector.
-  const [owner, setOwner] = useState<OwnerSelection | null>(null);
+  const [owner, setOwner] = useState<OwnerSelection | null>(fixedOwner ?? null);
   const [ownerConflict, setOwnerConflict] = useState<OwnerConflict | null>(null);
   const [accountChoice, setAccountChoice] = useState<AccountChoice | null>(null);
   // '' = nothing chosen yet; an account id; or 'new' = a different / new account.
@@ -699,9 +704,9 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'form' && (
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted">
-            Upload a bank statement (PDF or CSV) and FHIP will extract your transactions for you to review and
-            approve. Approved transactions become your actual income and spending for the months they are dated in —
-            nothing here changes your totals until you approve it.
+            {fixedOwner
+              ? 'Upload a bank statement of the fund (PDF or CSV) and FHIP will extract its transactions for you to review and approve. Approved transactions become the fund’s actual income and spending for the months they are dated in. They are shown with the SMSF cash flow only, nothing here changes your personal totals, and nothing changes until you approve it.'
+              : 'Upload a bank statement (PDF or CSV) and FHIP will extract your transactions for you to review and approve. Approved transactions become your actual income and spending for the months they are dated in — nothing here changes your totals until you approve it.'}
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
@@ -719,7 +724,14 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
                 <option value="IN">India</option>
               </select>
             </label>
-            <OwnerSelector flow="bank" idPrefix="bank-owner" value={owner} onChange={(next) => { setOwner(next); setOwnerConflict(null); }} disabled={busy} />
+            {fixedOwner ? (
+              <p className="text-sm text-ink" data-testid="bank-owner-fixed">
+                <span className="mb-1 block text-muted">Whose statement is this?</span>
+                Your SMSF. Its transactions are kept with the fund and never counted in your household spending.
+              </p>
+            ) : (
+              <OwnerSelector flow="bank" idPrefix="bank-owner" value={owner} onChange={(next) => { setOwner(next); setOwnerConflict(null); }} disabled={busy} />
+            )}
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Account / card number (last few digits, optional)</span>
               <input
