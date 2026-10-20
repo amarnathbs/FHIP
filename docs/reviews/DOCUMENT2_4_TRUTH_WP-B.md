@@ -27,3 +27,14 @@ Rule applied throughout: raw statement files are temporary and are deleted on pu
 | `unsupported_document`, `document_corrupt`, `parse_incomplete` | corrected file | yes | `Discard` (existing) / `Upload replacement copy` |
 | `transaction_missing_from_restatement`, `other`, informational | none | no | acknowledge-only, never a dead button |
 | any other open case on a document with no stored file and no retained data | information no longer exists | n/a | governed `Close stale case` with an audit trail; history is kept (status `resolved`, method `user_closed_stale_case`), never deleted |
+
+## Status after the fix (updated 21-10-2026)
+
+| Finding | Fix (short) | Tests | DEV proof | Verdict |
+|---|---|---|---|---|
+| F5 | `has_stored_file`; password and Reprocess hidden without a file; typed `source_file_not_stored`, no status rewrite; replacement copy; governed close | `iiWpbCaseLifecycle`, `iiWpbReplacementAndMissingFile`, `iiWpbRoutes` | NOT PERFORMED | CONDITIONAL |
+| F6 | Live lifecycle on every Review item; replacement / close-stale / bulk close; Review sync when a case closes elsewhere | `iiWpbStaleCasesAndReviewSync`, `iiWpbRoutes` | NOT PERFORMED | CONDITIONAL |
+| F14 | `POST /source-documents/[id]/replacement` attaches to the same logical document; accidental duplicates still refused | `iiWpbReplacementAndMissingFile` | NOT PERFORMED (no-duplicate property needs DEV) | CONDITIONAL |
+| F7 | Busy / inline outcome / blocker guidance for Re-evaluate, Publish, Resolve, Acknowledge, Dismiss; dismissed items stay dismissed; Re-evaluate all | `iiWpbReevaluateEndToEnd`, `iiWpbStaleCasesAndReviewSync` | NOT PERFORMED | CONDITIONAL |
+| F8 | Idempotent case opening; explicit owner never re-asked; per-account certification flag; governed tidy; grouped history; read-only SQL pack | `iiWpbStaleCasesAndReviewSync`, `iiWpbOwnerCasePipeline`, `iiWpbSqlPacksPglite` | NOT PERFORMED | CONDITIONAL |
+| F13 | Statement ids and currencies carried to the Dashboard note and Investments bucket; direct links; day-first dates; clears after publish | `iiWpbImportedNotInNetWorthCta` | NOT PERFORMED | CONDITIONAL |
