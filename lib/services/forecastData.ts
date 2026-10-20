@@ -18,7 +18,6 @@ import { isKnownCountry } from '@/lib/services/jurisdiction';
 import { computeAccessibleLiquidResources, type CommitmentRow } from '@/lib/engines/resilience';
 import type { ForecastType, ResolvedAssumptionSet } from '@/lib/engines/forecast/types';
 import type { ForecastAssumptionUpsertInput, ForecastScenarioInput } from '@/lib/validation/forecast';
-import { isPlausibleDob } from '@/lib/engines/age';
 import { toMonthly, type Frequency } from '@/lib/engines/money';
 import { computeAllocatedMonthlyContribution, computeLiveLinkedFundingValue } from '@/lib/services/goalFundingAllocation';
 import { loadLinkedContributionSources, type GoalFundingSourceRow } from '@/lib/services/goalsData';

@@ -177,18 +177,33 @@ export function RetirementContributionsPanel({ refreshKey = 0, onChanged }: { re
   const [formError, setFormError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const fetchPayload = useCallback(async (): Promise<Payload> => {
+    const res = await fetch('/api/retirement/contributions');
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? 'Could not load contributions');
+    return json.data as Payload;
+  }, []);
+  // Re-read after a change the person made (choose, remove, save, retry).
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/retirement/contributions');
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Could not load contributions');
-      setData(json.data as Payload);
+      setData(await fetchPayload());
       setLoadError(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Something went wrong');
     }
-  }, []);
-  useEffect(() => { void load(); }, [load, refreshKey]);
+  }, [fetchPayload]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = await fetchPayload();
+        if (!cancelled) { setData(d); setLoadError(null); }
+      } catch (e) {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Something went wrong');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [fetchPayload, refreshKey]);
 
   async function choose(id: string, account: string) {
     setChooseBusy(id);

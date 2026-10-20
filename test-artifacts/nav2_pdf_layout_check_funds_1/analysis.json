@@ -1,0 +1,62 @@
+{
+ "page_count": 2,
+ "pages": [
+  {
+   "page": 1,
+   "blank_ratio": 0.051,
+   "lines": 69,
+   "last_line": {
+    "text": "5 year",
+    "size": 8,
+    "bold": true
+   },
+   "first_line": {
+    "text": "Fund analytics report",
+    "size": 22,
+    "bold": true
+   },
+   "funds_named": [
+    "Aster Large Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8.5,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_1\\png\\page-01.png"
+  },
+  {
+   "page": 2,
+   "blank_ratio": 0.059,
+   "lines": 130,
+   "last_line": {
+    "text": "converted to a daily rate as (1 + yield) ^ (1 / 252) - 1. Source: Reserve Bank of India.",
+    "size": 8.5,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Rolling returns",
+    "size": 10,
+    "bold": true
+   },
+   "funds_named": [],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": true,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-d\\test-artifacts\\nav2_pdf_layout_check_funds_1\\png\\page-02.png"
+  }
+ ],
+ "cell_overflow": [],
+ "fund_names": [
+  "Aster Large Cap Fund"
+ ],
+ "pages_per_fund": 1
+}
