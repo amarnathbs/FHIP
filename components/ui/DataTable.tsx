@@ -22,6 +22,7 @@
 // No 'use client': usable from a server page.tsx. Only <ClampText> (used by kind="clamp") is a client component.
 import type { ComponentPropsWithoutRef, HTMLAttributes, ReactNode } from 'react';
 import { ClampText } from '@/components/ui/ClampText';
+import { ScrollRegion } from '@/components/ui/ScrollRegion';
 import { cellClass, headerClass, shouldOfferJumpLink, type CellKind } from '@/lib/ui/dataTable';
 
 export interface DataTableProps extends Omit<ComponentPropsWithoutRef<'table'>, 'children'> {
@@ -50,11 +51,11 @@ export function DataTable({ label, children, className = '', wrapperClassName = 
           </a>
         </p>
       ) : null}
-      <div {...wrapperProps} role="region" aria-label={label} tabIndex={0} className={`fhip-table-wrap ${wrapperClassName}`.trim()}>
+      <ScrollRegion {...wrapperProps} role="region" aria-label={label} tabIndex={0} className={`fhip-table-wrap ${wrapperClassName}`.trim()}>
         <table {...tableProps} data-sticky-first={stickyFirstColumn ? 'true' : undefined} className={`fhip-table ${className}`.trim()}>
           {children}
         </table>
-      </div>
+      </ScrollRegion>
     </>
   );
 }

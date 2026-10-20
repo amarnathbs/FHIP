@@ -11,6 +11,8 @@ import { FullStatementHelp } from './FullStatementHelp';
 import { ownerSelectionToMeta, type OwnerSelection } from '@/lib/ownership/ownerSelection';
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { ReplacementCopyControl } from './ReplacementCopyControl';
+import { RECONCILIATION_ANCHOR_ID, REVIEW_PATH, describeReevaluationOutcome, describeTruthBlocker, type CaseLifecycle } from '@/lib/services/investment-intelligence/caseLifecycle';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -39,6 +41,9 @@ interface SourceDocument {
   // "certified" alone is not "done" — the user still had to click Publish.
   totalHoldingsCount?: number;
   publishedHoldingsCount?: number;
+  // Document2 (4) WP-B: statement files are deleted shortly after processing, by design. False means the original file can no
+  // longer be re-read, so password / Reprocess must not be offered; a replacement copy is the way forward.
+  has_stored_file?: boolean;
 }
 
 interface ReconciliationCase {
@@ -50,6 +55,8 @@ interface ReconciliationCase {
   subject_id: string;
   discrepancy_details: Record<string, unknown> | null;
   opened_at: string;
+  /** What this case really needs and which actions are real (server-derived, see caseLifecycle.ts). */
+  lifecycle?: CaseLifecycle;
 }
 
 // R3 — Publish to FHIP (spec sections 41-42). Mirrors the shape returned by
@@ -107,6 +114,7 @@ interface DocumentSummary {
       warnings: { accountId: string; kind: string; maskedHolderName: string | null; message: string }[];
     } | null;
   };
+  hasStoredFile?: boolean;
   accountsFound: number;
   accounts: { id: string; folio_number: string | null; institution_name: string }[];
   schemesFound: number;
@@ -258,6 +266,20 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   // already reveals `alreadyPublished`, since that is the one place this
   // screen already knows a publication id.
   const [unpublishBusy, setUnpublishBusy] = useState(false);
+  // Document2 (4) WP-B (F7): every action reports its outcome NEXT TO the button that was clicked. Before, a failure surfaced
+  // only in the banner at the very top of the page and a success changed nothing visible, so a click looked like it did
+  // nothing. Each action also has a busy state, which doubles as the duplicate-submission guard.
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const publishPanelRef = useRef<HTMLElement>(null);
+  const [certifying, setCertifying] = useState<string | null>(null); // `${accountId}:${instrumentId}` being re-evaluated
+  const [certifyNotice, setCertifyNotice] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [reevaluatingAll, setReevaluatingAll] = useState(false);
+  const [reevaluateAllNotice, setReevaluateAllNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [resolvingCaseId, setResolvingCaseId] = useState<string | null>(null);
+  const [caseActionNotice, setCaseActionNotice] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [closingStaleCaseId, setClosingStaleCaseId] = useState<string | null>(null);
+  const [replacementOpenFor, setReplacementOpenFor] = useState<string | null>(null);
+  const [showDecidedCases, setShowDecidedCases] = useState(false);
 
   // 2026-09-20: an 'owner_unmatched' reconciliation case had no way to
   // actually be resolved — the generic Resolve button below only ever
@@ -609,51 +631,118 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   }
 
   async function handleResolveCase(caseId: string) {
+    if (resolvingCaseId) return; // duplicate-submission guard
     setError(null);
+    setResolvingCaseId(caseId);
+    setCaseActionNotice((prev) => ({ ...prev, [caseId]: { ok: true, text: '' } }));
     try {
       const res = await fetch(`/api/investment-intelligence/reconciliation-cases/${caseId}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resolution: 'accepted_new_value', resolutionMethod: 'user_accepted_anomaly' }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? 'Could not resolve case');
+      // The case is closed, so the Review item for it must go too (it is a snapshot of the case) and the list counts change.
+      await fetch('/api/investment-intelligence/review/sync', { method: 'POST' }).catch(() => undefined);
+      await loadDocuments();
       if (selectedId) await loadSummary(selectedId);
+      setCaseActionNotice((prev) => ({ ...prev, [caseId]: { ok: true, text: 'Marked resolved. It is recorded in your history.' } }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setCaseActionNotice((prev) => ({ ...prev, [caseId]: { ok: false, text: e instanceof Error ? e.message : 'Something went wrong' } }));
+    } finally {
+      setResolvingCaseId(null);
     }
   }
 
-  async function handleCertify(accountId: string, instrumentId: string) {
+  // Governed "Close stale case" (see the close-stale routes): for an item whose resolution needs a file that has been deleted.
+  async function handleCloseStale(caseId: string) {
+    if (closingStaleCaseId) return;
+    if (!window.confirm('Close this item? Its original statement file no longer exists, so it cannot be re-checked. The item stays in your history; nothing is deleted.')) return;
     setError(null);
+    setClosingStaleCaseId(caseId);
+    try {
+      const res = await fetch(`/api/investment-intelligence/reconciliation-cases/${caseId}/close-stale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message ?? json.error ?? 'Could not close this item.');
+      await fetch('/api/investment-intelligence/review/sync', { method: 'POST' }).catch(() => undefined);
+      await loadDocuments();
+      if (selectedId) await loadSummary(selectedId);
+    } catch (e) {
+      setCaseActionNotice((prev) => ({ ...prev, [caseId]: { ok: false, text: e instanceof Error ? e.message : 'Could not close this item.' } }));
+    } finally {
+      setClosingStaleCaseId(null);
+    }
+  }
+
+  async function handleCertify(accountId: string, instrumentId: string, before: string | null) {
+    const key = `${accountId}:${instrumentId}`;
+    if (certifying) return; // duplicate-submission guard
+    setError(null);
+    setCertifying(key);
+    setCertifyNotice((prev) => ({ ...prev, [key]: { ok: true, text: 'Re-evaluating…' } }));
     try {
       const res = await fetch('/api/investment-intelligence/portfolio-truth/certify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountId, instrumentId }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? 'Could not evaluate certification');
+      const after = (json.data?.status as string | undefined) ?? 'pending';
+      const blocking = ((json.data?.blocking_reasons ?? []) as { code: string; message: string }[]).map((b) => b.message);
+      setCertifyNotice((prev) => ({ ...prev, [key]: { ok: true, text: describeReevaluationOutcome(before, after, blocking) } }));
+      await loadDocuments();
       if (selectedId) await loadSummary(selectedId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setCertifyNotice((prev) => ({ ...prev, [key]: { ok: false, text: e instanceof Error ? e.message : 'Something went wrong' } }));
+    } finally {
+      setCertifying(null);
+    }
+  }
+
+  // "Re-evaluate all positions" / "Rebuild from retained structured data": works from what is stored, never the raw file.
+  async function handleReevaluateAll(documentId: string) {
+    if (reevaluatingAll) return;
+    setError(null);
+    setReevaluatingAll(true);
+    setReevaluateAllNotice(null);
+    try {
+      const res = await fetch(`/api/investment-intelligence/source-documents/${documentId}/reevaluate`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? 'Could not re-evaluate the positions.');
+      const { evaluated = 0, failed = 0, message } = (json.data ?? {}) as { evaluated?: number; failed?: number; message?: string };
+      setReevaluateAllNotice({ ok: failed === 0, text: message ?? `Re-evaluated ${evaluated} position${evaluated === 1 ? '' : 's'} from the retained data${failed ? `; ${failed} could not be evaluated` : ''}.` });
+      await loadDocuments();
+      await loadSummary(documentId);
+    } catch (e) {
+      setReevaluateAllNotice({ ok: false, text: e instanceof Error ? e.message : 'Something went wrong' });
+    } finally {
+      setReevaluatingAll(false);
     }
   }
 
   async function openPublishPreview(positionId: string) {
     setError(null);
     setPublishResultMessage(null);
+    setPublishError(null);
     setPublishChoice('new');
     setPublishPositionId(positionId);
     setPublishPreview(null);
+    // The panel renders below the whole statement list: bring it into view so the click visibly does something.
+    setTimeout(() => publishPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
     try {
       const res = await fetch(`/api/investment-intelligence/positions/${positionId}/preview`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not build publication preview');
       setPublishPreview(json.data as PublicationPreview);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
-      setPublishPositionId(null);
+      // Shown INSIDE the panel next to the button, not only in the page banner far above it.
+      setPublishError(e instanceof Error ? e.message : 'Could not build the publication preview.');
     }
   }
 
@@ -661,11 +750,13 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
     setPublishPositionId(null);
     setPublishPreview(null);
     setPublishResultMessage(null);
+    setPublishError(null);
   }
 
   async function confirmPublish() {
-    if (!publishPositionId) return;
+    if (!publishPositionId || publishBusy) return; // duplicate-submission guard
     setPublishBusy(true);
+    setPublishError(null);
     setError(null);
     try {
       const body: { linkToExistingInvestmentId?: string; acknowledgedNoDuplicate?: boolean } =
@@ -680,9 +771,10 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       setPublishResultMessage(
         `Published. Net change to net worth: ${json.data?.financialImpact ? formatMoney(json.data.financialImpact.netChange, json.data.financialImpact.currency) : '—'}.`
       );
+      await loadDocuments();
       if (selectedId) await loadSummary(selectedId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setPublishError(e instanceof Error ? e.message : 'Publish failed');
     } finally {
       setPublishBusy(false);
     }
@@ -697,9 +789,10 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Unpublish failed');
       setPublishResultMessage('Unpublished. This position no longer counts toward net worth. Publish again once you are ready.');
+      await loadDocuments();
       if (selectedId) await loadSummary(selectedId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setPublishError(e instanceof Error ? e.message : 'Unpublish failed');
     } finally {
       setUnpublishBusy(false);
     }
@@ -712,6 +805,11 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   // <input> (and drop its focus) on every keystroke, since typing into it
   // sets state on this very component.
   function renderDocumentRow(doc: SourceDocument) {
+    // Statement files are deleted shortly after processing, by design. When the file is gone, "enter the password" and
+    // "Reprocess" can only end in "Could not retrieve the stored document" -- so they are not drawn at all; the person is
+    // offered a replacement copy (attached to this same statement) instead.
+    const fileGone = doc.has_stored_file === false;
+    const canReplace = fileGone && doc.status !== 'archived' && doc.status !== 'superseded' && doc.status !== 'parsing';
     return (
       <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
         <button className="text-left text-sm font-medium text-gray-900 hover:underline" onClick={() => selectDocument(doc.id)}>
@@ -755,7 +853,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               successful extraction's data was untouched in the database.
               Left blank, it behaves exactly as before for a document that
               was never password-protected. */}
-          {(doc.status === 'password_required' || doc.status === 'parsed') && (
+          {!fileGone && (doc.status === 'password_required' || doc.status === 'parsed') && (
             <input
               type="password"
               placeholder="Document password"
@@ -773,7 +871,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               {processing === doc.id ? 'Loading…' : 'Review AI-extracted data'}
             </button>
           )}
-          {doc.status !== 'parsed' && doc.status !== 'archived' && doc.status !== 'superseded' && doc.status !== 'ai_review_pending' && (
+          {!fileGone && doc.status !== 'parsed' && doc.status !== 'archived' && doc.status !== 'superseded' && doc.status !== 'ai_review_pending' && (
             <button
               onClick={() => handleProcess(doc.id)}
               disabled={processing === doc.id}
@@ -782,7 +880,17 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               {processing === doc.id ? 'Processing…' : doc.status === 'password_required' ? 'Submit password & process' : 'Process'}
             </button>
           )}
-          {doc.status === 'parsed' && (
+          {canReplace && (
+            <button
+              type="button"
+              aria-expanded={replacementOpenFor === doc.id}
+              onClick={() => setReplacementOpenFor((cur) => (cur === doc.id ? null : doc.id))}
+              className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+            >
+              Upload replacement copy
+            </button>
+          )}
+          {!fileGone && doc.status === 'parsed' && (
             <button
               onClick={() => {
                 // A document that already succeeded is, by design, meant to
@@ -803,6 +911,24 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
             </button>
           )}
         </div>
+        {fileGone && doc.status !== 'archived' && doc.status !== 'superseded' && (
+          <p className="w-full text-xs text-gray-500" data-testid="file-deleted-note">
+            The original file was deleted after processing, as designed. What was imported from it is kept and unchanged. To process it again, upload a replacement
+            copy; it is attached to this same statement, so nothing is counted twice.
+          </p>
+        )}
+        {canReplace && replacementOpenFor === doc.id && (
+          <div className="w-full">
+            <ReplacementCopyControl
+              documentId={doc.id}
+              forceReparse={doc.status === 'parsed'}
+              onDone={async () => {
+                await loadDocuments();
+                if (selectedId === doc.id) await loadSummary(doc.id);
+              }}
+            />
+          </div>
+        )}
       </li>
     );
   }
@@ -1004,103 +1130,182 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               </div>
 
               {/* Step 6/7: Review + resolve issues */}
-              <div>
+              <div id={RECONCILIATION_ANCHOR_ID}>
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Reconciliation issues ({summary.openReconciliationCaseCount} open)
                 </h3>
+                {summary.hasStoredFile === false && summary.document.status !== 'archived' && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    The original file for this statement was deleted after processing, as designed. Issues below are resolved from what was kept, or with a replacement
+                    copy where the file itself is needed.
+                  </p>
+                )}
                 {summary.reconciliationCases.length === 0 ? (
                   <p className="mt-1 text-sm text-gray-500">No issues raised for this statement.</p>
                 ) : (
-                  <ul className="mt-1 space-y-1">
-                    {summary.reconciliationCases.map((c) => {
-                      const open = c.status !== 'resolved' && c.status !== 'dismissed';
+                  <>
+                    <ul className="mt-1 space-y-1">
+                      {summary.reconciliationCases
+                        .filter((c) => c.status !== 'resolved' && c.status !== 'dismissed')
+                        .map((c) => {
+                          const lc = c.lifecycle;
+                          const notice = caseActionNotice[c.id];
+                          return (
+                            <li key={c.id} className="rounded border border-gray-100 px-2 py-1.5 text-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span>
+                                  <span className="font-medium text-gray-900">{c.discrepancy_type.replace(/_/g, ' ')}</span>{' '}
+                                  <span className="text-xs text-gray-500">({c.severity}, {c.status})</span>
+                                </span>
+                                {c.discrepancy_type === 'owner_unmatched' && addMemberForCase !== c.id && (
+                                  <span className="flex items-center gap-2">
+                                    <select
+                                      value={ownerSelections[c.id] ?? ''}
+                                      onChange={(e) => {
+                                        if (e.target.value === ADD_NEW_MEMBER_VALUE) {
+                                          setAddMemberForCase(c.id);
+                                          return;
+                                        }
+                                        setOwnerSelections((prev) => ({ ...prev, [c.id]: e.target.value }));
+                                      }}
+                                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                                    >
+                                      <option value="">Who owns this account?</option>
+                                      {householdMembers.map((m) => (
+                                        <option key={m.id} value={m.id}>
+                                          {m.full_name}
+                                        </option>
+                                      ))}
+                                      <option value={ADD_NEW_MEMBER_VALUE}>+ Add a new person…</option>
+                                    </select>
+                                    <button
+                                      onClick={() => handleAssignOwner(c)}
+                                      disabled={!ownerSelections[c.id] || assigningOwner === c.id}
+                                      className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                                    >
+                                      {assigningOwner === c.id ? 'Assigning…' : 'Assign'}
+                                    </button>
+                                  </span>
+                                )}
+                                {c.discrepancy_type === 'owner_unmatched' && addMemberForCase === c.id && (
+                                  <span className="flex flex-wrap items-center gap-2">
+                                    <input
+                                      type="text"
+                                      value={newMemberName}
+                                      onChange={(e) => setNewMemberName(e.target.value)}
+                                      placeholder="Full name"
+                                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                                    />
+                                    <select
+                                      value={newMemberRelationship}
+                                      onChange={(e) => setNewMemberRelationship(e.target.value)}
+                                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                                    >
+                                      <option value="self">Self</option>
+                                      <option value="spouse">Spouse</option>
+                                      <option value="partner">Partner</option>
+                                      <option value="child">Child</option>
+                                      <option value="parent">Parent</option>
+                                      <option value="other_dependant">Other dependant</option>
+                                      <option value="other">Other</option>
+                                    </select>
+                                    <button
+                                      onClick={() => handleAddMember(c.id)}
+                                      disabled={!newMemberName.trim() || savingMember}
+                                      className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                                    >
+                                      {savingMember ? 'Saving…' : 'Save person'}
+                                    </button>
+                                    <button onClick={() => setAddMemberForCase(null)} className="text-xs text-gray-500 underline">
+                                      Cancel
+                                    </button>
+                                  </span>
+                                )}
+                                {/* Every other case: the action comes from the server-derived lifecycle, so a button is only drawn when it really works. */}
+                                {c.discrepancy_type !== 'owner_unmatched' && lc && (
+                                  <span className="flex flex-wrap items-center gap-2">
+                                    {lc.primary === 'enter_password' && <span className="text-xs text-gray-500">Enter the document password above and Reprocess — this clears automatically once it opens.</span>}
+                                    {(lc.primary === 'choose_owner' || lc.primary === 'choose_instrument' || lc.primary === 'classify_transaction' || lc.primary === 'choose_conflict') && (
+                                      <a href={REVIEW_PATH} className="text-xs font-medium text-primary hover:underline">
+                                        {lc.primary === 'choose_owner' ? 'Choose the owner on the Review tab' : lc.primary === 'choose_instrument' ? 'Choose the fund on the Review tab' : lc.primary === 'classify_transaction' ? 'Classify it on the Review tab' : 'Choose which record to keep on the Review tab'}
+                                      </a>
+                                    )}
+                                    {lc.primary === 'discard_document' && (
+                                      <a href={REVIEW_PATH} className="text-xs font-medium text-primary hover:underline">
+                                        Discard or replace this file on the Review tab
+                                      </a>
+                                    )}
+                                    {lc.primary === 'mark_resolved' && (
+                                      <button onClick={() => handleResolveCase(c.id)} disabled={resolvingCaseId !== null} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">
+                                        {resolvingCaseId === c.id ? 'Resolving…' : 'Resolve'}
+                                      </button>
+                                    )}
+                                    {(lc.primary === 'upload_replacement' || lc.secondary.includes('upload_replacement')) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setReplacementOpenFor((cur) => (cur === `case:${c.id}` ? null : `case:${c.id}`))}
+                                        className="rounded border px-2 py-1 text-xs font-medium text-primary"
+                                      >
+                                        Upload replacement copy
+                                      </button>
+                                    )}
+                                    {lc.staleClosable && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCloseStale(c.id)}
+                                        disabled={closingStaleCaseId !== null}
+                                        className="rounded border px-2 py-1 text-xs font-medium text-gray-700 disabled:opacity-50"
+                                      >
+                                        {closingStaleCaseId === c.id ? 'Closing…' : 'Close — I no longer have the file'}
+                                      </button>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                              {lc && c.discrepancy_type !== 'owner_unmatched' && <p className="mt-1 text-xs text-gray-500">{lc.explanation}</p>}
+                              {replacementOpenFor === `case:${c.id}` && (
+                                <ReplacementCopyControl
+                                  documentId={summary.document.id}
+                                  forceReparse={summary.document.status === 'parsed'}
+                                  onDone={async () => {
+                                    await loadDocuments();
+                                    await loadSummary(summary.document.id);
+                                  }}
+                                />
+                              )}
+                              {notice && notice.text && (
+                                <p role="status" className={`mt-1 text-xs ${notice.ok ? 'text-green-700' : 'text-red-700'}`}>
+                                  {notice.text}
+                                </p>
+                              )}
+                            </li>
+                          );
+                        })}
+                    </ul>
+                    {/* Decided cases are history, not work: grouped by cause with a count instead of one row each (F8: about 50 rows). */}
+                    {(() => {
+                      const decided = summary.reconciliationCases.filter((c) => c.status === 'resolved' || c.status === 'dismissed');
+                      if (decided.length === 0) return null;
+                      const groups = new Map<string, number>();
+                      for (const c of decided) groups.set(c.discrepancy_type, (groups.get(c.discrepancy_type) ?? 0) + 1);
                       return (
-                        <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 px-2 py-1.5 text-sm">
-                          <span>
-                            <span className="font-medium text-gray-900">{c.discrepancy_type.replace(/_/g, ' ')}</span>{' '}
-                            <span className="text-xs text-gray-500">({c.severity}, {c.status})</span>
-                          </span>
-                          {open && c.discrepancy_type === 'owner_unmatched' && addMemberForCase !== c.id && (
-                            <span className="flex items-center gap-2">
-                              <select
-                                value={ownerSelections[c.id] ?? ''}
-                                onChange={(e) => {
-                                  if (e.target.value === ADD_NEW_MEMBER_VALUE) {
-                                    setAddMemberForCase(c.id);
-                                    return;
-                                  }
-                                  setOwnerSelections((prev) => ({ ...prev, [c.id]: e.target.value }));
-                                }}
-                                className="rounded border border-gray-300 px-2 py-1 text-xs"
-                              >
-                                <option value="">Who owns this account?</option>
-                                {householdMembers.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.full_name}
-                                  </option>
-                                ))}
-                                <option value={ADD_NEW_MEMBER_VALUE}>+ Add a new person…</option>
-                              </select>
-                              <button
-                                onClick={() => handleAssignOwner(c)}
-                                disabled={!ownerSelections[c.id] || assigningOwner === c.id}
-                                className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
-                              >
-                                {assigningOwner === c.id ? 'Assigning…' : 'Assign'}
-                              </button>
-                            </span>
+                        <div className="mt-2" data-testid="decided-cases">
+                          <button type="button" aria-expanded={showDecidedCases} onClick={() => setShowDecidedCases((v) => !v)} className="text-xs text-gray-600 underline">
+                            {showDecidedCases ? 'Hide' : 'Show'} {decided.length} resolved item{decided.length === 1 ? '' : 's'} (history)
+                          </button>
+                          {showDecidedCases && (
+                            <ul className="mt-1 space-y-0.5 text-xs text-gray-500">
+                              {[...groups.entries()].map(([type, n]) => (
+                                <li key={type}>
+                                  {type.replace(/_/g, ' ')}: {n} resolved
+                                </li>
+                              ))}
+                            </ul>
                           )}
-                          {open && c.discrepancy_type === 'owner_unmatched' && addMemberForCase === c.id && (
-                            <span className="flex flex-wrap items-center gap-2">
-                              <input
-                                type="text"
-                                value={newMemberName}
-                                onChange={(e) => setNewMemberName(e.target.value)}
-                                placeholder="Full name"
-                                className="rounded border border-gray-300 px-2 py-1 text-xs"
-                              />
-                              <select
-                                value={newMemberRelationship}
-                                onChange={(e) => setNewMemberRelationship(e.target.value)}
-                                className="rounded border border-gray-300 px-2 py-1 text-xs"
-                              >
-                                <option value="self">Self</option>
-                                <option value="spouse">Spouse</option>
-                                <option value="partner">Partner</option>
-                                <option value="child">Child</option>
-                                <option value="parent">Parent</option>
-                                <option value="other_dependant">Other dependant</option>
-                                <option value="other">Other</option>
-                              </select>
-                              <button
-                                onClick={() => handleAddMember(c.id)}
-                                disabled={!newMemberName.trim() || savingMember}
-                                className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
-                              >
-                                {savingMember ? 'Saving…' : 'Save person'}
-                              </button>
-                              <button onClick={() => setAddMemberForCase(null)} className="text-xs text-gray-500 underline">
-                                Cancel
-                              </button>
-                            </span>
-                          )}
-                          {open && c.discrepancy_type === 'document_password_required' && (
-                            <span className="text-xs text-gray-500">Enter the document password above and Reprocess — this clears automatically once it opens.</span>
-                          )}
-                          {open && c.discrepancy_type === 'joint_holding_allocation_required' && (
-                            <a href="/investment-intelligence/review" className="text-xs font-medium text-primary hover:underline">
-                              Split ownership on the Review tab
-                            </a>
-                          )}
-                          {open && c.discrepancy_type !== 'owner_unmatched' && c.discrepancy_type !== 'joint_holding_allocation_required' && c.discrepancy_type !== 'document_password_required' && (
-                            <button onClick={() => handleResolveCase(c.id)} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
-                              Resolve
-                            </button>
-                          )}
-                        </li>
+                        </div>
                       );
-                    })}
-                  </ul>
+                    })()}
+                  </>
                 )}
               </div>
 
@@ -1122,6 +1327,22 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                       Resolving an issue above does not update a position by itself — click <strong>Re-evaluate</strong> to recompute its status, then{' '}
                       <strong>Publish to FHIP</strong> to make a certified position count toward net worth.
                     </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleReevaluateAll(summary.document.id)}
+                        disabled={reevaluatingAll || certifying !== null}
+                        className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                      >
+                        {reevaluatingAll ? 'Re-evaluating all…' : 'Re-evaluate all positions'}
+                      </button>
+                      <span className="text-xs text-gray-500">Uses the data already kept for this statement; it does not need the original file.</span>
+                      {reevaluateAllNotice && (
+                        <span role="status" className={`text-xs ${reevaluateAllNotice.ok ? 'text-green-700' : 'text-red-700'}`}>
+                          {reevaluateAllNotice.text}
+                        </span>
+                      )}
+                    </div>
                     <ul className="mt-1 space-y-2">
                       {summary.portfolioTruthStatuses.map((s) => {
                         const holding = summary.holdings.find((h) => h.account_id === s.account_id && h.instrument_id === s.instrument_id);
@@ -1149,16 +1370,55 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                               <span className="text-xs text-gray-600">{positionLabel}</span>
                               <span className="flex items-center gap-2">
                                 <StatusBadge status={s.status} />
-                                <button onClick={() => handleCertify(s.account_id, s.instrument_id)} className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
-                                  Re-evaluate
+                                <button
+                                  onClick={() => handleCertify(s.account_id, s.instrument_id, s.status)}
+                                  disabled={certifying !== null || reevaluatingAll}
+                                  className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                                >
+                                  {certifying === `${s.account_id}:${s.instrument_id}` ? 'Re-evaluating…' : 'Re-evaluate'}
                                 </button>
                                 {canPublish && (
-                                  <button onClick={() => openPublishPreview(holding!.id)} className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
+                                  <button
+                                    onClick={() => openPublishPreview(holding!.id)}
+                                    disabled={publishBusy}
+                                    className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                                  >
                                     Publish to FHIP
                                   </button>
                                 )}
                               </span>
                             </div>
+                            {certifyNotice[`${s.account_id}:${s.instrument_id}`]?.text && (
+                              <p role="status" className={`mt-1 text-xs ${certifyNotice[`${s.account_id}:${s.instrument_id}`].ok ? 'text-gray-700' : 'text-red-700'}`}>
+                                {certifyNotice[`${s.account_id}:${s.instrument_id}`].text}
+                              </p>
+                            )}
+                            {/* WHY it needs review, how to fix it, and a real action: what / why / how / CTA for every blocker. */}
+                            {s.status !== 'certified' && s.status !== 'certified_with_warnings' &&
+                              (s.blocking_reasons ?? []).map((b) => {
+                                const g = describeTruthBlocker(b.code, b.message);
+                                return (
+                                  <div key={b.code} className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="truth-blocker">
+                                    <p className="font-medium">{g.what}</p>
+                                    <p>{g.why}</p>
+                                    <p>{g.how}</p>
+                                    {g.cta.kind === 'link' && (
+                                      <a href={g.cta.href} className="mt-0.5 inline-block font-medium text-primary hover:underline">
+                                        {g.cta.label}
+                                      </a>
+                                    )}
+                                    {g.cta.kind === 'anchor' && (
+                                      <button
+                                        type="button"
+                                        onClick={() => document.getElementById(g.cta.kind === 'anchor' ? g.cta.targetId : '')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                                        className="mt-0.5 font-medium text-primary hover:underline"
+                                      >
+                                        {g.cta.label}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             {incompleteHistoryWarning && (
                               <p className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
                                 Current holdings were imported successfully. This statement does not contain the complete acquisition history, so some
@@ -1182,15 +1442,20 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
           Net-worth Impact Preview -> Confirm -> Success (spec sections
           41-42). Minimal inline panel, not a full redesign of the module. */}
       {publishPositionId && (
-        <section className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4">
+        <section ref={publishPanelRef} className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-900">Publish to FHIP</h2>
             <button onClick={closePublishPreview} className="text-xs text-gray-500 hover:underline">
               Close
             </button>
           </div>
+          {publishError && (
+            <p role="alert" className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {publishError}
+            </p>
+          )}
           {!publishPreview ? (
-            <p className="mt-2 text-sm text-gray-500">Loading preview…</p>
+            publishError ? null : <p className="mt-2 text-sm text-gray-500">Loading preview…</p>
           ) : publishResultMessage ? (
             <p className="mt-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{publishResultMessage}</p>
           ) : (

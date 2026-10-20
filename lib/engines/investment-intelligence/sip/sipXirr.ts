@@ -201,6 +201,8 @@ export interface BenchmarkSipInputs {
   asOfDate: string;
   /** Total-return (TRI) status of the mapped benchmark, carried through for disclosure. */
   benchmarkReturnType?: string | null;
+  /** The exact reason there is no benchmark for this scheme, when the loader knows it (Document2 (4) F9). */
+  missingReason?: string | null;
 }
 
 /**
@@ -225,7 +227,9 @@ export function calculateBenchmarkSip(series: SipSeries, inputs: BenchmarkSipInp
     return {
       status: 'unavailable',
       reason: 'MISSING_BENCHMARK',
-      detail: 'No benchmark is mapped to this scheme, or no benchmark history is available, so a like-for-like benchmark comparison cannot be produced. No comparison figure is shown.',
+      detail: inputs.missingReason
+        ? `${inputs.missingReason} No comparison figure is shown.`
+        : 'No benchmark is mapped to this scheme, or no benchmark history is available, so a like-for-like benchmark comparison cannot be produced. No comparison figure is shown.',
       ...base,
     };
   }

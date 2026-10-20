@@ -70,6 +70,8 @@ export const GATED_ROUTES: readonly GatedRoute[] = [
     what: 'AIE-fronted Investment Intelligence statement intake.', storage: 'AIE quarantine storage + aie_document_intake', downstream: 'Investment Intelligence via AIE review', ui: null },
   { surface: 'ii.source_document.upload', file: `${II}/source-documents/route.ts`, method: 'POST', guard: 'admission', domain: 'investments',
     what: 'India CAS / folio statement upload (multipart).', storage: 'private bucket for II source documents + ii_source_documents', downstream: 'ii_transactions / holdings (publish)', ui: 'components/investment-intelligence/InvestmentIntelligenceClient.tsx' },
+  { surface: 'ii.source_document.replacement', file: `${II}/source-documents/[id]/replacement/route.ts`, method: 'POST', guard: 'admission', domain: 'investments',
+    what: 'Controlled replacement copy of an already-uploaded statement whose raw file was deleted (attached to the SAME document; never a second one).', storage: 'private bucket for II source documents + ii_source_documents', downstream: 'ii_transactions / holdings (publish), via the idempotent process route', ui: 'components/investment-intelligence/ReplacementCopyControl.tsx' },
   { surface: 'ii.source_document.parse_fixture', file: `${II}/source-documents/[id]/parse/route.ts`, method: 'POST', guard: 'admission', domain: 'investments',
     what: 'Fixture importer: writes a supplied JSON statement into Investment Intelligence (QA path; not the manual-entry route).', storage: 'ii_source_documents + canonical II tables', downstream: 'ii_transactions / holdings', ui: null },
 

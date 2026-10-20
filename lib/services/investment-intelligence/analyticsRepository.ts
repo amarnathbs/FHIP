@@ -27,6 +27,8 @@ import type { SeriesPoint } from '@/lib/engines/investment-intelligence/benchmar
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 import type { CashFlow } from '@/lib/engines/investment-intelligence/xirr';
 import { fetchAllRows } from './pagination';
+import { loadRiskFreeSupply } from './nav2/riskFreeDatasetLoader';
+import { governedRiskFreeFor } from './performanceRiskFree';
 import { POSTGREST_PAGE_SIZE, NAV_PAGE_CONCURRENCY } from './pagination';
 import { loadNavHistoryByFund, sharedNavReadEnabled, sortLikePerformanceQuery } from './navHistoryRead';
 import { loadCategoryReferenceMappings } from './benchmarkData/categoryReferenceLoader';
@@ -331,8 +333,10 @@ export async function loadAnalyticsDataset(
   }
 
   // ---- Risk-free reference data ---------------------------------------
-  const { riskFreeSeries, riskFreeWarnings } = await loadRiskFreeRates(supabase);
-  warnings.push(...riskFreeWarnings);
+  // Document2 (4) F2: the governed RBI series (NAV2, migration 0260) is read through the same loader as the Fund analytics
+  // report; the old ii_risk_free_rates table is kept only as a fallback for a country the governed series does not cover.
+  const { legacyPoints, legacyReadWarning } = await loadLegacyRiskFreeRates(supabase);
+  const governedRiskFree = await loadRiskFreeSupply(supabase);
 
   // ---- Assemble per-scheme datasets -----------------------------------
   const completenessByInstrument = new Map<string, string | null>();
@@ -411,6 +415,8 @@ export async function loadAnalyticsDataset(
       return { cashFlows, externalCashFlows, externalCashFlowsExcludingTerminal };
     };
     const { cashFlows, externalCashFlows, externalCashFlowsExcludingTerminal } = assembleFlows(txs);
+    // Document2 (4) F4: the real flows INCLUDING switch legs and WITHOUT the terminal valuation, for the flow-adjusted index only.
+    const indexFlows: CashFlow[] = [...cashFlows];
 
     // ---- Folios -------------------------------------------------------
     // Multi-folio fix (2026-10-01). One instrument can sit in several folios
@@ -639,6 +645,7 @@ export async function loadAnalyticsDataset(
       cashFlows,
       externalCashFlows,
       externalCashFlowsExcludingTerminal,
+      indexFlows,
       currentValue,
       currentValueDate,
       navSeries: navSeriesForInstrument,
@@ -658,11 +665,16 @@ export async function loadAnalyticsDataset(
   // zero-return periods that dilute the benchmark blend and misdescribe the
   // period in the UI. An explicitly requested asOfDate is still honoured,
   // but is likewise capped to the data.
+  // Document2 (4) F3: the latest date for which the data really goes is the later of the newest statement point and the
+  // date of each held scheme's current valuation (units x latest eligible NAV). It used to be the statement point only, so
+  // with daily NAVs loaded to 16-10-2026 the page still said "calculated up to 04-09-2026", the header total was the statement
+  // value, and the period ended on the statement date.
   let latestDataDate: Date | null = null;
   for (const s of schemes) {
     for (const p of s.valuationSeries) {
       if (!latestDataDate || p.date > latestDataDate) latestDataDate = p.date;
     }
+    if (s.currentValue > 0 && (!latestDataDate || s.currentValueDate > latestDataDate)) latestDataDate = s.currentValueDate;
   }
   const effectiveAsOf =
     latestDataDate === null
@@ -674,9 +686,25 @@ export async function loadAnalyticsDataset(
   if (latestDataDate && asOfDate.getTime() - latestDataDate.getTime() > 45 * 86_400_000) {
     warnings.push({
       scope: 'data_currency',
-      detail: `The most recent certified valuation is dated ${formatDateShort(latestDataDate.toISOString().slice(0, 10), 'INR')}. Figures are calculated up to that date, not to today.`,
+      detail: `Your holdings are valued as at ${formatDateShort(latestDataDate.toISOString().slice(0, 10), 'INR')}, the latest date for which your holdings could be valued, and that is more than 45 days ago. Figures are worked out up to that date, not to today. Upload a newer statement, or ask us to load the latest prices, to bring them forward.`,
     });
   }
+
+  // ---- Risk-free rate, now that the as-at date is known -----------------------------------------
+  const asOfIso = effectiveAsOf.toISOString().slice(0, 10);
+  const riskFreeSeries: RiskFreeRatePoint[] = [];
+  const hasIndia = schemes.some((s) => s.countryOfDomicile === 'IN');
+  if (hasIndia) {
+    const gov = governedRiskFreeFor(governedRiskFree.supply, governedRiskFree.unavailableReason, asOfIso);
+    riskFreeSeries.push(...gov.points);
+    if (gov.unavailableReason && !legacyPoints.some((p) => p.countryCode === 'IN')) warnings.push({ scope: 'risk_free', detail: gov.unavailableReason });
+  }
+  riskFreeSeries.push(...legacyPoints);
+  const hasOtherCountry = schemes.some((s) => s.countryOfDomicile !== 'IN' && !legacyPoints.some((p) => p.countryCode === s.countryOfDomicile));
+  if (hasOtherCountry) {
+    warnings.push({ scope: 'risk_free', detail: 'A risk-free rate for the country of some of your holdings is not on file yet, so Sharpe, Sortino and alpha are not shown for them. No rate has been assumed.' });
+  }
+  if (legacyReadWarning) warnings.push({ scope: 'risk_free', detail: legacyReadWarning });
 
   return {
     dataset: {
@@ -785,9 +813,9 @@ async function loadBenchmarkMappings(
   return { mappings, benchmarkIds: [...new Set(mappings.map((m) => m.benchmarkId))], mappingVersion, mappingWarnings, benchmarkFacts };
 }
 
-async function loadRiskFreeRates(
+async function loadLegacyRiskFreeRates(
   supabase: SupabaseClient
-): Promise<{ riskFreeSeries: RiskFreeRatePoint[]; riskFreeWarnings: LoadWarning[] }> {
+): Promise<{ legacyPoints: RiskFreeRatePoint[]; legacyReadWarning: string | null }> {
   // R6-P0: unbounded reference read, and spec section 4 names reference data
   // and calculation inputs explicitly. This table is per-country periodic
   // rates with no user filter, so it grows monotonically with every country
@@ -814,18 +842,11 @@ async function loadRiskFreeRates(
         .order('id', { ascending: true })
     );
   } catch (e) {
-    return {
-      riskFreeSeries: [],
-      riskFreeWarnings: [
-        {
-          scope: 'risk_free',
-          detail: `Risk-free reference data is unavailable (${e instanceof Error ? e.message : String(e)}). Sharpe, Sortino and alpha are withheld rather than calculated against an assumed rate.`,
-        },
-      ],
-    };
+    void e; // the legacy table is only a fallback; the governed series is read separately and names its own reason
+    return { legacyPoints: [], legacyReadWarning: null };
   }
 
-  const riskFreeSeries: RiskFreeRatePoint[] = (data ?? []).map((r) => ({
+  const legacyPoints: RiskFreeRatePoint[] = (data ?? []).map((r) => ({
     countryCode: r.country_code as string,
     periodStart: toDate(r.period_start as string),
     periodEnd: toDate(r.period_end as string),
@@ -835,11 +856,7 @@ async function loadRiskFreeRates(
     version: r.version as string,
   }));
 
-  const riskFreeWarnings: LoadWarning[] = riskFreeSeries.length
-    ? []
-    : [{ scope: 'risk_free', detail: 'No risk-free reference data has been loaded yet, so risk-adjusted ratios are withheld.' }];
-
-  return { riskFreeSeries, riskFreeWarnings };
+  return { legacyPoints, legacyReadWarning: null };
 }
 
 /**

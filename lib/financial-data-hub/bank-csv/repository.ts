@@ -12,6 +12,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRows } from './pagination';
+import { PROCESSING_RUN_DEAD_AFTER_MS } from '../services/interruptedRun';
 import type { DedupIndex } from './dedup';
 import type { ExistingAccountSummary } from './accountIdentity';
 import type { DateRange } from './reconciliation';
@@ -30,7 +31,35 @@ interface FingerprintRow {
  * the most recent statement — hence the full paginated read rather than a
  * `.limit()`.
  */
+/**
+ * Document2 (4) F15: removes the partial rows a DEAD processing run left on this account (a statement stuck in `processing` for longer
+ * than any request can live: the platform killed it, see services/interruptedRun.ts). Those rows belong to a statement that never finished
+ * and never reached review or approval, so nothing depends on them; left in place they are read as "already imported" by the dedup index
+ * and a fresh upload of the same file would silently lose that many transactions. A run that is still live is never touched.
+ */
+export async function reapDeadRunPartialRows(userId: string, financialAccountId: string): Promise<number> {
+  const supabase = await createClient();
+  const cutoff = new Date(Date.now() - PROCESSING_RUN_DEAD_AFTER_MS).toISOString();
+  const { data: dead } = await supabase
+    .from('fdh_statement_uploads')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('financial_account_id', financialAccountId)
+    .eq('processing_status', 'processing')
+    .lt('processing_started_at', cutoff);
+  let reaped = 0;
+  for (const d of dead ?? []) {
+    const id = (d as { id: string }).id;
+    await supabase.from('fdh_transactions').delete().eq('user_id', userId).eq('statement_upload_id', id);
+    await supabase.from('fdh_reconciliation_results').delete().eq('user_id', userId).eq('statement_upload_id', id);
+    await supabase.from('fdh_data_quality_results').delete().eq('user_id', userId).eq('statement_upload_id', id);
+    reaped += 1;
+  }
+  return reaped;
+}
+
 export async function loadDedupIndexForAccount(userId: string, financialAccountId: string): Promise<DedupIndex> {
+  await reapDeadRunPartialRows(userId, financialAccountId);
   const supabase = await createClient();
   const rows = await fetchAllRows<FingerprintRow>(() =>
     supabase

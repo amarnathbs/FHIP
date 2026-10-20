@@ -64,6 +64,8 @@ export interface HoldingSnapshotRow {
   value: number;
   currency_code: string;
   created_at: string | null;
+  /** The statement this snapshot came from (null for a snapshot derived from the transaction ledger). */
+  source_document_id?: string | null;
 }
 
 export interface PublicationRow {
@@ -126,6 +128,8 @@ export interface UnpublishedHolding {
   asOfDate: string;
   units: number;
   value: MoneyValue;
+  /** Document2 (4) WP-B (F13): the statement to open to resolve / publish this position; null when it was derived from the ledger. */
+  sourceDocumentId: string | null;
 }
 
 export const UNPUBLISHED_BUCKET_LABEL = 'Imported, not yet in Net Worth';
@@ -230,7 +234,7 @@ export function computeInvestments(input: {
     }
     const amountReporting = toReporting(Number(s.value), s.currency_code, fx);
     if (amountReporting === null) addUnconverted(unconverted, s.currency_code, Number(s.value));
-    holdings.push({ accountId: s.account_id, instrumentId: s.instrument_id, snapshotId: s.id, asOfDate: s.as_of_date, units: Number(s.units), value: { amountNative: Number(s.value), currency: s.currency_code, amountReporting } });
+    holdings.push({ accountId: s.account_id, instrumentId: s.instrument_id, snapshotId: s.id, asOfDate: s.as_of_date, units: Number(s.units), value: { amountNative: Number(s.value), currency: s.currency_code, amountReporting }, sourceDocumentId: s.source_document_id ?? null });
   }
   holdings.sort((a, b) => (a.accountId + a.instrumentId < b.accountId + b.instrumentId ? -1 : 1));
   const sum = (vals: (number | null)[]) => r(vals.reduce<number>((s, v) => s + (v ?? 0), 0));
@@ -277,7 +281,7 @@ export async function loadInvestmentInputs(userId: string, client: ReadModelClie
   const snapshots = await fetchAllRows<HoldingSnapshotRow>('ii_holding_snapshots', (from, to) =>
     client
       .from('ii_holding_snapshots')
-      .select('id, account_id, instrument_id, as_of_date, units, value, currency_code, created_at')
+      .select('id, account_id, instrument_id, as_of_date, units, value, currency_code, created_at, source_document_id')
       .eq('user_id', userId)
       .order('id', { ascending: true })
       .range(from, to));

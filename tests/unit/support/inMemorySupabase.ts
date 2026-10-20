@@ -21,6 +21,12 @@ export interface InMemoryDbOptions {
    * A fake that accepts any column let `ii_prices_nav.provider` reach DEV unnoticed. Used by every NAV2 suite.
    */
   strictSchema?: boolean;
+  /**
+   * Postgres semantics for `.upsert(row, { onConflict: 'a,b' })` (Document2 (4) WP-B): a COMPOSITE conflict target is matched on every
+   * named column, and a conflicting row is UPDATED (merged) unless `ignoreDuplicates` is set. Off by default so every existing
+   * suite keeps the original insert-if-absent single-key behaviour.
+   */
+  upsertMerges?: boolean;
 }
 
 export interface InMemoryDb {
@@ -104,6 +110,22 @@ export function createInMemoryDb(options: InMemoryDbOptions = {}): InMemoryDb {
       // .upsert(rows, { onConflict, ignoreDuplicates }) -- insert-if-absent on one key column (NAV2 result cache).
       upsert: (r: Row | Row[], o?: { onConflict?: string; ignoreDuplicates?: boolean }) => {
         const key = o?.onConflict;
+        if (options.upsertMerges && key) {
+          const cols = key.split(',').map((c) => c.trim());
+          const out: Row[] = [];
+          for (const x of Array.isArray(r) ? r : [r]) {
+            need(Object.keys(x), 'upsert');
+            const existing = (db.tables[table] ?? []).find((e) => cols.every((c) => e[c] === x[c]));
+            if (existing) {
+              if (!o?.ignoreDuplicates) {
+                Object.assign(existing, x);
+                db.writes.push({ table, kind: 'update', payload: x });
+              }
+            } else out.push({ id: `ins-${Math.random().toString(36).slice(2, 10)}`, ...x });
+          }
+          inserted = out;
+          return chain;
+        }
         for (const x of Array.isArray(r) ? r : [r]) need(Object.keys(x), 'upsert');
         if (key) need(key.split(',').map((c) => c.trim()), 'onConflict');
         inserted = (Array.isArray(r) ? r : [r]).filter((x) => !key || !(db.tables[table] ?? []).some((e) => e[key] === x[key])).map((x) => ({ id: `ins-${Math.random().toString(36).slice(2, 10)}`, ...x }));
@@ -116,6 +138,19 @@ export function createInMemoryDb(options: InMemoryDbOptions = {}): InMemoryDb {
       // loadAppliedAsOfByLiability uses it; the fake threw, and the liability proposal route answered 500).
       not: (c: string, op: string, v: unknown) => { need([c], 'not'); filters.push((r) => (op === 'is' ? (v === null ? r[c] !== null && r[c] !== undefined : r[c] !== v) : r[c] !== v)); return chain; },
       in: (c: string, vs: unknown[]) => { need([c], 'in'); filters.push((r) => vs.includes(r[c])); return chain; },
+      // .gt -- string comparison (chronological for ISO dates). Added 2026-10-21 (WP-B: the zero-unit closure read in recertifyPosition).
+      gt: (c: string, v: unknown) => { need([c], 'gt'); filters.push((r) => String(r[c]) > String(v)); return chain; },
+      // .or('col.eq.v,col.eq.w') -- equality alternatives only (the certification blocking-case read). Anything else throws, never silently passes.
+      or: (expr: string) => {
+        const alts = expr.split(',').map((part) => {
+          const m = /^([a-z_]+)\.eq\.(.+)$/.exec(part.trim());
+          if (!m) throw new Error(`in-memory .or(): unsupported expression "${part}"`);
+          need([m[1]], 'or');
+          return [m[1], m[2]] as const;
+        });
+        filters.push((r) => alts.some(([c, v]) => String(r[c]) === v));
+        return chain;
+      },
       gte: (c: string, v: unknown) => { need([c], 'gte'); filters.push((r) => String(r[c]) >= String(v)); return chain; },
       // .lte / .lt -- string comparison, which is chronological for ISO dates (2026-10-03: investment-date NAV lookup).
       lte: (c: string, v: unknown) => { need([c], 'lte'); filters.push((r) => String(r[c]) <= String(v)); return chain; },

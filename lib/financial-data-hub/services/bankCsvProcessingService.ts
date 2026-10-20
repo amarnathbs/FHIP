@@ -34,6 +34,7 @@ import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE
 import { createClient } from '@/lib/supabase/server';
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { processingRunState, STATEMENT_STILL_BEING_READ_MESSAGE } from './interruptedRun';
 import {
   ingestionJobsRepository,
   parserRegistryRepository,
@@ -59,7 +60,7 @@ import { createHash } from 'node:crypto';
 
 export class BankCsvProcessingError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid_state' | 'mapping_required' | 'account_unresolved' | 'internal_error',
+    readonly code: 'not_found' | 'invalid_state' | 'mapping_required' | 'account_unresolved' | 'internal_error' | 'in_progress',
     message: string,
   ) {
     super(message);
@@ -294,7 +295,7 @@ async function cleanupPriorAttempt(userId: string, documentId: string): Promise<
 }
 
 export async function processBankCsvDocument(userId: string, documentId: string): Promise<ProcessBankCsvResult> {
-  const document = await getOwnedDocument(userId, documentId);
+  let document = await getOwnedDocument(userId, documentId);
 
   // IDEMPOTENCY (spec 37, 56): already certified/settled — return as-is.
   if (document.certification_status && ['certified', 'review_required', 'rejected'].includes(document.certification_status) && document.processing_completed_at) {
@@ -307,6 +308,18 @@ export async function processBankCsvDocument(userId: string, documentId: string)
   if (originalId) {
     const original = await getOwnedDocument(userId, originalId);
     return { ...summariseExisting(original), transactionsCreated: 0, duplicatesSkipped: original.certified_row_count ?? 0, rejectedRows: 0, duplicateOfDocumentId: originalId };
+  }
+
+  // Document2 (4) F15: a run the platform killed leaves the document in `processing` (see interruptedRun.ts). A live run is not
+  // started twice; a dead one is cleaned up and the statement is read again from the top.
+  const runState = processingRunState(document);
+  if (runState === 'live') throw new BankCsvProcessingError('in_progress', STATEMENT_STILL_BEING_READ_MESSAGE);
+  if (runState === 'dead') {
+    await cleanupPriorAttempt(userId, documentId);
+    assertDocumentTransition('processing', 'failed');
+    await adminUpdateStatementUpload(userId, documentId, { processing_status: 'failed', error_code: null });
+    await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_csv_processing_failed', actorType: 'system', metadata: { reason: 'run_interrupted' } });
+    document = { ...document, processing_status: 'failed' };
   }
 
   if (!document.detection_status || document.detection_status === 'invalid' || document.detection_status === 'unsupported') {

@@ -6,6 +6,7 @@ import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/inves
 import { navPrice, period, pct, ratio, rupees, showResult, type ShownCell } from '@/lib/engines/nav2/presentation';
 import { BETA_ALPHA_NO_BENCHMARK_LINE, betaAlphaNoBenchmark, HOW_CALCULATED_HEADING, pricesRunToLine, FUND_ANALYTICS_CAGR_CONVENTION_NOTE, FUND_ANALYTICS_SAVED_REPORT_SENTENCE, riskFreeLabelOf, versionMadeLinePrint } from '@/lib/engines/nav2/reportWording';
 import { ownershipSentence, percentLabel } from '@/lib/engines/nav2/ownershipShare';
+import { buildFundAnalyticsSummary, FUND_SUMMARY_HEAD, type FundSummaryRow } from '@/lib/engines/nav2/fundAnalyticsInsight';
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
@@ -473,19 +474,11 @@ export function comparisonPossible(report: Pick<FundAnalyticsReport, 'comparison
   return ranked || correlated;
 }
 
-/** The summary row of one fund ("Your funds at a glance"): the figures are the report's own saved results, shown by showResult(). One Footnotes list per table, so the letters never repeat. */
-export function summaryRowFor(b: FundAnalyticsSchemeBlock, fn: Footnotes): Row {
-  const inv = b.analytics.investor;
-  const three = b.analytics.scheme.pointToPoint.find((p) => p.id === '3Y');
+/** One table row of the summary model (lib/engines/nav2/fundAnalyticsInsight.ts buildFundAnalyticsSummary): the SAME model the on-screen report renders (Document2 (4) F10). One Footnotes list per table, so the letters never repeat. */
+export function summaryRowOf(s: FundSummaryRow, fn: Footnotes): Row {
   return {
-    key: b.instrumentId,
-    cells: [
-      `${b.schemeName}${b.ownership?.mode === 'share' && b.ownership.jointBasisPoints !== null ? ` (your share ${percentLabel(b.ownership.jointBasisPoints)})` : b.ownership?.mode === 'not_set' ? ' (ownership share not set)' : ''}`,
-      inv ? figure(showResult(inv.currentValue, (v) => rupees(v.value)), fn).node : '',
-      inv ? figure(showResult(inv.gainLoss, (v) => rupees(v.gainLoss)), fn).node : '',
-      inv ? figure(showResult(inv.xirr, (v) => pct(v.rate)), fn).node : '',
-      three ? figure(showResult(three.cagr, (v) => pct(v.cagr)), fn).node : '',
-    ],
+    key: s.instrumentId,
+    cells: [s.name, s.valueNow ? figure(s.valueNow, fn).node : '', s.gainLoss ? figure(s.gainLoss, fn).node : '', s.xirr ? figure(s.xirr, fn).node : '', s.cagr3Year ? figure(s.cagr3Year, fn).node : ''],
   };
 }
 
@@ -583,7 +576,8 @@ export default function FundAnalyticsPrintDocument({ report, version, pagesPerFu
   const fnCover = new Footnotes();
   const latestPriceDate = report.schemes.map((b) => b.navSeriesSummary.lastDate).filter((d): d is string => !!d).sort().slice(-1)[0] ?? null;
 
-  const summaryRows: Row[] = report.schemes.map((b) => summaryRowFor(b, fnCover));
+  // Document2 (4) F10: the SAME summary model the on-screen report renders (lib/engines/nav2/fundAnalyticsInsight.ts), so the screen and the PDF cannot disagree.
+  const summaryRows: Row[] = buildFundAnalyticsSummary(report, percentLabel).map((s) => summaryRowOf(s, fnCover));
 
   const expectedCharts = report.schemes.filter((b) => b.chart.navPoints.length >= 2).length;
   return (
@@ -609,7 +603,7 @@ export default function FundAnalyticsPrintDocument({ report, version, pagesPerFu
               {report.schemes.length} fund{report.schemes.length === 1 ? '' : 's'} analysed. The fund’s own growth and your own return are different things and are shown separately for each fund.
             </p>
             <h3>Your funds at a glance</h3>
-            <FaTable head={['Fund', 'Value now', 'Gain or loss', 'Your return (XIRR)', 'Fund CAGR, 3 year']} widths={[44, 14, 14, 14, 14]} num={[false, true, true, true, true]} rows={summaryRows} />
+            <FaTable head={[...FUND_SUMMARY_HEAD]} widths={[44, 14, 14, 14, 14]} num={[false, true, true, true, true]} rows={summaryRows} />
             {report.schemes.some((b) => b.ownership) && (
               <p className="fa-sub">Where a fund is held jointly, the figures about your own money (value now, gain or loss, your return) are your share of it, as the fund sheet states. Your share of each fund is shown beside its name.</p>
             )}
@@ -660,11 +654,12 @@ export function FundAnalyticsCombinedFront({ parts, timeZone = null }: { parts: 
   const { notes } = mergeNotes(parts, duplicateFunds);
   const latestPriceDate = reports.flatMap((r) => r.schemes.map((b) => b.navSeriesSummary.lastDate)).filter((d): d is string => !!d).sort().slice(-1)[0] ?? null;
   const fundCount = coverage(parts).covered;
+  const models = reports.map((r) => buildFundAnalyticsSummary(r, percentLabel)); // the same model the screen and the single report render
   const tableRows: Row[] = rows.map((r) => {
-    const row = summaryRowFor(reports[r.partIndex].schemes[r.schemeIndex], fn);
+    const row = summaryRowOf(models[r.partIndex][r.schemeIndex], fn);
     return mismatch ? { ...row, cells: [row.cells[0], String(r.partIndex + 1), ...row.cells.slice(1)] } : row;
   });
-  const head = ['Fund', 'Value now', 'Gain or loss', 'Your return (XIRR)', 'Fund CAGR, 3 year'];
+  const head: string[] = [...FUND_SUMMARY_HEAD];
   return (
     <div className="fa-doc" data-fa-front="true">
       <section className="fa-cover">
