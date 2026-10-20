@@ -31,13 +31,14 @@ describe('Admin nav labels: planning benchmarks vs market index data', () => {
     expect(PLANNING).not.toBe(INDEX);
     expect(ADMIN_GENERAL_ITEMS.find((i) => i.href === '/admin/benchmarks')?.label).toBe(PLANNING);
     expect(MARKET_INDEX_DATA_ITEMS).toEqual([{ label: INDEX, href: '/admin/investment-intelligence/market-index-data' }]);
-    expect(groupLabels).toContain(INDEX);
+    expect(groupLabels).toContain('Market Data'); // PO request 19-10-2026: the item now lives in the one Market Data group
   });
 
   it('each label appears exactly once among all nav entries (group headings and items), so no other entry shares either', () => {
     expect(itemLabels.filter((l) => l === PLANNING)).toHaveLength(1);
     expect(itemLabels.filter((l) => l === INDEX)).toHaveLength(1);
-    expect(groupLabels.filter((l) => l === INDEX)).toHaveLength(1);
+    expect(groupLabels.filter((l) => l === 'Market Data')).toHaveLength(1);
+    expect(groupLabels).not.toContain(INDEX); // the old stand-alone group heading is gone
     expect(groupLabels).not.toContain(PLANNING); // it is an ITEM of the General group, not a group heading
     const others = [...RESOURCES_ITEMS, ...CONTENT_TYPE_ITEMS, ...WORKFLOW_ITEMS, ...DISCOVERY_ITEMS, ...ANALYTICS_ITEMS, ...REFERENCE_DATA_ITEMS, ...LOOKTHROUGH_DATA_ITEMS].map((i) => i.label);
     expect(others).not.toContain(PLANNING);
@@ -53,7 +54,7 @@ describe('Admin nav labels: planning benchmarks vs market index data', () => {
 
   it('no item label equals any group heading other than the one group that holds it (no visual duplicate)', () => {
     const dup = itemLabels.filter((l) => groupLabels.includes(l));
-    // 'Market Index Data' is both the group heading and its single entry by design (as before); nothing else may repeat.
-    expect([...new Set(dup)].filter((l) => l !== INDEX)).toEqual(expect.not.arrayContaining(['Planning Benchmarks']));
+    // No item label repeats a group heading any more ('Market Data' is the heading, 'Market Index Data' an item).
+    expect(dup).toEqual([]);
   });
 });

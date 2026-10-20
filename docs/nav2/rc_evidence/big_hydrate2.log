@@ -1,0 +1,7 @@
+=== big user (30 funds: 4 with history + 26 without)  mode hydrate  2026-10-14T16:06:17.355Z ===
+   call 1: 503 24209 ms state=timed_out loaded=null/null reach=5/16
+   call 2: 503 23034 ms state=timed_out loaded=null/null reach=5/16
+   call 3: 503 22598 ms state=timed_out loaded=null/null reach=5/16
+   call 4: 503 22276 ms state=timed_out loaded=null/null reach=5/16
+   call 5: 503 22276 ms state=timed_out loaded=null/null reach=5/16
+   call 6: 503 22314 ms state=timed_out loaded=null/null reach=5/16

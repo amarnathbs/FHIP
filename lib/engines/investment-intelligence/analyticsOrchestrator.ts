@@ -33,6 +33,7 @@ import { fingerprintInputs, isStale, PERFORMANCE_ENGINE_VERSION, ENGINE_SUB_VERS
 import type { DataQualityAnnotation } from './dataQuality';
 import type { CashFlow } from './xirr';
 import type { BenchmarkMapping } from './benchmarkEngine';
+import type { SchemeValuation } from './valuation/schemeValuation';
 import type { RiskFreeRatePoint } from '@/lib/config/investment-intelligence/riskFreeRate';
 
 /** A dated portfolio value (used for the blend weights, drawdown and comparison chart). */
@@ -112,6 +113,12 @@ export interface SchemeDataset {
   reconstructedValuationSeries?: SeriesPoint[];
   /** Per-folio slices, only when the scheme is held in more than one folio. */
   folios?: SchemeFolioDataset[];
+  /**
+   * NAV2 (2026-10-04): the scheme-level valuation (valueSchemeAcrossFolios) the currentValue above was taken from, passed
+   * through UNCHANGED so the NAV2 Fund analytics report shows the same value, basis and NAV date as Performance.
+   * Additive and optional: nothing in this engine reads it.
+   */
+  valuation?: SchemeValuation;
 }
 
 export interface AnalyticsDataset {

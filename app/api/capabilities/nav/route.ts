@@ -19,6 +19,24 @@ import { ok, bad } from '@/lib/api';
 import { resolveCountryContext } from '@/lib/services/jurisdiction';
 import { resolveModuleCapability, MODULE_KEYS, type CapabilityDecision } from '@/lib/services/appCapability';
 import { isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
+import { canViewPremiumReport } from '@/lib/services/entitlements';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { isNav2FlagOn, NAV2_JOB_KEYS } from '@/lib/services/investment-intelligence/nav2/nav2Flags';
+import type { PremiumNavigation } from '@/lib/nav/appNavCapability';
+
+/**
+ * Premium-only navigation (NAV2 Fund analytics): true only when the person is Premium TODAY (same rule as the page and the APIs) AND the
+ * `nav2_fund_analytics` switch is on. FAILS CLOSED: any error, a missing switch row or an unapplied migration reads as false, so the entry
+ * is simply not shown. Visibility only - the page and every API enforce Premium themselves.
+ */
+async function premiumNavigationFor(userId: string, supabase: Awaited<ReturnType<typeof createClient>>): Promise<PremiumNavigation> {
+  try {
+    if (!(await canViewPremiumReport(userId, supabase))) return { fundAnalytics: false };
+    return { fundAnalytics: await isNav2FlagOn(createAdminClient(), NAV2_JOB_KEYS.fundAnalytics) };
+  } catch {
+    return { fundAnalytics: false };
+  }
+}
 
 export async function GET() {
   const supabase = await createClient();
@@ -31,13 +49,14 @@ export async function GET() {
   // (lib/nav/appNavCapability.ts's isNavHrefVisible) shows every item exactly
   // as it did before this endpoint existed — dispatch section 9's "flag-off
   // restores exact G3 containment behavior with no data changes either way".
+  const premiumNavigation = await premiumNavigationFor(user.id, supabase);
   if (!isG4CapabilityLayerEnabled()) {
     const decisions = Object.fromEntries(MODULE_KEYS.map((key) => [key, 'ENABLED' as CapabilityDecision]));
     // G4 closure item 2: writeDecisions mirrors decisions when the flag is
     // off — no module has ever had a narrower write decision pre-G4.
     // G5B Phase 2: deleteDecisions mirrors it too — the flag-off path has
     // never had a narrower delete decision either.
-    return ok({ decisions, writeDecisions: decisions, deleteDecisions: decisions });
+    return ok({ decisions, writeDecisions: decisions, deleteDecisions: decisions, premiumNavigation });
   }
 
   const context = await resolveCountryContext(user.id, supabase);
@@ -78,5 +97,5 @@ export async function GET() {
     // value for them, since their CREATE and DELETE policies still match.
     deleteDecisions[key] = resolveModuleCapability(key, context, { operation: 'DELETE' }).decision;
   }
-  return ok({ decisions, writeDecisions, deleteDecisions });
+  return ok({ decisions, writeDecisions, deleteDecisions, premiumNavigation });
 }

@@ -649,7 +649,9 @@ async function buildCalculatorInput(
       targetMethod: retirementOptions.targetMethod,
       targetCorpus: retirementOptions.targetCorpus,
       desiredAnnualIncome: retirementOptions.desiredAnnualIncome,
-      currentAnnualEssentialExpenses: dashboard.essentialMonthlyExpenses * 12,
+      // PO rule 17-10-2026: the owner-occupied home-loan repayment is essential today, but a retirement living-cost target must
+      // not assume the mortgage runs into retirement, so this keeps the essentials as they were before that rule.
+      currentAnnualEssentialExpenses: (dashboard.essentialMonthlyExpenses - (dashboard.essentialHomeLoan?.monthly ?? 0)) * 12,
       replacementPercentage: retirementOptions.replacementPercentage,
       members,
     };

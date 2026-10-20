@@ -6,7 +6,7 @@
 // Reuses the repository's Admin conventions: Tailwind tokens (trust, line, ink,
 // muted, risk, positive, attention), 44px touch targets, visible focus rings,
 // tables inside horizontal scroll containers, aria-live announcements.
-import { useId, type ReactNode, type Ref } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type Ref } from 'react';
 import { DataTable, DataTd } from '@/components/ui/DataTable';
 import { headerClass, type CellKind } from '@/lib/ui/dataTable';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
@@ -48,7 +48,8 @@ export function Chip({ label, tone = 'neutral', title }: { label: string; tone?:
 export function Notice({ tone = 'info', title, children, live }: { tone?: Tone; title?: string; children?: ReactNode; live?: 'status' | 'alert' }) {
   return (
     <div role={live} className={`rounded-compact border px-3 py-2 text-sm ${TONE_CLASS[tone]}`}>
-      {title ? <p className="font-semibold">{title}</p> : null}
+      {/* the amber title text on its pale amber background measured 3.27:1 (axe, NAV2 release candidate); the warn title is ink, the border and background still carry the tone */}
+      {title ? <p className={tone === 'warn' ? 'font-semibold text-ink' : 'font-semibold'}>{title}</p> : null}
       {children ? <div className={title ? 'mt-1 text-ink' : 'text-ink'}>{children}</div> : null}
     </div>
   );
@@ -78,11 +79,11 @@ const BTN: Record<BtnKind, string> = {
   danger: 'border border-risk/40 bg-white text-risk hover:bg-risk/10',
 };
 
-export function Btn({ children, onClick, disabled, kind = 'primary', type = 'button', busy, describedBy, ariaLabel, title, nowrap, compact }: { children: ReactNode; onClick?: () => void; disabled?: boolean; kind?: BtnKind; type?: 'button' | 'submit'; busy?: boolean; describedBy?: string; ariaLabel?: string; title?: string; nowrap?: boolean; /** Small button for a row of actions inside a table: 32 px high (44 px on a touch screen), 12 px text. */ compact?: boolean }) {
+export function Btn({ children, onClick, disabled, kind = 'primary', type = 'button', busy, busyLabel, describedBy, ariaLabel, title, nowrap, compact }: { children: ReactNode; onClick?: () => void; disabled?: boolean; kind?: BtnKind; type?: 'button' | 'submit'; busy?: boolean; /** What the button says while it works (default "Working..."): say what is happening, for example "Saving...". */ busyLabel?: string; describedBy?: string; ariaLabel?: string; title?: string; nowrap?: boolean; /** Small button for a row of actions inside a table: 32 px high (44 px on a touch screen), 12 px text. */ compact?: boolean }) {
   const off = disabled === true || busy === true;
   return (
     <button type={type} onClick={onClick} disabled={off} aria-disabled={off} aria-busy={busy === true} aria-describedby={describedBy} aria-label={ariaLabel} title={title} className={`inline-flex ${compact ? 'min-h-8 px-2 py-1 text-xs [@media(pointer:coarse)]:min-h-11' : 'min-h-11 px-3 py-2 text-sm'} items-center justify-center rounded font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${nowrap ? 'whitespace-nowrap' : ''} ${BTN[kind]} ${FOCUS}`}>
-      {busy ? 'Working...' : children}
+      {busy ? (busyLabel ?? 'Working...') : children}
     </button>
   );
 }
@@ -208,7 +209,7 @@ export function FieldShell({ id, label, hint, error, children, required }: { id:
   );
 }
 
-const INPUT_BASE = `block min-h-11 w-full rounded border bg-white px-3 py-2 text-sm text-ink disabled:bg-gray-100 disabled:text-muted ${FOCUS}`;
+export const INPUT_BASE = `block min-h-11 w-full rounded border bg-white px-3 py-2 text-sm text-ink disabled:bg-gray-100 disabled:text-muted ${FOCUS}`;
 /** A field with an error gets a red border and ring as well as its red message (never colour alone: the message and aria-invalid say it too). */
 function inputClass(error?: string | null): string {
   return `${INPUT_BASE} ${error ? 'border-risk ring-1 ring-risk' : 'border-line'}`;
@@ -259,12 +260,12 @@ export interface Opt {
   label: string;
 }
 
-export function SelectField({ label, value, onChange, options, placeholder = 'Choose...', hint, error, fieldKey, required, disabled }: { label: string; value: string; onChange: (v: string) => void; options: readonly Opt[]; placeholder?: string; hint?: ReactNode; error?: string | null; fieldKey?: string; required?: boolean | string; disabled?: boolean }) {
+export function SelectField({ label, value, onChange, options, placeholder = 'Choose...', hint, error, fieldKey, required, disabled, hidePlaceholder }: { label: string; value: string; onChange: (v: string) => void; options: readonly Opt[]; placeholder?: string; hint?: ReactNode; error?: string | null; fieldKey?: string; required?: boolean | string; disabled?: boolean; /** For a choice that always has a value (no "Choose..." row). */ hidePlaceholder?: boolean }) {
   const id = useId();
   return (
     <FieldShell id={id} label={label} hint={hint} error={error} required={required}>
       <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-invalid={error ? true : undefined} aria-describedby={describedBy(hint ? `${id}-hint` : null, error ? `${id}-error` : null)} className={inputClass(error)} data-field-key={fieldKey}>
-        <option value="">{placeholder}</option>
+        {hidePlaceholder ? null : <option value="">{placeholder}</option>}
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -272,6 +273,27 @@ export function SelectField({ label, value, onChange, options, placeholder = 'Ch
         ))}
       </select>
     </FieldShell>
+  );
+}
+
+/**
+ * The result of a button press, shown RIGHT NEXT TO that button (error: role=alert, success: role=status). When a new message
+ * arrives it scrolls into view and takes focus, so a keyboard or screen-reader user lands on it. Render it directly under the
+ * buttons; a page-top banner may repeat it but must not be the only place it appears.
+ */
+export function ActionMessage({ message }: { message: { kind: 'ok' | 'error'; text: string } | null }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!message || !el) return;
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    el.focus({ preventScroll: true });
+  }, [message]);
+  if (!message) return null;
+  return (
+    <div ref={ref} tabIndex={-1} role={message.kind === 'error' ? 'alert' : 'status'} data-testid={`action-message-${message.kind}`} className={`mt-3 rounded-compact border px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-trust ${message.kind === 'error' ? TONE_CLASS.bad : TONE_CLASS.ok}`}>
+      {message.text}
+    </div>
   );
 }
 

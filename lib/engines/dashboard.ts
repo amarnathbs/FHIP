@@ -8,6 +8,14 @@ import type { NetWorthBasisInfo } from './netWorthBasis';
 import type { PublishedValuationSummary } from './investment-intelligence/valuation/publishedRowRemark';
 import { assessNetToGross, isWageLikeIncome, type NetPlausibilityFlag } from './incomePlausibility';
 import { resolveNetBasis, type AssumedNetSource, type NetBasis } from './incomeNetBasis';
+import {
+  RENT_EXPENSE_ITEM_KEY,
+  resolveEssentialHomeLoan,
+  type EssentialHomeLoanResolution,
+  type HousingLoanInput,
+  type PropertyLinkPurpose,
+  type PropertyUse,
+} from './essentialHousing';
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the subset of each register's columns the dashboard uses)
@@ -129,6 +137,12 @@ export interface CanonicalExpenseFigures {
   essentialMonthly: number;
   lifestyleMonthly: number;
   coreSurvivalMonthly: number;
+  /**
+   * Monthly rent the household recorded (a counted planned 'rent' row plus imported actual spending categorised
+   * Housing > Rent), reporting currency. Decides whether the owner-occupied home-loan repayment is essential
+   * (essentialHousing.ts). Optional so fixtures built before the rule keep compiling: absent = no rent.
+   */
+  rentMonthly?: number;
   /** The slice of `monthly` taken from imported actuals (groups on the actual basis). */
   importedMonthly: number;
   lines: CanonicalExpenseLine[];
@@ -147,6 +161,13 @@ export interface CanonicalDebtServiceFigures {
   /** D-09 display line: interest + fees inside card/loan repayments (already inside householdMonthly). */
   costOfDebtMonthly: number;
   principalMonthly: number;
+  /**
+   * Per household liability id: the monthly debt service the surplus counts for that loan (a statement-derived
+   * actual when the loan has approved statement history, else the recorded repayment). The owner-occupied home-loan
+   * rule (essentialHousing.ts) uses the SAME figure so the essential total reconciles with the surplus. Optional:
+   * absent = the row's own `monthly_repayment`.
+   */
+  loanServiceById?: Record<string, number>;
 }
 
 export interface CanonicalCashFlowInput {
@@ -233,6 +254,14 @@ export interface LiabilityRow {
   country_code?: string | null;
   currency_code?: string | null;
   owner?: string | null;
+  /** Owner-occupied home-loan rule (essentialHousing.ts): all optional, absent = not supplied. */
+  id?: string | null;
+  liability_name?: string | null;
+  is_active?: boolean | null;
+  /** Explicit property-use answer for the property this loan finances (input-time answer, when collected). */
+  property_use?: PropertyUse | null;
+  /** Purposes of the loan's ACTIVE property_liability_links rows. */
+  link_purposes?: readonly PropertyLinkPurpose[] | null;
 }
 export interface InvestmentRow {
   current_value: number;
@@ -572,8 +601,16 @@ export interface DashboardSummary {
   netMonthlyIncome: number;
   passiveMonthlyIncome: number;
   activeMonthlyIncome: number;
+  /**
+   * Essential monthly expenses. PO rule 17-10-2026: INCLUDES the owner-occupied home-loan repayment when the household
+   * has recorded no rent (essentialHomeLoan below says whether and how much). That repayment is ALSO inside
+   * debtMonthlyRepayments and is deliberately NOT inside totalMonthlyExpenses, so total outflow, surplus and DSR are
+   * unchanged; anything that adds essential + debt must take essentialHomeLoan.monthly out once.
+   */
   essentialMonthlyExpenses: number;
-  coreSurvivalMonthlyExpenses: number; // Level 1 subset of essential expenses (see CORE_SURVIVAL_EXPENSE_KEYS)
+  coreSurvivalMonthlyExpenses: number; // Level 1 subset of essential expenses (see CORE_SURVIVAL_EXPENSE_KEYS); includes the same home-loan repayment
+  /** The owner-occupied home-loan rule's outcome (status, amount, loans, rent). Optional for hand-built fixtures. */
+  essentialHomeLoan?: EssentialHomeLoanResolution;
   lifestyleMonthlyExpenses: number;
   debtMonthlyRepayments: number;
   // LR-FI-2 §6c. The sum across ALL owners including SMSF, kept separate
@@ -590,7 +627,7 @@ export interface DashboardSummary {
   // purely so `lib/services/forecastData.ts`'s and `lib/engines/whatIf.ts`'s
   // "same basis as totalLiabilities" wiring needs no changes here.
   totalLiabilityMonthlyRepayments: number;
-  totalMonthlyExpenses: number; // essential + lifestyle, combined basis (excludes debt repayments, tracked separately)
+  totalMonthlyExpenses: number; // essential (WITHOUT the home-loan repayment) + lifestyle, combined basis (excludes debt repayments, tracked separately)
   // The slice of totalMonthlyExpenses / grossMonthlyIncome taken from approved
   // imported actuals (WP-03: groups on the ACTUAL side of the combined basis,
   // and bank income credits not represented by a payslip row). A part of the
@@ -876,6 +913,8 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     coreSurvivalMonthlyExpenses: number;
     lifestyleMonthlyExpenses: number;
     totalMonthlyExpenses: number;
+    rentMonthly: number;
+    loanServiceById: Record<string, number> | null;
     expenseLines: CanonicalExpenseLine[];
     debtMonthlyRepayments: number;
     costOfDebtMonthly: number;
@@ -958,6 +997,9 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       ),
       lifestyleMonthlyExpenses: lifestyle,
       totalMonthlyExpenses: essential + lifestyle,
+      // A counted rent row (household, not a debt-service duplicate, convertible) with an amount above zero.
+      rentMonthly: sumBy(expenses.filter((e) => e.r.master_item_key === RENT_EXPENSE_ITEM_KEY), (e) => e.monthly),
+      loanServiceById: null,
       expenseLines: expenses.map((e) => ({ name: e.r.expense_name, monthly: e.monthly, source: 'planned' })),
       // PO D-08, applied equally to manual and imported households: when the
       // household's consumption is counted as expense, a revolving facility's
@@ -1009,6 +1051,8 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
       coreSurvivalMonthlyExpenses: exp?.coreSurvivalMonthly ?? 0,
       lifestyleMonthlyExpenses: exp?.lifestyleMonthly ?? 0,
       totalMonthlyExpenses: exp?.monthly ?? 0,
+      rentMonthly: exp?.rentMonthly ?? 0,
+      loanServiceById: debt?.loanServiceById ?? null,
       expenseLines: exp?.lines ?? [],
       debtMonthlyRepayments: debt?.householdMonthly ?? 0,
       costOfDebtMonthly: debt?.costOfDebtMonthly ?? 0,
@@ -1038,14 +1082,41 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     grossMonthlyIncome,
     netMonthlyIncome,
     passiveMonthlyIncome,
-    essentialMonthlyExpenses,
-    coreSurvivalMonthlyExpenses,
+    essentialMonthlyExpenses: essentialExcludingHomeLoan,
+    coreSurvivalMonthlyExpenses: coreSurvivalExcludingHomeLoan,
     lifestyleMonthlyExpenses,
     totalMonthlyExpenses,
     debtMonthlyRepayments,
     bankMonthlyIncome,
     bankMonthlyExpenses,
   } = cf;
+  // PO rule 17-10-2026 (essentialHousing.ts): the owner-occupied home-loan repayment is an ESSENTIAL housing cost when
+  // no rent is recorded. It is moved INTO the essential bucket here, once; it stays in debtMonthlyRepayments and out of
+  // totalMonthlyExpenses, so total outflow, surplus, savings rate and DSR are exactly what they were. Needs the expense
+  // and debt-service sections readable and some expenses on file (otherwise "essential" would be the loan alone, and
+  // every engine would score an expense picture the household never gave).
+  const essentialHomeLoan: EssentialHomeLoanResolution =
+    cf.expensesAvailable && cf.debtAvailable && cf.hasExpenses
+      ? resolveEssentialHomeLoan({
+          rentMonthly: cf.rentMonthly,
+          loans: householdLiabilities.map((l): HousingLoanInput => ({
+            id: l.id ?? null,
+            name: l.liability_name ?? null,
+            masterItemKey: l.master_item_key ?? null,
+            debtType: l.debt_type,
+            owner: l.owner ?? null,
+            isActive: l.is_active ?? null,
+            propertyUse: l.property_use ?? null,
+            linkPurposes: l.link_purposes ?? null,
+            monthly:
+              l.id && cf.loanServiceById && Object.prototype.hasOwnProperty.call(cf.loanServiceById, l.id)
+                ? cf.loanServiceById[l.id]
+                : convertOrNull(l.currency_code, l.monthly_repayment ?? 0),
+          })),
+        })
+      : resolveEssentialHomeLoan({ loans: [], rentMonthly: cf.rentMonthly });
+  const essentialMonthlyExpenses = essentialExcludingHomeLoan + essentialHomeLoan.monthly;
+  const coreSurvivalMonthlyExpenses = coreSurvivalExcludingHomeLoan + essentialHomeLoan.monthly;
   const activeMonthlyIncome = grossMonthlyIncome - passiveMonthlyIncome;
   // LR-FI-2 §6c. All-owner CONTRACTUAL repayment total — the wealth-side
   // counterpart to debtMonthlyRepayments, paired with the ALSO all-owner
@@ -1077,7 +1148,9 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
   const monthlySurplus = incomeForSurplus - totalMonthlyExpenses - debtMonthlyRepayments;
   const savingsRate = cashFlowComplete && incomeForSurplus > 0 ? monthlySurplus / incomeForSurplus : null;
   const operatingCashFlow = incomeForSurplus - essentialMonthlyExpenses;
-  const disposableIncome = operatingCashFlow - debtMonthlyRepayments;
+  // The home-loan repayment is already inside operatingCashFlow (as essential) and inside debtMonthlyRepayments: take it
+  // out of the debt side once, so disposable income is exactly income - essential(before the rule) - debt, as before.
+  const disposableIncome = operatingCashFlow - (debtMonthlyRepayments - essentialHomeLoan.monthly);
   const totalOutflow = totalMonthlyExpenses + debtMonthlyRepayments;
   const cashFlowRatio = cashFlowComplete && totalOutflow > 0 ? monthlySurplus / totalOutflow : null;
   // LR-FI-1 / LR-FI-2 §R2: household rows only, and never a row the totals
@@ -1542,6 +1615,7 @@ export function computeDashboard(input: DashboardInput, currency: 'AUD' | 'INR',
     activeMonthlyIncome,
     essentialMonthlyExpenses,
     coreSurvivalMonthlyExpenses,
+    essentialHomeLoan,
     lifestyleMonthlyExpenses,
     debtMonthlyRepayments,
     totalLiabilityMonthlyRepayments,

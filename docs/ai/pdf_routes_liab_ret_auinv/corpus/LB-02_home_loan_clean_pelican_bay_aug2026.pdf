@@ -1,0 +1,67 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 800 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(Pelican Bay Home Loans) Tj
+0 -12 Td
+(HOME LOAN STATEMENT) Tj
+0 -12 Td
+(Borrower: ALEX SAMPLE-TWO) Tj
+0 -12 Td
+(Address: 0 Imaginary Court, Exampleton VIC 3000) Tj
+0 -12 Td
+(Email: alex.sample.two@example.invalid) Tj
+0 -12 Td
+(Loan account: 0099 7712) Tj
+0 -12 Td
+(Statement period: 01/08/2026 to 31/08/2026) Tj
+0 -12 Td
+(Statement date: 31/08/2026) Tj
+0 -12 Td
+(Interest rate: 6.29% p.a.) Tj
+0 -12 Td
+(Opening balance: $412,300.00) Tj
+0 -12 Td
+(Date Description Amount Balance) Tj
+0 -12 Td
+(05/08/2026 REPAYMENT RECEIVED 2,650.00 409,650.00) Tj
+0 -12 Td
+(19/08/2026 REPAYMENT RECEIVED 2,650.00 407,000.00) Tj
+0 -12 Td
+(31/08/2026 INTEREST CHARGED 2,142.50 409,142.50) Tj
+0 -12 Td
+(31/08/2026 ACCOUNT KEEPING FEE 8.00 409,150.50) Tj
+0 -12 Td
+(Closing balance: $409,150.50) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000001098 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1195
+%%EOF

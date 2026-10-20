@@ -24,6 +24,12 @@ frontend:
         # itself (the actual 2MB file every real PDF/CAS/bank-statement
         # upload needs) is untouched; only its debug sourcemap is removed.
         - rm -f node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs.map
+        # 2026-10-18: same idea for pdf-parse (47 debug .map files, 10.7MB, no runtime purpose). Its `.next/node_modules/
+        # pdf-parse-<hash>` link (written by Turbopack for the serverExternalPackages entry) points at the WHOLE package, and the
+        # `find .next ...` delete below does not follow that link, so these maps are not removed there. Whether Amplify copies
+        # what the link points at into the artifact is not observable from here (docs/ops/AMPLIFY_ARTIFACT_SLIM_2026-10-18.md,
+        # hypothesis H); if it does, this frees 10.7MB, if it does not this changes nothing. No file the app loads is touched.
+        - find node_modules/pdf-parse -type f -name '*.map' -delete
         # Amplify's build image is Amazon Linux (no apt-get), so Playwright's
         # --with-deps flag (which only knows apt-based distros) fails outright.
         # Install Chromium's runtime shared libraries via yum instead, then

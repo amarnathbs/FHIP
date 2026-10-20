@@ -91,6 +91,9 @@ export const ANALYTICS_ITEMS: { label: string; href: string }[] = [{ label: 'Ana
 // placeholder sub-links are added alongside it.
 export const REFERENCE_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Reference Data Quality', href: '/admin/investment-intelligence/reference-data-quality' },
+  // NAV2 Stage 2: the aggregate-only Fund analytics health view. The SAME capability (a read-only health view of this
+  // surface), so it lives in this group; the snapshot suppresses every user-derived figure below 5 in the database.
+  { label: 'Fund Analytics Health', href: '/admin/investment-intelligence/nav2-monitoring' },
 ];
 
 // PC7/O.9: the Underlying Fund Holdings quality surface. A SEPARATE group from
@@ -102,12 +105,21 @@ export const LOOKTHROUGH_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Underlying Fund Holdings Quality', href: '/admin/investment-intelligence/lookthrough-data-quality' },
 ];
 
-// Market Index Data: the Nifty 50 / BSE Sensex upload surface (migration 0232).
-// A SEPARATE group from Reference Data because it is a separate capability that
-// WRITES data: an operator trusted to read ingest health is not thereby trusted
-// to upload index values.
+// Market Data group (PO request 19-10-2026): Market Index Data and Risk-free Rate Data share ONE menu group, titled
+// MARKET_DATA_GROUP_LABEL, with the two as sub-options. Navigation grouping only: each ITEM below is still gated by its own
+// separately named capability(ies) (Standard section 2/4) and every route, page, API and RPC enforces its own check.
+
+// Market Index Data: the Nifty 50 / BSE Sensex upload surface (migration 0232). A separate capability from Reference Data
+// that WRITES data: an operator trusted to read ingest health is not thereby trusted to upload index values.
 export const MARKET_INDEX_DATA_ITEMS: { label: string; href: string }[] = [
   { label: 'Market Index Data', href: '/admin/investment-intelligence/market-index-data' },
+];
+
+// NAV2 Stage 2 (migration 0260): the Risk-free Rate Data surface. Its own pair of capabilities from Market Index Data and
+// Reference Data: loading the rates (upload / review / correct) and switching a series on or off are different duties held
+// by different people (Standard s3), and neither is implied by any other grant.
+export const RISK_FREE_DATA_ITEMS: { label: string; href: string }[] = [
+  { label: 'Risk-free Rate Data', href: '/admin/investment-intelligence/risk-free-data' },
 ];
 
 // Admin Premium grant (migration 0231): the entitlement-management destination.
@@ -177,6 +189,13 @@ export interface AdminCapabilities {
   benchmarkCatalogueManage: boolean;
   benchmarkEntitlementApprove: boolean;
   /**
+   * NAV2 Stage 2 (migration 0260) - each independently named; neither implies the other, isAdmin, or any other capability.
+   * riskFreeDataUpload   -> admin_users.can_upload_risk_free_data       (upload / review / correct RBI rates)
+   * riskFreeSeriesSwitch -> admin_users.can_switch_risk_free_series     (switch a series on / off, change its terms status)
+   */
+  riskFreeDataUpload: boolean;
+  riskFreeSeriesSwitch: boolean;
+  /**
    * Admin Premium grant (migration 0231) — allocate / extend / revoke admin
    * Premium. Backed by admin_users.can_manage_premium_entitlements and the
    * is_premium_entitlement_admin() predicate. Deliberately NOT implied by
@@ -229,6 +248,8 @@ export const NO_ADMIN_CAPABILITIES: AdminCapabilities = Object.freeze({
   benchmarkDataCorrect: false,
   benchmarkCatalogueManage: false,
   benchmarkEntitlementApprove: false,
+  riskFreeDataUpload: false,
+  riskFreeSeriesSwitch: false,
   entitlementManagement: false,
   promoCodeManagement: false,
   planningBenchmarkUpload: false,
@@ -272,6 +293,8 @@ export function parseAdminCapabilities(body: unknown): AdminCapabilities {
     benchmarkDataCorrect: readBooleanField(source, 'benchmarkDataCorrect'),
     benchmarkCatalogueManage: readBooleanField(source, 'benchmarkCatalogueManage'),
     benchmarkEntitlementApprove: readBooleanField(source, 'benchmarkEntitlementApprove'),
+    riskFreeDataUpload: readBooleanField(source, 'riskFreeDataUpload'),
+    riskFreeSeriesSwitch: readBooleanField(source, 'riskFreeSeriesSwitch'),
     entitlementManagement: readBooleanField(source, 'entitlementManagement'),
     promoCodeManagement: readBooleanField(source, 'promoCodeManagement'),
     planningBenchmarkUpload: readBooleanField(source, 'planningBenchmarkUpload'),
@@ -313,6 +336,27 @@ function premiumAndPromoGroup(capabilities: AdminCapabilities): AdminNavGroup[] 
   return items.length > 0 ? [{ label: PREMIUM_AND_PROMO_GROUP_LABEL, items, matchMode: 'exact' }] : [];
 }
 
+/** The single Admin menu group that holds both Market Index Data and Risk-free Rate Data (PO request 19-10-2026). */
+export const MARKET_DATA_GROUP_LABEL = 'Market Data';
+
+function marketDataGroup(capabilities: AdminCapabilities): AdminNavGroup[] {
+  // Market Index Data item: shown when ANY of its separately named capabilities is held (BENCH-1 Phase 2). Unchanged from
+  // before the grouping. Each is evaluated independently; this is UX only - every route, page and RPC enforces its own.
+  const marketIndexVisible =
+    capabilities.marketIndexDataUpload ||
+    capabilities.benchmarkDataView ||
+    capabilities.benchmarkDataPublish ||
+    capabilities.benchmarkDataCorrect ||
+    capabilities.benchmarkCatalogueManage ||
+    capabilities.benchmarkEntitlementApprove;
+  // Risk-free Rate Data item (NAV2): shown when EITHER of its two separately named capabilities is held. Unchanged from
+  // before the grouping; the switch is not implied by the upload or the reverse.
+  const riskFreeVisible = capabilities.riskFreeDataUpload || capabilities.riskFreeSeriesSwitch;
+  const items = [...(marketIndexVisible ? MARKET_INDEX_DATA_ITEMS : []), ...(riskFreeVisible ? RISK_FREE_DATA_ITEMS : [])];
+  // No empty group (A1 information architecture): dropped when neither item is visible.
+  return items.length > 0 ? [{ label: MARKET_DATA_GROUP_LABEL, items, matchMode: 'exact' }] : [];
+}
+
 // Admin A0.2 Wave 3, Gate 3 (Product Owner ruling): the Analytics shell
 // (/admin/resources/analytics) completes no task -- it is a certified,
 // honestly-labelled placeholder (Analyst Wave 1), not a working destination.
@@ -332,11 +376,8 @@ export function buildAdminNavGroups(isAdmin: boolean, capabilities: AdminCapabil
     ...(capabilities.resourceDiscoveryAdmin ? [{ label: 'Discovery', items: DISCOVERY_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.referenceDataQuality ? [{ label: 'Reference Data', items: REFERENCE_DATA_ITEMS, matchMode: 'exact' as const }] : []),
     ...(capabilities.lookthroughDataQuality ? [{ label: 'Fund Look-Through', items: LOOKTHROUGH_DATA_ITEMS, matchMode: 'exact' as const }] : []),
-    // Market Index Data (BENCH-1 Phase 2): shown when ANY of its separately named capabilities is held. Each is
-    // evaluated independently; this is UX only - every route, page and RPC enforces its own capability.
-    ...(capabilities.marketIndexDataUpload || capabilities.benchmarkDataView || capabilities.benchmarkDataPublish || capabilities.benchmarkDataCorrect || capabilities.benchmarkCatalogueManage || capabilities.benchmarkEntitlementApprove
-      ? [{ label: 'Market Index Data', items: MARKET_INDEX_DATA_ITEMS, matchMode: 'exact' as const }]
-      : []),
+    // Market Data (PO request 19-10-2026): Market Index Data and Risk-free Rate Data share ONE group; each item keeps its own gate.
+    ...marketDataGroup(capabilities),
     // PO review 06-10-2026, F10: Premium Access and Promo Codes are interrelated, so they share ONE menu group
     // (PREMIUM_AND_PROMO_GROUP_LABEL). The capabilities stay two separately named things (Standard section 2/3): each ITEM
     // is gated by its own field, an operator holding only one sees only that item, and the group is dropped when neither is held.

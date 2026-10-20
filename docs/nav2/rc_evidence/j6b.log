@@ -1,0 +1,21 @@
+=== journey 6b (joint SHARE) 2026-10-14T19:19:37.999Z ===
+  PASS  three statements accepted: D joint 60/40, B joint 50/50, A sole  ([200,200,200])
+  PASS  the report is generated  (201 {"data":{"status":"ready","report":{"id":"f70e00f0-2049-48ff-ade6-96d13e45c799","versionNumber":1,"asOfDate":"2026-10-14","schemeCount":3,"createdAt":"2026-10-14T19:22:32.770793+00:00","periodChoice":"since_first_held"}}})
+  PASS  D (joint 60/40): current value is the user's 60% = 37132.03 (whole holding 61886.72, never the whole)  (report 37132.0291)
+  PASS  D (joint 60/40): amount put in, gain or loss are the user's share  (put in 36000 vs 36000; gain 1132.0290999999997 vs 1132.0320000000006)
+  PASS  D (joint 60/40): XIRR equals the whole-holding XIRR (flows strictly proportional) 2.6755%  (report 2.6755%)
+  PASS  D (joint 60/40): the report says "Your share: 60% of a joint holding."  ({"mode":"share","soleFolios":0,"jointFolios":[{"memberId":"255d6d43-0034-44c5-b293-fc45d1769c54","basisPoints":6000,"allocationGroup":"a860c460-23f9-4749-8ec5-f1850d9441a7"}],"notSetFolios":0,"selfMemberId":"255d6d43-0034-44c5-b293-fc45d1769c54","notYoursFolios":0,"jointBasisPoints":6000})
+  PASS  D (joint 60/40): the manifest pins the allocation (member, basis points, allocation group a860c460)  ({"mode":"share","soleFolios":0,"jointFolios":[{"memberId":"255d6d43-0034-44c5-b293-fc45d1769c54","basisPoints":6000,"allocationGroup":"a860c460-23f9-4749-8ec5-f1850d9441a7"}],"notSetFolios":0,"selfMem)
+  PASS  D (joint 60/40): the fund's own 3-year CAGR is unchanged (oracle 0.064047)
+  PASS  B (joint 50/50): current value is the user's 50% = 33031.18 (whole holding 66062.36, never the whole)  (report 33031.1822)
+  PASS  B (joint 50/50): amount put in, gain or loss are the user's share  (put in 35000 vs 35000; gain -1968.817799999997 vs -1968.8199999999997)
+  PASS  B (joint 50/50): XIRR equals the whole-holding XIRR (flows strictly proportional) -5.1459%  (report -5.1459%)
+  PASS  B (joint 50/50): the report says "Your share: 50% of a joint holding."  ({"mode":"share","soleFolios":0,"jointFolios":[{"memberId":"255d6d43-0034-44c5-b293-fc45d1769c54","basisPoints":5000,"allocationGroup":"b8235ba9-a612-45c3-b753-120f266507e9"}],"notSetFolios":0,"selfMemberId":"255d6d43-0034-44c5-b293-fc45d1769c54","notYoursFolios":0,"jointBasisPoints":5000})
+  PASS  B (joint 50/50): the manifest pins the allocation (member, basis points, allocation group b8235ba9)  ({"mode":"share","soleFolios":0,"jointFolios":[{"memberId":"255d6d43-0034-44c5-b293-fc45d1769c54","basisPoints":5000,"allocationGroup":"b8235ba9-a612-45c3-b753-120f266507e9"}],"notSetFolios":0,"selfMem)
+  PASS  B (joint 50/50): the fund's own 3-year CAGR is unchanged (oracle 0.097408)
+  PASS  A (sole, Self): counted in full and carries no ownership note  (31641.149173999995 vs 31641.15)
+  PASS  NEGATIVE CONTROL: had the report shown the whole joint holding it would not equal the share (the two differ by more than 1 rupee)
+  PASS  the PDF says "Your share: 60% of a joint holding." and "Your share: 50% of a joint holding."  (200)
+  PASS  the PDF cover names the share beside the fund and explains it
+
+=== journey 6b: 18 PASS, 0 FAIL ===

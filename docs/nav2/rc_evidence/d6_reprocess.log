@@ -1,0 +1,4 @@
+process again: 200 {"data":{"ok":false,"status":"parsed","parseRunId":"aa5b7ea7-1ebf-4cd9-aa48-5f2d9c652eeb","error":"This document is alre
+before {"ii_portfolio_truth_status":30,"ii_holding_snapshots":30,"ii_transactions":30,"ii_reconciliation_cases":0,"ii_accounts":30,"instruments":30}
+after  {"ii_portfolio_truth_status":30,"ii_holding_snapshots":30,"ii_transactions":30,"ii_reconciliation_cases":0,"ii_accounts":30,"instruments":30}
+IDEMPOTENT: identical counts

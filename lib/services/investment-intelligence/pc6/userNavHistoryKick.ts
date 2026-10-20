@@ -18,8 +18,11 @@ export type UserNavHistoryRunner = (userId: string) => Promise<unknown>;
 
 async function defaultRunner(userId: string): Promise<unknown> {
   // Loaded only when the kick actually runs, so the confirm route does not import the adapters.
-  const { runLiveUserNavHistoryBatch } = await import('./userNavHistoryLive');
-  return runLiveUserNavHistoryBatch(userId);
+  // NAV2 Stage 2: with the nav2_trigger_planner switch OFF (the default, fails closed) this is exactly the previous behaviour,
+  // runLiveUserNavHistoryBatch(userId); with it ON the caller's held schemes are fetched by the NAV2 required-window plan
+  // through the same user-scoped path (see ../nav2/nav2TriggerRunner.ts).
+  const { runUserNavHistoryForKick } = await import('../nav2/nav2TriggerRunner');
+  return runUserNavHistoryForKick(userId);
 }
 
 /** Returns true when the work was scheduled, false when it could not be. Never throws, never waits. */

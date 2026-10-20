@@ -1,0 +1,9 @@
+-- P2 (read only). Everything fund analytics builds on is already on this database. Expect ONE row and every value true.
+-- If any value is false, STOP and send me the row. A false value means a migration that fund analytics depends on is missing here.
+select
+  (select count(*) = 14 from information_schema.tables where table_schema = 'public' and table_name in ('admin_users', 'ii_reference_job_control', 'ii_reference_corrections', 'ii_prices_nav', 'ii_benchmarks', 'ii_benchmark_series', 'ii_nav_hydration_attempts', 'ii_nav_retention_holds', 'ii_nav_source_coverage_gaps', 'ii_report_nav_dependencies', 'ii_instrument_benchmarks', 'ii_instruments', 'ii_scheme_master', 'user_entitlements')) as foundation_tables_ok,
+  (select count(*) = 2 from information_schema.columns where table_schema = 'public' and table_name = 'user_entitlements' and column_name in ('effective_from', 'effective_to')) as premium_window_columns_ok,
+  (select count(*) = 3 from information_schema.columns where table_schema = 'public' and table_name = 'ii_reference_corrections' and column_name in ('id', 'target_table', 'target_row_id')) as corrections_columns_ok,
+  (select count(*) = 4 from information_schema.columns where table_schema = 'public' and table_name = 'ii_reference_job_control' and column_name in ('job_key', 'enabled', 'disabled_reason', 'updated_at')) as job_control_columns_ok,
+  (select count(*) = 4 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('is_pc6_reference_data_admin', 'pc6_user_held_instrument_ids', 'pc6_instrument_is_user_held', 'pc6_nav_row_is_candidate')) as foundation_functions_ok,
+  (select count(*) = 1 from information_schema.columns where table_schema = 'public' and table_name = 'ii_ownership_allocation' and column_name = 'allocation_group_id') as ownership_group_column_ok;

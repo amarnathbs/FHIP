@@ -175,7 +175,8 @@ describe('every AI-fallback confirm path calls the purge helper after the durabl
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const src = readFileSync(join(process.cwd(), 'lib', 'financial-data-hub', 'services', file), 'utf8').replace(/\r\n/g, '\n');
-    expect(src).toMatch(/import \{ purgeRawDocumentAfterAiConfirm \} from '\.\/purge';/);
+    // (other named imports from the same module are allowed: the PDF routes import their own purge helpers beside it)
+    expect(src).toMatch(/import \{[^}]*\bpurgeRawDocumentAfterAiConfirm\b[^}]*\} from '\.\/purge';/);
     // the helper is called, and only AFTER the writer has returned (the writer call precedes the helper call)
     const writerAt = src.lastIndexOf(writer + '(');
     const callAt = src.indexOf('await purgeRawDocumentAfterAiConfirm(userId, documentId);');

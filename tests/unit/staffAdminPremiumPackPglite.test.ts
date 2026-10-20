@@ -100,9 +100,10 @@ describe('the files', () => {
     const files = fs.readdirSync(MIG_DIR).filter((f) => /^\d{4}_/.test(f));
     expect(files.filter((f) => f.startsWith('0283_'))).toEqual([MIGRATION.file]);
     // Later numbers may now exist on main (0285 income tax amount); what matters is that 0283 is the only file with its number and sorts above 0280.
-    expect(files.filter((f) => Number(f.slice(0, 4)) > 280 && Number(f.slice(0, 4)) < 283)).toEqual([]);
+    // 0281 and 0282 are the NAV2 migrations (Fund analytics idempotency key and ambiguity summary): present once NAV2 is merged, and nothing else may sit in that gap.
+    expect(files.filter((f) => Number(f.slice(0, 4)) > 280 && Number(f.slice(0, 4)) < 283 && !/^028[12]_nav2_/.test(f))).toEqual([]);
     expect(files.indexOf(MIGRATION.file)).toBeGreaterThan(files.indexOf('0280_bench1_entitlement_edit_revision.sql'));
-    expect(files.some((f) => f.startsWith('0281_') || f.startsWith('0282_'))).toBe(false);
+    expect(files.some((f) => (f.startsWith('0281_') || f.startsWith('0282_')) && !f.includes('_nav2_'))).toBe(false);
   });
 
   it('the earlier source rule is only WIDENED: every value the predecessor (0237) allowed is still in the new rule', () => {

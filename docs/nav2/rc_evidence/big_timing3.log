@@ -1,0 +1,15 @@
+=== big user (30 funds: 4 with history + 26 without)  mode timing  2026-10-14T16:58:40.489Z ===
+    1 funds | cold: 201/ready/15233ms (worst call 15233 ms) | warm: 201/ready/12167ms
+  PASS  TIMING 1 funds: the cold report is issued (201) in the end and no single request ended in the platform's page (every call answered in under the 28 s ceiling)  ({"status":201,"calls":["201/ready/15233ms"],"totalMs":15233,"worstCallMs":15233})
+  PASS  TIMING 1 funds: the warm report is issued in ONE call  ({"status":201,"calls":["201/ready/12167ms"],"totalMs":12167,"worstCallMs":12167})
+    4 funds | cold: 201/ready/15147ms (worst call 15147 ms) | warm: 201/ready/15613ms
+  PASS  TIMING 4 funds: the cold report is issued (201) in the end and no single request ended in the platform's page (every call answered in under the 28 s ceiling)  ({"status":201,"calls":["201/ready/15147ms"],"totalMs":15147,"worstCallMs":15147})
+  PASS  TIMING 4 funds: the warm report is issued in ONE call  ({"status":201,"calls":["201/ready/15613ms"],"totalMs":15613,"worstCallMs":15613})
+   10 funds | cold: 202/in_steps/14660ms 201/ready/22091ms (worst call 22091 ms) | warm: 201/ready/17023ms
+  PASS  TIMING 10 funds: the cold report is issued (201) in the end and no single request ended in the platform's page (every call answered in under the 28 s ceiling)  ({"status":201,"calls":["202/in_steps/14660ms","201/ready/22091ms"],"totalMs":39760,"worstCallMs":22091})
+  PASS  TIMING 10 funds: the warm report is issued in ONE call  ({"status":201,"calls":["201/ready/17023ms"],"totalMs":17023,"worstCallMs":17023})
+   20 funds | cold: 202/in_steps/17919ms 202/in_steps/17785ms 202/in_steps/17440ms 503/timed_out/22224ms 503/timed_out/22255ms 503/timed_out/22483ms 503/timed_out/22231ms 503/timed_out/22332ms 503/timed_out/22292ms 503/timed_out/22737ms 503/timed_out/22335ms 503/timed_out/22392ms 503/timed_out/22462ms 503/timed_out/22205ms 503/timed_out/23901ms 503/timed_out/22215ms 503/timed_out/22218ms 503/timed_out/22311ms 503/timed_out/23579ms 503/timed_out/22521ms (worst call 23901 ms) | warm: 503/timed_out/22227ms 503/timed_out/22317ms 503/timed_out/22201ms 503/timed_out/22328ms 201/ready/21846ms
+  FAIL  TIMING 20 funds: the cold report is issued (201) in the end and no single request ended in the platform's page (every call answered in under the 28 s ceiling)  ({"status":503,"calls":["202/in_steps/17919ms","202/in_steps/17785ms","202/in_steps/17440ms","503/timed_out/22224ms","503/timed_out/22255ms","503/timed_out/22483ms","503/timed_out/22231ms","503/timed_out/22332ms","503/timed_out/22292ms","503/timed_out/22737ms","503/timed_out/22335ms","503/timed_out/22392ms","503/timed_out/22462ms","503/timed_out/22205ms","503/timed_out/23901ms","503/timed_out/22215ms","503/timed_out/22218ms","503/timed_out/22311ms","503/timed_out/23579ms","503/timed_out/22521ms"],"totalMs":496011,"worstCallMs":23901})
+  FAIL  TIMING 20 funds: the warm report is issued in ONE call  ({"status":201,"calls":["503/timed_out/22227ms","503/timed_out/22317ms","503/timed_out/22201ms","503/timed_out/22328ms","201/ready/21846ms"],"totalMs":118942,"worstCallMs":22328})
+
+=== big user: 6 PASS, 2 FAIL ===

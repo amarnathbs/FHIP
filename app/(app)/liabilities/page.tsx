@@ -4,6 +4,7 @@ import { PageBackLink } from '@/components/navigation/PageBackLink';
 
 import { useRef, useState } from 'react';
 import { FinancialDataGrid } from '@/components/grid/FinancialDataGrid';
+import { EssentialHomeLoanNote } from '@/components/essential/EssentialHomeLoanNote';
 import { liabilityGridConfig } from '@/lib/grid/configs';
 import { LiabilityImportPanel } from '@/components/liabilities/LiabilityImportPanel';
 import { LiabilityStatementHistory } from '@/components/liabilities/LiabilityStatementHistory';
@@ -80,6 +81,9 @@ function LiabilitiesPageContent() {
       <hr className="border-gray-200" />
 
       <FinancialDataGrid key={gridKey} config={liabilityGridConfig} moduleKey="LIABILITIES" />
+
+      {/* PO rule 17-10-2026: the owner-occupied home loan is an essential housing cost when no rent is recorded. */}
+      <EssentialHomeLoanNote variant="liabilities" />
 
       {/* WP-11 (G7): what each imported statement line became, after Apply. */}
       <LiabilityStatementHistory refreshKey={gridKey} />

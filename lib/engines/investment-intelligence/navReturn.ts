@@ -71,6 +71,21 @@ export function pointToPointReturn(
 }
 
 /**
+ * NAV2 (2026-10-03): the same growth-ratio annualisation with a CALLER-CHOSEN
+ * days-per-year, so the NAV2 scheme-analytics engine can use its own declared
+ * convention (365.2425, the mean Gregorian year) without a second copy of the
+ * formula and WITHOUT changing the certified actual/365 behaviour above.
+ *
+ *   annualised = ratio ^ (daysPerYear / actualDays) - 1
+ *
+ * Pure. The caller guarantees ratio > 0 and actualDays > 0 (NAV2 validates
+ * both before calling and returns a typed unavailable state otherwise).
+ */
+export function annualiseGrowth(ratio: number, actualDays: number, daysPerYear: number = 365): number {
+  return Math.pow(ratio, daysPerYear / actualDays) - 1;
+}
+
+/**
  * CAGR = (Ending/Beginning)^(1/years) - 1 for a valid point-to-point period
  * ONLY. Never used for irregular external cash flows (that's XIRR's job —
  * see xirr.ts) and never substituted for a failed XIRR (spec section 18).

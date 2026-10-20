@@ -1,7 +1,7 @@
 'use client';
 
 import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
-import { formatDateShort } from '@/lib/engines/date';
+import { formatDateInText, formatDateShort } from '@/lib/engines/date';
 /**
  * FDH-11 — Australia Investment Statement Intelligence: the Investments-tab
  * statement import journey (spec sections 2, 15-25, 43-46, 63-65, 76, 108).
@@ -39,6 +39,8 @@ import {
 import { needsSecurityMatch } from '@/lib/investment-import-bridge/auLineRules';
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { AuInvestmentStatementFileField, AuInvestmentUploadIntro } from '@/components/financial-data-hub/PdfAwareStatementCopy';
+import { parsePdfRouteVisible } from '@/lib/financial-data-hub/pdf-statements/uiVisibility';
 import { DataTable } from '@/components/ui/DataTable';
 
 // 'ai_fallback_review' (2026-09-23, AIE unified document fallback): the native
@@ -294,6 +296,9 @@ export function AuInvestmentStatementImportPanel({
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Whether the server's AU-investment PDF route is switched on: presentation only (the words and the file chooser). Fail closed --
+  // CSV-only wording until the upload-status read says `true`; the upload route refuses a PDF while its switch is off.
+  const [pdfRouteEnabled, setPdfRouteEnabled] = useState(false);
   // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
   // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
   const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
@@ -321,10 +326,16 @@ export function AuInvestmentStatementImportPanel({
     fetch('/api/financial-data-hub/upload-status')
       .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
       .then((json) => {
-        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+        if (!cancelled) {
+          setUploadEnabled(Boolean(json.data?.enabled));
+          setPdfRouteEnabled(parsePdfRouteVisible(json, 'au_investment'));
+        }
       })
       .catch(() => {
-        if (!cancelled) setUploadEnabled(false);
+        if (!cancelled) {
+          setUploadEnabled(false);
+          setPdfRouteEnabled(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -538,7 +549,8 @@ export function AuInvestmentStatementImportPanel({
 
       const res = await fetch(`/api/financial-data-hub/investment-statement/upload?${params.toString()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/csv' },
+        // The file's own kind: a PDF is read for its layout, a CSV by its columns (the server decides from the bytes, not this header).
+        headers: { 'Content-Type': file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? 'application/pdf' : 'text/csv' },
         body: file,
       });
       const { ok, json } = await readJson(res);
@@ -870,15 +882,7 @@ export function AuInvestmentStatementImportPanel({
 
       {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'form' && (
         <div className="mt-4 space-y-4">
-          <p className="text-sm text-muted">
-            Upload a transaction-history or portfolio-holdings CSV and FHIP will extract the details for you to review before
-            anything is added to your Investments.
-          </p>
-          <p className="text-xs text-muted">
-            FHIP currently reads two generic Australian CSV layouts (a transaction-history export and a portfolio/holdings
-            export with standard column headers). Broker-specific exports or PDF statements outside these layouts are not
-            yet supported — you can still add the investment manually below instead.
-          </p>
+          <AuInvestmentUploadIntro pdfRouteEnabled={pdfRouteEnabled} />
           <div className="grid grid-cols-2 gap-4">
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Statement contains</span>
@@ -899,10 +903,7 @@ export function AuInvestmentStatementImportPanel({
           <div className="max-w-md">
             <OwnerSelector flow="au_investment" idPrefix="au-investment-owner" value={uploadOwner} onChange={setUploadOwner} disabled={busy} />
           </div>
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted">Statement file (CSV)</span>
-            <input type="file" accept="text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
+          <AuInvestmentStatementFileField pdfRouteEnabled={pdfRouteEnabled} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <button type="button" onClick={handleUpload} disabled={!file || !uploadOwner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed'} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
             Upload statement
           </button>
@@ -954,7 +955,7 @@ export function AuInvestmentStatementImportPanel({
             </div>
             <div>
               <dt className="text-muted">Statement date</dt>
-              <dd>{aiDraft.statementDate ?? 'Not shown'}</dd>
+              <dd>{aiDraft.statementDate ? formatDateInText(aiDraft.statementDate, 'AUD') : 'Not shown'}</dd>
             </div>
             <div>
               <dt className="text-muted">Period</dt>
@@ -1031,7 +1032,7 @@ export function AuInvestmentStatementImportPanel({
                 <tbody>
                   {aiDraft.activities.map((a, i) => (
                     <tr key={`${a.transactionType}-${i}`} className="border-t border-gray-100">
-                      <td className="px-3 py-2 whitespace-nowrap">{a.tradeDate ?? '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{a.tradeDate ? formatDateInText(a.tradeDate, 'AUD') : '—'}</td>
                       <td className="px-3 py-2">{a.transactionType}</td>
                       <td className="px-3 py-2">{a.securityNameRaw ?? a.tickerRaw ?? '—'}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{a.quantity ?? '—'}</td>
@@ -1092,10 +1093,10 @@ export function AuInvestmentStatementImportPanel({
             <dt className="text-muted">Account (masked)</dt>
             <dd>{statement.masked_account_identifier ?? 'Not provided'}</dd>
             <dt className="text-muted">Statement date</dt>
-            <dd>{statement.statement_date ?? 'Not shown'}</dd>
+            <dd>{statement.statement_date ? formatDateInText(statement.statement_date, 'AUD') : 'Not shown'}</dd>
             <dt className="text-muted">Period</dt>
             <dd>
-              {statement.statement_start_date || statement.statement_end_date ? `${statement.statement_start_date ?? '?'} to ${statement.statement_end_date ?? '?'}` : 'Not shown'}
+              {statement.statement_start_date || statement.statement_end_date ? `${statement.statement_start_date ? formatDateInText(statement.statement_start_date, "AUD") : "?"} to ${statement.statement_end_date ? formatDateInText(statement.statement_end_date, "AUD") : "?"}` : 'Not shown'}
             </dd>
             {statement.opening_portfolio_value !== null && (
               <>
@@ -1242,7 +1243,7 @@ export function AuInvestmentStatementImportPanel({
                   <li key={a.id} className="border-b border-gray-100 py-1">
                     <div className="flex justify-between gap-2">
                       <span>
-                        {a.trade_date ?? '—'} — {a.activity_type} {a.security_name_raw ?? a.ticker_raw ?? ''} {money(a.amount, statement.base_currency)}
+                        {a.trade_date ? formatDateInText(a.trade_date, 'AUD') : '—'} — {a.activity_type} {a.security_name_raw ?? a.ticker_raw ?? ''} {money(a.amount, statement.base_currency)}
                         {a.settlement_date ? ` · settles ${a.settlement_date}` : ''}
                         {a.brokerage_raw ? ` · brokerage ${money(a.brokerage_raw, statement.base_currency)}` : ''}
                         {a.franking_credit_raw ? ` · franking ${money(a.franking_credit_raw, statement.base_currency)}` : ''}
@@ -1335,7 +1336,7 @@ export function AuInvestmentStatementImportPanel({
             ))}
             {applyResult.activities.map((r) => (
               <li key={r.id}>
-                {r.ok ? 'Added' : 'Not added'}: {r.trade_date ?? ''} {r.activity_type} {money(r.amount ?? null)}
+                {r.ok ? 'Added' : 'Not added'}: {formatDateInText(r.trade_date ?? '', 'AUD')} {r.activity_type} {money(r.amount ?? null)}
                 {!r.ok && r.reason ? <span className="block text-xs text-muted">{r.reason}</span> : null}
               </li>
             ))}

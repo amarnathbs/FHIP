@@ -214,16 +214,18 @@ export interface OwnerClassContext {
   /** class key -> account ids, for every class that has at least one account. */
   accountIdsByClass: Map<string, string[]>;
   classes: OwnerClassInfo[];
+  /** account id -> the id of its ACTIVE account-grain allocation group (the allocation version), when it has one. Provenance only. */
+  allocationGroupByAccount?: Map<string, string | null>;
 }
 
 /** The owner classes of every account this user has. Every query is filtered by user_id. */
 export async function loadOwnerClassContext(supabase: SupabaseClient, userId: string): Promise<OwnerClassContext> {
   const accountRows = await fetchAllRows<{ id: string; owner_member_id: string | null }>(() => supabase.from('ii_accounts').select('id, owner_member_id').eq('user_id', userId).order('id', { ascending: true }));
   // `ii_ownership_allocation` may not exist in every environment: then there are simply no entity / joint owners.
-  let allocRows: (ActiveAllocationRow & { ii_account_id: string })[] = [];
+  let allocRows: (ActiveAllocationRow & { ii_account_id: string; allocation_group_id?: string | null })[] = [];
   try {
-    allocRows = await fetchAllRows<ActiveAllocationRow & { ii_account_id: string }>(() =>
-      supabase.from('ii_ownership_allocation').select('ii_account_id, owner_member_id, owner_business_entity_id, allocation_basis_points, ii_instrument_id, status').eq('user_id', userId).eq('status', 'active').order('id', { ascending: true })
+    allocRows = await fetchAllRows<ActiveAllocationRow & { ii_account_id: string; allocation_group_id?: string | null }>(() =>
+      supabase.from('ii_ownership_allocation').select('ii_account_id, owner_member_id, owner_business_entity_id, allocation_basis_points, ii_instrument_id, status, allocation_group_id').eq('user_id', userId).eq('status', 'active').order('id', { ascending: true })
     );
   } catch {
     allocRows = [];
@@ -238,6 +240,8 @@ export async function loadOwnerClassContext(supabase: SupabaseClient, userId: st
   const allocByAccount = new Map<string, ActiveAllocationRow[]>();
   for (const r of allocRows) allocByAccount.set(r.ii_account_id, [...(allocByAccount.get(r.ii_account_id) ?? []), r]);
 
+  const allocationGroupByAccount = new Map<string, string | null>();
+  for (const r of allocRows) if ((r.ii_instrument_id ?? null) === null && !allocationGroupByAccount.has(r.ii_account_id)) allocationGroupByAccount.set(r.ii_account_id, r.allocation_group_id ?? null);
   const accounts: BreakupAccount[] = accountRows.map((a) => ({ id: a.id, ownership: deriveAccountOwnership(a.owner_member_id, allocByAccount.get(a.id) ?? []) }));
   const accountIdsByClass = new Map<string, string[]>();
   const classInfo = new Map<string, OwnerClassInfo>();
@@ -247,7 +251,7 @@ export async function loadOwnerClassContext(supabase: SupabaseClient, userId: st
     accountIdsByClass.set(info.key, [...(accountIdsByClass.get(info.key) ?? []), a.id]);
   }
   const classes = [...classInfo.values()].sort((x, y) => KIND_ORDER[x.kind] - KIND_ORDER[y.kind] || x.label.localeCompare(y.label));
-  return { accounts, labels, accountIdsByClass, classes };
+  return { accounts, labels, accountIdsByClass, classes, allocationGroupByAccount };
 }
 
 /** Accounts that are NOT owned (even partly) by a trust / HUF / company: the scope of the personal report chapters. Unallocated accounts stay in (never hidden). */

@@ -1,0 +1,19 @@
+=== journey 7 2026-10-14T19:22:53.288Z ===
+   6 concurrent generations finished in 103 s: statuses 201,201,201,201,201,201
+  PASS  every concurrent request ended in a typed answer (201 ready) or an honest typed refusal; none was a bare server error  (201,201,201,201,201,201)
+  FAIL  6 reports were stored for 6 successful answers: nothing lost, nothing double-counted  (15 new rows)
+  PASS  version numbers are unique and contiguous (no gap, no duplicate)  (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74)
+  PASS  each version supersedes exactly the one before it (an unbroken chain)
+  PASS  ONE LOGICAL RESULT: all the concurrent reports have identical content, and identical manifests except for the calculation timestamp (which each run records)  (1 distinct report contents; 1 distinct manifests ignoring the timestamp; 15 distinct checksums (the checksum covers the timestamp))
+  PASS  the shared cache holds exactly one entry per key (no duplicate under concurrency)
+  PASS  NEGATIVE CONTROL: a deliberately duplicated version number is rejected by the database (so the checks above can fail)
+  PASS  one correction raised exactly one event  (1)
+  PASS  FIVE SIMULTANEOUS worker runs: every one answered "completed" (no 5xx)  (200,200,200,200,200)
+  PASS  the event is processed exactly once in the database (processed_at set, entries_invalidated fixed)  ({"processed_at":"2026-10-14T19:25:01.133+00:00","entries_invalidated":0})
+  PASS  the invalidations the runs reported add up to what the database says (no run counted work another run did)  (reported 0, recorded 0; events processed per run 1,0,0,0,0)
+  PASS  RETRY: a later run finds nothing to do and changes nothing  ({"status":"completed","eventsProcessed":0,"entriesInvalidated":0,"pinnedReportsAffected":0,"staleDefinitionInvalidated":0,"failed":0})
+  PASS  only E entries were touched; A and D entries of the current definition are still valid
+  PASS  REVERT: the NAV row is exactly as before
+  PASS  correction worker switch OFF again
+
+=== journey 7: 14 PASS, 1 FAIL ===

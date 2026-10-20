@@ -1,0 +1,44 @@
+=== journey 5 2026-10-14T19:13:25.358Z port 3981 ===
+  PASS  two real reports exist (holder's and other's)  (f6a7acdd / 41cf0e65)
+  PASS  CROSS-TENANT report JSON: another user gets 404, indistinguishable from an id that does not exist  (404 {"error":"The report was not found."} | 404)
+  PASS  CROSS-TENANT PDF: 404 and NO render token was created for it  (404; tokens 0 -> 0)
+  PASS  CROSS-TENANT list: only the caller's own reports
+  PASS  NEGATIVE CONTROL: the owner CAN read that same report (so the 404 above is the access rule, not a broken id)
+  PASS  FREE USER list: explicit 403 with the Premium sentence (never an empty 200 or a 422)  (403 {"error":"The Fund analytics report is part of the Premium plan."})
+  PASS  FREE USER report JSON: explicit 403 with the Premium sentence (never an empty 200 or a 422)  (403 {"error":"The Fund analytics report is part of the Premium plan."})
+  PASS  FREE USER PDF: explicit 403 with the Premium sentence (never an empty 200 or a 422)  (403 {"error":"Exporting the Fund analytics report requires a premium plan. You can s)
+  PASS  FREE USER generate (valid body): explicit 403 with the Premium sentence (never an empty 200 or a 422)  (403 {"error":"The Fund analytics report is part of the Premium plan."})
+  PASS  FREE USER generate (INVALID body: authorisation comes before validation): explicit 403 with the Premium sentence (never an empty 200 or a 422)  (403 {"error":"The Fund analytics report is part of the Premium plan."})
+  PASS  NO SESSION: the report API answers 401  (401)
+  PASS  FREE USER PDF created no render token
+  PASS  PRINT ROUTE with no token and no session redirects to login (not the report)  (307)
+  PASS  PRINT ROUTE with a made-up token is a 404
+  PASS  PRINT ROUTE with a valid token opens (200)
+  PASS  PRINT ROUTE with an EXPIRED token is a 404
+  PASS  PRINT ROUTE with a token for user X naming user Y's report is a 404 (the report is loaded with an explicit user filter)
+  PASS  PRINT ROUTE ?id= of another user's report, with a session: 404  (404)
+  PASS  DIRECT: the shared analytics cache is closed to a signed-in user (permission denied)  (403 {"code":"42501","details":null,"hint":"Grant the required privileges to the curr)
+  PASS  DIRECT: nav2_report_render_tokens is closed to a signed-in user  (403)
+  PASS  DIRECT: nav2_correction_events is closed to a signed-in user  (403)
+  PASS  DIRECT: the report NAV pin table shows a non-admin user nothing (RLS: admin only)  (200 rows 0)
+  PASS  DIRECT: another user's stored reports are invisible (RLS)  (200 rows 0)
+  PASS  DIRECT: a user cannot edit their own issued report (no update grant)  (403 {"code":"42501","details":null,"hint":"Grant the required privileges to the curr)
+  PASS  DIRECT: nor delete it  (403)
+  PASS  DIRECT: another user's held-scheme transactions are invisible (RLS)  (rows 0)
+  PASS  HELD SCHEMES via the app API: the other user's holdings list contains none of the holder-only funds (B, C)  (200; own instruments 3)
+  PASS  NON-ADMIN (free): monitoring, risk-free status, upload and series switch are all refused (403), and the monitoring RPC called directly is refused (42501)  (403/403/403/403; rpc 403 42501)
+  PASS  NON-ADMIN (holder): monitoring, risk-free status, upload and series switch are all refused (403), and the monitoring RPC called directly is refused (42501)  (403/403/403/403; rpc 403 42501)
+  PASS  NON-ADMIN (other): monitoring, risk-free status, upload and series switch are all refused (403), and the monitoring RPC called directly is refused (42501)  (403/403/403/403; rpc 403 42501)
+  PASS  MONITORING for the capability holder: 200 with aggregate cells only  (200 state ok)
+  PASS  the snapshot carries no user id, e-mail, folio or holding (aggregate-only)  (1915 chars)
+  PASS  user-derived figures below 5 are suppressed with the standard label, never shown as small numbers or zero  (cells with state suppressed or ok)
+  PASS  CAPABILITIES ARE SEPARATE: the monitoring capability does not open risk-free upload/status or the series switch (403)  (403/403)
+  PASS  the temporary admin capability was removed again
+  PASS  CRON: the correction worker and the weekly RBI refresh refuse a call with no secret and with a wrong secret (401)
+  PASS  WORKERS REMAIN OFF: with the correct secret both answer "switched off" and do nothing  ({"data":{"status":"skipped_kill_switch","detail":"The NAV2 correction worker is switched off; nothing was read | {"data":{"version":"nav2-risk-free-refresh-job-v1+rbi-html-readers-v1","mode":"skipped_kill_switch","asOfDate")
+  PASS  switch states read back from the database  ({"nav2_trigger_planner":false,"nav2_correction_worker":false,"nav2_risk_free_weekly_refresh":false,"pc6_selective_historical_hydration":false})
+  PASS  PREMIUM LOST: list, report JSON, PDF and the print view all refuse (403/403/403/404)  (403/403/403/404)
+  PASS  PREMIUM LOST, DIRECT DATABASE READ: a lapsed user cannot read the stored report straight from the table either  (closed)
+  PASS  Premium restored for the other user
+
+=== journey 5 (part 1): 41 PASS, 0 FAIL ===

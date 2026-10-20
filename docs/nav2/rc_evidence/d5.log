@@ -1,0 +1,19 @@
+=== D5 extra immutability  2026-10-14T19:29:09.165Z ===
+  PASS  Report R0 is issued  (201 {"data":{"status":"ready","report":{"id":"013ff948-bd0d-4baa-8390-c323f5715015","versionNumber":76,"asOfDate":"2026-10-14","schemeCount":3,"createdAt":"2026-10-14T19:29:26.666816+00:00","periodChoice":"since_first_held"}}})
+  PASS  a NEW report picks up the new daily NAV (its series now ends on the new date)  (2026-10-13 -> 2026-10-14)
+  PASS  R0 is byte-identical after: a new daily NAV
+  PASS  the series-switch capability was granted to the fixture administrator for this run
+  PASS  the series is switched OFF through the admin route  (200 {"data":{"enabled":false,"series_id":"RBI_91D_TBILL_CUTOFF_YIELD","terms_review_status":"po_accepted_2026-10-03"}})
+  PASS  while OFF no fund shows a Sharpe number: every one is a typed state, never a value  (["insufficient_history","risk_free_missing","risk_free_missing"])
+   Sharpe states while OFF: ["insufficient_history","risk_free_missing","risk_free_missing"]
+  PASS  R0 is byte-identical after: the series switched OFF
+  PASS  the series is switched back ON  (200 {"data":{"enabled":true,"series_id":"RBI_91D_TBILL_CUTOFF_YIELD","terms_review_status":"po_accepted_2026-10-03"}})
+  PASS  after ON again no fund is "risk_free_missing" any more (a fund is either computed or short of history)  (["insufficient_history","available","available"])
+  PASS  R0 is byte-identical after: the series switched back ON
+  PASS  D2: an administrator with ONLY the series-switch permission cannot upload (403)  (403 {"error":"Risk-free data upload access required"})
+  PASS  D2: an administrator with ONLY the upload permission cannot switch a series (403)  (403 {"error":"Risk-free series switch access required"})
+  PASS  D2 (control): the same administrator CAN reach the upload preview (not 403: the refusal above is the permission, not a broken route)  (200 {"data":{"fileSha256":"df63370920599d0b72d62d9932e8a5c4b0e45e6aaa2d6c39d1e224d4393e1d04","fileBytes")
+  PASS  R0 still reads through the API with its original checksum
+  PASS  the T-bill series is ENABLED at the end
+
+=== D5 extra: 15 PASS, 0 FAIL ===

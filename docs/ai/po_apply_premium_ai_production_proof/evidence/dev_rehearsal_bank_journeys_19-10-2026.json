@@ -1,0 +1,82 @@
+{
+  "run": "proofdev-1792395961031",
+  "app": "http://localhost:3991",
+  "startedAt": "2026-10-19T07:46:01.031Z",
+  "ledgerStart": {
+    "id": "global",
+    "allowance_usd": 10,
+    "reserved_usd": 0,
+    "settled_usd": 0.025506,
+    "total_attempts": 68,
+    "total_input_tokens": 92678,
+    "total_output_tokens": 19338,
+    "updated_at": "2026-10-19T07:40:18.561255+00:00",
+    "user_daily_cap_usd": 1
+  },
+  "users": {
+    "P1": "83a8e784",
+    "P2": "78de1f7e",
+    "X1-former-pilot": "3660830a",
+    "F1": "c5da532b"
+  },
+  "j1": {
+    "documentId": "8e0995c1-43c9-4713-a14e-b60c0b5718cd",
+    "scanWaitMs": 0,
+    "latencyMs": 26551,
+    "attempt": {
+      "model": "gpt-4o-mini",
+      "settled": 0.000444,
+      "reserved": 0.009173,
+      "tokens": [
+        1377,
+        396
+      ],
+      "requestIds": 1
+    },
+    "tx": 6,
+    "debits": 1795.7499999999998,
+    "credits": 2950,
+    "recon": [
+      {
+        "status": "reconciled",
+        "variance": 0,
+        "opening_balance": 3215.4,
+        "reported_closing_balance": 4369.65
+      }
+    ],
+    "cert": "certified",
+    "downstreamActivityHttp": 200,
+    "downstreamActivityTxCount": 6
+  },
+  "j1c": {
+    "documentId": "90aa5f15-4545-406d-ac0c-d2e100c73d07",
+    "recon": [
+      {
+        "status": "failed",
+        "variance": -43.95
+      }
+    ],
+    "cert": "review_required"
+  },
+  "ledgerEnd": {
+    "id": "global",
+    "allowance_usd": 10,
+    "reserved_usd": 0,
+    "settled_usd": 0.026767,
+    "total_attempts": 71,
+    "total_input_tokens": 96757,
+    "total_output_tokens": 20419,
+    "updated_at": "2026-10-19T07:49:51.969146+00:00",
+    "user_daily_cap_usd": 1
+  },
+  "residue": {
+    "fdh_statement_uploads": 0,
+    "fdh_transactions": 0,
+    "fdh_ai_fallback_drafts": 0,
+    "fdh_document_audit_events": 0,
+    "fdh_reconciliation_results": 0,
+    "aie_ai_cost_attempt_user_set": 0,
+    "auth_users": 0
+  },
+  "finishedAt": "2026-10-19T07:50:14.906Z"
+}

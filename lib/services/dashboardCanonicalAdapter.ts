@@ -32,6 +32,7 @@ import { coveredMonthlyAverage, type NormalisedLedger } from '@/lib/read-models/
 import { roundMoney, type ReadModelUnavailable } from '@/lib/read-models/core/types';
 import { bankBalancesNotInNetWorth } from '@/lib/read-models/bankBalanceDisclosure';
 import { assessNetToGross, isWageLikeIncome } from '@/lib/engines/incomePlausibility';
+import { RENT_EXPENSE_ITEM_KEY } from '@/lib/engines/essentialHousing';
 
 const unavailable = (u: ReadModelUnavailable): CanonicalUnavailable => ({ status: 'unavailable', reason: u.reason, source: u.source });
 
@@ -100,6 +101,25 @@ export function incomeFigures(income: IncomeReadModelData, ledger: NormalisedLed
   };
 }
 
+/** The taxonomy mapping key an approved imported rent payment carries (Housing > Rent), see expenseCategoryMapping.ts. */
+const RENT_MAPPING_KEY = 'housing.rent';
+
+/**
+ * Monthly rent the household recorded (PO rule 17-10-2026: decides whether the owner-occupied home-loan repayment is
+ * essential). A counted PLANNED 'rent' row (household-owned, not excluded, convertible) PLUS approved imported spending
+ * categorised Housing > Rent, averaged over the covered months (or, with no covered month yet, the months in the
+ * window that have any rent line, so a partial-month-only import still counts as "rent recorded").
+ */
+export function rentMonthlyRecorded(expenses: Pick<ExpensesReadModelData, 'planned' | 'actual' | 'coverage'>): number {
+  const planned = expenses.planned.lines
+    .filter((l) => l.excludedReason === null && l.masterItemKey === RENT_EXPENSE_ITEM_KEY && l.monthlyReporting !== null)
+    .reduce((s, l) => s + (l.monthlyReporting ?? 0), 0);
+  const rentLines = expenses.actual.lines.filter((l) => l.mappingKey === RENT_MAPPING_KEY && l.household && l.amountReporting !== null);
+  const total = rentLines.reduce((s, l) => s + (l.amountReporting ?? 0), 0);
+  const months = Math.max(1, new Set(rentLines.map((l) => l.month)).size);
+  return roundMoney(planned + (rentLines.length > 0 ? total / months : 0));
+}
+
 export function expenseFigures(expenses: ExpensesReadModelData): CanonicalExpenseFigures {
   const lines: CanonicalExpenseLine[] = [];
   let coreSurvival = 0;
@@ -126,6 +146,7 @@ export function expenseFigures(expenses: ExpensesReadModelData): CanonicalExpens
   const actualPresent = expenses.actual.byGroup.some((g) => g.coveredLineCount > 0);
   return {
     status: 'ok',
+    rentMonthly: rentMonthlyRecorded(expenses),
     monthly: expenses.combined.monthly,
     essentialMonthly: expenses.combined.essentialMonthly,
     lifestyleMonthly: expenses.combined.lifestyleMonthly,
@@ -178,6 +199,10 @@ export function toCanonicalCashFlow(snapshot: CanonicalFinancialSnapshotResult):
         householdMonthly: householdDebtServiceUnderD08(s.liabilities, s.expenses.status === 'ok' ? consumptionCounted(s.expenses) : true),
         costOfDebtMonthly: s.liabilities.householdCostOfDebtMonthly,
         principalMonthly: s.liabilities.householdPrincipalMonthly,
+        // The per-loan figure the surplus counts, so the owner-occupied home-loan rule reconciles with it.
+        loanServiceById: Object.fromEntries(
+          s.liabilities.lines.filter((l) => l.household && l.debtServiceMonthly !== null).map((l) => [l.id, l.debtServiceMonthly as number]),
+        ),
       }
       : unavailable(s.liabilities),
     window: { from: s.window.from, to: s.window.to, months: s.window.months, coveredMonths: ledger ? ledger.coverage.coveredMonths : [] },

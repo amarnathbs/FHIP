@@ -8,11 +8,11 @@ import { DataTable } from '@/components/ui/DataTable';
 // recalculated here. Shared by the on-screen report and the print / PDF view
 // (ReportPreview is the one renderer for both).
 //
-// PRINT / PDF FIT. The 16-column table is wider than the portrait A4 text
-// area, so the whole section sits inside `.india-mf-landscape` — a CSS named
-// page (app/globals.css) that prints on A4 LANDSCAPE while the rest of the
-// report stays portrait. Verified in the PDF renderer's own Chromium (see
-// docs/investment-intelligence/INDIA_MF_INVESTMENT_REPORT_REPORT.md).
+// PRINT / PDF FIT. The 16-column table is wider than the portrait A4 text area. It used to print on its own LANDSCAPE page, where it
+// was shrunk to about 5 pt and the report changed orientation mid-document (PO 18-10-2026). It now stays portrait: on paper each
+// holding becomes a two-line block (scheme, folio, start date and XIRR on the first line, the twelve amount columns on the second,
+// each under its own small caption from `data-label`); the screen keeps the real 16-column table. Rules: `.india-mf-section` in
+// app/globals.css. Every column and every figure is still printed.
 //
 // MONEY. Whole rupees with Indian digit grouping, no currency symbol per cell
 // (the header states "All amounts in Indian rupees (INR)"). Units to 3 dp and
@@ -168,34 +168,34 @@ function OwnerTable({ section }: { section: OwnerSection }) {
           {section.rows.map((r) => {
             const marks = rowMarks(r);
             return (
-              <tr key={`${r.accountId}:${r.instrumentId}:${r.shareBasisPoints}`} className="border-t border-gray-100">
-                <td className={`${TD} break-words`}>
+              <tr key={`${r.accountId}:${r.instrumentId}:${r.shareBasisPoints}`} className="imf-row border-t border-gray-100">
+                <td className={`${TD} break-words imf-folio`} data-label="Folio">
                   {r.folio ?? 'n/a'}
                   {r.jointFolio && <span className="block text-[9px] text-gray-500">{(r.shareBasisPoints / 100).toFixed(2).replace(/\.00$/, '')}% share (joint folio)</span>}
                 </td>
-                <td className={`${TD} break-words`}>
+                <td className={`${TD} break-words imf-scheme`} data-label="Scheme">
                   {r.schemeName}
                   {marks && <sup className="ml-0.5 text-[8px] text-gray-500">{marks}</sup>}
                   {r.basis.label && <span className="block text-[9px] font-medium text-amber-700">{r.basis.label}</span>}
                   {r.flags.redeemed && <span className="block text-[9px] text-gray-500">fully redeemed</span>}
                 </td>
-                <td className={TD}>{r.startDate ? formatIsoDateDMY(r.startDate) : 'n/a'}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{units(r.units)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{nav(r.avgNav)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>
+                <td className={`${TD} imf-start`} data-label="Start date">{r.startDate ? formatIsoDateDMY(r.startDate) : 'n/a'}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Units">{units(r.units)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Avg NAV">{nav(r.avgNav)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Latest NAV">
                   {nav(r.latestNav)}
                   {r.latestNavDate && <span className="block text-[8px] text-gray-400">{formatIsoDateDMY(r.latestNavDate)}</span>}
                 </td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.purchase)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.switchIn)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.redemptionSwp)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.switchOut)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.dividend)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{r.avgDays === null ? 'n/a' : Math.round(r.avgDays)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.currentValue)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.unrealisedGain)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(r.realisedGain)}</td>
-                <td className={`${TD} ${NUM_CELL_CLASS}`}>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Invested">{inr(r.purchase)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Switch in">{inr(r.switchIn)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Red / SWP">{inr(r.redemptionSwp)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Switch out">{inr(r.switchOut)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Dividend">{inr(r.dividend)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Avg days">{r.avgDays === null ? 'n/a' : Math.round(r.avgDays)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Curr value">{inr(r.currentValue)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Unrealised">{inr(r.unrealisedGain)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Realised">{inr(r.realisedGain)}</td>
+                <td className={`${TD} ${NUM_CELL_CLASS} imf-xirr`} data-label="XIRR">
                   {xirrText(r.xirr)}
                   {r.xirr.status === 'ok' && r.xirr.partialCost && <span className="block text-[8px] font-medium text-amber-700">{PARTIAL_COST_LABEL}</span>}
                 </td>
@@ -204,25 +204,25 @@ function OwnerTable({ section }: { section: OwnerSection }) {
           })}
         </tbody>
         <tfoot>
-          <tr className="border-t-2 border-gray-300 font-semibold">
-            <td className={TD} colSpan={2}>
+          <tr className="imf-row imf-total border-t-2 border-gray-300 font-semibold">
+            <td className={`${TD} imf-scheme`} colSpan={2}>
               Fund Portfolio Total
               {t.unvaluedPositions > 0 && <span className="block text-[8px] font-normal text-gray-500">excludes {t.unvaluedPositions} fund{t.unvaluedPositions === 1 ? '' : 's'} without a valuation</span>}
             </td>
-            <td className={TD} />
-            <td className={TD} />
-            <td className={TD} />
-            <td className={TD} />
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.purchase)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.switchIn)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.redemptionSwp)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.switchOut)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.dividend)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{section.totalAvgDays === null ? 'n/a' : Math.round(section.totalAvgDays)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.currentValue)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.unrealisedGain)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>{inr(t.realisedGain)}</td>
-            <td className={`${TD} ${NUM_CELL_CLASS}`}>
+            <td className={`${TD} imf-empty`} />
+            <td className={`${TD} imf-empty`} />
+            <td className={`${TD} imf-empty`} />
+            <td className={`${TD} imf-empty`} />
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Invested">{inr(t.purchase)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Switch in">{inr(t.switchIn)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Red / SWP">{inr(t.redemptionSwp)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Switch out">{inr(t.switchOut)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Dividend">{inr(t.dividend)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Avg days">{section.totalAvgDays === null ? 'n/a' : Math.round(section.totalAvgDays)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Curr value">{inr(t.currentValue)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Unrealised">{inr(t.unrealisedGain)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-n`} data-label="Realised">{inr(t.realisedGain)}</td>
+            <td className={`${TD} ${NUM_CELL_CLASS} imf-xirr`} data-label="XIRR">
               {xirrText(t.xirr)}
               {t.xirr.status === 'ok' && t.xirr.partialCost && <span className="block text-[8px] font-medium text-amber-700">{PARTIAL_COST_LABEL}</span>}
             </td>
@@ -259,7 +259,7 @@ function IndexQuoteView({ label, q }: { label: string; q: IndiaMfReport['indices
 
 export function IndiaMfInvestmentReportSection({ report, title, narrative, limitation }: { report: IndiaMfReport; title: string; narrative: string | null; limitation: string | null }) {
   return (
-    <div className="india-mf-landscape space-y-4 rounded-card border bg-white p-6" data-testid="india-mf-report">
+    <div className="india-mf-section space-y-4 rounded-card border bg-white p-6" data-testid="india-mf-report">
       <div>
         <h2 className="text-lg font-semibold text-trust">{title}</h2>
         {narrative && <p className="mt-1 text-justify text-sm text-gray-600">{narrative}</p>}

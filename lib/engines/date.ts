@@ -56,6 +56,40 @@ export function formatDateTimeShort(date: Date | string, currency: 'AUD' | 'INR'
   return `${formatDateShort(d, currency)}, ${time}`;
 }
 
+// "05-10-2026, 9:30 am": date and time to the MINUTE (no seconds), for "made on" lines on saved reports. Same day-first date as
+// formatDateShort; the time shape is explicit 'en-AU' (h:mm am/pm), any narrow no-break space ICU may emit is turned into a plain space.
+//
+// With `timeZone` (an IANA name such as 'Australia/Sydney' or 'UTC') BOTH the date and the time are those of that zone, so a late-evening time cannot
+// show the wrong day. Without it the process's own zone is used: the browser's (the viewer's local time) on a screen, the server's on a server render.
+export function formatDateTimeMinutes(date: Date | string, currency: 'AUD' | 'INR', timeZone?: string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const time = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true, ...(timeZone ? { timeZone } : {}) }).replace(/\s/g, ' ').toLowerCase();
+  if (!timeZone) return `${formatDateShort(d, currency)}, ${time}`;
+  const sep = currency === 'INR' ? '-' : '/';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone, day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.day}${sep}${p.month}${sep}${p.year}, ${time}`;
+}
+
+/** The viewer's own IANA time zone (the browser's), or '' where it cannot be read. The Fund analytics screen sends it to its print tab so the printed "made" time matches the screen. */
+export function viewerTimeZone(): string {
+  try {
+    return new Intl.DateTimeFormat('en-AU').resolvedOptions().timeZone ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** True when `name` is a time zone this runtime knows (the print page takes the viewer's zone from the address, so it is checked before use). */
+export function isKnownTimeZone(name: string | null | undefined): name is string {
+  if (!name || name.length > 64 || !/^[A-Za-z0-9_+\-/]+$/.test(name)) return false;
+  try {
+    new Intl.DateTimeFormat('en-AU', { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Country -> the date-format key above (formatDateShort is currency-keyed: AU
 // dd/mm/yyyy, India dd-mm-yyyy). Anything that is not India (including an
 // unresolved country) uses the AU shape, the app-wide display fallback.

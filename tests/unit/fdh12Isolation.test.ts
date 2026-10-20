@@ -125,7 +125,8 @@ describe('FDH-12 rule 1 — no second Retirement engine', () => {
     // positive the sibling FDH-1 isolation test already carries a
     // documented allow-list for. Scoped to this one module, not a directory,
     // so a future FDH-12 file importing an actual engine is still caught.
-    const ENGINE_IMPORT_RE = /from '@\/lib\/engines(?!\/money')/;
+    // (`lib/engines/date` is the day-first date formatter, display formatting only, like `money` above)
+    const ENGINE_IMPORT_RE = /from '@\/lib\/engines(?!\/(?:money|date)')/;
     FDH12_CODE.forEach((code, i) => {
       expect(ENGINE_IMPORT_RE.test(code), `${FDH12_FILES[i]} imports a calculation engine`).toBe(false);
     });

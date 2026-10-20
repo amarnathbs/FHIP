@@ -15,7 +15,7 @@ import {
   NO_ADMIN_CAPABILITIES,
   type AdminCapabilities,
 } from '@/lib/admin/adminNav';
-import { isNavHrefVisible, parseNavDecisions, EMPTY_NAV_DECISIONS } from '@/lib/nav/appNavCapability';
+import { isNavHrefVisible, parseNavDecisions, parsePremiumNavigation, EMPTY_NAV_DECISIONS, NO_PREMIUM_NAVIGATION, type PremiumNavigation } from '@/lib/nav/appNavCapability';
 import type { CapabilityDecision } from '@/lib/services/appCapability';
 import { GuidedSetupTour } from '@/components/onboarding/GuidedSetupTour';
 import { NAV_GROUPS, type NavDropdown } from '@/lib/nav/appNavGroups';
@@ -63,6 +63,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // until /api/capabilities/nav resolves. A failed or malformed response
   // leaves the nav in this same denied state rather than widening it.
   const [navDecisions, setNavDecisions] = useState<Record<string, CapabilityDecision>>(EMPTY_NAV_DECISIONS);
+  // Premium-only entries (NAV2 Fund analytics) stay hidden until the server says this person is entitled; a failed answer keeps them hidden.
+  const [premiumNav, setPremiumNav] = useState<PremiumNavigation>(NO_PREMIUM_NAVIGATION);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   // Auto-expand the Forecasting/Reports group only if the initial page load
@@ -134,10 +136,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     fetch('/api/capabilities/nav')
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (!cancelled) setNavDecisions(parseNavDecisions(j));
+        if (!cancelled) {
+          setNavDecisions(parseNavDecisions(j));
+          setPremiumNav(parsePremiumNavigation(j));
+        }
       })
       .catch(() => {
-        if (!cancelled) setNavDecisions(EMPTY_NAV_DECISIONS);
+        if (!cancelled) {
+          setNavDecisions(EMPTY_NAV_DECISIONS);
+          setPremiumNav(NO_PREMIUM_NAVIGATION);
+        }
       });
     return () => {
       cancelled = true;
@@ -187,10 +195,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           const visibleItems = group.items
             .map((entry) =>
               entry.type === 'dropdown'
-                ? { ...entry, items: entry.items.filter((i) => isNavHrefVisible(i.href, navDecisions)) }
+                ? { ...entry, items: entry.items.filter((i) => isNavHrefVisible(i.href, navDecisions, premiumNav)) }
                 : entry
             )
-            .filter((entry) => (entry.type === 'link' ? isNavHrefVisible(entry.href, navDecisions) : entry.items.length > 0));
+            .filter((entry) => (entry.type === 'link' ? isNavHrefVisible(entry.href, navDecisions, premiumNav) : entry.items.length > 0));
           if (visibleItems.length === 0) return null;
           group = { ...group, items: visibleItems };
 

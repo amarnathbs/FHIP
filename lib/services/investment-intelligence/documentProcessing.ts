@@ -35,6 +35,7 @@ import { purgeSourceDocumentStorage } from './sourceDocumentPurge';
 import { extractPdfText } from './pdfExtraction';
 import { parseExtractedDocument } from './parsers/registry';
 import type { ParsedAccountRecord, ParsedInstrumentRecord } from './parsers/types';
+import { createSchemeKeying } from './schemeKeying';
 // 2026-09-28 — owner-exception unification (PO decision, live production
 // walkthrough). PC5's own K.4/K.7 owner-matching comparison is REUSED
 // as-is, not reimplemented: this is the same deterministic,
@@ -783,14 +784,18 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const instrumentIdByKey = new Map<string, string>(); // key = normalisedSchemeName|plan|option|amc
   const instrumentUnresolvedKeys = new Set<string>();
 
+  // D-6 (NAV2 release candidate, PO decision 16-10-2026): the grouping key is name|plan|option|amc, and the ISIN (or the AMFI code) joins it ONLY when the
+  // statement itself holds two different ones under one key, so two funds that print the same name are no longer merged into the first. Ordinary
+  // statements are keyed exactly as before. See schemeKeying.ts.
+  const keying = createSchemeKeying([...parsed.transactions.map((t) => t.scheme), ...parsed.holdings.map((h) => h.scheme)]);
   const uniqueSchemes = new Map<string, ParsedInstrumentRecord>();
   for (const t of parsed.transactions) {
-    const key = schemeKey(t.scheme);
+    const key = keying.keyOf(t.scheme);
     const existing = uniqueSchemes.get(key);
     uniqueSchemes.set(key, existing ? mergeSchemeRecords(existing, t.scheme) : t.scheme);
   }
   for (const h of parsed.holdings) {
-    const key = schemeKey(h.scheme);
+    const key = keying.keyOf(h.scheme);
     const existing = uniqueSchemes.get(key);
     uniqueSchemes.set(key, existing ? mergeSchemeRecords(existing, h.scheme) : h.scheme);
   }
@@ -909,6 +914,35 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     if (userOverrideInstrumentId) {
       instrumentIdByKey.set(key, userOverrideInstrumentId);
       await auditUserResolvedAmbiguousInstrument(userId, userOverrideInstrumentId, parseRunId, scheme.rawSchemeName);
+      continue;
+    }
+
+    // D-6: a record WITHOUT an identifier whose name is shared by several funds with different identifiers cannot be said to belong to any of them. It is
+    // never resolved by name (that would be a guess) and no instrument is created for it: ONE review case lists the funds it could be.
+    if (keying.noIdentifierKeys.has(key)) {
+      instrumentUnresolvedKeys.add(key);
+      const siblingSchemes = keying.siblingKeysOf(key).map((k) => uniqueSchemes.get(k)).filter((x): x is ParsedInstrumentRecord => !!x);
+      const siblingIsins = new Set(siblingSchemes.map((x) => x.isin?.toUpperCase()).filter((x): x is string => !!x));
+      const siblingAmfis = new Set(siblingSchemes.map((x) => x.amfiSchemeCode).filter((x): x is string => !!x));
+      const candidates: AmbiguousInstrumentCandidate[] = existingForResolution
+        .filter((e) => (e.isin && siblingIsins.has(e.isin.toUpperCase())) || (e.amfiSchemeCode && siblingAmfis.has(e.amfiSchemeCode)))
+        .map((e) => ({ instrumentId: e.instrumentId, displayName: instrumentNameById.get(e.instrumentId) ?? scheme.rawSchemeName, amcName: e.amcName ?? null, isin: e.isin ?? null, planType: e.planType ?? null, optionType: e.optionType ?? null }));
+      const caseId = await openReconciliationCase(userId, {
+        subjectType: 'account',
+        subjectId: sourceDocumentId,
+        discrepancyType: 'ambiguous_instrument',
+        severity: 'high',
+        sourceDocumentId,
+        details: {
+          scheme: scheme.rawSchemeName,
+          matchedVia: 'none',
+          candidateInstrumentIds: candidates.map((c) => c.instrumentId),
+          candidates,
+          reason: `The statement lists "${scheme.rawSchemeName}" under ${siblingSchemes.length} different ISINs or AMFI codes, and this line carries none, so it cannot be matched to one of them. It was not matched to any fund.`,
+          signature: { isin: scheme.isin, amfiSchemeCode: scheme.amfiSchemeCode, normalisedSchemeName: scheme.normalisedSchemeName, amcName: scheme.amcName, planType: scheme.planType, optionType: scheme.optionType, countryCode },
+        },
+      });
+      if (caseId) reconciliationCasesOpened++;
       continue;
     }
 
@@ -1077,7 +1111,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
 
   for (const t of parsed.transactions) {
     const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(t.folioNumber, t.scheme.amcName));
-    const instrumentId = instrumentIdByKey.get(schemeKey(t.scheme));
+    const instrumentId = instrumentIdByKey.get(keying.keyOf(t.scheme));
     if (!accountId || !instrumentId) continue; // account/instrument unresolved — already logged as a reconciliation case above; skip writing an orphaned transaction
 
     // Document2 final non-benchmark closure #4 (2026-09-30): generated HERE,
@@ -1338,7 +1372,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // --- 6. Holding snapshots -------------------------------------------------
   for (const h of parsed.holdings) {
     const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(h.folioNumber, h.scheme.amcName));
-    const instrumentId = instrumentIdByKey.get(schemeKey(h.scheme));
+    const instrumentId = instrumentIdByKey.get(keying.keyOf(h.scheme));
     if (!accountId || !instrumentId) continue;
 
     // Real production defect (2026-09-07): this upsert's result was never
@@ -1420,7 +1454,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const coveredPositions: { accountId: string; instrumentId: string }[] = [];
   for (const h of parsed.holdings) {
     const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(h.folioNumber, h.scheme.amcName));
-    const instrumentId = instrumentIdByKey.get(schemeKey(h.scheme));
+    const instrumentId = instrumentIdByKey.get(keying.keyOf(h.scheme));
     if (accountId && instrumentId) coveredPositions.push({ accountId, instrumentId });
   }
 
@@ -1581,9 +1615,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   };
 }
 
-function schemeKey(s: ParsedInstrumentRecord): string {
-  return `${s.normalisedSchemeName}|${s.planType}|${s.optionType}|${s.amcName}`;
-}
+// (the grouping key now comes from createSchemeKeying in schemeKeying.ts; it is name|plan|option|amc unless the statement itself holds two different ISINs or AMFI codes under one key)
 
 // REAL DEFECT FOUND AND FIXED (NAV 1 continuation, 2026-09-21, discovered
 // while proving a real accepted-statement journey end-to-end against a

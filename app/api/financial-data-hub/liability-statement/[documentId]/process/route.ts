@@ -8,6 +8,7 @@ import {
 import { liabilityStatementUploadMetadataSchema } from '@/lib/financial-data-hub/validation/liabilityStatement';
 import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
 import { fdhDocumentRunPosition } from '@/lib/financial-data-hub/services/importRunPosition';
+import type { LiabilityFacilityType } from '@/lib/financial-data-hub/liability/types';
 
 // POST /api/financial-data-hub/liability-statement/{documentId}/process
 //
@@ -53,6 +54,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
         creditLimit: parsed.data.credit_limit ?? undefined,
         minimumPayment: parsed.data.minimum_payment ?? undefined,
         interestRate: parsed.data.interest_rate ?? undefined,
+        facilityType: (parsed.data.facility_type ?? undefined) as LiabilityFacilityType | undefined,
       },
     );
     const reviewDocumentId =

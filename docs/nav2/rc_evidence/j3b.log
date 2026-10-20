@@ -1,0 +1,22 @@
+=== journey 3b 2026-10-14T19:11:15.792Z ===
+  PASS  a 2013 purchase of fund A is accepted for the free user (window reaches 2013)  ({"ok":true,"step":"process","status":200,"docId":"26c7e17b-a57d-45cf-9cfe-5e3ae1bd4102","memberId":"7d3049dc-1e8a-4ec4-8)
+  PASS  observations to correct exist (T-bill in 06-2023, the latest repo-rate observation)  (2023-06-07=6.7545; repo 2025-12-05=5.25)
+  PASS  baseline: a report whose window reaches 2013 has a Sharpe computed on the T-bill series  (201 sharpe available annualised 0.4818410358518329)
+   valid cache entries: 12 depend on the T-bill series, 0 depend on no risk-free series
+  PASS  the cache holds entries that depend on the T-bill series
+  PASS  the admin route accepts a correction with a recorded reason (200)  (200 {"data":{"new":5.26,"previous":5.25,"observation_id":"45b8f2e5-10df-4623-9315-598137158ccc"}})
+  PASS  A. a correction to the repo-rate series (used by nobody) processed two events and invalidated NO entry  ({"status":"completed","eventsProcessed":2,"entriesInvalidated":0,"pinnedReportsAffected":0,"staleDefinitionInvalidated":0,"failed":0})
+  PASS  A. every cache entry is exactly as valid as before
+  PASS  B. the T-bill correction is accepted  (200 {"data":{"new":6.8045,"previous":6.7545,"observation_id":"a27631bc-ac51-416c-8b6d-e19514309e5a"}})
+  PASS  B. REVERT: the T-bill observation has its original value again  (6.7545)
+  PASS  B. the correction changed the risk-free dataset version, and the report made on the corrected rate has a different Sharpe  (dataset RBI_91D_TBIL -> RBI_91D_TBIL; sharpe 0.4818410358518329 -> 0.48183692306044)
+  PASS  B. the worker invalidated the entries that depend on the T-bill series  ({"status":"completed","eventsProcessed":1,"entriesInvalidated":13,"pinnedReportsAffected":0,"staleDefinitionInvalidated":0,"failed":0})
+  PASS  B. ONLY DEPENDENTS: every entry that depended on the T-bill series is invalidated, and every entry that depends on no risk-free series is still valid  (12/12 dependents invalidated; 0/0 independents still valid)
+  PASS  B. the revert is processed too and a further run finds nothing  ({"status":"completed","eventsProcessed":1,"entriesInvalidated":0,"pinnedReportsAffected":0,"staleDefinitionInvalidated":0,"failed":0})
+  PASS  B. ISSUED REPORT IMMUTABLE: the report made before the correction is byte-identical afterwards
+  PASS  B. after the revert a new report shows the ORIGINAL Sharpe again (same dataset content, same figure)  (0.4818410358518329 vs 0.4818410358518329)
+   PO account reports before 0, after 0
+  PASS  THE PO'S REPORTS WERE NOT TOUCHED: none of the PO reports changed, and none was made inside the correction window (a Version made inside it would carry the corrected rate)  (no PO report was made meanwhile)
+  PASS  switch OFF, temporary capability removed, free plan restored
+
+=== journey 3b: 17 PASS, 0 FAIL ===

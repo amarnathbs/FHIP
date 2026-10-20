@@ -1,0 +1,81 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1100 >>
+stream
+BT
+/F1 9 Tf
+50 760 Td
+(Wattlebird Credit Union) Tj
+0 -12 Td
+(CREDIT CARD STATEMENT) Tj
+0 -12 Td
+(Account holder: JORDAN SAMPLE-ONE) Tj
+0 -12 Td
+(Address: 14 Imaginary Street, Exampleton NSW 2000) Tj
+0 -12 Td
+(Email: jordan.sample.one@example.invalid) Tj
+0 -12 Td
+(Phone: 0400 000 001) Tj
+0 -12 Td
+(Card number: 5999 0000 1111 4821) Tj
+0 -12 Td
+(Statement period: 01/07/2026 to 31/07/2026) Tj
+0 -12 Td
+(Statement date: 31/07/2026) Tj
+0 -12 Td
+(Payment due date: 25/08/2026) Tj
+0 -12 Td
+(Credit limit: $8,000.00) Tj
+0 -12 Td
+(Opening balance: $1,250.40) Tj
+0 -12 Td
+(Date Description Amount) Tj
+0 -12 Td
+(03/07/2026 FICTIONAL GROCER 84.20) Tj
+0 -12 Td
+(06/07/2026 SAMPLE FUEL STOP 61.35) Tj
+0 -12 Td
+(09/07/2026 PAYMENT RECEIVED - THANK YOU 500.00 CR) Tj
+0 -12 Td
+(14/07/2026 IMAGINARY APPLIANCES 329.00) Tj
+0 -12 Td
+(17/07/2026 REFUND IMAGINARY APPLIANCES 49.00 CR) Tj
+0 -12 Td
+(21/07/2026 CASH ADVANCE ATM SAMPLE 200.00) Tj
+0 -12 Td
+(21/07/2026 CASH ADVANCE FEE 4.00) Tj
+0 -12 Td
+(28/07/2026 INTEREST CHARGES 27.85) Tj
+0 -12 Td
+(Closing balance: $1,407.80) Tj
+0 -12 Td
+(Minimum payment: $35.00) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000001399 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1496
+%%EOF

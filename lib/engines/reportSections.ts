@@ -4,6 +4,7 @@ import { computeMetricMovement, scoreMovementNarrative, overallocationNarrative,
 import { generateGoalInsights } from './goalInsights';
 import { computeKeyInsights } from './reportInsights';
 import { formatMoneyWhole } from './money';
+import { essentialHomeLoanNote } from './essentialHousing';
 import { buildPremiumSections } from './reportSectionsPremium';
 import type { FinancialSection } from './financialSectionStatus';
 import type { DashboardSummary, SnapshotRow } from './dashboard';
@@ -270,14 +271,17 @@ function buildExecutiveSummary(source: ReportSourceData, isFirstReport: boolean)
         ? `Your household received net income of ${fmt(d.netMonthlyIncome)} during the month. After ${fmt(d.totalMonthlyExpenses)} in living and other expenses and ${fmt(d.debtMonthlyRepayments)} in debt repayments (${fmt(totalMonthlyOutflow)} total outflows), the household retained a monthly surplus of ${fmt(d.monthlySurplus)}.`
         : `Your recorded expenses, commitments and debt repayments (${fmt(totalMonthlyOutflow)} in total) exceeded net monthly income by ${fmt(Math.abs(d.monthlySurplus))}. This may require the household to use savings, additional borrowing or other available funds to meet the difference.`) + (netIncomeNote ? ` ${netIncomeNote}` : ''),
   };
+  const homeLoanNote = essentialHomeLoanNote(d.essentialHomeLoan, currency);
   const emergencyFundChart = {
     months: d.emergencyFundMonths,
     targetMin: 3,
     targetMax: 6,
     summary:
       d.emergencyFundMonths !== null
-        ? `Your available emergency funds could cover approximately ${d.emergencyFundMonths.toFixed(1)} months of recorded essential expenses, compared with the current reference target of 4 months.`
+        ? `Your available emergency funds could cover approximately ${d.emergencyFundMonths.toFixed(1)} months of recorded essential expenses, compared with the current reference target of 4 months.${homeLoanNote ? ` ${homeLoanNote}` : ''}`
         : null,
+    // PO rule 17-10-2026: where essentials include the owner-occupied home-loan repayment, the report says so.
+    essentialHomeLoanNote: homeLoanNote,
   };
 
   // Level-based (works on a first report, unlike the movement-only lines
@@ -350,6 +354,9 @@ function buildCashFlow(source: ReportSourceData, status: SectionStatus, reason: 
             netIncomeNote: netIncomeBasisNote(d, source.currency),
             largestIncomeSharePct: d.largestIncomeSharePct,
             essentialMonthlyExpenses: d.essentialMonthlyExpenses,
+            // PO rule 17-10-2026: the owner-occupied home-loan repayment inside essentials (also inside debtMonthlyRepayments, counted once in the surplus).
+            essentialHomeLoanMonthly: d.essentialHomeLoan?.monthly ?? 0,
+            essentialHomeLoanNote: essentialHomeLoanNote(d.essentialHomeLoan, source.currency),
             lifestyleMonthlyExpenses: d.lifestyleMonthlyExpenses,
             debtMonthlyRepayments: d.debtMonthlyRepayments,
             totalMonthlyExpenses: d.totalMonthlyExpenses,

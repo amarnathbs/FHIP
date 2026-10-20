@@ -68,6 +68,7 @@ const BUILDING_BLOCKS: Record<string, string> = {
   'lib/aie/provider/providerFactory.ts': 'provider selection',
   'lib/ai/gateway/aiModelGateway.ts': 'Module 11 gateway; every call is admitted by ai_admit_request (Premium + quota + budget) inside the gateway',
   'app/api/internal/ai/provider/health/route.ts': 'constructs the gateway with the MOCK provider only; no provider spend',
+  'lib/services/investment-intelligence/nav2/rbiAiReader.ts': 'NAV2 weekly RBI auction reader: reached only by the cron-secret weekly refresh job (nav2_risk_free_weekly_refresh, OFF), never by a user request; it reads a public RBI page and no user data',
   'lib/services/investment-intelligence/factsheetReader/aieAdapter.ts': 'ADMIN / cron factsheet ingestion, not a user-facing path; stays OFF (not activated by this change)',
 };
 

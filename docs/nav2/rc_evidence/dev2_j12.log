@@ -1,0 +1,63 @@
+=== NAV2 Stage 3 journeys 1+2  2026-10-16T08:13:50.633Z  port 3981 ===
+DEV host verified by the harness (project vqycarelcoijzwlpkpcz); production never touched.
+before: {"global":{"ii_instruments":14570,"ii_scheme_master":14374,"ii_prices_nav_total":53051,"ii_nav_retention_holds_open":39,"ii_nav_hydration_attempts":"err:"},"user":{"ii_source_documents":0,"ii_accounts":0,"ii_transactions":0,"ii_holding_snapshots":0,"ii_portfolio_truth_status":0,"ii_fhip_publications":0,"ii_reconciliation_cases":0,"ii_transaction_source_links":0,"investments":3,"nav2_reports":0}}
+  PASS  the NAV2 planner switch is ON for this journey (original state saved, restored at the end)  (original enabled=false)
+  PASS  the fixture holder has a Self member (owner chosen BEFORE upload)  (status 200)
+  PASS  NEGATIVE CONTROL: an upload with NO owner is refused (owner-before-upload) and stores nothing  (status 422 code owner_required)
+  PASS  the statement is uploaded through the real upload route  (status 200 doc 68d21d18)
+  PASS  the real process route parsed the statement  (status 200 {"data":{"ok":true,"status":"parsed","parseRunId":"eb6d750e-069e-42d7-b68e-ea94bc2dd2ea","summary":{"sourceDetected":"cams","sourceConfidence":0.900000000000000)
+  PASS  the document reached a settled status  (status parsed)
+  PASS  the review summary reports every statement transaction (parser vs the statement file)  (found 22, statement has 22)
+  PASS  canonical accounts: one folio per statement scheme  (3 accounts)
+  PASS  every canonical transaction matches the statement line (instrument, date, units, amount)  (22 rows)
+  PASS  every scheme position is certified (accepted)  ([["575b7dc3","certified"],["31a05b68","certified"],["70c403e9","certified"]])
+  PASS  canonical holdings: units after the statement equal the statement closing units for A and B; C is zero  ([["575b7dc3",63.572],["31a05b68",1201.39],["70c403e9",0]])
+  PASS  JOURNEY 2: the plan holds exactly one required window per accepted scheme (3) and no other instrument  (3 windows: 31a05b68,575b7dc3,70c403e9)
+  PASS  JOURNEY 2: each window is driven by the scheme's own earliest transaction (as on the statement) and requires history from on or before it (the NAV window)  ([["31a05b68","2026-04-15","2021-03-17","2026-10-16"],["575b7dc3","2024-10-04","2019-09-06","2026-10-16"],["70c403e9","2024-08-12","2019-07-15","2026-10-16"]])
+  PASS  JOURNEY 2: stored history already reaches each required date, so nothing is fetched (history from 2013 is on DEV)  ({"covered":3,"toFetch":0})
+(node:6540) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  PASS  the report is generated (201 ready) from the accepted statement  (status 201 {"data":{"status":"ready","report":{"id":"f85e5109-be53-4b68-a756-3c91ab963e0b","versionNumber":1,"asOfDate":"2026-10-16)
+  PASS  the report covers the three schemes, ranking only A and B (C is redeemed)  (HDFC Corporate Bond Fund | HDFC Large Cap Fund | Nippon India Large Cap Fund)
+  PASS  ORACLE A: current value equals units x latest NAV (74342.3)  (report 74342.30466800001)
+  PASS  ORACLE A: gain/loss equals the independent figure (-3657.70)  (report -3657.6953319999884)
+  PASS  ORACLE A: XIRR matches the independent bisection (-3.2169%)  (report -3.2169%)
+  PASS  ORACLE A 1Y: absolute return and CAGR (-6.8840%)  (report abs -0.068614 cagr -0.068840)
+  PASS  ORACLE A 3Y: absolute return and CAGR (7.7600%)  (report abs 0.251145 cagr 0.077600)
+  PASS  ORACLE A 5Y: absolute return and CAGR (8.8301%)  (report abs 0.526952 cagr 0.088301)
+  PASS  ORACLE B: current value equals units x latest NAV (116090.08)  (report 116090.07542200001)
+  PASS  ORACLE B: gain/loss equals the independent figure (-3909.92)  (report -3909.924577999991)
+  PASS  ORACLE B: XIRR matches the independent bisection (-6.3934%)  (report -6.3934%)
+  PASS  ORACLE B 1Y: absolute return and CAGR (-7.2527%)  (report abs -0.072289 cagr -0.072527)
+  PASS  ORACLE B 3Y: absolute return and CAGR (9.9434%)  (report abs 0.328696 cagr 0.099434)
+  PASS  ORACLE B 5Y: absolute return and CAGR (11.1828%)  (report abs 0.699368 cagr 0.111828)
+  PASS  ORACLE C: current value equals units x latest NAV (0)  (report 0)
+  PASS  ORACLE C: gain/loss equals the independent figure (8612.08)  (report 8612.080000000002)
+  PASS  ORACLE C: XIRR matches the independent bisection (8.1555%)  (report 8.1555%)
+  PASS  ORACLE C 1Y: absolute return and CAGR (3.0963%)  (report abs 0.030856 cagr 0.030963)
+  PASS  ORACLE C 3Y: absolute return and CAGR (6.7682%)  (report abs 0.216941 cagr 0.067682)
+  PASS  ORACLE C 5Y: absolute return and CAGR (6.0878%)  (report abs 0.343948 cagr 0.060878)
+  PASS  the one-year CAGR for the over-a-year fund A is shown on the requested one-year window (v7 rule)  (state available, actual days 364)
+  PASS  the under-a-year holding B: the investor return starts on the statement purchase date (15-04-2026) and uses the money-weighted XIRR, while the fund's own 1Y/3Y/5Y figures come from the fund NAV history  (xirr period 2026-04-15 -> 2026-10-15)
+  PASS  the fully redeemed fund C is shown as redeemed with value exactly 0
+  PASS  beta and alpha are unavailable (never zero) while no licensed benchmark exists  (benchmark_missing,benchmark_missing,benchmark_missing)
+  PASS  NEGATIVE CONTROL (oracle): a value 0.1% off is detected as different from the report  (report 74342.30466800001 vs wrong 74416.64)
+  FAIL  the real export route returns a PDF for the report  (status 500 application/json)
+   export body: {"error":"The PDF could not be generated. Try again, or use Print / Save as PDF."}
+  PASS  JOURNEY 2: re-uploading the identical file is recognised, not stored again  (status 200 dedup true)
+  PASS  JOURNEY 2: repeated acceptance (processing the same document again) adds no account, transaction, holding, case or source link  (re-process status 200; {"ii_source_documents":1,"ii_accounts":3,"ii_transactions":22,"ii_holding_snapshots":3,"ii_portfolio_truth_status":3,"ii_fhip_publications":0,"ii_reconciliation_cases":0,"ii_transaction_source_links":22,"investments":3,"nav2_reports":1})
+  PASS  JOURNEY 2: each accepted scheme has exactly one open hydration/retention hold, not one per acceptance event  ({"A":"1 -> 1","B":"1 -> 1","C":"1 -> 1"})
+  PASS  JOURNEY 2: repeated planner invocations return the same plan (one window per scheme, same ids and dates) and write nothing  (3 windows; same UTC day: windows identical)
+  PASS  JOURNEY 2: planner invocations changed no table (global and per-instrument counts identical)
+  PASS  JOURNEY 2: generating again creates a NEW report version (immutable history) but no duplicate account, investment or hold  (reports 1 -> 2)
+  PASS  JOURNEY 2: publishing the position creates one investment and one publication; the same request again creates none  (publish 200/200; investments 3->4->4; publications 0->1->1)
+  PASS  JOURNEY 2: unpublish then republish (twice) leaves exactly one active publication and no extra investment  (unpublish 200, republish 200/409, active 1, investments 4)
+  PASS  JOURNEY 2: no instrument was added to the catalogue and the NAV row count of every instrument (held and control) is unchanged  (instruments 14570->14570; schemes 14374->14374; NAV rows changed for: none)
+  PASS  JOURNEY 2: the six NON-held control schemes gained no hold and no attempt record (held-only)  (controls 00003b87,013cabe4,024a316e,0370ac1a,04ab3a2e,05dff411)
+  PASS  JOURNEY 2: the scheme NOT held by this user (D) is not planned and gained no hold or attempt
+  PASS  JOURNEY 2: the global price table row count is unchanged (no history was loaded for anything: stored history already covered the held schemes)  (53051 -> 53051)
+  PASS  NEGATIVE CONTROL (held-only): a user who holds nothing gets an empty plan, and the SAME assertion applied to D for the holder is the one that could fail
+  PASS  the planner switch is restored to its original state  (enabled=false)
+
+=== journeys 1+2: 53 PASS, 1 FAIL ===
+exit 1

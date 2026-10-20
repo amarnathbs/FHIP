@@ -314,6 +314,21 @@ export function compareHoldingToBenchmark(rawInput: HoldingComparisonInput): Hol
   return { ...r, benchmarkLabel: seg.label, benchmarkBasis: basis, benchmarkBasisLabel: benchmarkBasisLabel(basis, seg.categoryLabel) };
 }
 
+/**
+ * The per-segment gates every benchmark use must pass, in this order: entitled, catalogue verified, total
+ * return (never a price index, never an unknown type), has published levels. Returns the first failure, or
+ * null when the segment may be used. Extracted (NAV2, 2026-10-03) from compareInner so NAV2's beta/alpha
+ * apply the SAME gates through the SAME code; behaviour and wording are unchanged.
+ */
+export function segmentGateFailure(s: BenchmarkSegmentInput): { reason: ComparisonUnavailableReason; detail: string } | null {
+  if (!s.entitled) return { reason: 'NOT_ENTITLED', detail: s.entitlementDetail ?? `${s.label}: no approved entitlement covers this benchmark, so no comparison is shown.` };
+  if (!s.catalogueVerified) return { reason: 'CATALOGUE_NOT_VERIFIED', detail: `${s.label}: the benchmark's catalogue entry has not been verified yet.` };
+  if (s.returnType === 'PRI') return { reason: 'PRICE_INDEX_NOT_TOTAL_RETURN', detail: `${s.label} is a price index (it leaves out dividends), so it is not used where a total-return benchmark is required.` };
+  if (s.returnType === 'OTHER') return { reason: 'UNKNOWN_RETURN_TYPE', detail: `${s.label}: it is not recorded whether this series is total return, so it is not used.` };
+  if (s.series.length === 0) return { reason: 'NO_SERIES', detail: `${s.label}: no published levels are available.` };
+  return null;
+}
+
 function compareInner(input: HoldingComparisonInput): HoldingBenchmarkComparison {
   const { currencyCode } = input;
   const flows = [...input.flows].filter((f) => Number.isFinite(f.amount) && f.amount !== 0).sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -359,11 +374,8 @@ function compareInner(input: HoldingComparisonInput): HoldingBenchmarkComparison
 
   // ---- gates, per segment actually used ----------------------------------
   for (const s of inPeriod) {
-    if (!s.entitled) return unavailable('NOT_ENTITLED', s.entitlementDetail ?? `${s.label}: no approved entitlement covers this benchmark, so no comparison is shown.`, periodLabel);
-    if (!s.catalogueVerified) return unavailable('CATALOGUE_NOT_VERIFIED', `${s.label}: the benchmark's catalogue entry has not been verified yet.`, periodLabel);
-    if (s.returnType === 'PRI') return unavailable('PRICE_INDEX_NOT_TOTAL_RETURN', `${s.label} is a price index (it leaves out dividends), so it is not used where a total-return benchmark is required.`, periodLabel);
-    if (s.returnType === 'OTHER') return unavailable('UNKNOWN_RETURN_TYPE', `${s.label}: it is not recorded whether this series is total return, so it is not used.`, periodLabel);
-    if (s.series.length === 0) return unavailable('NO_SERIES', `${s.label}: no published levels are available.`, periodLabel);
+    const failure = segmentGateFailure(s);
+    if (failure) return unavailable(failure.reason, failure.detail, periodLabel);
   }
 
   const prepared: PreparedSegment[] = inPeriod.map((s) => ({

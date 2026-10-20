@@ -1,0 +1,5 @@
+  PASS  the monitoring route answers 200 for the administrator  (200 {"data":{"state":"ok","snapshot":{"storage":{"nav_rows_total":{"note":"Approximate, taken out of the)
+identifierConflicts: {"state":"ok","value":{"still_open":{"label":"Insufficient data to display safely.","state":"suppressed","value":null},"generated_at":"2026-10-16T08:38:46.113558+00:00","opened_last_7_days":{"label":"Insufficient data to display safely.","state":"suppressed","value":null},"opened_last_30_days":{"label":"Insufficient data to display safely.","state":"suppressed","value":null},"opened_last_90_days":
+  PASS  the held-back count is AVAILABLE now (0282 applied), not the "not available until the migration" state  ({"state":"ok","value":{"still_open":{"label":"Insufficient data to display safely.","state":"suppressed","value":null},"generated_at":"2026-10-16T08:38:46.11355)
+service role call of the function: 42501 nav2 ambiguity summary: not authorised
+=== 0282 monitoring: 2 PASS, 0 FAIL ===
