@@ -23,6 +23,7 @@ const fixtures = (opt('--fixtures') ?? 'funds-1,funds-4,funds-10').split(',');
 const shots = opt('--shots');
 const jsonOut = opt('--json');
 const combined = opt('--combined');
+const prodNotes = args.includes('--prod-notes');
 const MIN_FILLED_NON_LAST = Number(opt('--min-filled') ?? 0.5);
 
 const rules = (extra: Partial<PrintLayoutRules> = {}): PrintLayoutRules => ({
@@ -51,7 +52,11 @@ async function checkCombined(spec: string, browser: Awaited<ReturnType<typeof la
   const names = spec.split(',');
   const parts = names.map((n, i) => {
     const { report } = buildPrintFixture(parseFixtureName(n));
-    return { report: i === 0 ? report : asOtherBatch(report, `B${i + 1}`), version: { versionNumber: 4 + i, createdAt: `2026-10-19T00:${38 + i}:00.000Z` } };
+    const r = i === 0 ? report : asOtherBatch(report, `B${i + 1}`);
+    // --prod-notes: the notes a production report of a household that holds 17 funds carries (statement lines waiting, "covers X of your Y funds"), so the front section is measured with a realistic notes block
+    const held = names.reduce((t, n) => t + parseFixtureName(n).funds, 0);
+    if (prodNotes) r.notes = ['3 statement lines are waiting for a review decision and are not shown here yet.', ...r.notes.slice(0, -1), `This report covers ${r.schemes.length} of your ${held} Indian mutual funds, as you chose. The others can go in a second report.`, r.notes[r.notes.length - 1]];
+    return { report: r, version: { versionNumber: 4 + i, createdAt: `2026-10-19T00:${38 + i}:00.000Z` } };
   });
   const label = `combined(${names.join(' + ')})`;
   const printed = await renderPdf(browser, { bundle: 'printHarnessEntry.fa.bundle.js', fixture: { parts, plan: 1 }, mode: 'print' });
@@ -59,37 +64,59 @@ async function checkCombined(spec: string, browser: Awaited<ReturnType<typeof la
   const pages: PdfPageMetrics[] = await analysePdf(browser, printed.pdf, { png: (shots ? Array.from({ length: 80 }, (_, i) => i + 1) : []) as unknown as never[], excludeBandMm: 21 });
   const fills = pages.map((p) => Math.round(p.filledFrac * 100));
   log.push(`INFO  ${label}: ${pages.length} pages, fill % ${fills.join(' ')}`);
-  // where each report starts: the cover title of a report is the only 22 pt "Fund analytics report" on a page
-  const starts = pages.filter((p) => p.items.some((i) => i.size >= 20 && i.str.trim() === 'Fund analytics report')).map((p) => p.page);
-  log.push(`INFO  ${label}: reports start on pages ${starts.join(', ')}`);
-  if (starts.length !== names.length) failures.push(`${label}: expected ${names.length} report covers, found ${starts.length}`);
-  const findings = evaluatePrintLayout(pages, rules({ requirePageNumbers: true }));
+  // the page's running header names its section: the front section "Versions 4 and 5", then each report's own "Version n, made ..."
+  const topBand = (p: PdfPageMetrics) => p.items.filter((i) => i.y < 21 * 2.835).map((i) => i.str).join(' ');
+  const sectionOf = (p: PdfPageMetrics): number => {
+    const t = topBand(p);
+    if (/Versions \d/.test(t)) return 0;
+    const m = /Version (\d+),/.exec(t);
+    return m ? Number(m[1]) - 3 : -1; // report number, 1-based
+  };
+  const sections = pages.map(sectionOf);
+  const starts = names.map((_, i) => sections.indexOf(i + 1) + 1); // first page of each report's fund pages
+  const frontPages = sections.filter((x) => x === 0).length;
+  log.push(`INFO  ${label}: front section = pages 1-${frontPages}; reports' fund pages start on pages ${starts.join(', ')}`);
+  // the last page of the FRONT section may be short: a front section longer than one page (more funds, long fund names, many notes) ends on a partial page before the
+  // reports' fund pages start on a fresh page. It is reported as INFO with its fill, not hidden, and not counted as a failure.
+  const allFindings = evaluatePrintLayout(pages, rules({ requirePageNumbers: true }));
+  const findings = allFindings.filter((f) => !(f.rule === 'blank-space' && f.page === frontPages && frontPages > 1));
+  if (findings.length !== allFindings.length) log.push(`INFO  ${label}: the front section is ${frontPages} pages; its last page is ${Math.round(pages[frontPages - 1].filledFrac * 100)}% full (a front longer than one page ends on a partial page)`);
   for (const f of findings) {
     log.push(`FAIL  ${label}: [${f.rule}] ${f.detail}`);
     failures.push(`${label}: ${f.rule}`);
   }
-  if (findings.length === 0) log.push(`PASS  ${label} print layout (page numbers "Page n of ${pages.length}" run 1 to ${pages.length} across all reports)`);
-  // each page's running header carries ITS report's version line
-  const topBand = (p: PdfPageMetrics) => p.items.filter((i) => i.y < 21 * 2.835).map((i) => i.str).join(' ');
-  let headerOk = true;
-  pages.forEach((p) => {
-    const part = starts.filter((s) => s <= p.page).length; // 1-based report number
-    const want = `Version ${3 + part},`;
-    if (!topBand(p).includes(want)) {
-      headerOk = false;
-      log.push(`FAIL  ${label}: page ${p.page} header should name "${want.slice(0, -1)}" (report ${part}); header is "${topBand(p)}"`);
-      failures.push(`${label}: header page ${p.page}`);
-    }
-  });
-  if (headerOk) log.push(`PASS  ${label} every page header names its own report's version`);
-  const introPages = pages.filter((p) => p.items.map((i) => i.str).join(' ').includes('This document combines')).map((p) => p.page);
+  if (findings.length === 0) log.push(`PASS  ${label} print layout (page numbers "Page n of ${pages.length}" run 1 to ${pages.length} across all sections)`);
+  const monotone = sections.every((x, i) => i === 0 || x >= sections[i - 1]) && sections[0] === 0 && starts.every((x) => x > 0);
+  if (monotone) log.push(`PASS  ${label} every page header names its own section's version (front, then report 1, 2, ...), in order`);
+  else {
+    log.push(`FAIL  ${label}: page headers by section are ${sections.join(',')}`);
+    failures.push(`${label}: headers`);
+  }
+  const textOf = (p: PdfPageMetrics) => p.items.map((i) => i.str).join(' ');
+  const countPages = (needle: string) => pages.filter((p) => textOf(p).includes(needle)).map((p) => p.page);
+  const introPages = countPages('This document combines');
   if (introPages.length === 1 && introPages[0] === 1) log.push(`PASS  ${label} the explanation line is on page 1 only`);
   else {
     log.push(`FAIL  ${label}: explanation line on pages ${introPages.join(', ') || 'none'}`);
     failures.push(`${label}: intro`);
   }
-  // report 2+ begins on a fresh page (its cover title is on its own page start); the last page of the report before it may end early, that is the price of a fresh start
-  for (const s of starts.slice(1)) log.push(`INFO  ${label}: page ${s - 1} (last page of the report before) is ${Math.round(pages[s - 2].filledFrac * 100)}% full`);
+  const glance = countPages('All your funds at a glance');
+  const oldGlance = pages.filter((p) => /(^|[^l] )Your funds at a glance/.test(textOf(p)) || textOf(p).includes('Your funds at a glance') && !textOf(p).includes('All your funds at a glance')).map((p) => p.page);
+  if (glance.length === 1 && glance[0] === 1 && oldGlance.length === 0) log.push(`PASS  ${label} ONE "All your funds at a glance" table on page 1, no per-report "Your funds at a glance"`);
+  else {
+    log.push(`FAIL  ${label}: "All your funds at a glance" on pages ${glance.join(', ')}; old per-report block on pages ${oldGlance.join(', ')}`);
+    failures.push(`${label}: summary`);
+  }
+  const howTo = countPages('How to read this report');
+  const notesH = countPages('Notes');
+  log.push(`INFO  ${label}: "How to read this report" on pages ${howTo.join(', ')}; "How this was calculated" on pages ${countPages('How this was calculated').join(', ') || 'none'}`);
+  if (howTo.length !== 1) {
+    log.push(`FAIL  ${label}: "How to read this report" printed ${howTo.length} times`);
+    failures.push(`${label}: how-to`);
+  }
+  void notesH;
+  // each report's fund pages begin on a fresh page; the last page of the section before may end early, that is the price of a fresh start
+  for (const s of starts) log.push(`INFO  ${label}: page ${s - 1} (last page before the section starting on page ${s}) is ${Math.round(pages[s - 2].filledFrac * 100)}% full`);
   summary.push({ combined: names, pages: pages.length, fill: fills, starts });
   if (shots) {
     const base = `combined_${names.join('_').replace(/[^a-z0-9]+/gi, '_')}`;
