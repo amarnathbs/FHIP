@@ -24,11 +24,11 @@ type Ctx = { params: Promise<{ id: string; itemId?: string }> };
 async function start(kind: Kind, ctx: Ctx) {
   const { id, itemId } = await ctx.params;
   const { user, unauthenticated } = await requireUser();
-  if (!user) return { denied: unauthenticated! } as const;
+  if (!user) return { ok: false, denied: unauthenticated! } as const;
   const supabase = await createClient();
   const scope = await resolveEntityScope(kind, id, user.id, supabase);
-  if (!scope) return { denied: bad('Not found', 404) } as const;
-  return { user, supabase, scope, itemId } as const;
+  if (!scope) return { ok: false, denied: bad('Not found', 404) } as const;
+  return { ok: true, user, supabase, scope, itemId } as const;
 }
 
 function fail(error: { message: string; code?: string | null }) {
@@ -38,23 +38,23 @@ function fail(error: { message: string; code?: string | null }) {
 
 export function entityIncomeHandlers(kind: Kind) {
   return {
-    async GET(_req: Request, ctx: Ctx) {
+    async GET(_req: Request, ctx: Ctx): Promise<Response> {
       const s = await start(kind, ctx);
-      if ('denied' in s) return s.denied;
+      if (!s.ok) return s.denied;
       const { data, error } = await listEntityIncome(s.scope, s.user.id, s.supabase);
       return error ? fail(error) : ok(data);
     },
-    async POST(req: Request, ctx: Ctx) {
+    async POST(req: Request, ctx: Ctx): Promise<Response> {
       const s = await start(kind, ctx);
-      if ('denied' in s) return s.denied;
+      if (!s.ok) return s.denied;
       const parsed = entityIncomeSchema.safeParse(await req.json().catch(() => null));
       if (!parsed.success) return badValidation(parsed.error, 422);
       const { data, error } = await createEntityIncome(s.scope, s.user.id, parsed.data, s.supabase);
       return error ? fail(error) : ok(data);
     },
-    async PATCH(req: Request, ctx: Ctx) {
+    async PATCH(req: Request, ctx: Ctx): Promise<Response> {
       const s = await start(kind, ctx);
-      if ('denied' in s) return s.denied;
+      if (!s.ok) return s.denied;
       const parsed = entityIncomeUpdateSchema.safeParse(await req.json().catch(() => null));
       if (!parsed.success) return badValidation(parsed.error, 422);
       if (parsed.data.income_type === 'rent' && parsed.data.amount !== undefined && !(parsed.data.amount > 0)) {
@@ -63,9 +63,9 @@ export function entityIncomeHandlers(kind: Kind) {
       const { data, error } = await updateEntityIncome(s.scope, s.itemId!, s.user.id, parsed.data, s.supabase);
       return error ? fail(error) : ok(data);
     },
-    async DELETE(_req: Request, ctx: Ctx) {
+    async DELETE(_req: Request, ctx: Ctx): Promise<Response> {
       const s = await start(kind, ctx);
-      if ('denied' in s) return s.denied;
+      if (!s.ok) return s.denied;
       const { error } = await retireEntityIncome(s.scope, s.itemId!, s.user.id, s.supabase);
       return error ? fail(error) : ok({ archived: true });
     },
@@ -74,31 +74,31 @@ export function entityIncomeHandlers(kind: Kind) {
 
 export function entityExpenseHandlers(kind: Kind) {
   return {
-    async GET(_req: Request, ctx: Ctx) {
+    async GET(_req: Request, ctx: Ctx): Promise<Response> {
       const s = await start(kind, ctx);
-      if ('denied' in s) return s.denied;
+      if (!s.ok) return s.denied;
       const { data, error } = await listEntityExpenses(s.scope, s.user.id, s.supabase);
       return error ? fail(error) : ok(data);
     },
-    async POST(req: Request, ctx: Ctx) {
+    async POST(req: Request, ctx: Ctx): Promise<Response> {
       const s = await start(kind, ctx);
-      if ('denied' in s) return s.denied;
+      if (!s.ok) return s.denied;
       const parsed = entityExpenseSchema.safeParse(await req.json().catch(() => null));
       if (!parsed.success) return badValidation(parsed.error, 422);
       const { data, error } = await createEntityExpense(s.scope, s.user.id, parsed.data, s.supabase);
       return error ? fail(error) : ok(data);
     },
-    async PATCH(req: Request, ctx: Ctx) {
+    async PATCH(req: Request, ctx: Ctx): Promise<Response> {
       const s = await start(kind, ctx);
-      if ('denied' in s) return s.denied;
+      if (!s.ok) return s.denied;
       const parsed = entityExpenseUpdateSchema.safeParse(await req.json().catch(() => null));
       if (!parsed.success) return badValidation(parsed.error, 422);
       const { data, error } = await updateEntityExpense(s.scope, s.itemId!, s.user.id, parsed.data, s.supabase);
       return error ? fail(error) : ok(data);
     },
-    async DELETE(_req: Request, ctx: Ctx) {
+    async DELETE(_req: Request, ctx: Ctx): Promise<Response> {
       const s = await start(kind, ctx);
-      if ('denied' in s) return s.denied;
+      if (!s.ok) return s.denied;
       const { error } = await retireEntityExpense(s.scope, s.itemId!, s.user.id, s.supabase);
       return error ? fail(error) : ok({ archived: true });
     },

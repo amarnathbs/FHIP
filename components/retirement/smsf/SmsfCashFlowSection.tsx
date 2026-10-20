@@ -40,7 +40,9 @@ export function SmsfCashFlowSection({ fund, onChanged }: { fund: SmsfFundRow; on
   }, [apiBase, fund.mode]);
 
   useEffect(() => {
-    void reloadAround();
+    (async () => {
+      await reloadAround();
+    })();
   }, [reloadAround, refresh]);
 
   async function startMove(register: 'income' | 'expenses', id: string) {

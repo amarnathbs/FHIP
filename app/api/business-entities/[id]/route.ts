@@ -11,7 +11,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const supabase = await createClient();
   const { data, error } = await getBusinessEntity(id, user.id, supabase);
   if (error || !data) return bad('not found', 404);
-  return ok(data);
+  // The net of an itemised entity is DERIVED by the database out of its active lines (migration 0297), never typed. Fail soft: an unreadable net is
+  // null, never zero.
+  let derivedNet: number | null = null;
+  if (data.valuation_mode === 'detailed') {
+    const rpc = await supabase.rpc('business_entity_derived_net', { p_entity_id: id });
+    if (!rpc.error && rpc.data !== null && rpc.data !== undefined) derivedNet = Number(rpc.data);
+  }
+  return ok({ ...data, derived_net: derivedNet });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -1,4 +1,4 @@
-import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
+import { requireCountryConfirmedUser as requireUser, ok, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
 import { entityErrorResponse } from '@/lib/services/entityCashFlowRoutes';
 import { updateBusinessEntityAsset, deleteBusinessEntityAsset } from '@/lib/services/businessEntityData';

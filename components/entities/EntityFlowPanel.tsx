@@ -73,7 +73,9 @@ export function EntityFlowPanel({
   }, [apiBase, flow]);
 
   useEffect(() => {
-    void reload();
+    (async () => {
+      await reload();
+    })();
   }, [reload]);
 
   const typeOf = (r: FlowRow) => (isIncome ? r.income_type : r.expense_type) as string;

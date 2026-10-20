@@ -95,8 +95,8 @@ describe('the Dashboard entity section (rendered)', () => {
 describe('recording: an entity recorded as a net value only says so instead of inventing assets and liabilities', () => {
   const company = (mode: 'summary' | 'detailed'): BusinessEntityWithLineItems => ({
     entity: { id: 'c2', user_id: 'u', entity_type: 'company', name: 'Net Only Co', country_code: null, currency_code: 'AUD', ownership_percentage: 40, valuation_mode: mode, summary_net_asset_value: mode === 'summary' ? 250_000 : null, is_active: true } as never,
-    assets: mode === 'detailed' ? [{ business_entity_id: 'c2', value: 1_000_000, currency_code: 'AUD' }] : [],
-    liabilities: mode === 'detailed' ? [{ business_entity_id: 'c2', value: 750_000, currency_code: 'AUD' }] : [],
+    assets: mode === 'detailed' ? [{ value: 1_000_000, currency_code: 'AUD' }] : [],
+    liabilities: mode === 'detailed' ? [{ value: 750_000, currency_code: 'AUD' }] : [],
   });
   it('net value only: recording net_only, net 250,000, counted 100,000, the table says "Recorded as a net value only"', () => {
     const input = toNetWorthEntityInput(company('summary'), 'AUD', 56)!;
