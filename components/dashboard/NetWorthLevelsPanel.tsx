@@ -92,19 +92,40 @@ export function NetWorthLevelsPanel({ levels }: { levels: NetWorthLevels }) {
           <h3 id="nw-entities-heading" className="text-base font-semibold text-ink">Entities (kept separate from your personal figures)</h3>
           <div className="mt-3">
             <DataTable label="Entity net worth included in the family level">
-              <caption className="sr-only">Entity net worth included in the family level</caption>
-              <Head first="Entity" />
+              <caption className="sr-only">Each entity&apos;s own assets, liabilities and net economic value, and what is counted in the family level</caption>
+              <thead>
+                <tr>
+                  <DataTh className="text-left text-xs font-medium text-muted">Entity</DataTh>
+                  <DataTh kind="num" className="text-xs font-medium text-muted">Assets</DataTh>
+                  <DataTh kind="num" className="text-xs font-medium text-muted">Liabilities</DataTh>
+                  <DataTh kind="num" className="text-xs font-medium text-muted">Net economic value</DataTh>
+                  <DataTh kind="num" className="text-xs font-medium text-muted">Counted in family</DataTh>
+                </tr>
+              </thead>
               <tbody>
                 {entities.blocks.map((b) => (
-                  <Row
-                    key={b.id}
-                    label={`${NET_WORTH_ENTITY_KIND_LABELS[b.kind]}: ${b.name}`}
-                    sub={`${basisText(b)}${b.note ? `. ${b.note}` : ''}`}
-                    t={b.included}
-                    currency={currency}
-                  />
+                  <tr key={b.id} className="border-t border-line" data-testid="net-worth-entity-row">
+                    <th scope="row" className="py-2 pr-3 text-left align-top text-sm font-normal text-ink">
+                      {`${NET_WORTH_ENTITY_KIND_LABELS[b.kind]}: ${b.name}`}
+                      <span className="block text-xs font-normal text-muted">{`${basisText(b)}${b.note ? `. ${b.note}` : ''}`}</span>
+                    </th>
+                    {b.recording === 'net_only' ? (
+                      <DataTd kind="num" className="align-top text-sm text-muted" colSpan={2}>Recorded as a net value only</DataTd>
+                    ) : (
+                      <>
+                        <DataTd kind="num" className="align-top text-sm text-ink">{formatMoneyWhole(b.entityTotals.totalAssets, currency)}</DataTd>
+                        <DataTd kind="num" className="align-top text-sm text-ink">{formatMoneyWhole(b.entityTotals.liabilities, currency)}</DataTd>
+                      </>
+                    )}
+                    <DataTd kind="num" className="align-top text-sm font-semibold text-ink">{formatMoneyWhole(b.entityTotals.net, currency)}</DataTd>
+                    <DataTd kind="num" className="align-top text-sm font-semibold text-ink">{formatMoneyWhole(b.included.net, currency)}</DataTd>
+                  </tr>
                 ))}
-                <Row label="Entities total" t={entities.total} currency={currency} strong />
+                <tr className="border-t border-line">
+                  <th scope="row" className="py-2 pr-3 text-left align-top text-sm font-semibold text-ink">Entities total</th>
+                  <DataTd kind="num" className="align-top text-sm text-muted" colSpan={3}>{'Own figures are shown at 100%, so they are not added up here'}</DataTd>
+                  <DataTd kind="num" className="align-top text-sm font-semibold text-ink">{formatMoneyWhole(entities.total.net, currency)}</DataTd>
+                </tr>
               </tbody>
             </DataTable>
           </div>

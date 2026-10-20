@@ -115,6 +115,11 @@ export interface NetWorthEntityBlock {
    * entity_record = the entity's OWN assets and liabilities (an SMSF fund, migrations 0289-0290), itemised or a typed net, read from `sheet`.
    */
   source: 'owner_tag' | 'registry' | 'entity_record';
+  /**
+   * How the entity's own figure is recorded (PO decision 17-10-2026, either-or): itemised (assets and liabilities, the net derived), a net value only
+   * (one typed net, so the assets and liabilities are NOT known), or register rows tagged with the entity (the earlier way).
+   */
+  recording: 'itemised' | 'net_only' | 'register_rows';
   name: string;
   /** The ownership percentage the user recorded (registry entities only). */
   recordedOwnershipPercent: number | null;
@@ -482,6 +487,7 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       id: `tag:${kind}`,
       kind,
       source: 'owner_tag',
+      recording: 'register_rows',
       name: kind === 'smsf' ? 'SMSF' : kind === 'family_trust' ? 'Family Trust (items tagged with this owner)' : 'Company (items tagged with this owner)',
       recordedOwnershipPercent: null,
       includedPercent: 100,
@@ -518,6 +524,7 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       id: 'tag:smsf',
       kind: 'smsf',
       source: 'entity_record',
+      recording: smsfSheet.mode === 'itemised' ? 'itemised' : 'net_only',
       name: smsfSheet.name || 'SMSF',
       recordedOwnershipPercent: null,
       includedPercent: 100,
@@ -550,6 +557,7 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       id: `entity:${e.id}`,
       kind: e.kind,
       source: 'registry',
+      recording: e.detail ? 'itemised' : 'net_only',
       name: e.name,
       recordedOwnershipPercent: e.ownershipPercent,
       includedPercent: percent,
