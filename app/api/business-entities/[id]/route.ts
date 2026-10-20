@@ -2,6 +2,7 @@ import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } fr
 import { createClient } from '@/lib/supabase/server';
 import { getBusinessEntity, updateBusinessEntity, archiveBusinessEntity } from '@/lib/services/businessEntityData';
 import { businessEntityUpdateSchema } from '@/lib/validation/businessEntity';
+import { smsfRpcError } from '@/lib/services/smsfErrors';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,7 +23,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const supabase = await createClient();
   const { data, error } = await updateBusinessEntity(id, user.id, parsed.data, supabase);
-  return error ? bad(error.message) : ok(data);
+  if (error) {
+    // The database owns the itemised-or-net-only rule (migration 0297): answer it in plain words with its stable code.
+    const e = smsfRpcError(error);
+    return bad(e.message, e.status, e.errorCode);
+  }
+  return ok(data);
 }
 
 // Soft-delete (is_active=false) — matches every financial-data-grid

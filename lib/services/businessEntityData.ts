@@ -2,7 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   BusinessEntityCreateInput,
   BusinessEntityUpdateInput,
-  BusinessEntityLineItemInput,
+  BusinessEntityAssetInput,
+  BusinessEntityLiabilityInput,
 } from '@/lib/validation/businessEntity';
 
 // LR-11 — Company entity data-access layer (migration 0134). Thin,
@@ -76,13 +77,14 @@ export async function listBusinessEntityAssets(entityId: string, userId: string,
     .select('*')
     .eq('business_entity_id', entityId)
     .eq('user_id', userId)
+    .eq('is_active', true)
     .order('created_at', { ascending: false });
 }
 
 export async function createBusinessEntityAsset(
   entityId: string,
   userId: string,
-  input: BusinessEntityLineItemInput,
+  input: BusinessEntityAssetInput,
   supabase: SupabaseClient
 ) {
   return supabase
@@ -95,7 +97,7 @@ export async function createBusinessEntityAsset(
 export async function updateBusinessEntityAsset(
   assetId: string,
   userId: string,
-  patch: Partial<BusinessEntityLineItemInput>,
+  patch: Partial<BusinessEntityAssetInput>,
   supabase: SupabaseClient
 ) {
   return supabase
@@ -107,8 +109,9 @@ export async function updateBusinessEntityAsset(
     .single();
 }
 
+/** Soft retire (migration 0297 added is_active): a line is never hard deleted, the change log keeps it. */
 export async function deleteBusinessEntityAsset(assetId: string, userId: string, supabase: SupabaseClient) {
-  return supabase.from('business_entity_assets').delete().eq('id', assetId).eq('user_id', userId);
+  return supabase.from('business_entity_assets').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', assetId).eq('user_id', userId);
 }
 
 export async function listBusinessEntityLiabilities(entityId: string, userId: string, supabase: SupabaseClient) {
@@ -117,13 +120,14 @@ export async function listBusinessEntityLiabilities(entityId: string, userId: st
     .select('*')
     .eq('business_entity_id', entityId)
     .eq('user_id', userId)
+    .eq('is_active', true)
     .order('created_at', { ascending: false });
 }
 
 export async function createBusinessEntityLiability(
   entityId: string,
   userId: string,
-  input: BusinessEntityLineItemInput,
+  input: BusinessEntityLiabilityInput,
   supabase: SupabaseClient
 ) {
   return supabase
@@ -136,7 +140,7 @@ export async function createBusinessEntityLiability(
 export async function updateBusinessEntityLiability(
   liabilityId: string,
   userId: string,
-  patch: Partial<BusinessEntityLineItemInput>,
+  patch: Partial<BusinessEntityLiabilityInput>,
   supabase: SupabaseClient
 ) {
   return supabase
@@ -149,7 +153,7 @@ export async function updateBusinessEntityLiability(
 }
 
 export async function deleteBusinessEntityLiability(liabilityId: string, userId: string, supabase: SupabaseClient) {
-  return supabase.from('business_entity_liabilities').delete().eq('id', liabilityId).eq('user_id', userId);
+  return supabase.from('business_entity_liabilities').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', liabilityId).eq('user_id', userId);
 }
 
 /**
@@ -170,11 +174,12 @@ export async function loadBusinessEntitiesForValuation(userId: string, supabase:
   }
 
   const [{ data: assets, error: assetsError }, { data: liabilities, error: liabilitiesError }] = await Promise.all([
-    supabase.from('business_entity_assets').select('business_entity_id, value, currency_code').eq('user_id', userId).in('business_entity_id', detailedIds),
+    supabase.from('business_entity_assets').select('business_entity_id, value, currency_code').eq('user_id', userId).eq('is_active', true).in('business_entity_id', detailedIds),
     supabase
       .from('business_entity_liabilities')
       .select('business_entity_id, value, currency_code')
       .eq('user_id', userId)
+      .eq('is_active', true)
       .in('business_entity_id', detailedIds),
   ]);
   if (assetsError) return { data: null, error: assetsError };
