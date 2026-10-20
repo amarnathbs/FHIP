@@ -275,7 +275,8 @@ describe('the migration parts the PO pastes into the SQL editor', () => {
   });
 
   it('run part by part (twice, as a re-run would) on a ledger that stops at 0285, they build the same objects and the rule works', async () => {
-    const db2 = await replayLedger({ skip: (f) => f.startsWith('0289_') || f.startsWith('0290_') });
+    // 0295 and later (work package C) build on 0289 and 0290, so a ledger that stops at 0285 skips them too: this test is about the phase 1 parts only.
+    const db2 = await replayLedger({ skip: (f) => f.startsWith('0289_') || f.startsWith('0290_') || /^029[5-9]_/.test(f) });
     try {
       const parts = fs.readdirSync(PARTS).filter((f) => f.endsWith('.sql')).sort();
       expect(parts.map((p) => p.slice(0, 9))).toContain('0290_part');
