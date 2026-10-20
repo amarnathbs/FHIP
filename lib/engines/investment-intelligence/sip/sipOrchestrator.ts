@@ -36,7 +36,9 @@ export interface SipDataset {
   /** NAV series keyed by instrument id. */
   navByInstrument: Map<string, Observation[]>;
   /** Benchmark series keyed by instrument id (already resolved via the effective-dated mapping). */
-  benchmarkByInstrument: Map<string, { benchmarkId: string; benchmarkKey: string; returnType: string | null; mappingVersion: string | null; series: Observation[] }>;
+  benchmarkByInstrument: Map<string, { benchmarkId: string; benchmarkKey: string; returnType: string | null; mappingVersion: string | null; series: Observation[]; basis?: 'declared' | 'category_reference'; basisLabel?: string | null }>;
+  /** instrumentId -> the exact reason no benchmark comparison is possible for it (Document2 (4) F9). Absent when there is none to give. */
+  missingBenchmarkReasons?: Map<string, string>;
   /** Cash distributions / redemptions attributable to a series, keyed by series key. */
   attributableInflowsBySeries?: Map<string, Array<{ date: string; amount: number }>>;
   instrumentNames?: Map<string, string>;
@@ -56,6 +58,8 @@ export interface SipSeriesAnalytics {
   timing: TimingComparisonResult;
   benchmarkKey: string | null;
   benchmarkReturnType: string | null;
+  /** Set when the benchmark is the read-time category reference rather than a declared mapping: says so (Document2 (4) F9). */
+  benchmarkBasisLabel?: string | null;
   navAtAsOf: number | null;
   navDateUsed: string | null;
   /** Deterministic fingerprint of everything that could change this result. */
@@ -139,6 +143,7 @@ export function runSipAnalytics(dataset: SipDataset): SipAnalyticsResult {
       benchmarkSeries: bm?.series ?? null,
       asOfDate: dataset.asOfDate,
       benchmarkReturnType: bm?.returnType ?? null,
+      missingReason: bm ? null : dataset.missingBenchmarkReasons?.get(series.instrumentId) ?? null,
     });
 
     const excessReturn = calculateSipExcessReturn(actualXirr, benchmarkSip, series);
@@ -175,6 +180,7 @@ export function runSipAnalytics(dataset: SipDataset): SipAnalyticsResult {
       timing,
       benchmarkKey: bm?.benchmarkKey ?? null,
       benchmarkReturnType: bm?.returnType ?? null,
+      benchmarkBasisLabel: bm?.basis === 'category_reference' ? bm.basisLabel ?? null : null,
       navAtAsOf,
       navDateUsed: navObs.status === 'ok' ? navObs.observation!.date : null,
       inputSnapshotVersion,
