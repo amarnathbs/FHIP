@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PGlite } from '@electric-sql/pglite';
 import { buildDb } from './support/fdh10LedgerPgliteHarness';
-import { pgliteSupabase } from './support/pgliteSupabase';
+import { pgliteSupabase } from './support/pgliteSupabaseJobs';
 import { detectBankCsvFormat } from '@/lib/financial-data-hub/bank-csv/detection';
 import { scaleBankStatement, parseMonth } from '../../scripts/canonical_cert/documents/builders';
 import { buildMinimalTextPdf } from '../support/buildMinimalPdf';

@@ -1586,29 +1586,39 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // a purge failure is recorded for retry, not surfaced to the caller.
   await purgeSourceDocumentStorage(admin, sourceDocumentId, doc.storage_path as string);
 
-  await admin
-    .from('ii_document_parse_runs')
-    .update({
-      run_status: 'succeeded',
-      completed_at: new Date().toISOString(),
-      parser_code: parsed.parserCode,
-      parser_version: parsed.parserVersion,
-      source_detected: detection.detection.sourceKey,
-      source_confidence: detection.detection.confidence,
-      document_type_detected: parsed.metadata.documentTypeDetected,
-      format_version_detected: parsed.metadata.formatVersionDetected,
-      extraction_method: extractionMethod,
-      accounts_found: accountIdByFolioAmc.size,
-      schemes_found: uniqueSchemes.size,
-      transactions_found: parsed.transactions.length,
-      holdings_found: parsed.holdings.length,
-      warnings: parsed.warnings,
-      errors: parsed.errors,
-      duplicate_transactions_linked: duplicateTransactionsLinked,
-      new_transactions_count: pendingTransactionInserts.length,
-      missing_transactions_count: missingTransactionsCount,
-    })
-    .eq('id', parseRunId);
+  const succeededRunPatch = {
+    run_status: 'succeeded',
+    completed_at: new Date().toISOString(),
+    parser_code: parsed.parserCode,
+    parser_version: parsed.parserVersion,
+    source_detected: detection.detection.sourceKey,
+    source_confidence: detection.detection.confidence,
+    document_type_detected: parsed.metadata.documentTypeDetected,
+    format_version_detected: parsed.metadata.formatVersionDetected,
+    extraction_method: extractionMethod,
+    accounts_found: accountIdByFolioAmc.size,
+    schemes_found: uniqueSchemes.size,
+    transactions_found: parsed.transactions.length,
+    holdings_found: parsed.holdings.length,
+    warnings: parsed.warnings,
+    errors: parsed.errors,
+    duplicate_transactions_linked: duplicateTransactionsLinked,
+    new_transactions_count: pendingTransactionInserts.length,
+    missing_transactions_count: missingTransactionsCount,
+  };
+  const { error: runCloseError } = await admin.from('ii_document_parse_runs').update(succeededRunPatch).eq('id', parseRunId);
+  if (runCloseError) {
+    // Deployment-order safety (Document2 (4) WP-H, found on DEV 21-10-2026): the three counters come from migration 0159. In an environment
+    // where it is not applied this update FAILS, and because the result was never checked the run stayed `running`: the statement was
+    // fully processed, yet every Reprocess / replacement within the next 10 minutes answered "already being processed" and no run ever
+    // counted as succeeded. Close the run without the counters instead, and say so in the server log.
+    const { duplicate_transactions_linked: _d, new_transactions_count: _n, missing_transactions_count: _m, ...withoutCounters } = succeededRunPatch;
+    void _d;
+    void _n;
+    void _m;
+    const { error: retryError } = await admin.from('ii_document_parse_runs').update(withoutCounters).eq('id', parseRunId);
+    console.error('[investment-intelligence] parse run could not be closed with its counters (is migration 0159 applied?)', { parseRunId, firstError: runCloseError.message, retryError: retryError?.message ?? null });
+  }
 
   await emitAuditEvent({
     userId,

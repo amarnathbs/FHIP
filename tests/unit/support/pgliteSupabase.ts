@@ -1,198 +1,262 @@
 /**
- * A supabase-js-shaped client over a REAL Postgres (PGlite) that has this repository's whole migration chain applied.
+ * A Supabase-client-shaped query builder over PGlite (real Postgres), for service-level tests that must run the REAL
+ * application code against the REAL migration chain: unique indexes, CHECK constraints, triggers and foreign keys all apply, which
+ * the in-memory fake (inMemorySupabase.ts) cannot do (it cannot enforce a unique fingerprint, match on a constraint, or reject an
+ * orphan row). Written for the Document2 (4) WP-H "no duplicate economics" oracle.
  *
- * Why: the in-memory fake proves the job's LOGIC; this proves it against the real schema: CHECK constraints, NOT NULL columns, the
- * unique index of migration 0311, the lease functions of 0310 (called through `rpc`), foreign keys and every trigger the importers
- * hit (country gate, R7 authoritative-column blocks, cross-tenant guards). It implements only the PostgREST subset the importer
- * uses (select / insert / upsert / update / delete with eq, neq, lt, lte, gt, gte, is, not-is, in, order, range, limit, single,
- * maybeSingle, head counts, and rpc) and THROWS on anything else, so an unsupported call can never pass silently.
- *
- * Rows come back as `to_jsonb` objects (ISO strings, JSON numbers), exactly the shape PostgREST returns.
- * Everything runs as the superuser with `service_role` claims, i.e. as the service-role client the worker is.
+ * Mirrors PostgREST/supabase-js behaviour where the code under test relies on it:
+ *   * an error is RETURNED ({ data: null, error }), never thrown, for a database error;
+ *   * `.single()` with 0 or many rows is an error, `.maybeSingle()` with many rows is an error;
+ *   * `insert/update/delete/upsert` return rows only when `.select()` is chained;
+ *   * numeric / int8 columns come back as JSON numbers, timestamps as ISO strings, dates as 'YYYY-MM-DD' (see `pgliteOptions`).
+ * Embedded resources (`select('a, b(c)')`) are NOT supported and throw, so a test never silently reads fewer columns than the code asks for.
  */
-import type { PGlite } from '@electric-sql/pglite';
+import { PGlite } from '@electric-sql/pglite';
 
-type Json = Record<string, unknown>;
-type Filter = { col: string; op: string; val?: unknown };
-
-const IDENT = /^[a-z_][a-z0-9_]*$/;
-const id = (s: string) => {
-  if (!IDENT.test(s)) throw new Error(`pglite client: unsafe identifier ${s}`);
-  return `"${s}"`;
+export const pgliteOptions = {
+  parsers: {
+    1700: (v: string) => Number(v), // numeric
+    20: (v: string) => Number(v), // int8
+    1082: (v: string) => v, // date -> 'YYYY-MM-DD'
+    1184: (v: string) => new Date(v).toISOString(), // timestamptz
+    1114: (v: string) => new Date(`${v.replace(' ', 'T')}Z`).toISOString(), // timestamp (treated as UTC)
+  },
 };
 
-class Builder implements PromiseLike<{ data: unknown; error: { message: string; code?: string } | null; count?: number | null }> {
-  private op: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';
-  private cols = '*';
-  private filters: Filter[] = [];
-  private orders: Array<{ col: string; asc: boolean }> = [];
-  private limitN: number | null = null;
-  private rangeFrom: number | null = null;
-  private rangeTo: number | null = null;
-  private payload: Json | Json[] | null = null;
-  private conflict: string[] = [];
-  private ignoreDup = false;
-  private returning = false;
-  private mode: 'single' | 'maybe' | null = null;
+type Row = Record<string, unknown>;
+type Err = { message: string; code?: string; details?: string | null; hint?: string | null };
+type Result = { data: unknown; error: Err | null; count?: number | null; status?: number; statusText?: string };
+
+const IDENT = /^[a-z_][a-z0-9_]*$/i;
+const q = (name: string): string => {
+  if (!IDENT.test(name)) throw new Error(`pglite supabase shim: unsupported identifier "${name}"`);
+  return `"${name}"`;
+};
+/** `col` or `col->>key` / `col->key` */
+function columnExpr(c: string): string {
+  const m = /^([a-z_][a-z0-9_]*)(->>?)([a-z_][a-z0-9_]*)$/i.exec(c);
+  if (m) return `${q(m[1])}${m[2]}'${m[3]}'`;
+  return q(c);
+}
+
+interface Filter {
+  build: (nextParam: (v: unknown) => string) => string;
+}
+
+function opSql(op: string, col: string, value: unknown, next: (v: unknown) => string): string {
+  const c = columnExpr(col);
+  switch (op) {
+    case 'eq': return `${c} = ${next(value)}`;
+    case 'neq': return `${c} <> ${next(value)}`;
+    case 'gt': return `${c} > ${next(value)}`;
+    case 'gte': return `${c} >= ${next(value)}`;
+    case 'lt': return `${c} < ${next(value)}`;
+    case 'lte': return `${c} <= ${next(value)}`;
+    case 'like': return `${c} like ${next(value)}`;
+    case 'ilike': return `${c} ilike ${next(value)}`;
+    case 'is':
+      if (value === null || value === 'null') return `${c} is null`;
+      return `${c} is ${value === true || value === 'true' ? 'true' : 'false'}`;
+    case 'in': {
+      const list = Array.isArray(value) ? value : String(value).replace(/^\(|\)$/g, '').split(',');
+      if (list.length === 0) return 'false';
+      return `${c} in (${list.map((v) => next(v)).join(', ')})`;
+    }
+    case 'cs': return `${c} @> ${next(typeof value === 'string' ? value : JSON.stringify(value))}`;
+    default: throw new Error(`pglite supabase shim: unsupported filter operator "${op}"`);
+  }
+}
+
+/** Parses a PostgREST `.or()` expression: `a.eq.1,b.is.null`. Nested and()/or() are not supported (they throw). */
+function parseOr(expr: string): Filter {
+  const parts: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of expr) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; } else cur += ch;
+  }
+  if (cur) parts.push(cur);
+  return {
+    build: (next) =>
+      '(' + parts.map((p) => {
+        const m = /^([a-z_][a-z0-9_>-]*)\.(not\.)?([a-z]+)\.(.*)$/i.exec(p.trim());
+        if (!m) throw new Error(`pglite supabase shim: unsupported .or() part "${p}"`);
+        const sql = opSql(m[3], m[1], m[3] === 'in' ? m[4] : m[4], next);
+        return m[2] ? `not (${sql})` : sql;
+      }).join(' or ') + ')',
+  };
+}
+
+class Builder implements PromiseLike<Result> {
+  private mode: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';
+  private columns = '*';
+  private countMode: 'exact' | null = null;
   private head = false;
-  private wantCount = false;
+  private filters: Filter[] = [];
+  private orders: string[] = [];
+  private limitN: number | null = null;
+  private offsetN: number | null = null;
+  private payload: Row[] = [];
+  private patch: Row = {};
+  private onConflict: string | null = null;
+  private ignoreDuplicates = false;
+  private returning = false;
+  private singleMode: 'single' | 'maybe' | null = null;
 
-  constructor(private readonly db: PGlite, private readonly table: string) {}
+  constructor(private readonly db: PGlite, private readonly table: string, private readonly log: string[]) {}
 
-  select(cols = '*', opts?: { count?: string; head?: boolean }) {
-    if (this.op === 'select') this.cols = cols;
-    else this.returning = true;
-    if (opts?.count) this.wantCount = true;
+  select(columns = '*', opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) {
+    if (columns.includes('(')) throw new Error(`pglite supabase shim: embedded resources are not supported ("${columns}")`);
+    if (this.mode !== 'select') this.returning = true;
+    this.columns = columns;
+    if (opts?.count) this.countMode = 'exact';
     if (opts?.head) this.head = true;
-    if (this.op !== 'select') this.cols = cols;
     return this;
   }
-  insert(rows: Json | Json[]) { this.op = 'insert'; this.payload = rows; return this; }
-  upsert(rows: Json | Json[], o?: { onConflict?: string; ignoreDuplicates?: boolean }) { this.op = 'upsert'; this.payload = rows; this.conflict = (o?.onConflict ?? '').split(',').map((s) => s.trim()).filter(Boolean); this.ignoreDup = o?.ignoreDuplicates === true; return this; }
-  update(patch: Json) { this.op = 'update'; this.payload = patch; return this; }
-  delete() { this.op = 'delete'; return this; }
-  eq(col: string, val: unknown) { this.filters.push({ col, op: '=', val }); return this; }
-  neq(col: string, val: unknown) { this.filters.push({ col, op: '<>', val }); return this; }
-  lt(col: string, val: unknown) { this.filters.push({ col, op: '<', val }); return this; }
-  lte(col: string, val: unknown) { this.filters.push({ col, op: '<=', val }); return this; }
-  gt(col: string, val: unknown) { this.filters.push({ col, op: '>', val }); return this; }
-  gte(col: string, val: unknown) { this.filters.push({ col, op: '>=', val }); return this; }
-  is(col: string, val: null | boolean) { this.filters.push({ col, op: val === null ? 'is null' : val ? 'is true' : 'is false' }); return this; }
-  not(col: string, op: string, val: unknown) {
-    if (op === 'is' && val === null) this.filters.push({ col, op: 'is not null' });
-    else if (op === 'in') throw new Error('pglite client: not(in) is not supported');
-    else throw new Error(`pglite client: unsupported not(${op})`);
+  insert(rows: Row | Row[]) { this.mode = 'insert'; this.payload = Array.isArray(rows) ? rows : [rows]; return this; }
+  upsert(rows: Row | Row[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
+    this.mode = 'upsert';
+    this.payload = Array.isArray(rows) ? rows : [rows];
+    this.onConflict = opts?.onConflict ?? null;
+    this.ignoreDuplicates = opts?.ignoreDuplicates === true;
     return this;
   }
-  in(col: string, vals: unknown[]) { this.filters.push({ col, op: 'in', val: vals }); return this; }
-  order(col: string, o?: { ascending?: boolean; nullsFirst?: boolean }) { this.orders.push({ col, asc: o?.ascending !== false }); return this; }
+  update(patch: Row) { this.mode = 'update'; this.patch = patch; return this; }
+  delete() { this.mode = 'delete'; return this; }
+
+  private add(op: string, col: string, value: unknown) { this.filters.push({ build: (n) => opSql(op, col, value, n) }); return this; }
+  eq(c: string, v: unknown) { return this.add('eq', c, v); }
+  neq(c: string, v: unknown) { return this.add('neq', c, v); }
+  gt(c: string, v: unknown) { return this.add('gt', c, v); }
+  gte(c: string, v: unknown) { return this.add('gte', c, v); }
+  lt(c: string, v: unknown) { return this.add('lt', c, v); }
+  lte(c: string, v: unknown) { return this.add('lte', c, v); }
+  like(c: string, v: unknown) { return this.add('like', c, v); }
+  ilike(c: string, v: unknown) { return this.add('ilike', c, v); }
+  is(c: string, v: unknown) { return this.add('is', c, v); }
+  in(c: string, v: unknown[]) { return this.add('in', c, v); }
+  not(c: string, op: string, v: unknown) {
+    this.filters.push({ build: (n) => `not (${opSql(op, c, v, n)})` });
+    return this;
+  }
+  or(expr: string) { this.filters.push(parseOr(expr)); return this; }
+  contains(c: string, v: unknown) {
+    this.filters.push({ build: (n) => `${q(c)} @> ${n(JSON.stringify(v))}::jsonb` });
+    return this;
+  }
+  match(o: Row) { for (const [k, v] of Object.entries(o)) this.eq(k, v); return this; }
+  order(col: string, o?: { ascending?: boolean; nullsFirst?: boolean }) {
+    this.orders.push(`${columnExpr(col)} ${o?.ascending === false ? 'desc' : 'asc'}${o?.nullsFirst === true ? ' nulls first' : o?.nullsFirst === false ? ' nulls last' : ''}`);
+    return this;
+  }
   limit(n: number) { this.limitN = n; return this; }
-  range(a: number, b: number) { this.rangeFrom = a; this.rangeTo = b; return this; }
+  range(from: number, to: number) { this.offsetN = from; this.limitN = to - from + 1; return this; }
   returns() { return this; }
-  maybeSingle() { this.mode = 'maybe'; return this; }
-  // supabase-js: `.single()` on zero rows is an error.
-  single() { this.mode = 'single'; return this; }
+  single(): PromiseLike<Result> { this.singleMode = 'single'; return this; }
+  maybeSingle(): PromiseLike<Result> { this.singleMode = 'maybe'; return this; }
 
-  private where(params: unknown[]): string {
-    if (this.filters.length === 0) return '';
-    const parts = this.filters.map((f) => {
-      const c = `${id(this.table)}.${id(f.col)}`;
-      if (f.op === 'in') {
-        params.push(f.val);
-        return `${c} = any($${params.length})`;
-      }
-      if (f.op.startsWith('is')) return `${c} ${f.op}`;
-      params.push(f.val);
-      return `${c} ${f.op} $${params.length}`;
-    });
-    return ` where ${parts.join(' and ')}`;
-  }
-
-  private projection(): string {
-    if (this.cols === '*') return '*';
-    return this.cols.split(',').map((c) => id(c.trim())).join(', ');
-  }
-
-  private async run(): Promise<{ data: unknown; error: { message: string; code?: string } | null; count?: number | null }> {
-    const params: unknown[] = [];
-    let sql: string;
-    const rowsOf = Array.isArray(this.payload) ? this.payload : this.payload ? [this.payload] : [];
-    const t = id(this.table);
-    switch (this.op) {
-      case 'select': {
-        const order = this.orders.length ? ` order by ${this.orders.map((o) => `${id(o.col)} ${o.asc ? 'asc' : 'desc'}`).join(', ')}` : '';
-        let lim = '';
-        if (this.rangeFrom !== null && this.rangeTo !== null) lim = ` limit ${this.rangeTo - this.rangeFrom + 1} offset ${this.rangeFrom}`;
-        else if (this.limitN !== null) lim = ` limit ${this.limitN}`;
-        const where = this.where(params);
-        if (this.head) sql = `select count(*)::int as c from ${t}${where}`;
-        else sql = `select to_jsonb(q) as j from (select ${this.projection()} from ${t}${where}${order}${lim}) q`;
-        break;
-      }
-      case 'insert':
-      case 'upsert': {
-        if (rowsOf.length === 0) return { data: this.returning ? [] : null, error: null };
-        const cols = [...new Set(rowsOf.flatMap((r) => Object.keys(r)))];
-        const colList = cols.map(id).join(', ');
-        params.push(JSON.stringify(rowsOf));
-        let tail = '';
-        if (this.op === 'upsert') {
-          const conflictCols = this.conflict.map(id).join(', ');
-          const upd = cols.filter((c) => !this.conflict.includes(c)).map((c) => `${id(c)} = excluded.${id(c)}`).join(', ');
-          tail = this.ignoreDup || !upd ? ` on conflict (${conflictCols}) do nothing` : ` on conflict (${conflictCols}) do update set ${upd}`;
-        }
-        // jsonb_populate_recordset types every value by the column it lands in (uuid, numeric, date, jsonb ...).
-        sql = `insert into ${t} (${colList}) select ${colList} from jsonb_populate_recordset(null::${t}, $1::jsonb)${tail} returning to_jsonb(${t}.*) as j`;
-        break;
-      }
-      case 'update': {
-        const patch = (this.payload ?? {}) as Json;
-        const cols = Object.keys(patch);
-        if (cols.length === 0) return { data: [], error: null };
-        params.push(JSON.stringify(patch));
-        const sets = cols.map((c) => `${id(c)} = r.${id(c)}`).join(', ');
-        const where = this.where(params);
-        sql = `update ${t} set ${sets} from jsonb_populate_record(null::${t}, $1::jsonb) r${where} returning to_jsonb(${t}.*) as j`;
-        break;
-      }
-      case 'delete': {
-        const where = this.where(params);
-        sql = `delete from ${t}${where} returning to_jsonb(${t}.*) as j`;
-        break;
-      }
-    }
+  private async run(): Promise<Result> {
     try {
-      const res = await this.db.query<{ j?: unknown; c?: number }>(sql, params);
-      if (this.head) return { data: null, error: null, count: res.rows[0]?.c ?? 0 };
-      const rows = res.rows.map((r) => r.j as Json);
-      const count = this.wantCount ? rows.length : undefined;
-      if (this.op !== 'select' && !this.returning) return { data: null, error: null, count };
-      if (this.mode === 'maybe') return { data: rows[0] ?? null, error: null, count };
-      if (this.mode === 'single') {
-        return rows.length === 1 ? { data: rows[0], error: null, count } : { data: null, error: { message: `expected one row, got ${rows.length}` }, count };
+      const params: unknown[] = [];
+      const next = (v: unknown) => { params.push(v); return `$${params.length}`; };
+      const where = () => (this.filters.length ? ` where ${this.filters.map((f) => f.build(next)).join(' and ')}` : '');
+      const t = q(this.table);
+      let sql: string;
+      const ret = this.returning ? ` returning ${this.columns === '*' ? '*' : this.columns.split(',').map((c) => columnExpr(c.trim())).join(', ')}` : '';
+
+      if (this.mode === 'select') {
+        const cols = this.columns === '*' ? '*' : this.columns.split(',').map((c) => columnExpr(c.trim())).join(', ');
+        let tail = '';
+        if (this.orders.length) tail += ` order by ${this.orders.join(', ')}`;
+        if (this.limitN !== null) tail += ` limit ${this.limitN}`;
+        if (this.offsetN !== null) tail += ` offset ${this.offsetN}`;
+        let count: number | null = null;
+        if (this.countMode) {
+          const cparams: unknown[] = [];
+          const cnext = (v: unknown) => { cparams.push(v); return `$${cparams.length}`; };
+          const cwhere = this.filters.length ? ` where ${this.filters.map((f) => f.build(cnext)).join(' and ')}` : '';
+          count = Number((await this.db.query<{ n: string }>(`select count(*)::text as n from ${t}${cwhere}`, cparams)).rows[0].n);
+          if (this.head) return { data: null, error: null, count };
+        }
+        sql = `select ${cols} from ${t}${where()}${tail}`;
+        this.log.push(sql);
+        const rows = (await this.db.query<Row>(sql, params)).rows;
+        return this.shape(rows, count);
       }
-      return { data: rows, error: null, count };
+
+      if (this.mode === 'insert' || this.mode === 'upsert') {
+        if (this.payload.length === 0) return { data: this.returning ? [] : null, error: null };
+        const colSet = [...new Set(this.payload.flatMap((r) => Object.keys(r).filter((k) => r[k] !== undefined)))];
+        const values = this.payload.map((r) => '(' + colSet.map((c) => (r[c] === undefined ? 'default' : next(r[c]))).join(', ') + ')').join(', ');
+        let conflict = '';
+        if (this.mode === 'upsert') {
+          const target = (this.onConflict ?? 'id').split(',').map((c) => q(c.trim())).join(', ');
+          const sets = colSet.filter((c) => !(this.onConflict ?? 'id').split(',').map((x) => x.trim()).includes(c));
+          conflict = this.ignoreDuplicates || sets.length === 0 ? ` on conflict (${target}) do nothing` : ` on conflict (${target}) do update set ${sets.map((c) => `${q(c)} = excluded.${q(c)}`).join(', ')}`;
+        }
+        sql = `insert into ${t} (${colSet.map(q).join(', ')}) values ${values}${conflict}${ret}`;
+      } else if (this.mode === 'update') {
+        const keys = Object.keys(this.patch).filter((k) => this.patch[k] !== undefined);
+        if (keys.length === 0) return { data: null, error: null };
+        const sets = keys.map((k) => `${q(k)} = ${next(this.patch[k])}`).join(', ');
+        sql = `update ${t} set ${sets}${where()}${ret}`;
+      } else {
+        sql = `delete from ${t}${where()}${ret}`;
+      }
+      this.log.push(sql);
+      const res = await this.db.query<Row>(sql, params);
+      return this.returning ? this.shape(res.rows, null) : { data: null, error: null };
     } catch (e) {
-      const err = e as Error & { code?: string };
-      return { data: null, error: { message: err.message, code: err.code } };
+      const err = e as { message?: string; code?: string; detail?: string; hint?: string };
+      return { data: null, error: { message: err.message ?? String(e), code: err.code, details: err.detail ?? null, hint: err.hint ?? null } };
     }
   }
 
-  then<T1 = unknown, T2 = never>(
-    resolve?: ((v: { data: unknown; error: { message: string; code?: string } | null; count?: number | null }) => T1 | PromiseLike<T1>) | null,
-    reject?: ((e: unknown) => T2 | PromiseLike<T2>) | null,
-  ): PromiseLike<T1 | T2> {
-    return this.run().then(resolve, reject);
+  private shape(rows: Row[], count: number | null): Result {
+    if (this.singleMode === 'single') {
+      if (rows.length !== 1) return { data: null, error: { message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116', details: `The result contains ${rows.length} rows` }, count };
+      return { data: rows[0], error: null, count };
+    }
+    if (this.singleMode === 'maybe') {
+      if (rows.length > 1) return { data: null, error: { message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116', details: `The result contains ${rows.length} rows` }, count };
+      return { data: rows[0] ?? null, error: null, count };
+    }
+    return { data: rows, error: null, count };
+  }
+
+  then<R1 = Result, R2 = never>(onfulfilled?: ((value: Result) => R1 | PromiseLike<R1>) | null, onrejected?: ((reason: unknown) => R2 | PromiseLike<R2>) | null): PromiseLike<R1 | R2> {
+    return this.run().then(onfulfilled, onrejected);
   }
 }
 
 export interface PgliteSupabase {
-  from(table: string): Builder;
-  rpc(name: string, args?: Json): Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
-  storage: never;
+  from: (table: string) => Builder;
+  rpc: (fn: string, args?: Row) => PromiseLike<Result>;
+  /** Every SQL statement the code under test issued (for assertions about what was NOT written). */
+  log: string[];
 }
 
-export function pgliteSupabase(db: PGlite): PgliteSupabase {
-  const client = {
-    from(table: string) {
-      return new Builder(db, table);
-    },
-    async rpc(name: string, args: Json = {}) {
-      if (!IDENT.test(name)) throw new Error(`pglite client: unsafe function name ${name}`);
-      const keys = Object.keys(args);
-      const sql = `select to_jsonb(r) as j from ${name}(${keys.map((k, i) => `${id(k)} := $${i + 1}`).join(', ')}) r`;
-      try {
-        const res = await db.query<{ j: Json }>(sql, keys.map((k) => args[k]));
-        const rows = res.rows.map((r) => r.j);
-        // A scalar function (e.g. the heartbeat) comes back as {"<name>": value}.
-        if (rows.length === 1 && (rows[0] === null || typeof rows[0] !== 'object')) return { data: rows[0], error: null };
-        if (rows.length === 1 && Object.keys(rows[0]).length === 1 && name in rows[0]) return { data: rows[0][name], error: null };
-        return { data: rows, error: null };
-      } catch (e) {
-        const err = e as Error & { code?: string };
-        return { data: null, error: { message: err.message, code: err.code } };
-      }
+export function createPgliteSupabase(db: PGlite): PgliteSupabase {
+  const log: string[] = [];
+  return {
+    log,
+    from: (table: string) => new Builder(db, table, log),
+    rpc: (fn: string, args: Row = {}) => {
+      const run = async (): Promise<Result> => {
+        try {
+          const names = Object.keys(args);
+          const sql = `select * from ${q(fn)}(${names.map((n, i) => `${q(n)} => $${i + 1}`).join(', ')})`;
+          log.push(sql);
+          const rows = (await db.query<Row>(sql, names.map((n) => args[n]))).rows;
+          const unwrapped = rows.length === 1 && Object.keys(rows[0]).length === 1 && fn in rows[0] ? rows[0][fn] : rows;
+          return { data: unwrapped, error: null };
+        } catch (e) {
+          return { data: null, error: { message: (e as Error).message } };
+        }
+      };
+      return { then: (a, b) => run().then(a, b) } as PromiseLike<Result>;
     },
   };
-  return client as unknown as PgliteSupabase;
 }

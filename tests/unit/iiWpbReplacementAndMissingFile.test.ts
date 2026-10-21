@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'crypto';
 import { createInMemoryDb, type Row } from './support/inMemorySupabase';
 import { buildMinimalTextPdf } from '../support/buildMinimalPdf';
+import { buildAieIiCasFixtureText } from '../support/buildAieIiCasFixtureText';
 
 const h = vi.hoisted(() => ({
   db: null as unknown as ReturnType<typeof import('./support/inMemorySupabase').createInMemoryDb>,
@@ -14,8 +15,10 @@ const h = vi.hoisted(() => ({
   uploads: [] as string[],
   removed: [] as string[],
   extractCalls: [] as (string | undefined)[],
+  /** When set, the PDF text layer is this statement text (so the WP-H identity check can read the copy); null = a wrong-password failure, as before. */
+  extractText: null as string | null,
   scanVerdict: { admitted: true } as { admitted: boolean; reason?: string },
-  scanCalls: [] as { storagePath: string; contentHash: string }[],
+  scanCalls: [] as { contentHash: string }[],
 }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => h.db.client }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => h.db.client }));
@@ -37,14 +40,17 @@ vi.mock('@/lib/services/investment-intelligence/storage', async (orig) => ({
 vi.mock('@/lib/services/investment-intelligence/pdfExtraction', () => ({
   extractPdfText: async (_b: Uint8Array, password?: string) => {
     h.extractCalls.push(password);
+    if (h.extractText) return { ok: true as const, text: h.extractText, pageCount: 1 };
     return { ok: false as const, kind: 'wrong_password' as const, error: 'wrong password' };
   },
 }));
 vi.mock('@/lib/services/investment-intelligence/realScanAdmission', () => ({
-  startIiRealScan: async (p: { storagePath: string; contentHash: string }) => {
-    h.scanCalls.push({ storagePath: p.storagePath, contentHash: p.contentHash });
-    return h.scanVerdict;
+  // WP-H: the replacement flow scans the copy BEFORE reading it (scanReplacementCandidate) and records the verdict after attaching.
+  scanReplacementCandidate: async (p: { contentHash: string }) => {
+    h.scanCalls.push({ contentHash: p.contentHash });
+    return h.scanVerdict.admitted ? { admitted: true as const, verdict: null } : { admitted: false as const, reason: h.scanVerdict.reason as 'pending' | 'blocked' | 'scanner_unavailable' };
   },
+  recordAdmittedReplacementScan: async () => undefined,
   II_SCAN_BLOCKED_MESSAGE: 'blocked-message',
   II_SCAN_UNAVAILABLE_MESSAGE: 'unavailable-message',
 }));
@@ -71,6 +77,13 @@ function doc(over: Row = {}): Row {
     mime_type: 'application/pdf',
     file_size: 10,
     owner_member_id: 'member-1',
+    country_code: 'IN',
+    // WP-H: the structured provenance a processed statement RETAINS after its file is deleted (period 01-01-2025 to 31-03-2025, CAMS).
+    source_detected: 'cams',
+    document_type_detected: 'cas_statement',
+    statement_period_start: '2025-01-01',
+    statement_period_end: '2025-03-31',
+    statement_as_of_date: '2025-03-31',
     malware_scan_status: 'clean',
     malware_scan_object_ref: null,
     malware_scan_admission_deadline_at: null,
@@ -90,6 +103,7 @@ function seed(documents: Row[], extra: Record<string, Row[]> = {}) {
 }
 
 beforeEach(() => {
+  h.extractText = null;
   h.db = createInMemoryDb();
   seed([doc()]);
 });
@@ -144,6 +158,11 @@ describe('processSourceDocument when the raw file was deleted (F5: "Could not re
 });
 
 describe('replaceSourceDocumentFile: a controlled replacement, not a duplicate (F14)', () => {
+  // The copy is a CAMS statement for exactly the retained period, so the WP-H identity check passes and these tests stay about the mechanics.
+  beforeEach(() => {
+    h.extractText = buildAieIiCasFixtureText();
+  });
+
   it('attaches the new copy to the SAME statement: same id and owner, no second row, file reference and checksum updated', async () => {
     const r = await replaceSourceDocumentFile({ userId: U, sourceDocumentId: 'doc1', filename: 'ADXXXXXXX9Q_new.pdf', mimeType: 'application/pdf', bytes: PDF });
     expect(r.ok).toBe(true);
@@ -167,20 +186,35 @@ describe('replaceSourceDocumentFile: a controlled replacement, not a duplicate (
     const event = h.db.tables.ii_audit_events.find((e) => e.event_type === 'upload');
     expect(event?.subject_id).toBe('doc1');
     expect(event?.metadata).toMatchObject({ controlledReplacement: true, replacementOf: 'doc1', previousFilename: 'ADXXXXXXX9Q_old.pdf', newFilename: 'new.pdf', checksumChanged: true });
-    expect(h.scanCalls).toEqual([{ storagePath: h.uploads[0], contentHash: sha(PDF) }]);
+    expect(h.scanCalls).toEqual([{ contentHash: sha(PDF) }]);
     expect(h.db.tables.ii_source_documents[0].malware_scan_status).toBe('not_required'); // reset: the 'clean' verdict was for the old file
   });
 
-  it('a blocked scan is reported and not treated as success', async () => {
+  it('a blocked scan is reported and not treated as success: nothing is parsed, stored or changed (WP-H: the verdict comes BEFORE the copy is read)', async () => {
     h.scanVerdict = { admitted: false, reason: 'blocked' };
+    const before = JSON.stringify(h.db.tables.ii_source_documents[0]);
     const r = await replaceSourceDocumentFile({ userId: U, sourceDocumentId: 'doc1', filename: 'new.pdf', mimeType: 'application/pdf', bytes: PDF });
     expect(r).toMatchObject({ ok: false, httpStatus: 422, code: 'malware_scan_blocked' });
+    expect(h.extractCalls, 'unscanned or blocked bytes are never parsed').toEqual([]);
+    expect(h.uploads).toEqual([]);
+    expect(JSON.stringify(h.db.tables.ii_source_documents[0])).toBe(before);
   });
 
-  it('a scan still pending is success with scanPending, so the screen waits instead of failing', async () => {
+  it('a scan still pending asks the screen to wait (409 malware_scan_pending); nothing is parsed, stored or changed', async () => {
     h.scanVerdict = { admitted: false, reason: 'pending' };
+    const before = JSON.stringify(h.db.tables.ii_source_documents[0]);
     const r = await replaceSourceDocumentFile({ userId: U, sourceDocumentId: 'doc1', filename: 'new.pdf', mimeType: 'application/pdf', bytes: PDF });
-    expect(r).toMatchObject({ ok: true, scanPending: true });
+    expect(r).toMatchObject({ ok: false, httpStatus: 409, code: 'malware_scan_pending' });
+    expect(h.extractCalls).toEqual([]);
+    expect(h.uploads).toEqual([]);
+    expect(JSON.stringify(h.db.tables.ii_source_documents[0])).toBe(before);
+  });
+
+  it('a scanner that is unavailable fails closed (503) and parses nothing', async () => {
+    h.scanVerdict = { admitted: false, reason: 'scanner_unavailable' };
+    const r = await replaceSourceDocumentFile({ userId: U, sourceDocumentId: 'doc1', filename: 'new.pdf', mimeType: 'application/pdf', bytes: PDF });
+    expect(r).toMatchObject({ ok: false, httpStatus: 503, code: 'malware_scan_unavailable' });
+    expect(h.extractCalls).toEqual([]);
   });
 
   it('REVIVES a discarded (archived) statement so the person can finish what they started', async () => {
@@ -230,12 +264,15 @@ describe('replaceSourceDocumentFile: a controlled replacement, not a duplicate (
 
   it('END TO END (F14): replace, then reprocess -- the file is read again and the password is used on the SAME document', async () => {
     seed([doc({ status: 'password_required' })]);
-    const rep = await replaceSourceDocumentFile({ userId: U, sourceDocumentId: 'doc1', filename: 'new.pdf', mimeType: 'application/pdf', bytes: PDF_B });
+    h.extractCalls.length = 0;
+    const rep = await replaceSourceDocumentFile({ userId: U, sourceDocumentId: 'doc1', filename: 'new.pdf', mimeType: 'application/pdf', bytes: PDF_B, password: 'secret' });
     expect(rep.ok).toBe(true);
+    expect(h.extractCalls).toEqual(['secret']); // the identity check read the copy with the password
+    h.extractText = null; // the processing run that follows stops at the password step, as before
     const r = await processSourceDocument({ userId: U, sourceDocumentId: 'doc1', password: 'secret' });
     expect(r.status).not.toBe(SOURCE_FILE_NOT_STORED_STATUS); // before the replacement this was the dead end
     expect(h.downloads).toEqual([h.uploads[0]]);
-    expect(h.extractCalls).toEqual(['secret']);
+    expect(h.extractCalls).toEqual(['secret', 'secret']);
     expect(h.db.tables.ii_source_documents).toHaveLength(1);
   });
 });

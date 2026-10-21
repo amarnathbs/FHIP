@@ -9,6 +9,15 @@ import { replaceSourceDocumentFile } from '@/lib/services/investment-intelligenc
 // full contract. Reprocessing the attached copy is the ordinary, already-idempotent `POST .../process` call (the screen
 // makes both calls), so no duplicate holdings, transactions or net worth can result.
 //
+// WP-H (21-10-2026): before the file reference is switched, the copy is checked against what the old statement retained
+// (provider, document type, period, folios, schemes, owner). Optional form fields:
+//   password             the document password, used only to read the copy for that check (never stored or logged)
+//   confirmDifferences   comma-separated codes of confirmable differences the person has seen and accepted; a rejection
+//                        (a different statement) can never be confirmed
+// Answers: 422 replacement_identity_conflict (different statement, with the plain-words reasons), 409
+// replacement_needs_confirmation (the differences to show, then resend with confirmDifferences), 422
+// password_required_for_check / wrong_password_for_check.
+//
 // Premium: attaching a file is new extraction work, gated exactly like the first upload. Refused before the body is read.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,11 +29,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const form = await req.formData().catch(() => null);
   const file = form?.get('file');
   if (!form || !(file instanceof File)) return bad('Choose the statement file to attach.', 422, 'missing_file');
+  const passwordField = form.get('password');
+  const password = typeof passwordField === 'string' && passwordField.length > 0 ? passwordField : undefined;
+  const confirmField = form.get('confirmDifferences');
+  const confirmedDifferences = typeof confirmField === 'string' ? confirmField.split(',').map((c) => c.trim()).filter((c) => /^[a-z_]{1,60}$/.test(c)) : [];
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const result = await replaceSourceDocumentFile({ userId: user.id, sourceDocumentId: id, filename: file.name, mimeType: file.type, bytes });
+  const result = await replaceSourceDocumentFile({ userId: user.id, sourceDocumentId: id, filename: file.name, mimeType: file.type, bytes, password, confirmedDifferences });
   if (!result.ok) {
-    return Response.json({ error: result.code, message: result.message, ...(result.existingDocumentId ? { existing_document_id: result.existingDocumentId } : {}) }, { status: result.httpStatus });
+    return Response.json(
+      {
+        error: result.code,
+        message: result.message,
+        ...(result.existingDocumentId ? { existing_document_id: result.existingDocumentId } : {}),
+        ...(result.identity ? { identity: result.identity } : {}),
+      },
+      { status: result.httpStatus },
+    );
   }
   return ok({
     sourceDocumentId: result.sourceDocumentId,
@@ -32,5 +53,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     checksumChanged: result.checksumChanged,
     previousFilename: result.previousFilename,
     scanPending: result.scanPending,
+    identity: result.identity,
   });
 }

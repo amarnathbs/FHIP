@@ -1,5 +1,5 @@
 // Investment Intelligence -- controlled replacement copy of a statement whose raw file was deleted
-// (Document2 (4) WP-B, F5/F6/F14, 20-10-2026).
+// (Document2 (4) WP-B, F5/F6/F14, 20-10-2026; identity validation added by WP-H, 21-10-2026).
 //
 // Statement files are temporary by design. When the person needs something that only the file can give (a password
 // reprocess, applying an instrument choice, re-reading a statement that failed), the answer is NOT to restore raw
@@ -16,18 +16,51 @@
 //
 // An accidental duplicate upload (the file is still stored, or the same bytes under a different document) is still
 // refused by the ordinary upload route; this flow only exists for a document that has no stored file.
+//
+// WP-H (Document2 (4) closure): the new copy must also be plausibly the SAME LOGICAL STATEMENT. Before the file reference is switched
+// it is read with the deterministic parsers (nothing is written) and compared with what the old statement retained (provider, document
+// type, period, folios, schemes, owner; see replacementIdentity.ts for the rules and thresholds). A different statement is refused; a
+// materially different period or folio set needs the person's explicit confirmation of exactly those differences; a signal the old
+// statement did not retain is reported as not compared, never as agreement. With the real malware scan on, the scan verdict comes
+// first: unscanned bytes are never parsed.
 
 import { createHash } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
 import { generateObjectKey, uploadSourceDocumentObject, deleteSourceDocumentObject, validateUploadedFile } from './storage';
 import { scanUploadedPdfForAdmission, uploadAdmissionFailureMessage } from './uploadAdmission';
-import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from './realScanAdmission';
+import { scanReplacementCandidate, recordAdmittedReplacementScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from './realScanAdmission';
 import { replacementAllowed } from './caseLifecycle';
+import {
+  compareStatementIdentity,
+  loadMembersReadOnly,
+  loadRetainedIdentity,
+  readCandidateIdentity,
+  unconfirmedDifferences,
+  unreadableCopyVerdict,
+  type IdentityVerdict,
+} from './replacementIdentity';
+
+/** What the identity check found, in a shape the screen can show. Dates are already day-first plain words. */
+export interface ReplacementIdentityReport {
+  decision: IdentityVerdict['decision'];
+  differences: { code: string; severity: 'reject' | 'confirm'; message: string }[];
+  comparedOn: string[];
+  notComparedOn: string[];
+  candidateSummary: string;
+}
 
 export type ReplacementResult =
-  | { ok: true; sourceDocumentId: string; status: string; checksumChanged: boolean; previousFilename: string | null; scanPending: boolean }
-  | { ok: false; httpStatus: number; code: string; message: string; existingDocumentId?: string };
+  | { ok: true; sourceDocumentId: string; status: string; checksumChanged: boolean; previousFilename: string | null; scanPending: boolean; identity: ReplacementIdentityReport }
+  | { ok: false; httpStatus: number; code: string; message: string; existingDocumentId?: string; identity?: ReplacementIdentityReport };
+
+const toReport = (v: IdentityVerdict): ReplacementIdentityReport => ({
+  decision: v.decision,
+  differences: v.differences.map((d) => ({ code: d.code, severity: d.severity, message: d.message })),
+  comparedOn: v.comparedOn,
+  notComparedOn: v.notComparedOn,
+  candidateSummary: v.candidateSummary,
+});
 
 export async function replaceSourceDocumentFile(input: {
   userId: string;
@@ -35,8 +68,13 @@ export async function replaceSourceDocumentFile(input: {
   filename: string;
   mimeType: string;
   bytes: Uint8Array;
+  /** The statement's document password, used ONLY to read the copy for the identity check. Never stored, never logged. */
+  password?: string;
+  /** Codes of the confirmable differences the person has seen and accepted. A rejection can never be confirmed. */
+  confirmedDifferences?: string[];
 }): Promise<ReplacementResult> {
   const { userId, sourceDocumentId, filename, mimeType, bytes } = input;
+  const confirmed = input.confirmedDifferences ?? [];
   const validation = validateUploadedFile({ filename, mimeType, sizeBytes: bytes.byteLength });
   if (!validation.ok) return { ok: false, httpStatus: 422, code: 'invalid_file', message: validation.error ?? 'This file cannot be used.' };
 
@@ -83,12 +121,66 @@ export async function replaceSourceDocumentFile(input: {
     };
   }
 
+  const hasScanColumns = 'malware_scan_status' in row;
+
+  // The real malware scan comes first: nothing below parses bytes that have not been cleared, and a refused copy leaves the row alone.
+  const scanAdmission = await scanReplacementCandidate({ userId, sourceDocumentId, bytes, contentType: mimeType, contentHash: checksum, hasScanColumns });
+  if (!scanAdmission.admitted) {
+    if (scanAdmission.reason === 'pending') return { ok: false, httpStatus: 409, code: 'malware_scan_pending', message: 'Your file is being scanned for safety. This usually takes a few seconds. Nothing has been changed.' };
+    if (scanAdmission.reason === 'scanner_unavailable') return { ok: false, httpStatus: 503, code: 'malware_scan_unavailable', message: II_SCAN_UNAVAILABLE_MESSAGE };
+    return { ok: false, httpStatus: 422, code: 'malware_scan_blocked', message: II_SCAN_BLOCKED_MESSAGE };
+  }
+
+  // WP-H: is this copy plausibly the same logical statement? Read-only; runs BEFORE the file reference is switched.
+  const candidate = await readCandidateIdentity({ bytes, mimeType, password: input.password });
+  if (candidate.kind === 'password') {
+    return {
+      ok: false,
+      httpStatus: 422,
+      code: candidate.failure === 'password_required' ? 'password_required_for_check' : 'wrong_password_for_check',
+      message:
+        candidate.failure === 'password_required'
+          ? 'This file is password protected. Enter its password so we can check it is the same statement. The password is used only for this check and is not stored. Nothing was changed.'
+          : 'The password did not open this file, so we could not check it is the same statement. Enter the document password again. Nothing was changed.',
+    };
+  }
+  const retained = await loadRetainedIdentity(admin, userId, row);
+  const verdict =
+    candidate.kind === 'ok'
+      ? compareStatementIdentity(retained, candidate.identity, await loadMembersReadOnly(admin, userId))
+      : unreadableCopyVerdict(retained, candidate.reason);
+  const unresolved = unconfirmedDifferences(verdict, confirmed);
+  if (unresolved.length > 0) {
+    const rejected = verdict.decision === 'rejected';
+    await emitAuditEvent({
+      userId,
+      eventType: 'document_processing_failed',
+      subjectType: 'ii_source_documents',
+      subjectId: sourceDocumentId,
+      actorType: 'system',
+      metadata: {
+        reason: rejected ? 'replacement_identity_rejected' : 'replacement_identity_needs_confirmation',
+        differences: verdict.differences.map((d) => d.code),
+        comparedOn: verdict.comparedOn,
+        notComparedOn: verdict.notComparedOn,
+      },
+    });
+    return {
+      ok: false,
+      httpStatus: rejected ? 422 : 409,
+      code: rejected ? 'replacement_identity_conflict' : 'replacement_needs_confirmation',
+      message: rejected
+        ? `${unresolved.map((d) => d.message).join(' ')} Nothing was changed.`
+        : `This copy differs from the statement it would replace. ${unresolved.map((d) => d.message).join(' ')} Nothing has been changed yet. Confirm only if this really is the same statement.`,
+      identity: toReport(verdict),
+    };
+  }
+
   const objectKey = generateObjectKey(userId, filename);
   const { error: uploadErr } = await uploadSourceDocumentObject(objectKey, bytes, mimeType);
   if (uploadErr) return { ok: false, httpStatus: 500, code: 'storage_failed', message: `Storage upload failed: ${uploadErr}` };
 
   const previousFilename = (row.original_filename as string | null) ?? null;
-  const hasScanColumns = 'malware_scan_status' in row;
   const patch: Record<string, unknown> = {
     storage_path: objectKey,
     storage_purged_at: null,
@@ -125,12 +217,31 @@ export async function replaceSourceDocumentFile(input: {
       checksumChanged: previousChecksum !== checksum,
       fileSize: bytes.byteLength,
       previousStatus: row.status ?? null,
+      // WP-H: what the identity check compared, what it found, and which differences the person confirmed.
+      identityCheck: {
+        decision: verdict.decision,
+        comparedOn: verdict.comparedOn,
+        notComparedOn: verdict.notComparedOn,
+        differences: verdict.differences.map((d) => d.code),
+        confirmedDifferences: verdict.differences.filter((d) => d.severity === 'confirm' && confirmed.includes(d.code)).map((d) => d.code),
+        previousPeriodStart: retained.periodStart,
+        previousPeriodEnd: retained.periodEnd,
+        newPeriodStart: candidate.kind === 'ok' ? candidate.identity.periodStart : null,
+        newPeriodEnd: candidate.kind === 'ok' ? candidate.identity.periodEnd : null,
+      },
     },
   });
 
-  const scan = await startIiRealScan({ userId, sourceDocumentId, storagePath: objectKey, bytes, contentType: mimeType, contentHash: checksum, hasScanColumns });
-  if (!scan.admitted && scan.reason === 'blocked') return { ok: false, httpStatus: 422, code: 'malware_scan_blocked', message: II_SCAN_BLOCKED_MESSAGE };
-  if (!scan.admitted && scan.reason === 'scanner_unavailable') return { ok: false, httpStatus: 503, code: 'malware_scan_unavailable', message: II_SCAN_UNAVAILABLE_MESSAGE };
+  // The verdict reached before the copy was read is now recorded against the attached file (and the scan copy is deleted).
+  await recordAdmittedReplacementScan(sourceDocumentId, scanAdmission.verdict);
 
-  return { ok: true, sourceDocumentId, status: (patch.status as string | undefined) ?? ((row.status as string | undefined) ?? 'uploaded'), checksumChanged: previousChecksum !== checksum, previousFilename, scanPending: !scan.admitted };
+  return {
+    ok: true,
+    sourceDocumentId,
+    status: (patch.status as string | undefined) ?? ((row.status as string | undefined) ?? 'uploaded'),
+    checksumChanged: previousChecksum !== checksum,
+    previousFilename,
+    scanPending: false,
+    identity: toReport(verdict),
+  };
 }
