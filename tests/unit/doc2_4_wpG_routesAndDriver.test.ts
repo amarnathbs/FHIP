@@ -168,6 +168,29 @@ describe('process routes: 202 + job id, quickly', () => {
   });
 });
 
+describe('a database without migration 0310', () => {
+  it('answers 503 with a plain sentence (never SQL) from the process routes', async () => {
+    const { BankImportJobsUnavailableError } = await import('@/lib/financial-data-hub/services/bankImportJobStore');
+    h.admit = async () => { throw new BankImportJobsUnavailableError(); };
+    const csv = await import('@/app/api/financial-data-hub/bank-csv/[documentId]/process/route');
+    const res = await csv.POST(new Request('http://x', { method: 'POST' }), { params: Promise.resolve({ documentId: 'd' }) });
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe('bank_import_unavailable');
+    expect(JSON.stringify(body)).not.toMatch(/relation|fdh_bank_import|PGRST/);
+  });
+
+  it('the store recognises a missing table in the shapes PostgREST and Postgres use', async () => {
+    const store = await import('@/lib/financial-data-hub/services/bankImportJobStore');
+    // listActiveJobsForUser treats "table missing" as "no jobs" instead of failing
+    const original = h.fake.client.from;
+    h.fake.client.from = () => ({ select: () => ({ eq: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.fdh_bank_import_jobs'" } }) }) }) }) }) }) as never;
+    vi.doMock('@/lib/supabase/admin', () => ({ createAdminClient: () => h.fake.client }));
+    expect(await store.listActiveJobsForUser('u')).toEqual([]);
+    h.fake.client.from = original;
+  });
+});
+
 describe('job model (pure)', () => {
   const base = { status: 'processing', lease_expires_at: null, slice_count: 0 } as const;
   it('liveness: working while a lease is live, stalled once it ran out (the dead-job rule), idle when never claimed, waiting for a person, finished', () => {
