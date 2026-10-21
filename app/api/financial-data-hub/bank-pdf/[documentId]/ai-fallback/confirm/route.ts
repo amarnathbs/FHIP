@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
-import { confirmAiBankStatementFallback, BankPdfProcessingError } from '@/lib/financial-data-hub/services/bankPdfProcessingService';
-import { AIE_BANK_STATEMENT_MAX_TRANSACTIONS } from '@/lib/aie/adapters/bankStatement';
+import { confirmAiDraftIntoJob } from '@/lib/financial-data-hub/services/bankImportAdmission';
+import { PDF_MAX_TRANSACTION_ROWS } from '@/lib/financial-data-hub/bank-pdf/constants';
+import { acceptedJobResponse, isUnavailable, unavailableResponse } from '@/lib/financial-data-hub/bankImport/routeHelpers';
 import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
 import { fdhDocumentRunPosition } from '@/lib/financial-data-hub/services/importRunPosition';
 
@@ -44,7 +45,9 @@ const rowSchema = z
 
 const bodySchema = z
   .object({
-    rows: z.array(rowSchema).min(1).max(AIE_BANK_STATEMENT_MAX_TRANSACTIONS),
+    // A long statement is read in parts (WP-G), so the reviewed draft can hold far more than the 80 lines one reading is limited to;
+    // the ceiling is the importer's own row limit.
+    rows: z.array(rowSchema).min(1).max(PDF_MAX_TRANSACTION_ROWS),
     statementPeriodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
     statementPeriodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
     declaredOpeningBalance: z.number().finite().nullable().optional(),
@@ -85,38 +88,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   const v = parsedBody.data;
 
   try {
-    const result = await confirmAiBankStatementFallback(user.id, documentId, {
-      rows: v.rows.map((r, i) => ({ ...r, sourceRowNumber: i + 1 })),
-      statementPeriodStart: orNull(v.statementPeriodStart),
-      statementPeriodEnd: orNull(v.statementPeriodEnd),
-      declaredOpeningBalance: orNull(v.declaredOpeningBalance),
-      declaredClosingBalance: orNull(v.declaredClosingBalance),
-      maskedAccountIdentifier: orNull(v.maskedAccountIdentifier),
+    // WP-G: confirming no longer writes the lines inside this request. It claims the server-issued draft (once) and queues the
+    // writing as the statement's background job; the browser polls the job to its end. A replayed confirmation finds the same job.
+    const outcome = await confirmAiDraftIntoJob({
+      userId: user.id,
+      documentId,
+      reviewed: {
+        rows: v.rows.map((r, i) => ({ ...r, sourceRowNumber: i + 1 })),
+        statementPeriodStart: orNull(v.statementPeriodStart),
+        statementPeriodEnd: orNull(v.statementPeriodEnd),
+        declaredOpeningBalance: orNull(v.declaredOpeningBalance),
+        declaredClosingBalance: orNull(v.declaredClosingBalance),
+        maskedAccountIdentifier: orNull(v.maskedAccountIdentifier),
+      },
     });
-    return ok({
-      document_id: result.document.id,
-      pipeline_status: result.pipelineStatus,
-      certification_status: result.certificationStatus,
-      processing_status: result.document.processing_status,
-      reconciliation_status: result.reconciliationStatus,
-      transactions_created: result.transactionsCreated,
-      duplicates_skipped: result.duplicatesSkipped,
-      duplicate_candidates: result.duplicateCandidates,
-      // WP-08 (EXP-G14/EXP-G15).
-      unread_lines: result.unreadLines ?? null,
-      incomplete_extraction: result.incompleteExtraction ?? false,
-    });
+    if (outcome.kind === 'job') return acceptedJobResponse(outcome.job);
+    if (outcome.kind === 'result') return ok(outcome.payload);
+    return bad(outcome.message, outcome.status);
   } catch (e) {
-    if (e instanceof BankPdfProcessingError) {
-      const status = e.code === 'not_found' ? 404 : e.code === 'invalid_state' ? 409 : e.code === 'account_unresolved' ? 422 : 400;
-      const message =
-        e.code === 'account_unresolved'
-          ? 'We could not tell which account this statement belongs to. Please resolve the account before confirming.'
-          : e.code === 'invalid_state'
-            ? 'This statement has no AI-extracted draft awaiting confirmation.'
-            : e.message;
-      return bad(message, status);
-    }
+    if (isUnavailable(e)) return unavailableResponse();
+    console.error('[bank-pdf/ai-fallback/confirm] unexpected failure', { documentIdPrefix: documentId.slice(0, 8), name: e instanceof Error ? e.name : typeof e, message: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300) });
     return bad('We could not save this statement.', 500);
   }
 }

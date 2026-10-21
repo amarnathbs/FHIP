@@ -43,6 +43,7 @@ import { assertPurgeTransition, isAllowedPurgeTransition, isPurgeEligible } from
 import { buildStatementUploadPurgePatch } from '../domain/privacy';
 import { decideRawFileBackstopAction } from '../domain/rawFileBackstop';
 import { documentsWithPendingAiFallbackDrafts, hasConfirmedAiFallbackDraft } from './aiFallbackDrafts';
+import { documentsWithStagedBankImportPlan } from './bankImportJobStore';
 
 /** Statuses at which the document's structured evidence is already persisted
  * (AIE-1 final completion, 2026-09-25 -- see rawFileBackstop.ts). */
@@ -459,10 +460,17 @@ export async function enforceRawFileHardBackstop(
     admin,
     (candidates ?? []).filter((d) => DRAFT_PARKING_STATUSES.includes(d.processing_status)).map((d) => d.id),
   );
+  // Document2 (4) WP-G: a bank statement whose background import job already holds its staged plan (confirmed reading, persist or
+  // finalize phase) has a durable structured result too; it may take several short slices to finish writing, so the backstop must
+  // purge the file but not force the statement to `rejected` half way through.
+  const stagedPlanDocIds = await documentsWithStagedBankImportPlan(
+    (candidates ?? []).filter((d) => d.processing_status === 'processing').map((d) => d.id),
+  );
   for (const doc of candidates ?? []) {
     const hasDurableStructuredResult =
       DURABLE_RESULT_STATUSES.includes(doc.processing_status) ||
-      (DRAFT_PARKING_STATUSES.includes(doc.processing_status) && (pendingDraftDocIds.has(doc.id) || evidenceDocIds.has(doc.id)));
+      (DRAFT_PARKING_STATUSES.includes(doc.processing_status) && (pendingDraftDocIds.has(doc.id) || evidenceDocIds.has(doc.id))) ||
+      (doc.processing_status === 'processing' && stagedPlanDocIds.has(doc.id));
     const decision = decideRawFileBackstopAction(
       {
         processingStatus: doc.processing_status,

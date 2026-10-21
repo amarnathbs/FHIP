@@ -280,7 +280,7 @@ export interface ProcessBankCsvResult {
 /** The earlier, already-imported upload this CSV is a byte-identical copy
  * of, if any (identicalUpload.ts). CSV imports have no AI draft to carry on
  * with, so only a settled import counts. */
-async function findImportedIdenticalCsv(userId: string, documentId: string): Promise<string | null> {
+export async function findImportedIdenticalCsv(userId: string, documentId: string): Promise<string | null> {
   const match = await findEarlierIdenticalUpload(userId, documentId, { ...IDENTICAL_UPLOAD_SPECS.bank, includePendingDrafts: false });
   return match?.kind === 'evidence' ? match.documentId : null;
 }
@@ -822,7 +822,7 @@ export async function finalizeBankCsvImport(input: BankCsvFinalizeInput): Promis
   };
 }
 
-function summariseExisting(document: FdhStatementUpload): ProcessBankCsvResult {
+export function summariseExisting(document: FdhStatementUpload): ProcessBankCsvResult {
   return {
     document,
     transactionsCreated: document.certified_row_count ?? 0,

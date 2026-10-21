@@ -41,6 +41,9 @@ export interface AieAiGenerateRequest {
   maxOutputTokens: number;
   temperature?: number;
   timeoutMs?: number;
+  /** WP-G: bounds the transient retries of THIS call (default: the configured maximum). A background-slice caller sets 0 so one call
+   * can never run for longer than `timeoutMs`; the part is retried by a later slice instead. */
+  maxTransientRetries?: number;
 }
 
 export interface AieAiGenerateResult {

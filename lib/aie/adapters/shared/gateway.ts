@@ -156,6 +156,9 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
    * the ordinary scalar budget, so an adapter that forgets this gets the
    * conservative number, not the expensive one. */
   lineItemDocument?: boolean;
+  /** WP-G: bounds for THIS call (a background slice must end inside a web request). Can only shorten the configured values. */
+  timeoutMs?: number;
+  maxTransientRetries?: number;
 }): Promise<AieAdapterExtractionOutcome<z.infer<TSchema>>> {
   // AIE-1 final completion (2026-09-25): per-attempt key; `requestId` is only
   // a correlation id. See the payslip adapter's gateway for defect D1.
@@ -170,6 +173,8 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
     requestedFields: [],
     idempotencyKey,
     userId: params.userId,
+    ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
+    ...(params.maxTransientRetries !== undefined ? { maxTransientRetries: params.maxTransientRetries } : {}),
   });
 
   const evidence: AieAdapterCallEvidence = {

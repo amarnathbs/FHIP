@@ -146,7 +146,8 @@ export interface BankImportJobView {
   message: string;
   error_code: string | null;
   error_message: string | null;
-  /** Present once `status === 'completed'`: the same payload the process route used to answer inline. */
+  /** Present once the job finished (completed, or failed with an answer such as an unsupported layout), or while it waits for a
+   * password: the same payload the process route used to answer inline. */
   result: Record<string, unknown> | null;
   /** True while a person (not the system) has to act. */
   needs_person: boolean;
@@ -170,7 +171,7 @@ export function toBankImportJobView(job: BankImportJobRow, nowMs: number = Date.
     message: bankImportStatusMessage(job),
     error_code: job.error_code,
     error_message: job.status === 'failed' ? job.error_message_sanitised : null,
-    result: job.status === 'completed' ? job.result_summary : null,
+    result: job.status === 'completed' || job.status === 'failed' || (job.status === 'review_required' && job.review_reason === 'password') ? job.result_summary : null,
     needs_person: job.status === 'review_required',
     keep_polling: job.status === 'queued' || job.status === 'processing',
   };

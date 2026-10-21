@@ -50,6 +50,10 @@ export interface AieFieldCompletionRequest {
    * refused before any provider call (it is never counted against nobody).
    */
   userId: string;
+  /** WP-G: a bound for THIS call only (default: the configured timeout / retries). Used by background slices that must end inside a
+   * web request's time limit; it can only shorten the configured values, never lengthen them. */
+  timeoutMs?: number;
+  maxTransientRetries?: number;
 }
 
 export interface AieFieldCompletionResult {
@@ -257,6 +261,8 @@ export class AieDocumentAiGateway {
         schemaVersion: req.schemaVersion,
         model: req.model,
         maxOutputTokens: req.maxOutputTokens,
+        ...(req.timeoutMs !== undefined ? { timeoutMs: req.timeoutMs } : {}),
+        ...(req.maxTransientRetries !== undefined ? { maxTransientRetries: req.maxTransientRetries } : {}),
       });
     } catch (e) {
       const outcome = mapProviderErrorToOutcome(e);

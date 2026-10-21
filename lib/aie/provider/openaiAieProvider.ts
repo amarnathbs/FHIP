@@ -129,7 +129,7 @@ export class OpenAiAieProvider implements AieAiProvider {
   async generateStructured(req: AieAiGenerateRequest): Promise<AieAiGenerateResult> {
     const apiKey = this.apiKey();
     const jsonSchema = getKnownOpenAiJsonSchema(req.schemaName, req.schemaVersion);
-    const maxRetries = getAieAiMaxTransientRetries();
+    const maxRetries = req.maxTransientRetries !== undefined ? Math.max(0, Math.min(req.maxTransientRetries, getAieAiMaxTransientRetries())) : getAieAiMaxTransientRetries();
     const timeoutMs = req.timeoutMs ?? getAieAiTimeoutMs();
 
     let lastError: ProviderError | null = null;

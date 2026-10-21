@@ -1,24 +1,29 @@
 import { z } from 'zod';
 import { requireCountryConfirmedUser as requireUser, bad, ok } from '@/lib/api';
 import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
-import { processBankPdfDocument, BankPdfProcessingError } from '@/lib/financial-data-hub/services/bankPdfProcessingService';
 import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
 import { fdhDocumentRunPosition } from '@/lib/financial-data-hub/services/importRunPosition';
+import { admitBankImport } from '@/lib/financial-data-hub/services/bankImportAdmission';
+import { normaliseIdempotencyKey } from '@/lib/financial-data-hub/bankImport/jobModel';
+import { acceptedJobResponse, isUnavailable, unavailableResponse } from '@/lib/financial-data-hub/bankImport/routeHelpers';
 
 const bodySchema = z.object({ password: z.string().max(200).optional() }).optional();
 
-// WP-08 (UPL-01): a bounded request. The PDF read itself stops at
-// PDF_EXTRACTION_TIMEOUT_MS (20 s) with a retryable `extraction_timeout`;
-// this is the outer ceiling for the rest of the import.
-export const maxDuration = 60;
+// A short request: it admits the statement and, for a protected PDF only, reads it once inside this request (the password must not
+// outlive the request; the platform's own limit of about 28 s applies, and the read itself stops at PDF_EXTRACTION_TIMEOUT_MS).
+export const maxDuration = 30;
 
-// POST /api/financial-data-hub/bank-pdf/{documentId}/process — spec sections
-// 6, 13-46, 55-56, 89-90. Idempotent/retry-safe (see the service module's
-// header comment). `password`, when the document is awaiting one, travels
-// ONLY in this request's JSON body — never a query string (spec 23: a
-// password must never appear in a URL) — and is used exactly once, in
-// memory, then discarded; see `bankPdfProcessingService.ts`'s own header
-// comment for the complete non-persistence discipline this route relies on.
+// POST /api/financial-data-hub/bank-pdf/{documentId}/process -- spec sections 6, 13-46, 55-56, 89-90.
+//
+// DOCUMENT2 (4) WP-G (F15, PO-D24-03): this request no longer reads a statement that may take minutes. It ADMITS it (owner/account
+// resolved, malware admission, state, password attempt rate limit), then creates or resumes the statement's ONE background job and
+// answers 202 + job id straight away. The certified-layout read, the AI reading (in page-group parts) and the writing of the lines
+// are done by short resumable slices (lib/financial-data-hub/services/bankImportWorker.ts) driven by
+// POST /api/financial-data-hub/bank-import-jobs/{jobId}/advance and by the scheduled backstop. A settled statement, a byte-identical
+// copy of one, or an AI reading that already waits for a check still answers 200 inline, exactly as before.
+//
+// `password`, when the document is awaiting one, travels ONLY in this request's JSON body -- never a query string (spec 23) -- and
+// is used exactly once, in memory, by the single read slice run inside this request, then discarded. It is never stored on the job.
 export async function POST(req: Request, { params }: { params: Promise<{ documentId: string }> }) {
   const { documentId } = await params;
   const { user, unauthenticated } = await requireUser();
@@ -42,58 +47,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   }
 
   try {
-    const result = await processBankPdfDocument(user.id, documentId, password);
-    return ok({
-      // 2026-09-25: for a byte-identical re-upload, the ORIGINAL upload the
-      // result belongs to (its import summary, or its AI draft to confirm).
-      document_id: result.duplicateOfDocumentId ?? result.document.id,
-      duplicate_of_document_id: result.duplicateOfDocumentId ?? null,
-      duplicate: Boolean(result.duplicateOfDocumentId),
-      pipeline_status: result.pipelineStatus,
-      certification_status: result.certificationStatus,
-      processing_status: result.document.processing_status,
-      // A copy never carries its own state (e.g. its password prompt) into the original's result.
-      error_code: result.duplicateOfDocumentId ? null : result.document.error_code,
-      reconciliation_status: result.reconciliationStatus,
-      transactions_created: result.transactionsCreated,
-      duplicates_skipped: result.duplicatesSkipped,
-      duplicate_candidates: result.duplicateCandidates,
-      rejected_rows: result.rejectedRows,
-      // WP-08 (EXP-G14/EXP-G15): why lines could not be read, and whether an
-      // AI reading may be missing lines (the statement then needs a check).
-      unread_lines: result.unreadLines ?? null,
-      incomplete_extraction: result.incompleteExtraction ?? false,
-      page_count: result.document.page_count,
-      declared_row_count: result.document.declared_row_count,
-      parsed_row_count: result.document.parsed_row_count,
-      // AIE bank-statement AI-fallback (2026-09-23). Present (non-null) ONLY
-      // when `pipeline_status === 'ai_fallback_available'`, i.e. the native
-      // parse failed on a readable-but-unrecognised layout and an AI read a
-      // DRAFT off it. Nothing has been written at this point; the panel shows
-      // this for explicit review and then posts it to
-      // `.../ai-fallback/confirm`.
-      ai_fallback_draft: result.aiFallbackDraft ?? null,
-      // 14-10-2026: present ('premium_required' | 'entitlement_unavailable') only when the file could not be read
-      // natively and the AI reading was NOT attempted for entitlement reasons, so the screen can explain and offer
-      // the upgrade. Null in every other case.
-      ai_fallback_refusal: result.aiFallbackRefusal ?? null,
+    const outcome = await admitBankImport({
+      userId: user.id,
+      documentId,
+      kind: 'pdf',
+      idempotencyKey: normaliseIdempotencyKey(req.headers.get('idempotency-key')),
+      password,
     });
+    if (outcome.kind === 'job') return acceptedJobResponse(outcome.job);
+    if (outcome.kind === 'result') return ok(outcome.payload);
+    return bad(outcome.message, outcome.status, outcome.code === 'statement_in_progress' || outcome.code === 'idempotency_key_in_use' ? outcome.code : undefined);
   } catch (e) {
-    if (e instanceof BankPdfProcessingError) {
-      // F15: another run of this same statement is still going; not an error, and not to be started twice.
-      if (e.code === 'in_progress') return bad(e.message, 409, 'statement_in_progress');
-      const status = e.code === 'not_found' ? 404 : e.code === 'rate_limited' ? 429 : 400;
-      const message =
-        e.code === 'account_unresolved'
-          ? 'We could not tell which account this statement belongs to. Please resolve the account before processing.'
-          : e.code === 'invalid_state'
-            ? 'This document is not currently ready to be processed.'
-            : e.code === 'rate_limited'
-              ? e.message
-              : e.message;
-      return bad(message, status);
-    }
-    // F15: see the bank-csv route; the failing stage is now in the server log and the answer carries a stable code.
+    if (isUnavailable(e)) return unavailableResponse();
+    // F15: see the bank-csv route; the failing stage is in the server log and the answer carries a stable code.
     console.error('[bank-pdf/process] unexpected failure', { documentIdPrefix: documentId.slice(0, 8), name: e instanceof Error ? e.name : typeof e, message: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300) });
     return bad('We could not process this bank statement.', 500, 'process_failed');
   }

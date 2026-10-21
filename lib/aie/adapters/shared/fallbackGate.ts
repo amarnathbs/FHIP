@@ -66,6 +66,25 @@ export type AieFallbackGateResult =
 const MIN_EXTRACTED_TEXT_CHARS = 40;
 
 /**
+ * The checks that need no text (steps 1 to 3 above): the adapter's switch, the shared global switch, the real-malware-scan
+ * precondition and the person's Premium entitlement. Exposed so a background reading made in several steps can re-check them before
+ * EACH step (a switch flipped or a plan lapsing part-way stops the next step) without re-masking the text.
+ */
+export async function evaluateAiEgressPreconditions(params: {
+  userId: string;
+  adapterEnabled: boolean;
+  entitlementDeps?: PremiumAiAccessDeps;
+}): Promise<{ ok: true } | { ok: false; reason: AieFallbackGateRefusalReason }> {
+  if (!params.adapterEnabled) return { ok: false, reason: 'adapter_disabled' };
+  if (!isAieAiFallbackEnabled()) return { ok: false, reason: 'global_kill_switch_disabled' };
+  // Document content leaves this process only where the REAL malware scan is on (see aiEgressPrecondition.ts).
+  if (!isAiEgressMalwarePreconditionMet()) return { ok: false, reason: 'malware_scan_not_enforced' };
+  const access = await resolvePremiumAiAccess(params.userId, 'aie_document_fallback', params.entitlementDeps);
+  if (!access.allowed) return { ok: false, reason: access.reason };
+  return { ok: true };
+}
+
+/**
  * Evaluates every gate and, if they all pass, returns the MASKED text — the
  * only form of the document any caller of this function is ever handed. A
  * caller cannot accidentally send the raw text to the provider, because a
@@ -79,12 +98,8 @@ export async function evaluateAiFallbackGate(params: {
   /** Test seam for the entitlement read; production never sets it. */
   entitlementDeps?: PremiumAiAccessDeps;
 }): Promise<AieFallbackGateResult> {
-  if (!params.adapterEnabled) return { ok: false, reason: 'adapter_disabled' };
-  if (!isAieAiFallbackEnabled()) return { ok: false, reason: 'global_kill_switch_disabled' };
-  // Document content leaves this process only where the REAL malware scan is on (see aiEgressPrecondition.ts).
-  if (!isAiEgressMalwarePreconditionMet()) return { ok: false, reason: 'malware_scan_not_enforced' };
-  const access = await resolvePremiumAiAccess(params.userId, 'aie_document_fallback', params.entitlementDeps);
-  if (!access.allowed) return { ok: false, reason: access.reason };
+  const pre = await evaluateAiEgressPreconditions(params);
+  if (!pre.ok) return pre;
 
   if (params.extractedText.trim().length < MIN_EXTRACTED_TEXT_CHARS) {
     return { ok: false, reason: 'no_extracted_text' };

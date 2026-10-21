@@ -218,7 +218,7 @@ async function cleanupPriorAttempt(userId: string, documentId: string): Promise<
  * `error_code` vocabulary (spec 83) — see `enums.ts`'s
  * `FDH_ERROR_CODES_FDH5_ADDED` header comment for the full reuse-vs-new-code
  * mapping table this mirrors exactly. */
-function errorCodeForPipelineStatus(status: PdfPipelineStatus): FdhErrorCode | null {
+export function errorCodeForPipelineStatus(status: PdfPipelineStatus): FdhErrorCode | null {
   switch (status) {
     case 'encrypted':
       return 'password_required';
@@ -274,7 +274,7 @@ function errorCodeForPipelineStatus(status: PdfPipelineStatus): FdhErrorCode | n
  * never reaches the fallback, including the zero-transaction case — see the
  * known-limitations note in the dispatch report.)
  */
-const AI_FALLBACK_ELIGIBLE_PIPELINE_STATUSES: readonly PdfPipelineStatus[] = ['unsupported_layout', 'ambiguous_layout', 'extraction_low_confidence'];
+export const AI_FALLBACK_ELIGIBLE_PIPELINE_STATUSES: readonly PdfPipelineStatus[] = ['unsupported_layout', 'ambiguous_layout', 'extraction_low_confidence'];
 
 export async function processBankPdfDocument(userId: string, documentId: string, password?: string): Promise<ProcessBankPdfResult> {
   let document = await getOwnedDocument(userId, documentId);
@@ -1105,7 +1105,7 @@ async function reconcileMaskedIdentifier(
 
 const GENERIC_ACCOUNT_NAMES = new Set(['imported account', 'imported bank account', '']);
 
-async function nameAccountFromAiReading(userId: string, accountId: string, institutionName: string): Promise<void> {
+export async function nameAccountFromAiReading(userId: string, accountId: string, institutionName: string): Promise<void> {
   const name = institutionName.trim().slice(0, 120);
   if (!name) return;
   const { data: account } = await financialAccountsRepository.getForUser(userId, accountId);
@@ -1328,7 +1328,7 @@ async function confirmClaimedBankStatementDraft(
   return persistBankPdfPipelineResult({ userId, documentId, document, pipeline, priorRanges, aiContext });
 }
 
-function draftResult(document: FdhStatementUpload, draft: BankStatementAiFallbackDraft, duplicateOfDocumentId?: string): ProcessBankPdfResult {
+export function draftResult(document: FdhStatementUpload, draft: BankStatementAiFallbackDraft, duplicateOfDocumentId?: string): ProcessBankPdfResult {
   return {
     document,
     transactionsCreated: 0,
@@ -1345,7 +1345,7 @@ function draftResult(document: FdhStatementUpload, draft: BankStatementAiFallbac
 
 /** The result for a copy of an earlier upload: the original's draft, or the
  * original's import summary with nothing created by this upload. */
-async function identicalUploadResult(userId: string, copy: FdhStatementUpload, match: IdenticalUploadMatch): Promise<ProcessBankPdfResult> {
+export async function identicalUploadResult(userId: string, copy: FdhStatementUpload, match: IdenticalUploadMatch): Promise<ProcessBankPdfResult> {
   if (match.kind === 'pending_draft') return draftResult(copy, match.payload as BankStatementAiFallbackDraft, match.documentId);
   const original = await getOwnedDocument(userId, match.documentId);
   return {
@@ -1361,7 +1361,7 @@ async function identicalUploadResult(userId: string, copy: FdhStatementUpload, m
   };
 }
 
-function summariseExisting(document: FdhStatementUpload): ProcessBankPdfResult {
+export function summariseExisting(document: FdhStatementUpload): ProcessBankPdfResult {
   return {
     document,
     transactionsCreated: document.certified_row_count ?? 0,

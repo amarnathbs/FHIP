@@ -115,9 +115,15 @@ export interface PdfPipelineResult {
    * usable text, which is precisely why those statuses are not AI-eligible).
    */
   extractedText: string | null;
+  /**
+   * WP-G: the same text kept PER PAGE (pages[0] is page 1), populated exactly where `extractedText` is and with the same in-memory-only
+   * rule. The background import reads a long statement through the AI in page groups and needs the page boundaries; it masks the
+   * text first and stages only the masked parts.
+   */
+  extractedPages: string[] | null;
 }
 
-function emptyResult(status: PdfPipelineStatus, detection: PdfDetectionResult | null = null, extractedText: string | null = null): PdfPipelineResult {
+function emptyResult(status: PdfPipelineStatus, detection: PdfDetectionResult | null = null, extractedText: string | null = null, extractedPages: string[] | null = null): PdfPipelineResult {
   return {
     status,
     adapter: null,
@@ -135,6 +141,7 @@ function emptyResult(status: PdfPipelineStatus, detection: PdfDetectionResult | 
     parserVersion: FDH5_PARSER_VERSION,
     economicFingerprintVersion: ECONOMIC_FINGERPRINT_VERSION,
     extractedText,
+    extractedPages,
   };
 }
 
@@ -188,11 +195,11 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
     detection = detectPdfBankAdapter(fullText);
     // `fullText` is carried out on these two statuses ONLY so the AI-fallback
     // path can mask it — see `PdfPipelineResult.extractedText`'s header.
-    if (detection.status === 'ambiguous') return emptyResult('ambiguous_layout', detection, fullText);
-    if (detection.status === 'unsupported_layout' || !detection.adapter) return emptyResult('unsupported_layout', detection, fullText);
+    if (detection.status === 'ambiguous') return emptyResult('ambiguous_layout', detection, fullText, pages);
+    if (detection.status === 'unsupported_layout' || !detection.adapter) return emptyResult('unsupported_layout', detection, fullText, pages);
     adapter = detection.adapter;
   }
-  if (!adapter) return emptyResult('unsupported_layout', detection, fullText);
+  if (!adapter) return emptyResult('unsupported_layout', detection, fullText, pages);
 
   const statementMetadata = extractPdfStatementMetadata(fullText, adapter);
 
@@ -284,7 +291,7 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
 
   if (statementExtractionConfidence < PDF_MIN_EXTRACTION_CONFIDENCE && rows.length > 0) {
     return {
-      ...emptyResult('extraction_low_confidence', detection, fullText),
+      ...emptyResult('extraction_low_confidence', detection, fullText, pages),
       adapter,
       pageCount: classified.pageCount,
       statementMetadata,
@@ -312,6 +319,7 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
     // Never carried on success — nothing downstream needs it, and the
     // narrowest possible lifetime for extracted document text is the point.
     extractedText: null,
+    extractedPages: null,
   };
 }
 
@@ -524,6 +532,7 @@ export function runBankPdfPipelineFromReadRows(input: RunPdfPipelineFromReadRows
     parserVersion: input.parserVersion,
     economicFingerprintVersion: ECONOMIC_FINGERPRINT_VERSION,
     extractedText: null,
+    extractedPages: null,
   };
 }
 

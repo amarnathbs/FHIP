@@ -143,6 +143,34 @@ export async function loadPendingAiFallbackDraft(userId: string, documentId: str
   return { found: true, draftId: rows[0].id, payload: rows[0].payload };
 }
 
+export type LoadConfirmedDraftResult =
+  | { found: true; draftId: string; payload: unknown; confirmedPayload: unknown }
+  | { found: false; reason: 'none_confirmed' | 'table_missing' | 'read_failed' };
+
+/**
+ * WP-G: the document's CONFIRMED draft -- what the server issued (`payload`) and what the person confirmed (`confirmed_payload`).
+ * The background import builds its plan from this, so a confirmed reading survives a killed or failed slice without the person
+ * confirming again and without the raw file (it may already be gone).
+ */
+export async function loadConfirmedAiFallbackDraft(userId: string, documentId: string): Promise<LoadConfirmedDraftResult> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('fdh_ai_fallback_drafts')
+    .select('id, payload, confirmed_payload')
+    .eq('statement_upload_id', documentId)
+    .eq('user_id', userId)
+    .eq('status', 'confirmed')
+    .order('confirmed_at', { ascending: false })
+    .limit(1);
+  if (error) {
+    if (isMissingTable(error)) return { found: false, reason: 'table_missing' };
+    return { found: false, reason: 'read_failed' };
+  }
+  const rows = (data ?? []) as Array<{ id: string; payload: unknown; confirmed_payload: unknown }>;
+  if (rows.length === 0) return { found: false, reason: 'none_confirmed' };
+  return { found: true, draftId: rows[0].id, payload: rows[0].payload, confirmedPayload: rows[0].confirmed_payload };
+}
+
 /**
  * The canonical tables a confirmed statement draft writes, keyed by upload.
  * Checked before a failed confirmation hands its draft back.
