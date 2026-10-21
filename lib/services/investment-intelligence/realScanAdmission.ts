@@ -112,6 +112,51 @@ export async function startIiRealScan(params: {
 }
 
 /**
+ * Document2 (4) WP-H: the real scan for a REPLACEMENT copy, run BEFORE anything parses the bytes (the identity check reads them) and
+ * BEFORE the document row or its file reference is touched. With the real scan switched off this admits without doing anything (the
+ * documented structural-only mode). With it on, only a `clean` verdict admits; a pending scan asks the caller to retry, any other
+ * verdict blocks, and a database that cannot record a verdict fails closed. Nothing is written to the document row here: a copy that is
+ * refused leaves the existing statement exactly as it was. The admitted verdict is recorded by `recordAdmittedReplacementScan` once the
+ * copy has actually been attached.
+ */
+export type ReplacementScanAdmission =
+  | { admitted: true; verdict: RealMalwareScanGateResult | null }
+  | { admitted: false; reason: 'pending' | 'blocked' | 'scanner_unavailable' };
+
+export async function scanReplacementCandidate(params: {
+  userId: string;
+  sourceDocumentId: string;
+  bytes: Uint8Array;
+  contentType: string;
+  contentHash: string;
+  /** Whether the document row carries the 0196 scan columns. */
+  hasScanColumns: boolean;
+}): Promise<ReplacementScanAdmission> {
+  if (!isRealMalwareScanEnabled()) return { admitted: true, verdict: null };
+  if (!params.hasScanColumns) {
+    console.error('ii real-scan: the scan is on but migration 0196 is not applied; refusing the replacement copy (fail closed)');
+    return { admitted: false, reason: 'scanner_unavailable' };
+  }
+  const result = await initiateRealMalwareScan({
+    pipeline: 'ii',
+    userId: params.userId,
+    documentId: params.sourceDocumentId,
+    bytes: params.bytes,
+    contentType: params.contentType,
+    contentHash: params.contentHash,
+  });
+  if (result.status === 'clean') return { admitted: true, verdict: result };
+  if (result.status === 'pending') return { admitted: false, reason: 'pending' };
+  if (result.status === 'scan_failed' || result.status === 'scan_timeout') return { admitted: false, reason: 'scanner_unavailable' };
+  return { admitted: false, reason: 'blocked' };
+}
+
+/** Records the clean verdict of an attached replacement copy on its row (also deletes the scan copy, as for any terminal verdict). */
+export async function recordAdmittedReplacementScan(sourceDocumentId: string, verdict: RealMalwareScanGateResult | null): Promise<void> {
+  if (verdict?.persisted) await recordMalwareScanState('ii_source_documents', sourceDocumentId, verdict.persisted as RealMalwareScanPersistedState);
+}
+
+/**
  * Called by the process route BEFORE `processSourceDocument` reads bytes.
  * Ownership is enforced by the `.eq('user_id', userId)` read.
  */
