@@ -10,7 +10,7 @@
  * includes a unique tie-breaker (`id`), never a bare non-unique column.
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { fdhDbClient } from '../dbContext';
 import { fetchAllRows } from './pagination';
 import { PROCESSING_RUN_DEAD_AFTER_MS } from '../services/interruptedRun';
 import type { DedupIndex } from './dedup';
@@ -38,7 +38,7 @@ interface FingerprintRow {
  * and a fresh upload of the same file would silently lose that many transactions. A run that is still live is never touched.
  */
 export async function reapDeadRunPartialRows(userId: string, financialAccountId: string): Promise<number> {
-  const supabase = await createClient();
+  const supabase = await fdhDbClient();
   const cutoff = new Date(Date.now() - PROCESSING_RUN_DEAD_AFTER_MS).toISOString();
   const { data: dead } = await supabase
     .from('fdh_statement_uploads')
@@ -47,9 +47,24 @@ export async function reapDeadRunPartialRows(userId: string, financialAccountId:
     .eq('financial_account_id', financialAccountId)
     .eq('processing_status', 'processing')
     .lt('processing_started_at', cutoff);
+  // WP-G: a statement that has a background import job is NOT a dead synchronous run. Its job spans several short slices, so its
+  // `processing_started_at` is legitimately old, and its rows are being written by the job (which owns its own dead-job detection,
+  // lease and cleanup). Reaping them here would delete a live import's lines mid-run.
+  const deadIds = (dead ?? []).map((d) => (d as { id: string }).id);
+  const owned = new Set<string>();
+  if (deadIds.length > 0) {
+    const { data: jobs, error: jobsError } = await supabase
+      .from('fdh_bank_import_jobs')
+      .select('statement_upload_id')
+      .eq('user_id', userId)
+      .in('statement_upload_id', deadIds);
+    // Before 0310 is applied the table does not exist: there are no jobs to protect.
+    if (!jobsError) for (const j of jobs ?? []) owned.add((j as { statement_upload_id: string }).statement_upload_id);
+  }
   let reaped = 0;
   for (const d of dead ?? []) {
     const id = (d as { id: string }).id;
+    if (owned.has(id)) continue;
     await supabase.from('fdh_transactions').delete().eq('user_id', userId).eq('statement_upload_id', id);
     await supabase.from('fdh_reconciliation_results').delete().eq('user_id', userId).eq('statement_upload_id', id);
     await supabase.from('fdh_data_quality_results').delete().eq('user_id', userId).eq('statement_upload_id', id);
@@ -60,7 +75,7 @@ export async function reapDeadRunPartialRows(userId: string, financialAccountId:
 
 export async function loadDedupIndexForAccount(userId: string, financialAccountId: string): Promise<DedupIndex> {
   await reapDeadRunPartialRows(userId, financialAccountId);
-  const supabase = await createClient();
+  const supabase = await fdhDbClient();
   const rows = await fetchAllRows<FingerprintRow>(() =>
     supabase
       .from('fdh_transactions')
@@ -91,7 +106,7 @@ export async function loadExistingAccountsForInstitutionCurrency(
   institutionId: string | null,
   currencyCode: string,
 ): Promise<ExistingAccountSummary[]> {
-  const supabase = await createClient();
+  const supabase = await fdhDbClient();
   let query = supabase
     .from('fdh_financial_accounts')
     .select('id, account_fingerprint')
@@ -116,7 +131,7 @@ export async function loadPriorStatementDateRanges(
   financialAccountId: string,
   excludeStatementUploadId: string,
 ): Promise<Map<string, DateRange>> {
-  const supabase = await createClient();
+  const supabase = await fdhDbClient();
   const rows = await fetchAllRows<DateRangeRow>(() =>
     supabase
       .from('fdh_transactions')

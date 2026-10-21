@@ -7,7 +7,7 @@
  * builder, no cache, no unit of work.
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { fdhDbClient } from '../dbContext';
 import type {
   FdhApprovedFinancialSummary,
   FdhCategory,
@@ -102,7 +102,7 @@ export const documentAuditEventsRepository = {
   table: 'fdh_document_audit_events' as const,
 
   async listForUser(userId: string, limit = 200) {
-    const supabase = await createClient();
+    const supabase = await fdhDbClient();
     return supabase
       .from('fdh_document_audit_events')
       .select('*')
@@ -233,7 +233,7 @@ export const parserVersionsRepository = {
   table: 'fdh_parser_versions' as const,
 
   async listCertifiedForParser(parserId: string) {
-    const supabase = await createClient();
+    const supabase = await fdhDbClient();
     return supabase
       .from('fdh_parser_versions')
       .select('*')
@@ -244,7 +244,7 @@ export const parserVersionsRepository = {
   },
 
   async getById(id: string) {
-    const supabase = await createClient();
+    const supabase = await fdhDbClient();
     return supabase
       .from('fdh_parser_versions')
       .select('*')
@@ -261,7 +261,7 @@ export const sourceTypesRepository = {
   table: 'fdh_source_types' as const,
 
   async listActive() {
-    const supabase = await createClient();
+    const supabase = await fdhDbClient();
     return supabase
       .from('fdh_source_types')
       .select('*')
@@ -270,7 +270,7 @@ export const sourceTypesRepository = {
   },
 
   async getByKey(sourceTypeKey: string) {
-    const supabase = await createClient();
+    const supabase = await fdhDbClient();
     return supabase
       .from('fdh_source_types')
       .select('*')

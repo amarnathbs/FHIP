@@ -40,7 +40,7 @@
  * caching, unit-of-work or a generic specification pattern.
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { fdhDbClient } from '../dbContext';
 import type { FdhAllUserOwnedTable, FdhMasterDataTable } from '../constants/tables';
 import { fetchAllRows, type RangeableQuery } from '../bank-csv/pagination';
 
@@ -77,7 +77,7 @@ export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unk
     table,
 
     async listForUser(userId: string, limit = 200) {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       return supabase
         .from(table)
         .select('*')
@@ -101,7 +101,7 @@ export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unk
      * should call this instead of guessing a large `limit`.
      */
     async listForUserAll(userId: string): Promise<{ data: TRow[] | null; error: { message: string } | null }> {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       try {
         const data = await fetchAllRows<TRow>(() =>
           supabase
@@ -118,7 +118,7 @@ export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unk
     },
 
     async getForUser(userId: string, id: string) {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       return supabase
         .from(table)
         .select('*')
@@ -133,7 +133,7 @@ export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unk
      * would reject it at the database if it were not.
      */
     async create(userId: string, row: TInsert) {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       return supabase
         .from(table)
         .insert({ ...row, user_id: userId })
@@ -142,7 +142,7 @@ export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unk
     },
 
     async update(userId: string, id: string, patch: Partial<TInsert>) {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       // `user_id` is never patchable: re-parenting a row to another user is
       // exactly the tenant-spoofing move RLS `with check` exists to stop, and
       // it must not be reachable from application code either.
@@ -158,7 +158,7 @@ export function makeUserOwnedRepository<TRow, TInsert extends Record<string, unk
     },
 
     async remove(userId: string, id: string) {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       return supabase.from(table).delete().eq('id', id).eq('user_id', userId);
     },
   };
@@ -182,7 +182,7 @@ export function makeMasterDataRepository<TRow>(table: FdhMasterDataTable) {
     table,
 
     async listActive(limit = 1000) {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       return supabase
         .from(table)
         .select('*')
@@ -198,7 +198,7 @@ export function makeMasterDataRepository<TRow>(table: FdhMasterDataTable) {
      * only sees the first 1,000 aliases would silently stop matching real
      * merchants past that point. */
     async listActiveAll(): Promise<{ data: TRow[] | null; error: { message: string } | null }> {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       try {
         const data = await fetchAllRows<TRow>(() =>
           supabase.from(table).select('*').eq('active', true).order('id', { ascending: true }) as unknown as RangeableQuery<TRow>,
@@ -210,7 +210,7 @@ export function makeMasterDataRepository<TRow>(table: FdhMasterDataTable) {
     },
 
     async getById(id: string) {
-      const supabase = await createClient();
+      const supabase = await fdhDbClient();
       return supabase.from(table).select('*').eq('id', id).maybeSingle<TRow>();
     },
   };

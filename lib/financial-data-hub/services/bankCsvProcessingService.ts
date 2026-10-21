@@ -31,7 +31,7 @@
  */
 
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
-import { createClient } from '@/lib/supabase/server';
+import { fdhDbClient } from '../dbContext';
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS } from './identicalUpload';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { processingRunState, STATEMENT_STILL_BEING_READ_MESSAGE } from './interruptedRun';
@@ -51,9 +51,9 @@ import { getAdapterById } from '../bank-csv/adapters/registry';
 import { adapterToRowFormat, mappingToRowFormat } from '../bank-csv/normalize';
 import { encodeUnreadLines, summariseUnreadLines, type UnreadLinesSummary } from '../domain/unreadLines';
 import { STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
-import { runBankCsvPipeline, decideCertification } from '../bank-csv/orchestrator';
+import { runBankCsvPipeline, decideCertification, type AcceptedTransactionPlan, type RejectedRowPlan } from '../bank-csv/orchestrator';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges } from '../bank-csv/repository';
-import { computeStatementOverlap } from '../bank-csv/reconciliation';
+import { computeStatementOverlap, type BalanceReconciliationResult } from '../bank-csv/reconciliation';
 import type { BankCsvMappingConfirmInput } from '../validation/bankCsv';
 import type { FdhStatementUpload, FdhCsvColumnMapping } from '../domain/types';
 import { createHash } from 'node:crypto';
@@ -152,7 +152,7 @@ export async function detectBankCsvDocument(userId: string, documentId: string):
         // adapter's version id is still recorded (never presented as
         // certified to the user — that distinction lives in
         // BankCsvAdapter.certificationState, surfaced separately).
-        const supabase = await createClient();
+        const supabase = await fdhDbClient();
         const { data: anyVersion } = await supabase
           .from('fdh_parser_versions')
           .select('id')
@@ -191,7 +191,7 @@ export async function detectBankCsvDocument(userId: string, documentId: string):
 }
 
 async function lookupParserIdByKey(parserKey: string): Promise<string | null> {
-  const supabase = await createClient();
+  const supabase = await fdhDbClient();
   const { data } = await supabase.from('fdh_parser_registry').select('id').eq('parser_key', parserKey).maybeSingle();
   return (data as { id: string } | null)?.id ?? null;
 }
@@ -288,7 +288,7 @@ async function findImportedIdenticalCsv(userId: string, documentId: string): Pro
 /** Removes every row a PRIOR (failed) processing attempt for this document
  * produced — the compensating cleanup that makes a retry safe (spec 56). */
 async function cleanupPriorAttempt(userId: string, documentId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await fdhDbClient();
   await supabase.from('fdh_transactions').delete().eq('user_id', userId).eq('statement_upload_id', documentId);
   await supabase.from('fdh_reconciliation_results').delete().eq('user_id', userId).eq('statement_upload_id', documentId);
   await supabase.from('fdh_data_quality_results').delete().eq('user_id', userId).eq('statement_upload_id', documentId);
@@ -412,33 +412,7 @@ export async function processBankCsvDocument(userId: string, documentId: string)
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('fdh_transactions')
-        .insert(
-          chunk.map((t) => ({
-            user_id: userId,
-            household_id: document.household_id,
-            financial_account_id: document.financial_account_id,
-            statement_upload_id: documentId,
-            transaction_date: t.transactionDate,
-            posting_date: t.postedDate,
-            value_date: t.valueDate,
-            description_raw: t.descriptionRaw,
-            description_clean: t.descriptionClean,
-            amount_original: t.amountOriginal,
-            currency_original: document.currency_code ?? 'AUD',
-            credit_debit: t.creditDebit,
-            economic_transaction_type: 'unknown',
-            source_reference: t.referenceRaw,
-            source_row: t.sourceRowNumber,
-            extraction_confidence: 1,
-            classification_method: 'unclassified',
-            source_row_hash: t.sourceRowHash,
-            economic_fingerprint: t.economicFingerprint,
-            economic_fingerprint_version: pipeline.economicFingerprintVersion,
-            dedup_status: t.dedupStatus,
-            balance_after: t.balanceAfter,
-            transaction_type_hint: t.transactionTypeHint,
-          })),
-        )
+        .insert(chunk.map((t) => csvTransactionRow(t, { userId, documentId, document, economicFingerprintVersion: pipeline.economicFingerprintVersion })))
         .select('id, source_row');
       if (error) {
         await cleanupPriorAttempt(userId, documentId);
@@ -458,261 +432,26 @@ export async function processBankCsvDocument(userId: string, documentId: string)
       insertedIds = insertedIds.concat((data ?? []) as { id: string; source_row: number | null }[]);
     }
 
-    // Duplicate-candidate provenance (Layer 4, spec 34/36).
-    //
-    // LIVE-DEV-DISCOVERED FIX (R7-FINAL live certification): a WITHIN-FILE
-    // duplicate candidate (the matched row is earlier in this SAME upload,
-    // not a prior persisted transaction) carries a `pending-row-N` placeholder
-    // in `matchedTransactionId` (orchestrator.ts's in-memory dedup index,
-    // populated before any DB write happens — see its own comment). That
-    // placeholder is never a real `fdh_transactions.id`, but by THIS point in
-    // the function every accepted row (including row N) has already been
-    // bulk-inserted, so `rowNumberToId` can resolve it to the real id the
-    // same way `newId` already does for the later row. Previously this was
-    // unconditionally skipped, which silently persisted `dedup_status =
-    // 'duplicate_candidate'` on both transactions with NO backing
-    // `fdh_duplicate_candidates` row at all — the user-facing
-    // duplicate-resolution API requires exactly that row's id, so a
-    // within-file candidate pair had no way to ever be resolved. Cross-import
-    // candidates (matched against a PRIOR statement's already-persisted
-    // transaction) are unaffected — `matchedTransactionId` there was never a
-    // placeholder.
-    const rowNumberToId = new Map(insertedIds.map((r) => [r.source_row, r.id]));
-    let duplicateCandidateCount = 0;
-    for (const t of rowsToInsert) {
-      if (t.dedupStatus !== 'duplicate_candidate' || !t.matchedTransactionId) continue;
-      const newId = rowNumberToId.get(t.sourceRowNumber);
-      let matchedId: string | null = t.matchedTransactionId;
-      if (matchedId.startsWith('pending-row-')) {
-        const matchedRowNumber = Number(matchedId.slice('pending-row-'.length));
-        matchedId = rowNumberToId.get(matchedRowNumber) ?? null;
-      }
-      if (!newId || !matchedId || matchedId === newId) continue;
-      await adminInsert('fdh_duplicate_candidates', {
-        user_id: userId,
-        transaction_id_a: matchedId,
-        transaction_id_b: newId,
-        match_method: t.matchMethod ?? 'fuzzy_amount_date',
-        confidence: t.dedupConfidence,
-        status: 'pending',
-      });
-      duplicateCandidateCount += 1;
-    }
-    if (duplicateConfirmedCount > 0 || duplicateCandidateCount > 0) {
-      await recordDocumentAuditEvent({
-        userId,
-        documentId,
-        eventType: 'transaction_duplicate_detected',
-        actorType: 'system',
-        metadata: { confirmed: duplicateConfirmedCount, candidates: duplicateCandidateCount },
-      });
-    }
-
-    // Overlap evidence (spec 44) — informational only; does not by itself
-    // change certification. WP-08 (EXP-G17): no longer computed and thrown
-    // away -- it becomes an info note on the statement (below).
-    const overlap = computeStatementOverlap(priorRanges, pipeline.dateCoverage);
-    const unreadLines = summariseUnreadLines(pipeline.rejected);
-
-    // Reconciliation persistence (spec 42-43).
-    if (pipeline.reconciliation) {
-      await adminInsert('fdh_reconciliation_results', {
-        user_id: userId,
-        statement_upload_id: documentId,
-        opening_balance: pipeline.reconciliation.openingBalance,
-        extracted_credits: pipeline.reconciliation.extractedCredits,
-        extracted_debits: pipeline.reconciliation.extractedDebits,
-        expected_closing_balance: pipeline.reconciliation.expectedClosingBalance,
-        reported_closing_balance: pipeline.reconciliation.reportedClosingBalance,
-        variance: pipeline.reconciliation.variance,
-        variance_tolerance: pipeline.reconciliation.varianceTolerance,
-        currency_code: document.currency_code,
-        status: pipeline.reconciliation.status,
-        reconciliation_method: pipeline.reconciliation.method,
-      });
-      await recordDocumentAuditEvent({
-        userId,
-        documentId,
-        eventType: 'import_reconciled',
-        actorType: 'system',
-        metadata: { status: pipeline.reconciliation.status },
-      });
-    }
-
-    // Data-quality checks (spec 46, FDH-1 closed vocabulary — see migration
-    // 0064 header note for why no widening was needed here).
-    const dqChecks: { check_code: string; status: string; details_sanitised?: string }[] = [
-      {
-        check_code: 'transaction_count_valid',
-        status: pipeline.declaredRowCount === pipeline.parsedRowCount ? 'pass' : 'fail',
-        details_sanitised: `declared=${pipeline.declaredRowCount} parsed=${pipeline.parsedRowCount} ${encodeUnreadLines(unreadLines)}`,
-      },
-      {
-        check_code: 'account_identified',
-        status: document.financial_account_id ? 'pass' : 'fail',
-      },
-      {
-        check_code: 'balance_reconciled',
-        status:
-          pipeline.reconciliation?.status === 'reconciled'
-            ? 'pass'
-            : pipeline.reconciliation?.status === 'not_available'
-              ? 'not_applicable'
-              : pipeline.reconciliation?.status === 'failed'
-                ? 'fail'
-                : 'warning',
-      },
-      {
-        check_code: 'statement_period_found',
-        status: document.statement_period_start && document.statement_period_end ? 'pass' : 'warning',
-      },
-      {
-        check_code: 'duplicate_file',
-        status: document.duplicate_of_document_id ? 'warning' : 'pass',
-      },
-    ];
-    for (const check of dqChecks) {
-      await adminInsert('fdh_data_quality_results', {
-        user_id: userId,
-        statement_upload_id: documentId,
-        check_code: check.check_code,
-        status: check.status,
-        details_sanitised: check.details_sanitised ?? null,
-      });
-    }
-
-    // Provenance (spec 24, one statement-level record; see
-    // R7_CANONICAL_TRANSACTION_CONTRACT.md for the chosen granularity).
-    await adminInsert('fdh_data_provenance', {
-      user_id: userId,
-      household_id: document.household_id,
-      entity_type: 'fdh_statement_upload',
-      entity_id: documentId,
-      source_type: 'csv',
-      source_statement_id: documentId,
-      parser_id: document.parser_id,
-      parser_version_id: document.parser_version_id,
-      mapping_rule_version: pipeline.parserVersion,
-      evidence_completeness: pipeline.rejected.length === 0 ? 1 : rowsToInsert.length / Math.max(pipeline.declaredRowCount, 1),
-      user_verified: false,
-      manual_override: false,
-    });
-
-    const certification = decideCertification({
-      detectionStatus: pipeline.detection.status,
-      declaredRowCount: pipeline.declaredRowCount,
-      parsedRowCount: pipeline.parsedRowCount,
-      rejectedRowCount: pipeline.rejected.length,
-      duplicateCandidateCount: duplicateCandidateCount,
-      accountAmbiguous: false,
-      reconciliationStatus: pipeline.reconciliation?.status ?? null,
-    });
-
-    if (certification.certificationStatus === 'review_required' && duplicateCandidateCount > 0) {
-      await reviewItemsRepository.create(userId, {
-        household_id: document.household_id,
-        statement_upload_id: documentId,
-        transaction_id: null,
-        review_type: 'possible_duplicate',
-        severity: 'warning',
-        status: 'open',
-        title_code: 'bank_csv.duplicate_candidates_pending_review',
-        context_json: { counts: { duplicate_candidates: duplicateCandidateCount } },
-      } as never);
-    }
-    if (certification.certificationStatus === 'review_required' && pipeline.reconciliation?.status === 'failed') {
-      await reviewItemsRepository.create(userId, {
-        household_id: document.household_id,
-        statement_upload_id: documentId,
-        transaction_id: null,
-        review_type: 'reconciliation_failure',
-        severity: 'blocking',
-        status: 'open',
-        title_code: 'bank_csv.reconciliation_failed',
-        context_json: { counts: { variance_minor_units: 1 } },
-      } as never);
-    }
-    if (overlap) {
-      await reviewItemsRepository.create(userId, {
-        household_id: document.household_id,
-        statement_upload_id: documentId,
-        transaction_id: null,
-        review_type: 'other',
-        severity: 'info',
-        status: 'open',
-        title_code: STATEMENT_OVERLAP_TITLE_CODE,
-        context_json: { overlapping_statement_count: overlap.overlappingStatementCount, overlap_from: overlap.overlapFrom, overlap_to: overlap.overlapTo },
-      } as never);
-    }
-
-    let finalProcessingStatus: FdhStatementUpload['processing_status'] = 'review_required';
-    assertDocumentTransition('processing', 'extracted');
-    await adminUpdateStatementUpload(userId, documentId, { processing_status: 'extracted' });
-
-    if (certification.certificationStatus === 'certified') {
-      assertDocumentTransition('extracted', 'ready_for_approval');
-      await adminUpdateStatementUpload(userId, documentId, { processing_status: 'ready_for_approval' });
-      assertDocumentTransition('ready_for_approval', 'approved');
-      finalProcessingStatus = 'approved';
-    } else if (certification.certificationStatus === 'partial') {
-      // A half-parsed file is never silently certified (spec 46, 91) — it
-      // lands in review_required with the exact row-count evidence attached,
-      // never in 'extracted'/'approved'.
-      assertDocumentTransition('extracted', 'review_required');
-      finalProcessingStatus = 'review_required';
-    } else if (certification.certificationStatus === 'review_required') {
-      assertDocumentTransition('extracted', 'review_required');
-      finalProcessingStatus = 'review_required';
-    } else {
-      assertDocumentTransition('extracted', 'rejected');
-      finalProcessingStatus = 'rejected';
-    }
-
-    const finalDoc = await adminUpdateStatementUpload(userId, documentId, {
-      processing_status: finalProcessingStatus,
-      certification_status: certification.certificationStatus,
-      parsed_row_count: pipeline.parsedRowCount,
-      certified_row_count: rowsToInsert.length,
-      duplicate_row_count: duplicateConfirmedCount,
-      reconciliation_status: pipeline.reconciliation?.status ?? 'not_available',
-      overall_quality_status: certification.certificationStatus === 'certified' ? 'pass' : certification.certificationStatus === 'partial' || certification.certificationStatus === 'rejected' ? 'fail' : 'warning',
-      processing_completed_at: new Date().toISOString(),
-      review_status: finalProcessingStatus === 'review_required' ? 'pending' : 'not_required',
-    });
-
-    await ingestionJobsRepository.listForUser(userId, 500).then(async ({ data }) => {
-      const job = (data ?? []).find((j) => j.statement_upload_id === documentId && j.job_type === 'document_extract' && j.status === 'queued');
-      if (job) {
-        await ingestionJobsRepository.update(userId, job.id, {
-          status: certification.certificationStatus === 'rejected' ? 'failed' : 'succeeded',
-          started_at: document.processing_started_at ?? new Date().toISOString(),
-          completed_at: new Date().toISOString(),
-        } as never);
-      }
-    });
-
-    await recordDocumentAuditEvent({
+    return await finalizeBankCsvImport({
       userId,
       documentId,
-      eventType: 'bank_csv_processing_completed',
-      actorType: 'system',
-      metadata: {
-        certification_status: certification.certificationStatus,
-        transactions_created: rowsToInsert.length,
-        duplicates_skipped: duplicateConfirmedCount,
+      document,
+      pipeline: {
+        detectionStatus: pipeline.detection.status,
+        declaredRowCount: pipeline.declaredRowCount,
+        parsedRowCount: pipeline.parsedRowCount,
+        rejected: pipeline.rejected,
+        reconciliation: pipeline.reconciliation,
+        parserVersion: pipeline.parserVersion,
       },
+      rowsInserted: rowsToInsert.length,
+      duplicateConfirmedCount,
+      duplicateCandidates: duplicateCandidateRefs(rowsToInsert),
+      insertedIds,
+      // Overlap evidence (spec 44) -- informational only; does not by itself change certification. WP-08 (EXP-G17): it becomes an
+      // info note on the statement, no longer computed and thrown away.
+      overlap: computeStatementOverlap(priorRanges, pipeline.dateCoverage),
     });
-
-    return {
-      document: (finalDoc ?? document) as FdhStatementUpload,
-      transactionsCreated: rowsToInsert.length,
-      duplicatesSkipped: duplicateConfirmedCount,
-      duplicateCandidates: duplicateCandidateCount,
-      rejectedRows: pipeline.rejected.length,
-      unreadLines,
-      certificationStatus: certification.certificationStatus,
-      reconciliationStatus: pipeline.reconciliation?.status ?? null,
-    };
   } catch (e) {
     if (e instanceof BankCsvProcessingError) throw e;
     await adminUpdateStatementUpload(userId, documentId, {
@@ -728,6 +467,359 @@ export async function processBankCsvDocument(userId: string, documentId: string)
     });
     throw new BankCsvProcessingError('internal_error', e instanceof Error ? e.message : 'processing failed');
   }
+}
+
+// ---------------------------------------------------------------------------
+// WP-G (F15): the pieces of the import the background job reuses. The synchronous path above and the job's slices call the SAME
+// row mapper and the SAME finalize, so a job-imported statement is indistinguishable from a synchronously imported one.
+// ---------------------------------------------------------------------------
+
+/** The `fdh_transactions` row for one accepted CSV line. */
+export function csvTransactionRow(
+  t: AcceptedTransactionPlan,
+  ctx: { userId: string; documentId: string; document: Pick<FdhStatementUpload, 'household_id' | 'financial_account_id' | 'currency_code'>; economicFingerprintVersion: string },
+): Record<string, unknown> {
+  return {
+    user_id: ctx.userId,
+    household_id: ctx.document.household_id,
+    financial_account_id: ctx.document.financial_account_id,
+    statement_upload_id: ctx.documentId,
+    transaction_date: t.transactionDate,
+    posting_date: t.postedDate,
+    value_date: t.valueDate,
+    description_raw: t.descriptionRaw,
+    description_clean: t.descriptionClean,
+    amount_original: t.amountOriginal,
+    currency_original: ctx.document.currency_code ?? 'AUD',
+    credit_debit: t.creditDebit,
+    economic_transaction_type: 'unknown',
+    source_reference: t.referenceRaw,
+    source_row: t.sourceRowNumber,
+    extraction_confidence: 1,
+    classification_method: 'unclassified',
+    source_row_hash: t.sourceRowHash,
+    economic_fingerprint: t.economicFingerprint,
+    economic_fingerprint_version: ctx.economicFingerprintVersion,
+    dedup_status: t.dedupStatus,
+    balance_after: t.balanceAfter,
+    transaction_type_hint: t.transactionTypeHint,
+  };
+}
+
+/** One within-file or cross-import duplicate CANDIDATE among the lines being written. */
+export interface DuplicateCandidateRef {
+  sourceRowNumber: number;
+  matchedTransactionId: string;
+  matchMethod: 'exact_hash' | 'fuzzy_amount_date' | 'statement_overlap' | 'user_reported' | null;
+  dedupConfidence: number;
+}
+
+export function duplicateCandidateRefs(
+  rows: ReadonlyArray<{ sourceRowNumber: number; dedupStatus: string; matchedTransactionId: string | null; matchMethod: DuplicateCandidateRef['matchMethod']; dedupConfidence: number }>,
+): DuplicateCandidateRef[] {
+  const out: DuplicateCandidateRef[] = [];
+  for (const t of rows) {
+    if (t.dedupStatus !== 'duplicate_candidate' || !t.matchedTransactionId) continue;
+    out.push({ sourceRowNumber: t.sourceRowNumber, matchedTransactionId: t.matchedTransactionId, matchMethod: t.matchMethod, dedupConfidence: t.dedupConfidence });
+  }
+  return out;
+}
+
+/**
+ * Writes the `fdh_duplicate_candidates` rows for a statement whose lines are already stored and returns how many pairs resolved.
+ *
+ * LIVE-DEV-DISCOVERED FIX (R7-FINAL live certification): a WITHIN-FILE duplicate candidate (the matched row is earlier in this SAME
+ * upload) carries a `pending-row-N` placeholder; by the time this runs every accepted row has been stored, so the placeholder resolves
+ * to the real id of row N. Cross-import candidates were never placeholders. Shared with the PDF path.
+ *
+ * WP-G: written in batches, and a pair that already exists is not written again, so a finalize that is run again (a job slice that
+ * was killed after writing some) creates each pair once.
+ */
+export async function writeDuplicateCandidates(
+  userId: string,
+  candidates: readonly DuplicateCandidateRef[],
+  insertedIds: ReadonlyArray<{ id: string; source_row: number | null }>,
+): Promise<number> {
+  const rowNumberToId = new Map(insertedIds.map((r) => [r.source_row, r.id]));
+  const pairs: Array<{ a: string; b: string; ref: DuplicateCandidateRef }> = [];
+  for (const t of candidates) {
+    const newId = rowNumberToId.get(t.sourceRowNumber);
+    let matchedId: string | null = t.matchedTransactionId;
+    if (matchedId.startsWith('pending-row-')) {
+      const matchedRowNumber = Number(matchedId.slice('pending-row-'.length));
+      matchedId = rowNumberToId.get(matchedRowNumber) ?? null;
+    }
+    if (!newId || !matchedId || matchedId === newId) continue;
+    pairs.push({ a: matchedId, b: newId, ref: t });
+  }
+  if (pairs.length === 0) return 0;
+  const admin = createAdminClient();
+  const existing = new Set<string>();
+  const newIds = [...new Set(pairs.map((p) => p.b))];
+  for (let i = 0; i < newIds.length; i += 200) {
+    const { data, error } = await admin
+      .from('fdh_duplicate_candidates')
+      .select('transaction_id_a, transaction_id_b')
+      .eq('user_id', userId)
+      .in('transaction_id_b', newIds.slice(i, i + 200));
+    if (error) throw new Error(error.message);
+    for (const r of (data ?? []) as Array<{ transaction_id_a: string; transaction_id_b: string }>) existing.add(`${r.transaction_id_a}|${r.transaction_id_b}`);
+  }
+  const fresh = pairs.filter((p) => !existing.has(`${p.a}|${p.b}`));
+  for (let i = 0; i < fresh.length; i += 200) {
+    const { error } = await admin.from('fdh_duplicate_candidates').insert(
+      fresh.slice(i, i + 200).map((p) => ({
+        user_id: userId,
+        transaction_id_a: p.a,
+        transaction_id_b: p.b,
+        match_method: p.ref.matchMethod ?? 'fuzzy_amount_date',
+        confidence: p.ref.dedupConfidence,
+        status: 'pending',
+      })),
+    );
+    if (error) throw new Error(error.message);
+  }
+  return pairs.length;
+}
+
+export interface BankCsvFinalizeInput {
+  userId: string;
+  documentId: string;
+  document: FdhStatementUpload;
+  pipeline: {
+    detectionStatus: string;
+    declaredRowCount: number;
+    parsedRowCount: number;
+    rejected: ReadonlyArray<RejectedRowPlan>;
+    reconciliation: BalanceReconciliationResult | null;
+    parserVersion: string;
+  };
+  rowsInserted: number;
+  duplicateConfirmedCount: number;
+  duplicateCandidates: readonly DuplicateCandidateRef[];
+  insertedIds: ReadonlyArray<{ id: string; source_row: number | null }>;
+  overlap: ReturnType<typeof computeStatementOverlap>;
+}
+
+/**
+ * Everything after the lines are stored: duplicate candidates, reconciliation, data-quality checks, provenance, the certification
+ * decision, review items, the lifecycle transitions and the ingestion-job row. Used by the synchronous path and by the background
+ * job's `finalize` slice.
+ */
+export async function finalizeBankCsvImport(input: BankCsvFinalizeInput): Promise<ProcessBankCsvResult> {
+  const { userId, documentId, document, pipeline, overlap } = input;
+  const duplicateConfirmedCount = input.duplicateConfirmedCount;
+
+  // Duplicate-candidate provenance (Layer 4, spec 34/36).
+  const duplicateCandidateCount = await writeDuplicateCandidates(userId, input.duplicateCandidates, input.insertedIds);
+  if (duplicateConfirmedCount > 0 || duplicateCandidateCount > 0) {
+    await recordDocumentAuditEvent({
+      userId,
+      documentId,
+      eventType: 'transaction_duplicate_detected',
+      actorType: 'system',
+      metadata: { confirmed: duplicateConfirmedCount, candidates: duplicateCandidateCount },
+    });
+  }
+
+  const unreadLines = summariseUnreadLines(pipeline.rejected);
+
+  // Reconciliation persistence (spec 42-43).
+  if (pipeline.reconciliation) {
+    await adminInsert('fdh_reconciliation_results', {
+      user_id: userId,
+      statement_upload_id: documentId,
+      opening_balance: pipeline.reconciliation.openingBalance,
+      extracted_credits: pipeline.reconciliation.extractedCredits,
+      extracted_debits: pipeline.reconciliation.extractedDebits,
+      expected_closing_balance: pipeline.reconciliation.expectedClosingBalance,
+      reported_closing_balance: pipeline.reconciliation.reportedClosingBalance,
+      variance: pipeline.reconciliation.variance,
+      variance_tolerance: pipeline.reconciliation.varianceTolerance,
+      currency_code: document.currency_code,
+      status: pipeline.reconciliation.status,
+      reconciliation_method: pipeline.reconciliation.method,
+    });
+    await recordDocumentAuditEvent({
+      userId,
+      documentId,
+      eventType: 'import_reconciled',
+      actorType: 'system',
+      metadata: { status: pipeline.reconciliation.status },
+    });
+  }
+
+  // Data-quality checks (spec 46, FDH-1 closed vocabulary -- see migration 0064 header note for why no widening was needed here).
+  const dqChecks: { check_code: string; status: string; details_sanitised?: string }[] = [
+    {
+      check_code: 'transaction_count_valid',
+      status: pipeline.declaredRowCount === pipeline.parsedRowCount ? 'pass' : 'fail',
+      details_sanitised: `declared=${pipeline.declaredRowCount} parsed=${pipeline.parsedRowCount} ${encodeUnreadLines(unreadLines)}`,
+    },
+    {
+      check_code: 'account_identified',
+      status: document.financial_account_id ? 'pass' : 'fail',
+    },
+    {
+      check_code: 'balance_reconciled',
+      status:
+        pipeline.reconciliation?.status === 'reconciled'
+          ? 'pass'
+          : pipeline.reconciliation?.status === 'not_available'
+            ? 'not_applicable'
+            : pipeline.reconciliation?.status === 'failed'
+              ? 'fail'
+              : 'warning',
+    },
+    {
+      check_code: 'statement_period_found',
+      status: document.statement_period_start && document.statement_period_end ? 'pass' : 'warning',
+    },
+    {
+      check_code: 'duplicate_file',
+      status: document.duplicate_of_document_id ? 'warning' : 'pass',
+    },
+  ];
+  for (const check of dqChecks) {
+    await adminInsert('fdh_data_quality_results', {
+      user_id: userId,
+      statement_upload_id: documentId,
+      check_code: check.check_code,
+      status: check.status,
+      details_sanitised: check.details_sanitised ?? null,
+    });
+  }
+
+  // Provenance (spec 24, one statement-level record; see R7_CANONICAL_TRANSACTION_CONTRACT.md for the chosen granularity).
+  await adminInsert('fdh_data_provenance', {
+    user_id: userId,
+    household_id: document.household_id,
+    entity_type: 'fdh_statement_upload',
+    entity_id: documentId,
+    source_type: 'csv',
+    source_statement_id: documentId,
+    parser_id: document.parser_id,
+    parser_version_id: document.parser_version_id,
+    mapping_rule_version: pipeline.parserVersion,
+    evidence_completeness: pipeline.rejected.length === 0 ? 1 : input.rowsInserted / Math.max(pipeline.declaredRowCount, 1),
+    user_verified: false,
+    manual_override: false,
+  });
+
+  const certification = decideCertification({
+    detectionStatus: pipeline.detectionStatus as never,
+    declaredRowCount: pipeline.declaredRowCount,
+    parsedRowCount: pipeline.parsedRowCount,
+    rejectedRowCount: pipeline.rejected.length,
+    duplicateCandidateCount: duplicateCandidateCount,
+    accountAmbiguous: false,
+    reconciliationStatus: pipeline.reconciliation?.status ?? null,
+  });
+
+  if (certification.certificationStatus === 'review_required' && duplicateCandidateCount > 0) {
+    await reviewItemsRepository.create(userId, {
+      household_id: document.household_id,
+      statement_upload_id: documentId,
+      transaction_id: null,
+      review_type: 'possible_duplicate',
+      severity: 'warning',
+      status: 'open',
+      title_code: 'bank_csv.duplicate_candidates_pending_review',
+      context_json: { counts: { duplicate_candidates: duplicateCandidateCount } },
+    } as never);
+  }
+  if (certification.certificationStatus === 'review_required' && pipeline.reconciliation?.status === 'failed') {
+    await reviewItemsRepository.create(userId, {
+      household_id: document.household_id,
+      statement_upload_id: documentId,
+      transaction_id: null,
+      review_type: 'reconciliation_failure',
+      severity: 'blocking',
+      status: 'open',
+      title_code: 'bank_csv.reconciliation_failed',
+      context_json: { counts: { variance_minor_units: 1 } },
+    } as never);
+  }
+  if (overlap) {
+    await reviewItemsRepository.create(userId, {
+      household_id: document.household_id,
+      statement_upload_id: documentId,
+      transaction_id: null,
+      review_type: 'other',
+      severity: 'info',
+      status: 'open',
+      title_code: STATEMENT_OVERLAP_TITLE_CODE,
+      context_json: { overlapping_statement_count: overlap.overlappingStatementCount, overlap_from: overlap.overlapFrom, overlap_to: overlap.overlapTo },
+    } as never);
+  }
+
+  let finalProcessingStatus: FdhStatementUpload['processing_status'] = 'review_required';
+  assertDocumentTransition('processing', 'extracted');
+  await adminUpdateStatementUpload(userId, documentId, { processing_status: 'extracted' });
+
+  if (certification.certificationStatus === 'certified') {
+    assertDocumentTransition('extracted', 'ready_for_approval');
+    await adminUpdateStatementUpload(userId, documentId, { processing_status: 'ready_for_approval' });
+    assertDocumentTransition('ready_for_approval', 'approved');
+    finalProcessingStatus = 'approved';
+  } else if (certification.certificationStatus === 'partial') {
+    // A half-parsed file is never silently certified (spec 46, 91) -- it lands in review_required with the exact row-count evidence
+    // attached, never in 'extracted'/'approved'.
+    assertDocumentTransition('extracted', 'review_required');
+    finalProcessingStatus = 'review_required';
+  } else if (certification.certificationStatus === 'review_required') {
+    assertDocumentTransition('extracted', 'review_required');
+    finalProcessingStatus = 'review_required';
+  } else {
+    assertDocumentTransition('extracted', 'rejected');
+    finalProcessingStatus = 'rejected';
+  }
+
+  const finalDoc = await adminUpdateStatementUpload(userId, documentId, {
+    processing_status: finalProcessingStatus,
+    certification_status: certification.certificationStatus,
+    parsed_row_count: pipeline.parsedRowCount,
+    certified_row_count: input.rowsInserted,
+    duplicate_row_count: duplicateConfirmedCount,
+    reconciliation_status: pipeline.reconciliation?.status ?? 'not_available',
+    overall_quality_status: certification.certificationStatus === 'certified' ? 'pass' : certification.certificationStatus === 'partial' || certification.certificationStatus === 'rejected' ? 'fail' : 'warning',
+    processing_completed_at: new Date().toISOString(),
+    review_status: finalProcessingStatus === 'review_required' ? 'pending' : 'not_required',
+  });
+
+  await ingestionJobsRepository.listForUser(userId, 500).then(async ({ data }) => {
+    const job = (data ?? []).find((j) => j.statement_upload_id === documentId && j.job_type === 'document_extract' && j.status === 'queued');
+    if (job) {
+      await ingestionJobsRepository.update(userId, job.id, {
+        status: certification.certificationStatus === 'rejected' ? 'failed' : 'succeeded',
+        started_at: document.processing_started_at ?? new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+      } as never);
+    }
+  });
+
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'bank_csv_processing_completed',
+    actorType: 'system',
+    metadata: {
+      certification_status: certification.certificationStatus,
+      transactions_created: input.rowsInserted,
+      duplicates_skipped: duplicateConfirmedCount,
+    },
+  });
+
+  return {
+    document: (finalDoc ?? document) as FdhStatementUpload,
+    transactionsCreated: input.rowsInserted,
+    duplicatesSkipped: duplicateConfirmedCount,
+    duplicateCandidates: duplicateCandidateCount,
+    rejectedRows: pipeline.rejected.length,
+    unreadLines,
+    certificationStatus: certification.certificationStatus,
+    reconciliationStatus: pipeline.reconciliation?.status ?? null,
+  };
 }
 
 function summariseExisting(document: FdhStatementUpload): ProcessBankCsvResult {

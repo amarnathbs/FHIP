@@ -26,7 +26,7 @@
  */
 
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
-import { createClient } from '@/lib/supabase/server';
+import { fdhDbClient } from '../dbContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   documentAuditEventsRepository,
@@ -46,7 +46,10 @@ import {
   type PdfPipelineStatus,
   type PdfPipelineResult,
   type ReadBankStatementRow,
+  type AcceptedPdfTransactionPlan,
 } from '../bank-pdf/orchestrator';
+import type { PdfStatementMetadata } from '../bank-pdf/metadata';
+import { duplicateCandidateRefs, writeDuplicateCandidates, type DuplicateCandidateRef } from './bankCsvProcessingService';
 // AIE bank-statement AI-fallback (2026-09-23). Follows the pattern proven by
 // the payslip path: call the shared AIE gateway DIRECTLY from inside this
 // native processing service's own failure branch, rather than routing through
@@ -76,7 +79,7 @@ import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraf
 import { saveAiFallbackDraft, claimPendingAiFallbackDraft, releaseClaimedAiFallbackDraftIfNothingWritten, loadPendingAiFallbackDraft } from './aiFallbackDrafts';
 import { findEarlierIdenticalUpload, IDENTICAL_UPLOAD_SPECS, type IdenticalUploadMatch } from './identicalUpload';
 import { loadDedupIndexForAccount, loadPriorStatementDateRanges } from '../bank-csv/repository';
-import { computeStatementOverlap } from '../bank-csv/reconciliation';
+import { computeStatementOverlap, type BalanceReconciliationResult } from '../bank-csv/reconciliation';
 import { computeAccountFingerprint, normaliseMaskedIdentifier } from '../bank-csv/accountIdentity';
 import { encodeUnreadLines, summariseUnreadLines, type UnreadLinesSummary } from '../domain/unreadLines';
 import { AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
@@ -205,7 +208,7 @@ export type BankStatementAiDraftRow = Omit<ReadBankStatementRow, 'sourceRowNumbe
  * produced — the compensating cleanup that makes a retry safe (spec 89-90),
  * identical discipline to the CSV path's own `cleanupPriorAttempt`. */
 async function cleanupPriorAttempt(userId: string, documentId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await fdhDbClient();
   await supabase.from('fdh_transactions').delete().eq('user_id', userId).eq('statement_upload_id', documentId);
   await supabase.from('fdh_reconciliation_results').delete().eq('user_id', userId).eq('statement_upload_id', documentId);
   await supabase.from('fdh_data_quality_results').delete().eq('user_id', userId).eq('statement_upload_id', documentId);
@@ -570,45 +573,7 @@ export async function persistBankPdfPipelineResult(params: {
   aiContext?: AiReadingContext;
 }): Promise<ProcessBankPdfResult> {
   const { userId, documentId, document, pipeline, priorRanges, aiContext } = params;
-  await recordDocumentAuditEvent({
-    userId,
-    documentId,
-    eventType: 'pdf_adapter_detected',
-    actorType: 'system',
-    metadata: { adapter_id: pipeline.adapter?.id ?? null, confidence: pipeline.detection?.confidence ?? null },
-  });
-
-  // Parser/version provenance (spec 27, 86) — recorded now that detection
-  // has actually succeeded (there is no separate PDF "detect" step; spec
-  // section 26's `detect()` runs inline as part of processing, unlike the
-  // CSV path's own separate `/detect` endpoint).
-  if (pipeline.adapter) {
-    const supabase = await createClient();
-    const { data: registryRow } = await supabase
-      .from('fdh_parser_registry')
-      .select('id')
-      .eq('parser_key', pipeline.adapter.id)
-      .maybeSingle();
-    let parserVersionId: string | null = null;
-    if (registryRow) {
-      const { data: versionRow } = await supabase
-        .from('fdh_parser_versions')
-        .select('id')
-        .eq('parser_id', (registryRow as { id: string }).id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      parserVersionId = (versionRow as { id: string } | null)?.id ?? null;
-    }
-    await adminUpdateStatementUpload(userId, documentId, {
-      adapter_key: pipeline.adapter.id,
-      adapter_version: pipeline.adapter.version,
-      parser_id: (registryRow as { id: string } | null)?.id ?? null,
-      parser_version_id: parserVersionId,
-    });
-    document.parser_id = (registryRow as { id: string } | null)?.id ?? null;
-    document.parser_version_id = parserVersionId;
-  }
+  await recordBankPdfAdapterProvenance(userId, documentId, document, pipeline.adapter ? { id: pipeline.adapter.id, version: pipeline.adapter.version } : null, pipeline.detection?.confidence ?? null);
 
   const rowsToInsert = pipeline.accepted.filter((a) => a.dedupStatus !== 'duplicate_confirmed');
   const duplicateConfirmedCount = pipeline.accepted.length - rowsToInsert.length;
@@ -619,34 +584,7 @@ export async function persistBankPdfPipelineResult(params: {
     const admin = createAdminClient();
     const { data, error } = await admin
       .from('fdh_transactions')
-      .insert(
-        chunk.map((t) => ({
-          user_id: userId,
-          household_id: document.household_id,
-          financial_account_id: document.financial_account_id,
-          statement_upload_id: documentId,
-          transaction_date: t.transactionDate,
-          posting_date: null,
-          value_date: null,
-          description_raw: t.descriptionRaw,
-          description_clean: t.descriptionClean,
-          amount_original: t.amountOriginal,
-          currency_original: document.currency_code ?? 'AUD',
-          credit_debit: t.creditDebit,
-          economic_transaction_type: 'unknown',
-          source_reference: null,
-          source_page: t.sourcePage,
-          source_row: t.sourceRowNumber,
-          extraction_confidence: t.extractionConfidence,
-          classification_method: 'unclassified',
-          source_row_hash: t.sourceRowHash,
-          economic_fingerprint: t.economicFingerprint,
-          economic_fingerprint_version: pipeline.economicFingerprintVersion,
-          dedup_status: t.dedupStatus,
-          balance_after: t.balanceAfter,
-          transaction_type_hint: t.transactionTypeHint,
-        })),
-      )
+      .insert(chunk.map((t) => pdfTransactionRow(t, { userId, documentId, document, economicFingerprintVersion: pipeline.economicFingerprintVersion })))
       .select('id, source_row');
     if (error) {
       await cleanupPriorAttempt(userId, documentId);
@@ -666,34 +604,155 @@ export async function persistBankPdfPipelineResult(params: {
     insertedIds = insertedIds.concat((data ?? []) as { id: string; source_row: number | null }[]);
   }
 
+  return finalizeBankPdfImport({
+    userId,
+    documentId,
+    document,
+    pipeline: {
+      status: pipeline.status,
+      acceptedCount: pipeline.accepted.length,
+      rejected: pipeline.rejected,
+      unparseableBlockCount: pipeline.unparseableBlockCount,
+      reconciliation: pipeline.reconciliation,
+      statementMetadata: pipeline.statementMetadata,
+      parserVersion: pipeline.parserVersion,
+      pageCount: pipeline.pageCount,
+      statementExtractionConfidence: pipeline.statementExtractionConfidence,
+    },
+    rowsInserted: rowsToInsert.length,
+    duplicateConfirmedCount,
+    duplicateCandidates: duplicateCandidateRefs(rowsToInsert),
+    insertedIds,
+    // WP-08 (EXP-G17): overlap evidence becomes a visible info note instead of being computed and discarded.
+    overlap: computeStatementOverlap(priorRanges, pipeline.dateCoverage),
+    aiContext,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// WP-G (F15): the pieces of the import the background job reuses (see the matching block in bankCsvProcessingService.ts).
+// ---------------------------------------------------------------------------
+
+/** Records which certified PDF adapter read the statement (audit event, adapter columns, parser/version ids). Idempotent. */
+export async function recordBankPdfAdapterProvenance(
+  userId: string,
+  documentId: string,
+  document: FdhStatementUpload,
+  adapter: { id: string; version: string } | null,
+  detectionConfidence: number | null,
+): Promise<void> {
+  await recordDocumentAuditEvent({
+    userId,
+    documentId,
+    eventType: 'pdf_adapter_detected',
+    actorType: 'system',
+    metadata: { adapter_id: adapter?.id ?? null, confidence: detectionConfidence },
+  });
+
+  // Parser/version provenance (spec 27, 86) -- recorded now that detection has actually succeeded (there is no separate PDF "detect"
+  // step; spec section 26's `detect()` runs inline as part of processing, unlike the CSV path's own separate `/detect` endpoint).
+  if (adapter) {
+    const supabase = await fdhDbClient();
+    const { data: registryRow } = await supabase
+      .from('fdh_parser_registry')
+      .select('id')
+      .eq('parser_key', adapter.id)
+      .maybeSingle();
+    let parserVersionId: string | null = null;
+    if (registryRow) {
+      const { data: versionRow } = await supabase
+        .from('fdh_parser_versions')
+        .select('id')
+        .eq('parser_id', (registryRow as { id: string }).id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      parserVersionId = (versionRow as { id: string } | null)?.id ?? null;
+    }
+    await adminUpdateStatementUpload(userId, documentId, {
+      adapter_key: adapter.id,
+      adapter_version: adapter.version,
+      parser_id: (registryRow as { id: string } | null)?.id ?? null,
+      parser_version_id: parserVersionId,
+    });
+    document.parser_id = (registryRow as { id: string } | null)?.id ?? null;
+    document.parser_version_id = parserVersionId;
+  }
+}
+
+/** The `fdh_transactions` row for one accepted PDF line (native or AI-read). */
+export function pdfTransactionRow(
+  t: AcceptedPdfTransactionPlan,
+  ctx: { userId: string; documentId: string; document: Pick<FdhStatementUpload, 'household_id' | 'financial_account_id' | 'currency_code'>; economicFingerprintVersion: string },
+): Record<string, unknown> {
+  return {
+    user_id: ctx.userId,
+    household_id: ctx.document.household_id,
+    financial_account_id: ctx.document.financial_account_id,
+    statement_upload_id: ctx.documentId,
+    transaction_date: t.transactionDate,
+    posting_date: null,
+    value_date: null,
+    description_raw: t.descriptionRaw,
+    description_clean: t.descriptionClean,
+    amount_original: t.amountOriginal,
+    currency_original: ctx.document.currency_code ?? 'AUD',
+    credit_debit: t.creditDebit,
+    economic_transaction_type: 'unknown',
+    source_reference: null,
+    source_page: t.sourcePage,
+    source_row: t.sourceRowNumber,
+    extraction_confidence: t.extractionConfidence,
+    classification_method: 'unclassified',
+    source_row_hash: t.sourceRowHash,
+    economic_fingerprint: t.economicFingerprint,
+    economic_fingerprint_version: ctx.economicFingerprintVersion,
+    dedup_status: t.dedupStatus,
+    balance_after: t.balanceAfter,
+    transaction_type_hint: t.transactionTypeHint,
+  };
+}
+
+export interface BankPdfFinalizeInput {
+  userId: string;
+  documentId: string;
+  document: FdhStatementUpload;
+  pipeline: {
+    status: PdfPipelineStatus;
+    acceptedCount: number;
+    rejected: ReadonlyArray<{ sourceRowNumber: number; reason: string }>;
+    unparseableBlockCount: number;
+    reconciliation: BalanceReconciliationResult | null;
+    statementMetadata: PdfStatementMetadata | null;
+    parserVersion: string;
+    pageCount: number | null;
+    statementExtractionConfidence: number | null;
+  };
+  rowsInserted: number;
+  duplicateConfirmedCount: number;
+  duplicateCandidates: readonly DuplicateCandidateRef[];
+  insertedIds: ReadonlyArray<{ id: string; source_row: number | null }>;
+  overlap: ReturnType<typeof computeStatementOverlap>;
+  /** Present only on the AI-fallback path: what the server-issued draft said about itself (never taken from the client). */
+  aiContext?: AiReadingContext;
+}
+
+/**
+ * Everything after a PDF statement's lines are stored: duplicate candidates, reconciliation (with the statement's own declared
+ * balances as an extra check), data-quality checks, provenance, certification, review items, lifecycle transitions, the
+ * ingestion-job row. THE canonical write's second half: native, AI-confirmed, and background-job imports all end here.
+ */
+export async function finalizeBankPdfImport(input: BankPdfFinalizeInput): Promise<ProcessBankPdfResult> {
+  const { userId, documentId, document, pipeline, aiContext, overlap } = input;
+  const rowsInsertedCount = input.rowsInserted;
+  const duplicateConfirmedCount = input.duplicateConfirmedCount;
+
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'pdf_native_extraction_completed', actorType: 'system' });
 
-  // Duplicate-candidate provenance (spec 57-59) — identical logic to the
-  // CSV path's own within-file `pending-row-N` placeholder resolution
-  // (see `bankCsvProcessingService.ts`'s own header comment for the
-  // live-DEV-discovered bug this pattern already fixed once for R7 — the
-  // exact same resolution is applied here).
-  const rowNumberToId = new Map(insertedIds.map((r) => [r.source_row, r.id]));
-  let duplicateCandidateCount = 0;
-  for (const t of rowsToInsert) {
-    if (t.dedupStatus !== 'duplicate_candidate' || !t.matchedTransactionId) continue;
-    const newId = rowNumberToId.get(t.sourceRowNumber);
-    let matchedId: string | null = t.matchedTransactionId;
-    if (matchedId.startsWith('pending-row-')) {
-      const matchedRowNumber = Number(matchedId.slice('pending-row-'.length));
-      matchedId = rowNumberToId.get(matchedRowNumber) ?? null;
-    }
-    if (!newId || !matchedId || matchedId === newId) continue;
-    await adminInsert('fdh_duplicate_candidates', {
-      user_id: userId,
-      transaction_id_a: matchedId,
-      transaction_id_b: newId,
-      match_method: t.matchMethod ?? 'fuzzy_amount_date',
-      confidence: t.dedupConfidence,
-      status: 'pending',
-    });
-    duplicateCandidateCount += 1;
-  }
+  // Duplicate-candidate provenance (spec 57-59) -- identical logic to the CSV path's own within-file `pending-row-N` placeholder
+  // resolution (see `bankCsvProcessingService.ts`'s own header comment for the live-DEV-discovered bug this pattern already fixed
+  // once for R7 -- the exact same resolution is applied here).
+  const duplicateCandidateCount = await writeDuplicateCandidates(userId, input.duplicateCandidates, input.insertedIds);
   if (duplicateConfirmedCount > 0 || duplicateCandidateCount > 0) {
     await recordDocumentAuditEvent({
       userId,
@@ -704,21 +763,13 @@ export async function persistBankPdfPipelineResult(params: {
     });
   }
 
-  // WP-08 (EXP-G17): overlap evidence becomes a visible info note instead
-  // of being computed and discarded.
-  const overlap = computeStatementOverlap(priorRanges, pipeline.dateCoverage);
   const unreadLines = summariseUnreadLines(pipeline.rejected, pipeline.unparseableBlockCount);
 
-  // Reconciliation persistence (spec 42-43, 60-62) — reuses R7's exact
-  // `fdh_reconciliation_results` table and `reconcileBalances()` output
-  // unchanged. An EXPLICIT statement-declared opening/closing balance
-  // (spec 36, when the adapter found one) is cross-checked here as an
-  // ADDITIONAL data-quality signal against the rollforward-DERIVED
-  // opening/closing balance `reconcileBalances()` computed — never used to
-  // silently override a reconciliation outcome, and never implemented as
-  // a second reconciliation engine (spec 60): both values are simply
-  // compared with the SAME `moneyEquals()` utility the reused engine
-  // itself is built on.
+  // Reconciliation persistence (spec 42-43, 60-62) -- reuses R7's exact `fdh_reconciliation_results` table and `reconcileBalances()`
+  // output unchanged. An EXPLICIT statement-declared opening/closing balance (spec 36, when the adapter found one) is cross-checked
+  // here as an ADDITIONAL data-quality signal against the rollforward-DERIVED opening/closing balance `reconcileBalances()` computed
+  // -- never used to silently override a reconciliation outcome, and never implemented as a second reconciliation engine (spec 60):
+  // both values are simply compared with the SAME `moneyEquals()` utility the reused engine itself is built on.
   let declaredBalanceMismatch = false;
   if (pipeline.reconciliation) {
     const declaredOpening = pipeline.statementMetadata?.declaredOpeningBalance;
@@ -755,20 +806,20 @@ export async function persistBankPdfPipelineResult(params: {
     });
   }
 
-  // WP-08 (EXP-G14): the masked account identifier the statement prints is
-  // used for matching instead of being dropped.
+  // WP-08 (EXP-G14): the masked account identifier the statement prints is used for matching instead of being dropped.
   const identifier = await reconcileMaskedIdentifier(userId, document, pipeline.statementMetadata?.maskedAccountIdentifier ?? null);
-  // WP-08 (EXP-G15): an AI reading that may have stopped early.
+  // WP-08 (EXP-G15): an AI reading that may have stopped early. A reading made in parts (WP-G) is judged by its parts'
+  // own "listed every line" answers; the single-reading row cap does not apply to it.
   const incompleteExtraction = Boolean(aiContext) && (
     aiContext!.allTransactionsListed === false
-    || (aiContext!.rowsRead >= AIE_BANK_STATEMENT_MAX_TRANSACTIONS && pipeline.reconciliation?.status !== 'reconciled')
+    || (!aiContext!.inParts && aiContext!.rowsRead >= AIE_BANK_STATEMENT_MAX_TRANSACTIONS && pipeline.reconciliation?.status !== 'reconciled')
   );
 
   const dqChecks: { check_code: string; status: string; details_sanitised?: string }[] = [
     {
       check_code: 'transaction_count_valid',
       status: pipeline.rejected.length === 0 && pipeline.unparseableBlockCount === 0 && !incompleteExtraction ? 'pass' : 'fail',
-      details_sanitised: `parsed=${pipeline.accepted.length} rejected=${pipeline.rejected.length} unparseable=${pipeline.unparseableBlockCount} ${encodeUnreadLines(unreadLines)}`,
+      details_sanitised: `parsed=${pipeline.acceptedCount} rejected=${pipeline.rejected.length} unparseable=${pipeline.unparseableBlockCount} ${encodeUnreadLines(unreadLines)}`,
     },
     {
       check_code: 'account_identified',
@@ -795,12 +846,12 @@ export async function persistBankPdfPipelineResult(params: {
     { check_code: 'duplicate_file', status: document.duplicate_of_document_id ? 'warning' : 'pass' },
   ];
   if (aiContext) {
-    // What the AI said about its own reading, persisted as evidence (counts
-    // and flags only -- the warning text itself may quote the document).
+    // What the AI said about its own reading, persisted as evidence (counts and flags only -- the warning text itself may quote the
+    // document).
     dqChecks.push({
       check_code: 'low_extraction_confidence',
       status: incompleteExtraction || aiContext.warningCount > 0 ? 'warning' : 'pass',
-      details_sanitised: `ai_reading all_transactions_listed=${aiContext.allTransactionsListed === null ? 'unknown' : aiContext.allTransactionsListed} rows_read=${aiContext.rowsRead} row_cap=${AIE_BANK_STATEMENT_MAX_TRANSACTIONS} warnings=${aiContext.warningCount}`,
+      details_sanitised: `ai_reading all_transactions_listed=${aiContext.allTransactionsListed === null ? 'unknown' : aiContext.allTransactionsListed} rows_read=${aiContext.rowsRead} row_cap=${AIE_BANK_STATEMENT_MAX_TRANSACTIONS} warnings=${aiContext.warningCount}${aiContext.inParts ? ' in_parts=true' : ''}`,
     });
   }
   for (const check of dqChecks) {
@@ -823,23 +874,22 @@ export async function persistBankPdfPipelineResult(params: {
     parser_id: document.parser_id,
     parser_version_id: document.parser_version_id,
     mapping_rule_version: pipeline.parserVersion,
-    evidence_completeness: pipeline.rejected.length === 0 && pipeline.unparseableBlockCount === 0 ? 1 : rowsToInsert.length / Math.max(rowsToInsert.length + pipeline.rejected.length + pipeline.unparseableBlockCount, 1),
+    evidence_completeness: pipeline.rejected.length === 0 && pipeline.unparseableBlockCount === 0 ? 1 : rowsInsertedCount / Math.max(rowsInsertedCount + pipeline.rejected.length + pipeline.unparseableBlockCount, 1),
     user_verified: false,
     manual_override: false,
   });
 
   const decidedCertification = decidePdfCertification({
     pipelineStatus: pipeline.status,
-    declaredRowCount: pipeline.accepted.length + pipeline.rejected.length + pipeline.unparseableBlockCount,
-    parsedRowCount: pipeline.accepted.length,
+    declaredRowCount: pipeline.acceptedCount + pipeline.rejected.length + pipeline.unparseableBlockCount,
+    parsedRowCount: pipeline.acceptedCount,
     rejectedRowCount: pipeline.rejected.length + pipeline.unparseableBlockCount,
     duplicateCandidateCount,
     accountAmbiguous: false,
     reconciliationStatus: declaredBalanceMismatch ? 'failed' : (pipeline.reconciliation?.status ?? null),
   });
-  // WP-08 (EXP-G15): a possibly-incomplete AI reading is never certified; it
-  // lands in review with a blocking statement-level item the user settles
-  // after checking the statement (or by adding the missing lines).
+  // WP-08 (EXP-G15): a possibly-incomplete AI reading is never certified; it lands in review with a blocking statement-level item
+  // the user settles after checking the statement (or by adding the missing lines).
   const certification = incompleteExtraction && decidedCertification.certificationStatus === 'certified'
     ? { ...decidedCertification, certificationStatus: 'review_required' as const }
     : decidedCertification;
@@ -879,8 +929,8 @@ export async function persistBankPdfPipelineResult(params: {
       context_json: null,
     } as never);
   }
-  // AI institution name (EXP-G14) names an account that was created without
-  // one; a name the user or a certified parser already gave is never replaced.
+  // AI institution name (EXP-G14) names an account that was created without one; a name the user or a certified parser already gave
+  // is never replaced.
   if (aiContext?.institutionName && document.financial_account_id) {
     await nameAccountFromAiReading(userId, document.financial_account_id, aiContext.institutionName);
   }
@@ -931,8 +981,8 @@ export async function persistBankPdfPipelineResult(params: {
   const finalDoc = await adminUpdateStatementUpload(userId, documentId, {
     processing_status: finalProcessingStatus,
     certification_status: certification.certificationStatus,
-    parsed_row_count: pipeline.accepted.length,
-    certified_row_count: rowsToInsert.length,
+    parsed_row_count: pipeline.acceptedCount,
+    certified_row_count: rowsInsertedCount,
     duplicate_row_count: duplicateConfirmedCount,
     reconciliation_status: declaredBalanceMismatch ? 'failed' : (pipeline.reconciliation?.status ?? 'not_available'),
     overall_quality_status: certification.certificationStatus === 'certified' ? 'pass' : certification.certificationStatus === 'rejected' ? 'fail' : 'warning',
@@ -941,10 +991,9 @@ export async function persistBankPdfPipelineResult(params: {
     page_count: pipeline.pageCount,
     pdf_classification: pipeline.unparseableBlockCount > 0 || (pipeline.rejected.length > 0) ? 'mixed_content' : 'text_native',
     extraction_confidence: pipeline.statementExtractionConfidence,
-    declared_row_count: pipeline.accepted.length + pipeline.rejected.length + pipeline.unparseableBlockCount,
-    // WP-08 (EXP-G14): the period the statement prints (native or AI-read)
-    // is persisted -- the canonical read models' coverage input. A period
-    // the user declared at upload is never overwritten.
+    declared_row_count: pipeline.acceptedCount + pipeline.rejected.length + pipeline.unparseableBlockCount,
+    // WP-08 (EXP-G14): the period the statement prints (native or AI-read) is persisted -- the canonical read models' coverage input.
+    // A period the user declared at upload is never overwritten.
     ...statementPeriodPatch(document, pipeline.statementMetadata),
   });
 
@@ -964,12 +1013,12 @@ export async function persistBankPdfPipelineResult(params: {
     documentId,
     eventType: 'pdf_processing_completed',
     actorType: 'system',
-    metadata: { certification_status: certification.certificationStatus, transactions_created: rowsToInsert.length, duplicates_skipped: duplicateConfirmedCount },
+    metadata: { certification_status: certification.certificationStatus, transactions_created: rowsInsertedCount, duplicates_skipped: duplicateConfirmedCount },
   });
 
   return {
     document: (finalDoc ?? document) as FdhStatementUpload,
-    transactionsCreated: rowsToInsert.length,
+    transactionsCreated: rowsInsertedCount,
     duplicatesSkipped: duplicateConfirmedCount,
     duplicateCandidates: duplicateCandidateCount,
     rejectedRows: pipeline.rejected.length + pipeline.unparseableBlockCount,
@@ -988,6 +1037,8 @@ export interface AiReadingContext {
   allTransactionsListed: boolean | null;
   warningCount: number;
   rowsRead: number;
+  /** WP-G: the reading was made in parts (a long statement); completeness is each part's own answer, not the single-reading row cap. */
+  inParts?: boolean;
 }
 
 /** The period columns to write: the printed period, only where the upload
@@ -1031,7 +1082,7 @@ async function reconcileMaskedIdentifier(
     const b = trailingDigits(normalised);
     return { mismatch: Boolean(a && b && a !== b), filled: false };
   }
-  const supabase = await createClient();
+  const supabase = await fdhDbClient();
   const { count: others, error: countError } = await supabase
     .from('fdh_statement_uploads')
     .select('id', { count: 'exact', head: true })
