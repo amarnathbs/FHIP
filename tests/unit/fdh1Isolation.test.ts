@@ -819,6 +819,15 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       // earlier documents to refuse the identical file under a different owner, and reads the caller's own
       // document owner at the canonical-write gates. Every query is `.eq('user_id', userId)`.
       path.join(FDH_LIB, 'services', 'documentOwnerRequest.ts'),
+      // Document2 (4) WP-G (F15, 2026-10-21) adds a SIXTEENTH, SEVENTEENTH and EIGHTEENTH: the background bank-import job.
+      // bankImportJobStore.ts is the only reader/writer of fdh_bank_import_jobs / _chunks (migration 0310: a browser can only READ its
+      // own jobs, every write is server-side); bankImportWorker.ts runs a slice under the service role because the scheduled backstop has
+      // no user session at all; bankImportAdmission.ts reads the statement row and creates the job after the route has authenticated the
+      // caller. Every query is scoped by user_id (resolved from the job row itself), writes to the job are fenced by the lease holder,
+      // and a statement or job of another user is indistinguishable from a missing one (tests/unit/doc2_4_wpG_*).
+      path.join(FDH_LIB, 'services', 'bankImportJobStore.ts'),
+      path.join(FDH_LIB, 'services', 'bankImportWorker.ts'),
+      path.join(FDH_LIB, 'services', 'bankImportAdmission.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

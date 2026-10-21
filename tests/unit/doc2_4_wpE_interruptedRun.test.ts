@@ -178,14 +178,14 @@ describe('F15 the process routes answer with a stable code (real route handlers)
     vi.doMock('@/lib/financial-data-hub/constants/featureFlags', async (o) => ({ ...(await o<typeof import('@/lib/financial-data-hub/constants/featureFlags')>()), isFdhDocumentUploadEnabled: () => true }));
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     for (const kind of ['bank-csv', 'bank-pdf'] as const) {
-      const svcPath = kind === 'bank-csv' ? '@/lib/financial-data-hub/services/bankCsvProcessingService' : '@/lib/financial-data-hub/services/bankPdfProcessingService';
-      const fn = kind === 'bank-csv' ? 'processBankCsvDocument' : 'processBankPdfDocument';
-      const Err = kind === 'bank-csv' ? 'BankCsvProcessingError' : 'BankPdfProcessingError';
+      // WP-G: the process routes ADMIT the statement (bankImportAdmission) instead of reading it; the stable-code contract is unchanged.
       let mode: 'boom' | 'busy' = 'boom';
-      vi.doMock(svcPath, async (o) => {
-        const actual = await o<Record<string, any>>();
-        return { ...actual, [fn]: async () => { if (mode === 'busy') throw new actual[Err]('in_progress', STATEMENT_STILL_BEING_READ_MESSAGE); throw new Error('relation "x" does not exist'); } };
-      });
+      vi.doMock('@/lib/financial-data-hub/services/bankImportAdmission', () => ({
+        admitBankImport: async () => {
+          if (mode === 'busy') return { kind: 'error', status: 409, code: 'statement_in_progress', message: STATEMENT_STILL_BEING_READ_MESSAGE };
+          throw new Error('relation "x" does not exist');
+        },
+      }));
       const { POST } = kind === 'bank-csv'
         ? await import('@/app/api/financial-data-hub/bank-csv/[documentId]/process/route')
         : await import('@/app/api/financial-data-hub/bank-pdf/[documentId]/process/route');

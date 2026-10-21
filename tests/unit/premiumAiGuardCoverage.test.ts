@@ -38,6 +38,10 @@ const GUARD = /resolvePremiumAiAccess\(|refuseUnlessPremiumAi\(|evaluateAiFallba
 const MUST_GUARD: Record<string, RegExp> = {
   'lib/financial-data-hub/services/payslipProcessingService.ts': /resolvePremiumAiAccess\(/,
   'lib/financial-data-hub/services/bankPdfProcessingService.ts': /await evaluateAiFallbackGate\(/,
+  // WP-G: the background reading of a long bank PDF in parts. The shared gate runs once to mask; the same Premium/kill-switch/malware
+  // preconditions are re-evaluated before EVERY step (evaluateAiEgressPreconditions -> resolvePremiumAiAccess), and every part still
+  // goes through the atomic per-user cost reservation inside the gateway.
+  'lib/financial-data-hub/services/bankImportWorker.ts': /await evaluateAiFallbackGate\(/,
   'lib/financial-data-hub/services/investmentStatementProcessingService.ts': /await evaluateAiFallbackGate\(/,
   'lib/financial-data-hub/services/liabilityStatementProcessingService.ts': /await evaluateAiFallbackGate\(/,
   'lib/financial-data-hub/services/retirementStatementProcessingService.ts': /await evaluateAiFallbackGate\(/,

@@ -68,6 +68,13 @@ vi.mock('@/lib/aie/adapters/auInvestment/gateway', async (importOriginal) => ({
   requestAuInvestmentAiExtraction: vi.fn(async () => ({ outcome: 'success', facts: facts.current, evidence })),
 }));
 
+vi.mock('@/lib/financial-data-hub/services/bankImportAdmission', () => ({
+  // WP-G: confirming claims the draft and QUEUES the writing as the statement's job; it no longer writes inside the request.
+  confirmAiDraftIntoJob: async (p: { reviewed: { rows: unknown[] } }) => {
+    confirmMocks.bank('u', 'd', p.reviewed);
+    return { kind: 'job', job: { id: '11111111-1111-4111-8111-111111111111', statement_upload_id: 'doc-rt', source_kind: 'pdf', status: 'queued', phase: 'plan_confirmed', review_reason: null, lease_expires_at: null, slice_count: 0, progress_done: 0, progress_total: p.reviewed.rows.length, attempt: 1, message: '', error_code: null, error_message_sanitised: null, result_summary: null, checkpoint: {}, user_id: 'user-rt' } };
+  },
+}));
 vi.mock('@/lib/financial-data-hub/services/bankPdfProcessingService', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   confirmAiBankStatementFallback: confirmMocks.bank,
@@ -127,7 +134,6 @@ describe('AI draft -> panel body -> confirm route', () => {
     const out = await svc.attemptAiBankStatementFallback('user-rt', 'doc-rt', SYNTHETIC_TEXT);
     expect(out.ok).toBe(true);
     const draft = (out as unknown as { draft: Record<string, unknown> & { rows: unknown[] } }).draft;
-    confirmMocks.bank.mockResolvedValue({ document: { id: 'doc-rt', processing_status: 'approved' }, pipelineStatus: 'ok', certificationStatus: 'certified', reconciliationStatus: 'reconciled', transactionsCreated: 2, duplicatesSkipped: 0, duplicateCandidates: 0 });
     const { POST } = await import('@/app/api/financial-data-hub/bank-pdf/[documentId]/ai-fallback/confirm/route');
     // Exactly BankStatementImportPanel.handleConfirmAiDraft's body.
     const res = await POST(post({
@@ -138,7 +144,7 @@ describe('AI draft -> panel body -> confirm route', () => {
       declaredClosingBalance: draft.declaredClosingBalance,
       maskedAccountIdentifier: draft.maskedAccountIdentifier,
     }), params);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202); // accepted: the lines are written by the background job, not in this request
     expect(confirmMocks.bank).toHaveBeenCalledTimes(1);
     expect(confirmMocks.bank.mock.calls[0][2].rows).toHaveLength(2);
   });
