@@ -42,7 +42,7 @@ export const BANK_IMPORT_STAGE_CHUNK = 250;
 /** Slices that may fail in a row (an exception, not "more to do") before the job stops and says so. */
 export const BANK_IMPORT_MAX_CONSECUTIVE_FAILURES = 3;
 /** AI reading: parts read in one slice (in parallel) and tries per part. */
-export const BANK_IMPORT_AI_PARALLEL_PARTS = 4;
+export const BANK_IMPORT_AI_PARALLEL_PARTS = 6;
 export const BANK_IMPORT_AI_MAX_ATTEMPTS_PER_PART = 3;
 /** Hard bound on one AI call inside a slice (the provider default is 20 s with up to two retries: far too long for a slice). */
 export const BANK_IMPORT_AI_CALL_TIMEOUT_MS = 15_000;

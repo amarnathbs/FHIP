@@ -36,8 +36,11 @@ export interface SplitOptions {
   maxChars?: number;
 }
 
-export const AI_PART_TARGET_LINES = 28;
-export const AI_PART_MAX_CHARS = 5_500;
+// MEASURED on DEV with the real provider (scripts/doc2_4_wp_g_ai_timing.ts, 21-10-2026): 10 lines 7 s, 20 lines 11 s, 28 lines 13.5 s
+// (14.5 s with four parts at once), 40 lines past the 15 s call bound. About 0.45 s per line plus 2.5 s. 18 lines is about 10.5 s: a
+// safe margin under the 15 s bound, and four to six parts in parallel cost no extra wall-clock time.
+export const AI_PART_TARGET_LINES = 18;
+export const AI_PART_MAX_CHARS = 3_600;
 
 const DATED_LINE = /^\s*(\d{1,2}[/.\-]\d{1,2}([/.\-]\d{2,4})?|\d{1,2}\s+[A-Za-z]{3,9}(\s+\d{2,4})?|[A-Za-z]{3,9}\s+\d{1,2}(,\s*\d{4})?|\d{4}-\d{2}-\d{2})\b/;
 

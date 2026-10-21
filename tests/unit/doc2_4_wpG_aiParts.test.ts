@@ -153,12 +153,12 @@ describe('splitting the masked text into parts (pure)', () => {
     const pages: string[] = [];
     for (let i = 0; i < lines.length; i += 55) pages.push(lines.slice(i, i + 55).join('\n'));
     const parts = splitMaskedPagesIntoParts(pages);
-    expect(parts.length).toBeGreaterThan(80);
+    expect(parts.length).toBeGreaterThan(150);
     expect(parts.map((p) => p.seq)).toEqual(parts.map((_, i) => i));
     expect(parts.flatMap((p) => p.text.split('\n'))).toEqual(lines);
     for (const p of parts) {
-      expect(p.lineCount).toBeLessThanOrEqual(42); // 28 target, 1.5x for an unsplittable page tail
-      expect(p.text.length).toBeLessThanOrEqual(5500);
+      expect(p.lineCount).toBeLessThanOrEqual(27); // 18 target (measured on DEV), 1.5x for an unsplittable page tail
+      expect(p.text.length).toBeLessThanOrEqual(3600);
     }
     for (let i = 1; i < parts.length; i += 1) expect(parts[i].pageFrom).toBeGreaterThanOrEqual(parts[i - 1].pageTo);
   });
