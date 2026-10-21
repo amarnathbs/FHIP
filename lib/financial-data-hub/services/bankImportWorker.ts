@@ -60,7 +60,7 @@ import {
   putChunks,
   releaseForNextSlice,
   updateOwned,
-  type ChunkRow,
+
 } from './bankImportJobStore';
 import { checkFdhDocumentMalwareAdmission, FDH_MALWARE_ADMISSION_REFUSED_MESSAGE } from './malwareScanGate';
 import { downloadDocumentObject } from './storage';
@@ -879,6 +879,7 @@ async function persistSlice(c: Ctx): Promise<SliceEnd> {
   const chunkIndex = await listChunks(job.id, userId, 'plan_rows', { withPayload: false });
   const admin = createAdminClient();
   let batchMs = 0;
+  let batches = 0;
 
   for (const idx of chunkIndex) {
     if (stored.size >= meta.rowsToInsertCount) break;
@@ -886,8 +887,9 @@ async function persistSlice(c: Ctx): Promise<SliceEnd> {
     if (!chunk) continue;
     const todo = rowsStillToWrite((chunk.payload.rows ?? []) as Array<{ source_row?: unknown }>, stored);
     for (const batch of chunkRows(todo, BANK_IMPORT_INSERT_CHUNK)) {
-      // Stop starting new batches when the next one might not finish inside the slice.
-      if (timeLeft(c) < Math.max(1_500, batchMs * 1.6)) return persistProgress(c, stored.size, meta.rowsToInsertCount);
+      // Stop starting new batches when the next one might not finish inside the slice. Every slice writes at least one batch, so a
+      // slice can never make no progress (and the tests can drive it one batch at a time with a zero budget).
+      if (batches > 0 && timeLeft(c) < Math.max(1_500, batchMs * 1.6)) return persistProgress(c, stored.size, meta.rowsToInsertCount);
       const t0 = c.now();
       const { error } = await admin.from('fdh_transactions').insert(batch as never);
       if (error) {
@@ -901,6 +903,7 @@ async function persistSlice(c: Ctx): Promise<SliceEnd> {
         throw new Error(error.message);
       }
       for (const r of batch as Array<{ source_row?: unknown }>) if (typeof r.source_row === 'number') stored.add(r.source_row);
+      batches += 1;
       batchMs = Math.max(batchMs, c.now() - t0);
       // Checkpoint, and renew the lease: if it was taken over this write matches nothing and the slice stops.
       const renewed = await updateOwned(job.id, c.owner, {

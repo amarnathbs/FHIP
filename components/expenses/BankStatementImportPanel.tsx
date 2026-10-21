@@ -68,6 +68,7 @@ import {
   PROCESS_STILL_READING_MESSAGE,
   PROCESS_TOO_LONG_MESSAGE,
 } from './processResume';
+import { driveBankImportJob, jobProgressPercent, type AdvanceAnswer, type JobViewLike } from './bankImportJobDriver';
 import { OwnerSelector } from '@/components/ownership/OwnerSelector';
 import type { OwnerSelection } from '@/lib/ownership/ownerSelection';
 import {
@@ -267,6 +268,8 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
   // AIE bank-statement AI-fallback (2026-09-23). Held only for the lifetime of
   // the `ai_fallback_review` phase; cleared by `reset()` and on confirm.
   const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
+  // WP-G (F15): the background import job being followed (progress shown to the person); null when none is running.
+  const [jobView, setJobView] = useState<JobViewLike | null>(null);
   // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
   // poll if the panel unmounts mid-scan.
   const scanPollCancelRef = useRef({ cancelled: false });
@@ -293,7 +296,38 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
+  // WP-G (F15): a statement import runs as a background job, so closing the panel or reloading the page must not lose it. On open, pick
+  // up any unfinished import of this user and keep following it. Nothing restarts and no line is written twice (the server holds a
+  // lease and decides what is still missing from the database).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/financial-data-hub/bank-import-jobs');
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const active = ((json.data?.jobs ?? []) as JobViewLike[]).find((j) => j.status === 'queued' || j.status === 'processing');
+        if (!active || cancelled) return;
+        const csv = (active as JobViewLike & { source_kind?: string }).source_kind === 'csv';
+        setDocumentId(active.document_id);
+        setJobView(active);
+        setMessage(active.message);
+        setPhase('processing');
+        const processUrl = csv ? `/api/financial-data-hub/bank-csv/${active.document_id}/process` : `/api/financial-data-hub/bank-pdf/${active.document_id}/process`;
+        const processInit: RequestInit = csv ? { method: 'POST' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' };
+        await followJob(active.job_id, active.document_id, processUrl, processInit);
+      } catch {
+        // Resuming is best effort; the Upload form is still there.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on open
+  }, []);
+
   function reset() {
+    setJobView(null);
     setAccountChoice(null);
     setAccountOwnerConflict(null);
     setInfo(null);
@@ -346,7 +380,20 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
         setPhase('error');
         return;
       }
-      const data = json.data ?? {};
+      let data = json.data ?? {};
+      // WP-G: confirming queues the saving of the checked lines as the statement's background job; follow it to its end.
+      if (res.status === 202 && data.async_job) {
+        setAiDraft(null);
+        setPhase('processing');
+        const done = await driveJob(data.job_id as string);
+        if (done.outcome === 'cancelled') return;
+        if (done.outcome !== 'completed' || !done.view?.result) {
+          setMessage(done.view?.error_message ?? 'We could not save this statement. Nothing was lost; please try again.');
+          setPhase('error');
+          return;
+        }
+        data = done.view.result;
+      }
       // Best-effort auto-classification, exactly as the native success path
       // does it — an AI-fallback import must land in the same state a native
       // one does, including this.
@@ -408,6 +455,12 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       attempt = await askProcess(processUrl, processInit);
     }
     const { ok: processOk, json: processJson } = attempt;
+    // WP-G (F15): admitted as a background job (202). Follow it: each ask does one short slice of the work, and the page can be
+    // closed or reloaded without losing it.
+    if (attempt.status === 202 && processJson.data?.async_job) {
+      await followJob(processJson.data.job_id as string, docId, processUrl, processInit);
+      return;
+    }
     if (!processOk) {
       setMessage(
         isResumableProcessAttempt(attempt)
@@ -418,7 +471,64 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    const data = processJson.data ?? {};
+    await handleProcessData(processJson.data ?? {}, docId);
+  }
+
+  /** Asks the job to do its next slice, again and again, until it finishes, needs the person, or fails. */
+  async function driveJob(jobId: string) {
+    return driveBankImportJob({
+      jobId,
+      advance: (id) => askProcess(`/api/financial-data-hub/bank-import-jobs/${id}/advance`, { method: 'POST' }) as Promise<AdvanceAnswer>,
+      wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      onUpdate: (v) => {
+        setJobView(v);
+        setMessage(v.message);
+      },
+      isCancelled: () => scanPollCancelRef.current.cancelled,
+    });
+  }
+
+  async function followJob(jobId: string, docId: string, processUrl: string, processInit: RequestInit) {
+    setPhase('processing');
+    const res = await driveJob(jobId);
+    if (res.outcome === 'cancelled') return;
+    const view = res.view;
+    if (res.outcome === 'completed' && view?.result) {
+      await handleProcessData(view.result, docId);
+      return;
+    }
+    if (res.outcome === 'needs_person') {
+      if (view?.review_reason === 'ai_draft') {
+        // The reading is saved on the server; asking again returns it for the person to check.
+        const again = await askProcess(processUrl, processInit);
+        if (again.ok) {
+          await handleProcessData(again.json.data ?? {}, docId);
+          return;
+        }
+        setMessage((again.json.message as string | undefined) ?? 'We could not open the reading. Please try again.');
+        setPhase('error');
+        return;
+      }
+      await handleProcessData(view?.result ?? { error_code: 'password_required' }, docId);
+      return;
+    }
+    if (res.outcome === 'failed') {
+      if (view?.result && (view.result as Record<string, unknown>).error_code) {
+        await handleProcessData(view.result, docId);
+        return;
+      }
+      const note = aiFallbackRefusalNote((view?.result as Record<string, unknown> | null | undefined)?.ai_fallback_refusal as never);
+      setMessage(`${view?.error_message ?? 'We could not process this bank statement.'}${note ? ` ${note}` : ''}`.trim());
+      setPhase('error');
+      return;
+    }
+    // gave_up: the connection was lost for a long time. The import itself is saved and carries on.
+    setMessage('We lost the connection while your statement was being read. Nothing is lost: it is saved and keeps going. Reopen this page in a minute to see it.');
+    setPhase('error');
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `data` is the process route's JSON payload
+  async function handleProcessData(data: Record<string, any>, docId: string) {
     // 2026-09-25: a re-upload of a statement already imported. Nothing was
     // read and nothing new was created; say so and point at the review page.
     if (data.duplicate && data.pipeline_status !== 'ai_fallback_available') {
@@ -821,6 +931,13 @@ export function BankStatementImportPanel({ onClose }: { onClose: () => void }) {
           {phase === 'scanning' && (message ?? SCANNING_MESSAGE)}
           {phase === 'processing' && (message ?? 'Processing your statement — extracting transactions…')}
         </p>
+      )}
+      {phase === 'processing' && jobView && jobProgressPercent(jobView) !== null && (
+        <div className="mt-2" aria-hidden="true">
+          <div className="h-2 w-full rounded bg-gray-100">
+            <div className="h-2 rounded bg-trust" style={{ width: `${jobProgressPercent(jobView)}%` }} />
+          </div>
+        </div>
       )}
 
       {phase === 'ai_fallback_review' && aiDraft && (
