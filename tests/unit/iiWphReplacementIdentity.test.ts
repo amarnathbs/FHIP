@@ -1,6 +1,9 @@
 // Document2 (4) WP-H (F5/F6/F14) -- is a replacement copy plausibly the SAME logical statement? PURE rules (replacementIdentity.ts):
 // every threshold and every reject / confirm / not-compared decision, the plain day-first wording, and reading a real parsed statement.
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { extractPdfText } from '@/lib/services/investment-intelligence/pdfExtraction';
+import { buildMinimalTextPdf } from '../support/buildMinimalPdf';
 import {
   PERIOD_TOLERANCE_DAYS,
   compareStatementIdentity,
@@ -252,5 +255,29 @@ describe('reading a real parsed statement (the same parsers the process route us
   it('a document that is not a statement is unreadable (not a guess)', async () => {
     const r = await readCandidateIdentity(asCsv('Certificate of Insurance\nPolicy Number: XYZ-000-111\nThis is not a statement.'));
     expect(r).toEqual({ kind: 'unreadable', reason: 'unrecognised_format' });
+  });
+});
+
+describe('REGRESSION: reading the copy must not consume the bytes that are about to be stored (found by the PGlite oracle on real PDFs)', () => {
+  const pdfOf = () => {
+    const text = buildWphCas({ periodStart: '01-Jan-2025', periodEnd: '31-Mar-2025', folios: [PRIME_FOLIO_Q1] });
+    return new Uint8Array(buildMinimalTextPdf([text.split('\n')]));
+  };
+  it('the PDF library takes ownership of (detaches) the buffer it is handed -- which is why readCandidateIdentity must hand it a copy', async () => {
+    const bytes = pdfOf();
+    const length = bytes.byteLength;
+    await extractPdfText(bytes);
+    expect(length).toBeGreaterThan(0);
+    expect(bytes.byteLength, 'if this stops being 0 the library no longer detaches and the copy is merely defensive').toBe(0);
+  });
+  it('readCandidateIdentity leaves the caller\'s bytes intact: same length, same hash, still a readable PDF afterwards', async () => {
+    const bytes = pdfOf();
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const length = bytes.byteLength;
+    const r = await readCandidateIdentity({ bytes, mimeType: 'application/pdf' });
+    expect(r.kind).toBe('ok');
+    expect(bytes.byteLength).toBe(length);
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(hash);
+    expect((await extractPdfText(new Uint8Array(bytes))).ok).toBe(true); // what a later reprocess would do with the stored bytes
   });
 });

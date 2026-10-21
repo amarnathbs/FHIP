@@ -345,7 +345,9 @@ export type CandidateReadResult =
 export async function readCandidateIdentity(input: { bytes: Uint8Array; mimeType: string; password?: string }): Promise<CandidateReadResult> {
   let text: string;
   if (input.mimeType === 'application/pdf') {
-    const extraction = await extractPdfText(input.bytes, input.password);
+    // A COPY: the PDF library may take ownership of (detach) the buffer it is given. The caller still has to store these very bytes, and a
+    // detached buffer would be stored empty. (Found by the PGlite oracle, which reads real PDFs: the mocked text layer hid it.)
+    const extraction = await extractPdfText(new Uint8Array(input.bytes), input.password);
     if (!extraction.ok) {
       if (extraction.kind === 'password_required' || extraction.kind === 'wrong_password') return { kind: 'password', failure: extraction.kind };
       return { kind: 'unreadable', reason: extraction.kind };

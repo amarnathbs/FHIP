@@ -3,7 +3,8 @@
 // The REAL application code (processSourceDocument, replaceSourceDocumentFile, publishPosition, refreshPosition, the canonical
 // Investments read model) runs against the REAL migration chain replayed into PGlite (a real Postgres: unique fingerprints, the
 // holding-snapshot unique key, CHECK constraints, triggers and foreign keys all apply), through a supabase-js-shaped client
-// (support/pgliteSupabase.ts). Only storage, the PDF text layer and the malware gate are stubbed.
+// (support/pgliteSupabase.ts). The statements are REAL PDF bytes read by the REAL pdf-parse text layer and the REAL CAMS parser; only
+// object storage is stubbed (an in-memory map) and the real malware scan is switched off (the documented structural-only mode).
 //
 // Scenario: old structured statement (processed, file deleted by design, published to FHIP) -> controlled replacement copy ->
 // reprocess -> replacement a SECOND time -> reprocess. For each step the oracle counts and sums, for that user, every table that can
@@ -11,7 +12,7 @@
 // canonical Investments and the Net Worth investments leg. The second pass must change NOTHING economic.
 //
 // EVIDENCE LABEL: PGLITE-VERIFIED (isolated replay on the migration ledger as of this branch). NOT DEV-verified, NOT production.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createHash } from 'node:crypto';
 import { replayAll } from './support/promoTestHelpers';
@@ -21,7 +22,6 @@ import { buildWphCas, OTHER_FOLIO, PRIME_FOLIO_APR, PRIME_FOLIO_Q1 } from '../su
 
 const h = vi.hoisted(() => ({
   client: null as unknown as PgliteSupabase,
-  textBySha: new Map<string, string>(),
   filesByKey: new Map<string, Uint8Array>(),
   removed: [] as string[],
 }));
@@ -44,12 +44,6 @@ vi.mock('@/lib/services/investment-intelligence/storage', async (orig) => ({
   },
   verifySourceDocumentObjectAbsent: async (key: string) => !h.filesByKey.has(key),
 }));
-vi.mock('@/lib/services/investment-intelligence/pdfExtraction', () => ({
-  extractPdfText: async (bytes: Uint8Array) => {
-    const text = h.textBySha.get(createHash('sha256').update(bytes).digest('hex'));
-    return text ? { ok: true as const, text, pageCount: 1 } : { ok: false as const, kind: 'unknown_error' as const, error: 'no text registered for these bytes' };
-  },
-}));
 vi.mock('@/lib/aie/malware/config', async (orig) => ({ ...(await orig<typeof import('@/lib/aie/malware/config')>()), isRealMalwareScanEnabled: () => false }));
 
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
@@ -62,10 +56,12 @@ const Q1 = buildWphCas({ periodStart: '01-Jan-2025', periodEnd: '31-Mar-2025', f
 const APR = buildWphCas({ periodStart: '01-Jan-2025', periodEnd: '30-Apr-2025', folios: [PRIME_FOLIO_APR] });
 const OTHER = buildWphCas({ periodStart: '01-Apr-2023', periodEnd: '31-Mar-2024', folios: [OTHER_FOLIO] });
 
-/** A distinct "file" per label: different bytes (so a different checksum), whose text layer is the given statement text. */
+/**
+ * A distinct REAL PDF per label: the statement text on page 1 and a one-line reference on page 2, so two copies of the same statement
+ * have different bytes (a different checksum, as a re-downloaded statement would) but the same statement content.
+ */
 function copy(label: string, text: string): { bytes: Uint8Array; name: string } {
-  const bytes = new Uint8Array(buildMinimalTextPdf([[`Statement copy ${label}`]]));
-  h.textBySha.set(createHash('sha256').update(bytes).digest('hex'), text);
+  const bytes = new Uint8Array(buildMinimalTextPdf([text.split('\n'), [`Copy reference ${label}`]]));
   return { bytes, name: `${label}.pdf` };
 }
 
@@ -199,6 +195,11 @@ async function replaceAndReprocess(f: Fixture, c: { bytes: Uint8Array; name: str
   const proc = await processSourceDocument({ userId: f.userId, sourceDocumentId: f.docId, forceReparse: true });
   return { rep, proc };
 }
+
+beforeEach(() => {
+  h.filesByKey.clear(); // each test starts with an empty object store, so "nothing was stored" assertions mean this test
+  h.removed.length = 0;
+});
 
 beforeAll(async () => {
   db = new PGlite(pgliteOptions);
