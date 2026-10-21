@@ -235,7 +235,7 @@ export async function listChunks(jobId: string, userId: string, kind: ChunkKind,
     .eq('kind', kind)
     .order('seq', { ascending: true });
   if (error) raise(error);
-  return (data ?? []) as unknown as ChunkRow[];
+  return ((data ?? []) as unknown as ChunkRow[]).map((r) => ({ ...r, attempts: Number(r.attempts ?? 0) }));
 }
 
 export async function bumpChunkAttempts(chunk: ChunkRow): Promise<void> {

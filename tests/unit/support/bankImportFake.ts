@@ -75,6 +75,11 @@ export function createBankImportFake(): BankImportFake {
           return insert(row);
         };
       }
+      if (table === 'fdh_ai_fallback_drafts') {
+        // migration 0197 defaults
+        const insert = q.insert;
+        q.insert = (r: unknown) => insert({ status: 'pending_review', confirmed_at: null, confirmed_payload: null, created_at: new Date().toISOString(), ...(r as Row) });
+      }
       if (table === 'fdh_transactions') {
         const insert = q.insert;
         q.insert = (r: unknown) => {
