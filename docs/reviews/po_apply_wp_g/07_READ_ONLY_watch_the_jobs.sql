@@ -8,7 +8,7 @@ select status, phase, count(*) as jobs
  order by 1, 2;
 
 -- BLOCK 2: unfinished jobs nobody is working on right now (the lease ran out). Healthy: none for more than a couple of minutes.
--- If this keeps showing rows, the browser is not open and the scheduled backstop (05_SCHEDULE) is not running.
+-- If this keeps showing rows, the browser is not open and the scheduled backstop (file 05) is not running.
 select id, status, phase, progress_done, progress_total, slice_count, reclaim_count,
        round(extract(epoch from (now() - coalesce(lease_expires_at, updated_at)))::numeric) as seconds_without_a_worker
   from fdh_bank_import_jobs
@@ -24,7 +24,7 @@ select error_code, count(*) as jobs
  group by error_code
  order by 2 desc;
 
--- BLOCK 4: staging left behind (should be empty once jobs finish; the backstop sweeps failed and finished jobs after 24 hours).
+-- BLOCK 4: staging left behind. Should be empty once jobs finish. The backstop sweeps failed and finished jobs after 24 hours.
 select j.status, count(c.id) as staged_chunks
   from fdh_bank_import_job_chunks c join fdh_bank_import_jobs j on j.id = c.job_id
  group by j.status;

@@ -12,36 +12,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { PGlite } from '@electric-sql/pglite';
 import { buildDb, MIG_DIR } from './support/fdh10LedgerPgliteHarness';
+import { hazards } from './support/editorSafeSql';
 
 const PACK = path.resolve(MIG_DIR, '..', '..', 'docs', 'reviews', 'po_apply_wp_g');
 const read = (f: string) => fs.readFileSync(path.join(PACK, f), 'utf8').replace(/\r\n/g, '\n');
 const mig = (f: string) => fs.readFileSync(path.join(MIG_DIR, f), 'utf8').replace(/\r\n/g, '\n');
 const files = fs.readdirSync(PACK).filter((f) => f.endsWith('.sql')).sort();
-
-/** The text of comments (-- ...) and single-quoted strings, which is where the forbidden words must not appear. */
-function commentsAndStrings(sql: string): string[] {
-  const out: string[] = [];
-  let i = 0;
-  while (i < sql.length) {
-    const ch = sql[i];
-    if (ch === '-' && sql[i + 1] === '-') {
-      const end = sql.indexOf('\n', i);
-      const stop = end === -1 ? sql.length : end;
-      out.push(sql.slice(i, stop));
-      i = stop;
-    } else if (ch === "'") {
-      let j = i + 1;
-      while (j < sql.length) {
-        if (sql[j] === "'" && sql[j + 1] === "'") j += 2;
-        else if (sql[j] === "'") break;
-        else j += 1;
-      }
-      out.push(sql.slice(i, j + 1));
-      i = j + 1;
-    } else i += 1;
-  }
-  return out;
-}
 
 let db: PGlite;
 beforeAll(async () => {
@@ -71,15 +47,18 @@ describe('the pack files', () => {
     expect(read('03_APPLY_0311_unique_source_row_index.sql')).toBe(mig('0311_fdh_transactions_statement_source_row_unique.sql'));
   });
 
-  it('no comment or string contains into / from / join followed by a word (pack files and both migrations)', () => {
+  it('every pack file and both migrations obey the Supabase SQL-editor rules (ASCII, no bare dollar quote, no percent sign, no double quote in code, no semicolon or quote in a comment, no semicolon in a string, no into / from / join + word in a comment or string)', () => {
     const bad: string[] = [];
     for (const [name, sql] of [...files.map((f) => [f, read(f)] as const), ['0310', mig('0310_fdh_bank_import_jobs.sql')], ['0311', mig('0311_fdh_transactions_statement_source_row_unique.sql')]]) {
-      for (const text of commentsAndStrings(sql)) {
-        const m = /\b(into|from|join)\s+\w/i.exec(text);
-        if (m) bad.push(`${name}: ${text.slice(0, 90)}`);
-      }
+      for (const h of hazards(sql)) bad.push(`${name}: ${h}`);
     }
     expect(bad).toEqual([]);
+  });
+
+  it('the lint really bites: a deliberately bad snippet is flagged', () => {
+    expect(hazards("select 1; -- it's a comment with ; and a quote\n").length).toBeGreaterThan(0);
+    expect(hazards('create function f() returns int as $$ select 1 $$ language sql;').join(' ')).toMatch(/bare dollar quote/);
+    expect(hazards("-- reading from the table\nselect 1;\n").join(' ')).toMatch(/from/);
   });
 
   it('there are no secrets in the pack (no key, token or password literal)', () => {
@@ -99,11 +78,12 @@ describe('on a real Postgres', () => {
       { table_name: 'fdh_bank_import_job_chunks', rls_on: true },
       { table_name: 'fdh_bank_import_jobs', rls_on: true },
     ]);
-    expect(after[1]).toEqual([{ tablename: 'fdh_bank_import_jobs', policyname: 'own rows read - fdh_bank_import_jobs', cmd: 'SELECT' }]);
+    expect(after[1]).toEqual([{ tablename: 'fdh_bank_import_jobs', policyname: 'own_rows_read_fdh_bank_import_jobs', cmd: 'SELECT' }]);
     const lease = (after[2] as Array<{ proname: string; anon_can_run: boolean; signed_in_browser_can_run: boolean; server_can_run: boolean }>).filter((r) => /claim|heartbeat/.test(r.proname));
     expect(lease.map((r) => r.proname).sort()).toEqual(['fdh_bank_import_claim_job', 'fdh_bank_import_claim_next', 'fdh_bank_import_heartbeat']);
     for (const r of lease) expect(r).toMatchObject({ anon_can_run: false, signed_in_browser_can_run: false, server_can_run: true });
-    expect(after[3]).toHaveLength(1);
+    expect(after[3]).toHaveLength(1); // the unique line index
+    expect(Number((after[4][0] as { jobs: number | string }).jobs)).toBe(0); // empty right after applying
     const watch = await runFile('07_READ_ONLY_watch_the_jobs.sql');
     expect(watch.length).toBe(5);
   });

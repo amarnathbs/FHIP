@@ -87,7 +87,7 @@ async function withMutation<T>(original: string, mutate: (s: string) => string, 
   }
 }
 function fnSql(name: string): string {
-  const re = new RegExp(`create or replace function ${name}\\([\\s\\S]*?\\n\\$\\$(?: language [a-z]+(?: security definer)?(?: set search_path = public)?)?;`);
+  const re = new RegExp(`create or replace function ${name}\\([\\s\\S]*?\\n\\$fn\\$(?: language [a-z]+(?: security definer)?(?: set search_path = public)?)?;`);
   const m = M0310.match(re);
   if (!m) throw new Error(`could not extract ${name}`);
   return m[0];
@@ -234,7 +234,7 @@ describe('0310 tenancy (two real users)', () => {
     const [{ id: job1 }] = (await db.query<{ id: string }>(`select id from fdh_bank_import_jobs where user_id = $1 limit 1`, [U1])).rows;
     await rejects(
       db.query(`insert into fdh_bank_import_job_chunks (job_id, user_id, kind, seq, payload) values ($1,$2,'plan_rows',9,'{}')`, [job1, U2]),
-      /does not belong to the job/i,
+      /does not belong to the user of the job/i,
     );
   });
 

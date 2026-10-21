@@ -132,6 +132,14 @@ select vault.create_secret('<the real CRON_SECRET value>', 'aie1_malware_scan_sw
 ```
 and replace the migration's `<REPLACE_WITH_REACHABLE_APP_ORIGIN>` placeholder with a real, publicly reachable origin for that environment before applying (Supabase's hosted Postgres cannot reach `localhost` — see the migration's own header for the full disclosure, including the same "no standing publicly-reachable DEV deployment exists yet" limitation this project's `0135` migration already discloses). The two mechanisms (this one and the AWS EventBridge one described above) are not mutually exclusive but should not both be pointed at the same route in the same environment — pick one per environment to avoid double-sweeping (harmless but wasteful, since the sweep is already idempotent).
 
+### Bank statement import backstop (Document2 (4) F15, 2026-10-21)
+
+The Expenses bank-statement import is a **background job** advanced in short slices (migration `0310`; design in `docs/reviews/DOCUMENT2_4_REPORT_WP-G.md`). The signed-in page drives the job while it is open. For a job nobody is watching (closed tab, sleeping laptop, a slice the platform ended) one more scheduled route finishes it:
+
+- `POST https://app.financialhealthplatform.com/api/financial-data-hub/bank-import-jobs/cron/advance`, header `x-cron-secret: <CRON_SECRET>` (the same secret and header as every route above), no body, every 1 minute.
+- Registration: `docs/reviews/po_apply_wp_g/05_SCHEDULE_backstop_every_minute.sql` (pg_cron + pg_net + Vault, the mechanism of migrations 0135/0149/0174), or an EventBridge schedule exactly like the malware-scan sweep above. Use one, not both. No new environment variable; no queue, worker or Lambda.
+- Not scheduled by the code. Without it the job still finishes while the page is open; an unattended job is ended by the 50-minute raw-file backstop.
+
 ## 7. Post-deploy verification
 
 Before telling real users the app is live:
