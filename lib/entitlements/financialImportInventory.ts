@@ -125,7 +125,6 @@ export const REVIEW_CONTINUATION_ROUTES: readonly { file: string; reason: string
   { file: `${FDH}/investment-statement/[documentId]/apply/route.ts`, reason: 'apply admitted evidence' },
   { file: `${FDH}/retirement-statement/[documentId]/apply/route.ts`, reason: 'apply admitted evidence' },
   { file: `${FDH}/bank-transactions/[transactionId]/approve/route.ts`, reason: 'approve admitted transactions' },
-  { file: `${FDH}/bank-import-jobs/[jobId]/advance/route.ts`, reason: 'continue the background import job of a statement whose admission already passed the Premium check (the AI reading re-checks Premium and the cost cap before every part)' },
   { file: `${AIE}/review/runs/[runId]/accept/route.ts`, reason: 'accept an admitted AIE run after review' },
   { file: `${II}/ai-extraction-reviews/[reviewId]/accept/route.ts`, reason: 'accept an admitted AI reading after review' },
   { file: `${II}/source-documents/[id]/discard/route.ts`, reason: 'delete an admitted document (privacy / cleanup is never Premium)' },
