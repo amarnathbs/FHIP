@@ -409,3 +409,26 @@ async function expectRed(assertion: () => unknown, named: string): Promise<void>
   expect(failure.name).toBe('AssertionError');
   expect(failure.message).toContain(named);
 }
+
+// Keep this block LAST: it drops three columns from the shared test database (and restores them).
+describe('DEPLOYMENT ORDER (found on DEV, 21-10-2026): an environment without migration 0159 must not leave the parse run `running`', () => {
+  const COUNTERS = ['duplicate_transactions_linked', 'new_transactions_count', 'missing_transactions_count'];
+  it('with the three counters absent, the full run update fails (the DEV condition), the pipeline closes the run without them, and a reprocess is NOT blocked as "already being processed"', async () => {
+    for (const c of COUNTERS) await db.exec(`alter table ii_document_parse_runs drop column ${c}`);
+    try {
+      // 1. the condition itself: the pipeline's full update errors on such a database
+      const probe = await h.client.from('ii_document_parse_runs').update({ run_status: 'succeeded', new_transactions_count: 1 }).eq('id', '00000000-0000-4000-8000-0000000000ff');
+      expect(probe.error?.message, 'the environment is not reproducing the missing columns').toMatch(/new_transactions_count/);
+      // 2. the fix: processing still completes, the run is closed as succeeded, a second pass is accepted
+      const f = await processedStatement('no-counters');
+      const runs = (await db.query<{ run_status: string }>(`select run_status from ii_document_parse_runs where user_id = $1`, [f.userId])).rows;
+      expect(runs.map((r) => r.run_status), 'the run must not stay running').toEqual(['succeeded']);
+      const again = await replaceAndReprocess(f, copy('no-counters-copy', Q1));
+      expect(again.rep.ok, JSON.stringify(again.rep)).toBe(true);
+      expect(again.proc?.ok, again.proc?.error ?? '').toBe(true);
+      expect(again.proc?.error ?? '').not.toMatch(/already being processed/);
+    } finally {
+      for (const c of COUNTERS) await db.exec(`alter table ii_document_parse_runs add column if not exists ${c} int not null default 0`);
+    }
+  }, 300_000);
+});

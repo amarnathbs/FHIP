@@ -1,0 +1,91 @@
+{
+  "project": "vqycarelcoijzwlpkpcz",
+  "runTag": "wph-1792550187844",
+  "startedAt": "2026-10-21T02:36:27.844Z",
+  "steps": [
+    {
+      "step": "same:0 after first process + publish",
+      "economic": {
+        "accounts": 1,
+        "instruments": 1,
+        "transactions": 2,
+        "transactionAmountSum": 7500,
+        "transactionUnitsSum": 150,
+        "transactionSourceLinks": 2,
+        "holdingSnapshots": 1,
+        "holdingUnitsSum": 150,
+        "holdingValueSum": 7800,
+        "publicationsPublished": 1,
+        "publicationsAll": 1,
+        "investmentsActive": 1,
+        "investmentsActiveValueSum": 7800,
+        "netWorthInvestmentsPublishedTotal": 7800,
+        "netWorthInvestmentsLineCount": 1,
+        "unpublishedBucketCount": 0,
+        "portfolioTruthRows": 1
+      },
+      "bookkeeping": {
+        "parseRuns": 1,
+        "auditEvents": 7,
+        "reconciliationCases": 0
+      }
+    },
+    {
+      "step": "extend:0 before",
+      "note": "refused without confirmation: This copy differs from the statement it would replace. This copy covers 01-01-2025 to 30-04-2025, but the statement it would replace covers 01-01-2025 to 31-03-2025. The periods overlap but are not the same. Nothing has been changed yet. Confirm only if this really is the same statement.",
+      "economic": {
+        "accounts": 1,
+        "instruments": 1,
+        "transactions": 2,
+        "transactionAmountSum": 7500,
+        "transactionUnitsSum": 150,
+        "transactionSourceLinks": 2,
+        "holdingSnapshots": 1,
+        "holdingUnitsSum": 150,
+        "holdingValueSum": 7800,
+        "publicationsPublished": 1,
+        "publicationsAll": 1,
+        "investmentsActive": 1,
+        "investmentsActiveValueSum": 7800,
+        "netWorthInvestmentsPublishedTotal": 7800,
+        "netWorthInvestmentsLineCount": 1,
+        "unpublishedBucketCount": 0,
+        "portfolioTruthRows": 1
+      },
+      "bookkeeping": {
+        "parseRuns": 1,
+        "auditEvents": 7,
+        "reconciliationCases": 0
+      }
+    },
+    {
+      "step": "unrelated: after refusal",
+      "note": "This copy covers 01-04-2023 to 31-03-2024, but the statement it would replace covers 01-01-2025 to 31-03-2025. The two periods do not overlap, so this is a different statement. Upload it as a new statement instead. Nothing was changed. None of the folios in this copy (ending 7844) is a folio of the statement it would replace (ending 7844). This is a different statement, so it was not attached. Nothing was changed.",
+      "economic": {
+        "accounts": 1,
+        "instruments": 1,
+        "transactions": 2,
+        "transactionAmountSum": 7500,
+        "transactionUnitsSum": 150,
+        "transactionSourceLinks": 2,
+        "holdingSnapshots": 1,
+        "holdingUnitsSum": 150,
+        "holdingValueSum": 7800,
+        "publicationsPublished": 1,
+        "publicationsAll": 1,
+        "investmentsActive": 1,
+        "investmentsActiveValueSum": 7800,
+        "netWorthInvestmentsPublishedTotal": 7800,
+        "netWorthInvestmentsLineCount": 1,
+        "unpublishedBucketCount": 0,
+        "portfolioTruthRows": 1
+      },
+      "bookkeeping": {
+        "parseRuns": 1,
+        "auditEvents": 8,
+        "reconciliationCases": 0
+      }
+    }
+  ],
+  "finishedAt": "2026-10-21T02:39:08.601Z"
+}
