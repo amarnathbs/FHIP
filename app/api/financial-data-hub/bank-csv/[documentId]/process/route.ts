@@ -14,7 +14,7 @@ import { acceptedJobResponse, isUnavailable, unavailableResponse } from '@/lib/f
 // POST /api/financial-data-hub/bank-import-jobs/{jobId}/advance and the scheduled backstop drives for abandoned jobs.
 // An already-settled statement, or a byte-identical copy of one, still answers 200 inline with its stored result, exactly as before.
 // Idempotent: asking again (another tab, a refresh, a dropped connection) returns the same job and never writes a line twice.
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: Request, { params }: { params: Promise<{ documentId: string }> }) {
   const { documentId } = await params;

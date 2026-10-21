@@ -11,7 +11,7 @@ const bodySchema = z.object({ password: z.string().max(200).optional() }).option
 
 // A short request: it admits the statement and, for a protected PDF only, reads it once inside this request (the password must not
 // outlive the request; the platform's own limit of about 28 s applies, and the read itself stops at PDF_EXTRACTION_TIMEOUT_MS).
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // POST /api/financial-data-hub/bank-pdf/{documentId}/process -- spec sections 6, 13-46, 55-56, 89-90.
 //

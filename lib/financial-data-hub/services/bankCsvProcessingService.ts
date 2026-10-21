@@ -754,12 +754,18 @@ export async function finalizeBankCsvImport(input: BankCsvFinalizeInput): Promis
   }
 
   let finalProcessingStatus: FdhStatementUpload['processing_status'] = 'review_required';
-  assertDocumentTransition('processing', 'extracted');
-  await adminUpdateStatementUpload(userId, documentId, { processing_status: 'extracted' });
+  // WP-G: a finalize that was killed part-way leaves the statement in `extracted` or `ready_for_approval` (the database refuses to
+  // move it backwards); the re-run carries on from where it is. A first run is always in `processing`, exactly as before.
+  if (document.processing_status === 'processing') {
+    assertDocumentTransition('processing', 'extracted');
+    await adminUpdateStatementUpload(userId, documentId, { processing_status: 'extracted' });
+  }
 
   if (certification.certificationStatus === 'certified') {
-    assertDocumentTransition('extracted', 'ready_for_approval');
-    await adminUpdateStatementUpload(userId, documentId, { processing_status: 'ready_for_approval' });
+    if (document.processing_status !== 'ready_for_approval') {
+      assertDocumentTransition('extracted', 'ready_for_approval');
+      await adminUpdateStatementUpload(userId, documentId, { processing_status: 'ready_for_approval' });
+    }
     assertDocumentTransition('ready_for_approval', 'approved');
     finalProcessingStatus = 'approved';
   } else if (certification.certificationStatus === 'partial') {

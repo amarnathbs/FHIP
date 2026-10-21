@@ -150,6 +150,12 @@ async function loadDoc(userId: string, documentId: string): Promise<FdhStatement
   return (data as FdhStatementUpload | null) ?? null;
 }
 
+/** Puts the statement in `processing` the way the lifecycle allows: a failed one is re-queued first (failed -> queued -> processing). */
+async function startProcessing(userId: string, doc: FdhStatementUpload, startedAtIso: string, extra: Record<string, unknown> = {}): Promise<void> {
+  if (doc.processing_status === 'failed') await patchDoc(userId, doc.id, { processing_status: 'queued' });
+  await patchDoc(userId, doc.id, { processing_status: 'processing', processing_started_at: startedAtIso, ...extra });
+}
+
 async function patchDoc(userId: string, documentId: string, patch: Record<string, unknown>): Promise<FdhStatementUpload | null> {
   const { data, error } = await createAdminClient()
     .from('fdh_statement_uploads')
@@ -377,7 +383,7 @@ async function readCsv(c: Ctx, doc: FdhStatementUpload): Promise<SliceEnd> {
   }
 
   await clearImportArtifacts(userId, documentId);
-  await patchDoc(userId, documentId, { processing_status: 'processing', processing_started_at: new Date(c.now()).toISOString(), error_code: null });
+  await startProcessing(userId, doc, new Date(c.now()).toISOString(), { error_code: null });
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_csv_processing_started', actorType: 'system' });
 
   if (!doc.raw_document_storage_reference) return failJob(c, 'file_missing', EXPIRED_MESSAGE, { documentErrorCode: 'internal_error' });
@@ -459,7 +465,7 @@ async function readPdf(c: Ctx, doc: FdhStatementUpload): Promise<SliceEnd> {
   }
   await clearImportArtifacts(userId, documentId);
   await deleteChunks(job.id, userId, ['ai_text', 'ai_result']);
-  await patchDoc(userId, documentId, { processing_status: 'processing', processing_started_at: new Date(c.now()).toISOString() });
+  await startProcessing(userId, doc, new Date(c.now()).toISOString());
   await recordDocumentAuditEvent({ userId, documentId, eventType: 'pdf_native_extraction_started', actorType: 'system' });
 
   if (!doc.raw_document_storage_reference) return failJob(c, 'file_missing', EXPIRED_MESSAGE, { documentErrorCode: 'internal_error' });
@@ -831,7 +837,7 @@ async function confirmedPlanSlice(c: Ctx): Promise<SliceEnd> {
   await recordBankPdfAdapterProvenance(userId, documentId, doc, null, null);
   const rowsToInsert = pipeline.accepted.filter((a) => a.dedupStatus !== 'duplicate_confirmed');
   const rows = rowsToInsert.map((t) => pdfTransactionRow(t, { userId, documentId, document: doc, economicFingerprintVersion: pipeline.economicFingerprintVersion }));
-  await patchDoc(userId, documentId, { processing_status: 'processing', processing_started_at: new Date(c.now()).toISOString(), error_code: null });
+  await startProcessing(userId, doc, new Date(c.now()).toISOString(), { error_code: null });
   await stagePlan(c, {
     version: 1,
     sourceKind: 'pdf',
@@ -952,10 +958,6 @@ async function finalizeSlice(c: Ctx): Promise<SliceEnd> {
 
   // Idempotent re-run: clear what a previous, killed finalize derived (the LINES are kept).
   await clearDerived(userId, documentId);
-  if (['extracted', 'ready_for_approval'].includes(doc.processing_status)) {
-    // Left half way by a killed finalize; nobody else acts on a statement that has no completed_at yet. Put it back, then redo it.
-    await patchDoc(userId, documentId, { processing_status: 'processing' });
-  }
   const document = (await loadDoc(userId, documentId)) as FdhStatementUpload;
 
   let summary: Record<string, unknown>;

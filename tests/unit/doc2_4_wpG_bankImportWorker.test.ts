@@ -219,7 +219,7 @@ describe('kill and resume: a slice that dies is taken over and the result is exa
     expect(txFor('doc-1')).toHaveLength(250);
     // The dead slice had also written batch 2 (rows 251-500) but never reached its checkpoint:
     const staged = h.fake.rows('fdh_bank_import_job_chunks').find((c) => c.kind === 'plan_rows' && c.seq === 1)!;
-    h.fake.db.tables.fdh_transactions.push(...(staged.payload.rows as Row[]).map((r, i) => ({ id: `dead-${i}`, ...r })));
+    h.fake.db.tables.fdh_transactions.push(...((staged.payload as { rows: Row[] }).rows).map((r, i) => ({ id: `dead-${i}`, ...r })));
     expect(txFor('doc-1')).toHaveLength(500);
     const row = h.fake.jobs()[0];
     Object.assign(row, { status: 'processing', lease_owner: 'dead-owner-0001', progress_done: 250 });
@@ -237,7 +237,7 @@ describe('kill and resume: a slice that dies is taken over and the result is exa
     await advanceBankImportJob(job.id, { userId: U1, sliceBudgetMs: 0 });
     await advanceBankImportJob(job.id, { userId: U1, sliceBudgetMs: 0 });
     const staged = h.fake.rows('fdh_bank_import_job_chunks').find((c) => c.kind === 'plan_rows' && c.seq === 1)!;
-    h.fake.db.tables.fdh_transactions.push(...(staged.payload.rows as Row[]).map((r, i) => ({ id: `dead-${i}`, ...r })));
+    h.fake.db.tables.fdh_transactions.push(...((staged.payload as { rows: Row[] }).rows).map((r, i) => ({ id: `dead-${i}`, ...r })));
     Object.assign(h.fake.jobs()[0], { status: 'processing', lease_owner: 'dead-owner-0009', progress_done: 250 });
     expireLease(job.id);
     const { job: end } = await driveToEnd(job.id);
