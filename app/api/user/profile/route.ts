@@ -2,6 +2,12 @@ import { createClient } from '@/lib/supabase/server';
 import { profileSchema } from '@/lib/validation/profile';
 import { ok, bad, badValidation } from '@/lib/api';
 import { recordCountryAuditEvent, recordReportingCurrencyAuditEvent } from '@/lib/services/countryAudit';
+import {
+  isRetirementDeclarationDbRefusal,
+  loadRetirementDeclarationBlockers,
+  refuseRetirementDeclarationIfConflicting,
+  retirementDeclarationConflictResponse,
+} from '@/lib/services/retirementDeclarationGuard';
 
 export async function GET() {
   const supabase = await createClient();
@@ -67,6 +73,18 @@ export async function PUT(req: Request) {
       previousCurrency !== parsed.data.preferred_currency;
   }
 
+  // PO-D24-02 (21-10-2026): "I don't have any retirement savings" cannot be SAVED as true while an active retirement account or SMSF
+  // exists. The grid disables the tick, but the rule lives here so a direct API call cannot write the contradiction. Checked BEFORE any
+  // write (nothing in this request is saved when it is refused), and re-checked AFTER the write below to close the window between the two.
+  const declaringNoRetirement = parsed.data.not_applicable_retirement === true;
+  let previousNoRetirement: boolean | null = null;
+  if (declaringNoRetirement) {
+    const refusal = await refuseRetirementDeclarationIfConflicting(supabase, user.id);
+    if (refusal) return refusal;
+    const { data: before } = await supabase.from('user_profiles').select('not_applicable_retirement').eq('user_id', user.id).maybeSingle();
+    previousNoRetirement = (before as { not_applicable_retirement?: boolean | null } | null)?.not_applicable_retirement ?? false;
+  }
+
   const updatePayload: Record<string, unknown> = { ...parsed.data, updated_at: new Date().toISOString() };
   if (countryChanged) {
     updatePayload.country_confirmed_at = null;
@@ -80,7 +98,24 @@ export async function PUT(req: Request) {
     .eq('user_id', user.id)
     .select()
     .single();
-  if (error) return bad(error.message);
+  if (error) {
+    // Migration 0298 refuses the same transition inside the database (any writer, a direct REST call included): answer with the same readable 409.
+    if (isRetirementDeclarationDbRefusal(error)) return retirementDeclarationConflictResponse(await loadRetirementDeclarationBlockers(supabase, user.id));
+    return bad(error.message);
+  }
+
+  // Re-check after the write: an account or SMSF added between the check above and this write must not leave the contradiction behind.
+  // The declaration is put back exactly as it was and the person is told why.
+  if (declaringNoRetirement) {
+    const after = await loadRetirementDeclarationBlockers(supabase, user.id);
+    if (after.total > 0) {
+      await supabase
+        .from('user_profiles')
+        .update({ not_applicable_retirement: previousNoRetirement ?? false, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id);
+      return retirementDeclarationConflictResponse(after);
+    }
+  }
 
   if (countryChanged) {
     await recordCountryAuditEvent({

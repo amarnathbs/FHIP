@@ -328,6 +328,8 @@ export function FinancialDataGrid({
   const [search, setSearch] = useState('');
   const [defaultCurrency, setDefaultCurrency] = useState<'AUD' | 'INR'>('AUD');
   const [notApplicable, setNotApplicable] = useState(false);
+  // PO-D24-02: the server's own reason when it refuses the declaration (it is the authority; the tick above is only the first guard).
+  const [notApplicableError, setNotApplicableError] = useState<string | null>(null);
   // Phase 0C: explicit Yes/No(/Not sure) confirmation for Liabilities and
   // Insurance — null means "not yet answered", distinct from 'yes' (which
   // isn't itself persisted; see handleZeroAnswer below).
@@ -632,6 +634,7 @@ export function FinancialDataGrid({
     if (checked && isNotApplicableBlocked(false, included.length + extraActiveItems)) return; // defence in depth: the control is disabled in this state
     const previous = notApplicable;
     setNotApplicable(checked);
+    setNotApplicableError(null);
     try {
       // Phase 0C.1 fix: the eligibility engine (computeHealthScoreEligibility,
       // scoreInvestment/scoreRetirement) reads exclusively from
@@ -655,8 +658,10 @@ export function FinancialDataGrid({
             })
           : Promise.resolve(),
       ]);
-    } catch {
-      setNotApplicable(previous); // best effort; revert the toggle if either save failed
+    } catch (e) {
+      setNotApplicable(previous); // revert the toggle if either save failed
+      // The server refuses "I don't have any ..." with a readable reason while active items exist (409): show it, do not swallow it.
+      if (e instanceof GridApiError && e.message) setNotApplicableError(e.message);
     }
   }
 
@@ -970,6 +975,11 @@ export function FinancialDataGrid({
               {notApplicableBlocked && (
                 <p className="mt-2 text-xs text-amber-900" data-testid="grid-not-applicable-blocked">
                   {notApplicableBlockedText(config.title, activeItemCount)}
+                </p>
+              )}
+              {notApplicableError && (
+                <p className="mt-2 text-xs text-amber-900" role="alert" data-testid="grid-not-applicable-server-refusal">
+                  {notApplicableError}
                 </p>
               )}
               {notApplicable && activeItemCount > 0 && (
