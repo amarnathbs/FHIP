@@ -23,6 +23,10 @@ async function ForecastRetirementPageContent({ searchParams }: { searchParams: P
   // Document2 (4) F26: the saved target age(s) shown here come from the same resolver the run uses.
   const timing = await loadRetirementTimingForPage(user.id, activeScenario.id, supabase);
 
+  // PO-D24-01: the separate Family retirement view is offered only to a person who has an active SMSF.
+  const { data: smsfFunds } = await supabase.from('smsf_funds').select('id').eq('user_id', user.id).eq('is_active', true).limit(1);
+  const hasSmsf = (smsfFunds ?? []).length > 0;
+
   return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -41,6 +45,7 @@ async function ForecastRetirementPageContent({ searchParams }: { searchParams: P
           currency={summary.currency}
           currentBalance={summary.totalRetirement}
           scenarioId={activeScenario.id}
+          hasSmsf={hasSmsf}
           savedAges={{
             self: timing.self.retirementAge,
             spouse: timing.spouse ? timing.spouse.retirementAge : undefined,

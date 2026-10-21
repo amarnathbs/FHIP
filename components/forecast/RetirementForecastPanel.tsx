@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
+import { FamilyRetirementView } from '@/components/forecast/FamilyRetirementView';
+import type { FamilyRetirementViewAvailable } from '@/lib/engines/forecast/familyRetirement';
 
 type TargetMethod = 'target_corpus' | 'desired_income' | 'expense_replacement';
 
@@ -50,12 +52,15 @@ export function RetirementForecastPanel({
   currentBalance,
   scenarioId,
   savedAges,
+  hasSmsf = false,
 }: {
   currency: 'AUD' | 'INR';
   currentBalance: number;
   scenarioId?: string;
   /** The ages the run would use without a what-if (Self always; Spouse only when a Spouse/Partner member exists). */
   savedAges?: { self: number | null; spouse?: number | null };
+  /** PO-D24-01: true when the person has an active SMSF. Only then is the separate Family retirement view requested and shown. */
+  hasSmsf?: boolean;
 }) {
   // A what-if age applies to the next run only. It is sent with the run and never written to the Retirement page's saved age.
   const [whatIfSelf, setWhatIfSelf] = useState('');
@@ -67,10 +72,13 @@ export function RetirementForecastPanel({
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [family, setFamily] = useState<FamilyRetirementViewAvailable | null>(null);
+  const [familyError, setFamilyError] = useState<string | null>(null);
 
   async function generate() {
     setLoading(true);
     setError(null);
+    setFamilyError(null);
     try {
       const body: Record<string, unknown> = { forecast_type: 'retirement', scenario_id: scenarioId, retirement_target_method: method };
       if (method === 'target_corpus') body.retirement_target_corpus = Number(targetCorpus) || 0;
@@ -90,6 +98,18 @@ export function RetirementForecastPanel({
       const detailJson = await detailRes.json();
       if (!detailRes.ok) throw new Error(detailJson.error ?? 'Could not load forecast results');
       setDetail(detailJson.data);
+      // PO-D24-01: the family view uses the very same options as the personal run, and never changes it.
+      if (hasSmsf) {
+        try {
+          const famRes = await fetch('/api/forecast/retirement/family', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const famJson = await famRes.json();
+          if (!famRes.ok) throw new Error(famJson.error ?? 'Could not work out the family retirement position');
+          setFamily(famJson.data?.available ? (famJson.data as FamilyRetirementViewAvailable) : null);
+        } catch (fe) {
+          setFamily(null);
+          setFamilyError(fe instanceof Error ? fe.message : 'Could not work out the family retirement position');
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
@@ -187,6 +207,21 @@ export function RetirementForecastPanel({
           </div>
           {explanation && <p className="mt-4 text-sm text-gray-600">{explanation.explanation_text}</p>}
         </>
+      )}
+      {hasSmsf && !family && !familyError && (
+        <p className="mt-4 text-xs text-gray-500" data-testid="family-hint">
+          You have an SMSF. When you generate the forecast, a separate Family retirement position (Personal + SMSF) appears below it.
+        </p>
+      )}
+      {familyError && (
+        <p className="mt-4 text-sm text-risk" data-testid="family-error">
+          {familyError}
+        </p>
+      )}
+      {family && (
+        <div className="mt-6">
+          <FamilyRetirementView view={family} currency={currency} />
+        </div>
       )}
     </SectionCard>
   );

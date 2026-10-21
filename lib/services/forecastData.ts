@@ -11,6 +11,8 @@ import type { InvestmentCalculatorInput } from '@/lib/engines/forecast/investmen
 import type { DebtCalculatorInput } from '@/lib/engines/forecast/debtCalculator';
 import type { RetirementCalculatorInput, RetirementMemberLegInput, RetirementTargetMethod } from '@/lib/engines/forecast/retirementCalculator';
 import { resolveRetirementTiming } from '@/lib/engines/forecast/retirementTiming';
+import { buildFamilyRetirementView, type FamilyRetirementView } from '@/lib/engines/forecast/familyRetirement';
+import { loadFamilySmsfComponent } from '@/lib/services/familyRetirementData';
 import type { CrossBorderCalculatorInput } from '@/lib/engines/forecast/crossBorderCalculator';
 import type { ResilienceCalculatorInput } from '@/lib/engines/forecast/resilienceCalculator';
 import { applyStressScenario, type StressScenarioType, type StressScenarioParams } from '@/lib/engines/resilienceStress';
@@ -971,6 +973,59 @@ async function buildCalculatorInput(
     plannedEvents,
   };
   return { input: netWorthInput, effectiveMonths: months };
+}
+
+/**
+ * PO-D24-01 (21-10-2026): the separate FAMILY retirement view for a person who has an SMSF. Read only: nothing is saved and no forecast run
+ * row is written, so it can never change a stored personal run. The PERSONAL input is built by the very function the personal run uses
+ * (buildCalculatorInput, unchanged), then the SMSF component is added in lib/engines/forecast/familyRetirement.ts.
+ * Returns { available: false } when the person has no active SMSF.
+ */
+export async function runFamilyRetirementView(
+  userId: string,
+  params: {
+    scenarioId?: string;
+    retirementTargetMethod?: RetirementTargetMethod;
+    retirementTargetCorpus?: number;
+    retirementDesiredAnnualIncome?: number;
+    retirementReplacementPercentage?: number;
+    whatIfRetirementAges?: { self?: number | null; spouse?: number | null };
+  },
+  client?: SupabaseServerClient
+): Promise<FamilyRetirementView> {
+  const supabase = client ?? (await createClient());
+  const profile = await getOrCreateForecastProfile(userId, supabase);
+  const scenario = params.scenarioId
+    ? (await supabase.from('forecast_scenarios').select('*').eq('id', params.scenarioId).eq('user_id', userId).single()).data
+    : await ensureDefaultScenario(userId, profile.id, supabase);
+  if (!scenario) throw new Error('Forecast scenario not found');
+  const assumptions = await loadResolvedAssumptions(userId, profile.id, scenario.id, profile.country_code, supabase);
+  const baselineDate = profile.forecast_start_date ?? new Date().toISOString().slice(0, 10);
+
+  const fx = forecastFx(profile.base_currency, getAssumptionValue(assumptions, 'fx_rate_aud_inr', 56), profile.country_code ?? null);
+  const smsf = await loadFamilySmsfComponent(userId, supabase, fx);
+  if (!smsf) return { available: false, reason: 'no_smsf' };
+
+  const { input } = await buildCalculatorInput(
+    'retirement',
+    userId,
+    profile,
+    assumptions,
+    baselineDate,
+    DEFAULT_MONTHS,
+    supabase,
+    0,
+    {
+      targetMethod: params.retirementTargetMethod ?? 'desired_income',
+      targetCorpus: params.retirementTargetCorpus,
+      desiredAnnualIncome: params.retirementDesiredAnnualIncome,
+      replacementPercentage: params.retirementReplacementPercentage,
+      whatIfRetirementAges: params.whatIfRetirementAges,
+    },
+    [],
+    {}
+  );
+  return buildFamilyRetirementView(input as RetirementCalculatorInput, smsf);
 }
 
 export async function runForecast(
