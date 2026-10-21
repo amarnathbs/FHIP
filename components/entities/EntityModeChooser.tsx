@@ -1,6 +1,7 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { fetchJson, formatMoneySafe } from '@/components/retirement/smsf/format';
 
 type Currency = 'AUD' | 'INR';
@@ -11,6 +12,30 @@ interface SwitchResult {
   net_before: number | null;
   net_after: number | null;
   variance: number;
+}
+
+interface UndoPreview {
+  status: 'preview' | 'applied';
+  undoes: 'to_itemised' | 'to_net_only';
+  to_mode: EntityRecordingMode;
+  net_before: number | null;
+  net_after: number | null;
+  variance: number;
+  will_archive?: { assets: number; liabilities: number };
+  will_restore?: { assets: number; liabilities: number };
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The plain sentence under the Undo confirmation: where the entity goes back to and what happens to its lines. Pure, so it is tested. */
+export function entityUndoMessage(p: Pick<UndoPreview, 'to_mode' | 'net_before' | 'net_after' | 'will_archive' | 'will_restore'>, currency: Currency): string {
+  const net = `Its net goes from ${formatMoneySafe(p.net_before, currency)} to ${formatMoneySafe(p.net_after, currency)}.`;
+  if (p.to_mode === 'summary') {
+    const a = p.will_archive ?? { assets: 0, liabilities: 0 };
+    return `The entity goes back to a net value only. ${net} Its ${plural(a.assets, 'asset', 'assets')} and ${plural(a.liabilities, 'liability', 'liabilities')} are archived, not deleted, and kept in the history. Only the net value is counted afterwards.`;
+  }
+  const r = p.will_restore ?? { assets: 0, liabilities: 0 };
+  return `The entity goes back to itemised assets and liabilities. ${net} ${plural(r.assets, 'asset', 'assets')} and ${plural(r.liabilities, 'liability', 'liabilities')} that you had before are brought back. The net value you typed is kept in the history, and only the itemised figures are counted afterwards.`;
 }
 
 export const ENTITY_NET_ONLY_NOTE = 'A single net value hides what the entity owns and owes. FHIP cannot show its debts or how it changes when a loan is repaid.';
@@ -41,6 +66,55 @@ export function EntityModeChooser({
   const [preview, setPreview] = useState<SwitchResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The most recent switch can be undone while nothing newer was recorded (the database decides; this only decides whether to offer the button).
+  const [canUndo, setCanUndo] = useState(false);
+  const [undoPreview, setUndoPreview] = useState<UndoPreview | null>(null);
+
+  const loadCanUndo = useCallback(async () => {
+    try {
+      const h = await fetchJson<{ modes: { action: string }[] }>(`/api/business-entities/${entityId}/history`);
+      const newest = h.modes[0];
+      setCanUndo(Boolean(newest && (newest.action === 'to_itemised' || newest.action === 'to_net_only')));
+    } catch {
+      setCanUndo(false);
+    }
+  }, [entityId]);
+  useEffect(() => {
+    // setState happens in the promise callback, not synchronously in the effect body.
+    fetchJson<{ modes: { action: string }[] }>(`/api/business-entities/${entityId}/history`).then(
+      (h) => setCanUndo(Boolean(h.modes[0] && (h.modes[0].action === 'to_itemised' || h.modes[0].action === 'to_net_only'))),
+      () => setCanUndo(false),
+    );
+  }, [entityId, mode]);
+
+  async function startUndo() {
+    setBusy(true);
+    setError(null);
+    try {
+      setUndoPreview(await fetchJson<UndoPreview>(`/api/business-entities/${entityId}/undo-switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: false }) }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Nothing can be undone right now');
+      await loadCanUndo();
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function confirmUndo() {
+    setBusy(true);
+    try {
+      await fetchJson(`/api/business-entities/${entityId}/undo-switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) });
+      setUndoPreview(null);
+      setTarget(null);
+      setPreview(null);
+      await loadCanUndo();
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not undo');
+      setUndoPreview(null);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const checked = target ?? mode;
   const field = 'mt-1 w-full max-w-xs rounded border border-line px-2 py-1.5 text-sm';
@@ -156,6 +230,26 @@ export function EntityModeChooser({
           </div>
         </div>
       )}
+
+      {canUndo && !target && (
+        <div className="mt-3 border-t border-line pt-3">
+          <button type="button" onClick={() => void startUndo()} disabled={busy} className="rounded border border-line px-3 py-1 text-xs text-ink hover:bg-gray-50 disabled:opacity-60" data-testid="entity-undo-switch">
+            Undo the last change
+          </button>
+          <p className="mt-1 text-[11px] text-muted">Goes back to how this entity was recorded before the last change. You see the effect first, nothing is deleted.</p>
+        </div>
+      )}
+      {!target && error && <p role="alert" className="mt-2 text-sm text-risk">{error}</p>}
+
+      <ConfirmDialog
+        open={undoPreview !== null}
+        title="Undo the last change?"
+        message={undoPreview ? entityUndoMessage(undoPreview, currency) : ''}
+        confirmLabel="Undo"
+        destructive={false}
+        onConfirm={() => void confirmUndo()}
+        onCancel={() => setUndoPreview(null)}
+      />
     </fieldset>
   );
 }

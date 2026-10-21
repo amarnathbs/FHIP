@@ -11,7 +11,7 @@ const CODE_PREFIX = /^(ENTITY_[A-Z_]+):\s*/;
 export function smsfRpcError(error: { message: string; code?: string | null }): SmsfApiError {
   const raw = error.message ?? 'Request failed';
   const m = raw.match(CODE_PREFIX);
-  const message = raw.replace(CODE_PREFIX, '').replace(/^smsf:\s*/, '');
+  const message = raw.replace(CODE_PREFIX, '').replace(/^(smsf|entity):\s*/, '');
   if (m) return { status: 409, errorCode: m[1], message };
   switch (error.code) {
     case '42501':

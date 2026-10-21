@@ -37,7 +37,7 @@ interface HistoryPayload {
   modes: { id: string; action: string; net_before: number | null; net_after: number | null; created_at: string }[];
   changes: { id: string; table_name: string; action: string; created_at: string }[];
 }
-const MODE_ACTION: Record<string, string> = { to_itemised: 'Switched to itemised assets and liabilities', to_net_only: 'Switched to a net value only' };
+const MODE_ACTION: Record<string, string> = { to_itemised: 'Switched to itemised assets and liabilities', to_net_only: 'Switched to a net value only', undo: 'Undid the last change' };
 const CHANGE_TABLE: Record<string, string> = {
   business_entity_assets: 'an asset',
   business_entity_liabilities: 'a liability',
