@@ -462,7 +462,7 @@ describe('PART 2b -- the hand-run package (docs/nav2/po_apply_verified_through/s
     expect(await through(db)).toBe(today); // no data lost by the rollback
     expect(await count(db, 'ii_risk_free_series_state_log')).toBe(1); // the audit row stays
     // and the 0260 function works again
-    expect((await commit(db, REPO, REPO_UPDATE_REWRITTEN, today, '2026-10-19')).status).toBe('committed');
+    expect((await commit(db, REPO, REPO_UPDATE_REWRITTEN, today, today)).status).toBe('committed');
 
     await db.exec(pkg('B3_drop_backups_after_release.sql'));
     expect((await db.query(`select 1 from information_schema.tables where table_name like 'nav2_backup_20261019%'`)).rows).toHaveLength(0);
