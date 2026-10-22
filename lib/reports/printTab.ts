@@ -77,6 +77,11 @@ export interface PrintTabOptions {
   /** How long to wait to find out whether `close()` was honoured. */
   verifyDelayMs?: number;
   schedule?: (fn: () => void, ms: number) => () => void;
+  /**
+   * Runs immediately before every window.print() (the automatic one and the button's), so the page title, which the print dialog reads
+   * when it opens and Chrome proposes as the saved file name, is the report's name and period at that moment.
+   */
+  beforePrint?: () => void;
 }
 
 const defaultSchedule = (fn: () => void, ms: number): (() => void) => {
@@ -108,6 +113,15 @@ export function createPrintTabController(w: PrintWindowLike, opts: PrintTabOptio
     }, opts.verifyDelayMs ?? 400);
   }
 
+  function printNow() {
+    try {
+      opts.beforePrint?.();
+    } catch {
+      // A title that cannot be set must never stop the print dialog from opening.
+    }
+    w.print();
+  }
+
   const onAfterPrint = () => {
     if (!scriptOpened) return; // a tab the app did not open cannot be closed by script: the person uses the Close button
     schedule(requestClose, opts.closeDelayMs ?? 150);
@@ -122,15 +136,13 @@ export function createPrintTabController(w: PrintWindowLike, opts: PrintTabOptio
     },
     start() {
       w.addEventListener('afterprint', onAfterPrint);
-      const cancelPrint = opts.autoPrint ? schedule(() => w.print(), opts.printDelayMs ?? 300) : () => undefined;
+      const cancelPrint = opts.autoPrint ? schedule(printNow, opts.printDelayMs ?? 300) : () => undefined;
       return () => {
         cancelPrint();
         w.removeEventListener('afterprint', onAfterPrint);
       };
     },
-    print() {
-      w.print();
-    },
+    print: printNow,
     requestClose,
   };
 }

@@ -64,6 +64,7 @@ interface SipSeriesView {
   timing: Unavailable & { staggeredEndingValue?: number; lumpSumAtStartEndingValue?: number; wealthDifference?: number; statement?: string };
   navAtAsOf: number | null;
   navDateUsed: string | null;
+  benchmarkBasisLabel?: string | null;
   attribution: { status: string; reason: string | null; positionIsMixed: boolean; detail: string | null };
   observations: Array<{ classification: string; text: string }>;
 }
@@ -402,7 +403,8 @@ function SipIntelligenceClientInner({ ownerClass }: { ownerClass: string }) {
                     </li>
                     <li>
                       The benchmark comparison applies each contribution&apos;s exact amount, on its own date, to {s.benchmarkSip.benchmarkKey ?? 'the mapped benchmark'}
-                      {s.benchmarkSip.benchmarkReturnType ? ` (${s.benchmarkSip.benchmarkReturnType})` : ''}. A contribution falling on a non-trading day uses the next
+                      {s.benchmarkSip.benchmarkReturnType ? ` (${s.benchmarkSip.benchmarkReturnType})` : ''}
+                      {s.benchmarkBasisLabel ? `. ${s.benchmarkBasisLabel}` : ''}. A contribution falling on a non-trading day uses the next
                       available observation.
                     </li>
                     <li>These figures describe what has already happened. They are not a forecast and not a recommendation.</li>

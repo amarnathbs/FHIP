@@ -16,6 +16,7 @@ import {
 import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from '@/lib/services/investment-intelligence/realScanAdmission';
 import { computeSourceDocumentCounts, EMPTY_SOURCE_DOCUMENT_COUNTS, type SourceDocumentCounts } from '@/lib/services/investment-intelligence/sourceDocumentEnrichment';
 import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
+import { hasStoredFile } from '@/lib/services/investment-intelligence/caseLifecycle';
 
 // Real upload path: multipart form-data with a "file" part and a "meta"
 // JSON part. Service-role storage write happens only AFTER an
@@ -27,7 +28,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('ii_source_documents')
-    .select('id, status, original_filename, document_type, uploaded_at, checksum, country_code')
+    .select('id, status, original_filename, document_type, uploaded_at, checksum, country_code, storage_path, storage_purged_at')
     .eq('user_id', user.id)
     .order('uploaded_at', { ascending: false });
   if (error) return bad(error.message);
@@ -69,8 +70,11 @@ export async function GET() {
     });
   }
 
-  const enriched = documents.map((d) => ({
+  // Document2 (4) WP-B: the raw file is temporary by design, so the screen must know whether it still exists before it
+  // offers a password / Reprocess action. The storage path itself is never sent to the browser.
+  const enriched = documents.map(({ storage_path, storage_purged_at, ...d }) => ({
     ...d,
+    has_stored_file: hasStoredFile({ storagePath: (storage_path as string | null) ?? null, storagePurgedAt: (storage_purged_at as string | null) ?? null }),
     ...(countsByDoc.get(d.id as string) ?? EMPTY_SOURCE_DOCUMENT_COUNTS),
   }));
   return ok(enriched);

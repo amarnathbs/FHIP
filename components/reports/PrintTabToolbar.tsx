@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useSyncExternalStore, type RefObject } from 'react';
 import { createPrintTabController, type PrintWindowLike } from '@/lib/reports/printTab';
+import { applyPrintDocumentTitle } from '@/lib/reports/printDocumentTitle';
 
 /**
  * The toolbar of every report PRINT view a person can reach (Net Worth Statement, Monthly Report print route, Forecasting report
@@ -43,14 +44,26 @@ export function PrintTabToolbar({
   autoPrint,
   parentHref,
   parentLabel,
+  documentTitle,
 }: {
   autoPrint: boolean;
   /** Where the fallback link goes, e.g. "/reports". */
   parentHref: string;
   /** The parent's name without "Back to", e.g. "Reports". */
   parentLabel: string;
+  /** The report's print title (lib/reports/printDocumentTitle.ts): set on the page right before the print dialog opens, which is when Chrome reads it as the saved file name. */
+  documentTitle?: string;
 }) {
-  const controller = useMemo(() => (typeof window === 'undefined' ? null : createPrintTabController(window as unknown as PrintWindowLike, { autoPrint })), [autoPrint]);
+  const controller = useMemo(
+    () =>
+      typeof window === 'undefined'
+        ? null
+        : createPrintTabController(window as unknown as PrintWindowLike, {
+            autoPrint,
+            beforePrint: documentTitle ? () => applyPrintDocumentTitle(document, documentTitle) : undefined,
+          }),
+    [autoPrint, documentTitle],
+  );
   useEffect(() => controller?.start(), [controller]);
   const state = useSyncExternalStore(
     (cb) => controller?.subscribe(cb) ?? (() => undefined),

@@ -218,7 +218,11 @@ describe('NC-F4: the time budget', () => {
 
 describe('the route and the screen', () => {
   const route = readFileSync(path.join(__dirname, '..', '..', '..', 'app', 'api', 'reports', 'fund-analytics', 'route.ts'), 'utf8');
-  const client = readFileSync(path.join(__dirname, '..', '..', '..', 'components', 'reports', 'FundAnalyticsReportClient.tsx'), 'utf8');
+  // the picker is its own component since 19-10-2026 (Clear all / Select the 10 largest); the screen and the panel are read together
+  const client =
+    readFileSync(path.join(__dirname, '..', '..', '..', 'components', 'reports', 'FundAnalyticsReportClient.tsx'), 'utf8') +
+    readFileSync(path.join(__dirname, '..', '..', '..', 'components', 'reports', 'FundPickPanel.tsx'), 'utf8') +
+    readFileSync(path.join(__dirname, '..', '..', '..', 'lib', 'reports', 'fundPicker.ts'), 'utf8');
   it('the route takes the chosen funds as uuids and answers 409 with the choice, 422 for a bad choice, 202 + Retry-After while preparing in steps', () => {
     expect(route).toMatch(/funds: z\.array\(z\.string\(\)\.uuid\(\)\)/);
     expect(route).toMatch(/fundIds: parsed\.data\.funds/);
@@ -229,7 +233,7 @@ describe('the route and the screen', () => {
   it('the screen lists the funds with their values, ticks the largest by default, caps the ticks at the limit, and offers the rest for a second report', () => {
     expect(client).toContain('data-testid="fund-pick"');
     expect(client).toContain('<CheckField');
-    expect(client).toMatch(/disabled=\{!on && pick\.chosen\.length >= pick\.max\}/);
+    expect(client).toMatch(/!pick\.chosen\.includes\(instrumentId\) && pick\.chosen\.length >= pick\.max/);
     expect(client).toContain('suggestedIds');
     expect(client).toContain('Choose the other funds');
     expect(client).toMatch(/largest by current value are ticked/);

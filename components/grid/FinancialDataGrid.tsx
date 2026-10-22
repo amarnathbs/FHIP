@@ -228,10 +228,23 @@ function isRowSaveable(row: Row, config: GridConfig, duplicates: Set<string>): b
   return value !== '' && value !== undefined && value !== null;
 }
 
+// A refused write carries the server's field-by-field sentences (lib/api.ts badValidation / badField) in `fields`; they are kept so the form
+// can name the field and say what to change instead of a generic line (Document2 (4) F24).
+class GridApiError extends Error {
+  fields: Record<string, string> | null;
+  constructor(message: string, fields: Record<string, string> | null) {
+    super(message);
+    this.fields = fields;
+  }
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? 'Request failed');
+  if (!res.ok) {
+    const fields = json && typeof json.fields === 'object' && json.fields ? (json.fields as Record<string, string>) : null;
+    throw new GridApiError(json.error ?? 'Request failed', fields);
+  }
   return json.data as T;
 }
 
@@ -512,6 +525,16 @@ export function FinancialDataGrid({
       applySavedRow(row, saved);
       return { ok: true, saved };
     } catch (err) {
+      // A refusal that names the fields is a correction for the user, not a blip: say what to change, never retry it, never tell the user to
+      // 'try Save again' with the same entry.
+      if (err instanceof GridApiError && err.fields && Object.keys(err.fields).length > 0) {
+        const fieldMessage = Object.entries(err.fields)
+          .map(([name, text]) => `${config.fields.find((f) => f.name === name)?.label ?? name.replace(/_/g, ' ')}: ${text}`)
+          .join(' ');
+        saveRetryCount.current[key] = 0;
+        setSaveErrors((prev) => ({ ...prev, [key]: fieldMessage }));
+        return { ok: false, error: fieldMessage };
+      }
       const attempt = (saveRetryCount.current[key] ?? 0) + 1;
       saveRetryCount.current[key] = attempt;
       const willAutoRetry = attempt <= MAX_AUTO_RETRIES;
@@ -759,6 +782,17 @@ export function FinancialDataGrid({
             : 'Fill in the required fields before saving.'
       );
       return;
+    }
+    // Pre-submit field checks (GridFieldDef.validate): the same rule the server applies, said before the round trip.
+    for (const f of config.fields) {
+      if (!isFieldApplicableForRow(draft, f.name, config) || !f.validate) continue;
+      const value = draft[f.name];
+      if (value === '' || value === null || value === undefined) continue;
+      const problem = f.validate(value);
+      if (problem) {
+        setFormError(`${f.label}: ${problem}`);
+        return;
+      }
     }
     setSaving(true);
     setFormError(null);

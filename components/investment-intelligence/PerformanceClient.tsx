@@ -13,6 +13,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import Link from 'next/link';
+import { presentWarningScope } from '@/lib/engines/investment-intelligence/warningLabels';
 import { fmtDate } from './dateDisplay';
 import { HoldingsTable } from './HoldingsTable';
 import BenchmarkComparisonView from './BenchmarkComparisonView';
@@ -292,7 +294,15 @@ function WarningList({ warnings }: { warnings: Array<{ scope: string; detail: st
     <ul className="space-y-2">
       {warnings.map((w, i) => (
         <li key={i} className="rounded-card border border-line bg-gray-50 p-3 text-xs leading-relaxed text-muted">
-          <span className="font-medium text-ink">{w.scope}</span> — {w.detail}
+          <span className="font-medium text-ink">{presentWarningScope(w.scope).label}</span> — {w.detail}
+          {presentWarningScope(w.scope).action && (
+            <>
+              {' '}
+              <Link href={presentWarningScope(w.scope).action!.href} className="font-medium text-primary underline">
+                {presentWarningScope(w.scope).action!.text}
+              </Link>
+            </>
+          )}
         </li>
       ))}
     </ul>

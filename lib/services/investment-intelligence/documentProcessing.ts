@@ -32,6 +32,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
 import { downloadSourceDocumentObject } from './storage';
 import { purgeSourceDocumentStorage } from './sourceDocumentPurge';
+import { hasStoredFile, SOURCE_FILE_NOT_STORED_STATUS, SOURCE_FILE_NOT_STORED_MESSAGE } from './caseLifecycle';
 import { extractPdfText } from './pdfExtraction';
 import { parseExtractedDocument } from './parsers/registry';
 import type { ParsedAccountRecord, ParsedInstrumentRecord } from './parsers/types';
@@ -52,7 +53,7 @@ import { matchStatementOwner, type Pc5HouseholdMemberForMatching } from '@/lib/a
 import { loadHouseholdMembersForMatching } from '@/lib/aie/adapters/investment-intelligence/householdContext';
 import { resolveOrCreateAccount, planFolioAccountResolution } from './accountResolution';
 import { applyDocumentOwnerToAccounts, computeHolderNameWarnings, readDocumentOwner, saveOwnerReview, withoutAcknowledgedWarnings, type ApplyAccount, type OwnerReview } from './documentOwner';
-import { loadAccountOwnership, loadDecidedOwnershipAccountIds } from './accountOwnership';
+import { loadAccountOwnership, loadDecidedOwnershipAccountIds, loadExplicitOwnerAccountIds } from './accountOwnership';
 import { resolveScheme, type AliasMapRow, type ExistingInstrumentForResolution } from './schemeResolution';
 import { computeTransactionFingerprint } from './fingerprint';
 import { reconcilePosition, determineHistoryCompleteness, evaluateDerivedZeroUnitClosure, type ReconciliationTransactionInput } from './reconciliation';
@@ -335,6 +336,16 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     }
   }
 
+  // Document2 (4) WP-B (F5/F6/F14, 20-10-2026) -- the raw file is TEMPORARY by design: it is deleted right after a
+  // successful parse and by the 24-hour backstop for everything else. Reading it is impossible after that, so a
+  // file-dependent action (reprocess, enter a password, apply an instrument choice) must say so up front instead of
+  // opening a parse run, failing with "Could not retrieve the stored document" and -- worse -- writing `parse_failed`
+  // onto a document that never failed. The document, its cases and its retained data are left exactly as they were.
+  // The way forward is a controlled replacement copy (see sourceDocumentReplacement.ts), never restoring raw retention.
+  if (!hasStoredFile({ storagePath: (doc.storage_path as string | null) ?? null, storagePurgedAt: (doc.storage_purged_at as string | null) ?? null })) {
+    return { ok: false, status: SOURCE_FILE_NOT_STORED_STATUS, parseRunId: null, error: SOURCE_FILE_NOT_STORED_MESSAGE };
+  }
+
   // --- M12C §10 (`M2-OPEN-8`) — password brute-force limiter ----------------
   //
   // Until now this endpoint accepted an unlimited number of PDF password
@@ -431,9 +442,10 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // --- 1. Safe document extraction --------------------------------------
   const { bytes, error: dlErr } = await downloadSourceDocumentObject(doc.storage_path as string);
   if (dlErr || !bytes) {
-    await failRun(admin, parseRunId, 'Could not retrieve the stored document.');
-    await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'storage_download_failed' });
-    return { ok: false, status: 'parse_failed', parseRunId, error: 'Could not retrieve the stored document.' };
+    // The object is gone although the row never recorded a purge (a purge that failed to record, or an operator deletion).
+    // Same truth as above: the document did not fail, its file is simply no longer there. Do not rewrite its status.
+    await failRun(admin, parseRunId, SOURCE_FILE_NOT_STORED_MESSAGE);
+    return { ok: false, status: SOURCE_FILE_NOT_STORED_STATUS, parseRunId, error: SOURCE_FILE_NOT_STORED_MESSAGE };
   }
 
   let text: string;
@@ -506,6 +518,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       discrepancyType: 'unsupported_document',
       severity: 'blocking',
       sourceDocumentId,
+      idempotent: {},
       details: { sourceConfidence: detection.detection.confidence, candidates: detection.allCandidates, aiFallbackOutcome: aiOutcome.outcome },
     });
     await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), source_detected: detection.detection.sourceKey, source_confidence: detection.detection.confidence }).eq('id', parseRunId);
@@ -562,6 +575,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       discrepancyType: 'parse_incomplete',
       severity: 'blocking',
       sourceDocumentId,
+      idempotent: {},
       details: { errors: validation.errors, aiFallbackOutcome: aiOutcome.outcome },
     });
     await admin.from('ii_document_parse_runs').update({ run_status: 'failed', completed_at: new Date().toISOString(), errors: validation.errors }).eq('id', parseRunId);
@@ -616,6 +630,10 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // joint_holding_allocation_required / owner_mismatch against it, nor count
   // as "unresolved owner" for certification: the user has already decided.
   const decidedOwnershipAccountIds = await loadDecidedOwnershipAccountIds(admin, userId, [...accountIdByFolioAmc.values()]);
+  // Document2 (4) WP-B (F8): an account whose owner a person already chose (sole member pointer or entity / joint split) is
+  // never "owner unmatched" again just because THIS statement carries no upload-time owner. Without this every reprocess
+  // re-opened one `owner_unmatched` case per folio (about 50 rows for 12 folios) and re-blocked certification.
+  const explicitOwnerAccountIds = await loadExplicitOwnerAccountIds(admin, userId, [...accountIdByFolioAmc.values()]);
   // Both rules compose: a statement uploaded with an owner never raises owner_unmatched (the owner is known);
   // an account whose owner was DECIDED as an entity / joint split is likewise never "unresolved".
   const documentOwner = readDocumentOwner(doc as Record<string, unknown>);
@@ -676,6 +694,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
             discrepancyType: 'joint_holding_allocation_required',
             severity: 'blocking',
             sourceDocumentId,
+            idempotent: {},
             details: {
               maskedHolderName: outcome.maskedHolderName,
               maskedJointHolders: outcome.maskedJointHolders,
@@ -688,12 +707,15 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
           continue;
         }
       }
+      // An owner a person already chose for this account stands: never re-ask, never guess (see explicitOwnerAccountIds).
+      if (explicitOwnerAccountIds.has(accountId)) continue;
       const caseId = await openReconciliationCase(userId, {
         subjectType: 'account',
         subjectId: accountId,
         discrepancyType: 'owner_unmatched',
         severity: 'blocking',
         sourceDocumentId,
+        idempotent: {},
         details: { reason: 'No household member was specified for this statement at upload time.' },
       });
       if (caseId) reconciliationCasesOpened++;
@@ -740,6 +762,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
           discrepancyType: 'joint_holding_allocation_required',
           severity: 'blocking',
           sourceDocumentId,
+          idempotent: {},
           details: {
             maskedHolderName: outcome.maskedHolderName,
             maskedJointHolders: outcome.maskedJointHolders,
@@ -764,6 +787,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
         discrepancyType: 'owner_mismatch',
         severity: 'blocking',
         sourceDocumentId,
+        idempotent: {},
         details: {
           outcomeKind: outcome.kind,
           maskedHolderName: outcome.maskedHolderName,
@@ -1475,6 +1499,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       discrepancyType: 'transaction_missing_from_restatement',
       severity: 'medium',
       sourceDocumentId,
+      idempotent: { discriminator: 'instrumentId' },
       details: {
         instrumentId,
         statementPeriodStartIso: periodStartIso,
@@ -1512,7 +1537,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   for (const [key, instrumentId] of instrumentIdByKey) {
     void key;
     for (const [, accountId] of accountIdByFolioAmc) {
-      await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved && !decidedOwnershipAccountIds.has(accountId), instrumentUnresolvedKeys.size > 0, parserHasFatalError);
+      await evaluatePositionAndCertify(admin, userId, accountId, instrumentId, sourceDocumentId, config, ownerUnresolved && !explicitOwnerAccountIds.has(accountId), instrumentUnresolvedKeys.size > 0, parserHasFatalError);
     }
   }
 
@@ -1561,29 +1586,39 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   // a purge failure is recorded for retry, not surfaced to the caller.
   await purgeSourceDocumentStorage(admin, sourceDocumentId, doc.storage_path as string);
 
-  await admin
-    .from('ii_document_parse_runs')
-    .update({
-      run_status: 'succeeded',
-      completed_at: new Date().toISOString(),
-      parser_code: parsed.parserCode,
-      parser_version: parsed.parserVersion,
-      source_detected: detection.detection.sourceKey,
-      source_confidence: detection.detection.confidence,
-      document_type_detected: parsed.metadata.documentTypeDetected,
-      format_version_detected: parsed.metadata.formatVersionDetected,
-      extraction_method: extractionMethod,
-      accounts_found: accountIdByFolioAmc.size,
-      schemes_found: uniqueSchemes.size,
-      transactions_found: parsed.transactions.length,
-      holdings_found: parsed.holdings.length,
-      warnings: parsed.warnings,
-      errors: parsed.errors,
-      duplicate_transactions_linked: duplicateTransactionsLinked,
-      new_transactions_count: pendingTransactionInserts.length,
-      missing_transactions_count: missingTransactionsCount,
-    })
-    .eq('id', parseRunId);
+  const succeededRunPatch = {
+    run_status: 'succeeded',
+    completed_at: new Date().toISOString(),
+    parser_code: parsed.parserCode,
+    parser_version: parsed.parserVersion,
+    source_detected: detection.detection.sourceKey,
+    source_confidence: detection.detection.confidence,
+    document_type_detected: parsed.metadata.documentTypeDetected,
+    format_version_detected: parsed.metadata.formatVersionDetected,
+    extraction_method: extractionMethod,
+    accounts_found: accountIdByFolioAmc.size,
+    schemes_found: uniqueSchemes.size,
+    transactions_found: parsed.transactions.length,
+    holdings_found: parsed.holdings.length,
+    warnings: parsed.warnings,
+    errors: parsed.errors,
+    duplicate_transactions_linked: duplicateTransactionsLinked,
+    new_transactions_count: pendingTransactionInserts.length,
+    missing_transactions_count: missingTransactionsCount,
+  };
+  const { error: runCloseError } = await admin.from('ii_document_parse_runs').update(succeededRunPatch).eq('id', parseRunId);
+  if (runCloseError) {
+    // Deployment-order safety (Document2 (4) WP-H, found on DEV 21-10-2026): the three counters come from migration 0159. In an environment
+    // where it is not applied this update FAILS, and because the result was never checked the run stayed `running`: the statement was
+    // fully processed, yet every Reprocess / replacement within the next 10 minutes answered "already being processed" and no run ever
+    // counted as succeeded. Close the run without the counters instead, and say so in the server log.
+    const { duplicate_transactions_linked: _d, new_transactions_count: _n, missing_transactions_count: _m, ...withoutCounters } = succeededRunPatch;
+    void _d;
+    void _n;
+    void _m;
+    const { error: retryError } = await admin.from('ii_document_parse_runs').update(withoutCounters).eq('id', parseRunId);
+    console.error('[investment-intelligence] parse run could not be closed with its counters (is migration 0159 applied?)', { parseRunId, firstError: runCloseError.message, retryError: retryError?.message ?? null });
+  }
 
   await emitAuditEvent({
     userId,
@@ -1700,6 +1735,7 @@ async function handleExtractionFailure(
     discrepancyType: discrepancyByKind[kind],
     severity: 'blocking',
     sourceDocumentId,
+    idempotent: {},
     // The password itself is NEVER included here (spec section 10,
     // critical failure condition list) — only the outcome kind.
     details: { kind },

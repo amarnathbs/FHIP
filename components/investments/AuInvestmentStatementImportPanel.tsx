@@ -39,6 +39,8 @@ import {
 import { needsSecurityMatch } from '@/lib/investment-import-bridge/auLineRules';
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
+import { AuInvestmentStatementFileField, AuInvestmentUploadIntro } from '@/components/financial-data-hub/PdfAwareStatementCopy';
+import { parsePdfRouteVisible } from '@/lib/financial-data-hub/pdf-statements/uiVisibility';
 import { DataTable } from '@/components/ui/DataTable';
 
 // 'ai_fallback_review' (2026-09-23, AIE unified document fallback): the native
@@ -294,6 +296,9 @@ export function AuInvestmentStatementImportPanel({
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Whether the server's AU-investment PDF route is switched on: presentation only (the words and the file chooser). Fail closed --
+  // CSV-only wording until the upload-status read says `true`; the upload route refuses a PDF while its switch is off.
+  const [pdfRouteEnabled, setPdfRouteEnabled] = useState(false);
   // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
   // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
   const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
@@ -321,10 +326,16 @@ export function AuInvestmentStatementImportPanel({
     fetch('/api/financial-data-hub/upload-status')
       .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
       .then((json) => {
-        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+        if (!cancelled) {
+          setUploadEnabled(Boolean(json.data?.enabled));
+          setPdfRouteEnabled(parsePdfRouteVisible(json, 'au_investment'));
+        }
       })
       .catch(() => {
-        if (!cancelled) setUploadEnabled(false);
+        if (!cancelled) {
+          setUploadEnabled(false);
+          setPdfRouteEnabled(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -871,15 +882,7 @@ export function AuInvestmentStatementImportPanel({
 
       {uploadEnabled !== false && importAccess?.state === 'allowed' && phase === 'form' && (
         <div className="mt-4 space-y-4">
-          <p className="text-sm text-muted">
-            Upload a transaction-history or portfolio-holdings statement (PDF or CSV) and FHIP will extract the details for you to
-            review before anything is added to your Investments. A PDF is deleted as soon as its details are saved.
-          </p>
-          <p className="text-xs text-muted">
-            FHIP reads two generic Australian CSV layouts (a transaction-history export and a portfolio/holdings export with
-            standard column headers) and the matching PDF statements. A statement in another layout is read by AI for you to
-            check before anything is saved, and you can always add the investment manually below instead.
-          </p>
+          <AuInvestmentUploadIntro pdfRouteEnabled={pdfRouteEnabled} />
           <div className="grid grid-cols-2 gap-4">
             <label className="block text-sm">
               <span className="mb-1 block text-muted">Statement contains</span>
@@ -900,10 +903,7 @@ export function AuInvestmentStatementImportPanel({
           <div className="max-w-md">
             <OwnerSelector flow="au_investment" idPrefix="au-investment-owner" value={uploadOwner} onChange={setUploadOwner} disabled={busy} />
           </div>
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted">Statement file (PDF or CSV)</span>
-            <input type="file" accept="application/pdf,.pdf,text/csv,.csv" className="block w-full text-sm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
+          <AuInvestmentStatementFileField pdfRouteEnabled={pdfRouteEnabled} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <button type="button" onClick={handleUpload} disabled={!file || !uploadOwner || busy || uploadEnabled !== true || importAccess?.state !== 'allowed'} className="rounded bg-trust px-4 py-2 text-sm text-white disabled:opacity-50">
             Upload statement
           </button>

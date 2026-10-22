@@ -187,3 +187,16 @@ export async function requireCountryConfirmedUserAllowingGeneric() {
   if (block) return { user: null, unauthenticated: block };
   return { user, unauthenticated: null };
 }
+
+/**
+ * A 422 that names ONE field and says, in a plain sentence, what to change. The same body shape as `badValidation` (`{ error, fields }`), so a
+ * client shows it the same way whether the refusal came from the schema or from a database rule the schema should have caught first.
+ */
+export const badField = (field: string, message: string, code = 422) =>
+  Response.json(
+    {
+      error: `Please check: ${field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}. ${message}`,
+      fields: { [field]: message },
+    },
+    { status: code },
+  );

@@ -31,11 +31,13 @@ import type { DebtExposureLine } from '@/lib/engines/investment-intelligence/xra
 import { fetchAllRows } from './pagination';
 import { POSTGREST_PAGE_SIZE, NAV_PAGE_CONCURRENCY } from './pagination';
 import { loadNavHistoryByFund, sharedNavReadEnabled, sortLikeSipQuery } from './navHistoryRead';
-import { accessAllows, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
+import { accessAllows, blockedReason, inDataScope, loadBenchmarkAccess, type AccessNeed } from './benchmarkAccess';
+import { loadCategoryReferenceMappings } from './benchmarkData/categoryReferenceLoader';
 import { loadNavCandidatesSince, loadUnitMovementsSince, positionKey } from './currentValuationLoader';
 import { isNavQualityEligible, type StatementPositionInput } from '@/lib/engines/investment-intelligence/valuation/currentHoldingValuation';
 import { valueSchemeAcrossFolios, UNKNOWN_FOLIO_KEY, type FolioValuationInput } from '@/lib/engines/investment-intelligence/valuation/schemeValuation';
 import type { Observation } from '@/lib/engines/investment-intelligence/sip/dateAlignment';
+import { formatDateShort } from '@/lib/engines/date';
 
 export interface LoadWarning {
   scope: string;
@@ -179,18 +181,20 @@ export async function loadSipDataset(
     warnings.push({ scope: 'nav', detail: 'No NAV history is available, so ending values and money-weighted returns cannot be calculated for any series.' });
   }
 
+  // Day-first in the household's own format (dd-mm-yyyy India, dd/mm/yyyy Australia); never ISO in a customer notice.
+  const sipCurrency: 'AUD' | 'INR' = transactions.some((t) => (t.currencyCode ?? '').toUpperCase() === 'INR') ? 'INR' : 'AUD';
   const dataCeiling = latestNavDate && latestNavDate > latestTxnDate ? latestNavDate : latestTxnDate;
   const asOfDate = requestedAsOf > dataCeiling ? dataCeiling : requestedAsOf;
   if (asOfDate !== requestedAsOf) {
     warnings.push({
       scope: 'as_of_date',
-      detail: `The analysis date has been set to ${asOfDate}, the most recent date for which real data exists, rather than ${requestedAsOf}.`,
+      detail: `The analysis date has been set to ${formatDateShort(asOfDate, sipCurrency)}, the most recent date for which real data exists, rather than ${formatDateShort(requestedAsOf, sipCurrency)}.`,
     });
   }
 
   // Benchmark resolution is entirely server-side. The client cannot name a
   // benchmark id (spec section 97).
-  const benchmarkByInstrument = await loadBenchmarkSeries(supabase, instrumentIds, warnings, options.benchmarkAccessNeed ?? 'display_comparison');
+  const { byInstrument: benchmarkByInstrument, reasons: missingBenchmarkReasons } = await loadBenchmarkSeries(supabase, instrumentIds, warnings, options.benchmarkAccessNeed ?? 'display_comparison');
 
   // Attributable inflows, grouped by (account, instrument) then matched to
   // series keys by the caller's series detection. Here we key by the
@@ -214,6 +218,7 @@ export async function loadSipDataset(
       transactions,
       navByInstrument,
       benchmarkByInstrument,
+      missingBenchmarkReasons,
       // Series keys are `${accountId}:${instrumentId}:${discriminator}`, so a
       // prefix lookup is exact and unambiguous.
       attributableInflowsBySeries: new Map(),
@@ -252,14 +257,25 @@ export function attachAttributableInflows(dataset: SipDataset, seriesKeys: strin
   dataset.attributableInflowsBySeries = map;
 }
 
-async function loadBenchmarkSeries(
+/**
+ * Document2 (4) F9. The benchmark a SIP series is compared with, resolved the SAME way the Performance and Holdings tabs resolve it:
+ * a declared primary mapping first (always wins), and for a fund with none the read-time CATEGORY REFERENCE (the usual benchmark for the
+ * fund's category). This function used to read declared mappings only, so after the NSE/BSE index history was loaded a fund that had a
+ * category benchmark but no declared row was compared on Performance and still said "No primary benchmark mapping exists" on the SIP page.
+ *
+ * Every gate Performance applies is applied here to a category reference: an approved entitlement for calculation and display, a verified
+ * catalogue entry, and a TOTAL-RETURN series (a price index leaves out dividends). A fund that cannot be compared gets the EXACT missing
+ * prerequisite (named benchmark, index type, date range), returned in `reasons`, never one generic sentence.
+ */
+export async function loadBenchmarkSeries(
   supabase: SupabaseClient,
   instrumentIds: string[],
   warnings: LoadWarning[],
   accessNeed: AccessNeed = 'display_comparison'
-): Promise<SipDataset['benchmarkByInstrument']> {
+): Promise<{ byInstrument: SipDataset['benchmarkByInstrument']; reasons: Map<string, string> }> {
   const out: SipDataset['benchmarkByInstrument'] = new Map();
-  if (instrumentIds.length === 0) return out;
+  const reasons = new Map<string, string>();
+  if (instrumentIds.length === 0) return { byInstrument: out, reasons };
 
   const { data: mappings } = await supabase
     .from('ii_instrument_benchmarks')
@@ -268,12 +284,18 @@ async function loadBenchmarkSeries(
     .eq('relationship_type', 'primary');
 
   const active = (mappings ?? []).filter((m) => m.quality_status !== 'superseded');
-  if (active.length === 0) {
-    warnings.push({ scope: 'benchmark', detail: 'No primary benchmark mapping exists for these schemes, so like-for-like benchmark comparisons cannot be produced.' });
-    return out;
+  const declaredIds = new Set(active.map((m) => m.instrument_id as string));
+
+  // The read-time category reference for every fund with no declared mapping (in memory only; nothing is stored).
+  const category = await loadCategoryReferenceMappings(supabase, instrumentIds, declaredIds);
+  for (const [id, why] of category.noBenchmark) reasons.set(id, why);
+
+  const benchmarkIds = [...new Set([...active.map((m) => m.benchmark_id as string), ...category.benchmarkIds])];
+  if (benchmarkIds.length === 0) {
+    summariseMissing(warnings, instrumentIds.length, reasons);
+    return { byInstrument: out, reasons };
   }
 
-  const benchmarkIds = [...new Set(active.map((m) => m.benchmark_id))];
   const { data: benchmarks } = await supabase.from('ii_benchmarks').select('id, benchmark_key, return_type').in('id', benchmarkIds);
   const bmMeta = new Map((benchmarks ?? []).map((b) => [b.id as string, b]));
 
@@ -321,9 +343,64 @@ async function loadBenchmarkSeries(
       returnType: meta?.return_type ?? null,
       mappingVersion: m.mapping_version ?? null,
       series: seriesByBenchmark.get(m.benchmark_id) ?? [],
+      basis: 'declared',
+      basisLabel: null,
     });
   }
-  return out;
+
+  // Category reference: each gate in the order Performance applies it, each with its own named reason.
+  for (const m of category.mappings) {
+    const facts = category.facts.get(m.benchmarkId);
+    const label = facts?.label ?? m.benchmarkKey;
+    const grant = benchmarkAccess.get(m.benchmarkId);
+    const series = seriesByBenchmark.get(m.benchmarkId) ?? [];
+    if (!accessAllows(grant, accessNeed)) {
+      reasons.set(m.instrumentId, blockedReason(label, grant, accessNeed, accessError));
+      continue;
+    }
+    if (facts?.catalogueVerified !== true) {
+      reasons.set(m.instrumentId, `${label} is the usual benchmark for this fund's category, but its catalogue entry has not been verified yet, so no comparison is shown.`);
+      continue;
+    }
+    if (m.returnType === 'PRI') {
+      reasons.set(m.instrumentId, `${label} is the usual benchmark for this fund's category, but only its price index is loaded (it leaves out dividends). A like-for-like comparison needs the total-return index of ${label}, which is not loaded yet.`);
+      continue;
+    }
+    if (m.returnType === 'OTHER') {
+      reasons.set(m.instrumentId, `${label}: it is not recorded whether this series is total return, so it is not used.`);
+      continue;
+    }
+    if (series.length === 0) {
+      reasons.set(m.instrumentId, `${label} is the usual benchmark for this fund's category, but no history of it is loaded yet, so no comparison is shown.`);
+      continue;
+    }
+    out.set(m.instrumentId, {
+      benchmarkId: m.benchmarkId,
+      benchmarkKey: m.benchmarkKey,
+      returnType: m.returnType ?? null,
+      mappingVersion: null,
+      series,
+      basis: 'category_reference',
+      basisLabel: m.basisLabel ?? `The usual benchmark for this fund's category (${label})`,
+    });
+    reasons.delete(m.instrumentId);
+  }
+
+  const withoutBenchmark = instrumentIds.filter((id) => !out.has(id));
+  summariseMissing(warnings, instrumentIds.length, reasons, withoutBenchmark);
+  return { byInstrument: out, reasons };
+}
+
+/** One notice that counts the funds with no benchmark and says why in groups, instead of one generic sentence for all of them. */
+function summariseMissing(warnings: LoadWarning[], total: number, reasons: Map<string, string>, ids?: string[]): void {
+  const missing = ids ?? [...reasons.keys()];
+  if (missing.length === 0) return;
+  const distinct = [...new Set(missing.map((id) => reasons.get(id) ?? 'no benchmark could be found for it'))];
+  const shown = distinct.slice(0, 3).join(' ');
+  warnings.push({
+    scope: 'benchmark',
+    detail: `${missing.length} of your ${total} fund${total === 1 ? '' : 's'} could not be compared with a benchmark. ${shown}${distinct.length > 3 ? ` (and ${distinct.length - 3} other reason${distinct.length - 3 === 1 ? '' : 's'}, shown under each fund)` : ''}`,
+  });
 }
 
 // ---------------------------------------------------------------------------

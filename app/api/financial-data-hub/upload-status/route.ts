@@ -1,6 +1,13 @@
 import { requireCountryConfirmedUser as requireUser, ok } from '@/lib/api';
 import { isFdhDocumentUploadEnabled } from '@/lib/financial-data-hub/constants/featureFlags';
 import { financialImportAccessView } from '@/lib/entitlements/financialDataImport';
+import {
+  isAuInvestmentPdfRouteEnabled,
+  isLiabilityPdfRouteEnabled,
+  isRetirementPdfRouteEnabled,
+  type PdfStatementClass,
+} from '@/lib/financial-data-hub/pdf-statements/flags';
+import { PDF_ROUTES_FIELD } from '@/lib/financial-data-hub/pdf-statements/uiVisibility';
 
 // GET /api/financial-data-hub/upload-status — App Review 2026-09-14, item 2.
 //
@@ -27,5 +34,13 @@ export async function GET() {
   const { user, unauthenticated } = await requireUser();
   if (!user) return unauthenticated!;
   const importAccess = await financialImportAccessView(user.id, 'fdh.upload_status');
-  return ok({ enabled: isFdhDocumentUploadEnabled(), import_access: importAccess.state });
+  // PDF statement routes (liability, retirement, Australian investment): one boolean per class, resolved HERE on the server so
+  // the env switch never reaches the client bundle. Presentation only -- the screens use it to say "CSV only" (and not offer a
+  // PDF in the file chooser) while a class's route is off. The upload routes stay authoritative and refuse a PDF regardless.
+  const pdfRoutes: Record<PdfStatementClass, boolean> = {
+    liability: isLiabilityPdfRouteEnabled(),
+    retirement: isRetirementPdfRouteEnabled(),
+    au_investment: isAuInvestmentPdfRouteEnabled(),
+  };
+  return ok({ enabled: isFdhDocumentUploadEnabled(), import_access: importAccess.state, [PDF_ROUTES_FIELD]: pdfRoutes });
 }

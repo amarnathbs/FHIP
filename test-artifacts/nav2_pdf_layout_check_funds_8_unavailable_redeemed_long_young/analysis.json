@@ -1,0 +1,301 @@
+{
+ "page_count": 10,
+ "pages": [
+  {
+   "page": 1,
+   "blank_ratio": 0.173,
+   "lines": 82,
+   "last_line": {
+    "text": "Dates are written day first.",
+    "size": 8.5,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Fund analytics report",
+    "size": 22,
+    "bold": true
+   },
+   "funds_named": [
+    "Aster Diversified Equity and Debt Hybrid Opportunities Allocation Fund - Direct Plan - Growth Option (formerly the Dune Balanced Advantage Fund)",
+    "Birch Flexi Cap Fund",
+    "Cedar Mid Cap Fund",
+    "Dune Corporate Bond Fund",
+    "Elm Gilt Fund",
+    "Fjord ELSS Fund",
+    "Grove Large Cap Fund",
+    "Harbor Flexi Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8.5,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-01.png"
+  },
+  {
+   "page": 2,
+   "blank_ratio": 0.073,
+   "lines": 152,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Aster Diversified Equity and Debt Hybrid Opportunities Allocation Fund - Direct",
+    "size": 13,
+    "bold": true
+   },
+   "funds_named": [
+    "Aster Diversified Equity and Debt Hybrid Opportunities Allocation Fund - Direct Plan - Growth Option (formerly the Dune Balanced Advantage Fund)"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-02.png"
+  },
+  {
+   "page": 3,
+   "blank_ratio": 0.112,
+   "lines": 150,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Birch Flexi Cap Fund",
+    "size": 13,
+    "bold": true
+   },
+   "funds_named": [
+    "Birch Flexi Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-03.png"
+  },
+  {
+   "page": 4,
+   "blank_ratio": 0.128,
+   "lines": 169,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Cedar Mid Cap Fund",
+    "size": 13,
+    "bold": true
+   },
+   "funds_named": [
+    "Cedar Mid Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-04.png"
+  },
+  {
+   "page": 5,
+   "blank_ratio": 0.112,
+   "lines": 149,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Dune Corporate Bond Fund",
+    "size": 13,
+    "bold": true
+   },
+   "funds_named": [
+    "Dune Corporate Bond Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-05.png"
+  },
+  {
+   "page": 6,
+   "blank_ratio": 0.112,
+   "lines": 152,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Elm Gilt Fund",
+    "size": 13,
+    "bold": true
+   },
+   "funds_named": [
+    "Elm Gilt Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-06.png"
+  },
+  {
+   "page": 7,
+   "blank_ratio": 0.112,
+   "lines": 149,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Fjord ELSS Fund",
+    "size": 13,
+    "bold": true
+   },
+   "funds_named": [
+    "Fjord ELSS Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-07.png"
+  },
+  {
+   "page": 8,
+   "blank_ratio": 0.064,
+   "lines": 204,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Grove Large Cap Fund",
+    "size": 13,
+    "bold": true
+   },
+   "funds_named": [
+    "Grove Large Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 7.8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-08.png"
+  },
+  {
+   "page": 9,
+   "blank_ratio": 0.112,
+   "lines": 151,
+   "last_line": {
+    "text": "carrying this mark.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Harbor Flexi Cap Fund",
+    "size": 13,
+    "bold": true
+   },
+   "funds_named": [
+    "Harbor Flexi Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": false,
+   "min_size": 7.6,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-09.png"
+  },
+  {
+   "page": 10,
+   "blank_ratio": 0.199,
+   "lines": 102,
+   "last_line": {
+    "text": "yield) ^ (1 / 252) - 1. Source: Reserve Bank of India.",
+    "size": 7.8,
+    "bold": false
+   },
+   "first_line": {
+    "text": "Comparing your funds",
+    "size": 14,
+    "bold": true
+   },
+   "funds_named": [
+    "Aster Diversified Equity and Debt Hybrid Opportunities Allocation Fund - Direct Plan - Growth Option (formerly the Dune Balanced Advantage Fund)",
+    "Birch Flexi Cap Fund",
+    "Cedar Mid Cap Fund",
+    "Dune Corporate Bond Fund",
+    "Elm Gilt Fund",
+    "Fjord ELSS Fund",
+    "Grove Large Cap Fund",
+    "Harbor Flexi Cap Fund"
+   ],
+   "overflow_right": [],
+   "overlaps": [],
+   "split_rows": [],
+   "continued": false,
+   "has_comparison": true,
+   "min_size": 7.8,
+   "min_size_all": 7.1,
+   "body_size": 8,
+   "png": "D:\\FHIP\\.claude\\worktrees\\doc2-4-wp-a\\test-artifacts\\nav2_pdf_layout_check_funds_8_unavailable_redeemed_long_young\\png\\page-10.png"
+  }
+ ],
+ "cell_overflow": [],
+ "fund_names": [
+  "Aster Diversified Equity and Debt Hybrid Opportunities Allocation Fund - Direct Plan - Growth Option (formerly the Dune Balanced Advantage Fund)",
+  "Birch Flexi Cap Fund",
+  "Cedar Mid Cap Fund",
+  "Dune Corporate Bond Fund",
+  "Elm Gilt Fund",
+  "Fjord ELSS Fund",
+  "Grove Large Cap Fund",
+  "Harbor Flexi Cap Fund"
+ ],
+ "pages_per_fund": 1
+}

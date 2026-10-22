@@ -3,6 +3,8 @@
 import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { DateInput } from '@/components/ui/DateInput';
 import { formatDateInText } from '@/lib/engines/date';
+import { RetirementStatementFileField } from '@/components/financial-data-hub/PdfAwareStatementCopy';
+import { parsePdfRouteVisible } from '@/lib/financial-data-hub/pdf-statements/uiVisibility';
 /**
  * FDH-12 — Retirement Statement Intelligence: the Retirement-tab import
  * journey (spec sections 146-151).
@@ -271,6 +273,9 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
   // hard gate (lib/financial-data-hub/constants/featureFlags.ts) when the
   // upload itself failed. `null` = not checked yet; `true`/`false` once known.
   const [uploadEnabled, setUploadEnabled] = useState<boolean | null>(null);
+  // Whether the server's retirement PDF route is switched on: presentation only (the words and the file chooser). Fail closed --
+  // CSV-only wording until the upload-status read says `true`; the upload route refuses a PDF while its switch is off.
+  const [pdfRouteEnabled, setPdfRouteEnabled] = useState(false);
   // Premium Upload Entitlement (14-10-2026): presentation only -- the server re-checks on every upload / process call.
   // Until it is known (null) no file picker is drawn, so a Free user never sees a working picker flash up.
   const { access: importAccess, noteResponse: noteImportResponse } = useFinancialImportAccess();
@@ -289,10 +294,16 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
     fetch('/api/financial-data-hub/upload-status')
       .then((res) => (res.ok ? res.json() : { data: { enabled: false } }))
       .then((json) => {
-        if (!cancelled) setUploadEnabled(Boolean(json.data?.enabled));
+        if (!cancelled) {
+          setUploadEnabled(Boolean(json.data?.enabled));
+          setPdfRouteEnabled(parsePdfRouteVisible(json, 'retirement'));
+        }
       })
       .catch(() => {
-        if (!cancelled) setUploadEnabled(false);
+        if (!cancelled) {
+          setUploadEnabled(false);
+          setPdfRouteEnabled(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -764,18 +775,7 @@ export function RetirementStatementImportPanel({ onApplied }: { onApplied?: () =
           <div className="max-w-md">
             <OwnerSelector flow="retirement" idPrefix="retirement-owner" value={owner} onChange={setOwner} disabled={busy} />
           </div>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1 font-medium">Statement file (PDF or CSV)</span>
-            <input type="file" accept="application/pdf,.pdf,.csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
-            {/* COVERAGE HONESTY (spec section 83). This states the ACTUAL
-                certified scope. It does not say "all Australian super funds
-                supported", because that is not true. */}
-            <span className="mt-1 text-xs text-muted">
-              A PDF is read for the balances and movements it prints, and is deleted as soon as the details are saved. A
-              statement in a layout we do not know is read by AI for you to check before anything is saved. Scanned or
-              photographed documents and password-protected files cannot be read — you can still add or update the account manually.
-            </span>
-          </label>
+          <RetirementStatementFileField pdfRouteEnabled={pdfRouteEnabled} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <button
             type="button" onClick={handleUpload} disabled={busy || !file || !owner || uploadEnabled !== true || importAccess?.state !== 'allowed'}
             className="rounded bg-trust px-4 py-2 text-sm font-medium text-white disabled:opacity-50"

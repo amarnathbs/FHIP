@@ -258,8 +258,9 @@ describe('partially redeemed scheme stays correct', () => {
     partial.currentValue = 300;
     partial.currentValueDate = d('2022-12-31');
     const rs = runAnalytics(dataset([openScheme(), partial]));
-    // last-known partial value 0.4 x redeemedLast is carried (it is still held)
-    expect(rs.portfolios[0].totalValue).toBeCloseTo(openLast + redeemedLast * 0.4, 6);
+    // Document2 (4) F3: the header total is each scheme's CURRENT valuation (units x latest eligible NAV, here 300), not the last
+    // point of its dated statement series (0.4 x redeemedLast). The partial holding is still counted once, at its current value.
+    expect(rs.portfolios[0].totalValue).toBeCloseTo(openLast + 300, 6);
   });
 });
 

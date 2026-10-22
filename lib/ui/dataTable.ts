@@ -72,3 +72,17 @@ export function clampToggleLabel(expanded: boolean): string {
 export function shouldOfferJumpLink(rowCount: number | undefined, hasTarget: boolean): boolean {
   return hasTarget && (rowCount ?? 0) >= LONG_TABLE_ROWS;
 }
+
+/**
+ * Document2 (4) F2. A table that is wider than its box needs its sideways scrollbar where the person can reach it WITHOUT scrolling the page to the
+ * bottom of a long table first. The region therefore also shows a mirrored scrollbar ABOVE the table, only when the table genuinely overflows
+ * (a table that fits shows nothing extra). Pure, so both rules are unit-tested.
+ */
+export function hasSidewaysOverflow(scrollWidth: number, clientWidth: number): boolean {
+  return Number.isFinite(scrollWidth) && Number.isFinite(clientWidth) && clientWidth > 0 && scrollWidth - clientWidth > 1;
+}
+
+/** The scroll position the OTHER bar must take when one moves, or null when it is already there (this is what stops two synchronised bars from ping-ponging). */
+export function mirroredScrollLeft(source: number, target: number): number | null {
+  return Math.abs(source - target) < 1 ? null : source;
+}

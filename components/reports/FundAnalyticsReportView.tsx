@@ -11,7 +11,8 @@ import { INVESTOR_XIRR_LABEL, SCHEME_CAGR_LABEL } from '@/lib/engines/nav2/inves
 import { chartRowsWithGaps, navPrice, period, pct, ratio, rupees, showResult, type ShownCell } from '@/lib/engines/nav2/presentation';
 import { showDate, type Nav2Context, type Nav2Result } from '@/lib/engines/nav2/types';
 import { BETA_ALPHA_NO_BENCHMARK_LINE, betaAlphaNoBenchmark, FUND_ANALYTICS_CAGR_CONVENTION_NOTE, HOW_CALCULATED_HEADING, pricesRunToLine, riskFreeLabelOf } from '@/lib/engines/nav2/reportWording';
-import { ownershipSentence } from '@/lib/engines/nav2/ownershipShare';
+import { ownershipSentence, percentLabel } from '@/lib/engines/nav2/ownershipShare';
+import { buildFundAnalyticsSummary, compareTwoFunds, comparisonPickerOptions, defaultComparisonPair, describeComparisonCoverage, FUND_SUMMARY_HEAD, rankingPrerequisites, type FundComparison } from '@/lib/engines/nav2/fundAnalyticsInsight';
 import type { CorrelationValue } from '@/lib/engines/nav2/schemeRisk';
 import { NAV2_POLICY } from '@/lib/config/nav2/metricPolicy';
 import { NUM_CELL_CLASS, NUM_HEADER_CLASS } from '@/lib/ui/tableAlign';
@@ -82,6 +83,22 @@ function Table({ caption, head, children }: { caption: string; head: Array<{ lab
 
 const rowCls = 'border-t border-line';
 
+/**
+ * Document2 (4) F1: a date range is TWO lines, each a date that never breaks (a dd-mm-yyyy date has hyphens, and a table cell that is only as wide as
+ * it must be breaks a date at every one of them, which the Product Owner saw as four lines at every width). The "to" starts the second line.
+ */
+export function DatesUsed({ ctx, from, to }: { ctx: Pick<Nav2Context, 'currency'>; from: string | null; to: string | null }) {
+  return (
+    <>
+      <span className="block whitespace-nowrap">{showDate(ctx, from)}</span>
+      <span className="block whitespace-nowrap">to {showDate(ctx, to)}</span>
+    </>
+  );
+}
+
+/** The widest a date-range cell is ever allowed to be: two lines of an unbreakable dd-mm-yyyy date (10 characters), plus the word "to". */
+export const DATES_USED_MAX_LINES = 2;
+
 export function NavChart({ block, ctx, height = 220 }: { block: FundAnalyticsSchemeBlock; ctx: Nav2Context; height?: number }) {
   const rows = useMemo(() => chartRowsWithGaps(block.chart).map((r) => ({ ...r, label: showDate(ctx, r.date) })), [block.chart, ctx]);
   if (block.chart.navPoints.length < 2) {
@@ -137,7 +154,9 @@ function SchemeSection({ block, ctx }: { block: FundAnalyticsSchemeBlock; ctx: N
               <th scope="row" className="py-2 pr-3 text-left font-medium">{p.id.replace('Y', ' year')}</th>
               <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}><ShortCell c={abs} /></td>
               <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}><ShortCell c={cg} /></td>
-              <td className="py-2 pr-3 text-xs text-muted">{p.result.state === 'available' ? period(ctx, p.result.value.startDate, p.result.value.endDate) : ''}</td>
+              <td className="py-2 pr-3 text-xs text-muted" data-testid="dates-used">
+                {p.result.state === 'available' ? <DatesUsed ctx={ctx} from={p.result.value.startDate} to={p.result.value.endDate} /> : ''}
+              </td>
             </tr>
           );
         })}
@@ -261,11 +280,108 @@ function pairCell(report: FundAnalyticsReport, aId: string, bId: string, ctx: Na
   return showResult(p.result as Nav2Result<CorrelationValue>, (v) => `${ratio(v.correlation)} (${v.commonReturnCount.toLocaleString('en-IN')} common returns, ${period(ctx, v.windowStart, v.windowEnd)})`);
 }
 
+/** What the picked pair shows: the verdict, the coverage it rests on, or the reason it cannot be worked out, and the two funds side by side. */
+export function ComparisonResult({ comparison, ctx }: { comparison: FundComparison; ctx: Nav2Context }) {
+  if (comparison.status === 'invalid') {
+    return (
+      <p className="mt-3 text-sm font-medium text-[#8A5A12]" role="status" aria-live="polite" data-testid="comparison-invalid">
+        {comparison.message}
+      </p>
+    );
+  }
+  const table = (
+    <Table caption={`${comparison.fundA} and ${comparison.fundB}, side by side`} head={[{ label: 'Measure' }, { label: comparison.fundA, num: true }, { label: comparison.fundB, num: true }]}>
+      {comparison.rows.map((row) => (
+        <tr key={row.label} className={rowCls}>
+          <th scope="row" className="py-2 pr-3 text-left font-medium">{row.label}</th>
+          <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}><ShortCell c={row.a} /></td>
+          <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}><ShortCell c={row.b} /></td>
+        </tr>
+      ))}
+    </Table>
+  );
+  if (comparison.status === 'unavailable') {
+    return (
+      <div className="mt-3" aria-live="polite" data-testid="comparison-unavailable">
+        <p className="text-sm font-medium text-[#8A5A12]">{comparison.headline}</p>
+        <p className="text-sm text-muted">{comparison.message}</p>
+        <p className="mt-1 text-sm text-ink">{comparison.whatToDo}</p>
+        {table}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3" aria-live="polite" data-testid="comparison-ok">
+      <p className="text-sm text-muted">How closely they moved together</p>
+      <p className="text-2xl font-semibold tabular-nums text-ink">{ratio(comparison.correlation)}</p>
+      <p className="text-sm text-ink">{comparison.reading}</p>
+      {describeComparisonCoverage(comparison, ctx).map((line) => (
+        <p key={line} className="mt-1 text-xs text-muted">{line}</p>
+      ))}
+      {comparison.cautions.map((c) => (
+        <p key={c} className="mt-1 text-xs text-[#8A5A12]">{c}</p>
+      ))}
+      {table}
+    </div>
+  );
+}
+
+/** Document2 (4) F10: "Your funds at a glance", the page the PDF opens with, from the SAME model (buildFundAnalyticsSummary). */
+export function FundSummaryCard({ report }: { report: FundAnalyticsReport }) {
+  const rows = buildFundAnalyticsSummary(report, percentLabel);
+  if (rows.length === 0) return null;
+  const cellOf = (c: ShownCell | null) => (c ? <ShortCell c={c} /> : <span className="text-muted">Not matched to your transactions</span>);
+  const firstWhy = rows.flatMap((r) => [r.valueNow, r.gainLoss, r.xirr, r.cagr3Year]).find((c) => c && !c.available && c.detail);
+  return (
+    <SectionCard title="Your funds at a glance" description="One line per fund: what it is worth now, what you have gained or lost, your own return and the fund's own 3 year growth.">
+      <div data-testid="fund-summary">
+        <DataTable label="Your funds at a glance" className="text-sm">
+          <thead>
+            <tr className="text-left text-muted">
+              {FUND_SUMMARY_HEAD.map((h, i) => (
+                <th key={h} scope="col" className={`py-1 pr-3 font-medium ${i > 0 ? NUM_HEADER_CLASS : ''}`}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="align-top">
+            {rows.map((r) => (
+              <tr key={r.instrumentId} className={rowCls}>
+                <th scope="row" className="py-2 pr-3 text-left font-medium">
+                  <a href={`#fund-${r.instrumentId}`} className="text-primary underline">
+                    {r.name}
+                  </a>
+                </th>
+                <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{cellOf(r.valueNow)}</td>
+                <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{cellOf(r.gainLoss)}</td>
+                <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{cellOf(r.xirr)}</td>
+                <td className={`py-2 pr-3 ${NUM_CELL_CLASS}`}>{cellOf(r.cagr3Year)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
+      </div>
+      {firstWhy && firstWhy.detail && (
+        <p className="mt-2 text-xs text-muted">
+          <sup>*</sup> {firstWhy.detail} Each fund&apos;s own section below says what is missing for it.
+        </p>
+      )}
+      {report.schemes.some((b) => b.ownership) && (
+        <p className="mt-2 text-xs text-muted">Where a fund is held jointly, the figures about your own money are your share of it. Your share of each fund is shown beside its name.</p>
+      )}
+    </SectionCard>
+  );
+}
+
 function Comparison({ report, ctx, printMode }: { report: FundAnalyticsReport; ctx: Nav2Context; printMode: boolean }) {
   const names = new Map(report.schemes.map((s) => [s.instrumentId, s.schemeName]));
-  const ids = report.schemes.map((s) => s.instrumentId);
-  const [a, setA] = useState(ids[0] ?? '');
-  const [b, setB] = useState(ids[1] ?? '');
+  // Each fund ONCE, and two funds with the same printed name told apart (Document2 (4) F12).
+  const options = useMemo(() => comparisonPickerOptions(report), [report]);
+  const ids = options.map((o) => o.value);
+  const [a, setA] = useState(defaultComparisonPair(options)[0]);
+  const [b, setB] = useState(defaultComparisonPair(options)[1]);
+  const comparison = useMemo(() => compareTwoFunds(report, a, b), [report, a, b]);
   const nm = (id: string) => names.get(id) ?? 'Unknown fund';
   return (
     <SectionCard title="Comparing your funds" description={report.comparison.label + ': only the funds you hold are compared with each other, and only against funds of the same category, plan and option.'}>
@@ -276,6 +392,16 @@ function Comparison({ report, ctx, printMode }: { report: FundAnalyticsReport; c
           <div key={r.horizonId} className="mt-3">
             <h3 className="text-base font-semibold text-ink">Ranked by CAGR, {r.horizonId.replace('Y', ' year')}</h3>
             {!v && <p className="text-sm text-muted"><Cell c={cell} /></p>}
+            {!v && (
+              <div className="mt-1 text-sm text-muted" data-testid="ranking-needs">
+                <p className="text-ink font-medium">What is needed for this to show</p>
+                <ul className="list-disc pl-5">
+                  {rankingPrerequisites(report, r.horizonId).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {v && v.groups.length === 0 && <p className="text-sm text-muted">No two of your funds are comparable over this period.</p>}
             {v?.groups.map((g) => (
               <Table key={`${g.category}|${g.planType}|${g.optionType}`} caption={`${g.category.replace(/_/g, ' ')}${g.planType ? `, ${g.planType} plan` : ''}${g.optionType ? `, ${g.optionType.replace(/_/g, ' ')}` : ''}`} head={[{ label: 'Rank', num: true }, { label: 'Fund' }, { label: 'CAGR', num: true }]}>
@@ -302,7 +428,7 @@ function Comparison({ report, ctx, printMode }: { report: FundAnalyticsReport; c
       {report.comparison.correlationsSkippedReason ? (
         <p className="text-sm text-muted">{report.comparison.correlationsSkippedReason}</p>
       ) : ids.length < 2 ? (
-        <p className="text-sm text-muted">You need at least two funds to compare how they move together.</p>
+        <p className="text-sm text-muted">You need at least two different funds in this report to compare how they move together.</p>
       ) : printMode ? (
         <Table caption="Correlation of periodic returns, each pair of your funds" head={[{ label: 'Fund A' }, { label: 'Fund B' }, { label: 'Correlation', num: true }]}>
           {report.comparison.correlations.map((p) => (
@@ -317,15 +443,13 @@ function Comparison({ report, ctx, printMode }: { report: FundAnalyticsReport; c
         <div className="mt-2">
           <div className="flex flex-wrap gap-3">
             <div className="min-w-[14rem] max-w-full flex-1">
-              <SelectField label="First fund" value={a} hidePlaceholder options={ids.map((id) => ({ value: id, label: nm(id) }))} onChange={setA} />
+              <SelectField label="First fund" value={a} hidePlaceholder options={options} onChange={setA} />
             </div>
             <div className="min-w-[14rem] max-w-full flex-1">
-              <SelectField label="Second fund" value={b} hidePlaceholder options={ids.map((id) => ({ value: id, label: nm(id) }))} onChange={setB} />
+              <SelectField label="Second fund" value={b} hidePlaceholder options={options} onChange={setB} />
             </div>
           </div>
-          <p className="mt-3 text-sm" aria-live="polite">
-            {a === b ? 'Pick two different funds.' : <Cell c={pairCell(report, a, b, ctx)} />}
-          </p>
+          <ComparisonResult comparison={comparison} ctx={ctx} />
           <p className="mt-1 text-xs text-muted">A correlation near 1 means the two funds usually rise and fall together; near 0, little relationship; below 0, they tend to move in opposite directions. It describes past returns only.</p>
         </div>
       )}
@@ -365,8 +489,11 @@ export default function FundAnalyticsReportView({ report, printMode = false }: {
           </details>
         )}
       </SectionCard>
+      {!printMode && <FundSummaryCard report={report} />}
       {report.schemes.map((b) => (
-        <SchemeSection key={b.instrumentId} block={b} ctx={ctx} />
+        <div key={b.instrumentId} id={`fund-${b.instrumentId}`}>
+          <SchemeSection block={b} ctx={ctx} />
+        </div>
       ))}
       {report.schemes.length > 0 && <Comparison report={report} ctx={ctx} printMode={printMode} />}
     </div>

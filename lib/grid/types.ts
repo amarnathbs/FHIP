@@ -22,6 +22,9 @@ export interface GridFieldDef {
   hiddenOnImportedRows?: boolean;
   // Short guidance shown under the field in the Add / Edit form (linked to the input with aria-describedby).
   helpText?: string;
+  // Pre-submit check (Document2 (4) F24): returns a plain sentence when the typed value must not be sent, null when it may be. The server
+  // still validates every write; this only says so before a round trip. Blank is never passed to it as a problem (the field is optional).
+  validate?: (value: unknown) => string | null;
   // A nullable number column the user may need to EMPTY again (Income take-home and tax). While the input is empty the draft keeps '' (not
   // 0), and a save that finds the field emptied, where the saved row had a value, sends an explicit null. Without this flag a number input
   // that is emptied becomes 0 (the behaviour every other register keeps). See lib/grid/saveBody.ts.

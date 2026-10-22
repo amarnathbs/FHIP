@@ -24,7 +24,7 @@ const doc = (report: unknown) => renderToStaticMarkup(createElement(FundAnalytic
 
 describe('the fixture names', () => {
   it('parse funds-N with optional flags and reject anything else', () => {
-    expect(parseFixtureName('funds-12+unavailable+redeemed+long+young')).toEqual({ funds: 12, unavailable: true, redeemed: true, longName: true, young: true });
+    expect(parseFixtureName('funds-12+unavailable+redeemed+long+young')).toEqual({ funds: 12, unavailable: true, redeemed: true, longName: true, young: true, longNames: false });
     expect(parseFixtureName('funds-4')).toMatchObject({ funds: 4, unavailable: false });
     expect(() => parseFixtureName('twelve')).toThrow(/unknown print fixture/);
   });
@@ -131,7 +131,7 @@ function chromiumPresent(): boolean {
 }
 const noBrowser = !chromiumPresent() || spawnSync(process.execPath, ['-e', 'require("playwright")'], { stdio: 'ignore' }).status !== 0;
 
-describe('NC-S3: the export measures whether every one-page fund sheet fits', () => {
+describe('NC-S3: the export measures whether every kept-together piece of a fund (its head, each block of its body) fits one page', () => {
   it.skipIf(noBrowser)(
     'a sheet shorter than the text area keeps the one-page plan; one taller than it (or any one of several) makes the whole report use two pages',
     async () => {
@@ -141,7 +141,7 @@ describe('NC-S3: the export measures whether every one-page fund sheet fits', ()
       try {
         const page = await browser.newPage();
         const fits = async (heights: number[]) => {
-          await page.setContent(`<div class="fa-doc">${heights.map((h) => `<section class="fa-one" style="height:${h}px"></section>`).join('')}</div>`);
+          await page.setContent(`<div class="fa-doc">${heights.map((h) => `<section class="fa-block" style="height:${h}px"></section>`).join('')}</div>`);
           return oneFundPerPageFits(page);
         };
         expect(await fits([800, 900, 950])).toBe(true);

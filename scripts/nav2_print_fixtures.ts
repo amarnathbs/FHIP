@@ -3,7 +3,7 @@
 // windows, risk measures, trend, the user's own money, rankings and correlations). No data of any real person or fund is used: names are
 // invented, prices are a seeded random walk.
 //
-//   npx tsx scripts/nav2_print_fixtures.ts <name> [--out file.json]      name = funds-N, with optional +flags: unavailable, redeemed, long, young
+//   npx tsx scripts/nav2_print_fixtures.ts <name> [--out file.json]      name = funds-N, with optional +flags: unavailable, redeemed, long, young, longnames
 //   e.g.  funds-12+unavailable+redeemed+long
 //
 // Exports buildPrintFixture(), also used by the unit tests and the layout check (timings are returned so the 25-fund build time is on record).
@@ -26,6 +26,19 @@ const CATS = [
   { key: 'corporate_bond', label: 'Corporate Bond' },
   { key: 'gilt', label: 'Gilt' },
   { key: 'elss', label: 'ELSS' },
+];
+
+const PO_CATS = [
+  { key: 'large_cap', label: 'Large Cap' },
+  { key: 'large_cap', label: 'Large Cap' },
+  { key: 'large_cap', label: 'Large Cap' },
+  { key: 'flexi_cap', label: 'Flexi Cap' },
+  { key: 'mid_cap', label: 'Mid Cap' },
+  { key: 'corporate_bond', label: 'Corporate Bond' },
+  { key: 'gilt', label: 'Gilt' },
+  { key: 'elss', label: 'ELSS' },
+  { key: 'small_cap', label: 'Small Cap' },
+  { key: 'hybrid', label: 'Hybrid' },
 ];
 
 function rng(seed: number): () => number {
@@ -87,13 +100,15 @@ export interface PrintFixtureOptions {
   longName?: boolean;
   /** One fund (the third) with about two years of history: 3-year and 5-year figures are unavailable (the common real case). */
   young?: boolean;
+  /** EVERY fund has a long production-style name (a code, the plan, a "formerly" clause, "(Non-Demat)"), as in the Product Owner's 10-fund production report of 19-10-2026. */
+  longNames?: boolean;
 }
 
 export function parseFixtureName(name: string): PrintFixtureOptions {
   const [head, ...flags] = name.split('+');
   const m = /^funds-(\d+)$/.exec(head);
-  if (!m) throw new Error(`unknown print fixture "${name}" (expected funds-N[+unavailable][+redeemed][+long][+young])`);
-  return { funds: Number(m[1]), unavailable: flags.includes('unavailable'), redeemed: flags.includes('redeemed'), longName: flags.includes('long'), young: flags.includes('young') };
+  if (!m) throw new Error(`unknown print fixture "${name}" (expected funds-N[+unavailable][+redeemed][+long][+young][+longnames])`);
+  return { funds: Number(m[1]), unavailable: flags.includes('unavailable'), redeemed: flags.includes('redeemed'), longName: flags.includes('long'), young: flags.includes('young'), longNames: flags.includes('longnames') };
 }
 
 export interface PrintFixture {
@@ -107,12 +122,16 @@ export function buildPrintFixture(opts: PrintFixtureOptions): PrintFixture {
   const dates = weekdaysBetween('2013-01-01', PRINT_FIXTURE_AS_OF);
   const schemes: HeldSchemeInput[] = [];
   for (let i = 0; i < opts.funds; i++) {
-    const cat = CATS[(i + Math.floor(i / 12)) % 6];
+    // longnames = the Product Owner's 10-fund production report: three funds of one category (the only ranked ones) and seven with no peer
+    const cat = opts.longNames ? PO_CATS[i % PO_CATS.length] : CATS[(i + Math.floor(i / 12)) % 6];
     const isUnavailable = !!opts.unavailable && opts.funds > 1 && i === Math.max(0, opts.funds - 2);
     const isRedeemed = !!opts.redeemed && opts.funds > 1 && i === 1;
     const long = !!opts.longName && i === 0;
     const id = `fixture-fund-${String(i + 1).padStart(2, '0')}`;
-    const name = long
+    const production = !!opts.longNames;
+    const name = production
+      ? `${['128EFGPG', 'B92', 'FTI036', 'FTI037', 'H02', 'H44', 'K123', 'L036G', 'L101G', 'P2373'][i % 10]}-${AMCS[i % 12]} ${cat.label} Fund${i % 3 === 0 ? ' - Regular Plan' : ''} - Growth${i % 2 === 0 ? ` (formerly known as ${AMCS[(i + 3) % 12]} Frontline Equity Fund)` : ''} (Non-Demat)`
+      : long
       ? `${AMCS[i % 12]} Diversified Equity and Debt Hybrid Opportunities Allocation Fund - Direct Plan - Growth Option (formerly the ${AMCS[(i + 3) % 12]} Balanced Advantage Fund)`
       : `${AMCS[i % 12]} ${cat.label} Fund`;
     const isYoung = !!opts.young && i === Math.min(2, opts.funds - 1);

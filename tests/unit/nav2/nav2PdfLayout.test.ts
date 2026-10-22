@@ -1,8 +1,10 @@
 // Fund analytics PDF layout (PO feedback: huge blank areas, headings stranded from their tables, a bordered card over several pages, no fund
 // name on later pages, cramped tables, the same long sentence in every cell).
 //
-// PAGE PLAN (PO 07-10-2026, lib/config/nav2/printLayout.ts): the summary flows (at most 2 pages), every fund starts on a fresh page and takes
-// exactly ONE page (or exactly TWO for the whole report when any fund cannot be set on one), the comparison is exactly ONE page.
+// PAGE PLAN (lib/config/nav2/printLayout.ts; PO 19-10-2026 "a lot of empty space", replacing the 07-10-2026 rule that every fund starts a fresh page):
+// the document FLOWS: summary, then each fund as a kept-together head (name, facts, chart) and body (the two columns), then the comparison, which is
+// a small block when nothing can be compared. A page may end between a fund's head and body, never inside a chart or a table. The two-page fallback
+// plan (sheet A / sheet B) still starts each sheet on a fresh page.
 //
 // Four layers:
 //   1. the document markup rendered to static HTML from a real report (DEV Version 5, synthetic data): one sheet per fund naming the
@@ -181,18 +183,28 @@ describe('print stylesheet and renderer settings (source contract)', () => {
     expect(block).toMatch(/\.fa-doc \.fa-table thead \{ display: table-header-group/);
     expect(block).toMatch(/table-layout: fixed/);
   });
-  it('NC-L6: the Fund analytics page set-up is a NAMED page (fa), so it cannot change any other printed page (the global @page is main\'s)', () => {
+  it('NC-L6: the Fund analytics page set-up is a NAMED page (fa), so it cannot change any other printed page (the global @page belongs to the other pages)', () => {
     expect(block).toMatch(/\.fa-doc \{ page: fa;/);
-    expect(block).toMatch(/@page fa \{ size: A4; margin: 22mm 16mm 20mm 16mm; \}/);
+    expect(block).toMatch(/@page fa \{\s*size: A4;\s*margin: 22mm 16mm 20mm 16mm;/);
     expect(block).not.toMatch(/@page \{/);
   });
-  it('NC-L5: only small blocks are kept whole (a row, a chart, a footnote, and a fund or comparison SHEET, which is a page); no multi-row table is forced together', () => {
-    const avoids = [...block.matchAll(/([^{}]+)\{[^}]*break-inside: avoid/g)].map((m) => m[1].trim());
-    for (const sel of avoids) expect(sel, sel).toMatch(/tr$|\.fa-chart$|\.fa-footnotes p$|\.fa-comparison$/);
+  it('NC-L6b: the named page declares a header box and a footer box (so Chromium prints none of its own date, title and address) with "Page n of N"', () => {
+    const page = block.slice(block.indexOf('@page fa {'));
+    for (const box of ['@top-left', '@top-right', '@bottom-left', '@bottom-right']) expect(page, box).toContain(box);
+    expect(page).toMatch(/content: 'Page ' counter\(page\) ' of ' counter\(pages\)/);
+    expect(page).toContain('--fa-print-version');
   });
-  it('NC-L5b: every fund and the comparison start a fresh page and are kept whole; the summary has no forced break; no card border', () => {
-    expect(block).toMatch(/\.fa-doc \.fa-fund,\s*\.fa-doc \.fa-comparison \{ break-before: page/);
-    expect(block).toMatch(/\.fa-doc \.fa-fund,\s*\.fa-doc \.fa-comparison \{ break-inside: avoid/);
+  it('NC-L5: only small blocks are kept whole (a row, a chart, a footnote, a fund head or body, a ranking, the method note); no multi-row table and no whole fund is forced together', () => {
+    const avoids = [...block.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{[^}]*break-inside: avoid/g)].flatMap((m) => m[1].split(',').map((s) => s.trim()));
+    expect(avoids.length).toBeGreaterThan(5);
+    for (const sel of avoids) expect(sel, sel).toMatch(/tr$|\.fa-chart$|\.fa-footnotes p$|\.fa-fund-head$|\.fa-fund-body$|\.fa-rank$|\.fa-calc$|\.fa-comparison-head$|\.fa-comparison-none$|\.fa-keep$|\.fa-block$|\.fa-sheet-a$|\.fa-sheet-b$/);
+    // the correlation table may split between rows (its header row repeats); a whole fund or comparison section is never kept whole
+    expect(avoids.filter((s) => /\.fa-corr$|\.fa-fund$|\.fa-one$|\.fa-comparison$/.test(s))).toEqual([]);
+  });
+  it('NC-L5b: NO fund and NO comparison forces a page break (the flow); only the two-page fallback sheets do; the summary has no forced break; no card border', () => {
+    expect(block).not.toMatch(/\.fa-doc \.fa-fund,\s*\.fa-doc \.fa-comparison \{[^}]*break-before: page/);
+    const forced = [...block.matchAll(/([^{}]+)\{[^}]*break-before: page/g)].flatMap((m) => m[1].split(',').map((s) => s.trim()));
+    expect(forced.sort()).toEqual(['.fa-doc .fa-sheet-a', '.fa-doc .fa-sheet-b']);
     expect(block).not.toMatch(/\.fa-cover[^{]*\{[^}]*break-(before|after): page/);
     expect(block).not.toMatch(/border-radius/);
   });
@@ -224,11 +236,14 @@ describe('the layout judge (NAMED NEGATIVE CONTROLS: each rule fails on a bad la
     expect(v.some((x) => x.includes('page 1') && x.includes('blank'))).toBe(true);
     expect(v.some((x) => x.includes('page 2'))).toBe(false);
   });
-  it('NC-L1b: with the page plan, only the pages of the summary that are not its last must be filled; fund pages and the last summary page may be short', () => {
+  it('NC-L1b: with the flow plan EVERY page but the last must be filled: a summary page, a fund page or the comparison that stops short fails (PO 19-10-2026)', () => {
     const named = (pages: PageReport[]): LayoutAnalysis => ({ ...doc(pages), fund_names: names, pages_per_fund: 1 });
-    expect(judgeLayout(named([page(1, { blank_ratio: 0.1, first_line: cover }), page(2, { blank_ratio: 0.72, first_line: { text: 'Notes', size: 11, bold: true } }), fundPage(3, 0), fundPage(4, 1, { blank_ratio: 0.6 }), comparison(5)]))).toEqual([]);
-    // a summary page that is followed by another summary page may not stop short
-    expect(judgeLayout(named([page(1, { blank_ratio: 0.45, first_line: cover }), page(2, { first_line: { text: 'Notes', size: 11, bold: true } }), fundPage(3, 0), fundPage(4, 1), comparison(5)])).some((x) => x.includes('page 1') && x.includes('blank'))).toBe(true);
+    expect(judgeLayout(named([page(1, { blank_ratio: 0.1, first_line: cover }), fundPage(2, 0, { blank_ratio: 0.2 }), fundPage(3, 1), comparison(4, { blank_ratio: 0.8 })]))).toEqual([]);
+    // the OLD layout: 42% of the summary page empty before the fund page, a fund page 40% empty, a comparison page 70% empty before another page
+    const old = judgeLayout(named([page(1, { blank_ratio: 0.42, first_line: cover }), fundPage(2, 0, { blank_ratio: 0.4 }), fundPage(3, 1), comparison(4, { blank_ratio: 0.7 }), page(5, { first_line: { text: 'Fund A  Fund B', size: 8, bold: false }, blank_ratio: 0.3 })]));
+    expect(old.some((x) => x.includes('page 1') && x.includes('blank'))).toBe(true);
+    expect(old.some((x) => x.includes('page 2') && x.includes('blank'))).toBe(true);
+    expect(old.some((x) => x.includes('page 4') && x.includes('blank'))).toBe(true);
   });
 
   it('NC-L2: a page that ends with a heading (stranded from its table) fails', () => {
@@ -275,44 +290,39 @@ describe('the layout judge (NAMED NEGATIVE CONTROLS: each rule fails on a bad la
   const names = ['Alpha Growth Fund', 'Beta Income Fund'];
   const cover: PageReport['first_line'] = { text: 'Fund analytics report', size: 22, bold: true };
   const fundPage = (n: number, i: number, over: Partial<PageReport> = {}): PageReport => page(n, { first_line: { text: names[i], size: 13, bold: true }, funds_named: [names[i]], ...over });
-  const comparison = (n: number): PageReport => page(n, { first_line: { text: 'Comparing your funds', size: 14, bold: true }, funds_named: [] });
+  const comparison = (n: number, over: Partial<PageReport> = {}): PageReport => page(n, { first_line: { text: 'Comparing your funds', size: 14, bold: true }, funds_named: [], has_comparison: true, ...over });
   const plan = (pages: PageReport[], perFund = 1): string[] => judgePagePlan({ ...doc(pages), fund_names: names, pages_per_fund: perFund });
 
-  it('a good one-page plan passes: summary, one page per fund, one comparison page', () => {
-    expect(plan([page(1, { first_line: cover }), fundPage(2, 0), fundPage(3, 1), comparison(4)])).toEqual([]);
-    expect(plan([page(1, { first_line: cover }), page(2, { first_line: { text: 'Notes', size: 11, bold: true } }), fundPage(3, 0), fundPage(4, 1), comparison(5)])).toEqual([]);
+  it('a good flow passes: the summary, the funds in any position, the comparison present', () => {
+    expect(plan([page(1, { first_line: cover, funds_named: names }), fundPage(2, 0), fundPage(3, 1), comparison(4)])).toEqual([]);
+    // the first fund starts on the summary page and the comparison follows the last fund on the same page (no page of its own)
+    expect(plan([page(1, { first_line: cover, funds_named: names }), page(2, { first_line: { text: 'Alpha Growth Fund: returns, risk and your own money', size: 8, bold: false }, funds_named: [names[0], names[1]], has_comparison: true })])).toEqual([]);
   });
-  it('NC-P1: the OLD layout (two pages per fund, the second named "(continued)") fails the one-page plan: a fund spills onto an extra page', () => {
-    const old = [page(1, { first_line: cover }), fundPage(2, 0), fundPage(3, 0, { continued: true }), fundPage(4, 1), fundPage(5, 1, { continued: true }), comparison(6)];
-    expect(plan(old).some((x) => x.includes('Alpha Growth Fund') && x.includes('spills onto an extra page'))).toBe(true);
-    expect(plan(old).some((x) => x.includes('Beta Income Fund') && x.includes('spills'))).toBe(true);
+  it('NC-P1: a fund that is in no page of the document fails; so does a missing comparison section', () => {
+    expect(plan([page(1, { first_line: cover, funds_named: [names[0]] }), fundPage(2, 0), comparison(3)]).some((x) => x.includes('Beta Income Fund') && x.includes('not on any page'))).toBe(true);
+    expect(plan([page(1, { first_line: cover, funds_named: names }), fundPage(2, 0), fundPage(3, 1)]).some((x) => x.includes('comparison section is missing'))).toBe(true);
   });
-  it('NC-P2: a fund that does not start at the top of a page fails (it began on the same page as the previous fund, or after the summary)', () => {
-    expect(plan([page(1, { first_line: cover }), fundPage(2, 0), comparison(3)]).some((x) => x.includes('Beta Income Fund') && x.includes('does not start at the top of a fresh page'))).toBe(true);
+  it('NC-P2: the document must open with the summary', () => {
+    expect(plan([fundPage(1, 0), fundPage(2, 1), comparison(3)]).some((x) => x.includes('page 1 is not the summary'))).toBe(true);
   });
-  it('NC-P3: a summary of more than two pages fails', () => {
-    const v = plan([page(1, { first_line: cover }), page(2, { first_line: { text: 'Notes', size: 11, bold: true } }), page(3, { first_line: { text: 'How to read', size: 11, bold: true } }), fundPage(4, 0), fundPage(5, 1), comparison(6)]);
-    expect(v.some((x) => x.includes('summary runs over 3 pages'))).toBe(true);
+  it('NC-P3: a summary of more than two pages before any fund fails (the flow lets a fund follow the summary instead)', () => {
+    const v = plan([page(1, { first_line: cover, funds_named: [] }), page(2, { first_line: { text: 'Notes', size: 11, bold: true }, funds_named: [] }), page(3, { first_line: { text: 'How to read', size: 11, bold: true }, funds_named: [] }), page(4, { first_line: { text: 'Dates are written day first', size: 9, bold: false }, funds_named: [] }), fundPage(5, 0), fundPage(6, 1), comparison(7)]);
+    expect(v.some((x) => x.includes('summary runs over'))).toBe(true);
   });
-  it('NC-P4: a comparison that runs over one page fails', () => {
-    const v = plan([page(1, { first_line: cover }), fundPage(2, 0), fundPage(3, 1), comparison(4), page(5, { first_line: { text: 'Ranked by CAGR', size: 11, bold: true } })]);
-    expect(v.some((x) => x.includes('comparison runs over 2 pages'))).toBe(true);
-    expect(plan([page(1, { first_line: cover }), fundPage(2, 0), fundPage(3, 1)]).some((x) => x.includes('comparison page is missing'))).toBe(true);
-  });
-  it('NC-P5: the two-page plan wants exactly two pages per fund: one page fails, a third page fails', () => {
-    const ok = [page(1, { first_line: cover }), fundPage(2, 0), fundPage(3, 0, { continued: true }), fundPage(4, 1), fundPage(5, 1, { continued: true }), comparison(6)];
+  it('NC-P4: the two-page plan wants exactly two pages per fund, the second named "(continued)": one page fails, a third page fails', () => {
+    const ok = [page(1, { first_line: cover, funds_named: names }), fundPage(2, 0), fundPage(3, 0, { continued: true }), fundPage(4, 1), fundPage(5, 1, { continued: true }), comparison(6)];
     expect(plan(ok, 2)).toEqual([]);
-    expect(plan([page(1, { first_line: cover }), fundPage(2, 0), fundPage(3, 1), comparison(4)], 2).some((x) => x.includes('uses 1 page(s), the plan is exactly 2'))).toBe(true);
-    const third = [page(1, { first_line: cover }), fundPage(2, 0), fundPage(3, 0, { continued: true }), page(4, { first_line: { text: 'a footnote', size: 8, bold: false } }), fundPage(5, 1), fundPage(6, 1, { continued: true }), comparison(7)];
-    expect(plan(third, 2).some((x) => x.includes('spills onto an extra page'))).toBe(true);
+    expect(plan([page(1, { first_line: cover, funds_named: names }), fundPage(2, 0), fundPage(3, 1), comparison(4)], 2).some((x) => x.includes('uses 1 page(s) of its own'))).toBe(true);
+    const third = [page(1, { first_line: cover, funds_named: names }), fundPage(2, 0), fundPage(3, 0, { continued: true }), fundPage(4, 0), fundPage(5, 1), fundPage(6, 1, { continued: true }), comparison(7)];
+    expect(plan(third, 2).some((x) => x.includes('Alpha Growth Fund') && x.includes('uses 3 page(s)'))).toBe(true);
   });
   it('NC-P6: a long fund name that wraps on the first line is still recognised as the start of its fund', () => {
     const long = ['Aster Diversified Equity and Debt Hybrid Opportunities Allocation Fund - Direct Plan'];
-    const pages = [page(1, { first_line: cover }), page(2, { first_line: { text: 'Aster Diversified Equity and Debt Hybrid Opportunities', size: 13, bold: true } }), comparison(3)];
+    const pages = [page(1, { first_line: cover, funds_named: long }), page(2, { first_line: { text: 'Aster Diversified Equity and Debt Hybrid Opportunities', size: 13, bold: true } }), comparison(3)];
     expect(judgePagePlan({ ...doc(pages), fund_names: long, pages_per_fund: 1 })).toEqual([]);
   });
   it('NC-P7: a table row split across the page break fails', () => {
-    expect(judgeLayout({ ...doc([page(1, { first_line: cover }), fundPage(2, 0, { split_rows: ['Nippon India Large Cap Fund'] }), fundPage(3, 1), comparison(4)]), fund_names: names, pages_per_fund: 1 }).some((x) => x.includes('page 2') && x.includes('row is split'))).toBe(true);
+    expect(judgeLayout({ ...doc([page(1, { first_line: cover, funds_named: names }), fundPage(2, 0, { split_rows: ['Nippon India Large Cap Fund'] }), fundPage(3, 1), comparison(4)]), fund_names: names, pages_per_fund: 1 }).some((x) => x.includes('page 2') && x.includes('row is split'))).toBe(true);
   });
 });
 
@@ -341,21 +351,22 @@ describe('the real PDF: rendered by Chromium through the export route\'s printPa
   }
 
   it.skipIf(skip !== null)(
-    'the stored 4-fund report (DEV Version 5): a summary page, ONE page per fund, one comparison page: 6 pages (was 10)',
+    'the stored 4-fund report (DEV Version 5): the flow takes 6 pages (the two-page plan took 10), every page but the last at least 65% full',
     () => {
       const { analysis } = run([]);
       expect(analysis.pages_per_fund).toBe(1);
       expect(analysis.page_count).toBe(report.schemes.length + 2);
+      for (const p of analysis.pages.slice(0, -1)) expect(p.blank_ratio, `page ${p.page}`).toBeLessThanOrEqual(0.35);
     },
     300_000
   );
   it.skipIf(skip !== null)(
-    'the page plan holds for 1, 2 and 8 funds (the 8 with a fund with unavailable data, a redeemed fund, a long name and a young fund): one page per fund, one comparison page',
+    'the flow holds for 1, 2 and 8 funds (the 8 with a fund with unavailable data, a redeemed fund, a long name and a young fund): ONE fund is 2 pages (it was 3: the comparison had a page of its own), no page but the last more than 35% empty',
     () => {
-      for (const [fixture, funds] of [['funds-1', 1], ['funds-2', 2], ['funds-8+unavailable+redeemed+long+young', 8]] as const) {
+      for (const [fixture, pages] of [['funds-1', 2], ['funds-2', 4], ['funds-8+unavailable+redeemed+long+young', 10]] as const) {
         const { analysis } = run(['--fixture', fixture]);
         expect(analysis.pages_per_fund, fixture).toBe(1);
-        expect(analysis.page_count, fixture).toBe(funds + 2);
+        expect(analysis.page_count, fixture).toBe(pages);
       }
     },
     300_000
@@ -370,7 +381,7 @@ describe('the real PDF: rendered by Chromium through the export route\'s printPa
     300_000
   );
   it.skipIf(skip !== null)(
-    '12 funds with every special case: summary on one page, 12 fund pages, one compact comparison page = 14 pages',
+    '12 funds with every special case: the flow takes 14 pages',
     () => {
       const { analysis } = run(['--fixture', 'funds-12+unavailable+redeemed+long+young']);
       expect(analysis.page_count).toBe(14);
@@ -378,21 +389,21 @@ describe('the real PDF: rendered by Chromium through the export route\'s printPa
     300_000
   );
   it.skipIf(skip !== null)(
-    '20 funds, a LAYOUT STRESS CASE (it was the cap until the pilot limit of 10, 15-10-2026): summary of at most 2 pages, 20 fund pages, ONE comparison page = 23 pages',
+    '20 funds, a LAYOUT STRESS CASE (it was the cap until the pilot limit of 10, 15-10-2026): the flow takes 23 pages',
     () => {
       const { analysis } = run(['--fixture', 'funds-20+unavailable+redeemed+long+young']);
       expect(analysis.pages_per_fund).toBe(1);
       expect(analysis.page_count).toBe(23);
-      expect(analysis.pages[analysis.pages.length - 1].first_line?.text).toBe('Comparing your funds');
+      expect(analysis.pages.some((p) => p.has_comparison)).toBe(true);
     },
     300_000
   );
   it.skipIf(skip !== null)(
-    '25 funds, a LAYOUT-ONLY STRESS TEST (no person can make a 25-fund report any more): the summary takes two pages, 25 fund pages, ONE comparison page = 28 pages',
+    '25 funds, a LAYOUT-ONLY STRESS TEST (no person can make a 25-fund report any more): the flow takes 28 pages',
     () => {
       const { analysis } = run(['--fixture', 'funds-25+unavailable+redeemed+long+young']);
       expect(analysis.page_count).toBe(28);
-      expect(analysis.pages[analysis.pages.length - 1].first_line?.text).toBe('Comparing your funds');
+      expect(analysis.pages.some((p) => p.has_comparison)).toBe(true);
     },
     300_000
   );

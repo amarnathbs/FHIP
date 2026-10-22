@@ -1,5 +1,6 @@
 import { FREQUENCY_OPTIONS } from '@/lib/engines/money';
 import { COUNTRY_OPTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
+import { maskedIdentifierProblem } from '@/lib/validation/maskedIdentifier';
 import { getAssetFieldMetadata } from './assetFieldMetadata';
 import { defaultIsEssentialForExpenseItem } from '@/lib/engines/dashboard';
 import { incomeDefaultsForMasterItem, incomeItemHint } from '@/lib/engines/incomeVariablePay';
@@ -156,7 +157,14 @@ export const liabilityGridConfig: GridConfig = {
     // card/loan statement fills — now visible and editable, never hidden.
     { name: 'minimum_payment', label: 'Minimum Payment', type: 'number', step: '0.01' },
     { name: 'due_date', label: 'Payment Due Date', type: 'date' },
-    { name: 'masked_identifier', label: 'Card / Account Number (masked)', type: 'text' },
+    // F24: a full number is refused by design (database rule chk_liabilities_masked_identifier); say so before the form is sent.
+    {
+      name: 'masked_identifier',
+      label: 'Card / Account Number (masked)',
+      type: 'text',
+      helpText: 'Last 4 digits only, for example 7434 or ****7434. FHIP never stores the full number.',
+      validate: maskedIdentifierProblem,
+    },
     { name: 'country_code', label: 'Country', type: 'select', options: COUNTRY_OPTIONS },
     { name: 'notes', label: 'Notes', type: 'text' },
   ],

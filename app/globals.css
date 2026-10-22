@@ -16,6 +16,14 @@
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
   }
+  /* Document2 (4) F2: the mirrored sideways scrollbar above a table that is wider than its box (components/ui/ScrollRegion.tsx). It only carries the bar. */
+  .fhip-table-topscroll {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 14px;
+    margin-bottom: 2px;
+  }
   .fhip-table-wrap:focus-visible {
     outline: 2px solid #1d4ed8;
     outline-offset: 2px;
@@ -162,6 +170,9 @@
   /* Printed / PDF tables are not scrolled or sticky: the whole table is laid out on the page. */
   .fhip-table-wrap {
     overflow: visible !important;
+  }
+  .fhip-table-topscroll {
+    display: none !important;
   }
   .fhip-table :is(th, td) {
     position: static !important;
@@ -487,13 +498,56 @@
 .fa-doc .fa-sub { font-size: 8.5pt; color: #5b677a; margin: 0 0 1.5mm; break-after: avoid; page-break-after: avoid; }
 .fa-doc .fa-text { margin: 1.5mm 0 0; }
 .fa-doc .fa-cover { padding-top: 4mm; }
+@media print {
+  /* the summary is one page for up to ten funds with long names (PO 19-10-2026: Notes and "How to read" spilled onto a page of their own) */
+  .fa-doc .fa-cover .fa-table { font-size: 8.5pt; }
+  .fa-doc .fa-cover .fa-table th,
+  .fa-doc .fa-cover .fa-table td { padding-top: 0.6mm; padding-bottom: 0.6mm; }
+  .fa-doc .fa-cover .fa-saved { margin-bottom: 2.5mm; padding: 1.5mm 3mm; font-size: 9pt; }
+  .fa-doc .fa-cover .fa-notes li { font-size: 8.5pt; margin-bottom: 1mm; }
+  .fa-doc .fa-cover .fa-howto { font-size: 8.5pt; }
+  .fa-doc .fa-cover .fa-howto li { margin-bottom: 0.8mm; }
+  .fa-doc .fa-cover h3 { margin-top: 2.5mm; }
+}
 
-/* PAGE PLAN (lib/config/nav2/printLayout.ts): the summary flows; every fund starts on a fresh page and is kept whole (one page, or A and B
-   pages of a two-page plan); the comparison is one page of its own. */
-.fa-doc .fa-fund,
-.fa-doc .fa-comparison { break-before: page; page-break-before: always; }
-.fa-doc .fa-fund,
-.fa-doc .fa-comparison { break-inside: avoid; page-break-inside: avoid; }
+/* PAGE PLAN (lib/config/nav2/printLayout.ts; PO 19-10-2026, "a lot of empty space in the report"): everything FLOWS. No fund and no comparison forces a
+   page break any more (a forced break after a short summary, and again before a comparison of two sentences, left pages half or mostly empty).
+   What is kept whole is small and purposeful: a fund's HEAD (name, price facts, chart), each BLOCK of its body (a heading with its table), each
+   ranking, the correlation block and the method note, a row, a chart. A page may therefore end between a fund's head and its first block, never inside a
+   chart or a table. Only the two-page fallback plan (sheet A / sheet B) still starts each sheet on a fresh page. */
+.fa-doc .fa-fund-head,
+.fa-doc .fa-block,
+.fa-doc .fa-rank,
+.fa-doc .fa-calc,
+.fa-doc .fa-keep,
+.fa-doc .fa-comparison-head,
+.fa-doc .fa-comparison-none { break-inside: avoid; page-break-inside: avoid; }
+/* the heading of the comparison keeps with the first block after it (a heading and half a sentence stranded at the foot of a page) */
+.fa-doc .fa-comparison-head { break-after: avoid; page-break-after: avoid; }
+.fa-doc .fa-sheet-a,
+.fa-doc .fa-sheet-b { break-before: page; page-break-before: always; break-inside: avoid; page-break-inside: avoid; }
+/* The last line of a kept-together piece (a chart caption, a ranking note) is a .fa-sub, which keeps with what FOLLOWS it; at the end of a piece that
+   would glue the piece to the next one (a fund's head to its body, a ranking to the correlation block) and make Chromium move both. A piece ends clean. */
+.fa-doc .fa-fund-head > :last-child,
+.fa-doc .fa-fund-head .fa-chart .fa-sub,
+.fa-doc .fa-block > :last-child,
+.fa-doc .fa-rank > :last-child,
+.fa-doc .fa-corr > :last-child,
+.fa-doc .fa-calc > :last-child { break-after: auto; page-break-after: auto; }
+.fa-doc .fa-body-tag { font-size: 8pt; color: #5b677a; margin: 0 0 1.5mm; padding-bottom: 0.8mm; border-bottom: 0.25mm solid #dde3ea; break-after: avoid; page-break-after: avoid; }
+/* a comparison that cannot compare anything is ONE small block: a heading, one line per missing ranking, the correlation line, the method note */
+.fa-doc .fa-comparison-none .fa-comparison-head { break-after: auto; }
+/* the compact comparison's ranking table can run to 25 rows: it may split between rows (header row repeating), unlike the small full-form tables */
+.fa-doc .fa-compact .fa-rank { break-inside: auto; page-break-inside: auto; }
+.fa-doc .fa-comparison-none h2.fa-fund-name { font-size: 11pt; margin-bottom: 1mm; padding-bottom: 1mm; }
+.fa-doc .fa-comparison-none .fa-meta { margin-bottom: 1.5mm; font-size: 8.5pt; }
+.fa-doc .fa-comparison-none .fa-rank,
+.fa-doc .fa-comparison-none .fa-corr { margin-top: 1mm; }
+.fa-doc .fa-comparison-none .fa-rank h3,
+.fa-doc .fa-comparison-none .fa-corr h3 { display: inline; font-size: 9pt; margin: 0 1.2mm 0 0; }
+.fa-doc .fa-comparison-none .fa-rank .fa-text,
+.fa-doc .fa-comparison-none .fa-corr .fa-text { display: inline; margin: 0; font-size: 8.5pt; }
+.fa-doc .fa-comparison-none .fa-calc h3 { margin-top: 2.5mm; font-size: 9.5pt; }
 /* ONE-PAGE FUND: the glance table and the chart run across the page, the rest sits in two columns of 86 mm; tighter rows, 8 pt table text (never below 7.5 pt) */
 .fa-doc .fa-one h2.fa-fund-name { font-size: 13pt; margin-bottom: 1mm; padding-bottom: 1.2mm; }
 .fa-doc .fa-one .fa-meta { margin-bottom: 1.2mm; }
@@ -565,7 +619,78 @@
 }
 @media print {
   .fa-doc { page: fa; width: 100%; max-width: 100%; margin: 0; padding: 0; box-shadow: none; }
-  @page fa { size: A4; margin: 22mm 16mm 20mm 16mm; } /* named page: only the Fund analytics document, so no other printed page changes */
+  /* Flowing pieces are separated by space (a forced page break used to do that): a fund's head follows whatever precedes it by 7 mm, the comparison too.
+     Chromium drops this margin at the top of a page, so it never pushes content down. */
+  .fa-doc .fa-one > .fa-fund-head,
+  .fa-doc .fa-comparison { margin-top: 7mm; }
+  /* A fund's body is TWO COLUMNS of blocks (growth, rolling returns, risk | your own money, trend) that flow: each block is kept whole, the body as a
+     whole is not, so a fund that is a little taller than the room left on a page continues on the next one instead of moving whole (and leaving its
+     head alone on a mostly empty page). The columns balance; the reading order is unchanged. On screen the two columns stay a grid. */
+  .fa-doc .fa-cols { display: block; column-count: 2; column-gap: 6mm; column-fill: balance; }
+  .fa-doc .fa-col { display: contents; }
+  /* A named page: only the Fund analytics document, so no other printed page changes. The page declares a header box and a footer box, which is what
+     makes Chromium leave its own date, title, address and counter out at this margin (the Monthly report page `report` does the same). The version line
+     comes from the document (--fa-print-version); the headless renderer path switches the boxes off (it draws its own header and footer). */
+  @page fa {
+    size: A4;
+    margin: 22mm 16mm 20mm 16mm;
+    @top-left {
+      content: 'Fund analytics report';
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #5b677a;
+      vertical-align: bottom;
+      padding-bottom: 2.5mm;
+    }
+    @top-right {
+      content: var(--fa-print-version, 'Confidential');
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #5b677a;
+      vertical-align: bottom;
+      padding-bottom: 2.5mm;
+    }
+    @bottom-left {
+      content: 'Financial Health Intelligence Platform';
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #5b677a;
+      vertical-align: top;
+      padding-top: 2.5mm;
+    }
+    @bottom-right {
+      content: 'Page ' counter(page) ' of ' counter(pages);
+      font-family: Inter, 'Segoe UI', Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #5b677a;
+      vertical-align: top;
+      padding-top: 2.5mm;
+    }
+  }
+}
+
+/* Several Fund analytics reports as ONE document (components/reports/FundAnalyticsCombinedPrintDocument.tsx). Each report is the unchanged .fa-doc; its print page
+   name comes from the generated rules .fa-combined-part-N (lib/reports/fundAnalyticsCombinedPrint.ts), so the inner document must not set its own. */
+.fa-combined-front + .fa-combined-part { margin-top: 12mm; }
+.fa-combined-intro { width: 178mm; max-width: 100%; margin: 8mm auto 0; padding: 2mm 3mm; border-left: 1mm solid #2563eb; background: #f5f7fa; color: #172033; font-size: 9.5pt; line-height: 1.32; font-family: Inter, 'Segoe UI', Arial, system-ui, sans-serif; }
+@media screen {
+  .fa-combined-part + .fa-combined-part { margin-top: 12mm; }
+}
+@media print {
+  .fa-combined-front .fa-doc,
+  .fa-combined-part .fa-doc { page: auto; }
+  .fa-combined-intro { width: 100%; margin: 0 0 3mm; break-after: avoid; page-break-after: avoid; }
+  /* the front section holds a table of EVERY fund of the set: a little tighter than one report's cover so that, for up to about 17 funds, it keeps to one page */
+  .fa-combined-front .fa-doc .fa-cover .fa-table th,
+  .fa-combined-front .fa-doc .fa-cover .fa-table td { padding-top: 0.35mm; padding-bottom: 0.35mm; }
+  .fa-combined-front .fa-doc .fa-cover .fa-version { margin-bottom: 0.4mm; font-size: 9pt; }
+  .fa-combined-front .fa-doc .fa-cover .fa-saved { margin-top: 2mm; margin-bottom: 1.5mm; padding: 1mm 3mm; font-size: 8.5pt; }
+  .fa-combined-front .fa-doc .fa-cover .fa-notes li,
+  .fa-combined-front .fa-doc .fa-cover .fa-howto,
+  .fa-combined-front .fa-doc .fa-cover .fa-howto li { font-size: 8pt; }
+  .fa-combined-front .fa-doc .fa-cover .fa-text { margin-top: 1mm; font-size: 8.5pt; }
+  .fa-combined-front .fa-doc .fa-cover h3 { margin-top: 2mm; }
+  .fa-combined-front .fa-doc .fa-cover .fa-calc .fa-sub { font-size: 8pt; }
 }
 
 /* Net Worth Statements (PO request 16-10-2026): one A4 portrait page per statement. Scoped to .nws-root so nothing else changes.

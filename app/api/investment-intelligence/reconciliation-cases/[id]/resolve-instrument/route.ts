@@ -2,6 +2,7 @@ import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } fr
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
+import { SOURCE_FILE_NOT_STORED_STATUS } from '@/lib/services/investment-intelligence/caseLifecycle';
 import { z } from 'zod';
 
 // Document2 final non-benchmark closure #3 (2026-09-30) — a genuine
@@ -112,13 +113,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const sourceDocumentId = existing.subject_id as string;
   let reprocessed = false;
   let reprocessError: string | null = null;
+  let needsReplacementCopy = false;
   try {
     const result = await processSourceDocument({ userId: user.id, sourceDocumentId, forceReparse: true });
     reprocessed = result.ok;
     if (!result.ok) reprocessError = result.error ?? 'Reprocessing did not complete successfully.';
+    // Document2 (4) WP-B: the raw file is deleted on purpose after processing. The choice IS saved; applying it needs a
+    // replacement copy of the statement, and the caller must say so instead of showing a bare failure.
+    if (!result.ok && result.status === SOURCE_FILE_NOT_STORED_STATUS) needsReplacementCopy = true;
   } catch (e) {
     reprocessError = e instanceof Error ? e.message : 'Reprocessing failed unexpectedly.';
   }
 
-  return ok({ caseId, resolvedInstrumentId: parsed.data.resolvedInstrumentId, reprocessed, reprocessError });
+  return ok({ caseId, resolvedInstrumentId: parsed.data.resolvedInstrumentId, reprocessed, reprocessError, needsReplacementCopy });
 }

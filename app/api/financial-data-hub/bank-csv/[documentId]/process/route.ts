@@ -40,6 +40,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
     });
   } catch (e) {
     if (e instanceof BankCsvProcessingError) {
+      // F15: another run of this same statement is still going; not an error, and not to be started twice.
+      if (e.code === 'in_progress') return bad(e.message, 409, 'statement_in_progress');
       const status = e.code === 'not_found' ? 404 : 400;
       const message =
         e.code === 'mapping_required'
@@ -51,6 +53,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
               : e.message;
       return bad(message, status);
     }
-    return bad('We could not process this bank statement.', 500);
+    // F15: this used to answer with a fixed sentence and log nothing, so the failing stage was invisible. The class and message (never the
+    // file, never an amount) go to the server log; the user still gets the plain sentence plus a stable code.
+    console.error('[bank-csv/process] unexpected failure', { documentIdPrefix: documentId.slice(0, 8), name: e instanceof Error ? e.name : typeof e, message: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300) });
+    return bad('We could not process this bank statement.', 500, 'process_failed');
   }
 }
