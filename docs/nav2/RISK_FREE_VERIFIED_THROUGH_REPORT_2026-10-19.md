@@ -1,6 +1,6 @@
 # Risk-free "confirmed through" date: root cause, fix and evidence (19-10-2026)
 
-Branch `fix/risk-free-verified-through-20261019`, written against `origin/main` `44ff8d6` and rebased on `origin/main` `7b26956` (no conflicts; the 12 risk-free suites were re-run on the rebased tree, 242 tests green). Nothing pushed, nothing merged, nothing applied anywhere. Evidence labels used below: **UNIT** (no database), **PGLITE** (the real service code and the real migration SQL in an in-process Postgres, as the `authenticated` role; not DEV, not production), **not performed** (stated as such).
+Branch `fix/risk-free-verified-through-20261019`, written against `origin/main` `44ff8d6` and rebased on `origin/main` `7b26956` (no conflicts; the 12 risk-free suites were re-run on the rebased tree, 242 tests green). On 22-10-2026 it was merged (normal merge, no conflicts) with `origin/main` `5c9fa63` (admin Market Data nav group, stack 1, Fund Analytics summary, WP-H); migration 0294 is byte-identical and still the only 0294 on any ref; the package under `po_apply_verified_through` needed no change. Nothing pushed, nothing merged, nothing applied anywhere. Evidence labels used below: **UNIT** (no database), **PGLITE** (the real service code and the real migration SQL in an in-process Postgres, as the `authenticated` role; not DEV, not production), **not performed** (stated as such).
 
 ## 1. The observation and the answer in one paragraph
 
