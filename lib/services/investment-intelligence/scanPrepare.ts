@@ -50,6 +50,9 @@ export async function prepareBytesForScan(bytes: Uint8Array, mimeType: string, p
   try {
     // An empty password is tried first when none was given: many statements are encrypted with an owner password only.
     const doc = await PDFDocument.load(new Uint8Array(bytes), { password: supplied ? password : '', updateMetadata: false });
+    // NOTHING is stripped from the copy. The loader keeps the original cross-reference containers and the encryption dictionary as ordinary
+    // objects (so the old text /Encrypt can still appear inside the file, though the final trailer no longer names it): removing objects
+    // would hide bytes from the scanner, and the scanner must see everything the person's file contains.
     const out = await doc.save({ useObjectStreams: false, updateFieldAppearances: false });
     return { kind: 'decrypted', bytes: out };
   } catch (e) {

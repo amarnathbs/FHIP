@@ -10,6 +10,7 @@ import { createInMemoryDb, type Row } from './support/inMemorySupabase';
 import { buildMinimalTextPdf } from '../support/buildMinimalPdf';
 import { buildEncryptedTextPdf, TEST_USER_PASSWORD } from '../support/buildEncryptedPdf';
 import { extractPdfText } from '@/lib/services/investment-intelligence/pdfExtraction';
+import { buildWphCas, PRIME_FOLIO_Q1 } from '../support/buildWphCasText';
 
 type GateResult = { status: string; detail?: string; persisted?: Record<string, unknown> };
 const h = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const h = vi.hoisted(() => ({
   enabled: true,
   stored: null as Uint8Array | null,
   purged: [] as string[],
+  uploads: [] as string[],
   initiated: [] as { bytes: Uint8Array; contentHash: string; candidateHash?: string; documentId: string; pollBudget?: unknown }[],
   continued: [] as { persisted: Record<string, unknown>; pollBudget?: unknown }[],
   initiateResults: [] as GateResult[],
@@ -42,6 +44,11 @@ vi.mock('@/lib/aie/malware/scanObjectPurge', () => ({ purgeRealScanObject: async
 vi.mock('@/lib/services/investment-intelligence/storage', async (orig) => ({
   ...(await orig<typeof import('@/lib/services/investment-intelligence/storage')>()),
   downloadSourceDocumentObject: async () => (h.stored ? { bytes: new Uint8Array(h.stored), error: null } : { bytes: null, error: 'gone' }),
+  uploadSourceDocumentObject: async (key: string) => {
+    h.uploads.push(key);
+    return { error: null };
+  },
+  deleteSourceDocumentObject: async () => ({ error: null }),
 }));
 vi.mock('@/lib/services/investment-intelligence/sourceDocumentPurge', () => ({
   purgeSourceDocumentStorage: async (_a: unknown, id: string) => {
@@ -55,6 +62,7 @@ function withPersisted(r: GateResult, candidateHash?: string): GateResult {
   return { ...r, persisted: r.persisted ?? { status: r.status, ref, expected, detail: r.detail, ...(candidateHash ? { candidateHash } : {}) } };
 }
 
+import { replaceSourceDocumentFile } from '@/lib/services/investment-intelligence/sourceDocumentReplacement';
 import { startIiRealScan, ensureIiRealScanAdmissible, scanReplacementCandidate } from '@/lib/services/investment-intelligence/realScanAdmission';
 import { classifyScanState, scanRefusalHttp, II_SCAN_BLOCKED_MESSAGE, II_SCAN_INCOMPLETE_MESSAGE, II_SCAN_UNSUPPORTED_MESSAGE, II_SCAN_PENDING_MESSAGE } from '@/lib/services/investment-intelligence/scanRefusal';
 
@@ -75,6 +83,7 @@ beforeEach(() => {
   h.enabled = true;
   h.stored = null;
   h.purged.length = 0;
+  h.uploads.length = 0;
   h.initiated.length = 0;
   h.continued.length = 0;
   h.initiateResults.length = 0;
@@ -390,5 +399,82 @@ describe('the password never leaves the process', () => {
     } finally {
       spies.forEach((s) => s.mockRestore());
     }
+  });
+});
+
+describe('END TO END: the replacement of a password-protected statement, three presses (real replacement service, real parsers, real scan wrapper)', () => {
+  const CAS = buildWphCas({ periodStart: '01-Jan-2025', periodEnd: '31-Mar-2025', folios: [PRIME_FOLIO_Q1] }).split('\n');
+  const retainedDoc = () =>
+    doc({
+      status: 'parsed',
+      storage_path: 'user-1/old.pdf',
+      storage_purged_at: '2026-10-01T00:00:00Z',
+      checksum: 'oldchecksum',
+      original_filename: 'old.pdf',
+      file_size: 10,
+      country_code: 'IN',
+      source_detected: 'cams',
+      document_type_detected: 'cas_statement',
+      statement_period_start: '2025-01-01',
+      statement_period_end: '2025-03-31',
+      statement_as_of_date: '2025-03-31',
+    });
+  const press = (bytes: Uint8Array, password?: string) => replaceSourceDocumentFile({ userId: U, sourceDocumentId: 'doc1', filename: 'new.pdf', mimeType: 'application/pdf', bytes, password });
+
+  it('press 1: password needed (nothing scanned, nothing stored). press 2 with the password: scan pending (state kept). press 3: the same scan finishes clean -> identity matches -> attached; the scanner saw the DECRYPTED statement exactly once', async () => {
+    h.db.reset({ ii_source_documents: [retainedDoc()], ii_audit_events: [], ii_document_parse_runs: [], ii_reconciliation_cases: [], ii_holding_snapshots: [], ii_transactions: [], ii_transaction_source_links: [], ii_accounts: [], household_members: [] });
+    const locked = await buildEncryptedTextPdf(CAS);
+    h.initiateResults.push({ status: 'pending' });
+    h.continueResults.push({ status: 'clean' });
+
+    const one = await press(locked);
+    expect(one).toMatchObject({ ok: false, httpStatus: 422, code: 'password_required_for_check' });
+    expect(h.initiated).toEqual([]);
+    expect(h.uploads).toEqual([]);
+
+    const two = await press(locked, TEST_USER_PASSWORD);
+    expect(two).toMatchObject({ ok: false, httpStatus: 409, code: 'malware_scan_pending' });
+    expect(two.ok === false && two.message).toMatch(/nothing was deleted/i);
+    expect(h.uploads).toEqual([]);
+    expect(row().storage_path).toBe('user-1/old.pdf');
+    expect(row().malware_scan_status).toBe('pending');
+
+    const three = await press(locked, TEST_USER_PASSWORD);
+    expect(three.ok, JSON.stringify(three)).toBe(true);
+    expect(h.initiated).toHaveLength(1);
+    expect(h.continued).toHaveLength(1);
+    const scanned = await extractPdfText(new Uint8Array(h.initiated[0].bytes));
+    expect(scanned.ok && scanned.text.includes('Folio No: 1122334455')).toBe(true);
+    expect(row().storage_path).toBe(h.uploads[0]);
+    expect(row().malware_scan_status, 'the clean verdict recorded before the copy was read is kept, not reset').toBe('clean');
+    expect(JSON.stringify([h.db.writes, h.db.tables.ii_audit_events])).not.toContain(TEST_USER_PASSWORD);
+  });
+
+  it('a copy the scanner refuses as THREATS FOUND is never read or stored; the old statement is untouched', async () => {
+    h.db.reset({ ii_source_documents: [retainedDoc()], ii_audit_events: [], ii_document_parse_runs: [], ii_reconciliation_cases: [] });
+    h.initiateResults.push({ status: 'malicious' });
+    const bytes = new Uint8Array(buildMinimalTextPdf([CAS]));
+    const r = await press(bytes);
+    expect(r).toMatchObject({ ok: false, httpStatus: 422, code: 'malware_scan_blocked' });
+    expect(h.uploads).toEqual([]);
+    expect(row().status).toBe('parsed');
+    expect(row().storage_path).toBe('user-1/old.pdf');
+  });
+
+  it('a scan timeout on a replacement says so honestly (503, "not a finding about your file") and stores nothing', async () => {
+    h.db.reset({ ii_source_documents: [retainedDoc()], ii_audit_events: [], ii_document_parse_runs: [], ii_reconciliation_cases: [] });
+    h.initiateResults.push({ status: 'scan_timeout' });
+    const r = await press(new Uint8Array(buildMinimalTextPdf([CAS])));
+    expect(r).toMatchObject({ ok: false, httpStatus: 503, code: 'malware_scan_incomplete' });
+    expect(r.ok === false && r.message).toMatch(/not a finding about your file/);
+    expect(h.uploads).toEqual([]);
+  });
+
+  it('keeps the library honest: the decrypted copy the scanner receives is a valid, unencrypted PDF', async () => {
+    const locked = await buildEncryptedTextPdf(CAS);
+    h.initiateResults.push({ status: 'clean' });
+    await scanReplacementCandidate({ userId: U, sourceDocumentId: 'doc1', bytes: locked, contentType: 'application/pdf', contentHash: sha(locked), hasScanColumns: true, password: TEST_USER_PASSWORD });
+    const text = await extractPdfText(new Uint8Array(h.initiated[0].bytes)); // pdf.js, the reader the pipeline uses: no password asked
+    expect(text.ok && text.text.includes('Closing Unit Balance')).toBe(true);
   });
 });

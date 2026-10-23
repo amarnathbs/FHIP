@@ -37,6 +37,8 @@ describe('prepareBytesForScan', () => {
     // its final trailer no longer names an encryption dictionary
     const tail = Buffer.from(ok.bytes).toString('latin1');
     expect(tail.slice(tail.lastIndexOf('trailer'))).not.toContain('/Encrypt');
+    // nothing was removed to get there: the copy is at least as large as the decrypted objects it was built from (no hidden bytes)
+    expect(ok.bytes.byteLength).toBeGreaterThan(lockedCopy.byteLength * 0.5);
   });
 
   it('owner-password-only protection (empty user password) opens without anyone typing a password', async () => {
