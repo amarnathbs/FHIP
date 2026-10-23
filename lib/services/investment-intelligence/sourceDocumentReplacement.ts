@@ -29,7 +29,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
 import { generateObjectKey, uploadSourceDocumentObject, deleteSourceDocumentObject, validateUploadedFile } from './storage';
 import { scanUploadedPdfForAdmission, uploadAdmissionFailureMessage } from './uploadAdmission';
-import { scanReplacementCandidate, recordAdmittedReplacementScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from './realScanAdmission';
+import { scanReplacementCandidate, recordAdmittedReplacementScan } from './realScanAdmission';
+import { scanRefusalHttp } from './scanRefusal';
 import { replacementAllowed } from './caseLifecycle';
 import {
   compareStatementIdentity,
@@ -123,12 +124,24 @@ export async function replaceSourceDocumentFile(input: {
 
   const hasScanColumns = 'malware_scan_status' in row;
 
-  // The real malware scan comes first: nothing below parses bytes that have not been cleared, and a refused copy leaves the row alone.
-  const scanAdmission = await scanReplacementCandidate({ userId, sourceDocumentId, bytes, contentType: mimeType, contentHash: checksum, hasScanColumns });
+  // The real malware scan comes first: nothing below parses bytes that have not been cleared, and a refused copy leaves the file reference
+  // alone. WP-H2: the scan of a password-protected copy is run on its decrypted bytes (the password is used only to open it in memory),
+  // and its state is kept on the row against this file's hash, so pressing again continues the same scan instead of starting over.
+  const scanAdmission = await scanReplacementCandidate({ userId, sourceDocumentId, bytes, contentType: mimeType, contentHash: checksum, hasScanColumns, password: input.password });
   if (!scanAdmission.admitted) {
-    if (scanAdmission.reason === 'pending') return { ok: false, httpStatus: 409, code: 'malware_scan_pending', message: 'Your file is being scanned for safety. This usually takes a few seconds. Nothing has been changed.' };
-    if (scanAdmission.reason === 'scanner_unavailable') return { ok: false, httpStatus: 503, code: 'malware_scan_unavailable', message: II_SCAN_UNAVAILABLE_MESSAGE };
-    return { ok: false, httpStatus: 422, code: 'malware_scan_blocked', message: II_SCAN_BLOCKED_MESSAGE };
+    if (scanAdmission.reason === 'password_required' || scanAdmission.reason === 'wrong_password') {
+      return {
+        ok: false,
+        httpStatus: 422,
+        code: scanAdmission.reason === 'password_required' ? 'password_required_for_check' : 'wrong_password_for_check',
+        message:
+          scanAdmission.reason === 'password_required'
+            ? 'This file is password protected. Enter its password so we can open it for the safety check and check it is the same statement. The password is used only for this and is not stored. Nothing was changed.'
+            : 'The password did not open this file, so it could not be checked. Enter the document password again. Nothing was changed.',
+      };
+    }
+    const refusal = scanRefusalHttp(scanAdmission);
+    return { ok: false, httpStatus: refusal.status, code: refusal.code, message: refusal.message };
   }
 
   // WP-H: is this copy plausibly the same logical statement? Read-only; runs BEFORE the file reference is switched.
@@ -192,7 +205,8 @@ export async function replaceSourceDocumentFile(input: {
     // A discarded statement is revived by a replacement; every other status is left for the process run to settle.
     ...(row.status === 'archived' ? { status: 'uploaded', parse_error: null } : {}),
     // The previous verdict was for the previous bytes. Service-role write (migration 0196's guard only restrains `authenticated`).
-    ...(hasScanColumns ? { malware_scan_status: 'not_required', malware_scan_object_ref: null, malware_scan_admission_deadline_at: null, malware_scan_decided_at: null } : {}),
+    // A verdict already recorded for exactly this file (WP-H2) is kept; anything else is reset (the old verdict was for the old bytes).
+    ...(hasScanColumns && !scanAdmission.recorded ? { malware_scan_status: 'not_required', malware_scan_object_ref: null, malware_scan_admission_deadline_at: null, malware_scan_decided_at: null } : {}),
   };
   const { error: updateErr } = await admin.from('ii_source_documents').update(patch).eq('id', sourceDocumentId).eq('user_id', userId);
   if (updateErr) {
@@ -233,7 +247,7 @@ export async function replaceSourceDocumentFile(input: {
   });
 
   // The verdict reached before the copy was read is now recorded against the attached file (and the scan copy is deleted).
-  await recordAdmittedReplacementScan(sourceDocumentId, scanAdmission.verdict);
+  if (!scanAdmission.recorded) await recordAdmittedReplacementScan(sourceDocumentId, scanAdmission.verdict);
 
   return {
     ok: true,

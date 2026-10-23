@@ -566,9 +566,10 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       }
       setNotice(null);
       if (res.status === 409 && json?.error === 'malware_scan_pending') {
-        throw new Error('The safety scan is taking longer than usual. Please try processing this document again in a few minutes.');
+        throw new Error('The safety scan is still running. Nothing was deleted. Please try processing this document again in a minute or two.');
       }
-      if (!res.ok && typeof json?.message === 'string' && (json?.error === 'malware_scan_blocked')) {
+      // WP-H2: every scan refusal carries its own plain message (finding about the file, scan could not finish, scanner unavailable).
+      if (!res.ok && typeof json?.message === 'string' && String(json?.error ?? '').startsWith('malware_scan_')) {
         await loadDocuments();
         throw new Error(json.message);
       }
