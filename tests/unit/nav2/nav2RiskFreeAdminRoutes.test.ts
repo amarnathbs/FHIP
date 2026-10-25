@@ -58,6 +58,7 @@ import { GET, POST } from '@/app/api/admin/investment-intelligence/risk-free-dat
 import { POST as reviewPOST } from '@/app/api/admin/investment-intelligence/risk-free-data/review/[id]/route';
 import { POST as correctPOST } from '@/app/api/admin/investment-intelligence/risk-free-data/correct/route';
 import { POST as statePOST } from '@/app/api/admin/investment-intelligence/risk-free-data/series-state/route';
+import { POST as confirmPOST } from '@/app/api/admin/investment-intelligence/risk-free-data/confirm-current/route';
 import { GET as monitoringGET } from '@/app/api/admin/investment-intelligence/nav2-monitoring/route';
 import { requireRiskFreePage, riskFreeFlagsFromRow } from '@/lib/services/investment-intelligence/nav2/riskFreeAdmin';
 import { buildAdminNavGroups, NO_ADMIN_CAPABILITIES, parseAdminCapabilities } from '@/lib/admin/adminNav';
@@ -82,6 +83,7 @@ const calls: Call[] = [
   { name: 'POST upload commit', needs: 'upload', run: () => POST(req('/u', uploadBody('commit', { attested: true, attestationText: RISK_FREE_ATTESTATION_TEXT }))) },
   { name: 'POST review', needs: 'upload', run: () => reviewPOST(req('/r', { decision: 'reject', note: 'a note that is long enough to pass' }), ctx()) },
   { name: 'POST correct', needs: 'upload', run: () => correctPOST(req('/c', { seriesId: 'RBI_91D_TBILL_CUTOFF_YIELD', date: '2026-09-30', newValue: 5.5, reason: 'a reason that is long enough to pass' })) },
+  { name: 'POST confirm-current', needs: 'upload', run: () => confirmPOST(req('/k', { seriesId: 'RBI_POLICY_REPO_RATE', throughDate: '2026-10-19', reason: 'a reason that is long enough to pass' })) },
   { name: 'POST series-state', needs: 'switch', run: () => statePOST(req('/s', { seriesId: 'RBI_91D_TBILL_CUTOFF_YIELD', enabled: false, termsStatus: 'po_accepted_2026-10-03', reason: 'a reason that is long enough to pass' })) },
   { name: 'GET monitoring', needs: 'pc6', run: () => monitoringGET() },
 ];
@@ -274,6 +276,34 @@ describe('writes run under the caller\'s own session, with the right function an
     expect(mockRpc).toHaveBeenLastCalledWith('correct_risk_free_observation', { p_series_id: 'RBI_91D_TBILL_CUTOFF_YIELD', p_date: '2026-09-30', p_new_value: 5.5198, p_reason: 'recomputed from the printed cut-off price' });
     expect((await statePOST(req('/s', { seriesId: 'RBI_POLICY_REPO_RATE', enabled: false, termsStatus: 'declined', reason: 'RBI terms position under review by the PO' }))).status).toBe(200);
     expect(mockRpc).toHaveBeenLastCalledWith('set_risk_free_series_state', { p_series_id: 'RBI_POLICY_REPO_RATE', p_enabled: false, p_terms_status: 'declined', p_reason: 'RBI terms position under review by the PO' });
+  });
+
+  it('confirm-current calls confirm_risk_free_verified_through with the validated arguments, under the caller own session', async () => {
+    adminRowResult = { data: UPLOAD, error: null };
+    mockRpc.mockResolvedValueOnce({ data: { series_id: 'RBI_POLICY_REPO_RATE', previous: '2026-10-02', new: '2026-10-19' }, error: null });
+    const res = await confirmPOST(req('/k', { seriesId: 'RBI_POLICY_REPO_RATE', throughDate: '2026-10-19', reason: '  Checked the RBI press releases: no change.  ' }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toEqual({ series_id: 'RBI_POLICY_REPO_RATE', previous: '2026-10-02', new: '2026-10-19' });
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenLastCalledWith('confirm_risk_free_verified_through', { p_series_id: 'RBI_POLICY_REPO_RATE', p_verified_through: '2026-10-19', p_reason: 'Checked the RBI press releases: no change.' });
+    expect(mockAdminClientUsed).not.toHaveBeenCalled();
+  });
+
+  it('confirm-current: a bad date, a short reason, an unknown series and an unknown field are refused without a call; a database refusal sentence reaches the person (422), a missing function is a 503 that names the migration, 42501 is 403', async () => {
+    adminRowResult = { data: UPLOAD, error: null };
+    const ok = { seriesId: 'RBI_POLICY_REPO_RATE', throughDate: '2026-10-19', reason: 'a reason that is long enough to pass' };
+    for (const bad of [{ ...ok, throughDate: '19-10-2026' }, { ...ok, throughDate: '' }, { ...ok, reason: 'too short' }, { ...ok, seriesId: 'NOT_A_SERIES' }, { ...ok, extra: 1 }]) expect((await confirmPOST(req('/k', bad))).status).toBe(422);
+    expect(mockRpc).not.toHaveBeenCalled();
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: '22023', message: 'risk-free confirmation: the series is already confirmed through 15-10-2026, a confirmation must be later than that' } });
+    const refused = await confirmPOST(req('/k', ok));
+    expect(refused.status).toBe(422);
+    expect((await refused.json()).error).toBe('the series is already confirmed through 15-10-2026, a confirmation must be later than that');
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.confirm_risk_free_verified_through' } });
+    const missing = await confirmPOST(req('/k', ok));
+    expect(missing.status).toBe(503);
+    expect(JSON.stringify(await missing.json())).toContain('migration 0294');
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'risk-free confirmation: not authorised' } });
+    expect((await confirmPOST(req('/k', ok))).status).toBe(403);
   });
 
   it('input validation: a short note / reason, a bad id, an out-of-range value, an unknown field are refused without a call', async () => {

@@ -4,12 +4,9 @@ import { kickUserNavHistory } from '@/lib/services/investment-intelligence/pc6/u
 import { z } from 'zod';
 import { refuseUnlessImportRunMayStart } from '@/lib/entitlements/financialDataImport';
 import { iiSourceDocumentRunPosition } from '@/lib/services/investment-intelligence/importRunPosition';
-import {
-  ensureIiRealScanAdmissible,
-  II_SCAN_PENDING_MESSAGE,
-  II_SCAN_BLOCKED_MESSAGE,
-  II_SCAN_UNAVAILABLE_MESSAGE,
-} from '@/lib/services/investment-intelligence/realScanAdmission';
+import { ensureIiRealScanAdmissible } from '@/lib/services/investment-intelligence/realScanAdmission';
+import { scanRefusalHttp } from '@/lib/services/investment-intelligence/scanRefusal';
+import { recordPasswordNeededAtScanGate } from '@/lib/services/investment-intelligence/scanPasswordPrompt';
 
 // A real-world CAMS consolidated statement with many schemes/transactions
 // (found live 2026-09-07: a 17-scheme, ~1000-row statement) can take longer
@@ -63,13 +60,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // AIE-1 final completion (2026-09-25): nothing parses these bytes until the
   // real malware scan has cleared them (a no-op while the scan is switched
   // off). 409 is retryable -- the client polls; 422 is final.
-  const scan = await ensureIiRealScanAdmissible(user.id, id);
+  const scan = await ensureIiRealScanAdmissible(user.id, id, { password: parsed.data.password });
   if (!scan.admitted) {
     if (scan.reason === 'not_found') return bad('Source document not found.', 404);
-    if (scan.reason === 'pending') return bad(II_SCAN_PENDING_MESSAGE, 409, 'malware_scan_pending');
-    // UPL-02 (canonical-upload WP-12): scan on, scanner unusable -> fail closed.
-    if (scan.reason === 'scanner_unavailable') return bad(II_SCAN_UNAVAILABLE_MESSAGE, 503, 'malware_scan_unavailable');
-    return bad(II_SCAN_BLOCKED_MESSAGE, 422, 'malware_scan_blocked');
+    // WP-H2: a protected statement is opened in memory with its password for the scan. A missing or wrong password is the ordinary
+    // password step (the document goes to `password_required`, nothing is deleted), not a scan verdict.
+    if (scan.reason === 'password_required' || scan.reason === 'wrong_password') return ok(await recordPasswordNeededAtScanGate(user.id, id, scan.reason));
+    const refusal = scanRefusalHttp(scan);
+    return bad(refusal.message, refusal.status, refusal.code);
   }
 
   const result = await processSourceDocument({

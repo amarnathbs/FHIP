@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { requireCountryConfirmedUser as requireUser, ok, bad } from '@/lib/api';
 import { describeDocumentOwner } from '@/lib/services/investment-intelligence/documentOwner';
 import { classifyCase, hasStoredFile } from '@/lib/services/investment-intelligence/caseLifecycle';
+import { fetchAllRows } from '@/lib/services/investment-intelligence/pagination';
+import { derivePublicationState, type PublicationState } from '@/lib/investment-intelligence/publicationState';
 
 // R2 — "retrieve parse summary" (spec section 51). Shows exactly what
 // spec section 31 requires the minimal UI to display: statement source,
@@ -55,11 +57,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // document currently holds the "latest" pointer.
   const positionPairs = new Set((holdings ?? []).map((h) => `${h.account_id as string}:${h.instrument_id as string}`));
   const accountIdsForHoldings = [...new Set((holdings ?? []).map((h) => h.account_id as string))];
-  let rawTruthStatuses: { account_id: string; instrument_id: string; status: string; blocking_reasons: unknown; warning_reasons: unknown }[] = [];
+  let rawTruthStatuses: {
+    account_id: string;
+    instrument_id: string;
+    status: string;
+    blocking_reasons: unknown;
+    warning_reasons: unknown;
+    history_completeness?: string | null;
+    reconciled_closing_units?: number | string | null;
+    statement_closing_units?: number | string | null;
+    unit_variance?: number | string | null;
+    unit_variance_within_tolerance?: boolean | null;
+    last_evaluated_at?: string | null;
+  }[] = [];
   if (accountIdsForHoldings.length > 0) {
     const { data } = await supabase
       .from('ii_portfolio_truth_status')
-      .select('account_id, instrument_id, status, blocking_reasons, warning_reasons')
+      .select('account_id, instrument_id, status, blocking_reasons, warning_reasons, history_completeness, reconciled_closing_units, statement_closing_units, unit_variance, unit_variance_within_tolerance, last_evaluated_at')
       .eq('user_id', user.id)
       .in('account_id', accountIdsForHoldings);
     rawTruthStatuses = (data ?? []).filter((t) => positionPairs.has(`${t.account_id as string}:${t.instrument_id as string}`));
@@ -83,6 +97,73 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   ]);
   const accountLabelById = new Map((accountsForPositions ?? []).map((a) => [a.id as string, (a.folio_number as string | null) ?? (a.institution_name as string)]));
   const instrumentNameById = new Map((instrumentsForPositions ?? []).map((i) => [i.id as string, i.instrument_name as string]));
+  // Document2 (4) WP-B2: per position, the facts the list needs to tell the truth about PUBLICATION (is it already published? is a
+  // newer certified statement waiting? what does net worth count today?) and about a UNIT MISMATCH (where the history is missing).
+  // The latest snapshot is taken across ALL the person's statements for that position, never just this one: the position's
+  // "Publish" target is its latest certified snapshot, and a first-found snapshot of an older statement used to be previewed instead.
+  const positions: Record<string, PositionView> = {};
+  if (accountIdsForHoldings.length > 0) {
+    const [snapshots, txns, pubsRes] = await Promise.all([
+      fetchAllRows<{ id: string; account_id: string; instrument_id: string; as_of_date: string; created_at: string | null; value: number | string; currency_code: string }>(() =>
+        supabase.from('ii_holding_snapshots').select('id, account_id, instrument_id, as_of_date, created_at, value, currency_code').eq('user_id', user.id).in('account_id', accountIdsForHoldings).order('id', { ascending: true }),
+      ),
+      fetchAllRows<{ account_id: string; instrument_id: string; transaction_date: string }>(() =>
+        supabase.from('ii_transactions').select('account_id, instrument_id, transaction_date').eq('user_id', user.id).in('account_id', accountIdsForHoldings).order('id', { ascending: true }),
+      ),
+      supabase
+        .from('ii_fhip_publications')
+        .select('id, account_id, instrument_id, canonical_position_id, published_row_id, published_value, source_currency')
+        .eq('user_id', user.id)
+        .eq('status', 'published')
+        .in('account_id', accountIdsForHoldings),
+    ]);
+    const pubs = (pubsRes.data ?? []) as { id: string; account_id: string; instrument_id: string; canonical_position_id: string; published_row_id: string | null; published_value: number | string | null; source_currency: string }[];
+    const rowIds = pubs.map((p) => p.published_row_id).filter((x): x is string => !!x);
+    const counted = new Map<string, number>();
+    if (rowIds.length > 0) {
+      const { data: invRows } = await supabase.from('investments').select('id, current_value, is_active').eq('user_id', user.id).in('id', rowIds);
+      for (const r of (invRows ?? []) as { id: string; current_value: number | string; is_active: boolean | null }[]) if (r.is_active !== false) counted.set(r.id, Number(r.current_value));
+    }
+    const snapById = new Map(snapshots.map((x) => [x.id, x] as const));
+    const latestByPair = new Map<string, (typeof snapshots)[number]>();
+    for (const x of snapshots) {
+      const k = `${x.account_id}:${x.instrument_id}`;
+      const cur = latestByPair.get(k);
+      if (!cur || x.as_of_date > cur.as_of_date || (x.as_of_date === cur.as_of_date && String(x.created_at ?? '') > String(cur.created_at ?? ''))) latestByPair.set(k, x);
+    }
+    const earliestByPair = new Map<string, string>();
+    for (const t of txns) {
+      const k = `${t.account_id}:${t.instrument_id}`;
+      const cur = earliestByPair.get(k);
+      if (!cur || t.transaction_date < cur) earliestByPair.set(k, t.transaction_date);
+    }
+    for (const k of positionPairs) {
+      const latest = latestByPair.get(k) ?? null;
+      const pub = pubs.find((p) => `${p.account_id}:${p.instrument_id}` === k) ?? null;
+      const published = pub ? snapById.get(pub.canonical_position_id) : undefined;
+      positions[k] = {
+        latestSnapshotId: latest?.id ?? null,
+        latestAsOf: latest?.as_of_date ?? null,
+        latestStatementValue: latest ? Number(latest.value) : null,
+        currency: latest?.currency_code ?? pub?.source_currency ?? null,
+        earliestTransactionDate: earliestByPair.get(k) ?? null,
+        publication: derivePublicationState(
+          pub
+            ? {
+                publicationId: pub.id,
+                canonicalPositionId: pub.canonical_position_id,
+                countedValue: pub.published_row_id && counted.has(pub.published_row_id) ? (counted.get(pub.published_row_id) as number) : null,
+                publishedValue: pub.published_value == null ? null : Number(pub.published_value),
+                currency: pub.source_currency,
+                publishedAsOf: published?.as_of_date ?? null,
+                publishedCertifiedAt: published?.created_at ?? null,
+              }
+            : null,
+          latest ? { id: latest.id, asOfDate: latest.as_of_date, createdAt: latest.created_at, value: Number(latest.value) } : null,
+        ),
+      };
+    }
+  }
   const truthStatuses = rawTruthStatuses.map((t) => ({
     ...t,
     accountLabel: accountLabelById.get(t.account_id) ?? null,
@@ -121,6 +202,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     reconciliationCases: casesWithLifecycle,
     openReconciliationCaseCount: (cases ?? []).filter((c) => c.status === 'open' || c.status === 'user_reviewing').length,
     portfolioTruthStatuses: truthStatuses,
+    positions,
     owner: ownerSummary,
   });
+}
+
+/** What the Portfolio Truth list needs about one position beyond its certification status. */
+interface PositionView {
+  latestSnapshotId: string | null;
+  latestAsOf: string | null;
+  latestStatementValue: number | null;
+  currency: string | null;
+  earliestTransactionDate: string | null;
+  publication: PublicationState;
 }

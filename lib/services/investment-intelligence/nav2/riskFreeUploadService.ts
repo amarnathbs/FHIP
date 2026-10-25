@@ -27,6 +27,8 @@ export const RISK_FREE_ATTESTATION_TEXT =
 export interface RiskFreeSeriesInfo {
   seriesId: string;
   cadence: 'weekly_auction' | 'policy_change';
+  /** The date the series is recorded as confirmed through (ISO), or null when it never was. */
+  verifiedThroughDate: string | null;
 }
 
 export interface RiskFreeConflict {
@@ -65,10 +67,11 @@ export function sha256Hex(text: string): string {
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 async function loadSeries(reader: SupabaseClient, seriesId: string): Promise<RiskFreeSeriesInfo> {
-  const { data, error } = await reader.from('ii_risk_free_series').select('series_id, cadence').eq('series_id', seriesId).maybeSingle();
+  const { data, error } = await reader.from('ii_risk_free_series').select('series_id, cadence, verified_through_date').eq('series_id', seriesId).maybeSingle();
   if (error) throw new Error('The risk-free series registry could not be read.');
   if (!data) throw new Error('This risk-free series does not exist (migration 0260 has not been applied to this database, or the series is unknown).');
-  return { seriesId: (data as { series_id: string }).series_id, cadence: (data as { cadence: 'weekly_auction' | 'policy_change' }).cadence };
+  const row = data as { series_id: string; cadence: 'weekly_auction' | 'policy_change'; verified_through_date?: string | null };
+  return { seriesId: row.series_id, cadence: row.cadence, verifiedThroughDate: row.verified_through_date ? String(row.verified_through_date).slice(0, 10) : null };
 }
 
 async function loadExisting(reader: SupabaseClient, seriesId: string, from: string, to: string): Promise<Map<string, { kind: string; value: number | null }>> {
@@ -89,7 +92,7 @@ export async function planRiskFreeUpload(reader: SupabaseClient, input: RiskFree
   const fileSha256 = sha256Hex(input.csvText);
   const blockers: string[] = [];
   const warnings: string[] = [];
-  const verifiedThrough = input.verifiedThrough && input.verifiedThrough.trim() !== '' ? input.verifiedThrough.trim() : null;
+  let verifiedThrough = input.verifiedThrough && input.verifiedThrough.trim() !== '' ? input.verifiedThrough.trim() : null;
 
   let series: RiskFreeSeriesInfo;
   try {
@@ -111,12 +114,19 @@ export async function planRiskFreeUpload(reader: SupabaseClient, input: RiskFree
   warnings.push(...analysis.warnings);
 
   if (verifiedThrough !== null) {
-    if (!ISO.test(verifiedThrough) || Number.isNaN(Date.parse(`${verifiedThrough}T00:00:00.000Z`))) blockers.push(`The "verified through" date is not a real date. ${DATE_INPUT_HINT}`);
-    else if (verifiedThrough > input.todayIso) blockers.push('The "verified through" date cannot be in the future.');
+    if (series.cadence === 'weekly_auction') {
+      // A weekly series is kept current by its auction rows. A date typed here means nothing, so it is NOT sent and NOT stored.
+      warnings.push('"Verified through" does nothing for a weekly series and will not be saved. Clear it, or choose the repo rate series.');
+      verifiedThrough = null;
+    } else if (!ISO.test(verifiedThrough) || Number.isNaN(Date.parse(`${verifiedThrough}T00:00:00.000Z`))) blockers.push(`The "verified through" date is not a real date. ${DATE_INPUT_HINT}`);
+    else if (verifiedThrough > input.todayIso) blockers.push(`The "verified through" date cannot be in the future (today in India is ${dmy(input.todayIso)}).`);
     else if (analysis.dateTo && verifiedThrough < analysis.dateTo) blockers.push(`The "verified through" date (${dmy(verifiedThrough)}) cannot be earlier than the last observation in the file (${dmy(analysis.dateTo)}).`);
-    else if (series.cadence === 'weekly_auction') warnings.push('"Verified through" is only used for a policy-change series; it has no effect on a weekly series.');
+    else if (series.verifiedThroughDate !== null && verifiedThrough <= series.verifiedThroughDate) {
+      // The database only ever moves this date forward. Say so before the commit instead of letting an unchanged date look like a success.
+      warnings.push(`This series is already confirmed through ${dmy(series.verifiedThroughDate)}. The date you entered (${dmy(verifiedThrough)}) is not later, so it will not change anything.`);
+    }
   } else if (series.cadence === 'policy_change') {
-    warnings.push('This is a policy-change series: it supplies no rate for any date after its last observation until a "verified through" date (the day it was last confirmed complete) is recorded. Enter one, or the repo-rate series will report rates as unavailable.');
+    warnings.push('This is a policy-change series: it supplies no rate for any date after its last observation until a "verified through" date (the day it was last confirmed complete) is recorded. Enter one, or use "Confirm the repo rate is still current" below, or the repo-rate series will report rates as unavailable.');
   }
 
   let newRows: RiskFreeCsvRow[] = [];
@@ -147,10 +157,22 @@ export async function planRiskFreeUpload(reader: SupabaseClient, input: RiskFree
   return { version: RISK_FREE_UPLOAD_SERVICE_VERSION, seriesId: input.seriesId, fileSha256, fileBytes: bytes, analysis, newRows, identicalExisting, conflicts, blockers, warnings, verifiedThrough };
 }
 
+/**
+ * What happened to the verified-through date. `moved` is true only when the stored date really changed; `current` is the date the series
+ * holds after the call (ISO), so the screen can say it in words instead of leaving a refused or unchanged date looking like success.
+ * `requested` is the date that was sent (null = none was sent, or it was dropped for a weekly series).
+ */
+export interface RiskFreeVerifiedThroughResult {
+  requested: string | null;
+  /** null = the database did not say (it still runs the migration 0260 function, 0294 not applied yet). */
+  moved: boolean | null;
+  current: string | null;
+}
+
 export type RiskFreeCommitOutcome =
-  | { status: 'committed'; batchId: string; inserted: number; identical: number }
-  | { status: 'already_committed'; batchId: string; inserted: number; identical: number }
-  | { status: 'noop'; identical: number }
+  | { status: 'committed'; batchId: string; inserted: number; identical: number; verifiedThrough: RiskFreeVerifiedThroughResult }
+  | { status: 'already_committed'; batchId: string; inserted: number; identical: number; verifiedThrough: RiskFreeVerifiedThroughResult }
+  | { status: 'noop'; identical: number; verifiedThrough: RiskFreeVerifiedThroughResult }
   | { status: 'refused'; blockers: string[] };
 
 export interface RiskFreeCommitInput extends RiskFreePlanInput {
@@ -173,7 +195,7 @@ export async function commitRiskFreeUpload(userClient: SupabaseClient, input: Ri
     return { status: 'refused', blockers: ['The file changed between the preview and the commit. Preview it again.'] };
   }
   if (plan.blockers.length > 0) return { status: 'refused', blockers: plan.blockers };
-  if (plan.newRows.length === 0 && plan.verifiedThrough === null) return { status: 'noop', identical: plan.identicalExisting };
+  if (plan.newRows.length === 0 && plan.verifiedThrough === null) return { status: 'noop', identical: plan.identicalExisting, verifiedThrough: { requested: null, moved: false, current: null } };
 
   // The database function receives the WHOLE accepted file (identical rows are skipped there and counted), so the file hash
   // recorded in the ledger is the hash of the file the operator actually committed.
@@ -188,8 +210,10 @@ export async function commitRiskFreeUpload(userClient: SupabaseClient, input: Ri
     p_verified_through: plan.verifiedThrough,
   });
   if (error) throw error;
-  const out = data as { already_committed: boolean; batch_id: string; inserted: number; identical: number };
+  const out = data as { already_committed: boolean; batch_id: string; inserted: number; identical: number; verified_through_moved?: boolean; verified_through?: string | null };
+  // A database that still runs the 0260 function does not say whether the date moved: that is reported as unknown (null), never guessed.
+  const verifiedThrough: RiskFreeVerifiedThroughResult = { requested: plan.verifiedThrough, moved: typeof out.verified_through_moved === 'boolean' ? out.verified_through_moved : null, current: out.verified_through ?? null };
   return out.already_committed
-    ? { status: 'already_committed', batchId: out.batch_id, inserted: out.inserted, identical: out.identical }
-    : { status: 'committed', batchId: out.batch_id, inserted: out.inserted, identical: out.identical };
+    ? { status: 'already_committed', batchId: out.batch_id, inserted: out.inserted, identical: out.identical, verifiedThrough }
+    : { status: 'committed', batchId: out.batch_id, inserted: out.inserted, identical: out.identical, verifiedThrough };
 }
