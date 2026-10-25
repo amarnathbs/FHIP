@@ -12,6 +12,8 @@ import { ownerSelectionToMeta, type OwnerSelection } from '@/lib/ownership/owner
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
 import { ReplacementCopyControl } from './ReplacementCopyControl';
+import { StatementJobFollower } from './StatementJobFollower';
+import type { DriveOutcome, StatementJobViewLike } from './statementJobDriver';
 import { RECONCILIATION_ANCHOR_ID, REVIEW_PATH, type CaseLifecycle } from '@/lib/services/investment-intelligence/caseLifecycle';
 import { PortfolioTruthPositionRow, type TruthRowPosition } from './PortfolioTruthPositionRow';
 import { buildReevaluationCard, type ReevaluationCard } from '@/lib/investment-intelligence/reevaluationResult';
@@ -256,6 +258,10 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   const [summary, setSummary] = useState<DocumentSummary | null>(null);
   const [passwordInputs, setPasswordInputs] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
+  // Document2 (4) WP-J: statement jobs this page is following, one per statement. A large statement is processed in the background in
+  // short steps; the job survives a reload (the list is read again on load) and the page only follows it. The password, when there is
+  // one, lives here in memory until the job has opened the file, then it is dropped.
+  const [followed, setFollowed] = useState<Record<string, { jobId: string; kind: 'process' | 'reevaluate'; password?: string }>>({});
   // 2026-09-17 PO addendum: the id of a pending AI-extraction review this
   // user needs to explicitly accept/reject before anything is written.
   const [aiReviewId, setAiReviewId] = useState<string | null>(null);
@@ -403,6 +409,31 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
         setDocuments(json.data);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Something went wrong');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // WP-J: pick up jobs that were already running (a reload, a second tab, a visit after leaving). Nothing restarts: the server holds the
+  // job; this page just follows it again.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/investment-intelligence/statement-jobs');
+        const json = await res.json().catch(() => null);
+        if (cancelled || !res.ok) return;
+        const views = ((json?.data?.jobs ?? []) as StatementJobViewLike[]).filter((j) => j.status === 'queued' || j.status === 'processing');
+        if (views.length === 0) return;
+        setFollowed((prev) => {
+          const next = { ...prev };
+          for (const v of views) if (!next[v.document_id]) next[v.document_id] = { jobId: v.job_id, kind: v.job_kind };
+          return next;
+        });
+      } catch {
+        // The list is a convenience; the statement list itself still loads.
       }
     })();
     return () => {
@@ -589,6 +620,12 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
         json = await res.json();
       }
       setNotice(null);
+      // WP-J: the request only ADMITTED the work (202). The statement is processed in the background in short steps; follow it.
+      if (res.status === 202 && json?.data?.job_id) {
+        setFollowed((prev) => ({ ...prev, [id]: { jobId: json.data.job_id as string, kind: 'process', password: passwordInputs[id] || undefined } }));
+        await loadDocuments();
+        return;
+      }
       if (res.status === 409 && json?.error === 'malware_scan_pending') {
         throw new Error('The safety scan is still running. Nothing was deleted. Please try processing this document again in a minute or two.');
       }
@@ -792,6 +829,11 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       const res = await fetch(`/api/investment-intelligence/source-documents/${documentId}/reevaluate`, { method: 'POST' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? 'Could not re-evaluate the positions.');
+      // WP-J: a statement with many positions is re-evaluated as a background job (202); follow it.
+      if (res.status === 202 && json?.data?.job_id) {
+        setFollowed((prev) => ({ ...prev, [documentId]: { jobId: json.data.job_id as string, kind: 'reevaluate' } }));
+        return;
+      }
       const { evaluated = 0, failed = 0, message } = (json.data ?? {}) as { evaluated?: number; failed?: number; message?: string };
       setReevaluateAllNotice({ ok: failed === 0, text: message ?? `Re-evaluated ${evaluated} position${evaluated === 1 ? '' : 's'} from the retained data${failed ? `; ${failed} could not be evaluated` : ''}.` });
       await loadDocuments();
@@ -910,6 +952,35 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
     }
   }
 
+  // WP-J: a followed job ended (or the page stopped following it). Reload what it changed, say plainly what happened, drop the password.
+  async function handleJobFinished(documentId: string, outcome: DriveOutcome, view: StatementJobViewLike | null) {
+    setFollowed((prev) => {
+      const next = { ...prev };
+      delete next[documentId];
+      return next;
+    });
+    setPasswordInputs((prev) => ({ ...prev, [documentId]: '' }));
+    if (outcome === 'cancelled') return;
+    await loadDocuments();
+    if (view?.job_kind === 'reevaluate') {
+      const e = (view.result as { reevaluated?: { evaluated: number; failed: number } } | null)?.reevaluated;
+      setReevaluatingAll(false);
+      setReevaluateAllNotice({
+        ok: outcome === 'completed' && (e?.failed ?? 0) === 0,
+        text:
+          view.status === 'completed'
+            ? `Re-evaluated ${e?.evaluated ?? 0} position${(e?.evaluated ?? 0) === 1 ? '' : 's'} from the retained data${e?.failed ? `; ${e.failed} could not be evaluated` : ''}.`
+            : (view.error_message ?? 'The re-evaluation could not finish. Nothing was changed.'),
+      });
+    } else if (view?.status === 'review_required' && view.review_reason === 'ai_review') {
+      const reviewId = (view.result as { aiExtractionReviewId?: string } | null)?.aiExtractionReviewId;
+      if (reviewId) setAiReviewId(reviewId);
+    } else if (view?.status === 'failed') {
+      setError(view.error_message ?? 'This statement could not be processed. Nothing was changed.');
+    }
+    if (selectedId === documentId || outcome === 'completed') await loadSummary(documentId);
+  }
+
   // Plain helper, not a nested component: called directly as
   // renderDocumentRow(doc) below rather than used as a JSX element type, so
   // it carries no separate component identity across renders — extracting
@@ -951,6 +1022,15 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               title="Positions from this statement are not yet certified or published"
             >
               {doc.positionsNeedingAttentionCount} position{doc.positionsNeedingAttentionCount === 1 ? '' : 's'} need attention
+            </button>
+          )}
+          {!doc.openReconciliationCaseCount && !doc.positionsNeedingAttentionCount && doc.status === 'parsed' && (doc.totalHoldingsCount ?? 0) > (doc.publishedHoldingsCount ?? 0) && (
+            <button
+              onClick={() => selectDocument(doc.id)}
+              className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 hover:bg-blue-200"
+              title="These positions are certified and can be published to FHIP"
+            >
+              {(doc.totalHoldingsCount ?? 0) - (doc.publishedHoldingsCount ?? 0)} ready to publish
             </button>
           )}
           {/* The password box is shown for 'parsed' documents too (not just
@@ -1023,6 +1103,18 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
             </button>
           )}
         </div>
+        {followed[doc.id] && (
+          <div className="w-full" data-testid="statement-job-follower">
+            <StatementJobFollower
+              jobId={followed[doc.id].jobId}
+              password={followed[doc.id].password}
+              onUpdate={(v) => {
+                if (!v.password_step && followed[doc.id]?.password) setFollowed((prev) => (prev[doc.id] ? { ...prev, [doc.id]: { ...prev[doc.id], password: undefined } } : prev));
+              }}
+              onFinished={(outcome, view) => handleJobFinished(doc.id, outcome, view)}
+            />
+          </div>
+        )}
         {fileGone && doc.status !== 'archived' && doc.status !== 'superseded' && (
           <p className="w-full text-xs text-gray-500" data-testid="file-deleted-note">
             The original file was deleted after processing, as designed. What was imported from it is kept and unchanged. To process it again, upload a replacement
@@ -1049,7 +1141,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   // for the exact condition. Computed fresh each render off `documents` —
   // cheap (a handful of documents per user) and always consistent with what
   // was just fetched, rather than tracked as separate state that could drift.
-  const { active: activeDocuments, previouslyProcessed: previouslyProcessedDocuments } = partitionSourceDocumentsByProcessedState(documents ?? []);
+  const { active: activeDocuments, previouslyProcessed: previouslyProcessedDocuments } = partitionSourceDocumentsByProcessedState(documents ?? [], new Set(Object.keys(followed)));
 
   return (
     <div className="space-y-6">
@@ -1133,8 +1225,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
           <p className="mt-2 text-sm text-gray-500">No statements uploaded yet.</p>
         ) : activeDocuments.length === 0 ? (
           <p className="mt-2 text-sm text-gray-500">
-            Nothing needs your attention right now — every statement you&apos;ve uploaded has been processed and published. See &ldquo;Previously
-            processed&rdquo; below.
+            Nothing needs your attention right now. Your processed statements are listed under &ldquo;Processed statements&rdquo; below.
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-gray-100">{activeDocuments.map((doc) => renderDocumentRow(doc))}</ul>
@@ -1151,7 +1242,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       {previouslyProcessedDocuments.length > 0 && (
         <section className="rounded-lg border border-gray-200 bg-white p-4">
           <button type="button" aria-expanded={showProcessed} onClick={() => setShowProcessed((v) => !v)} className="text-sm text-gray-700 underline">
-            {showProcessed ? 'Hide' : 'Show'} previously processed statements ({previouslyProcessedDocuments.length})
+            {showProcessed ? 'Hide' : 'Show'} Processed statements ({previouslyProcessedDocuments.length})
           </button>
           {showProcessed && (
             <ul className="mt-3 divide-y divide-gray-100 opacity-75">{previouslyProcessedDocuments.map((doc) => renderDocumentRow(doc))}</ul>

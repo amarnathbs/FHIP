@@ -1,6 +1,8 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { StatementJobFollower } from './StatementJobFollower';
+import { describeJobEnd, type DriveOutcome, type StatementJobViewLike } from './statementJobDriver';
 
 // Document2 (4) WP-B (F5/F6/F14): the one control that replaces every dead "enter the password and reprocess the stored
 // document" path. Statement files are deleted shortly after processing, by design, so when something needs the file again the
@@ -64,6 +66,19 @@ export function ReplacementCopyControl({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ReplacementOutcome | null>(null);
   const [confirmation, setConfirmation] = useState<ReplacementConfirmationRequest | null>(null);
+  // WP-J: the reprocess of the attached copy is a background job (a large statement cannot finish inside one request). The control follows
+  // it, shows where it is, and keeps going if the person leaves; the password stays in memory only until the job has opened the file.
+  const [job, setJob] = useState<{ id: string; password?: string } | null>(null);
+
+  async function handleJobFinished(outcome: DriveOutcome, view: StatementJobViewLike | null) {
+    setJob(null);
+    setPassword('');
+    if (outcome === 'cancelled') return;
+    const end = describeJobEnd(outcome, view);
+    setResult({ ok: end.ok, message: end.ok && view?.status === 'completed' ? `${end.text} The replacement copy was processed against the same statement; no duplicate holdings or transactions were added.` : end.text });
+    setFile(null);
+    await onDone?.();
+  }
 
   async function submit(e: React.FormEvent, confirmedCodes: string[] = []) {
     e.preventDefault();
@@ -118,6 +133,14 @@ export function ReplacementCopyControl({
         res = await processOnce();
         body = await res.json().catch(() => ({}));
       }
+      // WP-J: the process request only ADMITTED the work (202): follow the job.
+      if (res.status === 202 && body?.data?.job_id) {
+        setResult({ ok: true, message: 'Replacement copy attached. Processing it in the background.' });
+        setJob({ id: body.data.job_id as string, password: password || undefined });
+        keepPassword = true;
+        setFile(null);
+        return;
+      }
       setResult(describeReplacementOutcome('process', body, res.ok));
       setFile(null);
       await onDone?.();
@@ -137,7 +160,7 @@ export function ReplacementCopyControl({
         <label htmlFor={fileId} className="block text-xs font-medium text-gray-600">
           Replacement copy (PDF)
         </label>
-        <input id={fileId} type="file" accept=".pdf,application/pdf" disabled={busy} onChange={(e) => {
+        <input id={fileId} type="file" accept=".pdf,application/pdf" disabled={busy || job !== null} onChange={(e) => {
             setFile(e.target.files?.[0] ?? null);
             setConfirmation(null);
             setResult(null);
@@ -153,15 +176,28 @@ export function ReplacementCopyControl({
             type="password"
             autoComplete="off"
             value={password}
-            disabled={busy}
+            disabled={busy || job !== null}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 rounded border border-gray-300 px-2 py-1 text-xs"
           />
         </div>
       )}
-      <button type="submit" disabled={!file || busy} className="rounded bg-gray-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-        {busy ? 'Uploading and processing…' : 'Upload replacement copy'}
+      <button type="submit" disabled={!file || busy || job !== null} className="rounded bg-gray-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+        {busy ? 'Uploading the copy…' : job ? 'Processing…' : 'Upload replacement copy'}
       </button>
+      {job && (
+        <div className="w-full" data-testid="replacement-job-follower">
+          <StatementJobFollower
+            jobId={job.id}
+            password={job.password}
+            onUpdate={(v) => {
+              if (!v.password_step && job.password) setJob((cur) => (cur ? { ...cur, password: undefined } : cur));
+            }}
+            onFinished={handleJobFinished}
+            compact
+          />
+        </div>
+      )}
       {result && (
         <p role="status" aria-live="polite" className={`w-full text-xs ${result.ok ? 'text-green-700' : 'text-red-700'}`}>
           {result.message}

@@ -130,7 +130,7 @@ async function runWithKill(p: Prepared, point: string, extra: { forceReparse?: b
   for (let i = 0; i < 4000; i++) {
     try {
       const out = await advanceStatementJob(job.id, { userId: p.userId, sliceBudgetMs: 0, fault: once.hook });
-      if (out.kind === 'busy') throw new Error('busy without a kill');
+      if (out.kind === 'busy' || out.kind === 'not_found') throw new Error(`unexpected ${out.kind} without a kill`);
       if (out.job.status !== 'queued' && out.job.status !== 'processing') return { jobId: job.id, killed, job: out.job };
     } catch (e) {
       if (!(e instanceof SimulatedSliceKill)) throw e;
