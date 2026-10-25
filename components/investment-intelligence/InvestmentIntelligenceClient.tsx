@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { fmtDate } from './dateDisplay';
+import { fmtDate, fmtDateTime } from './dateDisplay';
 import { AiExtractionReviewPanel } from './AiExtractionReviewPanel';
 import { formatMoneyCode } from '@/lib/engines/money';
 import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping';
@@ -12,7 +12,11 @@ import { ownerSelectionToMeta, type OwnerSelection } from '@/lib/ownership/owner
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
 import { ReplacementCopyControl } from './ReplacementCopyControl';
-import { RECONCILIATION_ANCHOR_ID, REVIEW_PATH, describeReevaluationOutcome, describeTruthBlocker, type CaseLifecycle } from '@/lib/services/investment-intelligence/caseLifecycle';
+import { RECONCILIATION_ANCHOR_ID, REVIEW_PATH, type CaseLifecycle } from '@/lib/services/investment-intelligence/caseLifecycle';
+import { PortfolioTruthPositionRow, type TruthRowPosition } from './PortfolioTruthPositionRow';
+import { buildReevaluationCard, type ReevaluationCard } from '@/lib/investment-intelligence/reevaluationResult';
+import { UPLOAD_SECTION_ID } from '@/lib/investment-intelligence/unitVarianceGuidance';
+import { describePanelImpact } from '@/lib/investment-intelligence/publicationState';
 
 // R2 minimal UI (spec section 31): Step 1 Upload, Step 2 Password if
 // required, Step 3 Processing status, Step 4 Source identified, Step 5
@@ -82,7 +86,18 @@ interface PublicationPreview {
   registerAction: string;
   dataQualityStatus: string;
   baseCurrency: { currencyCode: string | null; amount: number | null; rateUsed: number | null; available: boolean; reason?: string };
-  alreadyPublished: { publicationId: string; publishedRowId: string | null; status: string } | null;
+  alreadyPublished: {
+    publicationId: string;
+    publishedRowId: string | null;
+    status: string;
+    canonicalPositionId: string | null;
+    /** How the previewed statement relates to the one already published (the same rule Refresh applies). */
+    relation: 'same_snapshot' | 'newer_snapshot' | 'older_snapshot';
+    /** What net worth counts for this position today. */
+    alreadyCountedValue: number | null;
+    publishedValue: number | null;
+    publishedAsOf: string | null;
+  } | null;
 }
 
 // App Review 2026-09-15 G1: whole currency units, via the shared helper.
@@ -135,7 +150,13 @@ interface DocumentSummary {
     // truncated-id fallback below still applies.
     accountLabel: string | null;
     instrumentName: string | null;
+    // WP-B2: the figures behind a unit mismatch, so the screen can show them instead of a bare message.
+    reconciled_closing_units?: number | string | null;
+    statement_closing_units?: number | string | null;
+    unit_variance?: number | string | null;
   }[];
+  /** WP-B2: per `account:instrument` -- publication state (published / refresh available), latest certified snapshot, earliest transaction. */
+  positions?: Record<string, TruthRowPosition>;
 }
 
 // FS1 (dispatch section 43): a clear, user-friendly document-kind label —
@@ -272,7 +293,10 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
   const [publishError, setPublishError] = useState<string | null>(null);
   const publishPanelRef = useRef<HTMLElement>(null);
   const [certifying, setCertifying] = useState<string | null>(null); // `${accountId}:${instrumentId}` being re-evaluated
-  const [certifyNotice, setCertifyNotice] = useState<Record<string, { ok: boolean; text: string }>>({});
+  // WP-B2: the result of the last Re-evaluate per position (a card with the time, the figures and what to do), or its plain failure.
+  const [reevaluateResult, setReevaluateResult] = useState<Record<string, ReevaluationCard>>({});
+  const [reevaluateError, setReevaluateError] = useState<Record<string, string>>({});
+  const [unpublishRowId, setUnpublishRowId] = useState<string | null>(null);
   const [reevaluatingAll, setReevaluatingAll] = useState(false);
   const [reevaluateAllNotice, setReevaluateAllNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [resolvingCaseId, setResolvingCaseId] = useState<string | null>(null);
@@ -685,7 +709,13 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
     if (certifying) return; // duplicate-submission guard
     setError(null);
     setCertifying(key);
-    setCertifyNotice((prev) => ({ ...prev, [key]: { ok: true, text: 'Re-evaluating…' } }));
+    setReevaluateResult((prev) => {
+      const { [key]: _gone, ...rest } = prev;
+      void _gone;
+      return rest;
+    });
+    setReevaluateError((prev) => ({ ...prev, [key]: '' }));
+    const previousReasonCodes = (summary?.portfolioTruthStatuses.find((t) => t.account_id === accountId && t.instrument_id === instrumentId)?.blocking_reasons ?? []).map((b) => b.code);
     try {
       const res = await fetch('/api/investment-intelligence/portfolio-truth/certify', {
         method: 'POST',
@@ -693,16 +723,62 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
         body: JSON.stringify({ accountId, instrumentId }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error ?? 'Could not evaluate certification');
-      const after = (json.data?.status as string | undefined) ?? 'pending';
-      const blocking = ((json.data?.blocking_reasons ?? []) as { code: string; message: string }[]).map((b) => b.message);
-      setCertifyNotice((prev) => ({ ...prev, [key]: { ok: true, text: describeReevaluationOutcome(before, after, blocking) } }));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'The check could not be run.');
+      const row = (json.data ?? {}) as { status?: string; blocking_reasons?: { code: string; message: string }[]; reconciled_closing_units?: number | string | null; statement_closing_units?: number | string | null; unit_variance?: number | string | null };
+      const earliest = summary?.positions?.[key]?.earliestTransactionDate ?? null;
+      const card = buildReevaluationCard(
+        {
+          before,
+          after: row.status ?? 'pending',
+          blocking: row.blocking_reasons ?? [],
+          reconciledClosingUnits: row.reconciled_closing_units ?? null,
+          statementClosingUnits: row.statement_closing_units ?? null,
+          unitVariance: row.unit_variance ?? null,
+          earliestTransactionDate: earliest,
+          previousReasonCodes,
+          checkedAtLabel: fmtDateTime(new Date().toISOString(), 'INR'),
+        },
+        (iso) => fmtDate(iso, 'INR'),
+      );
+      setReevaluateResult((prev) => ({ ...prev, [key]: card }));
+      await loadDocuments();
+      if (selectedId) await loadSummary(selectedId);
+      // Bring the result into view: the list can be far below the click, and a result nobody sees is no result.
+      setTimeout(() => document.getElementById(`ii-position-${accountId}-${instrumentId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    } catch (e) {
+      setReevaluateError((prev) => ({ ...prev, [key]: e instanceof Error ? e.message : 'Something went wrong.' }));
+    } finally {
+      setCertifying(null);
+    }
+  }
+
+  // "Upload statement": the fix for missing history is a consolidated statement, so take the person to Step 1 and focus the file picker.
+  function scrollToUpload() {
+    const el = document.getElementById(UPLOAD_SECTION_ID);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => (document.getElementById('ii-statement-file') as HTMLInputElement | null)?.focus(), 400);
+  }
+
+  function goToAnchor(targetId: string) {
+    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Unpublish straight from the list: explicit confirmation, busy state, honest result, list reloaded.
+  async function handleUnpublishFromList(publicationId: string) {
+    if (unpublishRowId) return;
+    if (!window.confirm('Unpublish this position? It will stop counting toward net worth. It stays certified here and can be published again later.')) return;
+    setError(null);
+    setUnpublishRowId(publicationId);
+    try {
+      const res = await fetch(`/api/investment-intelligence/publications/${publicationId}/unpublish`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Unpublish failed');
       await loadDocuments();
       if (selectedId) await loadSummary(selectedId);
     } catch (e) {
-      setCertifyNotice((prev) => ({ ...prev, [key]: { ok: false, text: e instanceof Error ? e.message : 'Something went wrong' } }));
+      setError(e instanceof Error ? e.message : 'Unpublish failed');
     } finally {
-      setCertifying(null);
+      setUnpublishRowId(null);
     }
   }
 
@@ -776,6 +852,41 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       if (selectedId) await loadSummary(selectedId);
     } catch (e) {
       setPublishError(e instanceof Error ? e.message : 'Publish failed');
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
+  // WP-B2: what is TRUE about net worth for the previewed position, and which button is valid (publish / refresh / none).
+  function panelImpactFor(p: PublicationPreview) {
+    const ap = p.alreadyPublished;
+    const cur = p.sourceCurrency ?? 'INR';
+    const willCount = p.currentValuation?.value ?? p.certifiedValue ?? null;
+    const base = { counted: ap?.alreadyCountedValue ?? ap?.publishedValue ?? null, asOf: ap?.publishedAsOf ?? null };
+    return describePanelImpact({
+      publication: !ap ? { kind: 'new' } : { kind: ap.relation, ...base },
+      eligible: p.eligibility.status !== 'NOT_ELIGIBLE',
+      willCount,
+      fmt: (n) => formatMoney(n, cur),
+      date: (iso) => fmtDate(iso, cur),
+    });
+  }
+
+  // Refresh: an already-published position is brought up to date from a newer certified statement (never a second publication).
+  async function confirmRefresh() {
+    if (!publishPositionId || publishBusy) return;
+    setPublishBusy(true);
+    setPublishError(null);
+    setError(null);
+    try {
+      const res = await fetch(`/api/investment-intelligence/positions/${publishPositionId}/refresh`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Refresh failed');
+      setPublishResultMessage('Refreshed. Net worth now reflects the newer statement.');
+      await loadDocuments();
+      if (selectedId) await loadSummary(selectedId);
+    } catch (e) {
+      setPublishError(e instanceof Error ? e.message : 'Refresh failed');
     } finally {
       setPublishBusy(false);
     }
@@ -950,7 +1061,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
       )}
 
       {/* Step 1: Upload */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4">
+      <section id={UPLOAD_SECTION_ID} className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-gray-900">Step 1 — Upload a statement</h2>
         {importAccess?.state !== 'allowed' ? (
           <ImportLockedNotice domain="investments" label="Upload a statement" state={importAccess === null ? 'checking' : importAccess.state} />
@@ -1346,88 +1457,40 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                     </div>
                     <ul className="mt-1 space-y-2">
                       {summary.portfolioTruthStatuses.map((s) => {
-                        const holding = summary.holdings.find((h) => h.account_id === s.account_id && h.instrument_id === s.instrument_id);
-                        const canPublish = holding && (s.status === 'certified' || s.status === 'certified_with_warnings');
-                        // FS1 (dispatch sections 4, 29, 44-45): a position can be a
-                        // fully valid CURRENT holding while its historical
-                        // transaction record is honestly incomplete (a folio
-                        // statement's Opening Balance, or a holdings-only
-                        // position). This is never framed as "failed" — the
-                        // holding itself is still shown and still publishable —
-                        // but analytics relying on full history are called out
-                        // as not yet fully available, with a neutral CTA rather
-                        // than a hard requirement to re-upload anything.
+                        const key = `${s.account_id}:${s.instrument_id}`;
+                        const position = summary.positions?.[key];
+                        // FS1 (dispatch sections 4, 29, 44-45): a position can be a fully valid CURRENT holding while its historical
+                        // transaction record is honestly incomplete (a folio statement's Opening Balance, or a holdings-only position).
+                        // This is never framed as "failed" -- the holding itself is still shown and still publishable.
                         const incompleteHistoryWarning = (s.warning_reasons ?? []).find((w) => INCOMPLETE_HISTORY_WARNING_CODES.has(w.code));
-                        // 2026-09-28 fix: real names instead of raw, truncated
-                        // ids ("Position a8b86c2e.../42c2515b..."). Falls back
-                        // to the truncated-id form only if the account/
-                        // instrument this position references could not be
-                        // resolved (e.g. archived) — never silently blank.
+                        // Real names instead of raw, truncated ids; falls back to the truncated-id form only if the account/instrument could not be resolved.
                         const positionLabel =
                           s.accountLabel && s.instrumentName ? `${s.instrumentName} — ${s.accountLabel}` : `Position ${s.account_id.slice(0, 8)}…/${s.instrument_id.slice(0, 8)}…`;
+                        const publicationId = position && position.publication.kind !== 'not_published' ? position.publication.publicationId : null;
                         return (
-                          <li key={`${s.account_id}:${s.instrument_id}`} className="rounded border border-gray-100 px-2 py-1.5 text-sm">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-xs text-gray-600">{positionLabel}</span>
-                              <span className="flex items-center gap-2">
-                                <StatusBadge status={s.status} />
-                                <button
-                                  onClick={() => handleCertify(s.account_id, s.instrument_id, s.status)}
-                                  disabled={certifying !== null || reevaluatingAll}
-                                  className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                                >
-                                  {certifying === `${s.account_id}:${s.instrument_id}` ? 'Re-evaluating…' : 'Re-evaluate'}
-                                </button>
-                                {canPublish && (
-                                  <button
-                                    onClick={() => openPublishPreview(holding!.id)}
-                                    disabled={publishBusy}
-                                    className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                                  >
-                                    Publish to FHIP
-                                  </button>
-                                )}
-                              </span>
-                            </div>
-                            {certifyNotice[`${s.account_id}:${s.instrument_id}`]?.text && (
-                              <p role="status" className={`mt-1 text-xs ${certifyNotice[`${s.account_id}:${s.instrument_id}`].ok ? 'text-gray-700' : 'text-red-700'}`}>
-                                {certifyNotice[`${s.account_id}:${s.instrument_id}`].text}
-                              </p>
-                            )}
-                            {/* WHY it needs review, how to fix it, and a real action: what / why / how / CTA for every blocker. */}
-                            {s.status !== 'certified' && s.status !== 'certified_with_warnings' &&
-                              (s.blocking_reasons ?? []).map((b) => {
-                                const g = describeTruthBlocker(b.code, b.message);
-                                return (
-                                  <div key={b.code} className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-900" data-testid="truth-blocker">
-                                    <p className="font-medium">{g.what}</p>
-                                    <p>{g.why}</p>
-                                    <p>{g.how}</p>
-                                    {g.cta.kind === 'link' && (
-                                      <a href={g.cta.href} className="mt-0.5 inline-block font-medium text-primary hover:underline">
-                                        {g.cta.label}
-                                      </a>
-                                    )}
-                                    {g.cta.kind === 'anchor' && (
-                                      <button
-                                        type="button"
-                                        onClick={() => document.getElementById(g.cta.kind === 'anchor' ? g.cta.targetId : '')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                                        className="mt-0.5 font-medium text-primary hover:underline"
-                                      >
-                                        {g.cta.label}
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            {incompleteHistoryWarning && (
-                              <p className="mt-1.5 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
-                                Current holdings were imported successfully. This statement does not contain the complete acquisition history, so some
-                                performance and tax calculations may remain unavailable until fuller transaction history or a consolidated statement is
-                                provided. Uploading a CAMS/KFintech consolidated account statement for this folio can fill in that history.
-                              </p>
-                            )}
-                          </li>
+                          <PortfolioTruthPositionRow
+                            key={key}
+                            status={s}
+                            position={position}
+                            label={positionLabel}
+                            fallbackCurrency="INR"
+                            busy={{
+                              certifyingThis: certifying === key,
+                              certifyingAny: certifying !== null || reevaluatingAll,
+                              publishBusy,
+                              unpublishBusy: publicationId !== null && unpublishRowId === publicationId,
+                              refreshBusy: publicationId !== null && publishBusy && publishPreview?.alreadyPublished?.publicationId === publicationId,
+                            }}
+                            result={reevaluateResult[key] ?? null}
+                            resultError={reevaluateError[key] ?? null}
+                            incompleteHistoryNote={!!incompleteHistoryWarning}
+                            onReevaluate={() => handleCertify(s.account_id, s.instrument_id, s.status)}
+                            onPublish={(snapshotId) => openPublishPreview(snapshotId)}
+                            onRefresh={(snapshotId) => openPublishPreview(snapshotId)}
+                            onUnpublish={(id) => handleUnpublishFromList(id)}
+                            onUpload={scrollToUpload}
+                            onGoToAnchor={goToAnchor}
+                          />
                         );
                       })}
                     </ul>
@@ -1525,8 +1588,9 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                   </dl>
 
                   {publishPreview.alreadyPublished && (
-                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
-                      <p>This position already has an active publication ({publishPreview.alreadyPublished.status}). Use Refresh instead of a first-time publish.</p>
+                    <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-blue-900" data-testid="already-published-panel">
+                      <p className="font-medium">{panelImpactFor(publishPreview).headline}</p>
+                      {panelImpactFor(publishPreview).detail && <p className="mt-0.5">{panelImpactFor(publishPreview).detail}</p>}
                       <p className="mt-2">
                         <button
                           onClick={handleUnpublish}
@@ -1560,7 +1624,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                     </div>
                   )}
 
-                  {publishPreview.financialImpact && (
+                  {publishPreview.financialImpact && !publishPreview.alreadyPublished && (
                     <div className="rounded border border-gray-200 bg-white px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Net-worth impact</p>
                       <p className="mt-1 text-gray-800">
@@ -1575,13 +1639,16 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                     <button onClick={closePublishPreview} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
                       Cancel
                     </button>
-                    <button
-                      onClick={confirmPublish}
-                      disabled={publishBusy || !!publishPreview.alreadyPublished}
-                      className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {publishBusy ? 'Publishing…' : 'Confirm & Publish'}
-                    </button>
+                    {/* Confirm exists ONLY when there is a valid action: publish (not yet published) or refresh (a newer statement). */}
+                    {panelImpactFor(publishPreview).action !== 'none' && (
+                      <button
+                        onClick={panelImpactFor(publishPreview).action === 'refresh' ? confirmRefresh : confirmPublish}
+                        disabled={publishBusy}
+                        className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {publishBusy ? (panelImpactFor(publishPreview).action === 'refresh' ? 'Refreshing…' : 'Publishing…') : panelImpactFor(publishPreview).confirmLabel}
+                      </button>
+                    )}
                   </div>
                 </>
               )}

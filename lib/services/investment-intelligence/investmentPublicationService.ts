@@ -27,6 +27,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitAuditEvent } from './audit';
 import { ensurePublishedValuesCurrent, valueSnapshotAtCurrentNav, type PublicationCurrentValuation } from './publishedValueRemark';
+import { derivePublicationState } from '@/lib/investment-intelligence/publicationState';
 import { loadAccountOwnership } from './accountOwnership';
 import type { AccountOwnership } from './ownerModel';
 import { getFxRateAudInr } from '@/lib/services/dashboardData';
@@ -194,7 +195,24 @@ export interface PublicationPreview {
   registerAction: IiRegisterAction;
   dataQualityStatus: string;
   baseCurrency: { currencyCode: string | null; amount: number | null; rateUsed: number | null; available: boolean; reason?: string };
-  alreadyPublished: { publicationId: string; publishedRowId: string | null; status: string } | null;
+  alreadyPublished: AlreadyPublishedPreview | null;
+}
+
+/**
+ * Document2 (4) WP-B2: everything the panel needs to say what is TRUE about a position that already has an active publication:
+ * what Net Worth counts today, which statement it came from and how the previewed snapshot relates to it. `relation` uses the very
+ * same rule refreshPosition() applies, so the panel never offers a refresh that would be rejected.
+ */
+export interface AlreadyPublishedPreview {
+  publicationId: string;
+  publishedRowId: string | null;
+  status: string;
+  canonicalPositionId: string | null;
+  relation: 'same_snapshot' | 'newer_snapshot' | 'older_snapshot';
+  /** What the register row counts in net worth right now (investments.current_value of the active published row). */
+  alreadyCountedValue: number | null;
+  publishedValue: number | null;
+  publishedAsOf: string | null;
 }
 
 interface PositionContext {
@@ -352,12 +370,49 @@ export async function buildPreview(userId: string, positionId: string): Promise<
   // vs first-publish distinguishing signal for the UI).
   const { data: existingPub } = await supabase
     .from('ii_fhip_publications')
-    .select('id, published_row_id, status')
+    .select('id, published_row_id, status, canonical_position_id, published_value')
     .eq('user_id', userId)
     .eq('account_id', account.id)
     .eq('instrument_id', instrument.id)
     .eq('status', 'published')
     .maybeSingle();
+
+  // WP-B2: what the active publication really counts today, and the statement it was published from.
+  let alreadyPublished: AlreadyPublishedPreview | null = null;
+  if (existingPub) {
+    const [{ data: countedRow }, { data: publishedSnap }] = await Promise.all([
+      existingPub.published_row_id
+        ? supabase.from('investments').select('current_value, is_active').eq('id', existingPub.published_row_id as string).eq('user_id', userId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      existingPub.canonical_position_id
+        ? supabase.from('ii_holding_snapshots').select('as_of_date, created_at').eq('id', existingPub.canonical_position_id as string).eq('user_id', userId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const publishedAsOf = ((publishedSnap as { as_of_date?: string } | null)?.as_of_date as string | undefined) ?? null;
+    const publishedCertifiedAt = ((publishedSnap as { created_at?: string } | null)?.created_at as string | undefined) ?? null;
+    const state = derivePublicationState(
+      {
+        publicationId: existingPub.id as string,
+        canonicalPositionId: (existingPub.canonical_position_id as string) ?? '',
+        countedValue: countedRow ? Number((countedRow as { current_value: number | string }).current_value) : null,
+        publishedValue: existingPub.published_value == null ? null : Number(existingPub.published_value),
+        currency: snapshot.currency_code,
+        publishedAsOf,
+        publishedCertifiedAt,
+      },
+      { id: positionId, asOfDate: snapshot.as_of_date, createdAt: snapshot.created_at ?? null, value: snapshot.value },
+    );
+    alreadyPublished = {
+      publicationId: existingPub.id as string,
+      publishedRowId: (existingPub.published_row_id as string) ?? null,
+      status: existingPub.status as string,
+      canonicalPositionId: (existingPub.canonical_position_id as string) ?? null,
+      relation: existingPub.canonical_position_id === positionId ? 'same_snapshot' : state.kind === 'published_refresh_available' ? 'newer_snapshot' : 'older_snapshot',
+      alreadyCountedValue: countedRow && (countedRow as { is_active?: boolean }).is_active !== false ? Number((countedRow as { current_value: number | string }).current_value) : null,
+      publishedValue: existingPub.published_value == null ? null : Number(existingPub.published_value),
+      publishedAsOf,
+    };
+  }
 
   // Duplicate-candidate detection against existing MANUAL investments rows.
   const { data: manualRows } = await supabase
@@ -399,13 +454,21 @@ export async function buildPreview(userId: string, positionId: string): Promise<
 
   let financialImpact: IiFinancialImpact | null = null;
   if (eligibility.status !== 'NOT_ELIGIBLE') {
-    const topCandidate = duplicateCandidates[0];
-    financialImpact = calculateFinancialImpact({
-      currentIncludedValue: existingPub ? countedValue : topCandidate ? 0 : 0,
-      newPublishedValue: countedValue,
-      manualValueBeingSuperseded: 0, // preview shows 0 until the user CONFIRMS a specific link — never assumed
-      currency: snapshot.currency_code,
-    });
+    if (alreadyPublished) {
+      // WP-B2: an already-published position is not "new": net worth already counts `alreadyCountedValue`. The same statement changes
+      // nothing; a newer one moves the counted value from what it is today to the freshly valued figure. (The old code set the
+      // "currently included" value to the NEW figure and ignored it in the net change, so the panel said "New position adds X".)
+      const already = alreadyPublished.alreadyCountedValue ?? alreadyPublished.publishedValue ?? 0;
+      const after = alreadyPublished.relation === 'newer_snapshot' ? countedValue : already;
+      financialImpact = calculateFinancialImpact({ currentIncludedValue: already, newPublishedValue: after, manualValueBeingSuperseded: already, currency: snapshot.currency_code });
+    } else {
+      financialImpact = calculateFinancialImpact({
+        currentIncludedValue: 0,
+        newPublishedValue: countedValue,
+        manualValueBeingSuperseded: 0, // preview shows 0 until the user CONFIRMS a specific link — never assumed
+        currency: snapshot.currency_code,
+      });
+    }
   }
 
   await emitAuditEvent({
@@ -442,7 +505,7 @@ export async function buildPreview(userId: string, positionId: string): Promise<
       registerAction,
       dataQualityStatus: truth?.status ?? 'pending',
       baseCurrency: { currencyCode: householdCurrency, amount: baseCurrency.baseCurrencyAmount, rateUsed: baseCurrency.rateUsed, available: baseCurrency.available, reason: baseCurrency.reason },
-      alreadyPublished: existingPub ? { publicationId: existingPub.id as string, publishedRowId: (existingPub.published_row_id as string) ?? null, status: existingPub.status as string } : null,
+      alreadyPublished,
     },
     error: null,
   };
