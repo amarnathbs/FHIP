@@ -33,10 +33,10 @@ describe('M12C §10 — the SHARED password-attempt limiter, applied to the Inve
     // The requirement says "Use the SHARED limiter, not multiple counters."
     // Both new call sites import the same function and the same constant; a
     // second threshold appearing anywhere would break this.
-    const ii = read('lib/services/investment-intelligence/documentProcessing.ts');
+    const ii = read('lib/services/investment-intelligence/statementPipeline.ts'); // WP-J: the pipeline moved into statementPipeline.ts
     const payslip = read('lib/financial-data-hub/services/payslipProcessingService.ts');
     for (const [name, src] of [
-      ['documentProcessing.ts', ii],
+      ['statementPipeline.ts', ii],
       ['payslipProcessingService.ts', payslip],
     ] as const) {
       expect(src, `${name} must import the shared limiter`).toMatch(/import \{ checkPasswordAttemptRateLimit \}/);
@@ -74,8 +74,8 @@ describe('M12C §10 — the SHARED password-attempt limiter, applied to the Inve
   it('cross-user isolation is enforced by the QUERY, not by the limiter — the II lookup filters on user_id', () => {
     // The limiter is pure and sees only what it is handed, so isolation has to
     // be proved where it actually lives.
-    const src = read('lib/services/investment-intelligence/documentProcessing.ts');
-    const block = /const passwordSupplied[\s\S]*?^  \}\n/m.exec(src);
+    const src = read('lib/services/investment-intelligence/statementPipeline.ts');
+    const block = /if \(typeof input\.password === 'string'[\s\S]*?^  \}\n/m.exec(src);
     expect(block, 'the M12C §10 limiter block was not found — this test\'s citation has moved').not.toBeNull();
     expect(block![0]).toMatch(/\.eq\('source_document_id', sourceDocumentId\)/);
     expect(block![0]).toMatch(/\.eq\('user_id', userId\)/);
@@ -87,9 +87,9 @@ describe('M12C §10 — the SHARED password-attempt limiter, applied to the Inve
     // `password_supplied` is written on the run row at INSERT; `extractPdfText`
     // is called later. Asserted by source order so the ordering cannot be
     // silently reversed by a future edit.
-    const src = read('lib/services/investment-intelligence/documentProcessing.ts');
+    const src = read('lib/services/investment-intelligence/statementPipeline.ts');
     const recordedAt = src.indexOf('password_supplied: passwordSupplied');
-    const decryptedAt = src.indexOf('await extractPdfText(bytes, input.password)');
+    const decryptedAt = src.indexOf('await extractPdfText(bytes, env.password)');
     expect(recordedAt, 'the attempt record was not found').toBeGreaterThan(-1);
     expect(decryptedAt, 'the decryption call was not found').toBeGreaterThan(-1);
     expect(recordedAt).toBeLessThan(decryptedAt);
@@ -110,8 +110,8 @@ describe('M12C §10 — the SHARED password-attempt limiter, applied to the Inve
   });
 
   it('the password VALUE is never counted, stored or logged — only the fact of an attempt', () => {
-    const ii = read('lib/services/investment-intelligence/documentProcessing.ts');
-    const block = /const passwordSupplied[\s\S]*?^  \}\n/m.exec(ii)![0];
+    const ii = read('lib/services/investment-intelligence/statementPipeline.ts');
+    const block = /if \(typeof input\.password === 'string'[\s\S]*?^  \}\n/m.exec(ii)![0];
     // The only thing derived from the password in the whole block is a boolean.
     expect(block).toMatch(/typeof input\.password === 'string' && input\.password\.length > 0/);
     // Nothing in the block puts the value anywhere.
@@ -126,7 +126,7 @@ describe('M12C §10 — the SHARED password-attempt limiter, applied to the Inve
 
 describe('M12C §11 — the Process action resolves by immutable source-document id, never by storage_path', () => {
   it('EVERY document and parse-run lookup in the processing chain is keyed by id, and none by storage_path', () => {
-    const src = read('lib/services/investment-intelligence/documentProcessing.ts');
+    const src = read('lib/services/investment-intelligence/statementPipeline.ts');
 
     // `storage_path` may be READ off an already-identified row (to fetch the
     // bytes) but must never be a lookup PREDICATE.
@@ -213,13 +213,13 @@ describe('M12C §11 — the Process action resolves by immutable source-document
     // password and no per-document credential check anywhere, so a password is
     // only ever tried against the bytes the row's OWN storage_path resolves to.
     // Proving the absence is the honest assertion here.
-    const src = read('lib/services/investment-intelligence/documentProcessing.ts');
+    const src = read('lib/services/investment-intelligence/statementPipeline.ts');
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     expect(code).not.toMatch(/password_hash|stored_password|expected_password|comparePassword/);
     // The extractor receives the caller's password and the row's own bytes.
-    expect(code).toMatch(/extractPdfText\(bytes, input\.password\)/);
+    expect(code).toMatch(/extractPdfText\(bytes, env\.password\)/);
     // And the bytes came from the row identified by id one step earlier.
-    const docLookupAt = code.indexOf(".eq('id', sourceDocumentId)");
+    const docLookupAt = code.indexOf(".eq('id', env.documentId)");
     const downloadAt = code.indexOf('downloadSourceDocumentObject(doc.storage_path');
     expect(docLookupAt).toBeGreaterThan(-1);
     expect(downloadAt).toBeGreaterThan(docLookupAt);
