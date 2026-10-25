@@ -334,8 +334,7 @@ async function kill() {
   const stopPort = () => {
     try {
       const out = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
-      const pids = new Set(out.split(/?
-/).filter((l) => l.includes(`:${port} `) && l.includes('LISTENING')).map((l) => l.trim().split(/\s+/).pop()));
+      const pids = new Set(out.split(/\r?\n/).filter((l) => l.includes(`:${port} `) && l.includes('LISTENING')).map((l) => l.trim().split(/\s+/).pop()));
       for (const pid of pids) if (pid && /^\d+$/.test(pid)) execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
     } catch { /* none */ }
   };
