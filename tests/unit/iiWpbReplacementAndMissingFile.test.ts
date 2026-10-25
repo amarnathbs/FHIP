@@ -48,7 +48,7 @@ vi.mock('@/lib/services/investment-intelligence/realScanAdmission', () => ({
   // WP-H: the replacement flow scans the copy BEFORE reading it (scanReplacementCandidate) and records the verdict after attaching.
   scanReplacementCandidate: async (p: { contentHash: string }) => {
     h.scanCalls.push({ contentHash: p.contentHash });
-    return h.scanVerdict.admitted ? { admitted: true as const, verdict: null } : { admitted: false as const, reason: h.scanVerdict.reason as 'pending' | 'blocked' | 'scanner_unavailable' };
+    return h.scanVerdict.admitted ? { admitted: true as const, verdict: null } : { admitted: false as const, reason: h.scanVerdict.reason as 'pending' | 'blocked' | 'scanner_unavailable', code: h.scanVerdict.reason === 'scanner_unavailable' ? 'scanner_not_configured' : 'threats_found' };
   },
   recordAdmittedReplacementScan: async () => undefined,
   II_SCAN_BLOCKED_MESSAGE: 'blocked-message',

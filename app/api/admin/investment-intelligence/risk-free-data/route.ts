@@ -20,6 +20,7 @@ import { ok, bad, badValidation } from '@/lib/api';
 import { adminRoute } from '@/lib/services/adminAuth';
 import { requireRiskFreeCapability } from '@/lib/services/investment-intelligence/nav2/riskFreeAdmin';
 import { buildRiskFreeAdminStatus, rpcFailure, uploadBodySchema } from '@/lib/services/investment-intelligence/nav2/riskFreeAdminService';
+import { indiaTodayIso } from '@/lib/services/investment-intelligence/nav2/riskFreeToday';
 import { commitRiskFreeUpload, planRiskFreeUpload, RISK_FREE_ATTESTATION_TEXT } from '@/lib/services/investment-intelligence/nav2/riskFreeUploadService';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,8 @@ export const GET = adminRoute(async () => {
   const { user, flags, forbidden } = await requireRiskFreeCapability('any');
   if (forbidden || !user) return forbidden ?? bad('unauthenticated', 401);
   const supabase = (await createClient()) as unknown as SupabaseClient;
-  const today = new Date().toISOString().slice(0, 10);
+  // The calendar day in India (not UTC): see riskFreeToday.ts.
+  const today = indiaTodayIso();
   return ok(await buildRiskFreeAdminStatus(supabase, user.id, flags, today));
 });
 
@@ -47,7 +49,7 @@ export const POST = adminRoute(async (req: Request) => {
   const body = parsed.data;
 
   const supabase = (await createClient()) as unknown as SupabaseClient;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = indiaTodayIso();
   const input = { seriesId: body.seriesId, csvText: body.csvText, todayIso, verifiedThrough: body.verifiedThrough || null };
 
   if (body.action === 'preview') {

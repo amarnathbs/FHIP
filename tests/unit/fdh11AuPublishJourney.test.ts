@@ -277,13 +277,13 @@ describe('UPL-02: the II real scan fails CLOSED when it is on but cannot run', (
   it('upload: scan on + no 0196 columns -> scanner_unavailable (was: admitted on the structural check)', async () => {
     h.scanOn = true;
     const r = await startIiRealScan({ userId: USER, sourceDocumentId: 'sd', storagePath: 'p', bytes: new Uint8Array([1]), contentType: 'application/pdf', contentHash: 'h', hasScanColumns: false });
-    expect(r).toEqual({ admitted: false, reason: 'scanner_unavailable' });
+    expect(r).toEqual({ admitted: false, reason: 'scanner_unavailable', code: 'scanner_not_configured' });
   });
   it('process: scan on + no 0196 columns -> scanner_unavailable; scan off -> admitted as before', async () => {
     db = world({ ii_source_documents: [{ id: 'sd', user_id: USER, storage_path: 'p', mime_type: 'application/pdf' }] });
     h.db = db;
     h.scanOn = true;
-    expect(await ensureIiRealScanAdmissible(USER, 'sd')).toEqual({ admitted: false, reason: 'scanner_unavailable' });
+    expect(await ensureIiRealScanAdmissible(USER, 'sd')).toEqual({ admitted: false, reason: 'scanner_unavailable', code: 'scanner_not_configured' });
     h.scanOn = false;
     expect(await ensureIiRealScanAdmissible(USER, 'sd')).toEqual({ admitted: true });
   });

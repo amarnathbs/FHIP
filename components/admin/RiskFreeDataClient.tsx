@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { formatDateShort, formatDateTimeShort } from '@/lib/engines/date';
 import { FileField } from '@/components/admin/FileField';
 import { ActionMessage, Btn, CheckField, DateField, Notice, Panel, ScrollTable, SelectField, Td, TextField, Th } from '@/components/admin/benchmarkData/ui';
-import { checkCorrection, checkVerifiedThrough, describeFailure, MIN_REASON_CHARS } from '@/components/admin/riskFreeFormLogic';
+import { checkConfirmation, checkCorrection, checkVerifiedThrough, describeFailure, describeUploadOutcome, MIN_REASON_CHARS, type UploadOutcomeView } from '@/components/admin/riskFreeFormLogic';
 
 // Risk-free Rate Data admin screen (NAV2). Everything shown comes from the capability-gated API; nothing here decides
 // authorisation. A panel the caller's capabilities do not cover arrives as `not_permitted` and is described as such,
@@ -36,6 +36,8 @@ interface SeriesStatus {
 interface Status {
   state: 'ok' | 'unavailable';
   reason?: string;
+  /** The calendar day in India as the server sees it (yyyy-mm-dd). */
+  asOfDate?: string;
   capabilities: { upload: boolean; switch: boolean };
   attestationText: string;
   series?: SeriesStatus[];
@@ -110,6 +112,8 @@ export default function RiskFreeDataClient() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [corr, setCorr] = useState({ seriesId: SERIES_IDS[0] as string, date: '', newValue: '', reason: '' });
   const [corrTried, setCorrTried] = useState(false);
+  const [confirm, setConfirm] = useState({ date: '', reason: '' });
+  const [confirmTried, setConfirmTried] = useState(false);
   const [stateForm, setStateForm] = useState<Record<string, { enabled: boolean; termsStatus: string; reason: string }>>({});
 
   const busy = busyArea !== null;
@@ -167,6 +171,8 @@ export default function RiskFreeDataClient() {
   }
 
   const vt = checkVerifiedThrough(verifiedThrough);
+  // A weekly series is kept current by its auction rows: a verified-through date means nothing for it and is never saved.
+  const seriesIsWeekly = (status?.series?.find((x) => x.seriesId === seriesId)?.cadence ?? (seriesId === SERIES_IDS[0] ? 'weekly_auction' : 'policy_change')) === 'weekly_auction';
 
   async function postUpload(action: 'preview' | 'commit') {
     const area = action === 'preview' ? 'check' : 'upload';
@@ -198,8 +204,7 @@ export default function RiskFreeDataClient() {
         setAttested(false);
         setMsg('check', p.canCommit ? { kind: 'ok', text: `The file was checked and nothing was written. ${p.willInsert} new row(s) are ready: go to step 3.` } : { kind: 'error', text: 'The file was checked and nothing was written, but it cannot be uploaded yet. The reasons are listed below.' });
       } else {
-        const o = j.data as { status: string; inserted?: number; identical?: number };
-        setMsg('upload', { kind: 'ok', text: o.status === 'noop' ? `Nothing to write: every row is already published (${o.identical} identical).` : `${o.status === 'already_committed' ? 'This file was already uploaded. ' : ''}Uploaded: ${o.inserted ?? 0} row(s) written, ${o.identical ?? 0} identical row(s) skipped.` });
+        setMsg('upload', describeUploadOutcome(j.data as UploadOutcomeView));
         setPreview(null);
         setAttested(false);
         void loadStatus();
@@ -317,6 +322,8 @@ export default function RiskFreeDataClient() {
                 options={SERIES_OPTIONS}
                 onChange={(v) => {
                   setSeriesId(v as (typeof SERIES_IDS)[number]);
+                  // The date typed for one series must never ride along to another (found on 19-10-2026: it did, and was saved for the T-bill series).
+                  setVerifiedThrough('');
                   setPreview(null);
                   setAttested(false);
                 }}
@@ -324,7 +331,7 @@ export default function RiskFreeDataClient() {
               <FileField label="CSV file" accept=".csv,text/csv" fileName={fileName} onFile={(f) => void onFile(f)} hint="Choose the rates file from your computer. It is read in your browser first; nothing is sent until you press a button below." />
               <DateField
                 label="Verified through (optional)"
-                hint="For the repo rate: the day it was last confirmed complete."
+                hint={seriesIsWeekly ? 'Only for the repo rate. Leave this empty for the 91-day T-bill series.' : 'The day the repo rate was last confirmed complete. To confirm it without a file, use "Confirm the repo rate is still current" below.'}
                 value={verifiedThrough}
                 error={verifiedThrough.trim() !== '' && !vt.ok ? vt.error : null}
                 onChange={(v) => {
@@ -333,6 +340,11 @@ export default function RiskFreeDataClient() {
                   setAttested(false);
                 }}
               />
+              {seriesIsWeekly && verifiedThrough.trim() !== '' && (
+                <Notice tone="warn" live="alert" title="This date will not be saved">
+                  &quot;Verified through&quot; does nothing for the 91-day T-bill series, which is kept current by its auction rows. Clear it, or choose the repo rate series.
+                </Notice>
+              )}
               <CheckField label="This is the first load of the historical file" checked={firstLoad} onChange={setFirstLoad} />
             </Step>
 
@@ -402,6 +414,53 @@ export default function RiskFreeDataClient() {
               <ActionMessage message={msgs.upload ?? null} />
             </Step>
           </ol>
+        </Panel>
+      )}
+
+      {status?.state === 'ok' && caps?.upload && (
+        <Panel title="Confirm the repo rate is still current" description="Use this when the Reserve Bank of India has announced no change. It records the day you checked, with your reason, and changes no rate. No file is needed.">
+          {(() => {
+            const rs = status.series?.find((x) => x.cadence === 'policy_change');
+            if (!rs) return <Notice tone="neutral">No policy-change series is set up on this database.</Notice>;
+            const ctx = { today: status.asOfDate ?? '', lastRateDate: rs.freshness.lastObservationDate, recordedThrough: rs.freshness.verifiedThroughDate };
+            const chk = checkConfirmation(confirm, ctx);
+            const show = (k: 'date' | 'reason'): string | null => (chk.errors[k] && (confirmTried || confirm[k].trim() !== '') ? (chk.errors[k] as string) : null);
+            return (
+              <>
+                <p className="text-sm text-ink">
+                  {rs.name}: last rate change <strong>{d(rs.freshness.lastObservationDate)}</strong>; confirmed current through <strong>{rs.freshness.verifiedThroughDate ? d(rs.freshness.verifiedThroughDate) : 'never'}</strong>
+                  {status.asOfDate ? `; today in India is ${d(status.asOfDate)}` : ''}.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <DateField label="Confirmed through" hint="The day you checked that no change was announced." value={confirm.date} error={show('date')} onChange={(v) => setConfirm({ ...confirm, date: v })} />
+                  <TextField label={`Reason (at least ${MIN_REASON_CHARS} characters)`} value={confirm.reason} error={show('reason')} onChange={(v) => setConfirm({ ...confirm, reason: v })} />
+                </div>
+                <div className="mt-3">
+                  <Btn
+                    kind="primary"
+                    busy={busyArea === 'confirm'}
+                    busyLabel="Saving..."
+                    disabled={busy}
+                    onClick={() => {
+                      setConfirmTried(true);
+                      if (!chk.ok) {
+                        setMsg('confirm', { kind: 'error', text: `The confirmation was not recorded. ${Object.values(chk.errors).join(' ')}` });
+                        return;
+                      }
+                      // The typed day-first date becomes ISO only here, at the API boundary.
+                      void send('confirm', '/api/admin/investment-intelligence/risk-free-data/confirm-current', { seriesId: rs.seriesId, throughDate: chk.iso, reason: confirm.reason }, (o) => `Recorded: the repo rate is confirmed current through ${d(o.new)}${o.previous ? ` (it was ${d(o.previous)})` : ''}.`, () => {
+                        setConfirm({ date: '', reason: '' });
+                        setConfirmTried(false);
+                      });
+                    }}
+                  >
+                    Confirm the repo rate is still current
+                  </Btn>
+                </div>
+                <ActionMessage message={msgs.confirm ?? null} />
+              </>
+            );
+          })()}
         </Panel>
       )}
 
@@ -598,7 +657,7 @@ export default function RiskFreeDataClient() {
                   {status.stateLog.data.map((c) => (
                     <li key={s(c.id)}>
                       {dt(c.created_at)}: {s(c.series_id)} {c.previous_enabled === c.new_enabled ? '' : `${c.previous_enabled ? 'on' : 'off'} to ${c.new_enabled ? 'on' : 'off'}; `}
-                      {c.previous_terms_status === c.new_terms_status ? '' : `terms ${s(c.previous_terms_status)} to ${s(c.new_terms_status)}; `}by {c.actedByMe ? 'you' : 'another admin'}: {s(c.reason)}
+                      {c.previous_terms_status === c.new_terms_status ? '' : `terms ${s(c.previous_terms_status)} to ${s(c.new_terms_status)}; `}{c.previous_enabled === c.new_enabled && c.previous_terms_status === c.new_terms_status ? 'confirmed-through date; ' : ''}by {c.actedByMe ? 'you' : 'another admin'}: {s(c.reason)}
                     </li>
                   ))}
                 </ul>

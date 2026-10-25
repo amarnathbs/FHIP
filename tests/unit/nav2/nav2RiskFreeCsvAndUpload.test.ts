@@ -168,7 +168,7 @@ describe('commit (NC-C5, NC-C6)', () => {
     const db = world();
     const { client, rpc } = rpcClient(db);
     const out = await commitRiskFreeUpload(client, { ...base, firstLoad: true, expectedSha256: sha256Hex(CLEAN) });
-    expect(out).toEqual({ status: 'committed', batchId: 'b-1', inserted: 3, identical: 0 });
+    expect(out).toEqual({ status: 'committed', batchId: 'b-1', inserted: 3, identical: 0, verifiedThrough: { requested: null, moved: null, current: null } }); // moved null: this database function reply does not say
     expect(rpc).toHaveBeenCalledTimes(1);
     const [fn, params] = rpc.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(fn).toBe('commit_risk_free_upload');
@@ -196,13 +196,13 @@ describe('commit (NC-C5, NC-C6)', () => {
   it('matrix 54: a file whose rows are all already published is a no-op and does not call the function', async () => {
     const db = world([stored('2026-09-16', 5.2801), stored('2026-09-23', 5.39), stored('2026-09-30', 5.5199)]);
     const { client, rpc } = rpcClient(db);
-    expect(await commitRiskFreeUpload(client, base)).toEqual({ status: 'noop', identical: 3 });
+    expect(await commitRiskFreeUpload(client, base)).toEqual({ status: 'noop', identical: 3, verifiedThrough: { requested: null, moved: false, current: null } });
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it('a re-submitted file that the database already holds is reported as already committed; a database refusal propagates', async () => {
     const { client } = rpcClient(world(), { already_committed: true, batch_id: 'b-0', inserted: 3, identical: 0 });
-    expect(await commitRiskFreeUpload(client, base)).toEqual({ status: 'already_committed', batchId: 'b-0', inserted: 3, identical: 0 });
+    expect(await commitRiskFreeUpload(client, base)).toEqual({ status: 'already_committed', batchId: 'b-0', inserted: 3, identical: 0, verifiedThrough: { requested: null, moved: null, current: null } });
     const { client: failing } = rpcClient(world(), null, { message: 'risk-free upload: not authorised', code: '42501' });
     await expect(commitRiskFreeUpload(failing, base)).rejects.toMatchObject({ code: '42501' });
   });

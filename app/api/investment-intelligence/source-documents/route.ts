@@ -13,7 +13,8 @@ import {
   ownerColumnsFor,
   verdictForIdenticalUpload,
 } from '@/lib/services/investment-intelligence/uploadOwner';
-import { startIiRealScan, II_SCAN_BLOCKED_MESSAGE, II_SCAN_UNAVAILABLE_MESSAGE } from '@/lib/services/investment-intelligence/realScanAdmission';
+import { startIiRealScan } from '@/lib/services/investment-intelligence/realScanAdmission';
+import { scanRefusalHttp } from '@/lib/services/investment-intelligence/scanRefusal';
 import { computeSourceDocumentCounts, EMPTY_SOURCE_DOCUMENT_COUNTS, type SourceDocumentCounts } from '@/lib/services/investment-intelligence/sourceDocumentEnrichment';
 import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 import { hasStoredFile } from '@/lib/services/investment-intelligence/caseLifecycle';
@@ -237,13 +238,11 @@ export async function POST(req: Request) {
     contentHash: checksum,
     hasScanColumns: 'malware_scan_status' in (doc as object),
   });
-  if (!scan.admitted && scan.reason === 'blocked') {
-    return bad(II_SCAN_BLOCKED_MESSAGE, 422, 'malware_scan_blocked');
-  }
-  // UPL-02 (canonical-upload WP-12): the scan is on but cannot run here --
-  // fail closed, never parse an unscanned document.
-  if (!scan.admitted && scan.reason === 'scanner_unavailable') {
-    return bad(II_SCAN_UNAVAILABLE_MESSAGE, 503, 'malware_scan_unavailable');
+  // WP-H2: three different refusals, three different words (scanRefusal.ts): a finding about the content (final, the stored copy is
+  // deleted), a scan that could not finish or run (nothing is deleted, the next attempt scans again), and a scan still running.
+  if (!scan.admitted && scan.reason !== 'pending') {
+    const refusal = scanRefusalHttp(scan);
+    return bad(refusal.message, refusal.status, refusal.code);
   }
 
   return ok({ ...doc, scan_pending: !scan.admitted });

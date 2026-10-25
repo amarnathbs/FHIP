@@ -31,6 +31,7 @@
     "check:dispositions": "vitest run tests/unit/uploadFieldDispositionRegistry.test.ts tests/unit/uploadFieldDispositionRegistryAntiVacuity.test.ts tests/unit/inactiveUploadFlowGuard.test.ts && node scripts/generate-upload-field-disposition-doc.mjs --check"
   },
   "dependencies": {
+    "@cantoo/pdf-lib": "^2.11.1",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.0",
     "@tanstack/react-query": "^5.59.0",
