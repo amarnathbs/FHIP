@@ -140,6 +140,15 @@ The Expenses bank-statement import is a **background job** advanced in short sli
 - Registration: `docs/reviews/po_apply_wp_g/05_SCHEDULE_backstop_every_minute.sql` (pg_cron + pg_net + Vault, the mechanism of migrations 0135/0149/0174), or an EventBridge schedule exactly like the malware-scan sweep above. Use one, not both. No new environment variable; no queue, worker or Lambda.
 - Not scheduled by the code. Without it the job still finishes while the page is open; an unattended job is ended by the 50-minute raw-file backstop.
 
+### Investment Intelligence statement processing backstop (Document2 (4) WP-J, 2026-10-25)
+
+Processing, reprocessing (a replacement copy, Reprocess, a resolution that re-reads the statement) and Re-evaluate all positions of an Investment Intelligence statement are **background jobs** advanced in short slices (migration `0313`; design in `docs/reviews/DOCUMENT2_4_REPORT_WP-J.md`), because a large consolidated statement cannot finish inside the platform's 28 second request limit. The signed-in page drives the job while it is open. For a job nobody is watching, one more scheduled route finishes it, closes parse runs that are dead (marked running with nothing working on them) and sweeps staging left behind by ended jobs:
+
+- `POST https://app.financialhealthplatform.com/api/investment-intelligence/statement-jobs/cron/advance`, header `x-cron-secret: <CRON_SECRET>` (the same secret and header as every route above), no body, every 1 minute.
+- Registration: `docs/reviews/po_apply_wp_j/05_SCHEDULE_backstop_every_minute.sql` (pg_cron + pg_net + Vault). Use ONE scheduler for this work. No new environment variable; no queue, worker or Lambda.
+- Not scheduled by the code. Without it a job still finishes while the page is open; a protected statement still waiting to be read waits for its password in any case (the password is never stored).
+- Release order: apply 0312 and 0313 first (`docs/reviews/po_apply_wp_j/02`, `03`), then deploy, then register the schedule.
+
 ## 7. Post-deploy verification
 
 Before telling real users the app is live:
