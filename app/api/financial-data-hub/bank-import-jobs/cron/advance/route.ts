@@ -16,8 +16,11 @@ import { BANK_IMPORT_SLICE_BUDGET_MS } from '@/lib/financial-data-hub/bankImport
 export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
-const CALL_BUDGET_MS = 22_000;
-const MAX_SLICES_PER_CALL = 6;
+// Some slices cannot stop part-way (a read, a finalize), so a second slice is started only if the first left a lot of room. Measured on
+// DEV (21-10-2026): a loop that started slices while 6 s remained ended a request at 29.7 s, past the platform limit.
+const CALL_BUDGET_MS = 20_000;
+const MIN_REMAINING_TO_START_ANOTHER_MS = 14_000;
+const MAX_SLICES_PER_CALL = 4;
 
 export async function POST(req: Request) {
   const secret = req.headers.get('x-cron-secret');
@@ -28,8 +31,8 @@ export async function POST(req: Request) {
   try {
     for (let i = 0; i < MAX_SLICES_PER_CALL; i += 1) {
       const remaining = CALL_BUDGET_MS - (Date.now() - started);
-      if (remaining < 6_000) break;
-      const out = await advanceNextBankImportJob({ sliceBudgetMs: Math.min(BANK_IMPORT_SLICE_BUDGET_MS, remaining - 4_000) });
+      if (i > 0 && remaining < MIN_REMAINING_TO_START_ANOTHER_MS) break;
+      const out = await advanceNextBankImportJob({ sliceBudgetMs: Math.min(BANK_IMPORT_SLICE_BUDGET_MS, Math.max(0, remaining - 6_000)) });
       if (!out || out.kind !== 'advanced') break;
       outcomes.push({ phase: out.job.phase, status: out.job.status });
     }

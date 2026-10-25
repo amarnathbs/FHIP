@@ -98,6 +98,8 @@ async function resetFailedJobForRetry(job: BankImportJobRow): Promise<BankImport
       lease_owner: null,
       lease_expires_at: null,
       completed_at: null,
+      // a retry starts finalize fresh (nothing derived is left once the lines were cleared or re-planned)
+      checkpoint: { ...job.checkpoint, finalize_started: false },
     },
   );
 }
