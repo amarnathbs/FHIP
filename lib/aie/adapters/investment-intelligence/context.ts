@@ -202,6 +202,7 @@ export async function buildInvestmentReconciliationContext(params: BuildContextP
         .from('ii_transactions')
         .select('account_id, instrument_id, transaction_type, units, transaction_date, source_reference')
         .eq('user_id', userId)
+        .neq('status', 'reversed') // WP-H3
         .in('account_id', resolvedAccountIds)
         .order('transaction_date', { ascending: true }),
     );
