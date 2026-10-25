@@ -38,6 +38,10 @@ export const STATEMENT_JOB_MAX_CONSECUTIVE_FAILURES = 3;
 export const STATEMENT_JOB_POLL_WAIT_MS = 3_000;
 /** Staging left behind by a finished or failed job is swept after this. */
 export const STATEMENT_JOB_STAGING_TTL_MS = 24 * 60 * 60_000;
+/** A job with no activity for this long, and no live lease, is ended as abandoned (its staging is removed). */
+export const STATEMENT_JOB_ABANDONED_AFTER_MS = 24 * 60 * 60_000;
+/** The scheduled backstop leaves a freshly admitted job alone for this long: the browser that admitted it is about to send the password. */
+export const STATEMENT_JOB_FRESH_READ_GRACE_MS = 2 * 60_000;
 /** A processing run with no job behind it (the old synchronous path) cannot outlive the platform request limit by much. */
 export const JOBLESS_RUN_DEAD_AFTER_MS = 2 * 60_000;
 

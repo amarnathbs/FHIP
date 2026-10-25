@@ -29,6 +29,7 @@ import type { AieDocumentProvider } from '../aiFallbackDocumentExtraction';
 import { kickUserNavHistory } from '../pc6/userNavHistoryKick';
 import { toPlain } from '../statementStaging';
 import {
+  STATEMENT_JOB_FRESH_READ_GRACE_MS,
   STATEMENT_JOB_MAX_CONSECUTIVE_FAILURES,
   STATEMENT_JOB_SLICE_BUDGET_MS,
   sanitiseStatementJobError,
@@ -209,6 +210,13 @@ export async function advanceNextStatementJob(opts: AdvanceOptions = {}): Promis
   const owner = opts.owner ?? randomUUID();
   const claimed = await claimNextJob(owner);
   if (!claimed) return null;
+  // A job admitted moments ago is waiting for the browser that admitted it: that browser is about to send the document password with the
+  // slice that opens the file, which the backstop cannot do. Leave it alone for a short grace period.
+  const now = opts.now ?? Date.now;
+  if (claimed.job_kind === 'process' && claimed.phase === 'read' && now() - Date.parse(claimed.created_at) < STATEMENT_JOB_FRESH_READ_GRACE_MS) {
+    const released = await releaseForNextSlice(claimed.id, owner, {});
+    return { kind: 'busy', job: released ?? claimed };
+  }
   const job = await runClaimed(claimed, owner, opts);
   return { kind: 'advanced', job };
 }

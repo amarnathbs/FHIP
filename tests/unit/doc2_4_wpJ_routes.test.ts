@@ -80,6 +80,7 @@ vi.mock('@/lib/services/investment-intelligence/statementJob/worker', () => ({
   },
 }));
 vi.mock('@/lib/services/investment-intelligence/statementJob/deadRuns', () => ({ closeAllDeadParseRuns: async () => 3 }));
+vi.mock('@/lib/services/investment-intelligence/statementJob/abandoned', () => ({ abandonIdleStatementJobs: async () => 2 }));
 
 import { GET as listGET } from '@/app/api/investment-intelligence/statement-jobs/route';
 import { GET as oneGET } from '@/app/api/investment-intelligence/statement-jobs/[jobId]/route';
@@ -228,7 +229,7 @@ describe('POST statement-jobs/cron/advance (the backstop)', () => {
     const ok = await cronPOST(new Request('http://t/x', { method: 'POST', headers: { 'x-cron-secret': 'cron-secret-value' } }));
     expect(ok.status).toBe(200);
     const data = (await ok.json()).data;
-    expect(data).toMatchObject({ slices: 0, dead_runs_closed: 3 });
+    expect(data).toMatchObject({ slices: 0, dead_runs_closed: 3, abandoned_jobs_ended: 2 });
     expect(h.nextCalls).toBe(1);
   });
 });

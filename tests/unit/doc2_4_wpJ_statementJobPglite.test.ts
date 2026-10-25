@@ -46,7 +46,8 @@ vi.mock('@/lib/aie/malware/config', async (orig) => ({ ...(await orig<typeof imp
 
 import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
 import { admitStatementJob } from '@/lib/services/investment-intelligence/statementJob/admission';
-import { advanceStatementJob, SimulatedSliceKill } from '@/lib/services/investment-intelligence/statementJob/worker';
+import { advanceNextStatementJob, advanceStatementJob, SimulatedSliceKill } from '@/lib/services/investment-intelligence/statementJob/worker';
+import { abandonIdleStatementJobs } from '@/lib/services/investment-intelligence/statementJob/abandoned';
 import { closeAllDeadParseRuns } from '@/lib/services/investment-intelligence/statementJob/deadRuns';
 import { getJobForUser, sweepStaleStaging } from '@/lib/services/investment-intelligence/statementJob/store';
 import { publishPosition } from '@/lib/services/investment-intelligence/investmentPublicationService';
@@ -658,4 +659,58 @@ describe('WP-J statement job: missing-transaction detection through the job', ()
       expect(cases, 'one case per position, never doubled').toBe(6);
     }
   }, 900_000);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+describe('WP-J statement job: the backstop and jobs nobody came back to', () => {
+  it('the backstop leaves a job admitted moments ago to its browser (which brings the password) and takes it over once it is old', async () => {
+    await db.query(`update ii_statement_jobs set status = 'completed', phase = 'done', lease_owner = null, lease_expires_at = null where status in ('queued', 'processing')`); // earlier tests' leftovers
+    const cas = fixture(5, 6);
+    const p = await prepare('grace', cas);
+    const job = await admit(p);
+    // a protected statement would fail here without its password, so the backstop must not touch a fresh read
+    const fresh = await advanceNextStatementJob({ sliceBudgetMs: 0 });
+    expect(fresh && fresh.kind).toBe('busy');
+    const same = await getJobForUser(p.userId, job.id);
+    expect(same).toMatchObject({ status: 'queued', phase: 'read' });
+    expect((await oracle(H, p.userId)).bookkeeping.parseRuns, 'nothing was read').toBe(0);
+    // the browser that admitted it still gets to run the read step at once
+    const mine = await advanceStatementJob(job.id, { userId: p.userId, sliceBudgetMs: 0 });
+    expect(mine.kind).toBe('advanced');
+    expect((await drive(job.id, p.userId)).job.status).toBe('completed');
+    // a job nobody drove for a few minutes is taken by the backstop
+    const q = await prepare('grace-old', cas);
+    const old = await admit(q);
+    await db.query(`update ii_statement_jobs set created_at = now() - interval '5 minutes' where id = $1`, [old.id]);
+    const taken = await advanceNextStatementJob({ sliceBudgetMs: 0 });
+    expect(taken && taken.kind).toBe('advanced');
+    expect((await oracle(H, q.userId)).bookkeeping.parseRuns).toBe(1);
+  }, 600_000);
+
+  it('a job idle for a day with no live lease is ended as abandoned: run closed as failed, staging removed; a young or live one is untouched', async () => {
+    const cas = fixture(5, 6);
+    await db.query(`update ii_statement_jobs set status = 'completed', phase = 'done', lease_owner = null, lease_expires_at = null where status in ('queued', 'processing')`);
+    const idle = await prepare('abandon-idle', cas);
+    const idleJob = await admit(idle);
+    await advanceStatementJob(idleJob.id, { userId: idle.userId, sliceBudgetMs: 0 }); // read step: staging exists, a run exists
+    expect(await stagingRows(H, idle.userId)).toBeGreaterThan(0);
+    await db.query(`update ii_statement_jobs set updated_at = now() - interval '2 days', lease_expires_at = null where id = $1`, [idleJob.id]);
+    const live = await prepare('abandon-live', cas);
+    const liveJob = await admit(live);
+    await advanceStatementJob(liveJob.id, { userId: live.userId, sliceBudgetMs: 0 });
+    await db.query(`update ii_statement_jobs set updated_at = now() - interval '2 days', lease_owner = 'someone-live-1', lease_expires_at = now() + interval '1 minute' where id = $1`, [liveJob.id]);
+    const young = await prepare('abandon-young', cas);
+    const youngJob = await admit(young);
+
+    expect(await abandonIdleStatementJobs()).toBe(1);
+    const ended = await getJobForUser(idle.userId, idleJob.id);
+    expect(ended).toMatchObject({ status: 'failed', error_code: 'abandoned' });
+    expect(await stagingRows(H, idle.userId)).toBe(0);
+    expect(await runningRuns(idle.userId), 'its run is closed, never left running').toBe(0);
+    expect((await getJobForUser(live.userId, liveJob.id))!.status, 'a live lease is never ended').not.toBe('failed');
+    expect((await getJobForUser(young.userId, youngJob.id))!.status).toBe('queued');
+    // the statement can be processed again at once (the file is still stored: the read step never finished)
+    const again = await admitStatementJob({ userId: idle.userId, documentId: idle.docId, kind: 'process', forceReparse: true });
+    expect(again.kind).toBe('job');
+  }, 600_000);
 });
