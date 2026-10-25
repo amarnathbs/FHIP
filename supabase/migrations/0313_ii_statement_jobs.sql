@@ -3,7 +3,7 @@
 -- WHY. Processing or reprocessing a large CAMS or KFintech consolidated statement (many funds, a long history) ran inside ONE web
 -- request. The hosting platform ends a request after about 28 seconds and the handler never gets to run its error path, so the
 -- browser waited on an answer the platform had already abandoned, the parse run stayed running, and a retry was answered with
--- already being processed. There is no long-running worker on this platform, so the work is cut into short, resumable SLICES whose
+-- already being processed. There is no long-running worker on this platform, so the work is cut up as short, resumable SLICES whose
 -- progress lives in this table (the same mechanism as the bank statement import jobs of 0310).
 --
 -- WHAT THIS ADDS (additive only, no existing table, column, constraint or policy is changed).
