@@ -27,6 +27,8 @@ export interface WpjCasOptions {
   holderName?: string;
   /** Extra purchase lines appended to the LAST position only (an "extended" copy), each dated after the previous closing date. */
   extraTxnsOnLastPosition?: number;
+  /** Real CAS lines carry no provider reference: omit the [Ref: ...] tail so source_reference stays NULL (the default is to print one). */
+  omitRefs?: boolean;
 }
 
 export interface WpjCas {
@@ -99,7 +101,7 @@ export function buildWpjLargeCas(opts: WpjCasOptions): WpjCas {
       const amount = Math.round((units / 1000) * price * 100); // scaled 100
       balance += units;
       txnLines.push(
-        `${fmtDate(year, monthIdx, 10)}   ${money(amount)}         ${price.toFixed(4)}      ${units3(units)}     Purchase                             ${units3(balance)}   [Ref: WPJ-${stamp}-${pad(i, 4)}-${pad(t, 3)}]`,
+        `${fmtDate(year, monthIdx, 10)}   ${money(amount)}         ${price.toFixed(4)}      ${units3(units)}     Purchase                             ${units3(balance)}${opts.omitRefs ? '' : `   [Ref: WPJ-${stamp}-${pad(i, 4)}-${pad(t, 3)}]`}`,
       );
     }
     totalTransactions += txnCount;

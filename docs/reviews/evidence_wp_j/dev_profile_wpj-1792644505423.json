@@ -1,0 +1,319 @@
+{
+  "project": "vqycarelcoijzwlpkpcz",
+  "runTag": "wpj-1792644505423",
+  "startedAt": "2026-10-22T04:48:25.423Z",
+  "fixtures": [
+    {
+      "positions": 25,
+      "txnsPerPosition": 12,
+      "transactions": 300,
+      "folios": 13,
+      "pdfKB": 58,
+      "first_processing": {
+        "ok": true,
+        "status": "parsed",
+        "error": null,
+        "summary": {
+          "sourceDetected": "cams",
+          "sourceConfidence": 0.99,
+          "accountsFound": 13,
+          "schemesFound": 25,
+          "transactionsFound": 300,
+          "holdingsFound": 25,
+          "duplicateTransactionsLinked": 0,
+          "reconciliationCasesOpened": 0,
+          "newTransactionsCount": 300,
+          "missingTransactionsCount": 0
+        },
+        "wallMs": 210055,
+        "totalMs": 210050,
+        "totalRequests": 1121,
+        "steps": {
+          "read_and_parse": {
+            "ms": 2707,
+            "requests": 7
+          },
+          "accounts": {
+            "ms": 9695,
+            "requests": 58
+          },
+          "scheme_resolution": {
+            "ms": 30728,
+            "requests": 145
+          },
+          "transactions": {
+            "ms": 15908,
+            "requests": 53
+          },
+          "holdings": {
+            "ms": 5371,
+            "requests": 25
+          },
+          "missing_detection": {
+            "ms": 4263,
+            "requests": 25
+          },
+          "certification": {
+            "ms": 139805,
+            "requests": 800
+          },
+          "finalize": {
+            "ms": 1569,
+            "requests": 8
+          }
+        },
+        "busiest": [
+          {
+            "call": "GET ii_transactions",
+            "requests": 401,
+            "totalMs": 76102
+          },
+          {
+            "call": "GET ii_holding_snapshots",
+            "requests": 350,
+            "totalMs": 60857
+          },
+          {
+            "call": "POST ii_audit_events",
+            "requests": 67,
+            "totalMs": 11544
+          },
+          {
+            "call": "GET ii_reconciliation_cases",
+            "requests": 50,
+            "totalMs": 8571
+          },
+          {
+            "call": "GET ii_instrument_identifiers",
+            "requests": 28,
+            "totalMs": 7013
+          },
+          {
+            "call": "POST ii_holding_snapshots",
+            "requests": 25,
+            "totalMs": 5355
+          },
+          {
+            "call": "POST ii_portfolio_truth_status",
+            "requests": 25,
+            "totalMs": 4867
+          },
+          {
+            "call": "GET ii_accounts",
+            "requests": 27,
+            "totalMs": 4401
+          },
+          {
+            "call": "POST ii_instrument_identifiers",
+            "requests": 25,
+            "totalMs": 4327
+          },
+          {
+            "call": "GET ii_instruments",
+            "requests": 15,
+            "totalMs": 4177
+          },
+          {
+            "call": "GET ii_investment_date_inputs",
+            "requests": 25,
+            "totalMs": 4154
+          },
+          {
+            "call": "POST ii_instruments",
+            "requests": 25,
+            "totalMs": 4091
+          }
+        ]
+      },
+      "replacement_attach": {
+        "ok": true,
+        "decision": "match",
+        "wallMs": 3018,
+        "requests": 14
+      },
+      "replacement_reprocess": {
+        "ok": true,
+        "status": "parsed",
+        "error": null,
+        "summary": {
+          "sourceDetected": "cams",
+          "sourceConfidence": 0.99,
+          "accountsFound": 13,
+          "schemesFound": 25,
+          "transactionsFound": 300,
+          "holdingsFound": 25,
+          "duplicateTransactionsLinked": 300,
+          "reconciliationCasesOpened": 0,
+          "newTransactionsCount": 0,
+          "missingTransactionsCount": 0
+        },
+        "wallMs": 240634,
+        "totalMs": 240633,
+        "totalRequests": 1293,
+        "steps": {
+          "read_and_parse": {
+            "ms": 2345,
+            "requests": 7
+          },
+          "accounts": {
+            "ms": 5533,
+            "requests": 32
+          },
+          "scheme_resolution": {
+            "ms": 23676,
+            "requests": 95
+          },
+          "transactions": {
+            "ms": 54698,
+            "requests": 301
+          },
+          "holdings": {
+            "ms": 4520,
+            "requests": 25
+          },
+          "missing_detection": {
+            "ms": 4638,
+            "requests": 25
+          },
+          "certification": {
+            "ms": 143027,
+            "requests": 800
+          },
+          "finalize": {
+            "ms": 2196,
+            "requests": 8
+          }
+        },
+        "busiest": [
+          {
+            "call": "GET ii_holding_snapshots",
+            "requests": 350,
+            "totalMs": 64410
+          },
+          {
+            "call": "GET ii_transactions",
+            "requests": 376,
+            "totalMs": 64371
+          },
+          {
+            "call": "POST ii_transaction_source_links",
+            "requests": 300,
+            "totalMs": 54348
+          },
+          {
+            "call": "POST ii_audit_events",
+            "requests": 67,
+            "totalMs": 11921
+          },
+          {
+            "call": "GET ii_reconciliation_cases",
+            "requests": 50,
+            "totalMs": 8735
+          },
+          {
+            "call": "GET ii_instrument_identifiers",
+            "requests": 28,
+            "totalMs": 8523
+          },
+          {
+            "call": "POST ii_portfolio_truth_status",
+            "requests": 25,
+            "totalMs": 5109
+          },
+          {
+            "call": "POST ii_holding_snapshots",
+            "requests": 25,
+            "totalMs": 4509
+          },
+          {
+            "call": "GET ii_instruments",
+            "requests": 15,
+            "totalMs": 4436
+          },
+          {
+            "call": "PATCH ii_holding_snapshots",
+            "requests": 25,
+            "totalMs": 4412
+          },
+          {
+            "call": "GET ii_accounts",
+            "requests": 14,
+            "totalMs": 2426
+          },
+          {
+            "call": "GET /storage/v1/object/investment-source-documents/53409524-0c65-4aaa-8f2d-8dfe5c0e7b68/63470cfa-18a3-4743-8257-f9b04a06fc61.pdf",
+            "requests": 1,
+            "totalMs": 821
+          }
+        ]
+      },
+      "reevaluate_all": {
+        "positions": 25,
+        "ok": 25,
+        "wallMs": 57573,
+        "requests": 350,
+        "msPerPosition": 2303,
+        "busiest": [
+          {
+            "call": "GET ii_holding_snapshots",
+            "requests": 75,
+            "totalMs": 12142
+          },
+          {
+            "call": "GET ii_transactions",
+            "requests": 50,
+            "totalMs": 8378
+          },
+          {
+            "call": "GET ii_accounts",
+            "requests": 50,
+            "totalMs": 8187
+          },
+          {
+            "call": "GET ii_reconciliation_cases",
+            "requests": 50,
+            "totalMs": 8019
+          },
+          {
+            "call": "POST ii_portfolio_truth_status",
+            "requests": 25,
+            "totalMs": 4210
+          },
+          {
+            "call": "PATCH ii_holding_snapshots",
+            "requests": 25,
+            "totalMs": 4136
+          },
+          {
+            "call": "POST ii_audit_events",
+            "requests": 25,
+            "totalMs": 4120
+          },
+          {
+            "call": "GET ii_reconciliation_config",
+            "requests": 25,
+            "totalMs": 4102
+          },
+          {
+            "call": "GET ii_ownership_allocation",
+            "requests": 25,
+            "totalMs": 4038
+          }
+        ]
+      },
+      "publish_three_positions": {
+        "wallMs": 11389,
+        "requests": 75,
+        "msPerPosition": 3796
+      }
+    }
+  ],
+  "environment": {
+    "roundTripMsMedian": 198,
+    "roundTripMsMin": 169,
+    "activeInstruments": 14570,
+    "activeIdentifiers": 27970,
+    "activeAliases": 0
+  },
+  "finishedAt": "2026-10-22T04:58:10.796Z"
+}

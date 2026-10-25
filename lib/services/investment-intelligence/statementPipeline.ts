@@ -261,6 +261,15 @@ type StepOut = { kind: 'more' } | { kind: 'next'; to: PipelineStep } | { kind: '
 export type SliceOutcome = { kind: 'more' } | { kind: 'finished'; result: ProcessSourceDocumentResult } | { kind: 'lost' };
 
 const more = (): StepOut => ({ kind: 'more' });
+
+/**
+ * Time check for a step's loop. The FIRST unit of every slice always runs (so a slice always makes progress, whatever its budget);
+ * after that the step stops when the slice's time is spent.
+ */
+function unitGuard(env: PipelineEnv): () => boolean {
+  let units = 0;
+  return () => units++ > 0 && env.timeLeftMs() <= 0;
+}
 const next = (to: PipelineStep): StepOut => ({ kind: 'next', to });
 const finished = (result: ProcessSourceDocumentResult): StepOut => ({ kind: 'finished', result });
 
@@ -581,6 +590,7 @@ async function readStep(env: PipelineEnv): Promise<StepOut> {
         .single();
       if (runErr || !run) return finished({ ok: false, status: doc.status as string, parseRunId: null, error: runErr?.message ?? 'Could not start a processing run.' });
       parseRunId = run.id as string;
+      await fault(env, 'read:run_created');
       await emitAuditEvent({ userId, eventType: 'parse_started', subjectType: 'ii_source_documents', subjectId: sourceDocumentId, actorType: 'user', actorId: userId, metadata: { parseRunId } });
     }
     state.parseRunId = parseRunId;
@@ -726,6 +736,7 @@ async function readStep(env: PipelineEnv): Promise<StepOut> {
 const ACCOUNT_BATCH = 25;
 
 async function accountsStep(env: PipelineEnv): Promise<StepOut> {
+  const stop = unitGuard(env);
   const { admin, userId, documentId: sourceDocumentId, state } = env;
   const meta = await loadMeta(env);
   const doc = await loadDoc(env);
@@ -734,7 +745,7 @@ async function accountsStep(env: PipelineEnv): Promise<StepOut> {
   const currencyCode = countryCode === 'IN' ? 'INR' : 'AUD';
   let prefetched: PrefetchedAccount[] | null = null;
   while (state.cursors.accounts < meta.assignments.length) {
-    if (env.timeLeftMs() <= 0) return more();
+    if (stop()) return more();
     prefetched ??= await prefetchActiveAccounts(userId);
     const from = state.cursors.accounts;
     const slice = meta.assignments.slice(from, from + ACCOUNT_BATCH);
@@ -773,6 +784,7 @@ async function accountsStep(env: PipelineEnv): Promise<StepOut> {
 const OWNER_BATCH = 40;
 
 async function ownerStep(env: PipelineEnv): Promise<StepOut> {
+  const stop = unitGuard(env);
   const { admin, userId, documentId: sourceDocumentId, state } = env;
   const meta = await loadMeta(env);
   const doc = await loadDoc(env);
@@ -789,7 +801,7 @@ async function ownerStep(env: PipelineEnv): Promise<StepOut> {
   let members: Pc5HouseholdMemberForMatching[] | null = null;
 
   while (state.cursors.owner < meta.assignments.length) {
-    if (env.timeLeftMs() <= 0) return more();
+    if (stop()) return more();
     const from = state.cursors.owner;
     const slice = meta.assignments.slice(from, from + OWNER_BATCH);
     const withAccount = slice.map((a) => ({ a, entry: accounts.get(a.key) })).filter((x): x is { a: typeof slice[number]; entry: AcctEntry } => Boolean(x.entry));
@@ -997,6 +1009,7 @@ async function loadUniverse(admin: Admin): Promise<Universe> {
 }
 
 async function schemesStep(env: PipelineEnv): Promise<StepOut> {
+  const stop = unitGuard(env);
   const { admin, userId, documentId: sourceDocumentId, state } = env;
   const meta = await loadMeta(env);
   const doc = await loadDoc(env);
@@ -1008,7 +1021,7 @@ async function schemesStep(env: PipelineEnv): Promise<StepOut> {
   let universe: Universe | null = null;
 
   while (state.cursors.schemes < entries.length) {
-    if (env.timeLeftMs() <= 0) return more();
+    if (stop()) return more();
     universe ??= await loadUniverse(admin);
     const { existingForResolution, aliasRows, instrumentNameById } = universe;
     const from = state.cursors.schemes;
@@ -1219,6 +1232,7 @@ async function loadClaims(env: PipelineEnv, belowBatch?: number): Promise<ClaimR
 }
 
 async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
+  const stop = unitGuard(env);
   const { admin, userId, documentId: sourceDocumentId, state } = env;
   const meta = await loadMeta(env);
   const doc = await loadDoc(env);
@@ -1280,7 +1294,7 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
   };
 
   while (state.cursors.txnBatch < state.counts.txnBatches) {
-    if (env.timeLeftMs() <= 0) return more();
+    if (stop()) return more();
     const batchIdx = state.cursors.txnBatch;
     const raw = await env.store.get('parsed_txns', batchIdx);
     if (!raw) throw new Error(`The staged transactions are missing (batch ${batchIdx}).`);
@@ -1603,6 +1617,7 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
 // STEP holdings
 // ---------------------------------------------------------------------------------------------------------------------
 async function holdingsStep(env: PipelineEnv): Promise<StepOut> {
+  const stop = unitGuard(env);
   const { admin, userId, documentId: sourceDocumentId, state } = env;
   if (state.cursors.holdBatch >= state.counts.holdBatches) return next('analyse');
   const meta = await loadMeta(env);
@@ -1614,7 +1629,7 @@ async function holdingsStep(env: PipelineEnv): Promise<StepOut> {
   const resolution = await loadResolution(env);
   const parseRunId = state.parseRunId as string;
   while (state.cursors.holdBatch < state.counts.holdBatches) {
-    if (env.timeLeftMs() <= 0) return more();
+    if (stop()) return more();
     const batchIdx = state.cursors.holdBatch;
     const raw = await env.store.get('parsed_holds', batchIdx);
     if (!raw) throw new Error(`The staged holdings are missing (batch ${batchIdx}).`);
@@ -1672,6 +1687,7 @@ async function loadCovered(env: PipelineEnv): Promise<Array<[string, string]>> {
 }
 
 async function analyseStep(env: PipelineEnv): Promise<StepOut> {
+  const stop = unitGuard(env);
   const { admin, userId, documentId: sourceDocumentId, state } = env;
   const meta = await loadMeta(env);
   const covered = await loadCovered(env);
@@ -1713,7 +1729,7 @@ async function analyseStep(env: PipelineEnv): Promise<StepOut> {
       }
     }
     while (state.cursors.analyse < covered.length) {
-      if (env.timeLeftMs() <= 0) return more();
+      if (stop()) return more();
       const from = state.cursors.analyse;
       const slice = covered.slice(from, from + ANALYSE_BATCH).map(([accountId, instrumentId]) => ({ accountId, instrumentId }));
       const missingCases = await detectMissingTransactions(admin as unknown as import('./missingTransactionDetection').MissingTransactionQueryClient, userId, sourceDocumentId, slice, confirmed, periodStartIso, periodEndIso);
@@ -1817,6 +1833,7 @@ async function loadCertificationPairs(env: PipelineEnv): Promise<Array<[string, 
 }
 
 async function certifyStep(env: PipelineEnv): Promise<StepOut> {
+  const stop = unitGuard(env);
   const { admin, userId, documentId: sourceDocumentId, state } = env;
   if (!state.cursors.pairsBuilt) {
     const pairs = state.kind === 'reevaluate' ? await listStatementPositions(admin, userId, sourceDocumentId) : await buildCertificationPairs(env);
@@ -1831,7 +1848,7 @@ async function certifyStep(env: PipelineEnv): Promise<StepOut> {
 
   if (state.kind === 'reevaluate') {
     while (state.cursors.certify < pairs.length) {
-      if (env.timeLeftMs() <= 0) return more();
+      if (stop()) return more();
       const from = state.cursors.certify;
       const batch = pairs.slice(from, from + CERTIFY_BATCH);
       const results = await mapLimit(batch, CERTIFY_CONCURRENCY, async ([a, i]) => recertifyPosition(userId, a, i));
@@ -1849,7 +1866,7 @@ async function certifyStep(env: PipelineEnv): Promise<StepOut> {
   const certifyCache: CertifyCache = new Map();
   const explicitCache = new Map<string, boolean>();
   while (state.cursors.certify < pairs.length) {
-    if (env.timeLeftMs() <= 0) return more();
+    if (stop()) return more();
     const from = state.cursors.certify;
     const batch = pairs.slice(from, from + CERTIFY_BATCH);
     const need = [...new Set(batch.map(([a]) => a))].filter((a) => !explicitCache.has(a));
@@ -1911,6 +1928,7 @@ async function finalizeStep(env: PipelineEnv): Promise<StepOut> {
   await fault(env, 'finalize:before_purge');
   // The raw statement bytes have done their job: purge them (strict deletion). A purge failure is recorded for retry, never surfaced.
   if (doc.storage_path) await purgeSourceDocumentStorage(admin, sourceDocumentId, doc.storage_path as string);
+  await fault(env, 'finalize:after_purge');
 
   // Genuinely new rows of THIS run, counted in the database (exact even after a killed and resumed slice).
   const { count: newCount } = await admin.from('ii_transactions').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('parse_run_id', parseRunId);
