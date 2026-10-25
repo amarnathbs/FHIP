@@ -52,6 +52,7 @@ import { scaledToDecimalString, ZERO } from './decimal';
 import { normaliseSchemeName } from './parsers/textUtils';
 import type { IiPlanType, IiOptionType } from './types';
 import { fetchAllRows } from './pagination';
+import { NaturalKeyPool, decideReRead, type ReReadLine, type StoredDocTransaction } from './reparseMatching';
 import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
 import {
   findResolvedAmbiguousInstrumentOverride,
@@ -131,8 +132,8 @@ export interface PipelineState {
   ownerUnresolved: boolean;
   unresolvedSchemeCount: number;
   counts: { assignments: number; schemes: number; txns: number; holdings: number; txnBatches: number; holdBatches: number; covered: number; pairs: number };
-  cursors: { accounts: number; owner: number; schemes: number; txnBatch: number; holdBatch: number; analyse: number; supersession: number; certify: number; pairsBuilt: boolean };
-  counters: { casesOpened: number; duplicateLinked: number; missing: number };
+  cursors: { accounts: number; owner: number; schemes: number; txnBatch: number; holdBatch: number; analyse: number; supersession: number; certify: number; pairsBuilt: boolean; reversalDone: boolean };
+  counters: { casesOpened: number; duplicateLinked: number; missing: number; matchedToExisting: number };
   owner: { conflicts: OwnerReview['conflicts']; warnings: OwnerReview['warnings']; appliedAccountIds: string[]; targetSignature: string | null } | null;
   /** reevaluate jobs: nothing else is needed, the positions are listed in staging. */
   evaluated: number;
@@ -153,8 +154,8 @@ export function initialPipelineState(kind: 'process' | 'reevaluate', forceRepars
     ownerUnresolved: false,
     unresolvedSchemeCount: 0,
     counts: { assignments: 0, schemes: 0, txns: 0, holdings: 0, txnBatches: 0, holdBatches: 0, covered: 0, pairs: 0 },
-    cursors: { accounts: 0, owner: 0, schemes: 0, txnBatch: 0, holdBatch: 0, analyse: 0, supersession: 0, certify: 0, pairsBuilt: false },
-    counters: { casesOpened: 0, duplicateLinked: 0, missing: 0 },
+    cursors: { accounts: 0, owner: 0, schemes: 0, txnBatch: 0, holdBatch: 0, analyse: 0, supersession: 0, certify: 0, pairsBuilt: false, reversalDone: false },
+    counters: { casesOpened: 0, duplicateLinked: 0, missing: 0, matchedToExisting: 0 },
     owner: null,
     evaluated: 0,
     failedEvaluations: 0,
@@ -1148,9 +1149,77 @@ async function schemesStep(env: PipelineEnv): Promise<StepOut> {
 const INSERT_CHUNK = 500;
 const FINGERPRINT_LOOKUP_CHUNK = 50;
 
+/** What one re-read line was matched to in the document's own earlier rows (WP-H3), recorded per batch BEFORE anything is written. */
+interface ClaimRecord {
+  /** Position of the line inside its staged batch. */
+  li: number;
+  oldId: string;
+  kind: 'link_existing' | 'supersede';
+  changed: string[];
+  /** The stored row's own fingerprint and position, so missing-transaction detection still counts it as confirmed. */
+  fp: string | null;
+  accountId: string;
+  instrumentId: string;
+}
+
+/** The rows an EARLIER parse of this same document wrote (rows of this run are never part of it). */
+async function loadPriorDocRows(env: PipelineEnv): Promise<StoredDocTransaction[]> {
+  const rows = await fetchAllRows<StoredDocTransaction & { parse_run_id: string | null }>(() =>
+    env.admin
+      .from('ii_transactions')
+      .select('id, account_id, instrument_id, transaction_date, gross_amount, transaction_type, units, price_per_unit, status, transaction_fingerprint, corrects_transaction_id, parse_run_id')
+      .eq('user_id', env.userId)
+      .eq('source_document_id', env.documentId)
+      .order('id', { ascending: true }),
+  );
+  return rows.filter((r) => r.parse_run_id !== env.state.parseRunId);
+}
+
+function lineFingerprint(meta: StagedMeta, t: ReturnType<typeof unstageTxn>, accountId: string, instrumentId: string): string {
+  return computeTransactionFingerprint({
+    sourceKey: meta.metadata.sourceKey,
+    accountId,
+    instrumentId,
+    transactionDateIso: t.transactionDateIso,
+    transactionType: t.canonicalType,
+    amountScaled: t.amountScaled,
+    unitsScaled: t.unitsScaled,
+    navScaled: t.navScaled,
+    sourceReference: t.sourceReference,
+  });
+}
+
+/** Pass 1 of WP-H3: prior rows this statement already matches EXACTLY by fingerprint (they can never be claimed by natural key). */
+async function priorRowsMatchedByFingerprint(env: PipelineEnv, priorRows: readonly StoredDocTransaction[], meta: StagedMeta): Promise<Set<string>> {
+  const claimed = new Set<string>();
+  if (priorRows.length === 0) return claimed;
+  const keying = uniqueSchemesOf(meta).keying;
+  const resolveRowKey = makeResolveRowKey(meta.accAmcNameByFolio);
+  const resolution = await loadResolution(env);
+  const lineKeys = new Set<string>();
+  for (let b = 0; b < env.state.counts.txnBatches; b++) {
+    const raw = await env.store.get('parsed_txns', b);
+    if (!raw) continue;
+    for (const st of fromPlain<StagedTxn[]>(raw)) {
+      const t = unstageTxn(st, meta.schemes);
+      const accountId = resolution.accounts.get(resolveRowKey(t.folioNumber, t.scheme.amcName))?.accountId;
+      const instrumentId = resolution.instruments.get(keying.keyOf(t.scheme));
+      if (!accountId || !instrumentId) continue;
+      lineKeys.add(`${accountId}:${lineFingerprint(meta, t, accountId, instrumentId)}`);
+    }
+  }
+  for (const r of priorRows) if (r.transaction_fingerprint && lineKeys.has(`${r.account_id}:${r.transaction_fingerprint}`)) claimed.add(r.id);
+  return claimed;
+}
+
+async function loadClaims(env: PipelineEnv, belowBatch?: number): Promise<ClaimRecord[]> {
+  const out: ClaimRecord[] = [];
+  for (const c of await env.store.list('claims')) if (belowBatch === undefined || c.seq < belowBatch) out.push(...((c.payload as { decisions: ClaimRecord[] }).decisions ?? []));
+  return out;
+}
+
 async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
   const { admin, userId, documentId: sourceDocumentId, state } = env;
-  if (state.cursors.txnBatch >= state.counts.txnBatches) return next('holdings');
   const meta = await loadMeta(env);
   const doc = await loadDoc(env);
   if (!doc) return finished({ ok: false, status: 'not_found', parseRunId: state.parseRunId, error: 'Source document not found.' });
@@ -1161,6 +1230,22 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
   const resolveRowKey = makeResolveRowKey(meta.accAmcNameByFolio);
   const resolution = await loadResolution(env);
   const config = await loadActiveReconciliationConfig();
+
+  // WP-H3 (re-reading a document that already wrote rows). Real CAS lines carry no reference, and the fingerprint covers units, NAV and
+  // type, which a parser fix legitimately corrects: a corrected re-read used to insert a second copy of every changed line. Lines that
+  // match no fingerprint are matched by natural key WITHIN THIS DOCUMENT (reparseMatching.ts), each stored row claimed at most once.
+  // The claims of finished batches are kept in staging, so a resumed job never claims a stored row twice.
+  const priorRows = state.cursors.txnBatch < state.counts.txnBatches ? await loadPriorDocRows(env) : [];
+  const storedById = new Map(priorRows.map((r) => [r.id, r]));
+  const personSettledIds = new Set<string>();
+  if (priorRows.length > 0) {
+    const settled = await fetchAllRows<{ id: string; subject_id: string | null }>(() =>
+      admin.from('ii_audit_events').select('id, subject_id').eq('user_id', userId).eq('event_type', 'user_correction').eq('subject_type', 'ii_transactions').order('id', { ascending: true }),
+    );
+    for (const e of settled) if (e.subject_id) personSettledIds.add(e.subject_id);
+  }
+  const claimedByFingerprint = await priorRowsMatchedByFingerprint(env, priorRows, meta);
+
   const crossSourcePositionCache = new Map<string, CrossSourceExistingTransaction[]>();
   const loadCrossSourceCandidates = async (accountId: string, instrumentId: string): Promise<CrossSourceExistingTransaction[]> => {
     const key = `${accountId}:${instrumentId}`;
@@ -1201,7 +1286,17 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
     if (!raw) throw new Error(`The staged transactions are missing (batch ${batchIdx}).`);
     const txns = fromPlain<StagedTxn[]>(raw).map((t) => unstageTxn(t, meta.schemes));
 
+    // The natural-key pool for THIS batch: prior rows, minus those matched by fingerprint, minus those claimed by earlier batches, minus
+    // those this very batch claimed in an attempt that was killed (its recorded claims are applied as they were decided).
+    const earlierClaims = await loadClaims(env, batchIdx);
+    const recordedChunk = (await env.store.get('claims', batchIdx)) as { decisions: ClaimRecord[] } | null;
+    const recorded = new Map<number, ClaimRecord>((recordedChunk?.decisions ?? []).map((d) => [d.li, d]));
+    const excluded = new Set<string>([...claimedByFingerprint, ...earlierClaims.map((c) => c.oldId), ...[...recorded.values()].map((c) => c.oldId)]);
+    const pool = new NaturalKeyPool(priorRows, excluded);
+    const decisions: ClaimRecord[] = [];
+
     interface Item {
+      li: number;
       t: (typeof txns)[number];
       accountId: string;
       instrumentId: string;
@@ -1209,24 +1304,14 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
       newId: string;
     }
     const items: Item[] = [];
-    for (const t of txns) {
+    txns.forEach((t, li) => {
       const accountId = resolution.accounts.get(resolveRowKey(t.folioNumber, t.scheme.amcName))?.accountId;
       const instrumentId = resolution.instruments.get(keying.keyOf(t.scheme));
-      if (!accountId || !instrumentId) continue; // unresolved: already a review case, no orphaned transaction is written
-      const fingerprint = computeTransactionFingerprint({
-        sourceKey: meta.metadata.sourceKey,
-        accountId,
-        instrumentId,
-        transactionDateIso: t.transactionDateIso,
-        transactionType: t.canonicalType,
-        amountScaled: t.amountScaled,
-        unitsScaled: t.unitsScaled,
-        navScaled: t.navScaled,
-        sourceReference: t.sourceReference,
-      });
+      if (!accountId || !instrumentId) return; // unresolved: already a review case, no orphaned transaction is written
+      const fingerprint = lineFingerprint(meta, t, accountId, instrumentId);
       // Derived from the run and the fingerprint: a replayed batch gives a row (and the review cases about it) the same id.
-      items.push({ t, accountId, instrumentId, fingerprint, newId: deterministicUuid('ii-txn', parseRunId, accountId, fingerprint) });
-    }
+      items.push({ li, t, accountId, instrumentId, fingerprint, newId: deterministicUuid('ii-txn', parseRunId, accountId, fingerprint) });
+    });
 
     // Which of this batch already exist (by the database's own unique key: account + fingerprint), read in a few exact lookups.
     interface Existing {
@@ -1237,8 +1322,7 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
       parse_run_id: string | null;
     }
     const existing = new Map<string, Existing>();
-    const lookups = chunked(items, FINGERPRINT_LOOKUP_CHUNK);
-    const found = await mapLimit(lookups, 4, async (chunk) => {
+    const found = await mapLimit(chunked(items, FINGERPRINT_LOOKUP_CHUNK), 4, async (chunk) => {
       const { data, error } = await admin
         .from('ii_transactions')
         .select('id, account_id, transaction_fingerprint, source_document_id, parse_run_id')
@@ -1250,7 +1334,7 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
     });
     for (const rows of found) for (const r of rows) existing.set(`${r.account_id}:${r.transaction_fingerprint}`, r);
 
-    // Candidate lists for the positions that will need a cross-source decision, read together.
+    // Candidate lists for the positions that may need a cross-source decision, read together.
     const needCandidates = [...new Set(items.filter((x) => !existing.has(`${x.accountId}:${x.fingerprint}`)).map((x) => `${x.accountId}:${x.instrumentId}`))];
     await mapLimit(needCandidates, 6, async (k) => {
       const [a, i] = k.split(':');
@@ -1258,20 +1342,22 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
     });
 
     const linkUpserts: Array<Record<string, unknown>> = [];
-    const ownLinkUpserts: Array<Record<string, unknown>> = [];
     const pendingTransactionInserts: Record<string, unknown>[] = [];
     const pendingSourceLinkInserts: Record<string, unknown>[] = [];
     let duplicateLinked = 0;
+    let matchedToExisting = 0;
     let opened = 0;
 
     for (const it of items) {
-      const { t, accountId, instrumentId, fingerprint, newId } = it;
+      const { li, t, accountId, instrumentId, fingerprint, newId } = it;
       const ex = existing.get(`${accountId}:${fingerprint}`);
       if (ex) {
         if (ex.source_document_id === sourceDocumentId && ex.parse_run_id === parseRunId) {
-          // Written by THIS run in a slice that was killed before it could checkpoint: it is ours, not a duplicate. Make sure it has
-          // its originating link (the kill may have fallen between the row and its link) and count it as nothing here.
-          ownLinkUpserts.push({ user_id: userId, transaction_id: ex.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: true });
+          // Written by THIS run in a slice that was killed before it could checkpoint: it is ours, not a duplicate. Make sure it has its
+          // originating link (the kill may have fallen between the row and its link). Its claim, if it replaced a row, is already recorded.
+          linkUpserts.push({ user_id: userId, transaction_id: ex.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: true });
+          const rec = recorded.get(li);
+          if (rec) decisions.push(rec);
           continue;
         }
         linkUpserts.push({ user_id: userId, transaction_id: ex.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: false });
@@ -1279,8 +1365,50 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
         continue;
       }
 
+      // WP-H3: no fingerprint match. Is this the same real line, written by an earlier parse of THIS document?
+      let supersedes: StoredDocTransaction | null = null;
+      {
+        let twin: StoredDocTransaction | null = null;
+        let decisionKind: 'link_existing' | 'supersede' | null = null;
+        let changed: string[] = [];
+        const rec = recorded.get(li);
+        if (rec) {
+          twin = storedById.get(rec.oldId) ?? null;
+          decisionKind = rec.kind;
+          changed = rec.changed;
+        } else {
+          const line: ReReadLine = {
+            accountId,
+            instrumentId,
+            dateIso: t.transactionDateIso,
+            amount: scaledToDecimalString(t.amountScaled, 2),
+            type: t.canonicalType,
+            units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
+            navPerUnit: t.navScaled === null ? null : scaledToDecimalString(t.navScaled),
+          };
+          twin = pool.take(line);
+          if (twin) {
+            const d = decideReRead(twin, line, personSettledIds);
+            if (d.kind === 'link_existing' || d.kind === 'supersede') {
+              decisionKind = d.kind;
+              changed = d.kind === 'supersede' ? d.changed : [];
+            }
+          }
+        }
+        if (twin && decisionKind) {
+          decisions.push({ li, oldId: twin.id, kind: decisionKind, changed, fp: twin.transaction_fingerprint, accountId, instrumentId });
+          if (decisionKind === 'link_existing') {
+            linkUpserts.push({ user_id: userId, transaction_id: twin.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: false });
+            duplicateLinked++;
+            matchedToExisting++;
+            continue;
+          }
+          supersedes = twin;
+        }
+      }
+
       // Cross-source identity (a different source already evidences the same real-world transaction).
-      const crossSourceCandidates = crossSourcePositionCache.get(`${accountId}:${instrumentId}`) ?? [];
+      const crossSourceCandidates = supersedes ? [] : crossSourcePositionCache.get(`${accountId}:${instrumentId}`) ?? [];
       if (crossSourceCandidates.length > 0) {
         const match = resolveCrossSourceTransactionMatch(
           {
@@ -1360,7 +1488,9 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
         instrument_id: instrumentId,
         source_document_id: sourceDocumentId,
         currency_code: currencyCode,
-        status: CROSS_SOURCE_INSERT_STATUS,
+        // WP-H3: a corrected re-read of a line this document already wrote is a correction row pointing at the row it replaces.
+        status: supersedes ? 'corrected' : CROSS_SOURCE_INSERT_STATUS,
+        corrects_transaction_id: supersedes ? supersedes.id : null,
         transaction_type: t.canonicalType,
         transaction_date: t.transactionDateIso,
         units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
@@ -1390,14 +1520,14 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
         status: CROSS_SOURCE_INSERT_STATUS,
       });
     }
+    // The claims are recorded BEFORE any row is written: a resumed batch applies them as decided instead of deciding again.
+    if (decisions.length > 0) await env.store.put('claims', batchIdx, { decisions });
     await fault(env, 'transactions:decided');
 
-    // Duplicate links: one bulk write per chunk instead of one round trip per transaction.
-    for (const links of chunked([...linkUpserts, ...ownLinkUpserts], INSERT_CHUNK)) {
+    for (const links of chunked(linkUpserts, INSERT_CHUNK)) {
       const { error } = await admin.from('ii_transaction_source_links').upsert(links, { onConflict: 'transaction_id,source_document_id', ignoreDuplicates: true });
       if (error) throw new Error(`Transaction link write failed: ${error.message}`);
     }
-    // New rows, each chunk followed by its links.
     for (let i = 0; i < pendingTransactionInserts.length; i += INSERT_CHUNK) {
       const txnChunk = pendingTransactionInserts.slice(i, i + INSERT_CHUNK);
       const linkChunk = pendingSourceLinkInserts.slice(i, i + INSERT_CHUNK);
@@ -1419,8 +1549,51 @@ async function transactionsStep(env: PipelineEnv): Promise<StepOut> {
     }
     await fault(env, 'transactions:written');
     state.counters.duplicateLinked += duplicateLinked;
+    state.counters.matchedToExisting += matchedToExisting;
     state.counters.casesOpened += opened;
     state.cursors.txnBatch = batchIdx + 1;
+    if (!(await env.save())) return { kind: 'lost' };
+  }
+
+  // WP-H3, once per document: the replaced rows leave the figures only AFTER every correction is written (soft, audited, reversible: the
+  // same `reversed` exclusion every ledger reader honours). It runs here, after the last batch and before holdings and certification,
+  // because certification reads the figures. Updating a row to reversed twice changes nothing, and the audit event is written once.
+  if (!state.cursors.reversalDone) {
+    const prior = await loadPriorDocRows(env);
+    const claims = await loadClaims(env);
+    const claimedFp = await priorRowsMatchedByFingerprint(env, prior, meta);
+    const replacedIds = claims.filter((c) => c.kind === 'supersede').map((c) => c.oldId);
+    // Self-healing: a correction whose predecessor is still counted (an earlier run stopped between the two writes) is finished now.
+    const healIds = prior
+      .filter((r) => r.status === 'corrected' && r.corrects_transaction_id && claimedFp.has(r.id))
+      .map((r) => r.corrects_transaction_id as string)
+      .filter((id) => prior.some((o) => o.id === id && o.status !== 'reversed'));
+    const reverseIds = [...new Set([...replacedIds, ...healIds])];
+    for (const part of chunked(reverseIds, INSERT_CHUNK)) {
+      const { error: reverseError } = await admin.from('ii_transactions').update({ status: 'reversed' }).eq('user_id', userId).in('id', part);
+      if (reverseError) {
+        const message = `Replacing re-read transactions failed: ${reverseError.message}`;
+        await failRun(admin, state.parseRunId as string, message);
+        await updateDocumentStatusUnlessSucceeded(env, { status: 'parse_failed', parse_error: 'transaction_write_failed' });
+        return finished({ ok: false, status: 'parse_failed', parseRunId: state.parseRunId, error: message });
+      }
+    }
+    await fault(env, 'transactions:reversed');
+    if (reverseIds.length > 0 || state.counters.matchedToExisting > 0) {
+      const { data: already } = await admin.from('ii_audit_events').select('id').eq('user_id', userId).eq('event_type', 'document_superseded').eq('subject_id', sourceDocumentId).contains('metadata', { parseRunId: state.parseRunId }).limit(1);
+      if ((already ?? []).length === 0) {
+        await emitAuditEvent({
+          userId,
+          eventType: 'document_superseded',
+          subjectType: 'ii_source_documents',
+          subjectId: sourceDocumentId,
+          actorType: 'system',
+          // counts and ids only; every replaced row is also reachable through ii_transactions.corrects_transaction_id
+          metadata: { kind: 'transactions_reconciled_on_reparse', parseRunId: state.parseRunId, replaced: replacedIds.length, healed: healIds.length, matchedToExisting: state.counters.matchedToExisting, replacedIdSample: claims.filter((c) => c.kind === 'supersede').slice(0, 20).map((c) => ({ old: c.oldId, changed: c.changed })) },
+        });
+      }
+    }
+    state.cursors.reversalDone = true;
     if (!(await env.save())) return { kind: 'lost' };
   }
   return next('holdings');
@@ -1526,6 +1699,17 @@ async function analyseStep(env: PipelineEnv): Promise<StepOut> {
           set.add(fp);
           confirmed.set(k, set);
         }
+      }
+    }
+    // WP-H3: the stored row a re-read line was matched to is confirmed by this statement too (its own fingerprint is the one
+    // missing-transaction detection knows).
+    if (periodStartIso && periodEndIso) {
+      for (const c of await loadClaims(env)) {
+        if (!c.fp) continue;
+        const k = `${c.accountId}:${c.instrumentId}`;
+        const set = confirmed.get(k) ?? new Set<string>();
+        set.add(c.fp);
+        confirmed.set(k, set);
       }
     }
     while (state.cursors.analyse < covered.length) {

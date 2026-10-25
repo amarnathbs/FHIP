@@ -18,7 +18,7 @@ import {
   type StatementJobRow,
 } from './model';
 
-export type StatementChunkKind = 'parsed_meta' | 'parsed_txns' | 'parsed_holds' | 'acct' | 'inst' | 'pairs';
+export type StatementChunkKind = 'parsed_meta' | 'parsed_txns' | 'parsed_holds' | 'acct' | 'inst' | 'pairs' | 'claims';
 
 export interface StatementChunkRow {
   id: string;

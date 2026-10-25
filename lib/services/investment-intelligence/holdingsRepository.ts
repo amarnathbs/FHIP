@@ -263,6 +263,7 @@ export async function loadHoldingsTable(
     .from('ii_transactions')
     .select('account_id, instrument_id, transaction_type, gross_amount, units, transaction_date')
     .eq('user_id', userId)
+    .neq('status', 'reversed') // WP-H3: a row replaced by a corrected re-read is out of cost value and the benchmark window
     .order('transaction_date', { ascending: true })
     .order('id', { ascending: true });
   const costValueByPosition = new Map<string, number>();

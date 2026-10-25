@@ -7,7 +7,8 @@ export interface WphTxn {
   price: string; // 50.0000
   units: string; // 100.000
   balance: string; // running unit balance after this line
-  ref: string;
+  /** Omit for a real-shaped line: genuine CAS lines carry no provider reference, so source_reference is NULL. */
+  ref?: string;
   type?: string;
 }
 
@@ -36,7 +37,7 @@ export function buildWphCas(opts: { periodStart: string; periodEnd: string; foli
       `${f.scheme} - ISIN: ${f.isin}(Advisor: ARN00001) Registrar : CAMS`,
       '',
       'Date          Amount           Price        Units       Transaction Type                    Unit Balance',
-      ...f.txns.map((t) => `${t.date}   ${t.amount}         ${t.price}      ${t.units}     ${t.type ?? 'Purchase'}                             ${t.balance}   [Ref: ${t.ref}]`),
+      ...f.txns.map((t) => `${t.date}   ${t.amount}         ${t.price}      ${t.units}     ${t.type ?? 'Purchase'}                             ${t.balance}${t.ref ? `   [Ref: ${t.ref}]` : ''}`),
       '',
       `Closing Unit Balance as on ${f.closingDate} : ${f.closingUnits} Units   Valuation : Rs. ${f.closingValue}   NAV as on ${f.closingDate} : Rs. ${f.closingNav}`,
       '',
@@ -84,4 +85,24 @@ export const OTHER_FOLIO: WphFolio = {
   closingUnits: '100.000',
   closingValue: '11,000.00',
   closingNav: '110.00',
+};
+
+/** A real-shaped folio: five lines with NO reference (source_reference stays NULL), a SIP series with identical amounts, closing 38.000 units. */
+export const NULL_REF_FOLIO: WphFolio = {
+  folio: '5566778899',
+  amc: 'Vantage Mutual Fund',
+  scheme: 'Vantage Growth Fund - Growth (Regular Plan)',
+  isin: 'INF777K01EE5',
+  holderName: 'Asha Rao',
+  txns: [
+    { date: '09-Nov-2015', amount: '1,000.00', price: '152.3899', units: '6.562', balance: '6.562', type: 'SIP Purchase' },
+    { date: '07-Dec-2015', amount: '1,000.00', price: '149.6313', units: '6.683', balance: '13.245', type: 'SIP Purchase' },
+    { date: '07-Jan-2016', amount: '1,000.00', price: '146.2884', units: '6.836', balance: '20.081', type: 'SIP Purchase' },
+    { date: '08-Feb-2016', amount: '1,000.00', price: '139.8785', units: '7.149', balance: '27.230', type: 'SIP Purchase' },
+    { date: '10-Feb-2014', amount: '10,000.00', price: '13.0500', units: '766.284', balance: '793.514', type: 'Purchase' },
+  ],
+  closingDate: '06-Sep-2026',
+  closingUnits: '793.514',
+  closingValue: '120,000.00',
+  closingNav: '151.2300',
 };

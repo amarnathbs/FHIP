@@ -114,8 +114,9 @@ create table if not exists ii_statement_job_chunks (
   job_id uuid not null references ii_statement_jobs(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   -- parsed_meta is the staged statement facts that are not lines (one row, seq 0). parsed_txns and parsed_holds are batches of lines.
-  -- acct and inst are the account and instrument resolution tables. pairs is the list of positions to certify.
-  kind text not null check (kind in ('parsed_meta', 'parsed_txns', 'parsed_holds', 'acct', 'inst', 'pairs')),
+  -- acct and inst are the account and instrument resolution tables. pairs is the list of positions to certify. claims records, per batch
+  -- of transaction lines, which stored row each re-read line was matched to, so a resumed job never claims a stored row twice.
+  kind text not null check (kind in ('parsed_meta', 'parsed_txns', 'parsed_holds', 'acct', 'inst', 'pairs', 'claims')),
   seq integer not null check (seq >= 0),
   payload jsonb not null,
   created_at timestamptz not null default now(),

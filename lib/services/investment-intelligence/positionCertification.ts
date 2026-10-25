@@ -138,6 +138,7 @@ async function ensureDerivedZeroUnitClosingSnapshot(
       .select('transaction_type, units, transaction_date, currency_code')
       .eq('account_id', accountId)
       .eq('instrument_id', instrumentId)
+      .neq('status', 'reversed') // WP-H3: a replaced row is out of the figures
       .order('transaction_date', { ascending: true })
       .order('id', { ascending: true });
     return baselineDate ? query.gt('transaction_date', baselineDate) : query;
@@ -225,6 +226,7 @@ export async function evaluatePositionAndCertify(
       .select('transaction_type, units, transaction_date, source_reference')
       .eq('account_id', accountId)
       .eq('instrument_id', instrumentId)
+      .neq('status', 'reversed') // WP-H3: a replaced row is out of the figures
       .lte('transaction_date', latestSnapshot.as_of_date as string)
       .order('transaction_date', { ascending: true })
       .order('id', { ascending: true })
