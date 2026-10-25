@@ -22,6 +22,16 @@ vi.mock('@/lib/entitlements/financialDataImport', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/entitlements/financialDataImport')>()),
   refuseUnlessFinancialImportAllowed: async () => (h.denyImport ? Response.json({ error: 'premium_required' }, { status: 403 }) : null),
 }));
+// Document2 (4) WP-J: re-evaluate is admitted as a job. These in-memory tests have no job tables, which is the documented fallback to the
+// earlier one-request behaviour; the job path is covered by the PGlite suite.
+vi.mock('@/lib/services/investment-intelligence/statementJob/admission', async () => {
+  const store = await import('@/lib/services/investment-intelligence/statementJob/store');
+  return {
+    admitStatementJob: async () => {
+      throw new store.StatementJobsUnavailableError();
+    },
+  };
+});
 vi.mock('@/lib/services/investment-intelligence/sourceDocumentReplacement', () => ({
   replaceSourceDocumentFile: async (input: unknown) => {
     h.replaceCalls.push(input);

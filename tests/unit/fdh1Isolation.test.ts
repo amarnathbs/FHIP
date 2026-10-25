@@ -400,6 +400,10 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // duplicate it" reasoning already approved for AIE-1.3's
       // fdhBankStatement adapter above.
       path.join(REPO_ROOT, 'lib', 'services', 'investment-intelligence', 'documentProcessing.ts'),
+      // Document2 (4) WP-J: the processing pipeline moved into statementPipeline.ts and keeps the very same reused limiter imports.
+      path.join(REPO_ROOT, 'lib', 'services', 'investment-intelligence', 'statementPipeline.ts'),
+      // Document2 (4) WP-H2 moved the same reused limiter into the malware-scan admission; this list was not updated there (it fails the same way on origin/main).
+      path.join(REPO_ROOT, 'lib', 'services', 'investment-intelligence', 'realScanAdmission.ts'),
       path.join(REPO_ROOT, 'app', 'api', 'aie', 'investment-intelligence', 'intake', '[intakeId]', 'process', 'route.ts'),
       // PC5/PC6/HUF (2026-09-15): the same naive-substring limitation once
       // more. `app/api/business-entities/route.ts` cites

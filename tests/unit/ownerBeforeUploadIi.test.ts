@@ -387,14 +387,15 @@ describe('holder-name mismatch is a NON-BLOCKING warning for new uploads; legacy
   });
 
   it('processing: a document with a chosen owner takes the new branch and that branch opens NO reconciliation case', () => {
-    const src = fs.readFileSync(path.resolve(__dirname, '../../lib/services/investment-intelligence/documentProcessing.ts'), 'utf8');
+    const src = fs.readFileSync(path.resolve(__dirname, '../../lib/services/investment-intelligence/statementPipeline.ts'), 'utf8');
     const start = src.indexOf('if (documentOwner) {');
     const end = src.indexOf('} else if (ownerUnresolved) {');
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
     const newBranch = src.slice(start, end);
     expect(newBranch).not.toMatch(/openReconciliationCase/);
-    expect(newBranch).toMatch(/computeHolderNameWarnings/);
+    // WP-J: the printed-name warnings are computed once, after every folio of the (possibly sliced) owner step has been looked at
+    expect(src).toMatch(/computeHolderNameWarnings/);
     // CONTROL: the LEGACY branches that follow still open the blocking cases, unchanged.
     const legacy = src.slice(end, end + 12000);
     expect(legacy).toMatch(/discrepancyType: 'owner_unmatched'/);
@@ -520,8 +521,8 @@ describe('"this is not joint": a statement that prints a joint holding but is so
     const warnings = [warn(ACC_NEW), warn(ACC_EMPTY)];
     expect(withoutAcknowledgedWarnings(warnings, [ACC_NEW]).map((w) => w.accountId)).toEqual([ACC_EMPTY]);
     expect(withoutAcknowledgedWarnings(warnings, undefined)).toHaveLength(2); // CONTROL
-    const src = fs.readFileSync(path.resolve(__dirname, '../../lib/services/investment-intelligence/documentProcessing.ts'), 'utf8');
-    expect(src).toMatch(/withoutAcknowledgedWarnings\(ownerReview\.warnings, acknowledged\)/);
+    const src = fs.readFileSync(path.resolve(__dirname, '../../lib/services/investment-intelligence/statementPipeline.ts'), 'utf8');
+    expect(src).toMatch(/withoutAcknowledgedWarnings\(review\.warnings, acknowledged\)/);
   });
   it('the statement detail offers the confirmation only on a joint-holding warning', () => {
     const client = fs.readFileSync(path.resolve(__dirname, '../../components/investment-intelligence/InvestmentIntelligenceClient.tsx'), 'utf8');

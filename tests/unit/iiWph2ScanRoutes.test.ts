@@ -28,6 +28,13 @@ vi.mock('@/lib/services/investment-intelligence/documentProcessing', () => ({
   },
   openReconciliationCase: vi.fn(),
 }));
+vi.mock('@/lib/services/investment-intelligence/statementJob/admission', () => ({
+  admitStatementJob: async (p: { userId: string; documentId: string; password?: string; forceReparse?: boolean }) => {
+    const input = { userId: p.userId, sourceDocumentId: p.documentId, password: p.password, forceReparse: p.forceReparse };
+    h.processCalls.push(input);
+    return { kind: 'answer', result: { ok: true, status: 'parsed', parseRunId: 'run1', error: null } };
+  },
+}));
 vi.mock('@/lib/services/investment-intelligence/reconciliationCases', () => ({
   openReconciliationCase: async (_u: string, input: Record<string, unknown>) => {
     h.db.tables.ii_reconciliation_cases.push({ id: `case${h.db.tables.ii_reconciliation_cases.length + 1}`, discrepancy_type: input.discrepancyType, status: 'open', source_document_id: input.sourceDocumentId, details: input.details });

@@ -23,7 +23,7 @@ describe('Previously processed statements section', () => {
     // Guards against the rule being re-implemented inline (and drifting from
     // the tested version) instead of imported.
     expect(src).toContain("import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping'");
-    expect(src).toContain('partitionSourceDocumentsByProcessedState(documents ?? [])');
+    expect(src).toContain('partitionSourceDocumentsByProcessedState(documents ?? [], new Set(Object.keys(followed)))');
   });
 
   it('renders only the active documents in the primary working list', () => {
@@ -40,7 +40,7 @@ describe('Previously processed statements section', () => {
   it('exposes an accessible expand/collapse toggle showing the count, not a bare link', () => {
     const section = src.slice(src.indexOf('previouslyProcessedDocuments.length > 0'), src.indexOf('previouslyProcessedDocuments.length > 0') + 1200);
     expect(section).toContain('aria-expanded={showProcessed}');
-    expect(section).toMatch(/previously processed statements \(\{previouslyProcessedDocuments\.length\}\)/);
+    expect(section).toMatch(/Processed statements \(\{previouslyProcessedDocuments\.length\}\)/);
   });
 
   it('never deletes or unconditionally hides a processed document — it renders behind the same row renderer, only gated on showProcessed', () => {

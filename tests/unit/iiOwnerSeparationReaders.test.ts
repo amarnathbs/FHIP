@@ -184,18 +184,18 @@ describe('documentProcessing / certification readers (structural: the pipeline n
   const read = (rel: string) => readFileSync(path.join(path.resolve(__dirname, '../..'), rel), 'utf8');
 
   it('the upload pipeline skips owner exceptions on an account whose owner is already decided as entity / joint, and does not count it as an unresolved owner', () => {
-    const src = read('lib/services/investment-intelligence/documentProcessing.ts');
+    const src = read('lib/services/investment-intelligence/statementPipeline.ts'); // WP-J: the pipeline steps
     expect(src).toContain('loadDecidedOwnershipAccountIds');
     // owner_unmatched / joint (no declared owner) loop, and the declared-owner loop
-    expect(src.match(/if \(decidedOwnershipAccountIds\.has\(accountId\)\) continue;/g)?.length).toBe(2);
+    expect(src.match(/if \(decided\.has\(accountId\)\) continue;/g)?.length).toBe(2);
     // Document2 (4) WP-B: the certification flag is now per account and uses the explicit-owner set, a SUPERSET of the decided
     // (entity / joint) set that also counts a sole-member pointer a person chose (see loadExplicitOwnerAccountIds).
-    expect(src).toContain('ownerUnresolved && !explicitOwnerAccountIds.has(accountId)');
+    expect(src).toContain('state.ownerUnresolved && !explicitCache.get(accountId)');
     expect(src).toContain('loadExplicitOwnerAccountIds');
   });
 
   it('recertifyPosition and the AU certification read the EFFECTIVE ownership, not just the pointer', () => {
-    expect(read('lib/services/investment-intelligence/documentProcessing.ts')).toContain("effectiveOwnership.ownership.kind === 'unassigned'");
+    expect(read('lib/services/investment-intelligence/positionCertification.ts')).toContain("effectiveOwnership.ownership.kind === 'unassigned'");
     expect(read('lib/investment-import-bridge/certifyAuPosition.ts')).toContain("effectiveOwnership.ownership.kind === 'unassigned'");
   });
 

@@ -1,18 +1,21 @@
-// Statements & data list — "Previously processed" grouping (2026-09-29 fix).
+// Statements & data list grouping.
 //
-// THE REAL BUG UNDER TEST
-// ------------------------
-// Confirmed live on /investment-intelligence/data: a statement that had been
-// fully processed, reviewed, certified AND published never left the working
-// list — every uploaded document stayed in the same flat list forever
-// regardless of status. These tests pin down the exact condition that now
-// moves a document into "previously processed" so a future change cannot
-// silently widen or narrow it (e.g. treating "certified" as "done" without
-// requiring an actual publish, which would be wrong per R3 spec sections
-// 41-42 — publishing is a separate, explicit user action).
+// 2026-09-29: a document that had been fully processed never left the working list.
+// Document2 (4) WP-J (25-10-2026, Product Owner request): the list shows PROMINENTLY only the statements that need action (Parse failed,
+// issues, positions needing attention, ready to publish, a running job, anything not yet processed) and folds everything else, including
+// archived or superseded statements with no open issue, into one quiet "Processed statements (N)" disclosure.
+//
+// These tests pin the exact rule so a future change cannot silently widen or narrow it. "Certified" alone is still not "done": publishing
+// is a separate, explicit user action (R3 spec sections 41-42), so a certified statement with unpublished positions stays prominent.
 
 import { describe, it, expect } from 'vitest';
-import { isSourceDocumentFullyProcessed, partitionSourceDocumentsByProcessedState, type SourceDocumentGroupingSignals } from '@/lib/investment-intelligence/sourceDocumentGrouping';
+import {
+  isSourceDocumentFullyProcessed,
+  partitionSourceDocumentsByProcessedState,
+  statementActionReasons,
+  statementNeedsAction,
+  type SourceDocumentGroupingSignals,
+} from '@/lib/investment-intelligence/sourceDocumentGrouping';
 
 const DONE: SourceDocumentGroupingSignals = {
   status: 'parsed',
@@ -22,61 +25,79 @@ const DONE: SourceDocumentGroupingSignals = {
   publishedHoldingsCount: 3,
 };
 
-describe('isSourceDocumentFullyProcessed', () => {
-  it('is true for a fully parsed, clean, fully-published document', () => {
+describe('statementNeedsAction / isSourceDocumentFullyProcessed', () => {
+  it('a fully parsed, clean, fully published statement is quiet', () => {
+    expect(statementNeedsAction(DONE)).toBe(false);
     expect(isSourceDocumentFullyProcessed(DONE)).toBe(true);
   });
 
-  it('is false for any status other than parsed', () => {
-    for (const status of ['uploaded', 'parsing', 'parse_failed', 'password_required', 'reconciliation_required', 'unsupported', 'ai_review_pending', 'superseded', 'archived']) {
-      expect(isSourceDocumentFullyProcessed({ ...DONE, status }), `status=${status} must stay active`).toBe(false);
+  it('every status that is not a finished one needs action (uploaded, processing, Parse failed, password, unsupported, reconciliation, AI review)', () => {
+    for (const status of ['uploaded', 'parsing', 'parse_failed', 'password_required', 'reconciliation_required', 'unsupported', 'ai_review_pending']) {
+      expect(statementNeedsAction({ ...DONE, status }), `status=${status}`).toBe(true);
     }
   });
 
-  it('is false while any reconciliation case is still open', () => {
-    expect(isSourceDocumentFullyProcessed({ ...DONE, openReconciliationCaseCount: 1 })).toBe(false);
+  it('archived and superseded statements with no open issue are quiet', () => {
+    expect(statementNeedsAction({ status: 'archived', openReconciliationCaseCount: 0 })).toBe(false);
+    expect(statementNeedsAction({ status: 'superseded' })).toBe(false);
   });
 
-  it('is false while any position still needs attention (certified only, not yet published, or worse)', () => {
-    expect(isSourceDocumentFullyProcessed({ ...DONE, positionsNeedingAttentionCount: 1 })).toBe(false);
+  it('an open issue is never hidden, not even on an archived statement', () => {
+    expect(statementNeedsAction({ ...DONE, openReconciliationCaseCount: 1 })).toBe(true);
+    expect(statementNeedsAction({ status: 'archived', openReconciliationCaseCount: 2 })).toBe(true);
   });
 
-  it('is false when publishing is incomplete, even with zero open cases and zero flagged positions', () => {
-    // The exact distinction this fix depends on: "certified" is not "done".
-    // A position can be fully certified and sit unpublished for weeks
-    // waiting on the user's own explicit Publish click.
-    expect(isSourceDocumentFullyProcessed({ ...DONE, publishedHoldingsCount: 2 })).toBe(false);
+  it('positions needing attention keep the statement prominent', () => {
+    expect(statementNeedsAction({ ...DONE, positionsNeedingAttentionCount: 15 })).toBe(true);
   });
 
-  it('is false for a document that produced zero holdings, even if otherwise clean', () => {
-    // Nothing was ever published for this document, so there is nothing to
-    // confirm — never guess it into the archive.
-    expect(isSourceDocumentFullyProcessed({ ...DONE, totalHoldingsCount: 0, publishedHoldingsCount: 0 })).toBe(false);
+  it('certified but not fully published (a Publish to FHIP click is still to be made) stays prominent', () => {
+    expect(statementNeedsAction({ ...DONE, publishedHoldingsCount: 2 })).toBe(true);
   });
 
-  it('tolerates undefined counts (a document response shape from before this fix) as "not done"', () => {
-    expect(isSourceDocumentFullyProcessed({ status: 'parsed' })).toBe(false);
+  it('a parsed statement that produced no holdings and has no issue is quiet (nothing is waiting on the person)', () => {
+    expect(statementNeedsAction({ ...DONE, totalHoldingsCount: 0, publishedHoldingsCount: 0 })).toBe(false);
+    expect(statementNeedsAction({ status: 'parsed' })).toBe(false);
+  });
+
+  it('a running or waiting job makes any statement prominent, whatever its status', () => {
+    expect(statementNeedsAction(DONE, true)).toBe(true);
+    expect(statementNeedsAction({ status: 'archived' }, true)).toBe(true);
   });
 });
 
 describe('partitionSourceDocumentsByProcessedState', () => {
   it('splits a mixed list, preserving each document exactly once and its relative order', () => {
-    const active1 = { ...DONE, id: 'a', status: 'uploaded' as const };
-    const done1 = { ...DONE, id: 'b' };
-    const active2 = { ...DONE, id: 'c', openReconciliationCaseCount: 1 };
-    const done2 = { ...DONE, id: 'd' };
-    const { active, previouslyProcessed } = partitionSourceDocumentsByProcessedState([active1, done1, active2, done2]);
-    expect(active.map((d) => (d as { id: string }).id)).toEqual(['a', 'c']);
-    expect(previouslyProcessed.map((d) => (d as { id: string }).id)).toEqual(['b', 'd']);
+    const a = { ...DONE, id: 'a', status: 'uploaded' };
+    const b = { ...DONE, id: 'b' };
+    const c = { ...DONE, id: 'c', openReconciliationCaseCount: 1 };
+    const d = { ...DONE, id: 'd' };
+    const e = { id: 'e', status: 'archived' };
+    const { active, previouslyProcessed } = partitionSourceDocumentsByProcessedState([a, b, c, d, e]);
+    expect(active.map((x) => x.id)).toEqual(['a', 'c']);
+    expect(previouslyProcessed.map((x) => x.id)).toEqual(['b', 'd', 'e']);
   });
 
-  it('returns everything as active when nothing qualifies', () => {
+  it('a statement with a running job is moved to the prominent list', () => {
+    const { active, previouslyProcessed } = partitionSourceDocumentsByProcessedState([{ ...DONE, id: 'b' }, { ...DONE, id: 'd' }], new Set(['d']));
+    expect(active.map((x) => x.id)).toEqual(['d']);
+    expect(previouslyProcessed.map((x) => x.id)).toEqual(['b']);
+  });
+
+  it('returns everything as active when nothing is quiet, and handles an empty list', () => {
     const { active, previouslyProcessed } = partitionSourceDocumentsByProcessedState([{ status: 'uploaded' }, { status: 'parse_failed' }]);
     expect(active).toHaveLength(2);
     expect(previouslyProcessed).toHaveLength(0);
-  });
-
-  it('handles an empty list', () => {
     expect(partitionSourceDocumentsByProcessedState([])).toEqual({ active: [], previouslyProcessed: [] });
+  });
+});
+
+describe('statementActionReasons (the chips that say why a statement is prominent)', () => {
+  it('names each reason in plain words', () => {
+    expect(statementActionReasons({ status: 'parse_failed' })).toEqual(['Parse failed']);
+    expect(statementActionReasons({ ...DONE, openReconciliationCaseCount: 1, positionsNeedingAttentionCount: 15 })).toEqual(['1 issue', '15 positions need attention']);
+    expect(statementActionReasons({ ...DONE, publishedHoldingsCount: 1 })).toEqual(['2 ready to publish']);
+    expect(statementActionReasons(DONE, true)).toEqual(['Processing']);
+    expect(statementActionReasons(DONE)).toEqual([]);
   });
 });

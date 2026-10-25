@@ -24,6 +24,13 @@ vi.mock('@/lib/services/investment-intelligence/pc6/userNavHistory', () => ({ ge
 vi.mock('@/lib/services/investment-intelligence/pc6/userNavHistoryLive', () => ({ runLiveUserNavHistoryBatch: (...a: unknown[]) => runLiveUserNavHistoryBatch(...a) }));
 vi.mock('@/lib/services/investment-intelligence/investmentDateService', () => ({ applyPendingInvestmentDates: (...a: unknown[]) => applyPendingInvestmentDates(...a) }));
 vi.mock('@/lib/services/investment-intelligence/documentProcessing', () => ({ recertifyPosition: (...a: unknown[]) => recertifyPosition(...a), processSourceDocument: (...a: unknown[]) => processSourceDocument(...a) }));
+// Document2 (4) WP-J: the process route admits a job. For an answer that needs no work (the case these tests cover) admission returns it.
+vi.mock('@/lib/services/investment-intelligence/statementJob/admission', () => ({
+  admitStatementJob: async (p: { userId: string; documentId: string; password?: string; forceReparse?: boolean }) => ({
+    kind: 'answer',
+    result: await processSourceDocument({ userId: p.userId, sourceDocumentId: p.documentId, password: p.password, forceReparse: p.forceReparse }),
+  }),
+}));
 vi.mock('@/lib/services/investment-intelligence/pc6/userNavHistoryKick', () => ({ kickUserNavHistory: (...a: unknown[]) => kickUserNavHistory(...a) }));
 vi.mock('@/lib/services/investment-intelligence/realScanAdmission', () => ({
   ensureIiRealScanAdmissible: async () => ({ admitted: true }),

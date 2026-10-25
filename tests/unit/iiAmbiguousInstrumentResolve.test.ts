@@ -18,6 +18,15 @@ const { processSourceDocumentMock } = vi.hoisted(() => ({ processSourceDocumentM
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth: { getUser: mockGetUser }, from: mockUserFrom }) }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: mockAdminFrom }) }));
 vi.mock('@/lib/services/investment-intelligence/documentProcessing', () => ({ processSourceDocument: processSourceDocumentMock }));
+// Document2 (4) WP-J: the reprocess after a resolution is admitted as a background job. This suite's contract (the choice is saved, the
+// reprocess outcome is reported, a failure never undoes the resolution) is unchanged; it goes through the admission seam with the earlier
+// synchronous behaviour, which is also the documented fallback where the job tables are absent. The job path has its own suites.
+vi.mock('@/lib/services/investment-intelligence/statementJob/admission', () => ({
+  reprocessAfterResolution: async (userId: string, documentId: string) => {
+    const r = (await processSourceDocumentMock({ userId, sourceDocumentId: documentId, forceReparse: true })) as { ok: boolean; error?: string | null };
+    return { reprocessed: r.ok, reprocessError: r.ok ? null : (r.error ?? 'Reprocessing did not complete successfully.'), needsReplacementCopy: false, reprocessJobId: null };
+  },
+}));
 vi.mock('@/lib/services/investment-intelligence/audit', () => ({ emitAuditEvent: vi.fn().mockResolvedValue(undefined) }));
 
 import { POST } from '@/app/api/investment-intelligence/reconciliation-cases/[id]/resolve-instrument/route';

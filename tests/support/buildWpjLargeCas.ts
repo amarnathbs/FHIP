@@ -29,6 +29,11 @@ export interface WpjCasOptions {
   extraTxnsOnLastPosition?: number;
   /** Real CAS lines carry no provider reference: omit the [Ref: ...] tail so source_reference stays NULL (the default is to print one). */
   omitRefs?: boolean;
+  /**
+   * On position 0: line twinAt+1 is a second purchase on the SAME date for the SAME amount as line twinAt, with different units and price
+   * (two genuine instalments, two fingerprints, one natural key). Placed across a staging batch boundary it proves a stored row is claimed once.
+   */
+  twinAt?: number;
 }
 
 export interface WpjCas {
@@ -96,12 +101,23 @@ export function buildWpjLargeCas(opts: WpjCasOptions): WpjCas {
       const monthIdx = monthsFromStart % 12;
       lastYear = year;
       lastMonth = monthIdx;
-      const units = 10 * (1 + (t % 5)) * 1000; // scaled 1000
-      const price = price0 + (t % 3); // whole rupees
-      const amount = Math.round((units / 1000) * price * 100); // scaled 100
+      let units = 10 * (1 + (t % 5)) * 1000; // scaled 1000
+      let price = price0 + (t % 3); // whole rupees
+      let amount = Math.round((units / 1000) * price * 100); // scaled 100
+      let year2 = year;
+      let monthIdx2 = monthIdx;
+      if (i === 0 && opts.twinAt !== undefined && (t === opts.twinAt || t === opts.twinAt + 1)) {
+        // both lines on the date of line twinAt, both for 600.00: 10 units at 60 and 12 units at 50
+        const base = opts.twinAt + (0 % 12);
+        year2 = 2015 + Math.floor(base / 12);
+        monthIdx2 = base % 12;
+        units = t === opts.twinAt ? 10_000 : 12_000;
+        price = t === opts.twinAt ? 60 : 50;
+        amount = 60_000;
+      }
       balance += units;
       txnLines.push(
-        `${fmtDate(year, monthIdx, 10)}   ${money(amount)}         ${price.toFixed(4)}      ${units3(units)}     Purchase                             ${units3(balance)}${opts.omitRefs ? '' : `   [Ref: WPJ-${stamp}-${pad(i, 4)}-${pad(t, 3)}]`}`,
+        `${fmtDate(year2, monthIdx2, 10)}   ${money(amount)}         ${price.toFixed(4)}      ${units3(units)}     Purchase                             ${units3(balance)}${opts.omitRefs ? '' : `   [Ref: WPJ-${stamp}-${pad(i, 4)}-${pad(t, 3)}]`}`,
       );
     }
     totalTransactions += txnCount;

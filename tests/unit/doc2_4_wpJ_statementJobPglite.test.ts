@@ -577,3 +577,85 @@ describe('WP-J statement job: two-user tenancy', () => {
     await expect(db.query(`insert into ii_statement_jobs (user_id, source_document_id, idempotency_key) values ($1, $2, 'x-tenant-key-1')`, [b.userId, a.docId])).rejects.toThrow(/cross-tenant/);
   }, 600_000);
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+describe('WP-J statement job: a stored row is claimed ONCE across slices (two genuine same-day instalments, one natural key)', () => {
+  it('two lines for the same date and amount in DIFFERENT staging batches, both aged: each claims its own stored row; one correction per old row; also when killed between the batches', async () => {
+    // 205 purchases on one position; lines 199 and 200 are the twins and fall in staging batch 0 and batch 1 (batches hold 200 lines)
+    const cas = buildWpjLargeCas({ positions: 1, txnsPerPosition: 205, stamp: stampOf(), omitRefs: true, twinAt: 199 });
+    for (const killPoint of [null, 'transactions:written']) {
+      const p = await prepare(`twins-${killPoint ?? 'clean'}`, cas);
+      expect((await runJob(p)).job.status).toBe('completed');
+      expect((await oracle(H, p.userId)).economic.transactionsActive).toBe(205);
+      // age BOTH twins (they share date and amount, so they share a natural key)
+      const twins = (await db.query<{ id: string }>(`select id from ii_transactions where user_id = $1 and gross_amount = 600 order by transaction_date, id`, [p.userId])).rows;
+      expect(twins.length).toBeGreaterThanOrEqual(2);
+      for (const t of twins) {
+        await db.query(`update ii_transactions set units = units * 10, price_per_unit = price_per_unit / 10, transaction_fingerprint = 'earlier-parse-' || id where id = $1`, [t.id]);
+      }
+      await attachCopy(H, p.userId, p.docId, statementPdf(cas.lines, `twin-copy-${killPoint}`), `twin${killPoint ?? 'c'}`.replace(/\W/g, ''));
+      const r = killPoint ? await runWithKill(p, killPoint, { forceReparse: true }) : await runJob(p, { forceReparse: true });
+      expect(r.job.status, JSON.stringify(r.job.result_summary)).toBe('completed');
+      const o = await oracle(H, p.userId);
+      expect(o.economic.transactionsActive, 'the position keeps its 205 lines').toBe(205);
+      expect(o.economic.transactionsReversed, 'each aged twin is replaced once').toBe(twins.length);
+      expect(o.economic.transactionsCorrected).toBe(twins.length);
+      const pointers = (await db.query<{ corrects_transaction_id: string }>(`select corrects_transaction_id from ii_transactions where user_id = $1 and corrects_transaction_id is not null`, [p.userId])).rows.map((x) => x.corrects_transaction_id);
+      expect(new Set(pointers).size, 'one correction per stored row, never two for the same row').toBe(twins.length);
+      expect(pointers.sort()).toEqual(twins.map((t) => t.id).sort());
+    }
+  }, 1_200_000);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+describe('WP-J statement job: a slice that lost its lease writes nothing (fencing)', () => {
+  it('slice A stalls, its lease runs out, slice B takes over and finishes the job; when A wakes it changes nothing', async () => {
+    const cas = fixture(25, 12);
+    const p = await prepare('fence', cas);
+    const job = await admit(p);
+    let tookOver = false;
+    const stall: Fault = async (point) => {
+      if (point === 'read:staged' && !tookOver) {
+        tookOver = true;
+        // A is "stalled": its lease runs out and another slice (B) takes the job over and runs it to the end
+        await expireLease(H, job.id);
+        const { job: done } = await drive(job.id, p.userId, { budget: 0 });
+        expect(done.status).toBe('completed');
+      }
+    };
+    const a = await advanceStatementJob(job.id, { userId: p.userId, sliceBudgetMs: 0, fault: stall });
+    expect(tookOver).toBe(true);
+    // A woke up, tried to checkpoint and found the lease gone: the finished job is exactly as B left it
+    const final = await getJobForUser(p.userId, job.id);
+    expect(final!.status).toBe('completed');
+    expect(final!.phase).toBe('done');
+    expect(final!.progress_done).toBe(100);
+    expect(a.kind === 'advanced' || a.kind === 'not_runnable' || a.kind === 'busy').toBe(true);
+    const o = await oracle(H, p.userId);
+    expect(o.economic).toMatchObject({ transactionsActive: 300, accounts: 13, holdingSnapshots: 25 });
+    expect(o.bookkeeping).toMatchObject({ parseRuns: 1, parseRunsRunning: 0 });
+    expect(final!.reclaim_count).toBeGreaterThanOrEqual(1);
+  }, 600_000);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+describe('WP-J statement job: missing-transaction detection through the job', () => {
+  it('a later statement that omits earlier lines opens ONE case per position and counts them; a kill in the middle changes nothing', async () => {
+    const full = buildWpjLargeCas({ positions: 6, txnsPerPosition: 12, stamp: stampOf(), omitRefs: true });
+    const stamp = full.positions[0].scheme.split(' ')[1];
+    const shorter = buildWpjLargeCas({ positions: 6, txnsPerPosition: 8, stamp, omitRefs: true });
+    for (const killPoint of [null, 'analyse:cases']) {
+      const first = await newUser(db, `miss-${killPoint ?? 'c'}`);
+      const doc1 = await seedStatement(H, first, statementPdf(full.lines, `full-${killPoint ?? 'c'}`), `full${killPoint ?? 'c'}`.replace(/\W/g, ''));
+      expect((await runJob({ ...first, docId: doc1 })).job.status).toBe('completed');
+      const doc2 = await seedStatement(H, first, statementPdf(shorter.lines, `short-${killPoint ?? 'c'}`), `short${killPoint ?? 'c'}`.replace(/\W/g, ''));
+      const second: Prepared = { ...first, docId: doc2 };
+      const r = killPoint ? await runWithKill(second, killPoint) : await runJob(second);
+      expect(r.job.status, JSON.stringify(r.job.result_summary)).toBe('completed');
+      const result = r.job.result_summary as { summary: { missingTransactionsCount: number; duplicateTransactionsLinked: number; newTransactionsCount: number } };
+      expect(result.summary).toMatchObject({ missingTransactionsCount: 24, duplicateTransactionsLinked: 48, newTransactionsCount: 0 });
+      const cases = Number((await db.query<{ n: string }>(`select count(*)::text n from ii_reconciliation_cases where user_id = $1 and discrepancy_type = 'transaction_missing_from_restatement'`, [first.userId])).rows[0].n);
+      expect(cases, 'one case per position, never doubled').toBe(6);
+    }
+  }, 900_000);
+});

@@ -156,7 +156,8 @@ describe('NC-C1: an open cross-source conflict no longer blocks certification', 
 });
 
 describe('NC-C1/NC-C2 contract: the creation sites, read from source', () => {
-  const documentProcessing = read('lib/services/investment-intelligence/documentProcessing.ts');
+  const documentProcessing = read('lib/services/investment-intelligence/statementPipeline.ts'); // WP-J: the pipeline steps hold the creation sites
+  const certification = read('lib/services/investment-intelligence/positionCertification.ts');
   const manualImporter = read('lib/services/investment-intelligence/manualImporter.ts');
   const certifyAu = read('lib/investment-import-bridge/certifyAuPosition.ts');
 
@@ -181,7 +182,7 @@ describe('NC-C1/NC-C2 contract: the creation sites, read from source', () => {
   });
 
   it('certification (India and AU) filters cross-source cases out of the blocking set', () => {
-    expect(documentProcessing).toContain('filterCertificationBlockingCases(openBlockingCasesRaw ?? [])');
+    expect(certification).toContain('filterCertificationBlockingCases(openBlockingCasesRaw)');
     expect(certifyAu).toContain('filterCertificationBlockingCases(');
   });
 
