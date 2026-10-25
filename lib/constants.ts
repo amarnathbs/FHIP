@@ -119,6 +119,13 @@ export const LEGACY_ENTITY_OWNER_RESTRICTIONS: { value: Owner }[] = [
   { value: 'family_trust' },
 ];
 
+/**
+ * Owner values a NEW row on the personal Liabilities, Income and Expenses registers must not use (PO review 20-10-2026, F21 / F22 / F23): the
+ * money of an SMSF, trust, HUF or company is entered on the entity itself, never in a personal register. The two legacy tags above plus 'smsf'.
+ * Existing rows keep their value. The server refuses the same values (lib/services/entityOwnerGuard.ts).
+ */
+export const ENTITY_OWNER_NEW_ROW_RESTRICTIONS: { value: Owner }[] = [...LEGACY_ENTITY_OWNER_RESTRICTIONS, { value: 'smsf' }];
+
 const LEGACY_ENTITY_OWNER_VALUES = new Set<string>(LEGACY_ENTITY_OWNER_RESTRICTIONS.map((r) => r.value));
 
 /** Owner label for display, marking the two legacy cosmetic-only entity tags

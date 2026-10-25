@@ -1,5 +1,7 @@
 import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } from '@/lib/api';
 import { createClient } from '@/lib/supabase/server';
+import { entityErrorResponse } from '@/lib/services/entityCashFlowRoutes';
+import { resolveEntityScope } from '@/lib/services/entityCashFlowData';
 import { listBusinessEntityLiabilities, createBusinessEntityLiability } from '@/lib/services/businessEntityData';
 import { businessEntityLiabilitySchema } from '@/lib/validation/businessEntity';
 
@@ -15,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return unauthenticated!;
   const supabase = await createClient();
   const { data, error } = await listBusinessEntityLiabilities(id, user.id, supabase);
-  return error ? bad(error.message) : ok(data);
+  return error ? entityErrorResponse(error) : ok(data);
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -26,6 +28,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.success) return badValidation(parsed.error, 422);
 
   const supabase = await createClient();
+  // An entity of another household answers 404, exactly like one that does not exist (non-enumerating), before row level security is reached.
+  if (!(await resolveEntityScope('business', id, user.id, supabase))) return bad('Not found', 404);
   const { data, error } = await createBusinessEntityLiability(id, user.id, parsed.data, supabase);
-  return error ? bad(error.message) : ok(data);
+  return error ? entityErrorResponse(error) : ok(data);
 }

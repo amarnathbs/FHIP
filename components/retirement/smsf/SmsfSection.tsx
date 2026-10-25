@@ -73,7 +73,7 @@ export function SmsfSection() {
   return (
     <SectionCard
       title="SMSF"
-      description="Self-Managed Super Fund — track your fund as a single summary value, or build out Detailed Holdings."
+      description="Self-Managed Super Fund: record what the fund owns and owes (the net is worked out for you), or a single net value. Never both."
       className="mb-6"
     >
       <div className="space-y-4">

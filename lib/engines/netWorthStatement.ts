@@ -410,6 +410,30 @@ function buildEntityInputs(input: NetWorthStatementInput, destinations: Map<stri
       out.push(override);
       continue;
     }
+    // An entity that records its OWN assets and liabilities (an SMSF fund, migrations 0289-0290): the statement itemises straight from the model's
+    // sheet, so it follows the family view with nothing to keep in step. Net value only: no lines, the model's net.
+    if (block.sheet) {
+      const toRow = (l: { id: string; name: string; kind: string | null; amountNative: number; currency: string; amountReporting: number | null }, register: NetWorthRegister): StatementSourceRow => ({
+        id: `${block.id}:${register}:${l.id}`,
+        register,
+        name: l.name,
+        owner: 'smsf',
+        amountReporting: l.amountReporting,
+        nativeAmount: l.amountNative,
+        nativeCurrency: l.currency,
+        group: register === 'liabilities' ? null : 'other',
+      });
+      out.push({
+        entityId: block.id,
+        kind: block.kind,
+        name: block.name,
+        assets: block.sheet.assets.map((l) => toRow(l, 'assets')),
+        liabilities: block.sheet.liabilities.map((l) => toRow(l, 'liabilities')),
+        net: block.entityTotals.net,
+        source: 'entity_level_rows',
+      });
+      continue;
+    }
     if (block.source === 'owner_tag') {
       const suppressed = !!block.suppressedFundRecord;
       const mine = input.rows.filter((r) => {
@@ -615,8 +639,11 @@ export function buildNetWorthStatements(input: NetWorthStatementInput): NetWorth
       );
     }
     if (block.kind === 'smsf' && input.smsfFundsUnavailable) notes.push('The fund’s holdings could not be read, so they are not itemised here.');
+    const legacyIds = new Set((block.legacyRowsNotCounted?.rows ?? []).map((r) => r.id));
     const shownNotCounted = input.rows
       .filter((r) => {
+        // register rows owned by the SMSF that the fund's own record replaces (statement row ids carry a register prefix)
+        if (legacyIds.has(r.id) || legacyIds.has(r.id.slice(r.id.indexOf(':') + 1))) return true;
         const d = destinations.get(r.id);
         return !!block.suppressedFundRecord && !!d && d.level === 'entity' && d.kind === block.kind && d.fundRecord;
       })

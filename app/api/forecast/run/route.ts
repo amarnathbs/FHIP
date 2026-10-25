@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       retirementTargetCorpus: parsed.data.retirement_target_corpus,
       retirementDesiredAnnualIncome: parsed.data.retirement_desired_annual_income,
       retirementReplacementPercentage: parsed.data.retirement_replacement_percentage,
+      whatIfRetirementAges: { self: parsed.data.retirement_what_if_age_self ?? null, spouse: parsed.data.retirement_what_if_age_spouse ?? null },
       plannedEvents: parsed.data.planned_events?.map((e) => ({ monthIndex: e.month_index, amount: e.amount, description: e.description })),
       resilienceStressScenario:
         parsed.data.resilience_stress_scenario && parsed.data.resilience_stress_scenario !== 'none'

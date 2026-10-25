@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { SectionCard, Stat } from '@/components/dashboard/SectionCard';
 import { formatMoney } from '@/lib/engines/money';
+import { FamilyRetirementView } from '@/components/forecast/FamilyRetirementView';
+import type { FamilyRetirementViewAvailable } from '@/lib/engines/forecast/familyRetirement';
 
 type TargetMethod = 'target_corpus' | 'desired_income' | 'expense_replacement';
 
@@ -16,6 +18,8 @@ interface RetirementExplanation {
     status: string;
     contributionGap: number | null;
     monthsUntilRetirement: number | null;
+    retirementAge?: number | null;
+    retirementAgeSource?: string | null;
   };
 }
 interface RunDetail {
@@ -32,15 +36,35 @@ const STATUS_LABEL: Record<string, { label: string; className: string }> = {
   insufficient_information: { label: 'Insufficient Information', className: 'bg-gray-100 text-gray-500' },
 };
 
+// Document2 (4) F26: the plain-words source of the retirement age a run used.
+export function retirementAgeSourceText(source: string | null | undefined): string {
+  switch (source) {
+    case 'saved': return 'the target age saved on the Retirement page';
+    case 'what_if': return 'a what-if age for this run only (not saved)';
+    case 'legacy_profile': return 'your older Forecast setting';
+    case 'country_default': return 'the standard age for your country, because no target age is saved';
+    default: return 'the age on file';
+  }
+}
+
 export function RetirementForecastPanel({
   currency,
   currentBalance,
   scenarioId,
+  savedAges,
+  hasSmsf = false,
 }: {
   currency: 'AUD' | 'INR';
   currentBalance: number;
   scenarioId?: string;
+  /** The ages the run would use without a what-if (Self always; Spouse only when a Spouse/Partner member exists). */
+  savedAges?: { self: number | null; spouse?: number | null };
+  /** PO-D24-01: true when the person has an active SMSF. Only then is the separate Family retirement view requested and shown. */
+  hasSmsf?: boolean;
 }) {
+  // A what-if age applies to the next run only. It is sent with the run and never written to the Retirement page's saved age.
+  const [whatIfSelf, setWhatIfSelf] = useState('');
+  const [whatIfSpouse, setWhatIfSpouse] = useState('');
   const [method, setMethod] = useState<TargetMethod>('desired_income');
   const [desiredIncome, setDesiredIncome] = useState('60000');
   const [targetCorpus, setTargetCorpus] = useState('1000000');
@@ -48,15 +72,20 @@ export function RetirementForecastPanel({
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [family, setFamily] = useState<FamilyRetirementViewAvailable | null>(null);
+  const [familyError, setFamilyError] = useState<string | null>(null);
 
   async function generate() {
     setLoading(true);
     setError(null);
+    setFamilyError(null);
     try {
       const body: Record<string, unknown> = { forecast_type: 'retirement', scenario_id: scenarioId, retirement_target_method: method };
       if (method === 'target_corpus') body.retirement_target_corpus = Number(targetCorpus) || 0;
       if (method === 'desired_income') body.retirement_desired_annual_income = Number(desiredIncome) || 0;
       if (method === 'expense_replacement') body.retirement_replacement_percentage = Number(replacementPct) || 0;
+      if (whatIfSelf.trim() !== '') body.retirement_what_if_age_self = Number(whatIfSelf);
+      if (whatIfSpouse.trim() !== '') body.retirement_what_if_age_spouse = Number(whatIfSpouse);
 
       const runRes = await fetch('/api/forecast/run', {
         method: 'POST',
@@ -69,6 +98,18 @@ export function RetirementForecastPanel({
       const detailJson = await detailRes.json();
       if (!detailRes.ok) throw new Error(detailJson.error ?? 'Could not load forecast results');
       setDetail(detailJson.data);
+      // PO-D24-01: the family view uses the very same options as the personal run, and never changes it.
+      if (hasSmsf) {
+        try {
+          const famRes = await fetch('/api/forecast/retirement/family', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const famJson = await famRes.json();
+          if (!famRes.ok) throw new Error(famJson.error ?? 'Could not work out the family retirement position');
+          setFamily(famJson.data?.available ? (famJson.data as FamilyRetirementViewAvailable) : null);
+        } catch (fe) {
+          setFamily(null);
+          setFamilyError(fe instanceof Error ? fe.message : 'Could not work out the family retirement position');
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
@@ -121,6 +162,30 @@ export function RetirementForecastPanel({
           {loading ? 'Calculating...' : detail ? 'Regenerate forecast' : 'Generate forecast'}
         </button>
       </div>
+      {savedAges && (
+        <fieldset className="mt-4 rounded border border-line p-3" data-testid="what-if-age">
+          <legend className="px-1 text-xs font-medium text-ink">What-if retirement age (this run only, not saved)</legend>
+          <p className="text-xs text-muted">
+            Leave these empty to use the target age saved on the Retirement page. A what-if age changes only the next forecast you generate here; it does not change the age saved on the Retirement page.
+          </p>
+          <div className="mt-2 flex flex-wrap items-end gap-3">
+            <div>
+              <label htmlFor="what-if-self" className="block text-xs text-gray-500">
+                Self (saved: {savedAges.self ?? 'none'})
+              </label>
+              <input id="what-if-self" type="number" min={1} max={119} value={whatIfSelf} onChange={(e) => setWhatIfSelf(e.target.value)} className="mt-1 w-28 rounded border px-3 py-2 text-sm" />
+            </div>
+            {savedAges.spouse !== undefined && (
+              <div>
+                <label htmlFor="what-if-spouse" className="block text-xs text-gray-500">
+                  Spouse/Partner (saved: {savedAges.spouse ?? 'none'})
+                </label>
+                <input id="what-if-spouse" type="number" min={1} max={119} value={whatIfSpouse} onChange={(e) => setWhatIfSpouse(e.target.value)} className="mt-1 w-28 rounded border px-3 py-2 text-sm" />
+              </div>
+            )}
+          </div>
+        </fieldset>
+      )}
       {error && <p className="mt-3 text-sm text-risk">{error}</p>}
 
       {inputs && (
@@ -129,6 +194,11 @@ export function RetirementForecastPanel({
             {statusInfo && <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusInfo.className}`}>{statusInfo.label}</span>}
             {inputs.readinessPct !== null && <span className="text-sm text-gray-600">{inputs.readinessPct.toFixed(0)}% funded</span>}
           </div>
+          {inputs.retirementAge != null && (
+            <p className="mt-2 text-sm text-gray-600" data-testid="run-age-used">
+              This forecast used a retirement age of {inputs.retirementAge}: {retirementAgeSourceText(inputs.retirementAgeSource)}.
+            </p>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Current balance" value={formatMoney(currentBalance, currency)} />
             <Stat label="Projected balance at retirement" value={formatMoney(inputs.balanceAtRetirement, currency)} />
@@ -137,6 +207,21 @@ export function RetirementForecastPanel({
           </div>
           {explanation && <p className="mt-4 text-sm text-gray-600">{explanation.explanation_text}</p>}
         </>
+      )}
+      {hasSmsf && !family && !familyError && (
+        <p className="mt-4 text-xs text-gray-500" data-testid="family-hint">
+          You have an SMSF. When you generate the forecast, a separate Family retirement position (Personal + SMSF) appears below it.
+        </p>
+      )}
+      {familyError && (
+        <p className="mt-4 text-sm text-risk" data-testid="family-error">
+          {familyError}
+        </p>
+      )}
+      {family && (
+        <div className="mt-6">
+          <FamilyRetirementView view={family} currency={currency} />
+        </div>
       )}
     </SectionCard>
   );

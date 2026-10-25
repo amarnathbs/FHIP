@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const { data, error } = await createSmsfFund(parsed.data, supabase);
   if (error) {
     // 42501 = insufficient_privilege, raised by trg_retirement_accounts_smsf_au_gate.
-    const status = error.code === '42501' ? 403 : 400;
+    const status = error.code === '42501' ? 403 : error.code === '23505' ? 409 : 400;
     return bad(error.message, status);
   }
   return ok(data);
