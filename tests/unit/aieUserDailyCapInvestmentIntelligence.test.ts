@@ -93,7 +93,7 @@ describe('Investment Intelligence AI reading and the per-user daily cap', () => 
   });
 
   it('the message shown on the statement upload is plain: daily limit, try tomorrow, enter manually, no amount or internal term', () => {
-    const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'lib/services/investment-intelligence/documentProcessing.ts'), 'utf8');
+    const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'lib/services/investment-intelligence/statementPipeline.ts'), 'utf8');
     const m = src.match(/case 'daily_limit_reached':[\s\S]*?return `([^`]*)`/);
     expect(m).not.toBeNull();
     const text = m![1].replace('${baseMessage}', 'BASE');

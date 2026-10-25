@@ -975,6 +975,8 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
     } else if (view?.status === 'review_required' && view.review_reason === 'ai_review') {
       const reviewId = (view.result as { aiExtractionReviewId?: string } | null)?.aiExtractionReviewId;
       if (reviewId) setAiReviewId(reviewId);
+    } else if (view?.status === 'review_required' && view.review_reason === 'password') {
+      setNotice('The password was missing or wrong. Enter the document password on the statement and try again.');
     } else if (view?.status === 'failed') {
       setError(view.error_message ?? 'This statement could not be processed. Nothing was changed.');
     }

@@ -116,7 +116,6 @@ describe('0312: the parse-run counter columns, columns only', () => {
 describe('0313: the statement job tables and lease functions', () => {
   let db: PGlite;
   let docA: string;
-  let docB: string;
 
   async function seedUser(id: string) {
     await db.exec('reset role;');
@@ -145,7 +144,6 @@ describe('0313: the statement job tables and lease functions', () => {
     await seedUser(U1);
     await seedUser(U2);
     docA = await seedDoc(U1);
-    docB = await seedDoc(U2);
   }, 600_000);
   afterAll(async () => {
     await db?.close();
