@@ -65,6 +65,7 @@ import { normaliseSchemeName } from './parsers/textUtils';
 import { randomUUID } from 'crypto';
 import type { IiPlanType, IiOptionType } from './types';
 import { fetchAllRows } from './pagination';
+import { NaturalKeyPool, decideReRead, type ReReadLine, type StoredDocTransaction } from './reparseMatching';
 import { resolveCrossSourceTransactionMatch, type CrossSourceExistingTransaction } from './crossSourceIdentity';
 import { OPENING_BALANCE_SOURCE_REFERENCE } from './openingBalanceMarker';
 import {
@@ -1116,6 +1117,55 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
   const pendingTransactionInserts: Record<string, unknown>[] = [];
   const pendingSourceLinkInserts: Record<string, unknown>[] = [];
 
+  // Document2 (4) WP-H3 (25-10-2026) -- re-reading a document that already wrote rows. Real CAS lines carry no reference (source_reference is
+  // NULL), so the unique reference index never applies, and the fingerprint covers units, NAV and type, which a parser fix legitimately
+  // corrects: a corrected re-read of the SAME document used to match nothing and insert a second copy of every changed line (plus a second
+  // source link). Lines that match no fingerprint are now matched by natural key within THIS document (see reparseMatching.ts).
+  const storedDocRows = await fetchAllRows<StoredDocTransaction>(() =>
+    admin
+      .from('ii_transactions')
+      .select('id, account_id, instrument_id, transaction_date, gross_amount, transaction_type, units, price_per_unit, status, transaction_fingerprint, corrects_transaction_id')
+      .eq('user_id', userId)
+      .eq('source_document_id', sourceDocumentId)
+      .order('id', { ascending: true })
+  );
+  const personSettledIds = new Set<string>();
+  if (storedDocRows.length > 0) {
+    const settled = await fetchAllRows<{ id: string; subject_id: string | null }>(() =>
+      admin.from('ii_audit_events').select('id, subject_id').eq('user_id', userId).eq('event_type', 'user_correction').eq('subject_type', 'ii_transactions').order('id', { ascending: true })
+    );
+    for (const e of settled) if (e.subject_id) personSettledIds.add(e.subject_id);
+  }
+  const fingerprintOf = (t: (typeof parsed.transactions)[number], accountId: string, instrumentId: string) =>
+    computeTransactionFingerprint({
+      sourceKey: parsed.metadata.sourceKey,
+      accountId,
+      instrumentId,
+      transactionDateIso: t.transactionDateIso,
+      transactionType: t.canonicalType,
+      amountScaled: t.amountScaled,
+      unitsScaled: t.unitsScaled,
+      navScaled: t.navScaled,
+      sourceReference: t.sourceReference,
+    });
+  // Pass 1: rows this re-read already matches EXACTLY. They can never be claimed by the natural-key match below.
+  const claimedByFingerprint = new Set<string>();
+  for (const t of parsed.transactions) {
+    const accountId = accountIdByFolioAmc.get(resolutionPlan.resolveRowKey(t.folioNumber, t.scheme.amcName));
+    const instrumentId = instrumentIdByKey.get(keying.keyOf(t.scheme));
+    if (!accountId || !instrumentId) continue;
+    const existingId = existingFingerprints.get(`${accountId}:${fingerprintOf(t, accountId, instrumentId)}`);
+    if (existingId) claimedByFingerprint.add(existingId);
+  }
+  const naturalPool = new NaturalKeyPool(storedDocRows, claimedByFingerprint);
+  const supersessions: { oldId: string; newId: string; changed: string[] }[] = [];
+  let reReadMatchedToExisting = 0;
+  // Self-healing: a correction whose predecessor is still counted (an earlier run stopped between the two writes) is finished now.
+  const healReversalIds = storedDocRows
+    .filter((r) => r.status === 'corrected' && r.corrects_transaction_id && claimedByFingerprint.has(r.id))
+    .map((r) => r.corrects_transaction_id as string)
+    .filter((id) => storedDocRows.some((o) => o.id === id && o.status !== 'reversed'));
+
   // Incremental-statement-upload support (task 2026-09-17): every fingerprint
   // this run's OWN parsed transactions resolve to, per (account, instrument)
   // position — whether that fingerprint turns out to be a fresh insert below
@@ -1149,17 +1199,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     // to the database in the same batched insert as before.
     const newTransactionId = randomUUID();
 
-    const fingerprint = computeTransactionFingerprint({
-      sourceKey: parsed.metadata.sourceKey,
-      accountId,
-      instrumentId,
-      transactionDateIso: t.transactionDateIso,
-      transactionType: t.canonicalType,
-      amountScaled: t.amountScaled,
-      unitsScaled: t.unitsScaled,
-      navScaled: t.navScaled,
-      sourceReference: t.sourceReference,
-    });
+    const fingerprint = fingerprintOf(t, accountId, instrumentId);
     markConfirmed(accountId, instrumentId, fingerprint);
 
     const existingTxnId = existingFingerprints.get(`${accountId}:${fingerprint}`);
@@ -1172,6 +1212,40 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       continue;
     }
 
+    // WP-H3: no fingerprint match. Is this the same real line, written by an earlier parse of THIS document?
+    let supersedes: StoredDocTransaction | null = null;
+    let supersedeChanged: string[] = [];
+    {
+      const line: ReReadLine = {
+        accountId,
+        instrumentId,
+        dateIso: t.transactionDateIso,
+        amount: scaledToDecimalString(t.amountScaled, 2),
+        type: t.canonicalType,
+        units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
+        navPerUnit: t.navScaled === null ? null : scaledToDecimalString(t.navScaled),
+      };
+      const twin = naturalPool.take(line);
+      if (twin) {
+        const decision = decideReRead(twin, line, personSettledIds);
+        // the stored row is confirmed by this statement too (its own fingerprint is the one missing-transaction detection knows)
+        if (twin.transaction_fingerprint) markConfirmed(accountId, instrumentId, twin.transaction_fingerprint);
+        if (decision.kind === 'link_existing') {
+          await admin.from('ii_transaction_source_links').upsert(
+            { user_id: userId, transaction_id: twin.id, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: false },
+            { onConflict: 'transaction_id,source_document_id', ignoreDuplicates: true }
+          );
+          duplicateTransactionsLinked++;
+          reReadMatchedToExisting++;
+          continue;
+        }
+        if (decision.kind === 'supersede') {
+          supersedes = twin;
+          supersedeChanged = decision.changed;
+        }
+      }
+    }
+
     // R11 — cross-source identity resolution (spec sections 24-41). Only
     // reached once the SAME-source fingerprint check above has already
     // ruled out a re-import of this exact document's own prior evidence.
@@ -1179,7 +1253,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
     // real-world transaction (fingerprint.ts's sourceKey-scoped fingerprint
     // can never catch this by construction — see
     // R11_SCOPE_AND_ARCHITECTURE_RECONCILIATION.md section 1).
-    const crossSourceCandidates = await loadCrossSourceCandidates(accountId, instrumentId);
+    const crossSourceCandidates = supersedes ? [] : await loadCrossSourceCandidates(accountId, instrumentId);
     if (crossSourceCandidates.length > 0) {
       const match = resolveCrossSourceTransactionMatch(
         {
@@ -1301,7 +1375,9 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       // R11: a cross-source CONFLICT/AMBIGUOUS candidate is still fully
       // inserted (never discarded — spec section 29). D-5 (2026-10-03): it is
       // COUNTED, not parked — see crossSourceReviewPolicy.ts.
-      status: CROSS_SOURCE_INSERT_STATUS,
+      // WP-H3: a corrected re-read of a line this document already wrote is a correction row pointing at the row it replaces.
+      status: supersedes ? 'corrected' : CROSS_SOURCE_INSERT_STATUS,
+      corrects_transaction_id: supersedes ? supersedes.id : null,
       transaction_type: t.canonicalType,
       transaction_date: t.transactionDateIso,
       units: t.unitsScaled === null ? null : scaledToDecimalString(t.unitsScaled),
@@ -1316,6 +1392,7 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       transaction_fingerprint: fingerprint,
     });
     pendingSourceLinkInserts.push({ user_id: userId, transaction_id: newTransactionId, source_document_id: sourceDocumentId, parse_run_id: parseRunId, is_originating: true });
+    if (supersedes) supersessions.push({ oldId: supersedes.id, newId: newTransactionId, changed: supersedeChanged });
     existingFingerprints.set(`${accountId}:${fingerprint}`, newTransactionId); // guards a within-this-same-import fingerprint collision too, not only a pre-existing one
 
     // In-memory equivalent of the old cache invalidation: append this
@@ -1370,6 +1447,30 @@ export async function processSourceDocument(input: ProcessSourceDocumentInput): 
       await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
       return { ok: false, status: 'parse_failed', parseRunId, error: message };
     }
+  }
+
+  // WP-H3: the replaced rows leave the figures only AFTER their corrections are safely written (soft, audited, reversible: the same
+  // `reversed` exclusion every ledger reader honours). If this write fails the next re-read finishes the job (healReversalIds).
+  const reverseIds = [...supersessions.map((x) => x.oldId), ...healReversalIds];
+  for (let i = 0; i < reverseIds.length; i += BATCH_CHUNK_SIZE) {
+    const { error: reverseError } = await admin.from('ii_transactions').update({ status: 'reversed' }).eq('user_id', userId).in('id', reverseIds.slice(i, i + BATCH_CHUNK_SIZE));
+    if (reverseError) {
+      const message = `Replacing re-read transactions failed (rows ${i}-${i + BATCH_CHUNK_SIZE}): ${reverseError.message}`;
+      await failRun(admin, parseRunId, message);
+      await updateDocumentStatusUnlessSucceeded({ status: 'parse_failed', parse_error: 'transaction_write_failed' });
+      return { ok: false, status: 'parse_failed', parseRunId, error: message };
+    }
+  }
+  if (reverseIds.length > 0 || reReadMatchedToExisting > 0) {
+    await emitAuditEvent({
+      userId,
+      eventType: 'document_superseded',
+      subjectType: 'ii_source_documents',
+      subjectId: sourceDocumentId,
+      actorType: 'system',
+      // counts and ids only; every replaced row is also reachable through ii_transactions.corrects_transaction_id
+      metadata: { kind: 'transactions_reconciled_on_reparse', parseRunId, replaced: supersessions.length, healed: healReversalIds.length, matchedToExisting: reReadMatchedToExisting, replacedIdSample: supersessions.slice(0, 20).map((x) => ({ old: x.oldId, new: x.newId, changed: x.changed })) },
+    });
   }
 
   // Document2 D-3 follow-up (2026-10-03): a position whose purchase date the
@@ -1875,6 +1976,7 @@ async function ensureDerivedZeroUnitClosingSnapshot(
       .select('transaction_type, units, transaction_date, currency_code')
       .eq('account_id', accountId)
       .eq('instrument_id', instrumentId)
+      .neq('status', 'reversed') // WP-H3: a replaced row is out of the figures
       .order('transaction_date', { ascending: true })
       .order('id', { ascending: true });
     return baselineDate ? query.gt('transaction_date', baselineDate) : query;
@@ -1961,6 +2063,7 @@ async function evaluatePositionAndCertify(
       .select('transaction_type, units, transaction_date, source_reference')
       .eq('account_id', accountId)
       .eq('instrument_id', instrumentId)
+      .neq('status', 'reversed') // WP-H3: a replaced row is out of the figures
       .lte('transaction_date', latestSnapshot.as_of_date as string)
       .order('transaction_date', { ascending: true })
       .order('id', { ascending: true })
