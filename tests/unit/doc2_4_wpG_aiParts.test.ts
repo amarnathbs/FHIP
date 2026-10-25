@@ -157,7 +157,7 @@ describe('splitting the masked text into parts (pure)', () => {
     expect(parts.map((p) => p.seq)).toEqual(parts.map((_, i) => i));
     expect(parts.flatMap((p) => p.text.split('\n'))).toEqual(lines);
     for (const p of parts) {
-      expect(p.lineCount).toBeLessThanOrEqual(27); // 18 target (measured on DEV), 1.5x for an unsplittable page tail
+      expect(p.lineCount).toBeLessThanOrEqual(18); // the target measured on DEV is a hard maximum (a 27-line part timed out three times)
       expect(p.text.length).toBeLessThanOrEqual(3600);
     }
     for (let i = 1; i < parts.length; i += 1) expect(parts[i].pageFrom).toBeGreaterThanOrEqual(parts[i - 1].pageTo);

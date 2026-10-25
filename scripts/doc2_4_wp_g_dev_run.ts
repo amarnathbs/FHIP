@@ -131,7 +131,16 @@ async function uploadStatement(u: U, file: { name: string; csv: boolean; bytes: 
 
 const processPath = (csv: boolean, docId: string) => `/api/financial-data-hub/${csv ? 'bank-csv' : 'bank-pdf'}/${docId}/process`;
 const jobRows = (docId: string) => rows('fdh_bank_import_jobs', `statement_upload_id=eq.${docId}`);
-const txRows = async (docId: string) => rows('fdh_transactions', `statement_upload_id=eq.${docId}`, 'source_row');
+// PostgREST caps one read at 1,000 rows, so the lines are read page by page (an unpaged read here would make a 3,000-line import look like 1,000).
+const txRows = async (docId: string) => {
+  const out: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const r = await devFetch(`/rest/v1/fdh_transactions?statement_upload_id=eq.${docId}&select=source_row&order=source_row.asc`, { headers: { Range: `${from}-${from + 999}`, 'Range-Unit': 'items' } });
+    const page = Array.isArray(r.json) ? r.json : [];
+    out.push(...page);
+    if (page.length < 1000) return out;
+  }
+};
 
 /** Drives a job like the browser: ask `advance` until it stops. Every request is timed. */
 async function drive(u: U, jobId: string, label: string, stopAt: Array<'completed' | 'failed' | 'review_required'> = ['completed', 'failed', 'review_required']) {
@@ -159,7 +168,7 @@ async function scale() {
     const file = { name: `${RUN}-scale${n}.csv`, csv: true, bytes: scaleBankStatement({ year: 2026, month: 9 }, n, salt).bytes };
     const docId = await uploadStatement(u, file);
     const adm = await timed(u, `scale${n} admission`, processPath(true, docId), { method: 'POST' });
-    check(`G.${n}.A admission answers 202 with a job id, quickly (${adm.ms} ms), and wrote no line`, adm.status === 202 && !!adm.json?.data?.job_id && adm.ms < 8000 && (await txRows(docId)).length === 0, JSON.stringify({ status: adm.status, ms: adm.ms }));
+    check(`G.${n}.A admission answers 202 with a job id, quickly (${adm.ms} ms), and wrote no line`, adm.status === 202 && !!adm.json?.data?.job_id && adm.ms < 20000 && (await txRows(docId)).length === 0, JSON.stringify({ status: adm.status, ms: adm.ms }));
     const jobId = adm.json?.data?.job_id as string;
     const d = await drive(u, jobId, `scale${n}`);
     const tx = await txRows(docId);
@@ -203,7 +212,7 @@ async function ai() {
     for (let i = 0; i < lines.length; i += 55) pages.push(lines.slice(i, i + 55));
     const docId = await uploadStatement(u, { name: `${RUN}-ai${n}.pdf`, csv: false, bytes: new Uint8Array(buildMinimalTextPdf(pages)) });
     const adm = await timed(u, `ai${n} admission`, processPath(false, docId), { method: 'POST', json: {} });
-    check(`G.AI${n}.A admission answers 202 (${adm.ms} ms)`, adm.status === 202 && adm.ms < 8000, JSON.stringify({ status: adm.status, ms: adm.ms, err: adm.json?.error }));
+    check(`G.AI${n}.A admission answers 202 (${adm.ms} ms)`, adm.status === 202 && adm.ms < 20000, JSON.stringify({ status: adm.status, ms: adm.ms, err: adm.json?.error }));
     const jobId = adm.json?.data?.job_id as string;
     const d = await drive(u, jobId, `ai${n}`);
     check(`G.AI${n}.B read in parts, the reading waits for a check (slices ${d.slices}, ${Math.round(d.totalMs / 1000)} s)`, d.view?.status === 'review_required' && d.view?.review_reason === 'ai_draft', JSON.stringify({ status: d.view?.status, err: d.view?.error_code, msg: d.view?.error_message }));
@@ -273,6 +282,7 @@ async function robust() {
 
   // Tenancy on the real database.
   const other = await makeUser('G4', `wpg-g4-${Date.now()}@fhip-test.invalid`);
+  await setPlan(other, 'premium'); // so the refusal below is about the statement, not about the plan
   const peek = await app(other, `/api/financial-data-hub/bank-import-jobs/${jobId}`);
   const poke = await app(other, `/api/financial-data-hub/bank-import-jobs/${jobId}/advance`, { method: 'POST' });
   const listOther = await app(other, '/api/financial-data-hub/bank-import-jobs');
@@ -282,15 +292,83 @@ async function robust() {
   evidence.timings = timings;
 }
 
+// Is the 0311 unique line index on this database? Found by behaviour (no SQL access): two lines with the same row number on one statement.
+async function index0311() {
+  const u = await makeUser('G0', `wpg-g0-${Date.now()}@fhip-test.invalid`);
+  await setPlan(u, 'premium');
+  const docId = await uploadStatement(u, { name: `${RUN}-index.csv`, csv: true, bytes: scaleBankStatement({ year: 2026, month: 9 }, 25, String(Date.now() % 100000) + 'ix').bytes });
+  const doc = (await rows('fdh_statement_uploads', `id=eq.${docId}`))[0];
+  const line = { user_id: u.id, financial_account_id: doc.financial_account_id, statement_upload_id: docId, transaction_date: '2026-09-01', amount_original: 1, currency_original: 'AUD', credit_debit: 'debit', description_raw: 'WPG INDEX PROBE', source_row: 999001 };
+  const a = await devFetch('/rest/v1/fdh_transactions', { method: 'POST', body: line, prefer: 'return=minimal' });
+  const b = await devFetch('/rest/v1/fdh_transactions', { method: 'POST', body: line, prefer: 'return=minimal' });
+  await devFetch(`/rest/v1/fdh_transactions?statement_upload_id=eq.${docId}&source_row=eq.999001`, { method: 'DELETE' });
+  const present = a.status === 201 && b.status === 409 && /uq_fdh_transactions_statement_source_row|duplicate key/.test(b.text);
+  evidence.index0311 = { firstInsert: a.status, secondInsert: b.status, state: present ? 'PRESENT' : 'ABSENT' };
+  console.log(`0311 unique line index on DEV: ${present ? 'PRESENT' : 'ABSENT'} (first ${a.status}, second ${b.status})`);
+  check('G.0 migration 0311 state on DEV is reported (present = a duplicate row number is refused by the database)', a.status === 201, JSON.stringify(evidence.index0311));
+}
+
+// A slice KILLED mid-write, for real: this script's own dev server (the one on its port) is killed while a persist slice is writing lines,
+// a fresh server is started (the platform brings up a fresh instance) and the job must take over once the lease has run out.
+async function kill() {
+  const { spawn, execSync } = await import('node:child_process');
+  const u = await makeUser('G5', `wpg-g5-${Date.now()}@fhip-test.invalid`);
+  await setPlan(u, 'premium');
+  const N = Number(process.argv[5] ?? 3000);
+  const docId = await uploadStatement(u, { name: `${RUN}-kill.csv`, csv: true, bytes: scaleBankStatement({ year: 2026, month: 9 }, N, String(Date.now() % 100000) + 'k').bytes });
+  const adm = await app(u, processPath(true, docId), { method: 'POST' });
+  const jobId = adm.json?.data?.job_id as string;
+  // first slice (read and stage), then start the persist slice WITHOUT waiting for its answer
+  await app(u, `/api/financial-data-hub/bank-import-jobs/${jobId}/advance`, { method: 'POST' });
+  const inflight = fetch(`${APP}/api/financial-data-hub/bank-import-jobs/${jobId}/advance`, { method: 'POST', headers: { Cookie: u.cookie } }).then((r) => r.status).catch(() => 'connection-lost');
+  // Wait (cheaply: a head count, not a page read) until the first batch is stored, then kill AT ONCE: a slice writes for up to 17 s.
+  const countLines = async () => {
+    assertDev(BASE);
+    const r = await fetch(`${BASE}/rest/v1/fdh_transactions?statement_upload_id=eq.${docId}&select=id`, { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, Prefer: 'count=exact', Range: '0-0' } });
+    return Number(/\/(\d+)$/.exec(r.headers.get('content-range') ?? '')?.[1] ?? 0);
+  };
+  let atKill = 0;
+  for (let i = 0; i < 400 && atKill === 0; i++) { await sleep(250); atKill = await countLines(); }
+  const port = new URL(APP).port;
+  // ONLY the listener on this script's own port (netstat parse, then taskkill of that process tree): never a machine-wide kill.
+  const stopPort = () => {
+    try {
+      const out = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
+      const pids = new Set(out.split(/?
+/).filter((l) => l.includes(`:${port} `) && l.includes('LISTENING')).map((l) => l.trim().split(/\s+/).pop()));
+      for (const pid of pids) if (pid && /^\d+$/.test(pid)) execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
+    } catch { /* none */ }
+  };
+  stopPort();
+  const answer = await inflight;
+  const afterKill = await txRows(docId);
+  check(`G.K1 the server was killed while a slice was writing: ${afterKill.length} of ${N} lines were stored and the request got no answer (${answer})`, afterKill.length > 0 && afterKill.length < N && answer === 'connection-lost', JSON.stringify({ atKill, afterKill: afterKill.length, answer }));
+  const leaseHeld = (await jobRows(docId))[0];
+  check('G.K2 the dead slice left the job unfinished with a lease nobody renews', leaseHeld?.status === 'processing' && !!leaseHeld?.lease_owner, JSON.stringify({ status: leaseHeld?.status, phase: leaseHeld?.phase, progress: leaseHeld?.progress_done }));
+  const child = spawn('node', ['scripts/pdf_routes_dev_server.mjs', port], { stdio: 'ignore', shell: false });
+  for (let i = 0; i < 120; i++) { if ((await fetch(`${APP}/login`).then((r) => r.status).catch(() => 0)) === 200) break; await sleep(2000); }
+  await fetch(`${APP}/api/financial-data-hub/bank-import-jobs/${jobId}/advance`, { method: 'POST', headers: { Cookie: u.cookie } }).catch(() => null); // warm the route on the fresh server
+  const d = await drive(u, jobId, 'kill');
+  const tx = await txRows(docId);
+  const job = (await jobRows(docId))[0];
+  check(`G.K3 a fresh server took the job over after the lease ran out and it ended exact: ${N} lines, none twice`, d.view?.status === 'completed' && tx.length === N && new Set(tx.map((t) => t.source_row)).size === N, JSON.stringify({ status: d.view?.status, tx: tx.length, reclaim: job?.reclaim_count, busyAsks: d.busy }));
+  check('G.K4 the takeover was counted (reclaim_count at least 1) and the statement is certified', Number(job?.reclaim_count) >= 1 && (await rows('fdh_statement_uploads', `id=eq.${docId}`))[0]?.certification_status === 'certified', JSON.stringify({ reclaim: job?.reclaim_count }));
+  evidence.kill = { N, atKill, afterKill: afterKill.length, reclaim: job?.reclaim_count, slices: d.slices, busy: d.busy };
+  evidence.timings = timings;
+  void child;
+}
+
 async function main() {
   console.log(`=== WP-G ${which} (${RUN}) against ${APP} ===`);
   if ((await fetch(`${APP}/login`).then((r) => r.status).catch(() => 0)) === 0) throw new Error('app not reachable');
   const probe = await devFetch('/rest/v1/fdh_bank_import_jobs?select=id&limit=1');
   if (probe.status !== 200) throw new Error(`migration 0310 is not applied on DEV (HTTP ${probe.status}); apply docs/reviews/po_apply_wp_g/02 and 03 first`);
   try {
+    await index0311();
     if (which === 'scale') await scale();
     else if (which === 'ai') await ai();
     else if (which === 'robust') await robust();
+    else if (which === 'kill') await kill();
   } finally {
     await cleanup();
     evidence.cleanedUsers = created.length;

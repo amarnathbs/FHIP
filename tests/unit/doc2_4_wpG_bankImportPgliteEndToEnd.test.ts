@@ -233,7 +233,7 @@ describe('real Postgres: duplicate admission, concurrent polling, kill and resum
     await h.db.query(`insert into fdh_reconciliation_results (user_id, statement_upload_id, status, reconciliation_method) values ($1,$2,'not_available','none')`, [U1, docId]);
     await h.db.query(`insert into fdh_data_provenance (user_id, entity_type, entity_id, source_type, source_statement_id) values ($1,'fdh_statement_upload',$2,'csv',$2)`, [U1, docId]);
     await h.db.query(`update fdh_statement_uploads set processing_status='extracted' where id=$1`, [docId]);
-    await h.db.query(`update fdh_bank_import_jobs set status='processing', lease_owner='dead-owner-pg-2', lease_expires_at=now() - interval '1 second' where id=$1`, [adm.job.id]);
+    await h.db.query(`update fdh_bank_import_jobs set status='processing', lease_owner='dead-owner-pg-2', lease_expires_at=now() - interval '1 second', checkpoint = checkpoint || '{"finalize_started": true}'::jsonb where id=$1`, [adm.job.id]);
     const end = await driveToEnd(adm.job.id);
     expect(end.status).toBe('completed');
     expect(await count(`select count(*) n from fdh_reconciliation_results where statement_upload_id=$1`, [docId])).toBe(1);
