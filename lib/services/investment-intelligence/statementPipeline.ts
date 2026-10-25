@@ -32,7 +32,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { emitAuditEvent } from './audit';
+import { emitAuditEvent, emitAuditEvents, type AuditEventInput } from './audit';
 import { downloadSourceDocumentObject } from './storage';
 import { purgeSourceDocumentStorage } from './sourceDocumentPurge';
 import { hasStoredFile, SOURCE_FILE_NOT_STORED_STATUS, SOURCE_FILE_NOT_STORED_MESSAGE } from './caseLifecycle';
@@ -750,6 +750,7 @@ async function accountsStep(env: PipelineEnv): Promise<StepOut> {
     const from = state.cursors.accounts;
     const slice = meta.assignments.slice(from, from + ACCOUNT_BATCH);
     const entries: AcctEntry[] = [];
+    const auditBatch: AuditEventInput[] = [];
     for (const assignment of slice) {
       const resolved = await resolveOrCreateAccount(
         userId,
@@ -767,9 +768,10 @@ async function accountsStep(env: PipelineEnv): Promise<StepOut> {
       );
       entries.push({ key: assignment.key, accountId: resolved.accountId, created: resolved.created, folioNumber: assignment.folioNumber, amcName: assignment.amcName });
       if (resolved.accountId) {
-        await emitAuditEvent({ userId, eventType: 'account_resolved', subjectType: 'ii_accounts', subjectId: resolved.accountId, actorType: 'system', metadata: { folioNumber: assignment.folioNumber, amcName: assignment.amcName, created: resolved.created, parseRunId: state.parseRunId } });
+        auditBatch.push({ userId, eventType: 'account_resolved', subjectType: 'ii_accounts', subjectId: resolved.accountId, actorType: 'system', metadata: { folioNumber: assignment.folioNumber, amcName: assignment.amcName, created: resolved.created, parseRunId: state.parseRunId } });
       }
     }
+    await emitAuditEvents(auditBatch);
     await env.store.put('acct', Math.floor(from / ACCOUNT_BATCH), entries);
     await fault(env, 'accounts:written');
     state.cursors.accounts = from + slice.length;
@@ -1040,6 +1042,7 @@ async function schemesStep(env: PipelineEnv): Promise<StepOut> {
     const overrides = await mapLimit(slice, 8, async ([key], i) => (keying.noIdentifierKeys.has(key) ? null : await findResolvedAmbiguousInstrumentOverride(admin, userId, signatures[i])));
 
     const out: InstEntry[] = [];
+    const auditBatch: AuditEventInput[] = [];
     const toCreate: Array<{ key: string; scheme: ParsedInstrumentRecord; id: string }> = [];
     let opened = 0;
     for (let i = 0; i < slice.length; i++) {
@@ -1085,7 +1088,7 @@ async function schemesStep(env: PipelineEnv): Promise<StepOut> {
       );
       if (outcome.kind === 'resolved') {
         out.push({ key, instrumentId: outcome.instrumentId });
-        await emitAuditEvent({ userId, eventType: 'instrument_resolved', subjectType: 'ii_instruments', subjectId: outcome.instrumentId, actorType: 'system', metadata: { matchedVia: outcome.matchedVia, confidence: outcome.confidence, scheme: scheme.rawSchemeName, parseRunId: state.parseRunId } });
+        auditBatch.push({ userId, eventType: 'instrument_resolved', subjectType: 'ii_instruments', subjectId: outcome.instrumentId, actorType: 'system', metadata: { matchedVia: outcome.matchedVia, confidence: outcome.confidence, scheme: scheme.rawSchemeName, parseRunId: state.parseRunId } });
         continue;
       }
       if (outcome.kind === 'ambiguous') {
@@ -1142,10 +1145,11 @@ async function schemesStep(env: PipelineEnv): Promise<StepOut> {
         }
         if (identifierRows.length > 0) await admin.from('ii_instrument_identifiers').insert(identifierRows);
         for (const c of toCreate) {
-          await emitAuditEvent({ userId, eventType: 'instrument_resolved', subjectType: 'ii_instruments', subjectId: c.id, actorType: 'system', metadata: { matchedVia: 'created_provisional', scheme: c.scheme.rawSchemeName, parseRunId: state.parseRunId } });
+          auditBatch.push({ userId, eventType: 'instrument_resolved', subjectType: 'ii_instruments', subjectId: c.id, actorType: 'system', metadata: { matchedVia: 'created_provisional', scheme: c.scheme.rawSchemeName, parseRunId: state.parseRunId } });
         }
       }
     }
+    await emitAuditEvents(auditBatch);
     await env.store.put('inst', Math.floor(from / SCHEME_BATCH), out);
     await fault(env, 'schemes:written');
     state.counters.casesOpened += opened;

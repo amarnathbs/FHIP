@@ -40,3 +40,24 @@ export async function emitAuditEvent(input: AuditEventInput): Promise<{ error: s
   });
   return { error: error?.message ?? null };
 }
+
+/**
+ * Several audit events in ONE write (Document2 (4) WP-J): a statement with many folios and funds used to make one round trip per
+ * account and per fund. The rows are exactly what emitAuditEvent would have written, one each, in the given order.
+ */
+export async function emitAuditEvents(inputs: readonly AuditEventInput[]): Promise<{ error: string | null }> {
+  if (inputs.length === 0) return { error: null };
+  const admin = createAdminClient();
+  const { error } = await admin.from('ii_audit_events').insert(
+    inputs.map((input) => ({
+      user_id: input.userId,
+      event_type: input.eventType,
+      subject_type: input.subjectType,
+      subject_id: input.subjectId ?? null,
+      actor_type: input.actorType,
+      actor_id: input.actorId ?? null,
+      metadata: input.metadata ?? null,
+    })),
+  );
+  return { error: error?.message ?? null };
+}
