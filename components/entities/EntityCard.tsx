@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { mergeEntityHistory } from '@/components/entities/entityHistory';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { fetchJson, formatMoneySafe } from '@/components/retirement/smsf/format';
 import { formatDateShort } from '@/lib/engines/date';
@@ -166,16 +167,17 @@ export function EntityCard({ entity: initial, onArchive, onChanged, busy }: { en
           <div className="text-sm" data-testid="entity-history">
             {history.modes.length === 0 && history.changes.length === 0 && <p className="text-muted">No changes recorded yet.</p>}
             <ul className="space-y-1">
-              {history.modes.map((m) => (
-                <li key={m.id}>
-                  {formatDateShort(m.created_at.slice(0, 10), entity.currency_code)}: {MODE_ACTION[m.action] ?? m.action}. Net {formatMoneySafe(m.net_before, entity.currency_code)} to {formatMoneySafe(m.net_after, entity.currency_code)}.
-                </li>
-              ))}
-              {history.changes.slice(0, 30).map((c) => (
-                <li key={c.id} className="text-muted">
-                  {formatDateShort(c.created_at.slice(0, 10), entity.currency_code)}: {CHANGE_ACTION[c.action] ?? c.action} {CHANGE_TABLE[c.table_name] ?? c.table_name}.
-                </li>
-              ))}
+              {mergeEntityHistory(history.modes, history.changes).map((h) =>
+                h.kind === 'mode' ? (
+                  <li key={'m' + h.row.id}>
+                    {formatDateShort(h.row.created_at.slice(0, 10), entity.currency_code)}: {MODE_ACTION[h.row.action] ?? h.row.action}. Net {formatMoneySafe(h.row.net_before, entity.currency_code)} to {formatMoneySafe(h.row.net_after, entity.currency_code)}.
+                  </li>
+                ) : (
+                  <li key={'c' + h.row.id} className="text-muted">
+                    {formatDateShort(h.row.created_at.slice(0, 10), entity.currency_code)}: {CHANGE_ACTION[h.row.action] ?? h.row.action} {CHANGE_TABLE[h.row.table_name] ?? h.row.table_name}.
+                  </li>
+                ),
+              )}
             </ul>
           </div>
         )}
