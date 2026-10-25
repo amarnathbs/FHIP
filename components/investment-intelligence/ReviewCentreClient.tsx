@@ -7,6 +7,7 @@ import { apiErrorMessage, type OwnerSelectionBody } from './ownerChange';
 import { fmtDate } from './dateDisplay';
 import { ProbableDuplicateReview } from './ProbableDuplicateReview';
 import { ReplacementCopyControl } from './ReplacementCopyControl';
+import { StatementJobFollower } from './StatementJobFollower';
 import type { CaseLifecycle } from '@/lib/services/investment-intelligence/caseLifecycle';
 
 // R9 — Review Centre UX (spec sections 56, 59, 134). Sections mirror the
@@ -97,6 +98,9 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
   // aiExtractionReviewApply.ts), so this screen needs no extra lookup.
   const [selectedInstrumentByItem, setSelectedInstrumentByItem] = useState<Record<string, string>>({});
   const [resolvingInstrumentItemId, setResolvingInstrumentItemId] = useState<string | null>(null);
+  // Document2 (4) WP-J: applying a resolution re-reads the statement. For a large one that is a background job; the screen follows it and
+  // refreshes when it ends. Nothing is lost if the person leaves: the job continues on the server.
+  const [reprocessJobIds, setReprocessJobIds] = useState<string[]>([]);
   const [resolveInstrumentError, setResolveInstrumentError] = useState<Record<string, string>>({});
   // Document2 final non-benchmark closure #4 (2026-09-30): a genuine
   // explicit conflict-choice action for 'cross_source_conflict'/
@@ -272,6 +276,10 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
         setActionNotice((prev) => ({ ...prev, [itemId]: { ok: true, text: 'Your choice is saved. The original statement file was deleted after processing, so it is applied the next time you upload a replacement copy of this statement.' } }));
       } else if (json.data?.reprocessError) {
         setActionNotice((prev) => ({ ...prev, [itemId]: { ok: false, text: `Your choice is saved, but re-checking the statement did not finish: ${String(json.data.reprocessError)}` } }));
+      } else if (typeof json.data?.reprocessJobId === 'string') {
+        const jobId = json.data.reprocessJobId as string;
+        setReprocessJobIds((prev) => (prev.includes(jobId) ? prev : [...prev, jobId]));
+        setActionNotice((prev) => ({ ...prev, [itemId]: { ok: true, text: 'Your choice is saved. The statement is being re-checked in the background; this list updates when it is done.' } }));
       }
       // Same reason submitOwner()/discardDocument() above hit /review/refresh
       // before reloading -- ii_review_items is a materialised snapshot, not
@@ -372,6 +380,20 @@ export function ReviewCentreClient({ dateCurrency = 'AUD' }: { dateCurrency?: 'A
           ))}
         </div>
       )}
+
+      {reprocessJobIds.map((jobId) => (
+        <div key={jobId} className="mb-3 rounded-md border border-gray-200 bg-gray-50 p-3" data-testid="review-reprocess-job">
+          <p className="text-sm font-medium text-gray-800">Re-checking the statement with your choice</p>
+          <StatementJobFollower
+            jobId={jobId}
+            onFinished={async () => {
+              setReprocessJobIds((prev) => prev.filter((j) => j !== jobId));
+              await fetch('/api/investment-intelligence/review/refresh', { method: 'POST' });
+              await load(statusFilter);
+            }}
+          />
+        </div>
+      ))}
 
       {loading && <p className="text-sm text-muted">Loading…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}

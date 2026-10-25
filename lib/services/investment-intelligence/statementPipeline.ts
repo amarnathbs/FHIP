@@ -737,7 +737,7 @@ const ACCOUNT_BATCH = 25;
 
 async function accountsStep(env: PipelineEnv): Promise<StepOut> {
   const stop = unitGuard(env);
-  const { admin, userId, documentId: sourceDocumentId, state } = env;
+  const { userId, documentId: sourceDocumentId, state } = env;
   const meta = await loadMeta(env);
   const doc = await loadDoc(env);
   if (!doc) return finished({ ok: false, status: 'not_found', parseRunId: state.parseRunId, error: 'Source document not found.' });
