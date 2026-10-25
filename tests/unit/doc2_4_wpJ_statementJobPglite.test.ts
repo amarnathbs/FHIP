@@ -421,6 +421,7 @@ describe('WP-J statement job: admission, polling, retry, dead jobs, dead runs', 
     let last = job;
     for (let i = 0; i < 6 && (last.status === 'queued' || last.status === 'processing'); i++) {
       const out = await advanceStatementJob(job.id, { userId: p.userId, sliceBudgetMs: 0, fault: boom });
+      if (out.kind === 'not_found') throw new Error('job not found');
       last = out.job;
     }
     expect(last.status).toBe('failed');
