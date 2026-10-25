@@ -70,9 +70,28 @@ export const UNKNOWN_AMC_SENTINEL = 'Unknown AMC';
  * folio already on file (spec section 15: "Do not create a new account for
  * every uploaded statement.").
  */
-export async function resolveOrCreateAccount(userId: string, input: ResolveAccountInput): Promise<ResolveAccountResult> {
+/** One active account of the user, as read once per slice (Document2 (4) WP-J): lets a statement with hundreds of folios resolve them without a query each. */
+export interface PrefetchedAccount {
+  id: string;
+  folio_number: string | null;
+  institution_name: string;
+}
+
+/** The user's active accounts, read once, to hand to resolveOrCreateAccount as `prefetched`. */
+export async function prefetchActiveAccounts(userId: string): Promise<PrefetchedAccount[]> {
+  const admin = createAdminClient();
+  const { fetchAllRows } = await import('./pagination');
+  return fetchAllRows<PrefetchedAccount>(
+    () => admin.from('ii_accounts').select('id, folio_number, institution_name').eq('user_id', userId).eq('status', 'active').order('id', { ascending: true }),
+    1000,
+    { concurrency: 2 },
+  );
+}
+
+export async function resolveOrCreateAccount(userId: string, input: ResolveAccountInput, prefetched?: PrefetchedAccount[]): Promise<ResolveAccountResult> {
   const admin = createAdminClient();
   const normalisedFolio = normaliseFolioNumber(input.folioNumber);
+  if (prefetched) return resolveWithPrefetched(admin, userId, input, normalisedFolio, prefetched);
 
   const { data: candidates, error: fetchErr } = await admin
     .from('ii_accounts')
@@ -166,6 +185,54 @@ export async function resolveOrCreateAccount(userId: string, input: ResolveAccou
 // resolve to two assignments here rather than being silently collapsed
 // under whichever AMC name won a guess (the mandatory
 // same-folio-number/different-AMC negative control).
+/**
+ * The same decision resolveOrCreateAccount takes with queries, taken on a list the caller read once (and keeps current: an account
+ * created or upgraded here is added to / updated in `prefetched`, so later folios of the same statement see it).
+ */
+async function resolveWithPrefetched(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  input: ResolveAccountInput,
+  normalisedFolio: string | null,
+  prefetched: PrefetchedAccount[],
+): Promise<ResolveAccountResult> {
+  const match = prefetched.find((c) => c.institution_name === input.institutionName && normaliseFolioNumber(c.folio_number) === normalisedFolio);
+  if (match) return { accountId: match.id, created: false, error: null };
+  if (normalisedFolio) {
+    const sameFolio = prefetched.filter((c) => normaliseFolioNumber(c.folio_number) === normalisedFolio);
+    if (input.institutionName === UNKNOWN_AMC_SENTINEL) {
+      if (sameFolio.length === 1) return { accountId: sameFolio[0].id, created: false, error: null };
+    } else {
+      const unknownMatch = sameFolio.find((c) => c.institution_name === UNKNOWN_AMC_SENTINEL);
+      if (unknownMatch) {
+        const { error: updateErr } = await admin.from('ii_accounts').update({ institution_name: input.institutionName }).eq('id', unknownMatch.id);
+        if (updateErr) return { accountId: null, created: false, error: updateErr.message };
+        unknownMatch.institution_name = input.institutionName;
+        return { accountId: unknownMatch.id, created: false, error: null };
+      }
+    }
+  }
+  const { data: created, error: insertErr } = await admin
+    .from('ii_accounts')
+    .insert({
+      user_id: userId,
+      account_type: input.accountType,
+      institution_name: input.institutionName,
+      country_code: input.countryCode,
+      currency_code: input.currencyCode,
+      folio_number: input.folioNumber,
+      account_number_masked: input.accountNumberMasked ?? null,
+      owner_member_id: input.ownerMemberId ?? null,
+      source_document_id: input.sourceDocumentId ?? null,
+      status: 'active',
+    })
+    .select('id')
+    .single();
+  if (insertErr || !created) return { accountId: null, created: false, error: insertErr?.message ?? 'Account creation failed' };
+  prefetched.push({ id: created.id as string, folio_number: input.folioNumber, institution_name: input.institutionName });
+  return { accountId: created.id as string, created: true, error: null };
+}
+
 export interface FolioAmcAssignment {
   key: string; // accountResolutionKey(folioNumber, amcName) — stable identity for this run
   folioNumber: string | null;
