@@ -41,7 +41,7 @@ function parsedFixture(positions = 25, txns = 12) {
 
 describe('staging a parsed statement', () => {
   it('bigints survive the round trip bit for bit, including inside arrays and objects', () => {
-    const value = { a: 12345678901234567890n, nested: { list: [1n, 2n, { x: -7n }], s: 'text', n: null, k: 3 } };
+    const value = { a: BigInt('12345678901234567890'), nested: { list: [BigInt(1), BigInt(2), { x: BigInt(-7) }], s: 'text', n: null, k: 3 } };
     const plain = JSON.parse(JSON.stringify(toPlain(value))); // exactly what a jsonb column stores
     expect(fromPlain(plain)).toEqual(value);
     expect(toPlain({ u: undefined, k: 1 })).toEqual({ k: 1 });

@@ -1,0 +1,9 @@
+{
+  "project": "vqycarelcoijzwlpkpcz",
+  "runTag": "wpjjob-1792931748287",
+  "startedAt": "2026-10-25T12:35:48.287Z",
+  "steps": [],
+  "preconditionMet": false,
+  "verdict": "NOT PERFORMED: migrations 0312 / 0313 are not applied on DEV (docs/reviews/po_apply_wp_j/02 and 03).",
+  "finishedAt": "2026-10-25T12:35:49.723Z"
+}
