@@ -22,6 +22,7 @@
 
 import type { createAdminClient } from '@/lib/supabase/admin';
 import { deleteSourceDocumentObject, verifySourceDocumentObjectAbsent } from './storage';
+import { documentsWithActiveStatementJob } from './statementJob/store';
 
 /**
  * AIE-1 final production completion (2026-09-25) -- the Investment
@@ -62,7 +63,10 @@ export async function enforceIiSourceDocumentRetentionBackstop(
   }
   let purged = 0;
   let failed = 0;
-  for (const row of (data ?? []) as Array<{ id: string; storage_path: string }>) {
+  // Document2 (4) WP-J: a statement with an unfinished processing job keeps its file until that job has read it (the job's `read`
+  // step is the only step that opens the file). The job finishes or fails on its own; the next sweep then removes whatever is left.
+  const busy = await documentsWithActiveStatementJob(((data ?? []) as Array<{ id: string }>).map((r) => r.id));
+  for (const row of ((data ?? []) as Array<{ id: string; storage_path: string }>).filter((r) => !busy.has(r.id))) {
     await purgeSourceDocumentStorage(admin, row.id, row.storage_path);
     const { data: after } = await admin.from('ii_source_documents').select('storage_purged_at').eq('id', row.id).maybeSingle();
     if ((after as { storage_purged_at: string | null } | null)?.storage_purged_at) purged += 1;

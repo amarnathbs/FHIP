@@ -269,10 +269,15 @@ export async function deleteChunks(jobId: string, userId: string, kinds?: Statem
 // Backstop / purge integration
 // ---------------------------------------------------------------------------
 
-/** Of the given statements, those with an unfinished job: the raw-file retention backstop leaves their file for the job's read slice. Missing table = empty. */
-export async function documentsWithActiveStatementJob(documentIds: string[]): Promise<Set<string>> {
+/**
+ * Of the given statements, those with a RECENTLY ACTIVE unfinished job (touched within `withinMs`): the raw-file retention backstop
+ * leaves their file for the job's read slice. A job nobody has touched for longer than that no longer protects the file (strict deletion
+ * wins; the read step then reports that a replacement copy is needed). Missing table = empty.
+ */
+export async function documentsWithActiveStatementJob(documentIds: string[], withinMs: number = 6 * 60 * 60_000): Promise<Set<string>> {
   if (documentIds.length === 0) return new Set();
-  const { data, error } = await createAdminClient().from('ii_statement_jobs').select('source_document_id').in('source_document_id', documentIds).in('status', ['queued', 'processing']);
+  const since = new Date(Date.now() - withinMs).toISOString();
+  const { data, error } = await createAdminClient().from('ii_statement_jobs').select('source_document_id').in('source_document_id', documentIds).in('status', ['queued', 'processing']).gt('updated_at', since);
   if (error) return new Set();
   return new Set(((data ?? []) as Array<{ source_document_id: string }>).map((r) => r.source_document_id));
 }

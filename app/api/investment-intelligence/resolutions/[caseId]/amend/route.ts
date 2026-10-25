@@ -2,8 +2,7 @@ import { requireCountryConfirmedUser as requireUser, ok, bad, badValidation } fr
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { emitAuditEvent } from '@/lib/services/investment-intelligence/audit';
-import { processSourceDocument } from '@/lib/services/investment-intelligence/documentProcessing';
-import { SOURCE_FILE_NOT_STORED_STATUS } from '@/lib/services/investment-intelligence/caseLifecycle';
+import { reprocessAfterResolution } from '@/lib/services/investment-intelligence/statementJob/admission';
 import { applyAccountOwnerChange, loadAccountOwnership, loadOwnerChoiceContext } from '@/lib/services/investment-intelligence/accountOwnership';
 import { describeOwnership, isOwnerCaseType, jointCaseOwnerFailure, ownerChangeRequestSchema, ownershipAuditShape, resolutionMethodFor, validateOwnerSelection } from '@/lib/services/investment-intelligence/ownerModel';
 import { z } from 'zod';
@@ -144,21 +143,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ caseId:
       metadata: { field: 'ambiguous_instrument', newValue: parsed.data.resolvedInstrumentId, previousValue: previousResolvedInstrumentId, amendsCaseId: caseId, newCaseId: newCase.id },
     });
 
-    let reprocessed = false;
-    let reprocessError: string | null = null;
-  let needsReplacementCopy = false;
-    try {
-      const result = await processSourceDocument({ userId: user.id, sourceDocumentId, forceReparse: true });
-      reprocessed = result.ok;
-      if (!result.ok) reprocessError = result.error ?? 'Reprocessing did not complete successfully.';
-      // Document2 (4) WP-B: the raw file is deleted on purpose after processing. The choice IS saved; applying it needs a
-      // replacement copy of the statement, and the caller must say so instead of showing a bare failure.
-      if (!result.ok && result.status === SOURCE_FILE_NOT_STORED_STATUS) needsReplacementCopy = true;
-    } catch (e) {
-      reprocessError = e instanceof Error ? e.message : 'Reprocessing failed unexpectedly.';
-    }
+    // Document2 (4) WP-J: a large statement is reprocessed as a background job; the answer carries the job id.
+    const { reprocessed, reprocessError, needsReplacementCopy, reprocessJobId } = await reprocessAfterResolution(user.id, sourceDocumentId);
 
-    return ok({ resolvedInstrumentId: parsed.data.resolvedInstrumentId, newCaseId: newCase.id, amendsCaseId: caseId, reprocessed, reprocessError, needsReplacementCopy });
+    return ok({ resolvedInstrumentId: parsed.data.resolvedInstrumentId, newCaseId: newCase.id, amendsCaseId: caseId, reprocessed, reprocessError, needsReplacementCopy, reprocessJobId });
   }
 
   if (!ownerParsed?.success) return bad('This resolution type cannot be amended here.', 422);
