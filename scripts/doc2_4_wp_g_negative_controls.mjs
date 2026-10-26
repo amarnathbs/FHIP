@@ -19,8 +19,8 @@ const controls = [
   {
     name: 'finalize does not clear what a killed finalize derived',
     file: 'lib/financial-data-hub/services/bankImportWorker.ts',
-    from: '  await clearDerived(userId, documentId);\n  if (',
-    to: '  if (',
+    from: '    await clearDerived(userId, documentId);\n',
+    to: '',
   },
   {
     name: 'fencing removed: a write no longer requires the lease holder',
@@ -37,8 +37,8 @@ const controls = [
   {
     name: 'the read phase no longer clears what an earlier attempt wrote',
     file: 'lib/financial-data-hub/services/bankImportWorker.ts',
-    from: "  await clearImportArtifacts(userId, documentId);\n  await patchDoc(userId, documentId, { processing_status: 'processing', processing_started_at: new Date(c.now()).toISOString(), error_code: null });\n  await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_csv_processing_started'",
-    to: "  await patchDoc(userId, documentId, { processing_status: 'processing', processing_started_at: new Date(c.now()).toISOString(), error_code: null });\n  await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_csv_processing_started'",
+    from: "  await clearImportArtifacts(userId, documentId);\n  await startProcessing(userId, doc, new Date(c.now()).toISOString(), { error_code: null });\n  await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_csv_processing_started'",
+    to: "  await startProcessing(userId, doc, new Date(c.now()).toISOString(), { error_code: null });\n  await recordDocumentAuditEvent({ userId, documentId, eventType: 'bank_csv_processing_started'",
   },
   {
     name: 'a failed job no longer removes its partial lines',

@@ -1,0 +1,5 @@
+Progress (resume file). Branch feat/doc2-4-wp-j-statement-reprocess-job-20261022.
+DONE: origin/main merged (1a6d923); WP-J live DEV 25x12+60x30 passed (dev_job_wpjjob-1792985544201.json); WP-G merged (a29038a);
+ tsc = only 2 known errors; vitest wpG/wpJ/wpE_interruptedRun 13 files 212 tests pass; WP-J controls exit 0;
+ WP-G controls were stale after WP-G latest (2 SKIP): guard texts updated, now exit 0, 6/6 red. Committed.
+PENDING: WP-G DEV script (server: node scripts/pdf_routes_dev_server.mjs 3947; npx tsx scripts/doc2_4_wp_g_dev_run.ts http://localhost:3947 scale|ai|robust|kill), stop server, then commit, fetch, merge-base --is-ancestor origin/main HEAD.
