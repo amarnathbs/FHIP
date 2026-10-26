@@ -48,10 +48,13 @@ function splitOversizedPage(lines: string[], target: number, maxChars: number): 
   const out: string[][] = [];
   let i = 0;
   while (i < lines.length) {
-    let end = Math.min(lines.length, i + target);
+    // Balanced windows (never more than the target): 20 lines become 10 + 10, not 18 + 2.
+    const pieces = Math.ceil((lines.length - i) / target);
+    const window = Math.ceil((lines.length - i) / pieces);
+    let end = Math.min(lines.length, i + window);
     // Prefer to end just before a line that starts a new dated entry, within the back 40 percent of the window.
     if (end < lines.length) {
-      const floor = i + Math.max(1, Math.floor(target * 0.6));
+      const floor = i + Math.max(1, Math.floor(window * 0.6));
       for (let k = end; k >= floor; k -= 1) {
         if (DATED_LINE.test(lines[k])) {
           end = k;
@@ -96,7 +99,8 @@ export function splitMaskedPagesIntoParts(pages: readonly string[], options: Spl
     const chars = lines.reduce((sum, l) => sum + l.length + 1, 0);
     const fits = cur.length + lines.length <= target && curChars + chars <= maxChars;
     if (cur.length > 0 && !fits) flush();
-    if (lines.length > target * 1.5 || chars > maxChars) {
+    // A page over the target is split (DEV, 21-10-2026: a 27-line part timed out three times; no part may exceed the target).
+    if (lines.length > target || chars > maxChars) {
       // A page bigger than one part: split it by lines, each piece its own part (after flushing what came before).
       flush();
       for (const piece of splitOversizedPage(lines, target, maxChars)) {

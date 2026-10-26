@@ -284,7 +284,8 @@ describe('kill and resume: a slice that dies is taken over and the result is exa
     h.fake.db.tables.fdh_data_quality_results = [{ id: 'old-dq', user_id: U1, statement_upload_id: 'doc-1', check_code: 'transaction_count_valid' }];
     h.fake.db.tables.fdh_data_provenance = [{ id: 'old-prov', user_id: U1, entity_type: 'fdh_statement_upload', entity_id: 'doc-1' }];
     (doc('doc-1') as Row).processing_status = 'extracted';
-    Object.assign(h.fake.jobs()[0], { status: 'processing', lease_owner: 'dead-owner-0003' });
+    // a killed finalize leaves its durable start flag set (written before anything is derived), which tells the re-run to clear first
+    Object.assign(h.fake.jobs()[0], { status: 'processing', lease_owner: 'dead-owner-0003', checkpoint: { ...(h.fake.jobs()[0].checkpoint as object), finalize_started: true } });
     expireLease(job.id);
     const { job: end } = await driveToEnd(job.id);
     expect(end.status).toBe('completed');

@@ -924,7 +924,9 @@ async function persistSlice(c: Ctx): Promise<SliceEnd> {
 
   if (stored.size < meta.rowsToInsertCount) return persistProgress(c, stored.size, meta.rowsToInsertCount);
   // Everything is stored: finalize (in this slice when there is time, otherwise in the next).
-  if (timeLeft(c) < 6_000) return more(c, { phase: 'finalize', progress_done: meta.rowsToInsertCount, progress_total: meta.rowsToInsertCount });
+  // Finalize is chained into this slice only when there is clearly room for it (measured on DEV: a 3,000-line finalize needs several
+  // seconds of round trips); otherwise it gets a slice of its own.
+  if (timeLeft(c) < 9_000) return more(c, { phase: 'finalize', progress_done: meta.rowsToInsertCount, progress_total: meta.rowsToInsertCount });
   const upd = await updateOwned(job.id, c.owner, { phase: 'finalize', progress_done: meta.rowsToInsertCount, progress_total: meta.rowsToInsertCount });
   if (!upd) return 'lost';
   return finalizeSlice({ ...c, job: upd });
@@ -956,8 +958,15 @@ async function finalizeSlice(c: Ctx): Promise<SliceEnd> {
   const storedCount = new Set(ids.map((r) => r.source_row)).size;
   if (storedCount < meta.rowsToInsertCount) return more(c, { phase: 'persist' });
 
-  // Idempotent re-run: clear what a previous, killed finalize derived (the LINES are kept).
-  await clearDerived(userId, documentId);
+  // Idempotent re-run: clear what a previous, killed finalize derived (the LINES are kept). The FIRST run of finalize has nothing to
+  // clear, and clearing is a round trip per few hundred lines, so it is skipped: a durable flag, written before anything is derived,
+  // tells a re-run (a killed finalize leaves the flag set) that it must clear first. Measured on DEV: this cost 30 s on 3,000 lines.
+  if (job.checkpoint.finalize_started === true) {
+    await clearDerived(userId, documentId);
+  } else {
+    const marked = await updateOwned(job.id, c.owner, { checkpoint: { ...job.checkpoint, finalize_started: true } });
+    if (!marked) return 'lost';
+  }
   const document = (await loadDoc(userId, documentId)) as FdhStatementUpload;
 
   let summary: Record<string, unknown>;
@@ -1011,11 +1020,13 @@ async function finalizeSlice(c: Ctx): Promise<SliceEnd> {
 async function clearDerived(userId: string, documentId: string): Promise<void> {
   const admin = createAdminClient();
   const ids = await storedIds(userId, documentId);
-  for (let i = 0; i < ids.length; i += 100) {
-    const slice = ids.slice(i, i + 100).map((r) => r.id);
-    const a = await admin.from('fdh_duplicate_candidates').delete().eq('user_id', userId).in('transaction_id_a', slice);
+  for (let i = 0; i < ids.length; i += 250) {
+    const slice = ids.slice(i, i + 250).map((r) => r.id);
+    const [a, b] = await Promise.all([
+      admin.from('fdh_duplicate_candidates').delete().eq('user_id', userId).in('transaction_id_a', slice),
+      admin.from('fdh_duplicate_candidates').delete().eq('user_id', userId).in('transaction_id_b', slice),
+    ]);
     if (a.error) throw new Error(a.error.message);
-    const b = await admin.from('fdh_duplicate_candidates').delete().eq('user_id', userId).in('transaction_id_b', slice);
     if (b.error) throw new Error(b.error.message);
   }
   for (const table of ['fdh_reconciliation_results', 'fdh_data_quality_results'] as const) {
