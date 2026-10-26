@@ -89,7 +89,18 @@ if (!HAS_ENV) {
     return n ?? 0;
   }
   async function oracle(userId: string) {
-    const rows = async (table: string, cols: string) => ((await admin.from(table).select(cols).eq('user_id', userId).limit(20000)).data ?? []) as unknown as Array<Record<string, number | string>>;
+    // PostgREST caps one response at its max_rows (1000 on DEV), so a plain .limit(20000) silently returned 1000 rows; page explicitly.
+    const rows = async (table: string, cols: string) => {
+      const all: Array<Record<string, number | string>> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin.from(table).select(cols).eq('user_id', userId).order('id', { ascending: true }).range(from, from + 999);
+        if (error) throw new Error(`oracle read of ${table} failed: ${error.message}`);
+        const page = (data ?? []) as unknown as Array<Record<string, number | string>>;
+        all.push(...page);
+        if (page.length < 1000) break;
+      }
+      return all;
+    };
     const sum = (xs: Array<Record<string, number | string>>, k: string) => Math.round(xs.reduce((s, r) => s + Number(r[k] ?? 0), 0) * 100) / 100;
     const txns = await rows('ii_transactions', 'gross_amount, units, status');
     const active = txns.filter((t) => t.status !== 'reversed');
@@ -171,7 +182,7 @@ if (!HAS_ENV) {
         const cas = buildWpjLargeCas({ positions: size.positions, txnsPerPosition: size.txns, stamp, omitRefs: true });
         const pdf = (label: string) => new Uint8Array(buildMinimalTextPdf([...paginateLines(cas.lines), [`Copy reference ${RUN_TAG} ${label}`]]));
         const { userId, memberId } = await makeUser(`${size.positions}x${size.txns}`);
-        const other = await makeUser('other');
+        const other = await makeUser(`other-${size.positions}x${size.txns}`);
         const first = pdf('original');
         const key = `${userId}/${randomUUID()}.pdf`;
         created.keys.push(key);

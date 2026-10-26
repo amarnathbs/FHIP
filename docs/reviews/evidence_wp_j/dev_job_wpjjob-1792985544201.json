@@ -1,0 +1,171 @@
+{
+  "project": "vqycarelcoijzwlpkpcz",
+  "runTag": "wpjjob-1792985544201",
+  "startedAt": "2026-10-26T03:32:24.201Z",
+  "steps": [
+    {
+      "positions": 25,
+      "transactions": 300,
+      "first": {
+        "slices": 3,
+        "wallMs": 45252,
+        "slowestSliceMs": 19793,
+        "oracle": {
+          "accounts": 13,
+          "transactionsActive": 300,
+          "transactionsReversed": 0,
+          "transactionAmountSumActive": 443020,
+          "transactionUnitsSumActive": 8250,
+          "links": 300,
+          "originatingLinks": 300,
+          "holdings": 25,
+          "holdingValueSum": 460020,
+          "publications": 0,
+          "investments": 0,
+          "truthRows": 25,
+          "runsRunning": 0
+        }
+      },
+      "copy-1": {
+        "slices": 2,
+        "wallMs": 38082,
+        "slowestSliceMs": 19880,
+        "oracle": {
+          "accounts": 13,
+          "transactionsActive": 300,
+          "transactionsReversed": 0,
+          "transactionAmountSumActive": 443020,
+          "transactionUnitsSumActive": 8250,
+          "links": 300,
+          "originatingLinks": 300,
+          "holdings": 25,
+          "holdingValueSum": 460020,
+          "publications": 0,
+          "investments": 0,
+          "truthRows": 25,
+          "runsRunning": 0
+        }
+      },
+      "copy-2": {
+        "slices": 2,
+        "wallMs": 36625,
+        "slowestSliceMs": 18715,
+        "oracle": {
+          "accounts": 13,
+          "transactionsActive": 300,
+          "transactionsReversed": 0,
+          "transactionAmountSumActive": 443020,
+          "transactionUnitsSumActive": 8250,
+          "links": 300,
+          "originatingLinks": 300,
+          "holdings": 25,
+          "holdingValueSum": 460020,
+          "publications": 0,
+          "investments": 0,
+          "truthRows": 25,
+          "runsRunning": 0
+        }
+      },
+      "killedAndResumed": {
+        "oracle": {
+          "accounts": 13,
+          "transactionsActive": 300,
+          "transactionsReversed": 0,
+          "transactionAmountSumActive": 443020,
+          "transactionUnitsSumActive": 8250,
+          "links": 300,
+          "originatingLinks": 300,
+          "holdings": 25,
+          "holdingValueSum": 460020,
+          "publications": 0,
+          "investments": 0,
+          "truthRows": 25,
+          "runsRunning": 0
+        }
+      }
+    },
+    {
+      "positions": 60,
+      "transactions": 1800,
+      "first": {
+        "slices": 5,
+        "wallMs": 90479,
+        "slowestSliceMs": 22627,
+        "oracle": {
+          "accounts": 30,
+          "transactionsActive": 1800,
+          "transactionsReversed": 0,
+          "transactionAmountSumActive": 2910600,
+          "transactionUnitsSumActive": 54000,
+          "links": 1800,
+          "originatingLinks": 1800,
+          "holdings": 60,
+          "holdingValueSum": 3018600,
+          "publications": 0,
+          "investments": 0,
+          "truthRows": 60,
+          "runsRunning": 0
+        }
+      },
+      "copy-1": {
+        "slices": 4,
+        "wallMs": 82180,
+        "slowestSliceMs": 24100,
+        "oracle": {
+          "accounts": 30,
+          "transactionsActive": 1800,
+          "transactionsReversed": 0,
+          "transactionAmountSumActive": 2910600,
+          "transactionUnitsSumActive": 54000,
+          "links": 1800,
+          "originatingLinks": 1800,
+          "holdings": 60,
+          "holdingValueSum": 3018600,
+          "publications": 0,
+          "investments": 0,
+          "truthRows": 60,
+          "runsRunning": 0
+        }
+      },
+      "copy-2": {
+        "slices": 4,
+        "wallMs": 83060,
+        "slowestSliceMs": 22958,
+        "oracle": {
+          "accounts": 30,
+          "transactionsActive": 1800,
+          "transactionsReversed": 0,
+          "transactionAmountSumActive": 2910600,
+          "transactionUnitsSumActive": 54000,
+          "links": 1800,
+          "originatingLinks": 1800,
+          "holdings": 60,
+          "holdingValueSum": 3018600,
+          "publications": 0,
+          "investments": 0,
+          "truthRows": 60,
+          "runsRunning": 0
+        }
+      },
+      "killedAndResumed": {
+        "oracle": {
+          "accounts": 30,
+          "transactionsActive": 1800,
+          "transactionsReversed": 0,
+          "transactionAmountSumActive": 2910600,
+          "transactionUnitsSumActive": 54000,
+          "links": 1800,
+          "originatingLinks": 1800,
+          "holdings": 60,
+          "holdingValueSum": 3018600,
+          "publications": 0,
+          "investments": 0,
+          "truthRows": 60,
+          "runsRunning": 0
+        }
+      }
+    }
+  ],
+  "preconditionMet": true,
+  "finishedAt": "2026-10-26T03:42:31.207Z"
+}
