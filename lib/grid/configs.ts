@@ -1,5 +1,5 @@
 import { FREQUENCY_OPTIONS } from '@/lib/engines/money';
-import { COUNTRY_OPTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
+import { COUNTRY_OPTIONS, ENTITY_OWNER_NEW_ROW_RESTRICTIONS, LEGACY_ENTITY_OWNER_RESTRICTIONS } from '@/lib/constants';
 import { maskedIdentifierProblem } from '@/lib/validation/maskedIdentifier';
 import { getAssetFieldMetadata } from './assetFieldMetadata';
 import { defaultIsEssentialForExpenseItem } from '@/lib/engines/dashboard';
@@ -21,7 +21,7 @@ export const incomeGridConfig: GridConfig = {
   // LR-11B: 'company'/'family_trust' are legacy cosmetic-only owner tags,
   // no longer offered for a brand-new row on any of the 7 registers — see
   // LEGACY_ENTITY_OWNER_RESTRICTIONS' own doc comment (lib/constants.ts).
-  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  restrictedOwnerValues: [...ENTITY_OWNER_NEW_ROW_RESTRICTIONS],
   // PO request 16-10-2026: Bonus is its own income source, paid once a year, so a new Bonus row starts as Annually
   // (taxable like salary, from the field default below). The user can change any value.
   defaultsForMasterItem: incomeDefaultsForMasterItem,
@@ -73,7 +73,7 @@ export const expenseGridConfig: GridConfig = {
   isFlow: true,
   frequencyField: 'frequency',
   reviewSection: 'expenses',
-  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  restrictedOwnerValues: [...ENTITY_OWNER_NEW_ROW_RESTRICTIONS],
   // PO decision 16-10-2026: necessities (rent, mortgage, rates, utilities, groceries, health, fuel, transport, home
   // insurance, body corporate, internet) start ticked Essential when the row is created; the user can untick.
   defaultsForMasterItem: (itemKey) => (defaultIsEssentialForExpenseItem(itemKey) ? { is_essential: true } : {}),
@@ -131,12 +131,15 @@ export const liabilityGridConfig: GridConfig = {
   valueField: 'balance',
   reviewSection: 'liabilities',
   propertyLinkSide: 'liability',
+  // F21: an SMSF property loan is a debt of the fund, entered on the fund (Retirement > SMSF). The catalogue entry is not offered for a NEW
+  // personal liability; a saved row that already uses it stays visible and editable (the grid keeps rows whose key is not in the catalogue).
+  withholdMasterItemKeysFromPicker: ['smsf_property_loan'],
   zeroConfirmation: {
     section: 'liabilities',
     question: 'Do you currently have any debts or financial liabilities?',
     noLabel: 'No, I have no debts or liabilities',
   },
-  restrictedOwnerValues: [...LEGACY_ENTITY_OWNER_RESTRICTIONS],
+  restrictedOwnerValues: [...ENTITY_OWNER_NEW_ROW_RESTRICTIONS],
   fields: [
     { name: 'lender', label: 'Lender', type: 'text' },
     { name: 'balance', label: 'Outstanding Balance', type: 'number', step: '0.01', required: true },
@@ -220,18 +223,21 @@ export const retirementGridConfig: GridConfig = {
   // backed by retirement_members. The legacy retirement_accounts.
   // target_retirement_age column is kept for backward compatibility (spec
   // s.27) but is deliberately no longer surfaced here.
+  // Document2 (4) F25b (20-10-2026): this form records the BALANCE of an account. The employer/personal contribution amounts and
+  // their frequency were removed from it: a contribution is a flow and has its own "Add contribution" action and history
+  // (components/retirement/RetirementContributionsPanel.tsx), so a balance and a contribution are never entered together.
   fields: [
     { name: 'current_balance', label: 'Current Balance', type: 'number', step: '0.01', required: true },
-    { name: 'employer_contribution', label: 'Employer Contribution', type: 'number', step: '0.01' },
-    { name: 'personal_contribution', label: 'Personal Contribution', type: 'number', step: '0.01' },
-    {
-      name: 'contribution_frequency',
-      label: 'Contribution Frequency',
-      type: 'select',
-      options: FREQUENCY_OPTIONS,
-    },
     { name: 'country_code', label: 'Country', type: 'select', options: COUNTRY_OPTIONS },
     { name: 'notes', label: 'Notes', type: 'text' },
+  ],
+  hideFromAddPickerKeys: [
+    'employer_contributions',
+    'salary_sacrifice',
+    'personal_concessional',
+    'non_concessional',
+    'spouse_contribution',
+    'government_co_contribution',
   ],
   // SMSF-UI (spec s.4-38): SMSF has its own dedicated Fund/Members/
   // Summary-Detailed-Holdings management UI (components/retirement/smsf/

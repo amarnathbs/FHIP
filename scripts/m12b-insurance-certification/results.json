@@ -664,8 +664,10 @@
       },
       "canonicalWritesDuringIntake": 0,
       "canonicalWritesAfterExplicitAccept": 0,
-      "aiCompletionAttempts": 0,
-      "aiOutcomes": [],
+      "aiCompletionAttempts": 1,
+      "aiOutcomes": [
+        "success"
+      ],
       "maskingSummaries": [
         {
           "coverageByType": {
@@ -1178,8 +1180,10 @@
       },
       "canonicalWritesDuringIntake": 0,
       "canonicalWritesAfterExplicitAccept": 0,
-      "aiCompletionAttempts": 0,
-      "aiOutcomes": [],
+      "aiCompletionAttempts": 1,
+      "aiOutcomes": [
+        "success"
+      ],
       "maskingSummaries": [
         {
           "coverageByType": {

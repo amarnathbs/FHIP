@@ -26,7 +26,7 @@
 
 import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { formatMoneyExact } from '@/lib/engines/money';
+import { formatMoney, formatMoneyExact } from '@/lib/engines/money';
 import { normaliseProposedFields, type ProposedField } from '@/lib/import-bridge/proposedFieldShape';
 import { PayslipDetails } from '@/components/income/PayslipDetails';
 import { OwnerSelector } from '@/components/ownership/OwnerSelector';
@@ -308,12 +308,43 @@ async function readJson(res: Response) {
   return { ok: res.ok, status: res.status, json };
 }
 
+interface SuperOutcomeView {
+  status: 'none' | 'recorded';
+  ledgerStatus?: string;
+  alreadyRecorded?: boolean;
+  amount?: number;
+  currency?: string;
+  destinationName?: string | null;
+  destinationKind?: 'smsf' | 'retirement_account' | null;
+}
+
+/** Plain words for the employer super found on an approved payslip (Document2 (4) F25). Null when the payslip shows none. */
+export function describeSuperOutcome(data: { retirement_contribution?: SuperOutcomeView | null; retirement_contribution_error?: string | null } | undefined): { text: string; needsChoice: boolean } | null {
+  if (!data) return null;
+  if (data.retirement_contribution_error) {
+    return { text: 'Your payslip was approved, but the employer super on it could not be recorded on Retirement just now. You can add it there as a contribution.', needsChoice: false };
+  }
+  const c = data.retirement_contribution;
+  if (!c || c.status !== 'recorded') return null;
+  const money = c.amount !== undefined ? formatMoney(c.amount, c.currency === 'INR' ? 'INR' : 'AUD') : 'The employer super';
+  if (c.ledgerStatus === 'needs_destination') {
+    return { text: `${money} of employer super is on this payslip. FHIP could not tell which of your retirement accounts it goes to, so it has not guessed and has not counted it yet.`, needsChoice: true };
+  }
+  if (c.alreadyRecorded) {
+    return { text: `The ${money} employer super on this payslip was already recorded on Retirement, so it was not added again.`, needsChoice: false };
+  }
+  const dest = c.destinationName ? `${c.destinationName}${c.destinationKind === 'smsf' ? ' (SMSF)' : ''}` : 'your retirement account';
+  return { text: `${money} of employer super on this payslip was recorded as a contribution to ${dest}. It is a contribution, not income and not a balance.`, needsChoice: false };
+}
+
 export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void; onApplied?: () => void }) {
   const [phase, setPhase] = useState<Phase>('form');
   const [country, setCountry] = useState<'AU' | 'IN'>('AU');
   const [file, setFile] = useState<File | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Document2 (4) F25: what happened to the employer super on this payslip after Approve (a contribution flow on Retirement, not income).
+  const [superNotice, setSuperNotice] = useState<{ text: string; needsChoice: boolean } | null>(null);
   const [event, setEvent] = useState<PayrollEvent | null>(null);
   const [proposalId, setProposalId] = useState<string | null>(null);
   const [fields, setFields] = useState<ProposedField[]>([]);
@@ -701,6 +732,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       });
       const { ok, json } = await readJson(res);
       if (!ok) throw new Error(json.error ?? 'Could not approve this payroll evidence.');
+      setSuperNotice(describeSuperOutcome((json as { data?: { retirement_contribution?: SuperOutcomeView | null; retirement_contribution_error?: string | null } }).data));
       await loadReview(documentId);
       await handleGenerateProposal();
     } catch (e) {
@@ -869,6 +901,12 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
       className="rounded border border-gray-200 p-5"
       aria-live="polite"
     >
+      {superNotice && (
+        <p className="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-900" role="status" data-testid="payslip-super-notice">
+          {superNotice.text}{' '}
+          <a href="/retirement#contributions" className="underline">{superNotice.needsChoice ? 'Choose where it goes on the Retirement page' : 'See it on the Retirement page'}</a>
+        </p>
+      )}
       <div className="flex items-start justify-between gap-4">
         <h2 className="text-lg font-semibold text-trust">Import from Payslip</h2>
         <button type="button" onClick={onClose} className="text-sm text-muted underline" aria-label="Close payslip import">

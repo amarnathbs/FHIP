@@ -3,6 +3,8 @@ import { makeRegistry } from '@/lib/services/registry';
 import { expenseSchema } from '@/lib/validation/expense';
 import { defaultIsEssentialForExpenseItem } from '@/lib/engines/dashboard';
 import { requireModuleCapability } from '@/lib/services/appCapability';
+import { refuseEntityOwnerOnSave, existingOwnerForMasterItem } from '@/lib/services/entityOwnerGuard';
+import { createClient } from '@/lib/supabase/server';
 
 const registry = makeRegistry('expense_items');
 
@@ -23,6 +25,9 @@ export async function POST(req: Request) {
   if (!user) return blocked!;
   const parsed = expenseSchema.safeParse(await req.json());
   if (!parsed.success) return badValidation(parsed.error, 422);
+  // F23: an SMSF / trust / HUF / company expense is entered on the entity, never in personal Expenses.
+  const refused = await refuseEntityOwnerOnSave('expenses', parsed.data.owner, async () => existingOwnerForMasterItem(await createClient(), 'expense_items', user.id, parsed.data.master_item_key));
+  if (refused) return refused;
   const row = { ...parsed.data, is_essential: parsed.data.is_essential ?? defaultIsEssentialForExpenseItem(parsed.data.master_item_key) };
   const { data, error } = await registry.save(user.id, row);
   return error ? bad(error.message) : ok(data);

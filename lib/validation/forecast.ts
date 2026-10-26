@@ -48,6 +48,9 @@ export const forecastRunRequestSchema = z.object({
   retirement_target_corpus: z.number().min(0).optional(),
   retirement_desired_annual_income: z.number().min(0).optional(),
   retirement_replacement_percentage: z.number().min(0).max(100).optional(),
+  // Document2 (4) F26: a what-if target age for THIS run only. Never saved; the saved age (Retirement page) is unchanged.
+  retirement_what_if_age_self: z.number().int().min(1).max(119).optional(),
+  retirement_what_if_age_spouse: z.number().int().min(1).max(119).optional(),
   planned_events: z.array(plannedFinancialEventSchema).max(50).optional(),
   resilience_stress_scenario: resilienceStressScenarioSchema.optional(),
   resilience_duration_months: z.number().int().min(1).max(60).optional(),

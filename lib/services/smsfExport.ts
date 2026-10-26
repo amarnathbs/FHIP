@@ -17,7 +17,7 @@
 // This module also carries the WP-10 Auditor pack: rather than a wholly
 // separate export type, the same CSV includes a clearly labelled
 // "Provenance / audit metadata" section (fund identity, mode, holding/member
-// counts, reconciliation variance, generated-at) — structured metadata only,
+// counts, generated-at) — structured metadata only,
 // explicitly never a raw source document, matching the PO lock verbatim
 // ("Accountant/auditor export is structured data plus minimal provenance.
 // No raw-document evidence vault.").
@@ -90,13 +90,28 @@ export function buildSmsfAccountantExportCsv(bundle: SmsfFundReportBundle, perio
   out += csvRow(['Spouse / rollover contributions', 'Not modelled in this release']);
   out += csvRow([]);
 
-  out += csvRow(['Balance Reconciliation']);
-  if (bundle.provenance.activeHoldingCount === 0) {
-    out += csvRow(['Detailed Holdings has not been set up for this fund yet — nothing to reconcile against Summary Mode']);
+  out += csvRow(['Fund net position']);
+  out += csvRow([bundle.position.mode === 'itemised' ? 'Net - assets less liabilities (worked out by FHIP)' : 'Net value (recorded as one figure)', bundle.position.net ?? 'N/A']);
+  out += csvRow([]);
+
+  out += csvRow(['Where the recurring figures come from']);
+  out += csvRow(['Fund income records', bundle.sources.entityIncomeCount]);
+  out += csvRow(['Fund expense records', bundle.sources.entityExpenseCount]);
+  out += csvRow(['Income recorded the earlier way (not yet moved into the fund)', bundle.sources.legacyIncomeCount]);
+  out += csvRow(['Expenses recorded the earlier way (not yet moved into the fund)', bundle.sources.legacyExpenseCount]);
+  out += csvRow([]);
+
+  out += csvRow(['Actuals from bank statements of the fund accounts (shown beside the recurring figures, never added to them)']);
+  if (bundle.bankActuals.status === 'ok') {
+    const b = bundle.bankActuals;
+    out += csvRow(['Statement window', b.window.from, b.window.to]);
+    out += csvRow(['Money in', money(b.totals.incomeReporting)]);
+    out += csvRow(['Money out (spending)', money(b.totals.spendingReporting)]);
+    out += csvRow(['Cost of debt', money(b.totals.costOfDebtReporting)]);
+    out += csvRow(['Net', money(b.totals.netReporting)]);
+    for (const m of b.months) out += csvRow([m.month, money(m.incomeReporting), money(m.spendingReporting), money(m.costOfDebtReporting), money(m.netReporting)]);
   } else {
-    out += csvRow(['Detailed net value', bundle.reconciliation.detailedNetValue ?? 'N/A']);
-    out += csvRow(['Summary balance', bundle.reconciliation.summaryBalance ?? 'N/A']);
-    out += csvRow(['Variance', bundle.reconciliation.variance ?? 'N/A']);
+    out += csvRow(['Not available', 'the approved bank statements could not be read']);
   }
   out += csvRow([]);
 

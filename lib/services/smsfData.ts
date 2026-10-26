@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { SmsfFundCreateInput, SmsfFundUpdateInput, SmsfHoldingInput, SmsfMemberInput } from '@/lib/validation/smsf';
+import type { SmsfFundCreateInput, SmsfFundUpdateInput, SmsfHoldingInput, SmsfLiabilityInput, SmsfMemberInput, SmsfSwitchModeInput } from '@/lib/validation/smsf';
 
 // Thin, self-contained data-access layer for the SMSF Fund/Members/Holdings
 // model (migration 0084). Deliberately does NOT import the sibling
@@ -35,11 +35,12 @@ export async function createSmsfFund(input: SmsfFundCreateInput, supabase: Supab
   return supabase.rpc('smsf_create_fund', {
     p_account_name: input.account_name,
     p_fund_name: input.fund_name,
-    p_summary_balance: input.summary_balance,
-    p_summary_balance_date: input.summary_balance_date ?? null,
+    p_summary_balance: input.mode === 'summary' ? (input.summary_balance ?? null) : null,
+    p_summary_balance_date: input.mode === 'summary' ? (input.summary_balance_date ?? null) : null,
     p_owner: input.owner,
     p_currency_code: input.currency_code,
     p_country_code: input.country_code,
+    p_mode: input.mode,
   });
 }
 
@@ -57,33 +58,76 @@ export async function updateSmsfFundSummary(fundId: string, userId: string, patc
 }
 
 /**
- * The hard SMSF-6 mode-switch gate, via the smsf_switch_to_detailed() RPC.
- * Raises (and this rejects) if the computed Detailed net value doesn't
- * match the Summary balance to the cent -- callers must resolve any
- * variance in Detailed Holdings first, exactly per spec s.24 steps 5-7.
+ * Entity-level recording mode (migration 0290): itemised (assets and liabilities, net derived) OR net value only (one typed net).
+ * ONE atomic, PREVIEW-FIRST call. With confirm false nothing changes and the result says what would (net before, net after, variance);
+ * with confirm true the new representation is applied and the old one retired (archived, never deleted) in one transaction, with a
+ * history row. Replaces the earlier two-step switch functions, which staged lines in a net-value fund.
  */
-export async function switchSmsfFundToDetailed(fundId: string, supabase: SupabaseClient) {
-  return supabase.rpc('smsf_switch_to_detailed', { p_fund_id: fundId });
+export async function switchSmsfRecordingMode(fundId: string, input: SmsfSwitchModeInput, supabase: SupabaseClient) {
+  return supabase.rpc('smsf_entity_switch_mode', {
+    p_fund_id: fundId,
+    p_to_mode: input.to_mode,
+    p_assets: input.to_mode === 'detailed' ? input.assets : [],
+    p_liabilities: input.to_mode === 'detailed' ? input.liabilities : [],
+    p_net: input.to_mode === 'summary' ? input.net : null,
+    p_net_date: input.to_mode === 'summary' ? (input.net_date ?? null) : null,
+    p_confirm: input.confirm,
+  });
 }
 
-/**
- * Detailed -> Summary switch-back (spec s.32-33, migration 0089). Detailed
- * holdings are never touched by this call -- they remain in the database,
- * simply no longer the fund's active valuation source (see the RPC's own
- * SQL comment). Requires a new Summary value + valuation date, matching the
- * spec's explicit "require/confirm" language.
- */
-export async function switchSmsfFundToSummary(
-  fundId: string,
-  newBalance: number,
-  newDate: string,
-  supabase: SupabaseClient
-) {
-  return supabase.rpc('smsf_switch_to_summary', {
-    p_fund_id: fundId,
-    p_new_summary_balance: newBalance,
-    p_new_summary_balance_date: newDate,
-  });
+export async function undoSmsfLastSwitch(fundId: string, confirm: boolean, supabase: SupabaseClient) {
+  return supabase.rpc('smsf_entity_undo_last_switch', { p_fund_id: fundId, p_confirm: confirm });
+}
+
+export async function retireSmsfTypedNet(fundId: string, confirm: boolean, supabase: SupabaseClient) {
+  return supabase.rpc('smsf_entity_retire_typed_net', { p_fund_id: fundId, p_confirm: confirm });
+}
+
+export async function moveSmsfLinkedLoan(fundId: string, liabilityId: string, confirm: boolean, supabase: SupabaseClient) {
+  return supabase.rpc('smsf_entity_move_linked_loan', { p_fund_id: fundId, p_liability_id: liabilityId, p_confirm: confirm });
+}
+
+export async function adoptSmsfRegisterRows(fundId: string, retirementRowIds: string[], confirm: boolean, supabase: SupabaseClient) {
+  return supabase.rpc('smsf_entity_adopt_register_rows', { p_fund_id: fundId, p_retirement_row_ids: retirementRowIds, p_confirm: confirm });
+}
+
+/** The fund's own debts (migration 0289): entity-level liabilities, never personal. */
+export async function listSmsfLiabilities(fundId: string, userId: string, supabase: SupabaseClient) {
+  return supabase
+    .from('smsf_liabilities')
+    .select('*')
+    .eq('smsf_fund_id', fundId)
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+}
+
+export async function createSmsfLiability(fundId: string, userId: string, input: SmsfLiabilityInput, supabase: SupabaseClient) {
+  // trg_smsf_liabilities_recompute (migration 0289) re-derives the fund net after this insert.
+  return supabase
+    .from('smsf_liabilities')
+    .insert({ ...input, smsf_fund_id: fundId, user_id: userId })
+    .select()
+    .single();
+}
+
+export async function updateSmsfLiability(liabilityId: string, userId: string, patch: Partial<SmsfLiabilityInput>, supabase: SupabaseClient) {
+  return supabase
+    .from('smsf_liabilities')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', liabilityId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+}
+
+export async function archiveSmsfLiability(liabilityId: string, userId: string, supabase: SupabaseClient) {
+  return supabase.from('smsf_liabilities').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', liabilityId).eq('user_id', userId).select().single();
+}
+
+/** Funds that hold BOTH an itemised set and a typed net (data-quality check; see smsf_mode_rule_violations()). */
+export async function listSmsfModeRuleViolations(supabase: SupabaseClient) {
+  return supabase.rpc('smsf_mode_rule_violations');
 }
 
 export async function listSmsfHoldings(fundId: string, userId: string, supabase: SupabaseClient) {

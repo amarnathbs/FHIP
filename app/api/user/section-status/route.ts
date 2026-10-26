@@ -7,6 +7,12 @@ import { createClient } from '@/lib/supabase/server';
 import { ok, bad, requireCountryConfirmedUser as requireUser, requireCountryConfirmedUserAllowingGeneric } from '@/lib/api';
 import { setSectionConfirmation } from '@/lib/services/financialSectionStatusData';
 import { ALL_SECTIONS, type FinancialSection, type ExplicitSectionConfirmation } from '@/lib/engines/financialSectionStatus';
+import {
+  isRetirementDeclarationDbRefusal,
+  loadRetirementDeclarationBlockers,
+  refuseRetirementDeclarationIfConflicting,
+  retirementDeclarationConflictResponse,
+} from '@/lib/services/retirementDeclarationGuard';
 
 const VALID_SECTIONS = new Set<string>(ALL_SECTIONS);
 // Phase 0C.1: 'reviewed_with_data' added — the positive-data-section
@@ -58,10 +64,44 @@ export async function PUT(req: Request) {
   }
 
   const supabase = await createClient();
+
+  // PO-D24-02 (21-10-2026): the retirement "I don't have any retirement savings" confirmation (not_applicable) is refused, with a readable 409,
+  // while an active retirement account or SMSF exists. Same rule as PUT /api/user/profile (lib/services/retirementDeclarationGuard.ts).
+  const declaringNoRetirement = section === 'retirement' && status === 'not_applicable';
+  let previousConfirmation: ExplicitSectionConfirmation | null = null;
+  if (declaringNoRetirement) {
+    const refusal = await refuseRetirementDeclarationIfConflicting(supabase, user.id);
+    if (refusal) return refusal;
+    const { data: before } = await supabase
+      .from('user_financial_section_status')
+      .select('status')
+      .eq('user_id', user.id)
+      .eq('section', 'retirement')
+      .maybeSingle();
+    previousConfirmation = ((before as { status?: ExplicitSectionConfirmation } | null)?.status ?? null) as ExplicitSectionConfirmation | null;
+  }
+
   try {
     await setSectionConfirmation(user.id, section as FinancialSection, status ?? null, supabase);
-    return ok({ section, status: status ?? null });
   } catch (e) {
+    // Migration 0298 refuses the same transition inside the database: answer with the same readable 409.
+    if (isRetirementDeclarationDbRefusal(e instanceof Error ? { message: e.message } : null)) {
+      return retirementDeclarationConflictResponse(await loadRetirementDeclarationBlockers(supabase, user.id));
+    }
     return bad(e instanceof Error ? e.message : 'Failed to save section status', 500);
   }
+
+  // Re-check after the write (an account or SMSF added in between): put the confirmation back exactly as it was.
+  if (declaringNoRetirement) {
+    const after = await loadRetirementDeclarationBlockers(supabase, user.id);
+    if (after.total > 0) {
+      try {
+        await setSectionConfirmation(user.id, 'retirement', previousConfirmation, supabase);
+      } catch {
+        /* the refusal below is still returned; the reconciling page will show the contradiction notice */
+      }
+      return retirementDeclarationConflictResponse(after);
+    }
+  }
+  return ok({ section, status: status ?? null });
 }

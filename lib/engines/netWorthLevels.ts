@@ -36,6 +36,7 @@ import { attributeByBasisPoints } from '@/lib/services/investment-intelligence/o
 import { computeBusinessEntityNetAssetValue, type BusinessEntityWithLineItems } from '@/lib/engines/businessEntityValuation';
 import { convertToReportingCurrency, type SupportedCurrency } from '@/lib/engines/fx';
 import { isEntityOwnerTag, isSmsfFundRow } from '@/lib/engines/netWorthBasis';
+import type { EntityBalanceSheet } from '@/lib/engines/entityBalanceSheet';
 
 export type NetWorthRegister = 'assets' | 'investments' | 'retirement' | 'liabilities';
 export type NetWorthRole = 'self' | 'spouse' | 'other';
@@ -109,8 +110,16 @@ export interface NetWorthParty {
 export interface NetWorthEntityBlock {
   id: string;
   kind: NetWorthEntityKind;
-  /** owner_tag = register rows tagged with the entity; registry = a Company / Trust / HUF recorded in Entities. */
-  source: 'owner_tag' | 'registry';
+  /**
+   * owner_tag = register rows tagged with the entity; registry = a Company / Trust / HUF recorded in Entities;
+   * entity_record = the entity's OWN assets and liabilities (an SMSF fund, migrations 0289-0290), itemised or a typed net, read from `sheet`.
+   */
+  source: 'owner_tag' | 'registry' | 'entity_record';
+  /**
+   * How the entity's own figure is recorded (PO decision 17-10-2026, either-or): itemised (assets and liabilities, the net derived), a net value only
+   * (one typed net, so the assets and liabilities are NOT known), or register rows tagged with the entity (the earlier way).
+   */
+  recording: 'itemised' | 'net_only' | 'register_rows';
   name: string;
   /** The ownership percentage the user recorded (registry entities only). */
   recordedOwnershipPercent: number | null;
@@ -128,6 +137,13 @@ export interface NetWorthEntityBlock {
    * and counting both would count the fund twice. Listed so nothing disappears silently.
    */
   suppressedFundRecord: { count: number; amount: number } | null;
+  /**
+   * entity_record blocks: the entity's own balance sheet (assets, liabilities, net), the stable source for statements. The family figure
+   * reads THIS and nothing else for the SMSF: register rows that duplicate the fund are listed below, never added.
+   */
+  sheet: EntityBalanceSheet | null;
+  /** entity_record blocks: Retirement / Assets / Investments / Liabilities rows owned by the SMSF that are NOT counted because the fund records itself. */
+  legacyRowsNotCounted: { count: number; net: number; rows: { id: string; name: string; register: NetWorthRegister; amount: number }[] } | null;
   note: string | null;
 }
 
@@ -138,7 +154,7 @@ export interface NetWorthReconciliationLine {
 }
 
 export interface NetWorthBridgeLine {
-  key: 'smsf_loan_counted_once' | 'smsf_fund_record_not_counted' | 'trust_huf_included_in_full' | 'unexplained';
+  key: 'smsf_loan_counted_once' | 'smsf_fund_record_not_counted' | 'smsf_legacy_rows_not_counted' | 'smsf_fund_row_differs' | 'trust_huf_included_in_full' | 'unexplained';
   label: string;
   /** Amount that turns the FAMILY figure into the previously reported figure (add to family net). */
   amount: number;
@@ -200,6 +216,8 @@ export interface NetWorthLevelsInput {
   currency: string;
   rows: readonly NetWorthRowInput[];
   entities?: readonly NetWorthEntityInput[];
+  /** Entities that record their own assets and liabilities (an SMSF fund). When present they REPLACE the owner-tag path for that entity. */
+  entitySheets?: readonly EntityBalanceSheet[];
   /** The Dashboard's previously reported (history-basis, all entities included) net worth, to prove the bridge. */
   previouslyReported?: number | null;
   /** The Dashboard summary's PERSONAL-basis net worth, to prove it equals the personal level. */
@@ -350,6 +368,15 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
   );
   const suppressedFund = { count: 0, amount: 0 };
 
+  // An SMSF that records its own balance sheet (itemised or a typed net) is the ONE source for the SMSF: the fund record in the register
+  // (a mirror of the same net), personal liabilities linked to the fund (they are inside the sheet) and register rows owned by the SMSF
+  // are not added a second time. The latter are listed, never silently dropped.
+  const smsfSheet = (input.entitySheets ?? []).find((s) => s.kind === 'smsf') ?? null;
+  const legacyRows: { id: string; name: string; register: NetWorthRegister; amount: number }[] = [];
+  let legacyNet = 0;
+  let sheetLinkedAmount = 0;
+  let sheetMirror = 0;
+
   for (const row of input.rows) {
     if (row.amountReporting === null || !Number.isFinite(row.amountReporting)) {
       unconvertedCount += 1;
@@ -362,6 +389,22 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
 
     // LR-12R: a loan linked to an SMSF fund is the fund's debt whatever its owner tag says.
     const effectiveOwner = isLiability && row.smsfLinkedLoan ? 'smsf' : row.owner;
+
+    if (smsfSheet) {
+      if (row.register === 'retirement' && isSmsfFundRow(row)) {
+        sheetMirror += amount;
+        continue;
+      }
+      if (isLiability && row.smsfLinkedLoan) {
+        sheetLinkedAmount += amount;
+        continue;
+      }
+      if (entityKindOfOwner(effectiveOwner) === 'smsf') {
+        legacyRows.push({ id: row.id, name: row.name, register: row.register, amount });
+        legacyNet += isLiability ? -amount : amount;
+        continue;
+      }
+    }
 
     if (isLiability && row.smsfLinkedLoan && row.nettedInFundBalance) {
       // Already subtracted inside the fund's own balance: counted once, there. Memo only.
@@ -444,6 +487,7 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       id: `tag:${kind}`,
       kind,
       source: 'owner_tag',
+      recording: 'register_rows',
       name: kind === 'smsf' ? 'SMSF' : kind === 'family_trust' ? 'Family Trust (items tagged with this owner)' : 'Company (items tagged with this owner)',
       recordedOwnershipPercent: null,
       includedPercent: 100,
@@ -452,6 +496,8 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       included: totals,
       nettedLoans,
       suppressedFundRecord: kind === 'smsf' && suppressedFund.count > 0 ? { count: suppressedFund.count, amount: cents(suppressedFund.amount) } : null,
+      sheet: null,
+      legacyRowsNotCounted: null,
       note:
         kind === 'smsf'
           ? suppressedFund.count > 0
@@ -460,6 +506,39 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
             ? `${nettedLoans.count} SMSF property loan${nettedLoans.count === 1 ? '' : 's'} already deducted inside the fund balance are not deducted again.`
             : null
           : 'Recorded with this owner tag and counted as entered. The tag carries no ownership percentage.',
+    });
+  }
+  if (smsfSheet) {
+    const t = emptyTotals();
+    if (smsfSheet.mode === 'itemised') {
+      // Gross assets and the fund's own debts, so the block shows what the fund owns and owes; the net is derived (assets minus liabilities).
+      t.retirement = smsfSheet.assetsTotal;
+      t.liabilities = smsfSheet.liabilitiesTotal;
+    } else {
+      t.retirement = smsfSheet.net;
+    }
+    const totals = finalise(t);
+    const legacy = legacyRows.length > 0 ? { count: legacyRows.length, net: cents(legacyNet), rows: legacyRows } : null;
+    const way = smsfSheet.mode === 'itemised' ? 'derived from its assets and liabilities' : 'recorded as a net value only';
+    blocks.unshift({
+      id: 'tag:smsf',
+      kind: 'smsf',
+      source: 'entity_record',
+      recording: smsfSheet.mode === 'itemised' ? 'itemised' : 'net_only',
+      name: smsfSheet.name || 'SMSF',
+      recordedOwnershipPercent: null,
+      includedPercent: 100,
+      basis: 'recorded',
+      entityTotals: totals,
+      included: totals,
+      nettedLoans: null,
+      suppressedFundRecord: null,
+      sheet: smsfSheet,
+      legacyRowsNotCounted: legacy,
+      note:
+        `The SMSF's own net is ${way}. ` +
+        (legacy ? `${legacy.count} register row${legacy.count === 1 ? '' : 's'} owned by the SMSF ${legacy.count === 1 ? 'is' : 'are'} listed but not counted, because the fund records itself and counting both would count it twice. ` : '') +
+        (smsfSheet.unconvertedCount > 0 ? `${smsfSheet.unconvertedCount} line${smsfSheet.unconvertedCount === 1 ? '' : 's'} could not be converted and ${smsfSheet.unconvertedCount === 1 ? 'is' : 'are'} left out.` : ''),
     });
   }
   for (const e of input.entities ?? []) {
@@ -478,6 +557,7 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       id: `entity:${e.id}`,
       kind: e.kind,
       source: 'registry',
+      recording: e.detail ? 'itemised' : 'net_only',
       name: e.name,
       recordedOwnershipPercent: e.ownershipPercent,
       includedPercent: percent,
@@ -486,6 +566,8 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       included: scaleTotals(entityTotals, factor),
       nettedLoans: null,
       suppressedFundRecord: null,
+      sheet: null,
+      legacyRowsNotCounted: null,
       note:
         e.kind === 'company'
           ? `Counted at your ${e.ownershipPercent}% ownership share of the company's net value.`
@@ -526,6 +608,27 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       label: 'SMSF fund record not counted in the family figure because a fund-level row already carries the fund (previously both were counted)',
       amount: smsfBlock.suppressedFundRecord.amount,
     });
+  }
+  const sheetBlock = blocks.find((b) => b.kind === 'smsf' && b.source === 'entity_record');
+  if (sheetBlock?.sheet) {
+    // Turning the family figure back into the previously reported one when the SMSF records itself:
+    //  - a personal loan linked to the fund was deducted again as a personal liability (and is inside the sheet once);
+    //  - register rows owned by the SMSF were all counted before (now listed, not counted);
+    //  - the fund record in the register was counted at its mirrored balance (floored at zero) instead of the fund's own net.
+    if (cents(sheetLinkedAmount) !== 0) {
+      bridgeLines.push({ key: 'smsf_loan_counted_once', label: 'SMSF property loan linked to the fund: counted once inside the fund net (previously deducted twice)', amount: -cents(sheetLinkedAmount) });
+    }
+    if (sheetBlock.legacyRowsNotCounted) {
+      bridgeLines.push({
+        key: 'smsf_legacy_rows_not_counted',
+        label: 'Register rows owned by the SMSF are not counted because the fund records itself (previously they were added as well)',
+        amount: sheetBlock.legacyRowsNotCounted.net,
+      });
+    }
+    const mirrorDiff = cents(sheetMirror - sheetBlock.sheet.net);
+    if (mirrorDiff !== 0) {
+      bridgeLines.push({ key: 'smsf_fund_row_differs', label: "The SMSF fund row in Retirement differs from the fund's own net (the row cannot be negative)", amount: mirrorDiff });
+    }
   }
   const trustHufDelta = (input.entities ?? [])
     .filter((e) => e.kind !== 'company')
@@ -592,7 +695,11 @@ export function computeNetWorthLevels(input: NetWorthLevelsInput): NetWorthLevel
       unconvertedByCurrency,
       unavailable: [...(input.unavailable ?? [])],
       duplicateRisk,
-      smsfPossibleDoubleCount: detectSmsfPossibleDoubleCount(input.rows, input.currency),
+      smsfPossibleDoubleCount: smsfSheet
+        ? legacyRows.length > 0
+          ? `Your SMSF records its own assets and liabilities, so ${legacyRows.length} register row${legacyRows.length === 1 ? '' : 's'} owned by the SMSF ${legacyRows.length === 1 ? 'is' : 'are'} listed but not counted (${legacyRows.map((r) => `"${r.name}"`).join(', ')}). ${legacyRows.some((r) => r.register === 'liabilities') ? 'A debt listed here is not deducted either, so add it to the own liabilities of the fund. ' : ''}Archive ${legacyRows.length === 1 ? 'it' : 'them'} once you have checked the SMSF figures.`
+          : null
+        : detectSmsfPossibleDoubleCount(input.rows, input.currency),
     },
     hasEntities: blocks.length > 0,
     explanation: { personal: NET_WORTH_PERSONAL_EXPLANATION, family: NET_WORTH_FAMILY_EXPLANATION, jointSplit },

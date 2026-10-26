@@ -8,7 +8,6 @@ import {
   type CountryCode,
   type CurrencyCode,
   type HoldingClass,
-  type IncomeOption,
   type SmsfHoldingRow,
 } from './types';
 
@@ -20,14 +19,12 @@ import {
 export function SmsfHoldingForm({
   fundId,
   currency,
-  incomeOptions,
   existing,
   onSaved,
   onCancel,
 }: {
   fundId: string;
   currency: CurrencyCode;
-  incomeOptions: IncomeOption[];
   existing?: SmsfHoldingRow;
   onSaved: (holding: SmsfHoldingRow) => void;
   onCancel: () => void;
@@ -38,7 +35,9 @@ export function SmsfHoldingForm({
   const [value, setValue] = useState(existing?.value != null ? String(existing.value) : '');
   const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(existing?.currency_code ?? currency);
   const [countryCode, setCountryCode] = useState<CountryCode | ''>(existing?.country_code ?? '');
-  const [linkedIncomeSourceId, setLinkedIncomeSourceId] = useState(existing?.linked_income_source_id ?? '');
+  // A property asset that was tied to a personal income record the earlier way keeps that link until the record is moved into the fund. This form
+  // never creates a new one: the rent a property earns is entered as the fund's own income, with an amount and how often it is paid.
+  const legacyLinkedIncomeSourceId = existing?.linked_income_source_id ?? null;
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +48,6 @@ export function SmsfHoldingForm({
   function handleClassChange(next: HoldingClass) {
     setHoldingClass(next);
     setHoldingType(holdingTypeOptionsFor(next)[0].value);
-    if (next !== 'property') setLinkedIncomeSourceId('');
   }
 
   async function submit() {
@@ -63,7 +61,7 @@ export function SmsfHoldingForm({
       value: Number(value),
       currency_code: currencyCode,
       country_code: countryCode || null,
-      linked_income_source_id: holdingClass === 'property' && linkedIncomeSourceId ? linkedIncomeSourceId : null,
+      linked_income_source_id: holdingClass === 'property' ? legacyLinkedIncomeSourceId : null,
       notes: notes || null,
     };
     try {
@@ -181,27 +179,11 @@ export function SmsfHoldingForm({
           </select>
         </div>
         {holdingClass === 'property' && (
-          <div className="sm:col-span-2">
-            <label htmlFor="holding-income" className="block text-xs text-muted">
-              Linked Rental Income (optional)
-            </label>
-            <select
-              id="holding-income"
-              value={linkedIncomeSourceId}
-              onChange={(e) => setLinkedIncomeSourceId(e.target.value)}
-              className="mt-1 w-full rounded border border-line px-2 py-1.5 text-sm"
-            >
-              <option value="">None</option>
-              {incomeOptions.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.source_name} ({i.frequency})
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-muted">
-              Displays your existing canonical Income record — does not create a second income amount.
-            </p>
-          </div>
+          <p className="text-[11px] text-muted sm:col-span-2" data-testid="holding-rent-hint">
+            {legacyLinkedIncomeSourceId
+              ? 'The rent for this property is recorded the earlier way, in your personal Income. Move it into the fund under Income and expenses below so it lives in one place.'
+              : 'Rent this property earns is entered under Income and expenses below, where you set the amount and how often it is paid. It is not entered here, so it is never counted twice.'}
+          </p>
         )}
         <div className="sm:col-span-2">
           <label htmlFor="holding-notes" className="block text-xs text-muted">
