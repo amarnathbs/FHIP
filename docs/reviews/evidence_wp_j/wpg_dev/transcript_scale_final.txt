@@ -1,0 +1,49 @@
+=== WP-G scale (wpg-1792987723883) against http://localhost:3947 ===
+0311 unique line index on DEV: PRESENT (first 201, second 409)
+  PASS  WP-G-scale-final-01  G.0 migration 0311 state on DEV is reported (present = a duplicate row number is refused by the database)
+        {"firstInsert":201,"secondInsert":409,"state":"PRESENT"}
+  PASS  WP-G-scale-final-02  G.25.A admission answers 202 with a job id, quickly (6062 ms), and wrote no line
+        {"status":202,"ms":6062}
+  PASS  WP-G-scale-final-03  G.25.B 25 rows -> job completed, exactly 25 stored lines, none twice, certified (slices 2, busy 0, 13 s)
+        {"status":"completed","tx":25,"distinct":25,"cert":"certified","err":null}
+  PASS  WP-G-scale-final-04  G.25.C staging is cleaned when the job completes
+        chunks 0
+  PASS  WP-G-scale-final-05  G.25.D asking to process again answers 200 with the stored result and writes nothing
+        status 200
+  PASS  WP-G-scale-final-06  G.120.A admission answers 202 with a job id, quickly (1685 ms), and wrote no line
+        {"status":202,"ms":1685}
+  PASS  WP-G-scale-final-07  G.120.B 120 rows -> job completed, exactly 120 stored lines, none twice, certified (slices 2, busy 0, 11 s)
+        {"status":"completed","tx":120,"distinct":120,"cert":"certified","err":null}
+  PASS  WP-G-scale-final-08  G.120.C staging is cleaned when the job completes
+        chunks 0
+  PASS  WP-G-scale-final-09  G.120.D asking to process again answers 200 with the stored result and writes nothing
+        status 200
+  PASS  WP-G-scale-final-10  G.500.A admission answers 202 with a job id, quickly (2070 ms), and wrote no line
+        {"status":202,"ms":2070}
+  PASS  WP-G-scale-final-11  G.500.B 500 rows -> job completed, exactly 500 stored lines, none twice, certified (slices 2, busy 0, 15 s)
+        {"status":"completed","tx":500,"distinct":500,"cert":"certified","err":null}
+  PASS  WP-G-scale-final-12  G.500.C staging is cleaned when the job completes
+        chunks 0
+  PASS  WP-G-scale-final-13  G.500.D asking to process again answers 200 with the stored result and writes nothing
+        status 200
+  PASS  WP-G-scale-final-14  G.1500.A admission answers 202 with a job id, quickly (1752 ms), and wrote no line
+        {"status":202,"ms":1752}
+  PASS  WP-G-scale-final-15  G.1500.B 1500 rows -> job completed, exactly 1500 stored lines, none twice, certified (slices 2, busy 0, 20 s)
+        {"status":"completed","tx":1500,"distinct":1500,"cert":"certified","err":null}
+  PASS  WP-G-scale-final-16  G.1500.C staging is cleaned when the job completes
+        chunks 0
+  PASS  WP-G-scale-final-17  G.1500.D asking to process again answers 200 with the stored result and writes nothing
+        status 200
+  PASS  WP-G-scale-final-18  G.3000.A admission answers 202 with a job id, quickly (7301 ms), and wrote no line
+        {"status":202,"ms":7301}
+  PASS  WP-G-scale-final-19  G.3000.B 3000 rows -> job completed, exactly 3000 stored lines, none twice, certified (slices 3, busy 0, 31 s)
+        {"status":"completed","tx":3000,"distinct":3000,"cert":"certified","err":null}
+  PASS  WP-G-scale-final-20  G.3000.C staging is cleaned when the job completes
+        chunks 0
+  PASS  WP-G-scale-final-21  G.3000.D asking to process again answers 200 with the stored result and writes nothing
+        status 200
+  PASS  WP-G-scale-final-22  G.S every request of every run ended under the 28 s platform limit
+        []
+
+22 passed, 0 failed
+EXIT 0

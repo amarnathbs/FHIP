@@ -1,0 +1,136 @@
+{
+  "run": "wpg-1792987723883",
+  "which": "scale",
+  "label": "final",
+  "app": "http://localhost:3947",
+  "startedAt": "2026-10-26T04:08:43.883Z",
+  "index0311": {
+    "firstInsert": 201,
+    "secondInsert": 409,
+    "state": "PRESENT"
+  },
+  "scale": [
+    {
+      "n": 25,
+      "slices": 2,
+      "busy": 0,
+      "totalMs": 13466,
+      "maxRequestMs": 7154
+    },
+    {
+      "n": 120,
+      "slices": 2,
+      "busy": 0,
+      "totalMs": 11346,
+      "maxRequestMs": 7011
+    },
+    {
+      "n": 500,
+      "slices": 2,
+      "busy": 0,
+      "totalMs": 14654,
+      "maxRequestMs": 9116
+    },
+    {
+      "n": 1500,
+      "slices": 2,
+      "busy": 0,
+      "totalMs": 19801,
+      "maxRequestMs": 13300
+    },
+    {
+      "n": 3000,
+      "slices": 3,
+      "busy": 0,
+      "totalMs": 30937,
+      "maxRequestMs": 15913
+    }
+  ],
+  "timings": [
+    {
+      "what": "scale25 admission",
+      "ms": 6062
+    },
+    {
+      "what": "scale25 advance",
+      "ms": 7154
+    },
+    {
+      "what": "scale25 advance",
+      "ms": 6312
+    },
+    {
+      "what": "scale25 process again",
+      "ms": 996
+    },
+    {
+      "what": "scale120 admission",
+      "ms": 1685
+    },
+    {
+      "what": "scale120 advance",
+      "ms": 4334
+    },
+    {
+      "what": "scale120 advance",
+      "ms": 7011
+    },
+    {
+      "what": "scale120 process again",
+      "ms": 918
+    },
+    {
+      "what": "scale500 admission",
+      "ms": 2070
+    },
+    {
+      "what": "scale500 advance",
+      "ms": 5538
+    },
+    {
+      "what": "scale500 advance",
+      "ms": 9116
+    },
+    {
+      "what": "scale500 process again",
+      "ms": 1007
+    },
+    {
+      "what": "scale1500 admission",
+      "ms": 1752
+    },
+    {
+      "what": "scale1500 advance",
+      "ms": 6501
+    },
+    {
+      "what": "scale1500 advance",
+      "ms": 13300
+    },
+    {
+      "what": "scale1500 process again",
+      "ms": 954
+    },
+    {
+      "what": "scale3000 admission",
+      "ms": 7301
+    },
+    {
+      "what": "scale3000 advance",
+      "ms": 9112
+    },
+    {
+      "what": "scale3000 advance",
+      "ms": 15913
+    },
+    {
+      "what": "scale3000 advance",
+      "ms": 5912
+    },
+    {
+      "what": "scale3000 process again",
+      "ms": 946
+    }
+  ],
+  "cleanedUsers": 2
+}

@@ -1,0 +1,27 @@
+=== WP-G robust (wpg-1792988076498) against http://localhost:3947 ===
+0311 unique line index on DEV: PRESENT (first 201, second 409)
+  PASS  WP-G-robust-final-01  G.0 migration 0311 state on DEV is reported (present = a duplicate row number is refused by the database)
+        {"firstInsert":201,"secondInsert":409,"state":"PRESENT"}
+  PASS  WP-G-robust-final-02  G.R1 four admissions at the same moment create ONE job
+        {"statuses":[202,202,202,202],"ids":1}
+  PASS  WP-G-robust-final-03  G.R2 a reloaded page finds the unfinished job (list)
+        ["queued"]
+  PASS  WP-G-robust-final-04  G.R3 two polls at the same moment: one works, the other is told it is busy
+        [{"s":200,"busy":false},{"s":200,"busy":true}]
+  PASS  WP-G-robust-final-05  G.R4 while the dead worker's lease is live nobody else may work on the job
+        {"claim":200,"busy":true}
+  PASS  WP-G-robust-final-06  G.R5 after the lease ran out the job was taken over and ended exactly: 1500 lines, none twice
+        {"status":"completed","tx":1500,"reclaim":1}
+  PASS  WP-G-robust-final-07  G.R6 polling a finished job changes nothing
+        "completed"
+  PASS  WP-G-robust-final-08  G.R7 the scheduled backstop finishes an abandoned job with no browser
+        ticks 0
+  PASS  WP-G-robust-final-09  G.R8 the backstop refuses a call without the secret
+        status 401
+  PASS  WP-G-robust-final-10  G.R9 another user cannot read, advance, list or admit this user's job (404 / empty)
+        {"peek":404,"poke":404,"admit":404}
+  PASS  WP-G-robust-final-11  G.R.S every request ended under the 28 s platform limit
+        []
+
+11 passed, 0 failed
+EXIT 0

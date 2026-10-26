@@ -1,0 +1,67 @@
+{
+  "run": "wpg-1792988227457",
+  "which": "kill",
+  "label": "final",
+  "app": "http://localhost:3947",
+  "startedAt": "2026-10-26T04:17:07.457Z",
+  "index0311": {
+    "firstInsert": 201,
+    "secondInsert": 409,
+    "state": "PRESENT"
+  },
+  "kill": {
+    "N": 3000,
+    "atKill": 250,
+    "afterKill": 250,
+    "reclaim": 1,
+    "slices": 2,
+    "busy": 9
+  },
+  "timings": [
+    {
+      "what": "kill advance",
+      "ms": 1285
+    },
+    {
+      "what": "kill advance",
+      "ms": 1301
+    },
+    {
+      "what": "kill advance",
+      "ms": 1393
+    },
+    {
+      "what": "kill advance",
+      "ms": 1317
+    },
+    {
+      "what": "kill advance",
+      "ms": 1310
+    },
+    {
+      "what": "kill advance",
+      "ms": 1260
+    },
+    {
+      "what": "kill advance",
+      "ms": 1340
+    },
+    {
+      "what": "kill advance",
+      "ms": 1826
+    },
+    {
+      "what": "kill advance",
+      "ms": 1284
+    },
+    {
+      "what": "kill advance",
+      "ms": 15036
+    },
+    {
+      "what": "kill advance",
+      "ms": 6272
+    }
+  ],
+  "cleanedUsers": 2
+}

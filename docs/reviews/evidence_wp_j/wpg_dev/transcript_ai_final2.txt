@@ -1,0 +1,39 @@
+=== WP-G ai (wpg-1792989642526) against http://localhost:3947 ===
+0311 unique line index on DEV: PRESENT (first 201, second 409)
+  PASS  WP-G-ai-final2-01  G.0 migration 0311 state on DEV is reported (present = a duplicate row number is refused by the database)
+        {"firstInsert":201,"secondInsert":409,"state":"PRESENT"}
+  PASS  WP-G-ai-final2-02  G.AI25.A admission answers 202 (8196 ms)
+        {"status":202,"ms":8196}
+  PASS  WP-G-ai-final2-03  G.AI25.B read in parts, the reading waits for a check (slices 2, 24 s)
+        {"status":"review_required","err":null,"msg":null}
+  PASS  WP-G-ai-final2-04  G.AI25.C asking again returns the saved draft inline (no second reading), 25 lines
+        {"status":200,"rows":25,"listed":true}
+  PASS  WP-G-ai-final2-05  G.AI25.D confirm answers 202 and a replay finds the same job
+        {"c1":202,"c2":202}
+  PASS  WP-G-ai-final2-06  G.AI25.E 25 checked lines -> exactly that many stored, none twice
+        {"status":"completed","tx":25,"rows":25}
+  PASS  WP-G-ai-final2-07  G.AI120.A admission answers 202 (1815 ms)
+        {"status":202,"ms":1815}
+  PASS  WP-G-ai-final2-08  G.AI120.B read in parts, the reading waits for a check (slices 3, 41 s)
+        {"status":"review_required","err":null,"msg":null}
+  PASS  WP-G-ai-final2-09  G.AI120.C asking again returns the saved draft inline (no second reading), 120 lines
+        {"status":200,"rows":120,"listed":false}
+  PASS  WP-G-ai-final2-10  G.AI120.D confirm answers 202 and a replay finds the same job
+        {"c1":202,"c2":202}
+  PASS  WP-G-ai-final2-11  G.AI120.E 120 checked lines -> exactly that many stored, none twice
+        {"status":"completed","tx":120,"rows":120}
+  PASS  WP-G-ai-final2-12  G.AI500.A admission answers 202 (1701 ms)
+        {"status":202,"ms":1701}
+  PASS  WP-G-ai-final2-13  G.AI500.B read in parts, the reading waits for a check (slices 8, 114 s)
+        {"status":"review_required","err":null,"msg":null}
+  PASS  WP-G-ai-final2-14  G.AI500.C asking again returns the saved draft inline (no second reading), 500 lines
+        {"status":200,"rows":500,"listed":true}
+  PASS  WP-G-ai-final2-15  G.AI500.D confirm answers 202 and a replay finds the same job
+        {"c1":202,"c2":202}
+  PASS  WP-G-ai-final2-16  G.AI500.E 500 checked lines -> exactly that many stored, none twice
+        {"status":"completed","tx":500,"rows":500}
+  PASS  WP-G-ai-final2-17  G.AI.S every request ended under the 28 s platform limit
+        []
+
+17 passed, 0 failed
+EXIT 0

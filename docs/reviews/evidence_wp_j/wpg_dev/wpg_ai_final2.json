@@ -1,0 +1,177 @@
+{
+  "run": "wpg-1792989642526",
+  "which": "ai",
+  "label": "final2",
+  "app": "http://localhost:3947",
+  "startedAt": "2026-10-26T04:40:42.526Z",
+  "index0311": {
+    "firstInsert": 201,
+    "secondInsert": 409,
+    "state": "PRESENT"
+  },
+  "ai": [
+    {
+      "n": 25,
+      "read": {
+        "slices": 2,
+        "totalMs": 23787
+      },
+      "write": {
+        "slices": 2,
+        "totalMs": 13088
+      },
+      "rows": 25
+    },
+    {
+      "n": 120,
+      "read": {
+        "slices": 3,
+        "totalMs": 40758
+      },
+      "write": {
+        "slices": 2,
+        "totalMs": 13638
+      },
+      "rows": 120
+    },
+    {
+      "n": 500,
+      "read": {
+        "slices": 8,
+        "totalMs": 114429
+      },
+      "write": {
+        "slices": 2,
+        "totalMs": 24009
+      },
+      "rows": 500
+    }
+  ],
+  "timings": [
+    {
+      "what": "ai25 admission",
+      "ms": 8196
+    },
+    {
+      "what": "ai25 advance",
+      "ms": 8232
+    },
+    {
+      "what": "ai25 advance",
+      "ms": 15555
+    },
+    {
+      "what": "ai25 reopen draft",
+      "ms": 1149
+    },
+    {
+      "what": "ai25 confirm",
+      "ms": 12625
+    },
+    {
+      "what": "ai25 confirm replay",
+      "ms": 1314
+    },
+    {
+      "what": "ai25-write advance",
+      "ms": 4270
+    },
+    {
+      "what": "ai25-write advance",
+      "ms": 8818
+    },
+    {
+      "what": "ai120 admission",
+      "ms": 1815
+    },
+    {
+      "what": "ai120 advance",
+      "ms": 5255
+    },
+    {
+      "what": "ai120 advance",
+      "ms": 17755
+    },
+    {
+      "what": "ai120 advance",
+      "ms": 17748
+    },
+    {
+      "what": "ai120 reopen draft",
+      "ms": 1258
+    },
+    {
+      "what": "ai120 confirm",
+      "ms": 1617
+    },
+    {
+      "what": "ai120 confirm replay",
+      "ms": 1065
+    },
+    {
+      "what": "ai120-write advance",
+      "ms": 4349
+    },
+    {
+      "what": "ai120-write advance",
+      "ms": 9289
+    },
+    {
+      "what": "ai500 admission",
+      "ms": 1701
+    },
+    {
+      "what": "ai500 advance",
+      "ms": 5368
+    },
+    {
+      "what": "ai500 advance",
+      "ms": 15258
+    },
+    {
+      "what": "ai500 advance",
+      "ms": 16062
+    },
+    {
+      "what": "ai500 advance",
+      "ms": 15559
+    },
+    {
+      "what": "ai500 advance",
+      "ms": 16221
+    },
+    {
+      "what": "ai500 advance",
+      "ms": 16055
+    },
+    {
+      "what": "ai500 advance",
+      "ms": 16262
+    },
+    {
+      "what": "ai500 advance",
+      "ms": 13643
+    },
+    {
+      "what": "ai500 reopen draft",
+      "ms": 1064
+    },
+    {
+      "what": "ai500 confirm",
+      "ms": 1779
+    },
+    {
+      "what": "ai500 confirm replay",
+      "ms": 1127
+    },
+    {
+      "what": "ai500-write advance",
+      "ms": 5288
+    },
+    {
+      "what": "ai500-write advance",
+      "ms": 18721
+    }
+  ],
+  "cleanedUsers": 2
+}

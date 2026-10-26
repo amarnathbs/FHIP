@@ -1,0 +1,15 @@
+=== WP-G kill (wpg-1792988227457) against http://localhost:3947 ===
+0311 unique line index on DEV: PRESENT (first 201, second 409)
+  PASS  WP-G-kill-final-01  G.0 migration 0311 state on DEV is reported (present = a duplicate row number is refused by the database)
+        {"firstInsert":201,"secondInsert":409,"state":"PRESENT"}
+  PASS  WP-G-kill-final-02  G.K1 the server was killed while a slice was writing: 250 of 3000 lines were stored and the request got no answer (connection-lost)
+        {"atKill":250,"afterKill":250,"answer":"connection-lost"}
+  PASS  WP-G-kill-final-03  G.K2 the dead slice left the job unfinished with a lease nobody renews
+        {"status":"processing","phase":"persist","progress":250}
+  PASS  WP-G-kill-final-04  G.K3 a fresh server took the job over after the lease ran out and it ended exact: 3000 lines, none twice
+        {"status":"completed","tx":3000,"reclaim":1,"busyAsks":9}
+  PASS  WP-G-kill-final-05  G.K4 the takeover was counted (reclaim_count at least 1) and the statement is certified
+        {"reclaim":1}
+
+5 passed, 0 failed
+EXIT 0

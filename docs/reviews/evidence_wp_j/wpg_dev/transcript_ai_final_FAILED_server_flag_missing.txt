@@ -1,0 +1,21 @@
+=== WP-G ai (wpg-1792987974215) against http://localhost:3947 ===
+0311 unique line index on DEV: PRESENT (first 201, second 409)
+  PASS  WP-G-ai-final-01  G.0 migration 0311 state on DEV is reported (present = a duplicate row number is refused by the database)
+        {"firstInsert":201,"secondInsert":409,"state":"PRESENT"}
+  PASS  WP-G-ai-final-02  G.AI25.A admission answers 202 (4206 ms)
+        {"status":202,"ms":4206}
+  FAIL  WP-G-ai-final-03  G.AI25.B read in parts, the reading waits for a check (slices 1, 6 s)
+        {"status":"failed","err":"layout_unsupported","msg":"This statement could not be read (layout_unsupported)."}
+  PASS  WP-G-ai-final-04  G.AI120.A admission answers 202 (1749 ms)
+        {"status":202,"ms":1749}
+  FAIL  WP-G-ai-final-05  G.AI120.B read in parts, the reading waits for a check (slices 1, 6 s)
+        {"status":"failed","err":"layout_unsupported","msg":"This statement could not be read (layout_unsupported)."}
+  PASS  WP-G-ai-final-06  G.AI500.A admission answers 202 (1876 ms)
+        {"status":202,"ms":1876}
+  FAIL  WP-G-ai-final-07  G.AI500.B read in parts, the reading waits for a check (slices 1, 6 s)
+        {"status":"failed","err":"layout_unsupported","msg":"This statement could not be read (layout_unsupported)."}
+  PASS  WP-G-ai-final-08  G.AI.S every request ended under the 28 s platform limit
+        []
+
+5 passed, 3 failed (WP-G-ai-final-03, WP-G-ai-final-05, WP-G-ai-final-07)
+EXIT 0

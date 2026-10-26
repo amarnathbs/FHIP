@@ -1,0 +1,23 @@
+{
+  "run": "wpg-1792988076498",
+  "which": "robust",
+  "label": "final",
+  "app": "http://localhost:3947",
+  "startedAt": "2026-10-26T04:14:36.498Z",
+  "index0311": {
+    "firstInsert": 201,
+    "secondInsert": 409,
+    "state": "PRESENT"
+  },
+  "timings": [
+    {
+      "what": "robust advance",
+      "ms": 21343
+    },
+    {
+      "what": "cron advance",
+      "ms": 9577
+    }
+  ],
+  "cleanedUsers": 3
+}
