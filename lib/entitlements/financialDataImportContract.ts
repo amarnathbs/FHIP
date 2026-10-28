@@ -32,7 +32,8 @@ export const FINANCIAL_IMPORT_ENTITLEMENT_UNAVAILABLE = 'ENTITLEMENT_UNAVAILABLE
 export type FinancialImportDenyCode = typeof FINANCIAL_IMPORT_PREMIUM_REQUIRED | typeof FINANCIAL_IMPORT_ENTITLEMENT_UNAVAILABLE;
 
 /** High-level product domains (for lock copy / conversion attribution only; never a document type or a filename). */
-export type FinancialImportDomain = 'income' | 'expenses' | 'liabilities' | 'investments' | 'retirement' | 'insurance' | 'fdh';
+export const FINANCIAL_IMPORT_DOMAINS = ['income', 'expenses', 'liabilities', 'investments', 'retirement', 'insurance', 'fdh'] as const;
+export type FinancialImportDomain = (typeof FINANCIAL_IMPORT_DOMAINS)[number];
 
 /** Free-plan wording, as set by the Product Owner. No advice or compliance language is changed by it. */
 export const FINANCIAL_IMPORT_LOCK_COPY =
@@ -79,7 +80,25 @@ export function accessViewFromDeniedBody(body: FinancialImportDeniedBody): Finan
   return body.code === FINANCIAL_IMPORT_PREMIUM_REQUIRED ? { state: 'premium_required' } : { state: 'unavailable' };
 }
 
+/** The query parameter and value prefix the upgrade link carries. The profile page reads them back with `parseImportArrivalDomain`. */
+export const FINANCIAL_IMPORT_UPGRADE_PARAM = 'from';
+export const FINANCIAL_IMPORT_UPGRADE_FROM_PREFIX = 'import-';
+
 /** Upgrade link with non-sensitive context (domain only) so the plan page can explain why the user arrived. */
 export function financialImportUpgradeHref(domain: FinancialImportDomain): string {
-  return `${FINANCIAL_IMPORT_UPGRADE_PATH}?from=import-${domain}`;
+  return `${FINANCIAL_IMPORT_UPGRADE_PATH}?${FINANCIAL_IMPORT_UPGRADE_PARAM}=${FINANCIAL_IMPORT_UPGRADE_FROM_PREFIX}${domain}`;
+}
+
+/** Anchor id of the Billing / plan section on the profile page (the destination of every import upgrade link). */
+export const FINANCIAL_IMPORT_PLAN_SECTION_ID = 'profile-plan';
+
+/**
+ * The domain a person arrived from, read back from the `from` query value, or null.
+ * Strict allow-list: only `import-<known domain>` is understood. Anything else (missing, empty, other prefix, an unknown
+ * domain, wrong case, extra characters, an array) is ignored, so a hand-edited URL can never put text on the page.
+ */
+export function parseImportArrivalDomain(from: string | null | undefined): FinancialImportDomain | null {
+  if (typeof from !== 'string' || !from.startsWith(FINANCIAL_IMPORT_UPGRADE_FROM_PREFIX)) return null;
+  const candidate = from.slice(FINANCIAL_IMPORT_UPGRADE_FROM_PREFIX.length);
+  return (FINANCIAL_IMPORT_DOMAINS as readonly string[]).includes(candidate) ? (candidate as FinancialImportDomain) : null;
 }
