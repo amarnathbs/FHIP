@@ -54,6 +54,7 @@ export const bankCsvMappingConfirmSchema = z.object({
     posting_date: z.string().min(1).nullish(),
     value_date: z.string().min(1).nullish(),
     description: z.string().min(1),
+    extra_description: z.string().min(1).nullish(),
     amount: z.string().min(1).nullish(),
     debit: z.string().min(1).nullish(),
     credit: z.string().min(1).nullish(),
@@ -63,6 +64,8 @@ export const bankCsvMappingConfirmSchema = z.object({
     currency: z.string().min(1).nullish(),
   }),
   save_as_reusable_template: z.boolean().default(true),
+  /** The person explicitly allowed one file column to hold two fields. Without it a column given to two fields is refused. */
+  allow_shared_columns: z.boolean().default(false),
 })
   .superRefine((v, ctx) => {
     if (v.amount_convention === 'single_signed' && !v.column_mapping.amount) {

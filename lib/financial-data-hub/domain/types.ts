@@ -772,6 +772,8 @@ export interface FdhCsvColumnMapping {
   posting_date?: string | null;
   value_date?: string | null;
   description: string;
+  /** A second, longer description column, kept as extra detail after the main description. */
+  extra_description?: string | null;
   amount?: string | null;
   debit?: string | null;
   credit?: string | null;

@@ -208,6 +208,7 @@ const LOADERS: Record<string, () => Promise<{ POST: RouteHandler }>> = {
   'ii.source_document.parse_fixture': () => import('@/app/api/investment-intelligence/source-documents/[id]/parse/route'),
   'fdh.bank_csv.detect': () => import('@/app/api/financial-data-hub/bank-csv/[documentId]/detect/route'),
   'fdh.bank_csv.map': () => import('@/app/api/financial-data-hub/bank-csv/[documentId]/map/route'),
+  'fdh.bank_csv.remap': () => import('@/app/api/financial-data-hub/bank-csv/[documentId]/remap/route'),
   'fdh.bank_csv.process': () => import('@/app/api/financial-data-hub/bank-csv/[documentId]/process/route'),
   'fdh.bank_pdf.process': () => import('@/app/api/financial-data-hub/bank-pdf/[documentId]/process/route'),
   'fdh.bank_pdf.ai_fallback_confirm': () => import('@/app/api/financial-data-hub/bank-pdf/[documentId]/ai-fallback/confirm/route'),

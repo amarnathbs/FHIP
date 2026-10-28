@@ -21,6 +21,8 @@ export interface RowFormat {
     postedDate?: string;
     valueDate?: string;
     description: string;
+    /** A second, longer description column ("Long description"). Kept as extra detail after the main description. */
+    extraDescription?: string;
     amount?: string;
     debit?: string;
     credit?: string;
@@ -50,6 +52,7 @@ export function mappingToRowFormat(mapping: FdhCsvColumnMapping, amountConventio
       postedDate: mapping.posting_date ?? undefined,
       valueDate: mapping.value_date ?? undefined,
       description: mapping.description,
+      extraDescription: mapping.extra_description ?? undefined,
       amount: mapping.amount ?? undefined,
       debit: mapping.debit ?? undefined,
       credit: mapping.credit ?? undefined,
@@ -101,6 +104,20 @@ function cell(header: readonly string[], row: readonly string[], name: string | 
   const idx = columnIndex(header, name);
   if (idx === -1) return null;
   return row[idx] ?? '';
+}
+
+/**
+ * The main description followed by the extra ("long") description as detail. When one is empty the other stands alone, and when the
+ * long one only repeats the short one it is not added a second time.
+ */
+export function joinDescriptions(main: string, extra: string): string {
+  const m = main.trim();
+  const e = extra.trim();
+  if (!e) return main;
+  if (!m) return extra;
+  if (e.toLowerCase().includes(m.toLowerCase())) return extra;
+  if (m.toLowerCase().includes(e.toLowerCase())) return main;
+  return `${m} - ${e}`;
 }
 
 /**
@@ -185,7 +202,9 @@ export function normalizeRow(
     }
   }
 
-  const descriptionRaw = cell(header, row, rowFormat.columnRoles.description) ?? '';
+  const mainDescription = cell(header, row, rowFormat.columnRoles.description) ?? '';
+  const extraDescription = rowFormat.columnRoles.extraDescription ? (cell(header, row, rowFormat.columnRoles.extraDescription) ?? '') : '';
+  const descriptionRaw = joinDescriptions(mainDescription, extraDescription);
   const descriptionClean = normalizeDescription(descriptionRaw);
   const referenceRaw = rowFormat.columnRoles.reference ? cell(header, row, rowFormat.columnRoles.reference) : null;
 

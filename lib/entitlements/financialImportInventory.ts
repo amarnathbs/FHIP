@@ -80,6 +80,8 @@ export const GATED_ROUTES: readonly GatedRoute[] = [
     what: 'Detects the CSV layout of an admitted statement.', storage: 'reads private storage', downstream: 'bank CSV mapping', ui: 'components/expenses/BankStatementImportPanel.tsx' },
   { surface: 'fdh.bank_csv.map', file: `${FDH}/bank-csv/[documentId]/map/route.ts`, method: 'POST', guard: 'run_start', domain: 'expenses',
     what: 'Saves the column mapping of an admitted CSV.', storage: 'mapping row', downstream: 'bank CSV processing', ui: 'components/expenses/BankStatementImportPanel.tsx' },
+  { surface: 'fdh.bank_csv.remap', file: `${FDH}/bank-csv/[documentId]/remap/route.ts`, method: 'POST', guard: 'run_start', domain: 'expenses',
+    what: 'Takes a statement that was read through a column mapping back to the mapping step so it can be read again (nothing approved is touched).', storage: 'removes unapproved lines and the statement job; reads private storage', downstream: 'bank CSV mapping, then processing', ui: 'components/expenses/BankStatementImportPanel.tsx' },
   { surface: 'fdh.bank_csv.process', file: `${FDH}/bank-csv/[documentId]/process/route.ts`, method: 'POST', guard: 'run_start', domain: 'expenses',
     what: 'Parses an admitted CSV into transactions (retry of a failed document is a new run).', storage: 'reads private storage; writes fdh_transactions', downstream: 'approved Expenses actuals', ui: 'components/expenses/BankStatementImportPanel.tsx' },
   { surface: 'fdh.bank_pdf.process', file: `${FDH}/bank-pdf/[documentId]/process/route.ts`, method: 'POST', guard: 'run_start', domain: 'expenses',

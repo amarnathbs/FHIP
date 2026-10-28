@@ -278,6 +278,9 @@ describe('FDH-1 has zero downstream analytical side effects', () => {
       // substring, so both files are approved as exactly these two, not a
       // directory.
       path.join(REPO_ROOT, 'components', 'expenses', 'BankStatementImportPanel.tsx'),
+      // 2026-10-28: the panel's column-mapping step (BankCsvMappingStep.tsx) shares the pure mapping helpers and date styles of the bank CSV
+      // engine, which is what lets its preview show exactly what the import will do; it talks to the server only over fetch().
+      path.join(REPO_ROOT, 'components', 'expenses', 'BankCsvMappingStep.tsx'),
       path.join(REPO_ROOT, 'app', '(app)', 'expenses', 'page.tsx'),
       // LR-8 (2026-09-08): app/(app)/reports/page.tsx's new "Other Reports &
       // Outputs" section trips the identical naive-substring limitation the
@@ -832,6 +835,12 @@ describe('FDH-1 never writes existing FHIP Input Data', () => {
       path.join(FDH_LIB, 'services', 'bankImportJobStore.ts'),
       path.join(FDH_LIB, 'services', 'bankImportWorker.ts'),
       path.join(FDH_LIB, 'services', 'bankImportAdmission.ts'),
+      // Bank CSV column mapping (2026-10-28) adds a NINETEENTH: bankCsvRemap.ts, the way back to the column step after a wrong reading. It
+      // removes the unapproved lines and the job of ONE statement the caller owns (authoritative columns the authenticated role may not
+      // write, R7) and resets that statement's row; it refuses once any line is approved. Every query is `.eq('user_id', userId)`
+      // (and `.eq('id', ...)` for writes), another user's statement is indistinguishable from a missing one
+      // (tests/unit/bankCsvColumnMappingPglite.test.ts, two users).
+      path.join(FDH_LIB, 'services', 'bankCsvRemap.ts'),
     ];
     let usedByApprovedFile = 0;
     for (let i = 0; i < FDH_CODE.length; i += 1) {

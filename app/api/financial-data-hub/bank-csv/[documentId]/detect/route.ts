@@ -23,6 +23,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ docume
       encoding_detected: document.encoding_detected,
       delimiter_detected: document.delimiter_detected,
       declared_row_count: document.declared_row_count,
+      // True when this person already confirmed the column layout of exactly this header on an earlier upload and it is used again.
+      saved_layout_used: document.detection_status === 'detected' && document.adapter_key === null && document.mapping_template_id !== null,
     });
   } catch (e) {
     if (e instanceof BankCsvProcessingError) {

@@ -73,6 +73,7 @@ import { assertDocumentTransition } from '../domain/documentLifecycle';
 import { BankOwnerConflictError, decideAccountOwnerWrite } from './bankOwnerAttribution';
 import { downloadDocumentObject } from './storage';
 import { checkFdhDocumentMalwareAdmission } from './malwareScanGate';
+import { readAdapterAccountLastDigits } from '../bank-csv/accountColumn';
 
 type Row = Record<string, unknown>;
 
@@ -280,7 +281,10 @@ export async function readStatementIdentityFromStoredFile(document: Row): Promis
       const detection = detectBankCsvFormat(download.bytes);
       // A generic (country-neutral) adapter names no bank: say nothing rather than "Generic CSV".
       const adapter = detection.status === 'detected' ? detection.adapter : null;
-      return adapter && adapter.institutionCode ? { institutionName: adapter.displayName, lastDigits: null, institutionCode: adapter.institutionCode } : null;
+      if (!adapter || !adapter.institutionCode) return null;
+      // An adapter that knows which column holds the account number names the account by its LAST digits only (never the whole number).
+      const lastDigits = detection.parsed ? readAdapterAccountLastDigits(detection.parsed.header, detection.parsed.rows, adapter.columnRoles.accountIdentifier) : null;
+      return { institutionName: adapter.displayName, lastDigits, institutionCode: adapter.institutionCode };
     }
 
     if (document.source_type !== 'pdf_native' || document.error_code === 'password_required') return null;

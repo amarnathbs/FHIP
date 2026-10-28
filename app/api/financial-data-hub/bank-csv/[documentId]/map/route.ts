@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     });
   } catch (e) {
     if (e instanceof BankCsvProcessingError) {
-      const status = e.code === 'not_found' ? 404 : 400;
+      const status = e.code === 'not_found' ? 404 : e.code === 'invalid_mapping' ? 422 : 400;
       return bad(
         e.code === 'invalid_state'
           ? 'This document does not currently need a manual column mapping.'

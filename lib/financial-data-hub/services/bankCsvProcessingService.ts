@@ -60,7 +60,7 @@ import { createHash } from 'node:crypto';
 
 export class BankCsvProcessingError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid_state' | 'mapping_required' | 'account_unresolved' | 'internal_error' | 'in_progress',
+    readonly code: 'not_found' | 'invalid_state' | 'mapping_required' | 'account_unresolved' | 'internal_error' | 'in_progress' | 'invalid_mapping' | 'file_gone' | 'already_approved',
     message: string,
   ) {
     super(message);
@@ -74,8 +74,23 @@ async function getOwnedDocument(userId: string, documentId: string): Promise<Fdh
   return data;
 }
 
-function headerFingerprint(header: readonly string[], delimiter: string): string {
+export function headerFingerprint(header: readonly string[], delimiter: string): string {
   return createHash('sha256').update(JSON.stringify([delimiter, header.map((h) => h.trim().toLowerCase())])).digest('hex');
+}
+
+/** The layout this person confirmed earlier for exactly this header (same columns, same order, same delimiter), if any. User-scoped. */
+async function findConfirmedLayoutTemplate(userId: string, fingerprint: string): Promise<{ id: string } | null> {
+  const supabase = await fdhDbClient();
+  const { data } = await supabase
+    .from('fdh_csv_mapping_templates')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('source_fingerprint', fingerprint)
+    .eq('status', 'user_confirmed')
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string } | null) ?? null;
 }
 
 /** Service-role write, explicitly re-scoped to (id, user_id) even though the
@@ -165,11 +180,20 @@ export async function detectBankCsvDocument(userId: string, documentId: string):
     }
   }
 
+  // 28-10-2026: a layout this person already confirmed for exactly this header is used again, without asking. Only for a file the
+  // certified/experimental adapters did not settle on their own (an adapter match is never overridden by a template).
+  let savedLayoutId: string | null = null;
+  if ((detection.status === 'manual_mapping_required' || detection.status === 'ambiguous') && detection.header && detection.delimiter) {
+    const template = await findConfirmedLayoutTemplate(userId, headerFingerprint(detection.header, detection.delimiter));
+    savedLayoutId = template?.id ?? null;
+  }
+
   const updated = await adminUpdateStatementUpload(userId, documentId, {
+    ...(savedLayoutId ? { mapping_template_id: savedLayoutId } : {}),
     delimiter_detected: detection.delimiter,
     encoding_detected: detection.encoding,
     header_row_index: detection.headerRowIndex,
-    detection_status: detection.status,
+    detection_status: savedLayoutId ? 'detected' : detection.status,
     detection_confidence: detection.confidence,
     detection_evidence: detection.evidence,
     declared_row_count: detection.parsed?.declaredRowCount ?? null,
@@ -184,7 +208,7 @@ export async function detectBankCsvDocument(userId: string, documentId: string):
     documentId,
     eventType: 'bank_csv_detection_completed',
     actorType: 'system',
-    metadata: { status: detection.status, adapter_id: detection.adapter?.id ?? null, confidence: detection.confidence },
+    metadata: { status: detection.status, adapter_id: detection.adapter?.id ?? null, confidence: detection.confidence, saved_layout_used: savedLayoutId !== null },
   });
 
   return (updated ?? document) as FdhStatementUpload;
@@ -200,6 +224,42 @@ async function lookupParserIdByKey(parserKey: string): Promise<string | null> {
 // MAP (spec section 22-23)
 // ---------------------------------------------------------------------------
 
+function sameColumn(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** The checks that make a mapping usable, against the header this file really has. Throws `invalid_mapping` with the reason in plain words. */
+function assertMappingMatchesHeader(header: readonly string[], input: BankCsvMappingConfirmInput): void {
+  const m = input.column_mapping;
+  const assigned: Array<[string, string | null | undefined]> = [
+    ['the date', m.transaction_date],
+    ['the other date', m.posting_date],
+    ['the description', m.description],
+    ['the extra description', m.extra_description],
+    ['the amount', m.amount],
+    ['the debit amount', m.debit],
+    ['the credit amount', m.credit],
+    ['the debit/credit marker', m.dr_cr_indicator],
+    ['the balance', m.balance],
+    ['the reference', m.reference],
+  ];
+  const used = new Map<string, string>();
+  for (const [what, column] of assigned) {
+    if (!column) continue;
+    const matches = header.filter((h) => sameColumn(h, column));
+    if (matches.length === 0) throw new BankCsvProcessingError('invalid_mapping', `The column "${column}" chosen for ${what} is not in this file.`);
+    if (matches.length > 1) {
+      throw new BankCsvProcessingError('invalid_mapping', `Two columns in this file are both called "${column}", so they cannot be told apart. Rename one in your file and upload it again.`);
+    }
+    const key = column.trim().toLowerCase();
+    const earlier = used.get(key);
+    if (earlier && !input.allow_shared_columns) {
+      throw new BankCsvProcessingError('invalid_mapping', `The column "${column}" is chosen for both ${earlier} and ${what}. Choose a different column for one of them.`);
+    }
+    if (!earlier) used.set(key, what);
+  }
+}
+
 export async function confirmBankCsvMapping(
   userId: string,
   documentId: string,
@@ -210,30 +270,67 @@ export async function confirmBankCsvMapping(
     throw new BankCsvProcessingError('invalid_state', 'this document does not require manual mapping');
   }
   const header = (document.detection_evidence as { header?: string[] } | null)?.header ?? [];
-  const fingerprint = headerFingerprint(header, input.delimiter);
+  assertMappingMatchesHeader(header, input);
+  // The layout is remembered under the delimiter the file was really read with, never one the browser claims.
+  const delimiter = document.delimiter_detected ?? input.delimiter;
+  const fingerprint = headerFingerprint(header, delimiter);
+
+  // Every key present (null when not assigned): the stored template's shape check requires `amount` to exist even for a debit/credit file.
+  const m = input.column_mapping;
+  const columnMapping: FdhCsvColumnMapping = {
+    transaction_date: m.transaction_date,
+    posting_date: m.posting_date ?? null,
+    value_date: m.value_date ?? null,
+    description: m.description,
+    extra_description: m.extra_description ?? null,
+    amount: m.amount ?? null,
+    debit: m.debit ?? null,
+    credit: m.credit ?? null,
+    dr_cr_indicator: m.dr_cr_indicator ?? null,
+    balance: m.balance ?? null,
+    reference: m.reference ?? null,
+    currency: m.currency ?? null,
+  };
+
+  const { data: existingTemplates } = await csvMappingTemplatesRepository.listForUser(userId, 500);
+  const sameLayout = (existingTemplates ?? []).filter((t) => t.source_fingerprint === fingerprint);
+  const patch = { amount_convention: input.amount_convention, date_format: input.date_format, delimiter, column_mapping: columnMapping, country_code: document.country_code };
+  const admin = createAdminClient();
 
   let mappingTemplateId: string | null = null;
   if (input.save_as_reusable_template) {
-    const { data: existingTemplates } = await csvMappingTemplatesRepository.listForUser(userId, 500);
-    const existing = (existingTemplates ?? []).find((t) => t.source_fingerprint === fingerprint);
-    if (existing) {
-      mappingTemplateId = existing.id;
+    // One remembered layout per header. Confirming again replaces what was remembered (this is how a wrong mapping is corrected for good).
+    const confirmed = sameLayout.filter((t) => t.status === 'user_confirmed').sort((a, b) => b.version - a.version)[0];
+    if (confirmed) {
+      const { error } = await admin.from('fdh_csv_mapping_templates').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', confirmed.id).eq('user_id', userId);
+      if (error) throw new BankCsvProcessingError('internal_error', error.message);
+      mappingTemplateId = confirmed.id;
     } else {
+      const version = Math.max(0, ...sameLayout.map((t) => t.version)) + 1;
       const { data: created, error } = await csvMappingTemplatesRepository.create(userId, {
         household_id: null,
         institution_id: document.institution_id,
         source_fingerprint: fingerprint,
-        country_code: document.country_code,
-        version: 1,
+        version,
         status: 'user_confirmed',
-        amount_convention: input.amount_convention,
-        date_format: input.date_format,
-        delimiter: input.delimiter,
-        column_mapping: input.column_mapping as FdhCsvColumnMapping,
+        ...patch,
       } as never);
       if (error || !created) throw new BankCsvProcessingError('internal_error', error?.message ?? 'could not save mapping template');
       mappingTemplateId = created.id;
     }
+  } else {
+    // Not remembered for next time, but THIS import still needs the mapping to read the file from: a draft that no later upload matches.
+    const version = Math.max(0, ...sameLayout.map((t) => t.version)) + 1;
+    const { data: created, error } = await csvMappingTemplatesRepository.create(userId, {
+      household_id: null,
+      institution_id: document.institution_id,
+      source_fingerprint: fingerprint,
+      version,
+      status: 'user_draft',
+      ...patch,
+    } as never);
+    if (error || !created) throw new BankCsvProcessingError('internal_error', error?.message ?? 'could not save mapping template');
+    mappingTemplateId = created.id;
   }
 
   const updated = await adminUpdateStatementUpload(userId, documentId, {
@@ -249,10 +346,50 @@ export async function confirmBankCsvMapping(
     eventType: 'bank_csv_mapping_confirmed',
     actorType: 'user',
     actorId: userId,
-    metadata: { mapping_template_id: mappingTemplateId, amount_convention: input.amount_convention },
+    metadata: { mapping_template_id: mappingTemplateId, amount_convention: input.amount_convention, remembered: input.save_as_reusable_template },
   });
 
   return (updated ?? document) as FdhStatementUpload;
+}
+
+// ---------------------------------------------------------------------------
+// The columns of an unrecognised file, for the mapping step, and the way back to it
+// ---------------------------------------------------------------------------
+
+/** How many data rows the mapping step is shown: enough to prove a date style and to catch a wrong column, small enough to send. */
+export const MAPPING_SAMPLE_ROWS = 100;
+const MAPPING_SAMPLE_CELL_CHARS = 200;
+
+export interface BankCsvMappingSample {
+  header: string[];
+  rows: string[][];
+  totalRows: number;
+  delimiter: string;
+}
+
+/**
+ * The file's own columns and its first rows, read again from the stored copy. Only for the owner, only while the file needs a mapping,
+ * and only once the same malware admission every import passes has cleared it.
+ */
+export async function loadBankCsvMappingSample(userId: string, documentId: string): Promise<BankCsvMappingSample> {
+  const document = await getOwnedDocument(userId, documentId);
+  const needsMapping = document.detection_status === 'manual_mapping_required' || document.detection_status === 'ambiguous';
+  if (!needsMapping) throw new BankCsvProcessingError('invalid_state', 'this document does not currently need a column mapping');
+  if (!checkFdhDocumentMalwareAdmission(document).admitted) {
+    throw new BankCsvProcessingError('invalid_state', FDH_MALWARE_ADMISSION_REFUSED_MESSAGE);
+  }
+  if (!document.raw_document_storage_reference) throw new BankCsvProcessingError('file_gone', 'the stored copy of this file is no longer available');
+  const download = await downloadDocumentObject(document.raw_document_storage_reference);
+  if (!download.ok) throw new BankCsvProcessingError('file_gone', 'the stored copy of this file is no longer available');
+  const detection = detectBankCsvFormat(download.bytes);
+  if (!detection.parsed || !detection.delimiter) throw new BankCsvProcessingError('invalid_state', 'this file could not be read as a table');
+  const clip = (cell: string) => (cell.length > MAPPING_SAMPLE_CELL_CHARS ? `${cell.slice(0, MAPPING_SAMPLE_CELL_CHARS)}...` : cell);
+  return {
+    header: detection.parsed.header,
+    rows: detection.parsed.rows.slice(0, MAPPING_SAMPLE_ROWS).map((r) => r.map(clip)),
+    totalRows: detection.parsed.rows.length,
+    delimiter: detection.delimiter,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -582,6 +719,12 @@ export async function writeDuplicateCandidates(
   return pairs.length;
 }
 
+/** An adapter that names a bank but is not certified yet (built from too little evidence to certify an import on its own). */
+function isExperimentalInstitutionAdapter(adapterKey: string | null | undefined): boolean {
+  const adapter = adapterKey ? getAdapterById(adapterKey) : null;
+  return Boolean(adapter && adapter.certificationState === 'experimental' && adapter.institutionCode);
+}
+
 export interface BankCsvFinalizeInput {
   userId: string;
   documentId: string;
@@ -714,6 +857,7 @@ export async function finalizeBankCsvImport(input: BankCsvFinalizeInput): Promis
     duplicateCandidateCount: duplicateCandidateCount,
     accountAmbiguous: false,
     reconciliationStatus: pipeline.reconciliation?.status ?? null,
+    experimentalInstitutionAdapter: isExperimentalInstitutionAdapter(document.adapter_key),
   });
 
   if (certification.certificationStatus === 'review_required' && duplicateCandidateCount > 0) {

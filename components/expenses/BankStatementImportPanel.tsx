@@ -87,6 +87,7 @@ import { StatementDetailsDrawer } from '@/components/financial-data-hub/Statemen
 import { useFinancialImportAccess } from '@/lib/entitlements/useFinancialImportAccess';
 import { ImportLockedNotice } from '@/components/entitlements/ImportLockedNotice';
 import { DataTable } from '@/components/ui/DataTable';
+import { BankCsvMappingStep } from './BankCsvMappingStep';
 
 type Phase =
   | 'form'
@@ -97,6 +98,9 @@ type Phase =
   // The upload could not tell which of the user's accounts the statement is for
   // and no single account was deterministic: the user picks one (or adds one).
   | 'choose_account'
+  // 28-10-2026: the CSV's layout is not one the importer recognises. The person says which column is which; the import then carries on
+  // from the stored file (no second upload).
+  | 'map_columns'
   // AIE bank-statement AI-fallback (2026-09-23). The native parse failed on a
   // readable-but-unrecognised layout and an AI read a DRAFT off it; nothing
   // is saved until the user confirms from this phase.
@@ -275,6 +279,11 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
   const [aiDraft, setAiDraft] = useState<AiFallbackDraft | null>(null);
   // WP-G (F15): the background import job being followed (progress shown to the person); null when none is running.
   const [jobView, setJobView] = useState<JobViewLike | null>(null);
+  // 28-10-2026: how the CSV's columns were settled, so the result screen can say so and offer to change them. null = recognised layout.
+  const [layoutSource, setLayoutSource] = useState<'mapped' | 'saved' | null>(null);
+  const [layoutRemembered, setLayoutRemembered] = useState(false);
+  const [mapMode, setMapMode] = useState<'new' | 'change'>('new');
+  const [remapError, setRemapError] = useState<string | null>(null);
   // Real-malware-gate async fix (2026-09-21): cancels an in-flight status
   // poll if the panel unmounts mid-scan.
   const scanPollCancelRef = useRef({ cancelled: false });
@@ -333,6 +342,10 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
 
   function reset() {
     setJobView(null);
+    setLayoutSource(null);
+    setLayoutRemembered(false);
+    setMapMode('new');
+    setRemapError(null);
     setAccountChoice(null);
     setAccountOwnerConflict(null);
     setInfo(null);
@@ -444,6 +457,17 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
         setPhase('error');
         return;
       }
+      // 28-10-2026: a layout the importer does not recognise is not a dead end. The person says which column is which (or, when they
+      // already did for exactly this header, that choice is used again and nothing is asked).
+      const detectedStatus = detectJson.data?.detection_status as string | undefined;
+      if (detectedStatus === 'manual_mapping_required' || detectedStatus === 'ambiguous') {
+        setDocumentId(docId);
+        setMapMode('new');
+        setMessage(null);
+        setPhase('map_columns');
+        return;
+      }
+      setLayoutSource(detectJson.data?.saved_layout_used ? 'saved' : null);
     }
 
     // F15: the platform ends a request after about 28 s. When the answer is "no answer yet" (gateway error, dropped connection, or the
@@ -464,6 +488,14 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
     // closed or reloaded without losing it.
     if (attempt.status === 202 && processJson.data?.async_job) {
       await followJob(processJson.data.job_id as string, docId, processUrl, processInit);
+      return;
+    }
+    // The server says the columns are still unsettled (a second tab, a refresh, or a state the detect answer did not show): ask for them.
+    if (!processOk && csv && processJson.error === 'mapping_required') {
+      setDocumentId(docId);
+      setMapMode('new');
+      setMessage(null);
+      setPhase('map_columns');
       return;
     }
     if (!processOk) {
@@ -607,6 +639,42 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
       incompleteExtraction: Boolean(data.incomplete_extraction),
     });
     setPhase('done');
+  }
+
+  /** The person confirmed the columns (the map route saved them): the import carries on from the stored file, with no second upload. */
+  async function handleMappingConfirmed(result: { remembered: boolean }) {
+    if (!documentId) return;
+    setLayoutSource('mapped');
+    setLayoutRemembered(result.remembered);
+    setRemapError(null);
+    setSummary(null);
+    setBusy(false);
+    // `knownCopy` here only skips the detection request (the layout is settled); processing runs as for any statement.
+    await runProcessing(documentId, true, undefined, true);
+  }
+
+  /** The columns read the statement wrongly: take it back to the column step without uploading it again. */
+  async function handleChangeMapping() {
+    if (!documentId) return;
+    setBusy(true);
+    setRemapError(null);
+    try {
+      const res = await fetch(`/api/financial-data-hub/bank-csv/${documentId}/remap`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (noteImportResponse(json)) return;
+        setRemapError((json.message as string | undefined) ?? (json.error as string | undefined) ?? 'We could not reopen the column choice. Please try again.');
+        return;
+      }
+      setSummary(null);
+      setMapMode('change');
+      setMessage(null);
+      setPhase('map_columns');
+    } catch {
+      setRemapError('We could not reach the server. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleUpload(confirmOwnerChange = false) {
@@ -1207,12 +1275,32 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
         </div>
       )}
 
+      {phase === 'map_columns' && documentId && (
+        <div className="mt-4">
+          <BankCsvMappingStep
+            documentId={documentId}
+            country={country}
+            mode={mapMode}
+            onConfirmed={handleMappingConfirmed}
+            onCancel={reset}
+          />
+        </div>
+      )}
+
       {phase === 'error' && (
         <div className="mt-4 space-y-3">
           <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">{message}</p>
-          <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
-            Try again
-          </button>
+          {remapError && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{remapError}</p>}
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={reset} className="rounded border border-gray-300 px-3 py-1 text-sm">
+              Try again
+            </button>
+            {layoutSource && documentId && (
+              <button type="button" onClick={handleChangeMapping} disabled={busy} className="rounded border border-gray-300 px-3 py-1 text-sm" data-testid="change-column-mapping">
+                Change which column is which
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -1231,6 +1319,31 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
                 ? `Done. Every transaction on this statement was already imported (${summary.duplicatesSkipped} duplicate${summary.duplicatesSkipped === 1 ? '' : 's'} skipped).`
                 : 'Done. This statement has been processed.'}
           </p>
+          {layoutSource && (
+            <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900" data-testid="layout-note">
+              {layoutSource === 'saved'
+                ? 'We read this file with the column choice you confirmed earlier for this layout, so you were not asked again.'
+                : layoutRemembered
+                  ? 'We read this file with the columns you chose. We have remembered this layout: the next file with exactly these columns will be read the same way and you will not be asked again.'
+                  : 'We read this file with the columns you chose. You asked us not to remember this layout, so you will be asked again next time.'}
+            </p>
+          )}
+          {layoutSource && documentId && !summary?.alreadyImported && (
+            <div className="space-y-2">
+              {summary && (summary.transactionsCreated === 0 || (summary.unreadLines?.count ?? 0) > 0) && (
+                <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status" data-testid="mapping-looks-wrong">
+                  {summary.transactionsCreated === 0
+                    ? 'No transactions could be read with these columns. This usually means a column or the date style was chosen wrongly.'
+                    : 'Some lines could not be read with these columns. If that is not what you expect, a column or the date style may have been chosen wrongly.'}{' '}
+                  You can change the columns and read the file again. You do not need to upload it again.
+                </p>
+              )}
+              {remapError && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{remapError}</p>}
+              <button type="button" onClick={handleChangeMapping} disabled={busy} className="rounded border border-gray-300 px-3 py-1 text-sm" data-testid="change-column-mapping">
+                Change which column is which
+              </button>
+            </div>
+          )}
           {unreadLinesText(summary?.unreadLines) && (
             <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{unreadLinesText(summary?.unreadLines)}</p>
           )}

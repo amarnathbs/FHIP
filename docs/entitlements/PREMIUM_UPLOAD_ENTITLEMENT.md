@@ -70,7 +70,7 @@ automated sync are Premium unless the Product Owner explicitly changes the polic
 
 <!-- BEGIN GENERATED INVENTORY MATRIX -->
 
-**Counts:** 29 gated routes (14 admission, 15 run-start); 13 review/apply/delete routes deliberately NOT gated; 7 Admin/system route families exempt; 14 manual-entry route families that must stay Free.
+**Counts:** 30 gated routes (14 admission, 16 run-start); 13 review/apply/delete routes deliberately NOT gated; 7 Admin/system route families exempt; 14 manual-entry route families that must stay Free.
 
 ### Gated routes (Free: refused 403 PREMIUM_REQUIRED, or 503 ENTITLEMENT_UNAVAILABLE; Premium: unchanged)
 
@@ -92,19 +92,20 @@ automated sync are Premium unless the Product Owner explicitly changes the polic
 | 14 | `ii.source_document.parse_fixture` | Admission | `/api/investment-intelligence/source-documents/[id]/parse` | investments | API only (no UI caller) | ii_source_documents + canonical II tables | ii_transactions / holdings |
 | 15 | `fdh.bank_csv.detect` | Run start | `/api/financial-data-hub/bank-csv/[documentId]/detect` | expenses | `components/expenses/BankStatementImportPanel.tsx` | reads private storage | bank CSV mapping |
 | 16 | `fdh.bank_csv.map` | Run start | `/api/financial-data-hub/bank-csv/[documentId]/map` | expenses | `components/expenses/BankStatementImportPanel.tsx` | mapping row | bank CSV processing |
-| 17 | `fdh.bank_csv.process` | Run start | `/api/financial-data-hub/bank-csv/[documentId]/process` | expenses | `components/expenses/BankStatementImportPanel.tsx` | reads private storage; writes fdh_transactions | approved Expenses actuals |
-| 18 | `fdh.bank_pdf.process` | Run start | `/api/financial-data-hub/bank-pdf/[documentId]/process` | expenses | `components/expenses/BankStatementImportPanel.tsx` | reads private storage; writes fdh_transactions | approved Expenses actuals |
-| 19 | `fdh.bank_pdf.ai_fallback_confirm` | Run start | `/api/financial-data-hub/bank-pdf/[documentId]/ai-fallback/confirm` | expenses | `components/expenses/BankStatementImportPanel.tsx` | writes fdh_transactions | approved Expenses actuals |
-| 20 | `fdh.payslip.process` | Run start | `/api/financial-data-hub/payslip/[documentId]/process` | income | `components/income/PayslipImportPanel.tsx` | reads private storage; writes payroll evidence | Income proposal |
-| 21 | `fdh.payslip.ai_fallback_confirm` | Run start | `/api/financial-data-hub/payslip/[documentId]/ai-fallback/confirm` | income | `components/income/PayslipImportPanel.tsx` | writes payroll evidence | Income proposal |
-| 22 | `fdh.liability_statement.process` | Run start | `/api/financial-data-hub/liability-statement/[documentId]/process` | liabilities | `components/liabilities/LiabilityImportPanel.tsx` | reads private storage; writes statement evidence | liability proposal |
-| 23 | `fdh.liability_statement.ai_fallback_confirm` | Run start | `/api/financial-data-hub/liability-statement/[documentId]/ai-fallback/confirm` | liabilities | `components/liabilities/LiabilityImportPanel.tsx` | writes statement evidence | liability proposal |
-| 24 | `fdh.investment_statement.process` | Run start | `/api/financial-data-hub/investment-statement/[documentId]/process` | investments | `components/investments/AuInvestmentStatementImportPanel.tsx` | reads private storage; writes statement evidence | Investment Intelligence |
-| 25 | `fdh.investment_statement.ai_fallback_confirm` | Run start | `/api/financial-data-hub/investment-statement/[documentId]/ai-fallback/confirm` | investments | `components/investments/AuInvestmentStatementImportPanel.tsx` | writes statement evidence | Investment Intelligence |
-| 26 | `fdh.retirement_statement.process` | Run start | `/api/financial-data-hub/retirement-statement/[documentId]/process` | retirement | `components/retirement/RetirementStatementImportPanel.tsx` | reads private storage; writes statement evidence | retirement summary (apply) |
-| 27 | `fdh.retirement_statement.ai_fallback_confirm` | Run start | `/api/financial-data-hub/retirement-statement/[documentId]/ai-fallback/confirm` | retirement | `components/retirement/RetirementStatementImportPanel.tsx` | writes statement evidence | retirement summary (apply) |
-| 28 | `aie.investment_intelligence.process` | Run start | `/api/aie/investment-intelligence/intake/[intakeId]/process` | investments | API only (no UI caller) | reads AIE storage; writes extraction run | Investment Intelligence via AIE review |
-| 29 | `ii.source_document.process` | Run start | `/api/investment-intelligence/source-documents/[id]/process` | investments | `components/investment-intelligence/InvestmentIntelligenceClient.tsx` | reads private storage; writes parse run + canonical II tables | ii_transactions / holdings (publish) |
+| 17 | `fdh.bank_csv.remap` | Run start | `/api/financial-data-hub/bank-csv/[documentId]/remap` | expenses | `components/expenses/BankStatementImportPanel.tsx` | removes unapproved lines and the statement job; reads private storage | bank CSV mapping, then processing |
+| 18 | `fdh.bank_csv.process` | Run start | `/api/financial-data-hub/bank-csv/[documentId]/process` | expenses | `components/expenses/BankStatementImportPanel.tsx` | reads private storage; writes fdh_transactions | approved Expenses actuals |
+| 19 | `fdh.bank_pdf.process` | Run start | `/api/financial-data-hub/bank-pdf/[documentId]/process` | expenses | `components/expenses/BankStatementImportPanel.tsx` | reads private storage; writes fdh_transactions | approved Expenses actuals |
+| 20 | `fdh.bank_pdf.ai_fallback_confirm` | Run start | `/api/financial-data-hub/bank-pdf/[documentId]/ai-fallback/confirm` | expenses | `components/expenses/BankStatementImportPanel.tsx` | writes fdh_transactions | approved Expenses actuals |
+| 21 | `fdh.payslip.process` | Run start | `/api/financial-data-hub/payslip/[documentId]/process` | income | `components/income/PayslipImportPanel.tsx` | reads private storage; writes payroll evidence | Income proposal |
+| 22 | `fdh.payslip.ai_fallback_confirm` | Run start | `/api/financial-data-hub/payslip/[documentId]/ai-fallback/confirm` | income | `components/income/PayslipImportPanel.tsx` | writes payroll evidence | Income proposal |
+| 23 | `fdh.liability_statement.process` | Run start | `/api/financial-data-hub/liability-statement/[documentId]/process` | liabilities | `components/liabilities/LiabilityImportPanel.tsx` | reads private storage; writes statement evidence | liability proposal |
+| 24 | `fdh.liability_statement.ai_fallback_confirm` | Run start | `/api/financial-data-hub/liability-statement/[documentId]/ai-fallback/confirm` | liabilities | `components/liabilities/LiabilityImportPanel.tsx` | writes statement evidence | liability proposal |
+| 25 | `fdh.investment_statement.process` | Run start | `/api/financial-data-hub/investment-statement/[documentId]/process` | investments | `components/investments/AuInvestmentStatementImportPanel.tsx` | reads private storage; writes statement evidence | Investment Intelligence |
+| 26 | `fdh.investment_statement.ai_fallback_confirm` | Run start | `/api/financial-data-hub/investment-statement/[documentId]/ai-fallback/confirm` | investments | `components/investments/AuInvestmentStatementImportPanel.tsx` | writes statement evidence | Investment Intelligence |
+| 27 | `fdh.retirement_statement.process` | Run start | `/api/financial-data-hub/retirement-statement/[documentId]/process` | retirement | `components/retirement/RetirementStatementImportPanel.tsx` | reads private storage; writes statement evidence | retirement summary (apply) |
+| 28 | `fdh.retirement_statement.ai_fallback_confirm` | Run start | `/api/financial-data-hub/retirement-statement/[documentId]/ai-fallback/confirm` | retirement | `components/retirement/RetirementStatementImportPanel.tsx` | writes statement evidence | retirement summary (apply) |
+| 29 | `aie.investment_intelligence.process` | Run start | `/api/aie/investment-intelligence/intake/[intakeId]/process` | investments | API only (no UI caller) | reads AIE storage; writes extraction run | Investment Intelligence via AIE review |
+| 30 | `ii.source_document.process` | Run start | `/api/investment-intelligence/source-documents/[id]/process` | investments | `components/investment-intelligence/InvestmentIntelligenceClient.tsx` | reads private storage; writes parse run + canonical II tables | ii_transactions / holdings (publish) |
 
 ### Deliberately NOT gated: review / correct / approve / apply / delete (downgrade must not strand data; privacy is never Premium)
 

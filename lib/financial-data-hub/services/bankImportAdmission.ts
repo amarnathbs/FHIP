@@ -160,7 +160,7 @@ export async function admitBankImport(params: {
       return { kind: 'error', status: 400, code: 'invalid_state', message: 'this document has not been successfully detected' };
     }
     if ((doc.detection_status === 'ambiguous' || doc.detection_status === 'manual_mapping_required') && !doc.mapping_template_id) {
-      return { kind: 'error', status: 400, code: 'mapping_required', message: 'We could read this CSV, but could not determine which column contains the transaction amount. Please confirm a column mapping first.' };
+      return { kind: 'error', status: 400, code: 'mapping_required', message: 'We could read this CSV, but we do not recognise its layout, so we cannot tell which column is the date, the description and the amount. Choose the columns and the import will carry on.' };
     }
   } else if (!['queued', 'failed', 'processing'].includes(doc.processing_status)) {
     return { kind: 'error', status: 400, code: 'invalid_state', message: 'This document is not currently ready to be processed.' };

@@ -201,6 +201,9 @@ export interface CertificationDecisionInput {
   duplicateCandidateCount: number;
   accountAmbiguous: boolean;
   reconciliationStatus: BalanceReconciliationResult['status'] | null;
+  /** The file was read by an EXPERIMENTAL adapter that names a bank (not a generic structural one). Such a layout is built from too little
+   * evidence to certify an import on its own, so a file that would otherwise be certified lands in review instead. */
+  experimentalInstitutionAdapter?: boolean;
 }
 
 export interface CertificationDecision {
@@ -242,6 +245,9 @@ export function decideCertification(input: CertificationDecisionInput): Certific
   }
   if (input.reconciliationStatus === 'failed') {
     return { certificationStatus: 'review_required', reasonCodes: ['reconciliation_failed'] };
+  }
+  if (input.experimentalInstitutionAdapter) {
+    return { certificationStatus: 'review_required', reasonCodes: ['adapter_experimental'] };
   }
 
   return { certificationStatus: 'certified', reasonCodes: [] };

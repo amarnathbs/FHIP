@@ -53,6 +53,10 @@ export interface BankCsvAdapter {
     postedDate?: string;
     valueDate?: string;
     description: string;
+    /** A second, longer description column, kept as extra detail after the description. */
+    extraDescription?: string;
+    /** The column holding the account number. Only its last digits are ever read, to name the account (never stored or logged in full). */
+    accountIdentifier?: string;
     amount?: string;
     debit?: string;
     credit?: string;

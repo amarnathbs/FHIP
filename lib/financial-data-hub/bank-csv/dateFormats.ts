@@ -28,6 +28,14 @@ export const SUPPORTED_DATE_FORMATS = [
   // adapter's own `dateFormat` field, never by locale-guessing.
   'DD-Mon-YYYY',
   'DD Mon YYYY',
+  // 2026-10-28 (bank CSV column-mapping step): formats a person can pick when their bank's export is not a recognised layout.
+  // Each names its day/month order explicitly. 'DD/MM/YY' is day-first; there is deliberately NO 'MM/DD/YY'.
+  'DD/MM/YY',
+  // Month spelled out, full name or three-letter abbreviation: "30 June 2026", "30 Jun 2026".
+  'D MMMM YYYY',
+  // A time of day, a weekday name, then the date with the month spelled out: "12:00am Tue 30 June, 2026". The time and the weekday
+  // are read and checked for shape, never used: the date is the day, month name and year.
+  'h:mma ddd D MMMM, YYYY',
 ] as const;
 export type SupportedDateFormat = (typeof SUPPORTED_DATE_FORMATS)[number];
 
@@ -40,6 +48,23 @@ export interface DateParseResult {
   ok: boolean;
   /** ISO YYYY-MM-DD, only when ok. */
   iso: string | null;
+}
+
+const FULL_MONTH_NAMES = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const WEEKDAY_NAMES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const FULL_WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+/** A month written as a word: the full name ("June") or its standard abbreviation ("Jun", "Sept"). Anything else is not a month. */
+function monthFromWord(word: string): number | null {
+  const w = word.toLowerCase();
+  const full = FULL_MONTH_NAMES.indexOf(w);
+  if (full !== -1) return full + 1;
+  return MONTH_ABBREVIATIONS[w] ?? null;
+}
+
+function isWeekdayWord(word: string): boolean {
+  const w = word.toLowerCase().replace(/\.$/, '');
+  return WEEKDAY_NAMES.includes(w) || w === 'tues' || w === 'thur' || w === 'thurs' || FULL_WEEKDAY_NAMES.includes(w);
 }
 
 /** True calendar validity — rejects 31 Feb, 13th month, etc. rather than
@@ -128,9 +153,76 @@ export function parseDateWithFormat(raw: string, format: SupportedDateFormat): D
       if (!month) return fail;
       return isValidCalendarDate(year, month, day) ? { ok: true, iso: toIso(year, month, day) } : fail;
     }
+    case 'DD/MM/YY': {
+      const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+      if (!m) return fail;
+      const day = Number(m[1]);
+      const month = Number(m[2]);
+      // Two-digit years: 00-69 are 2000-2069, 70-99 are 1970-1999 (a bank statement is never from the future century).
+      const yy = Number(m[3]);
+      const year = yy <= 69 ? 2000 + yy : 1900 + yy;
+      return isValidCalendarDate(year, month, day) ? { ok: true, iso: toIso(year, month, day) } : fail;
+    }
+    case 'D MMMM YYYY': {
+      const m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
+      if (!m) return fail;
+      const day = Number(m[1]);
+      const month = monthFromWord(m[2]);
+      const year = Number(m[3]);
+      if (!month) return fail;
+      return isValidCalendarDate(year, month, day) ? { ok: true, iso: toIso(year, month, day) } : fail;
+    }
+    case 'h:mma ddd D MMMM, YYYY': {
+      const m = s.match(/^(\d{1,2}):(\d{2})\s*(am|pm)\s+([A-Za-z]{3,9}\.?)\s+(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})$/i);
+      if (!m) return fail;
+      const hour = Number(m[1]);
+      const minute = Number(m[2]);
+      if (hour < 1 || hour > 12 || minute > 59) return fail;
+      if (!isWeekdayWord(m[4])) return fail;
+      const day = Number(m[5]);
+      const month = monthFromWord(m[6]);
+      const year = Number(m[7]);
+      if (!month) return fail;
+      return isValidCalendarDate(year, month, day) ? { ok: true, iso: toIso(year, month, day) } : fail;
+    }
     default:
       return fail;
   }
+}
+
+/** What a person is shown when choosing how their file writes dates. Day-first wording; the order is always stated. */
+export const DATE_FORMAT_LABELS: Record<SupportedDateFormat, string> = {
+  'DD/MM/YYYY': 'Day/Month/Year, like 30/06/2026',
+  'D/M/YYYY': 'Day/Month/Year, like 3/6/2026',
+  'MM/DD/YYYY': 'Month/Day/Year (US order), like 06/30/2026',
+  'YYYY-MM-DD': 'Year-Month-Day, like 2026-06-30',
+  'DD-MM-YYYY': 'Day-Month-Year, like 30-06-2026',
+  'DD.MM.YYYY': 'Day.Month.Year, like 30.06.2026',
+  'DD-Mon-YYYY': 'Day-Month name-Year, like 30-Jun-2026',
+  'DD Mon YYYY': 'Day Month name Year, like 30 Jun 2026',
+  'DD/MM/YY': 'Day/Month/two-digit Year, like 30/06/26',
+  'D MMMM YYYY': 'Day Month name Year, like 30 June 2026',
+  'h:mma ddd D MMMM, YYYY': 'Time, weekday, day, month name, year, like 12:00am Tue 30 June, 2026',
+};
+
+/**
+ * Every supported format that reads EVERY non-empty sample, grouped by what it makes of them: formats that give the same date for every
+ * sample (D/M/YYYY and DD/MM/YYYY) are one group. One group = the values themselves prove the reading (a date written as "30 June, 2026"
+ * has only one). More than one group = the same text means different days under different orders (01/02/2026), so the person must say
+ * which; nothing here chooses. No group = no supported format reads these values.
+ */
+export function dateFormatCandidates(samples: readonly string[]): { groups: SupportedDateFormat[][]; proven: SupportedDateFormat | null } {
+  const nonEmpty = samples.map((x) => x.trim()).filter(Boolean);
+  if (nonEmpty.length === 0) return { groups: [], proven: null };
+  const bySignature = new Map<string, SupportedDateFormat[]>();
+  for (const format of SUPPORTED_DATE_FORMATS) {
+    const results = nonEmpty.map((x) => parseDateWithFormat(x, format));
+    if (!results.every((r) => r.ok)) continue;
+    const signature = results.map((r) => r.iso).join('|');
+    bySignature.set(signature, [...(bySignature.get(signature) ?? []), format]);
+  }
+  const groups = [...bySignature.values()];
+  return { groups, proven: groups.length === 1 ? groups[0][0] : null };
 }
 
 /**

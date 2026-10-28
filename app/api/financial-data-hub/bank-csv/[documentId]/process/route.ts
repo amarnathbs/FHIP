@@ -35,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
     if (outcome.kind === 'job') return acceptedJobResponse(outcome.job);
     if (outcome.kind === 'result') return ok(outcome.payload);
     // Stable machine-readable codes only where a client branches on them (the in-progress answer F15 introduced, a reused key).
-    return bad(outcome.message, outcome.status, outcome.code === 'statement_in_progress' || outcome.code === 'idempotency_key_in_use' ? outcome.code : undefined);
+    return bad(outcome.message, outcome.status, outcome.code === 'statement_in_progress' || outcome.code === 'idempotency_key_in_use' || outcome.code === 'mapping_required' ? outcome.code : undefined);
   } catch (e) {
     if (isUnavailable(e)) return unavailableResponse();
     // F15: the failing stage is in the server log and the answer carries a stable code (never the file, never an amount).
