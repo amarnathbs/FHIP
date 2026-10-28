@@ -3,7 +3,7 @@
 import { DateInput } from '@/components/ui/DateInput';
 import { PageBackLink } from '@/components/navigation/PageBackLink';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { REGISTRATION_COUNTRY_OPTIONS } from '@/lib/services/countryGate';
@@ -11,7 +11,9 @@ import type { CountryCode } from '@/lib/services/jurisdiction';
 import { MIN_PLAUSIBLE_AGE, MAX_PLAUSIBLE_AGE } from '@/lib/engines/age';
 import { CrossBorderRelationshipsPanel } from '@/components/profile/CrossBorderRelationshipsPanel';
 import { CloseAccountPanel } from '@/components/profile/CloseAccountPanel';
-import { BillingPanel } from '@/components/profile/BillingPanel';
+import { ProfilePlanSection } from '@/components/profile/ProfilePlanSection';
+import { ImportArrivalNotice, IMPORT_ARRIVAL_BODY_ID, useImportArrival } from '@/components/profile/ImportArrivalNotice';
+import { browserPlanSectionEnv, focusPlanSection } from '@/lib/entitlements/importArrival';
 
 // App Review tier-2 fix pass (2026-08-28 branch reconciliation), Fix 1 —
 // Profile Page. Ported from app/(app)/profile/page.tsx on
@@ -94,6 +96,17 @@ function ProfilePageContent() {
   const [newEmail, setNewEmail] = useState('');
   const [emailStatus, setEmailStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [emailSubmitting, setEmailSubmitting] = useState(false);
+
+  // PO defect 28-10-2026: a Free person who chose a locked Import control arrives with ?from=import-<domain>. Say why they are
+  // here (the notice), then take them to the plan section once the page has drawn it (once only, so a later edit never re-scrolls).
+  const arrival = useImportArrival();
+  const arrivalHandled = useRef(false);
+  const pageReady = !loading && !!profile;
+  useEffect(() => {
+    if (!arrival.show || !pageReady || arrivalHandled.current) return;
+    arrivalHandled.current = focusPlanSection(browserPlanSectionEnv());
+  }, [arrival.show, pageReady]);
+  const arrivalNotice = arrival.show && arrival.domain ? <ImportArrivalNotice domain={arrival.domain} /> : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -182,6 +195,7 @@ function ProfilePageContent() {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold text-trust">Profile</h1>
+        {arrivalNotice}
         <p className="text-muted">Loading...</p>
       </div>
     );
@@ -193,6 +207,8 @@ function ProfilePageContent() {
         <h1 className="text-2xl font-semibold text-trust">Profile</h1>
         <p className="mt-1 text-muted">Your account and core personal details.</p>
       </div>
+
+      {arrivalNotice}
 
       <SectionCard title="Personal details" description="Used across your dashboard, forecasts and reports.">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -342,9 +358,7 @@ function ProfilePageContent() {
         </p>
       </SectionCard>
 
-      <SectionCard title="Billing" description="Your plan, billing country and payment history.">
-        <BillingPanel />
-      </SectionCard>
+      <ProfilePlanSection describedBy={arrivalNotice ? IMPORT_ARRIVAL_BODY_ID : undefined} />
 
       <SectionCard title="Close account" description="Permanently delete your FHIP account and data.">
         <CloseAccountPanel />
@@ -358,7 +372,10 @@ export default function ProfilePage() {
   return (
     <>
       <PageBackLink href="/dashboard" label="Dashboard" />
-      <ProfilePageContent />
+      {/* useSearchParams (the import-arrival notice) needs a Suspense boundary. */}
+      <Suspense fallback={null}>
+        <ProfilePageContent />
+      </Suspense>
     </>
   );
 }
