@@ -15,8 +15,9 @@
 import type { PdfStatementMetadata } from '@/lib/financial-data-hub/bank-pdf/metadata';
 import type { ReadBankStatementRow } from '@/lib/financial-data-hub/bank-pdf/orchestrator';
 import type { BankStatementDocumentFacts } from './schema';
-import { figureIsPrinted } from '../shared/reviewDraft';
+import { figureIsPrinted, explicitSignOfPrintedFigure } from '../shared/reviewDraft';
 import { isStatementSummaryLine } from '../shared/statementSummaryLines';
+import type { BankFactsNormalisationNotes } from './normalise';
 
 export const AIE_BANK_STATEMENT_PARSER_NAME = 'aie_bank_statement_ai_fallback';
 export const AIE_BANK_STATEMENT_PARSER_VERSION = '1';
@@ -47,6 +48,11 @@ export interface MappedBankStatementDraft {
   allTransactionsListed: boolean;
   institutionName: string | null;
   warnings: string[];
+  /** 28-10-2026: how many KEPT lines had a running balance that was present but unreadable (set to null, line kept). A balance is
+   * verification data, so it never discards a line; it makes the import land in review with a plain reason instead. */
+  balancesNotRead?: number;
+  /** The statement's declared opening / closing balance that was present but unreadable (0, 1 or 2). */
+  declaredBalancesNotRead?: number;
 }
 
 /**
@@ -59,14 +65,23 @@ export interface MappedBankStatementDraft {
  */
 export function keepOnlyPrintedBankFigures(mapped: MappedBankStatementDraft, documentText: string): MappedBankStatementDraft {
   const warnings = [...mapped.warnings];
+  let signDropped = 0;
   const rows = mapped.rows.map((r) => {
     if (!figureIsPrinted(r.amountOriginal, documentText)) warnings.push(`ai_row_${r.sourceRowNumber}_amount_not_found_in_document`);
     if (r.balanceAfter !== null && !figureIsPrinted(r.balanceAfter, documentText)) {
       warnings.push(`ai_row_${r.sourceRowNumber}_balance_not_printed_dropped`);
       return { ...r, balanceAfter: null };
     }
+    // 28-10-2026: the document prints this figure with an explicit sign ("34.15 DR", "(34.15)", "34.15 CR" everywhere it appears)
+    // and the reading says the opposite. The sign is never guessed or flipped: the balance is dropped and COUNTED as not read.
+    if (r.balanceAfter !== null && r.balanceAfter !== 0 && signContradicted(r.balanceAfter, documentText)) {
+      warnings.push(`ai_row_${r.sourceRowNumber}_balance_sign_contradicts_document_dropped`);
+      signDropped += 1;
+      return { ...r, balanceAfter: null };
+    }
     return r;
   });
+  let declaredSignDropped = 0;
   const md = { ...mapped.statementMetadata };
   if (md.declaredOpeningBalance !== null && md.declaredOpeningBalance !== undefined && !figureIsPrinted(md.declaredOpeningBalance, documentText)) {
     warnings.push('ai_opening_balance_not_printed_dropped');
@@ -76,7 +91,32 @@ export function keepOnlyPrintedBankFigures(mapped: MappedBankStatementDraft, doc
     warnings.push('ai_closing_balance_not_printed_dropped');
     md.declaredClosingBalance = null;
   }
-  return { ...mapped, rows, statementMetadata: md, warnings };
+  if (md.declaredOpeningBalance !== null && md.declaredOpeningBalance !== undefined && md.declaredOpeningBalance !== 0 && signContradicted(md.declaredOpeningBalance, documentText)) {
+    warnings.push('ai_opening_balance_sign_contradicts_document_dropped');
+    md.declaredOpeningBalance = null;
+    declaredSignDropped += 1;
+  }
+  if (md.declaredClosingBalance !== null && md.declaredClosingBalance !== undefined && md.declaredClosingBalance !== 0 && signContradicted(md.declaredClosingBalance, documentText)) {
+    warnings.push('ai_closing_balance_sign_contradicts_document_dropped');
+    md.declaredClosingBalance = null;
+    declaredSignDropped += 1;
+  }
+  const balancesNotRead = (mapped.balancesNotRead ?? 0) + signDropped;
+  const declaredBalancesNotRead = (mapped.declaredBalancesNotRead ?? 0) + declaredSignDropped;
+  return {
+    ...mapped,
+    rows,
+    statementMetadata: md,
+    warnings,
+    ...(balancesNotRead > 0 ? { balancesNotRead } : {}),
+    ...(declaredBalancesNotRead > 0 ? { declaredBalancesNotRead } : {}),
+  };
+}
+
+/** True when the document prints this figure with an explicit sign that is the OPPOSITE of the reading's sign. */
+function signContradicted(value: number, documentText: string): boolean {
+  const printed = explicitSignOfPrintedFigure(value, documentText);
+  return (value > 0 && printed === 'negative') || (value < 0 && printed === 'positive');
 }
 
 /**
@@ -90,9 +130,11 @@ export function keepOnlyPrintedBankFigures(mapped: MappedBankStatementDraft, doc
  * pipeline answers all of them better, and answering them twice is how two
  * implementations start disagreeing.
  */
-export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts): MappedBankStatementDraft | null {
+export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts, notes?: BankFactsNormalisationNotes): MappedBankStatementDraft | null {
   const rows: ReadBankStatementRow[] = [];
   const warnings: string[] = [];
+  const unreadPositions = new Set(notes?.balanceLinesNotRead ?? []);
+  let balancesNotRead = 0;
 
   facts.transactions.forEach((t, index) => {
     const amount = money(t.amount);
@@ -120,6 +162,7 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts):
       // rather than letting a sign silently invert the rollforward.
       warnings.push(`ai_row_${index + 1}_negative_amount_normalised`);
     }
+    if (unreadPositions.has(index + 1)) balancesNotRead += 1;
     rows.push({
       sourceRowNumber: index + 1,
       transactionDate: t.transactionDate,
@@ -138,6 +181,11 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts):
   if (facts.documentMissingReasonCode) {
     warnings.push(`document_missing_reason:${facts.documentMissingReasonCode}`);
   }
+  // One warning per reading (never one per line), so a statement whose every balance was unreadable cannot flood the warning list.
+  if (balancesNotRead > 0) warnings.push(`ai_balances_not_read:${balancesNotRead}`);
+  const declaredBalancesNotRead = (notes?.declaredOpeningNotRead ? 1 : 0) + (notes?.declaredClosingNotRead ? 1 : 0);
+  if (notes?.declaredOpeningNotRead) warnings.push('ai_opening_balance_not_read');
+  if (notes?.declaredClosingNotRead) warnings.push('ai_closing_balance_not_read');
 
   const statementMetadata: PdfStatementMetadata = {
     declaredOpeningBalance: nullableMoney(facts.declaredOpeningBalance.value),
@@ -153,5 +201,7 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts):
     allTransactionsListed: facts.allTransactionsListed,
     institutionName: facts.institutionName.value,
     warnings,
+    ...(balancesNotRead > 0 ? { balancesNotRead } : {}),
+    ...(declaredBalancesNotRead > 0 ? { declaredBalancesNotRead } : {}),
   };
 }

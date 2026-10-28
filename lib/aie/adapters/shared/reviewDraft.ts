@@ -29,7 +29,13 @@
  * (`850.00` inside `1,850.00`, `2000` inside `12000`).
  */
 export function figureIsPrinted(value: number, text: string): boolean {
-  if (!Number.isFinite(value)) return false;
+  return findPrintedFigure(value, text).length > 0;
+}
+
+/** Every place `value` is printed in `text` (see `figureIsPrinted` for the spellings and the whole-number rule). */
+export function findPrintedFigure(value: number, text: string): Array<{ index: number; length: number }> {
+  const found: Array<{ index: number; length: number }> = [];
+  if (!Number.isFinite(value)) return found;
   const fixed = Math.abs(value).toFixed(2);
   const [intPart, dec] = fixed.split('.');
   const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -50,11 +56,42 @@ export function figureIsPrinted(value: number, text: string): boolean {
       const a2 = text[i + c.length + 1];
       const partOfLongerBefore = isDigit(b1) || ((b1 === ',' || b1 === '.') && isDigit(b2));
       const partOfLongerAfter = isDigit(a1) || ((a1 === '.' || a1 === ',') && isDigit(a2));
-      if (!partOfLongerBefore && !partOfLongerAfter) return true;
+      if (!partOfLongerBefore && !partOfLongerAfter && !found.some((f) => f.index === i)) found.push({ index: i, length: c.length });
       from = i + 1;
     }
   }
-  return false;
+  return found;
+}
+
+/**
+ * The sign the DOCUMENT itself prints for a figure, when it prints one explicitly and unambiguously (28-10-2026). Looks at every
+ * place the figure's digits are printed:
+ *   - 'negative' : every occurrence is marked DR, or in brackets, or has a trailing / leading minus;
+ *   - 'positive' : every occurrence is marked CR;
+ *   - 'unknown'  : not printed, mixed, or unmarked. NO conclusion is drawn from silence.
+ * Used only to refuse a figure whose sign the model contradicted (a live gpt-4o-mini asked to convert "$34.15 DR" returned 34.15).
+ */
+export function explicitSignOfPrintedFigure(value: number, text: string): 'negative' | 'positive' | 'unknown' {
+  const hits = findPrintedFigure(value, text);
+  if (hits.length === 0) return 'unknown';
+  let negative = 0;
+  let positive = 0;
+  for (const h of hits) {
+    const before = text.slice(Math.max(0, h.index - 8), h.index);
+    const after = text.slice(h.index + h.length, h.index + h.length + 6);
+    const isNegative =
+      /^\s?DR\b/i.test(after) ||
+      /\bDR\s?\$?\s?$/i.test(before) ||
+      (/\(\s?\$?\s?$/.test(before) && /^\s?\)/.test(after)) ||
+      /^-(?!\d)/.test(after) ||
+      /(^|[^\w])-\$?$/.test(before); // a minus directly against the figure (a spaced " - " is a separator, not a sign)
+    const isPositive = !isNegative && (/^\s?CR\b/i.test(after) || /\bCR\s?\$?\s?$/i.test(before));
+    if (isNegative) negative += 1;
+    else if (isPositive) positive += 1;
+  }
+  if (negative === hits.length) return 'negative';
+  if (positive === hits.length) return 'positive';
+  return 'unknown';
 }
 
 /** An identifier the review UI may show and send back. A masking token is

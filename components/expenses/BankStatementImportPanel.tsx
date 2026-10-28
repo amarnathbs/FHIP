@@ -128,6 +128,9 @@ interface AiFallbackDraft {
   declaredClosingBalance: number | null;
   allTransactionsListed: boolean;
   warnings: string[];
+  /** Printed balances the AI reading could not make out (the lines were kept). */
+  balancesNotRead?: number;
+  declaredBalancesNotRead?: number;
 }
 
 const FAILURE_MESSAGES: Record<string, string> = {
@@ -1054,6 +1057,15 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
               The AI reported that it could <strong>not</strong> list every transaction on this statement. If you save
               this, the import will be incomplete — we recommend adding the missing transactions by hand afterwards, or
               trying a different file.
+            </p>
+          )}
+
+          {((aiDraft.balancesNotRead ?? 0) > 0 || (aiDraft.declaredBalancesNotRead ?? 0) > 0) && (
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="ai-balances-not-read">
+              Balance not read for {aiDraft.balancesNotRead ?? 0} line{(aiDraft.balancesNotRead ?? 0) === 1 ? '' : 's'}
+              {(aiDraft.declaredBalancesNotRead ?? 0) > 0 ? ' and for the opening or closing balance' : ''}. The transactions
+              were read, but the check that they add up could not be completed, so this statement will be sent for your
+              review instead of being approved automatically. Compare the balances with your statement.
             </p>
           )}
 

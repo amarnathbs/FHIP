@@ -611,11 +611,13 @@ export function linkDecisionForChosenType(
 
 /** title_code of the blocking item a possibly-incomplete AI reading raises. */
 export const AI_EXTRACTION_INCOMPLETE_TITLE_CODE = 'bank_statement.ai_extraction_incomplete';
+/** title_code of the blocking item raised when the statement printed balances the AI reading could not make out (28-10-2026). */
+export const AI_BALANCES_NOT_READ_TITLE_CODE = 'bank_statement.ai_balances_not_read';
 /** title_code of the info note an overlapping statement raises. */
 export const STATEMENT_OVERLAP_TITLE_CODE = 'bank_statement.overlaps_prior_statement';
 /** Statement-level items the user may settle themselves (after checking the
  * statement). Nothing else can be acknowledged away. */
-export const ACKNOWLEDGEABLE_STATEMENT_TITLE_CODES: readonly string[] = [AI_EXTRACTION_INCOMPLETE_TITLE_CODE];
+export const ACKNOWLEDGEABLE_STATEMENT_TITLE_CODES: readonly string[] = [AI_EXTRACTION_INCOMPLETE_TITLE_CODE, AI_BALANCES_NOT_READ_TITLE_CODE];
 
 export interface StatementReviewItemRow {
   id: string;
@@ -645,6 +647,16 @@ export function statementNoteText(item: StatementReviewItemRow): string {
       return `This statement was read by AI and may be missing transactions${rows !== null ? ` (${rows} read)` : ''}. `
         + 'Check it against your statement. Add any missing transactions by hand, then confirm that every transaction is listed. '
         + 'Until then this statement cannot be approved.';
+    }
+    case AI_BALANCES_NOT_READ_TITLE_CODE: {
+      const lines = num((ctx as { lines_not_read?: unknown }).lines_not_read) ?? 0;
+      const declared = num((ctx as { declared_not_read?: unknown }).declared_not_read) ?? 0;
+      const what = [
+        lines > 0 ? `the balance for ${lines} line${lines === 1 ? '' : 's'}` : null,
+        declared > 0 ? (declared === 1 ? 'the opening or closing balance' : 'the opening and closing balances') : null,
+      ].filter(Boolean).join(' and ');
+      return `This statement prints balances that could not be read (${what || 'some balances'}). The transactions themselves were read, but the check that they add up could not be completed. `
+        + 'Compare the balances with your statement, then confirm. Until then this statement cannot be approved.';
     }
     case STATEMENT_OVERLAP_TITLE_CODE: {
       const from = (ctx as { overlap_from?: unknown }).overlap_from;

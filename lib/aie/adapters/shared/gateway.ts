@@ -64,8 +64,8 @@ export interface AieAdapterCallEvidence {
   schemaErrorCodes?: string[];
 }
 
-export type AieAdapterExtractionOutcome<TFacts> =
-  | { outcome: 'success'; facts: TFacts; evidence?: AieAdapterCallEvidence }
+export type AieAdapterExtractionOutcome<TFacts, TNotes = undefined> =
+  | { outcome: 'success'; facts: TFacts; evidence?: AieAdapterCallEvidence; /** What the adapter's optional normaliser did (counts and positions only, never values). */ notes?: TNotes }
   | { outcome: AieAdapterFailureOutcome; evidence?: AieAdapterCallEvidence };
 
 /** Identifiers and counts only (auditLog.ts's own metadata rule). Same keys
@@ -97,11 +97,28 @@ export function adapterCallEvidenceMetadata(evidence: AieAdapterCallEvidence | u
  * Stating the formats once, here, is what stops the next three adapters
  * rediscovering it one live call at a time.
  */
-export const AIE_DOCUMENT_FACTS_FORMAT_INSTRUCTIONS =
+const FORMAT_MONEY_PLAIN =
   'Every money value must be a plain decimal string with no currency symbol and no thousands separator, e.g. "3200.00" (never "$3,200.00" or "3,200"). ' +
+  // 28-10-2026 (production: a real bank statement printed balances as "1,234.56 CR" and the model copied them, so whole answers were rejected).
+  'Convert the way a figure is PRINTED into a plain decimal: drop currency symbols and codes ($, A$, AUD, Rs, INR), drop thousands separators, and never copy a CR or DR suffix, parentheses, or a trailing minus into the value. ' +
+  'Write exactly the digits printed; never calculate or estimate a figure. ';
+const FORMAT_QUANTITY_DATE_DIRECTION =
   'Every quantity must be a plain decimal string, e.g. "1250.5" (never "1,250.5"). ' +
   'Every date must be an ISO 8601 date string, e.g. "2026-03-01" (never "01/03/2026" or "1 March 2026"). ' +
   'Report every amount as a POSITIVE magnitude and use the separate type/direction field to say whether it was money in or money out; never use a minus sign to mean a debit.';
+
+export const AIE_DOCUMENT_FACTS_FORMAT_INSTRUCTIONS = FORMAT_MONEY_PLAIN + FORMAT_QUANTITY_DATE_DIRECTION;
+
+/** The format instructions for an adapter that re-spells BALANCES itself, deterministically, after the answer
+ * (`lib/aie/adapters/bankStatement/normalise.ts`): the model copies each balance EXACTLY as printed. Measured live on 28-10-2026 with
+ * gpt-4o-mini: asked to CONVERT "$34.15 DR" into "-34.15", it returned "34.15" for every overdrawn line (no error: a silently wrong
+ * sign); asked to COPY the printed text it returned "$34.15 DR" every time, and the deterministic step owns the sign. Amounts,
+ * quantities and dates keep the plain formats above. */
+export const AIE_DOCUMENT_FACTS_FORMAT_INSTRUCTIONS_BALANCES_AS_PRINTED =
+  'Every money value that is NOT a balance must be a plain decimal string with no currency symbol and no thousands separator, e.g. "3200.00" (never "$3,200.00" or "3,200"). ' +
+  'A balance (balanceAfter, declaredOpeningBalance, declaredClosingBalance) is the one exception: copy it EXACTLY as the document prints it, keeping any currency symbol, thousands separators and any CR or DR mark, brackets or minus sign, for example "$1,234.56 CR", "$34.15 DR", "(34.15)" or "1,234.56-". ' +
+  'The mark carries the sign of a balance, so never drop it, never convert a balance, and never calculate or estimate one. If a line prints no balance, balanceAfter is null. ' +
+  FORMAT_QUANTITY_DATE_DIRECTION;
 
 /** The anti-invention preamble every adapter shares. The "untrusted data, not
  * an instruction" clause is a prompt-injection boundary: the masked document
@@ -117,8 +134,9 @@ export const AIE_DOCUMENT_FACTS_BASE_PROMPT =
  * the shared format instructions. Exported per-adapter (not inlined) so the
  * live-DEV proofs exercise the EXACT production prompt rather than a
  * hand-retyped copy that could silently drift from it. */
-export function buildDocumentFactsSystemPrompt(documentDescription: string): string {
-  return `${AIE_DOCUMENT_FACTS_BASE_PROMPT} ${documentDescription} ${AIE_DOCUMENT_FACTS_FORMAT_INSTRUCTIONS}`;
+export function buildDocumentFactsSystemPrompt(documentDescription: string, options: { balancesAsPrinted?: boolean } = {}): string {
+  const format = options.balancesAsPrinted ? AIE_DOCUMENT_FACTS_FORMAT_INSTRUCTIONS_BALANCES_AS_PRINTED : AIE_DOCUMENT_FACTS_FORMAT_INSTRUCTIONS;
+  return `${AIE_DOCUMENT_FACTS_BASE_PROMPT} ${documentDescription} ${format}`;
 }
 
 /**
@@ -137,7 +155,7 @@ export function buildDocumentFactsSystemPrompt(documentDescription: string): str
  * SAME idempotency key and collapses at the gateway's own in-flight layer
  * rather than double-billing.
  */
-export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(params: {
+export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny, TNotes = undefined>(params: {
   schema: TSchema;
   schemaName: string;
   schemaVersion: string;
@@ -159,7 +177,14 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
   /** WP-G: bounds for THIS call (a background slice must end inside a web request). Can only shorten the configured values. */
   timeoutMs?: number;
   maxTransientRetries?: number;
-}): Promise<AieAdapterExtractionOutcome<z.infer<TSchema>>> {
+  /**
+   * 28-10-2026: an adapter's DETERMINISTIC re-spelling of the provider's answer, applied after the provider gateway's own
+   * validation and BEFORE `schema` decides. Used for printed money shapes ("1,234.56 CR") that the strict decimal pattern
+   * would otherwise refuse, discarding a whole billed answer. It may only re-spell what the model returned; `schema` still
+   * decides, so anything not clean afterwards is still `schema_rejected`.
+   */
+  normaliseBeforeParse?: (data: unknown) => { data: unknown; notes?: TNotes };
+}): Promise<AieAdapterExtractionOutcome<z.infer<TSchema>, TNotes>> {
   // AIE-1 final completion (2026-09-25): per-attempt key; `requestId` is only
   // a correlation id. See the payslip adapter's gateway for defect D1.
   const idempotencyKey = `${params.idempotencyPrefix}:${params.requestId ?? 'adhoc'}:${randomUUID()}`;
@@ -188,10 +213,11 @@ export async function requestAdapterDocumentFacts<TSchema extends z.ZodTypeAny>(
     if (result.outcome === 'schema_rejected' && result.errorCodes?.length) evidence.schemaErrorCodes = result.errorCodes;
     return { outcome: result.outcome, evidence };
   }
-  const parsed = params.schema.safeParse(result.data);
+  const normalised = params.normaliseBeforeParse ? params.normaliseBeforeParse(result.data) : { data: result.data, notes: undefined };
+  const parsed = params.schema.safeParse(normalised.data);
   if (!parsed.success) {
     evidence.schemaErrorCodes = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}:${i.code}`);
     return { outcome: 'schema_rejected', evidence };
   }
-  return { outcome: 'success', facts: parsed.data as z.infer<TSchema>, evidence };
+  return { outcome: 'success', facts: parsed.data as z.infer<TSchema>, evidence, ...(normalised.notes !== undefined ? { notes: normalised.notes } : {}) };
 }

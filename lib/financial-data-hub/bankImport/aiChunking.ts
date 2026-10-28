@@ -121,14 +121,39 @@ export function splitMaskedPagesIntoParts(pages: readonly string[], options: Spl
   return parts;
 }
 
+/**
+ * 28-10-2026 (production defect): the short REPAIR instruction added to the next attempt of a part whose previous answer was
+ * `schema_rejected`. Built ONLY from the validation issue PATHS and codes (`transactions.3.balanceAfter:invalid_string`) that the
+ * call evidence already records: never a value, never any document text. Row numbers are collapsed ("transactions[*].balanceAfter
+ * (12 lines)") so the note stays a line or two however many rows were wrong. Returns null when there is nothing usable.
+ */
+export function aiRepairNote(issueCodes: readonly string[] | undefined | null): string | null {
+  if (!issueCodes || issueCodes.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const code of issueCodes.slice(0, 200)) {
+    const path = String(code).split(':')[0] ?? '';
+    if (!/^[A-Za-z0-9_.()]{1,80}$/.test(path)) continue;
+    const generic = path.replace(/\.\d+(?=\.|$)/g, '[*]');
+    counts.set(generic, (counts.get(generic) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  const fields = [...counts.entries()].slice(0, 6).map(([path, n]) => (n > 1 && path.includes('[*]') ? `${path} (${n} lines)` : path));
+  return (
+    `[Your previous answer for this part was rejected because these fields were not in the required format: ${fields.join(', ')}. ` +
+    'Write every money value as digits with an optional decimal point and nothing else: no currency symbol, no comma, no CR or DR, no brackets, no trailing minus. ' +
+    'Write a negative or overdrawn balance with one leading minus. Dates are YYYY-MM-DD. Copy only digits that are printed in this part; if a balance is not printed on a line, use null.]'
+  );
+}
+
 /** The text one part's AI call is given: the part's masked lines under a one-line note that says which part this is. */
-export function aiPartPrompt(part: Pick<AiTextPart, 'seq' | 'pageFrom' | 'pageTo' | 'text'>, totalParts: number): string {
+export function aiPartPrompt(part: Pick<AiTextPart, 'seq' | 'pageFrom' | 'pageTo' | 'text'>, totalParts: number, repairIssueCodes?: readonly string[] | null): string {
   const pages = part.pageFrom === part.pageTo ? `page ${part.pageFrom}` : `pages ${part.pageFrom} to ${part.pageTo}`;
   const note =
     `[This is part ${part.seq + 1} of ${totalParts} of one bank statement (${pages}). Report only the transaction lines printed in THIS part, in the order printed. ` +
     'Statement header figures (institution, account identifier, period, opening or closing balance) only if they are printed in this part, otherwise null. ' +
     'Set allTransactionsListed to true only if every transaction line in this part is listed.]';
-  return `${note}\n${part.text}`;
+  const repair = aiRepairNote(repairIssueCodes);
+  return `${note}${repair ? `\n${repair}` : ''}\n${part.text}`;
 }
 
 /** One part's reading, after the shared mapping and the printed-figure check. */
@@ -139,10 +164,20 @@ export interface MappedPartReading {
   allTransactionsListed: boolean;
   institutionName: string | null;
   warnings: string[];
+  /** Kept lines whose running balance was present but unreadable (set to null; the line is kept). */
+  balancesNotRead?: number;
+  /** The declared opening / closing balance this part printed but could not be read. */
+  declaredNotRead?: { opening: boolean; closing: boolean };
 }
 
 /** A part with no transaction lines (a page of terms and conditions) is a valid, empty reading, not a failure. */
-export function mappedPartReading(seq: number, mapped: MappedBankStatementDraft | null, fallbackFacts: { allTransactionsListed: boolean; institutionName: string | null; metadata: PdfStatementMetadata }): MappedPartReading {
+export function mappedPartReading(
+  seq: number,
+  mapped: MappedBankStatementDraft | null,
+  fallbackFacts: { allTransactionsListed: boolean; institutionName: string | null; metadata: PdfStatementMetadata },
+  declaredNotRead?: { opening: boolean; closing: boolean },
+): MappedPartReading {
+  const declared = declaredNotRead && (declaredNotRead.opening || declaredNotRead.closing) ? { declaredNotRead } : {};
   if (!mapped) {
     return {
       seq,
@@ -151,6 +186,7 @@ export function mappedPartReading(seq: number, mapped: MappedBankStatementDraft 
       allTransactionsListed: fallbackFacts.allTransactionsListed,
       institutionName: fallbackFacts.institutionName,
       warnings: [],
+      ...declared,
     };
   }
   return {
@@ -160,6 +196,8 @@ export function mappedPartReading(seq: number, mapped: MappedBankStatementDraft 
     allTransactionsListed: mapped.allTransactionsListed,
     institutionName: mapped.institutionName,
     warnings: mapped.warnings,
+    ...(mapped.balancesNotRead ? { balancesNotRead: mapped.balancesNotRead } : {}),
+    ...declared,
   };
 }
 
@@ -170,6 +208,11 @@ export interface MergedAiReading {
   allTransactionsListed: boolean;
   warnings: string[];
   partsRead: number;
+  /** Lines (across all parts) whose running balance was present but unreadable. */
+  balancesNotRead: number;
+  /** 0, 1 or 2: the statement's declared opening / closing balance that no part could read (a balance one part could not read
+   * and another part read is NOT counted). */
+  declaredBalancesNotRead: number;
 }
 
 const MAX_WARNINGS = 40;
@@ -186,6 +229,7 @@ export function mergePartReadings(parts: readonly MappedPartReading[]): MergedAi
   const ordered = [...parts].sort((a, b) => a.seq - b.seq);
   const rows: MergedAiReading['rows'] = [];
   const warnings: string[] = [];
+  let balancesNotRead = 0;
   for (const p of ordered) {
     for (const r of p.rows) {
       rows.push({
@@ -197,6 +241,7 @@ export function mergePartReadings(parts: readonly MappedPartReading[]): MergedAi
       });
     }
     for (const w of p.warnings) if (warnings.length < MAX_WARNINGS) warnings.push(`part_${p.seq + 1}:${w}`);
+    balancesNotRead += p.balancesNotRead ?? 0;
   }
   const firstWith = <K extends keyof PdfStatementMetadata>(key: K): PdfStatementMetadata[K] | null => {
     for (const p of ordered) {
@@ -220,6 +265,10 @@ export function mergePartReadings(parts: readonly MappedPartReading[]): MergedAi
     }
   }
   const allListed = ordered.length > 0 && ordered.every((p) => p.allTransactionsListed);
+  const openingKnown = firstWith('declaredOpeningBalance') !== null;
+  const closingKnown = lastWith('declaredClosingBalance') !== null;
+  const declaredBalancesNotRead =
+    (!openingKnown && ordered.some((p) => p.declaredNotRead?.opening) ? 1 : 0) + (!closingKnown && ordered.some((p) => p.declaredNotRead?.closing) ? 1 : 0);
   if (!allListed && warnings.length < MAX_WARNINGS) warnings.push('ai_reported_transactions_incomplete');
   return {
     rows,
@@ -234,5 +283,7 @@ export function mergePartReadings(parts: readonly MappedPartReading[]): MergedAi
     allTransactionsListed: allListed,
     warnings,
     partsRead: ordered.length,
+    balancesNotRead,
+    declaredBalancesNotRead,
   };
 }

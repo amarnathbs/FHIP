@@ -80,6 +80,7 @@ import {
   pdfTransactionRow,
   recordBankPdfAdapterProvenance,
   summariseExisting as summariseExistingPdf,
+  unreadBalancesFromDraft,
   type AiReadingContext,
   type BankStatementAiFallbackDraft,
 } from './bankPdfProcessingService';
@@ -105,7 +106,7 @@ import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraf
 import { aiFallbackRefusalFromReason } from '@/lib/ai/access/aiFallbackRefusal';
 import type { PdfStatementMetadata } from '../bank-pdf/metadata';
 import type { FdhStatementUpload } from '../domain/types';
-import { AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
+import { AI_BALANCES_NOT_READ_TITLE_CODE, AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
 
 // ---------------------------------------------------------------------------
 // Types and small helpers
@@ -177,6 +178,7 @@ const IMPORT_REVIEW_TITLE_CODES = [
   'bank_statement.account_identifier_mismatch',
   STATEMENT_OVERLAP_TITLE_CODE,
   AI_EXTRACTION_INCOMPLETE_TITLE_CODE,
+  AI_BALANCES_NOT_READ_TITLE_CODE,
 ];
 
 /** Removes what a (partly) run import wrote for a statement: its lines, their duplicate candidates, and the rows finalize derives.
@@ -441,6 +443,12 @@ async function readCsv(c: Ctx, doc: FdhStatementUpload): Promise<SliceEnd> {
   return more(c, { phase: 'persist', progress_done: 0, progress_total: rows.length, checkpoint: { ...job.checkpoint, resume_phase: 'read', origin: 'native' } });
 }
 
+/** The repair codes a previous rejected attempt left on a part (validation paths only; see the call site). */
+function storedRepairCodes(payload: Record<string, unknown>): string[] | null {
+  const r = payload.repair;
+  return Array.isArray(r) ? r.filter((x): x is string => typeof x === 'string') : null;
+}
+
 function metadataFromFacts(facts: BankStatementDocumentFacts): PdfStatementMetadata {
   const num = (v: string | null) => {
     if (v === null) return null;
@@ -683,7 +691,8 @@ async function aiReadSlice(c: Ctx): Promise<SliceEnd> {
       batch.map(async (part) => {
         await bumpChunkAttempts(part);
         const outcome = await requestBankStatementAiExtraction({
-          maskedText: aiPartPrompt({ seq: part.seq, pageFrom: Number(part.payload.pageFrom), pageTo: Number(part.payload.pageTo), text: String(part.payload.text) }, texts.length),
+          // 28-10-2026: after a schema_rejected, the next attempt carries the validation issue PATHS (never values) as a short repair note.
+          maskedText: aiPartPrompt({ seq: part.seq, pageFrom: Number(part.payload.pageFrom), pageTo: Number(part.payload.pageTo), text: String(part.payload.text) }, texts.length, storedRepairCodes(part.payload)),
           requestId: `${documentId}:part${part.seq}`,
           userId,
           timeoutMs: BANK_IMPORT_AI_CALL_TIMEOUT_MS,
@@ -691,6 +700,11 @@ async function aiReadSlice(c: Ctx): Promise<SliceEnd> {
         });
         if (outcome.outcome !== 'success') {
           if (HARD_STOP_OUTCOMES.has(outcome.outcome)) hardStop = outcome.outcome;
+          if (outcome.outcome === 'schema_rejected' && outcome.evidence?.schemaErrorCodes?.length) {
+            // Kept on the part (not on the attempt counter, which is untouched) so the next slice's call can ask for a correction.
+            const codes = outcome.evidence.schemaErrorCodes.filter((x) => /^[A-Za-z0-9_.()]{1,80}:[A-Za-z0-9_]{1,40}$/.test(x)).slice(0, 60);
+            if (codes.length > 0) await putChunks(job.id, userId, 'ai_text', [{ seq: part.seq, payload: { ...part.payload, repair: codes } }]).catch(() => undefined);
+          }
           await recordDocumentAuditEvent({
             userId,
             documentId,
@@ -701,12 +715,15 @@ async function aiReadSlice(c: Ctx): Promise<SliceEnd> {
           return;
         }
         const facts = outcome.facts;
-        const mapped = facts.transactions.length > 0 ? mapBankStatementFactsToDraft(facts) : null;
+        const mapped = facts.transactions.length > 0 ? mapBankStatementFactsToDraft(facts, outcome.notes) : null;
         const kept = mapped ? keepOnlyPrintedBankFigures(mapped, String(part.payload.text)) : null;
         const reading = mappedPartReading(part.seq, kept, {
           allTransactionsListed: facts.allTransactionsListed,
           institutionName: facts.institutionName.value,
           metadata: metadataFromFacts(facts),
+        }, {
+          opening: Boolean(outcome.notes?.declaredOpeningNotRead) || Boolean(kept?.warnings.includes('ai_opening_balance_sign_contradicts_document_dropped')),
+          closing: Boolean(outcome.notes?.declaredClosingNotRead) || Boolean(kept?.warnings.includes('ai_closing_balance_sign_contradicts_document_dropped')),
         });
         await putChunks(job.id, userId, 'ai_result', [{ seq: part.seq, payload: reading as unknown as Record<string, unknown> }]);
       }),
@@ -746,6 +763,8 @@ async function finishAiReading(c: Ctx, doc: FdhStatementUpload, partsTotal: numb
     declaredClosingBalance: merged.statementMetadata.declaredClosingBalance,
     allTransactionsListed: merged.allTransactionsListed,
     warnings: merged.warnings,
+    ...(merged.balancesNotRead > 0 ? { balancesNotRead: merged.balancesNotRead } : {}),
+    ...(merged.declaredBalancesNotRead > 0 ? { declaredBalancesNotRead: merged.declaredBalancesNotRead } : {}),
   };
   // Persisted BEFORE the person sees it (migration 0197): the confirm is accepted only against a draft the server issued, once.
   const saved = await saveAiFallbackDraft({
@@ -809,6 +828,7 @@ async function confirmedPlanSlice(c: Ctx): Promise<SliceEnd> {
     warningCount: Array.isArray(issued.warnings) ? issued.warnings.length : 0,
     rowsRead: Array.isArray(issued.rows) ? issued.rows.length : reviewed.rows.length,
     inParts: Number(job.checkpoint.parts_total ?? 0) > 1,
+    ...unreadBalancesFromDraft(issued, reviewed.rows, reviewed),
   };
 
   await clearImportArtifacts(userId, documentId);

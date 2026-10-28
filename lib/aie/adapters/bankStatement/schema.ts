@@ -117,6 +117,28 @@ export const bankStatementDocumentFactsSchema = z
 
 export type BankStatementDocumentFacts = z.infer<typeof bankStatementDocumentFactsSchema>;
 
+/**
+ * THE WIRE SCHEMA -- what the shared gateway's FIRST validation (`validateAiOutput`, which runs inside the provider gateway before
+ * the adapter ever sees the answer) checks. It is `bankStatementDocumentFactsSchema` with ONE difference: the money fields accept
+ * any short string. Structure, dates, directions, descriptions and the row cap are exactly as strict as before.
+ *
+ * WHY. Production, 28-10-2026: the model returned balances in the statement's own printed shape ("1,234.56 CR") and the strict
+ * decimal pattern, applied here, threw away the whole billed part. The strict schema is still the decision (the adapter
+ * normalises the printed shape deterministically and then validates against `bankStatementDocumentFactsSchema`, so a figure that
+ * is not a clean decimal AFTER normalisation is still refused); this schema only stops the first check from deciding before the
+ * normaliser has had a chance. Derived from the strict schema so the two cannot drift apart structurally.
+ */
+const wireMoneyString = z.string().max(64);
+const wireMoneyField = z.object({ value: wireMoneyString.nullable(), missingReasonCode: aieMissingReasonSchema }).strict();
+
+export const bankStatementWireFactsSchema = bankStatementDocumentFactsSchema.extend({
+  declaredOpeningBalance: wireMoneyField,
+  declaredClosingBalance: wireMoneyField,
+  transactions: z
+    .array(bankStatementTransactionSchema.extend({ amount: wireMoneyString, balanceAfter: wireMoneyString.nullable() }).strict())
+    .max(AIE_BANK_STATEMENT_MAX_TRANSACTIONS),
+});
+
 let registered = false;
 
 /** Idempotent — safe to call from multiple module-load sites and tests, the
@@ -126,7 +148,8 @@ export function registerBankStatementDocumentFactsSchema(): void {
   aieSchemaRegistry.register({
     name: AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME,
     version: AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION,
-    schema: bankStatementDocumentFactsSchema,
+    // The WIRE schema (see above); the strict `bankStatementDocumentFactsSchema` decides after normalisation, in the adapter.
+    schema: bankStatementWireFactsSchema,
     ownerAdapterId: 'aie_bank_statement_ai_fallback_v1',
   });
   registered = true;

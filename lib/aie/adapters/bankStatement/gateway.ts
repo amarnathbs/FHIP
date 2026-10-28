@@ -16,6 +16,7 @@ import {
   buildDocumentFactsSystemPrompt,
   type AieAdapterExtractionOutcome,
 } from '../shared/gateway';
+import { normaliseBankStatementRawFacts, type BankFactsNormalisationNotes } from './normalise';
 import {
   bankStatementDocumentFactsSchema,
   registerBankStatementDocumentFactsSchema,
@@ -25,7 +26,7 @@ import {
   type BankStatementDocumentFacts,
 } from './schema';
 
-export type BankStatementAiExtractionOutcome = AieAdapterExtractionOutcome<BankStatementDocumentFacts>;
+export type BankStatementAiExtractionOutcome = AieAdapterExtractionOutcome<BankStatementDocumentFacts, BankFactsNormalisationNotes>;
 
 /**
  * Exported (not inlined) so `tests/live-dev/aieUnifiedFallbackLiveProviderProof.live.test.ts`
@@ -38,6 +39,9 @@ export const BANK_STATEMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSyst
     'For each transaction report the date, the description exactly as printed, the amount as a positive number, whether it was money IN to the account (credit) or money OUT of it (debit), and the running balance printed after it if the statement prints one (otherwise null). ' +
     'Do not include opening-balance, closing-balance, subtotal, brought-forward, carried-forward (including "Balance b/f", "B/F", "C/F") or "total" summary lines as transactions, even when they are printed inside the transaction table with a date and an amount — they are not transactions, and including them would double-count. ' +
     `Report at most ${AIE_BANK_STATEMENT_MAX_TRANSACTIONS} transactions; if the statement prints more than that, report the first ${AIE_BANK_STATEMENT_MAX_TRANSACTIONS} and set allTransactionsListed to false. Set allTransactionsListed to true only if you have listed every transaction printed in the document.`,
+  // Balances are copied as printed and re-spelled deterministically afterwards (see AIE_DOCUMENT_FACTS_FORMAT_INSTRUCTIONS_BALANCES_AS_PRINTED
+  // and ./normalise.ts): live gpt-4o-mini, asked to convert "$34.15 DR", dropped the DR and returned 34.15 on every overdrawn line.
+  { balancesAsPrinted: true },
 );
 
 /**
@@ -50,8 +54,10 @@ export const BANK_STATEMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSyst
  */
 export async function requestBankStatementAiExtraction(params: { maskedText: string; requestId?: string; userId: string; timeoutMs?: number; maxTransientRetries?: number }): Promise<BankStatementAiExtractionOutcome> {
   registerBankStatementDocumentFactsSchema();
-  return requestAdapterDocumentFacts({
+  return requestAdapterDocumentFacts<typeof bankStatementDocumentFactsSchema, BankFactsNormalisationNotes>({
     schema: bankStatementDocumentFactsSchema,
+    // 28-10-2026: printed money shapes ("1,234.56 CR") are re-spelled deterministically BEFORE the strict schema decides.
+    normaliseBeforeParse: normaliseBankStatementRawFacts,
     schemaName: AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME,
     schemaVersion: AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION,
     systemPrompt: BANK_STATEMENT_AI_EXTRACTION_SYSTEM_PROMPT,
