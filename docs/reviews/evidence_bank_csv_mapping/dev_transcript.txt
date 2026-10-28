@@ -1,0 +1,50 @@
+=== bank CSV column mapping (map-1793151028449) against http://localhost:3951 ===
+  PASS  MAP-final2-01  M.1 the upload is stored and scanned clean
+        {"scan":"clean","status":"queued"}
+  PASS  MAP-final2-02  M.2 detect says the layout is not recognised (manual_mapping_required)
+        {"document_id":"c152bdd6-401c-4313-9e09-92352959a6bf","detection_status":"manual_mapping_required","detection_confidence":0,"adapter_key":null,"encoding_detected":"utf-8-bom","delimiter_detected":",","declared_row_count":342,"saved_layout_used":false}
+  PASS  MAP-final2-03  M.3 process still refuses with the stable code mapping_required and a message that says what to do
+        {"status":400,"error":"mapping_required"}
+  PASS  MAP-final2-04  M.4 the columns route returns the 10 headings, 100 sample rows and the true row count
+        {"status":200,"header":10,"rows":100,"total":342}
+  PASS  MAP-final2-05  M.5 another user gets 404 on columns, remap and map; signed out is refused
+        {"columns":404,"remap":404,"map":404,"anon":401}
+  PASS  MAP-final2-06  M.5b the other user's refusal revealed no column heading
+  PASS  MAP-final2-07  M.6 a column that is not in the file is refused with 422 and a plain message
+        {"status":422,"error":"The column \"No such column\" chosen for the description is not in this file."}
+  PASS  MAP-final2-08  M.7 the suggested columns, confirmed, are saved (200, detected, a remembered layout)
+        {"document_id":"c152bdd6-401c-4313-9e09-92352959a6bf","detection_status":"detected","mapping_template_id":"0dca2090-da88-40ba-bd74-cf7decb25c79"}
+  PASS  MAP-final2-09  M.8 the stored layout has every key (amount null) and the PO date style
+        {"status":"user_confirmed","date_format":"h:mma ddd D MMMM, YYYY","hasAmountKey":true}
+  PASS  MAP-final2-10  M.9 process then answers 202 with a job id and writes no line
+        {"status":202}
+  PASS  MAP-final2-11  M.10 the job completes: exactly 342 stored lines, none twice, in review
+        {"status":"completed","tx":342,"cert":"review_required","slices":2}
+  PASS  MAP-final2-12  M.11 the first line has the right day and carries the long description
+        {"date":"2025-07-01"}
+  PASS  MAP-final2-13  M.12 asking again answers 200 with the stored result and writes nothing
+        status 200
+  PASS  MAP-final2-14  M.13 a second identical upload is a copy: no mapping asked, 200, nothing created
+        {"status":200,"created":0}
+  PASS  MAP-final2-15  M.14 a different file with the SAME layout uses the remembered layout (detected, saved_layout_used, no question)
+        {"document_id":"7bada334-bedc-4566-af1c-59f15b972c6b","detection_status":"detected","detection_confidence":0,"adapter_key":null,"encoding_detected":"utf-8-bom","delimiter_detected":",","declared_row_count":400,"saved_layout_used":true}
+  PASS  MAP-final2-16  M.15 only the 58 new lines are added; the overlap is not duplicated (no economic fingerprint twice across both statements)
+        {"status":"completed","added":58,"total":400,"distinct":400}
+  PASS  MAP-final2-17  M.16 a wrong date style reads nothing (0 lines) and the job still ends cleanly
+        {"map":200,"status":"completed","tx":0}
+  PASS  MAP-final2-18  M.17 remap takes the statement back to the columns (no upload) and removes its job
+        {"status":200,"data":{"document_id":"438f8b0c-6cd7-47a3-b768-8b0f4c815979","detection_status":"manual_mapping_required"}}
+  PASS  MAP-final2-19  M.18 the corrected columns read all 50 lines, once
+        {"map":200,"status":"completed","tx":50}
+  PASS  MAP-final2-20  M.19 the full Bank Australia header is recognised (detected, no mapping asked)
+        {"document_id":"c430849a-885c-41f2-9cde-c361bedb2c4f","detection_status":"detected","detection_confidence":1,"adapter_key":"au_bank_australia_debit_credit_v1","encoding_detected":"utf-8-bom","delimiter_detected":",","declared_row_count":342,"saved_layout_used":false}
+  PASS  MAP-final2-21  M.20 342 lines stored once; an experimental layout lands in review, never certified
+        {"status":"completed","tx":342,"cert":"review_required"}
+  PASS  MAP-final2-22  M.21 a recognised layout has no mapping to change (remap refused, lines untouched)
+        {"status":400}
+  PASS  MAP-final2-23  M.22 a Free user is refused at upload (Premium upload entitlement preserved)
+        {"status":403,"error":"Statement and document import is available on Premium. You can continue to add and edit your financial information manually on the Free plan."}
+  PASS  MAP-final2-24  M.23 a Free user cannot remap (refused, and it is not another user's statement to reveal)
+        status 403
+
+24 passed, 0 failed

@@ -1,0 +1,13 @@
+{
+  "run": "map-1793151028449",
+  "label": "final2",
+  "app": "http://localhost:3951",
+  "startedAt": "2026-10-28T01:30:28.449Z",
+  "counts": {
+    "first": 342,
+    "longerAdded": 58,
+    "remapped": 50,
+    "bankAustralia": 342
+  },
+  "cleanedUsers": 3
+}
