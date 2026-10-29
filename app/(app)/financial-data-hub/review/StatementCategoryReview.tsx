@@ -146,6 +146,8 @@ export function StatementCategoryReview({
   const [bulkRemember, setBulkRemember] = useState(false);
   const [confirm, setConfirm] = useState<null | 'category' | 'suggested'>(null);
   const [bulkResult, setBulkResult] = useState<BulkSetCategoryResult | null>(null);
+  // (Declared after the hooks the render test seeds by position.) "I checked these lines" per proposed transfer group (the server refuses the approval without it).
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
   const confirmRef = useRef<HTMLDivElement>(null);
   // After an action the line or button the user was on may disappear; focus
   // moves to the result message so keyboard and screen-reader users are not
@@ -223,7 +225,7 @@ export function StatementCategoryReview({
 
   function approveGroup(group: CategoryGroup) {
     void run(`group:${group.group_key}`, async () => {
-      const result = await apiPost<GroupApprovalResult>(`${url}/approve-group`, { group_key: group.group_key });
+      const result = await apiPost<GroupApprovalResult>(`${url}/approve-group`, { group_key: group.group_key, acknowledge_proposed: checked[group.group_key] === true });
       if (result.outcome === 'already_approved') return `${group.label} was already approved. Nothing changed.`;
       let message = `Approved ${group.label}: ${plural(result.approved, 'transaction', 'transactions')}.`;
       if (result.failed > 0) message += ` ${plural(result.failed, 'transaction', 'transactions')} could not be approved yet and ${result.failed === 1 ? 'is' : 'are'} listed above.`;
@@ -683,8 +685,10 @@ export function StatementCategoryReview({
                         {plural(group.count, 'transaction', 'transactions')} · {COUNTS_TOWARD_TEXT[group.counts_toward]}
                       </p>
                       {group.not_counted_reason && <p className="text-xs text-muted">{group.not_counted_reason}</p>}
-                      {!group.fully_confident && group.status !== 'approved' && (
-                        <p className="mt-1 text-xs text-muted">Suggested from the wording on your statement. Check the total looks right.</p>
+                      {group.proposed_count > 0 && group.status !== 'approved' && (
+                        <p className="mt-1 text-xs font-medium text-ink">
+                          Proposed, check the lines: {plural(group.proposed_count, 'transaction was', 'transactions were')} put here from the wording on your statement. Nothing counts until you approve.
+                        </p>
                       )}
                     </div>
                     <div className="text-right">
@@ -699,10 +703,20 @@ export function StatementCategoryReview({
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
+                    {group.pending_count > 0 && group.requires_acknowledgement && (
+                      <label className="flex items-center gap-2 text-xs text-ink">
+                        <input
+                          type="checkbox"
+                          checked={checked[group.group_key] === true}
+                          onChange={(e) => setChecked((c) => ({ ...c, [group.group_key]: e.target.checked }))}
+                        />
+                        I checked these lines: they are moves between my own accounts or card repayments
+                      </label>
+                    )}
                     {group.pending_count > 0 && (
                       <button
                         type="button"
-                        disabled={busy !== null}
+                        disabled={busy !== null || (group.requires_acknowledgement && checked[group.group_key] !== true)}
                         onClick={() => approveGroup(group)}
                         aria-label={`Approve ${group.label}, ${plural(group.pending_count, 'transaction', 'transactions')}, ${money(group.pending_total, group.currency)}`}
                         className="rounded-compact bg-trust px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
@@ -718,7 +732,7 @@ export function StatementCategoryReview({
                             <span className="text-ink">{displayDate(line.transaction_date, group.currency)} · {line.description ?? 'Transaction'}</span>
                             <span className="tabular-nums text-ink">
                               {money(line.amount, group.currency)}
-                              {line.approval_status === 'approved' ? ' · approved' : ''}
+                              {line.approval_status === 'approved' ? ' · approved' : line.proposed ? ' · proposed' : ''}
                             </span>
                           </li>
                         ))}

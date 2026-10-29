@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ documen
   if (!parsed.success) return bad('Choose a category group to approve.', 422);
 
   try {
-    const result = await approveCategoryGroup(user.id, documentId, parsed.data.group_key);
+    const result = await approveCategoryGroup(user.id, documentId, parsed.data.group_key, { acknowledgeProposed: parsed.data.acknowledge_proposed === true });
     if (result.outcome === 'blocked') {
       return Response.json(
         { error: 'None of these transactions could be approved yet. Refresh the page to see which ones need a decision.', details: result },

@@ -233,6 +233,7 @@ export type NeedsDecisionReason =
   | 'refund_check'
   | 'uncategorised'
   | 'low_confidence'
+  | 'large_amount'
   | 'other_check';
 
 export const NEEDS_DECISION_REASON_TEXT: Record<NeedsDecisionReason, string> = {
@@ -241,11 +242,24 @@ export const NEEDS_DECISION_REASON_TEXT: Record<NeedsDecisionReason, string> = {
   refund_check: 'This may be a refund of an earlier purchase. Open it to decide.',
   uncategorised: 'We could not tell what this is. Choose a category.',
   low_confidence: 'We are not sure about this one. Check the category.',
+  large_amount: 'This is a large amount and its category is only a proposal. Check it, then save the category.',
   other_check: 'This needs a quick check before it can be approved. Open it to see why.',
 };
 
 /** Reasons the user can settle straight from the category dropdown. */
-const CLASSIFIABLE_REASONS: readonly NeedsDecisionReason[] = ['transfer_check', 'uncategorised', 'low_confidence'];
+const CLASSIFIABLE_REASONS: readonly NeedsDecisionReason[] = ['transfer_check', 'uncategorised', 'low_confidence', 'large_amount'];
+
+/**
+ * A PROPOSED line (a rule or a general wording match, not a person's own decision and not a verified merchant) at or above this amount is listed
+ * for the person to check on its own instead of riding along inside its category total. Per statement currency; the default covers the
+ * dollar-like currencies. A product decision the Product Owner can change in one place.
+ */
+export const LARGE_AMOUNT_THRESHOLD: Readonly<Record<string, number>> = { INR: 400000 };
+export const LARGE_AMOUNT_THRESHOLD_DEFAULT = 5000;
+
+export function isLargeAmount(amount: number, currency: string): boolean {
+  return Math.abs(amount) >= (LARGE_AMOUNT_THRESHOLD[currency] ?? LARGE_AMOUNT_THRESHOLD_DEFAULT);
+}
 
 export interface NeedsDecisionItem {
   id: string;
@@ -268,6 +282,8 @@ export interface CategoryGroupLine {
   amount: number;
   approval_status: 'pending' | 'approved';
   fully_confident: boolean;
+  /** True when the category was PROPOSED by a rule or a general wording match: the person has not decided it and no verified merchant backs it. */
+  proposed: boolean;
 }
 
 export interface CategoryGroup {
@@ -286,6 +302,13 @@ export interface CategoryGroup {
   pending_total: number;
   approved_count: number;
   fully_confident: boolean;
+  /** Lines in this total whose category is a proposal (see `CategoryGroupLine.proposed`). */
+  proposed_count: number;
+  /**
+   * True when approving this total needs the person's explicit "I checked these lines" first: a PROPOSED group of transfers between own accounts
+   * or card repayments, which count nowhere once approved and so would hide a wrong guess. The server refuses the approval without it.
+   */
+  requires_acknowledgement: boolean;
   status: 'waiting' | 'partly_approved' | 'approved';
   lines: CategoryGroupLine[];
 }
@@ -359,15 +382,32 @@ export function groupKeyFor(
   return `${head}|${t.credit_debit === 'credit' ? 'in' : 'out'}|${t.currency_original}${refundTail}`;
 }
 
+/**
+ * A still-pending transfer / card-settlement link whose meaning AGREES with the line's own proposed category (a line the engine classed as a
+ * transfer, with a pending "is this a transfer?" link) is settled by the person approving that category total, so it no longer needs the line
+ * listed on its own. A link that DISAGREES with the line (a purchase with a pending settlement link), or any link on an uncategorised, low
+ * confidence or split line, still does.
+ */
+function transferLinksAgreeWithLine(t: CategoryReviewTransaction, linkTypes: readonly string[], isSplit: boolean): boolean {
+  if (isSplit || isUncategorised(t) || isLowConfidence(t)) return false;
+  return linkTypes
+    .filter((l) => TRANSFER_LIKE_LINK_TYPES.includes(l))
+    .every((l) => linkDecisionForChosenType(l, t.economic_transaction_type as FdhEconomicTransactionType) === 'confirm');
+}
+
 function needsDecisionReason(t: CategoryReviewTransaction, b: CategoryReviewBlockers): NeedsDecisionReason | null {
   if (b.pendingDuplicateTxnIds.has(t.id)) return 'possible_duplicate';
   const linkTypes = b.pendingLinkTypesByTxn.get(t.id) ?? [];
-  if (linkTypes.some((l) => TRANSFER_LIKE_LINK_TYPES.includes(l))) return 'transfer_check';
-  if (linkTypes.some((l) => REFUND_LIKE_LINK_TYPES.has(l))) return 'refund_check';
   const isSplit = b.splitPartsByTxn?.has(t.id) ?? false;
+  const transferLinks = linkTypes.filter((l) => TRANSFER_LIKE_LINK_TYPES.includes(l));
+  const transferLinksSettledByGroup = transferLinks.length > 0 && transferLinksAgreeWithLine(t, linkTypes, isSplit);
+  if (transferLinks.length > 0 && !transferLinksSettledByGroup) return 'transfer_check';
+  if (linkTypes.some((l) => REFUND_LIKE_LINK_TYPES.has(l))) return 'refund_check';
   if (!isSplit && isUncategorised(t)) return 'uncategorised';
   if (!isSplit && isLowConfidence(t)) return 'low_confidence';
-  if (b.blockingReviewItemTxnIds.has(t.id) || b.invalidSplitTxnIds.has(t.id) || linkTypes.length > 0) return 'other_check';
+  if (!isSplit && !isFullyConfident(t) && isLargeAmount(Number(t.amount_original), t.currency_original)) return 'large_amount';
+  const otherLinks = linkTypes.filter((l) => !(transferLinksSettledByGroup && TRANSFER_LIKE_LINK_TYPES.includes(l)));
+  if (b.blockingReviewItemTxnIds.has(t.id) || b.invalidSplitTxnIds.has(t.id) || otherLinks.length > 0) return 'other_check';
   return null;
 }
 
@@ -472,6 +512,8 @@ export function buildCategoryReview(
         pending_total: 0,
         approved_count: 0,
         fully_confident: true,
+        proposed_count: 0,
+        requires_acknowledgement: false,
         status: 'waiting',
         lines: [],
       };
@@ -495,7 +537,12 @@ export function buildCategoryReview(
       amount,
       approval_status: t.approval_status,
       fully_confident: confident,
+      proposed: !confident,
     });
+    if (!confident && !isApproved) {
+      g.proposed_count += 1;
+      if (type === 'transfer') g.requires_acknowledgement = true;
+    }
 
     const tm = totalsMinor.get(t.currency_original) ?? { wi: 0, ws: 0, ai: 0, as: 0 };
     const monthKey = `${t.transaction_date.slice(0, 7)}|${t.currency_original}`;

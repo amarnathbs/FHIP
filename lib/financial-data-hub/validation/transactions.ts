@@ -337,5 +337,7 @@ export type FdhBulkSetCategoryInput = z.infer<typeof fdhBulkSetCategorySchema>;
  * group (404), it never widens what gets approved. */
 export const fdhApproveCategoryGroupSchema = z.object({
   group_key: z.string().min(1).max(300),
+  /** The person ticked "I checked these lines". Required to approve a PROPOSED group of transfers (see CategoryGroup.requires_acknowledgement). */
+  acknowledge_proposed: z.boolean().optional(),
 });
 export type FdhApproveCategoryGroupInput = z.infer<typeof fdhApproveCategoryGroupSchema>;

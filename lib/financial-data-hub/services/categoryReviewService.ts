@@ -290,12 +290,46 @@ async function finaliseStatementIfComplete(userId: string, statementId: string):
   }
 }
 
+/** Confirms the pending transfer-like links on `transactionIds` that agree with `groupType` (see linkDecisionForChosenType). Best-effort per link. */
+async function settlePendingLinksForGroup(userId: string, transactionIds: readonly string[], groupType: FdhEconomicTransactionType): Promise<number> {
+  const supabase = await createClient();
+  const seen = new Set<string>();
+  let settled = 0;
+  for (const part of chunk(transactionIds, 100)) {
+    for (const side of ['transaction_id_from', 'transaction_id_to'] as const) {
+      const { data } = await supabase
+        .from('fdh_transaction_links')
+        .select('id, link_type')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .in(side, part);
+      for (const link of (data ?? []) as Array<{ id: string; link_type: string }>) {
+        if (seen.has(link.id)) continue;
+        seen.add(link.id);
+        if (linkDecisionForChosenType(link.link_type, groupType) !== 'confirm') continue;
+        try {
+          await reviewTransactionLink(userId, link.id, { decision: 'confirm' });
+          settled += 1;
+        } catch {
+          // left pending; the approval gate reports the line
+        }
+      }
+    }
+  }
+  return settled;
+}
+
 /**
  * Approves EXACTLY the still-pending transactions of one category group on
  * one statement. Idempotent: a group with nothing left pending is a no-op
  * (`already_approved`), not a second approval and not a second audit row.
  */
-export async function approveCategoryGroup(userId: string, statementId: string, groupKey: string): Promise<GroupApprovalResult> {
+export async function approveCategoryGroup(
+  userId: string,
+  statementId: string,
+  groupKey: string,
+  opts: { acknowledgeProposed?: boolean } = {},
+): Promise<GroupApprovalResult> {
   const review = await getStatementCategoryReview(userId, statementId);
   const ids = pendingIdsForGroup(review, groupKey);
   if (ids === null) {
@@ -304,6 +338,21 @@ export async function approveCategoryGroup(userId: string, statementId: string, 
   if (ids.length === 0) {
     return { outcome: 'already_approved', approved: 0, failed: 0, results: [], statement_finalised: false };
   }
+  const group = review.groups.find((g) => g.group_key === groupKey)!;
+  // A PROPOSED group of transfers between own accounts / card repayments counts nowhere once approved, so a wrong guess would hide real
+  // spending or income. The person must say they checked the lines; without it nothing is approved.
+  if (group.requires_acknowledgement && !opts.acknowledgeProposed) {
+    throw new CategoryReviewError(
+      'invalid_input',
+      'These transactions were proposed from their wording and, once approved, count as moves between your own accounts. Check the lines, tick the box to say you did, then approve.',
+      { code: 'proposed_needs_acknowledgement' },
+    );
+  }
+
+  // Approving a total is the person's answer to "is this a transfer?" for each of its lines: settle the pending transfer links that agree with
+  // the group's own type exactly as picking the category on each line would (reviewTransactionLink -> confirm). Links that do not agree never
+  // reach a group (the line is listed on its own), and a failure here leaves the link pending, which the approval gate then reports per line.
+  await settlePendingLinksForGroup(userId, ids, group.economic_type);
 
   const result = await bulkApproveTransactions(userId, ids);
   const finalise = result.succeeded > 0 ? await finaliseStatementIfComplete(userId, statementId) : { finalised: false, reason: null };
