@@ -13,6 +13,8 @@ import type { CategoryGroup, CategoryReviewMonthTotals, NeedsDecisionItem, State
 import type { StatementCategoryReview as ReviewPayload, GroupApprovalResult, ApproveAllResult, SetCategoryResult } from '@/lib/financial-data-hub/services/categoryReviewService';
 import type { AiCategoriseResult } from '@/lib/financial-data-hub/services/bankAiCategoriseService';
 import type { BulkSetCategoryResult } from '@/lib/financial-data-hub/services/categoryBulkService';
+import type { RecheckResult } from '@/lib/financial-data-hub/services/categoryRecheckService';
+import { recheckResultText } from '@/lib/financial-data-hub/domain/recheckText';
 import { displayDate, displayPeriod } from '@/lib/engines/statementDisplayDate';
 import {
   BULK_MAX_SELECTION,
@@ -238,6 +240,10 @@ export function StatementCategoryReview({
     });
   }
 
+  function recheckCategories() {
+    void run('recheck', async () => recheckResultText(await apiPost<RecheckResult>(`${url}/recheck`, {})));
+  }
+
   function suggestWithAi() {
     void run('ai-categorise', async () => {
       const r = await apiPost<AiCategoriseResult>(`${url}/ai-categorise`, {});
@@ -424,6 +430,25 @@ export function StatementCategoryReview({
           </div>
         </dl>
       </section>
+
+      {counts.waiting_for_approval > 0 && (
+        <section aria-labelledby="recheck-heading" className="rounded-compact border border-line bg-white p-4">
+          <h2 id="recheck-heading" className="text-base font-semibold text-ink">Check the categories again</h2>
+          <p className="mt-1 text-xs text-muted">
+            Imported this statement some time ago? We have improved how we recognise payments, including transfers between you and the members of your
+            household. This applies the latest rules to everything still waiting for your approval. Nothing is approved for you, and anything you have
+            already approved or chosen yourself stays exactly as it is.
+          </p>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => recheckCategories()}
+            className="mt-2 rounded-compact border border-line px-3 py-1.5 text-sm font-semibold text-trust disabled:opacity-50"
+          >
+            {busy === 'recheck' ? 'Checking…' : 'Check categories again'}
+          </button>
+        </section>
+      )}
 
       {review.ai_categorise_enabled && needsDecision.some((i) => i.reason === 'uncategorised' && i.direction === 'out') && (
         <section aria-labelledby="ai-heading" className="rounded-compact border border-line bg-white p-4">

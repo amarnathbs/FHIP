@@ -64,6 +64,30 @@ export interface ClassificationRunSummary {
   transferLinksProposed: number;
   refundLinksProposed: number;
   recurringSeriesDetected: number;
+  /** Present only on a run started with `retractStale`: pending lines whose earlier system guess was withdrawn because no rule supports it now. */
+  transactionsRetracted?: number;
+}
+
+export interface ClassifyOptions {
+  /**
+   * The "check the categories again" button (30-10-2026). Earlier engine versions guessed categories that today's rules no longer support (the
+   * "BP" fuel brand matching "BPAY", a Centrelink debit typed as income). A normal run leaves such a line as it was when the engine now finds
+   * nothing; with this flag a PENDING line whose category came from the engine itself goes back to "needs your choice". Approved lines, a
+   * person's own choice, lines typed by the statement, user rules and AI proposals are never touched.
+   */
+  retractStale?: boolean;
+}
+
+/**
+ * True when the line's current classification is a guess made by the engine's own rules (merchant list, global/built-in rules), is still pending,
+ * and is not a person's decision or the statement's own typing. Exported for its test.
+ */
+export function isStaleEngineGuess(
+  txn: Pick<FdhTransaction, 'classification_method' | 'user_override' | 'approval_status' | 'economic_transaction_type' | 'category_id'>,
+): boolean {
+  if (txn.user_override || txn.approval_status === 'approved') return false;
+  if (txn.classification_method !== 'merchant_master' && txn.classification_method !== 'global_rule') return false;
+  return txn.category_id !== null || txn.economic_transaction_type !== 'unknown';
 }
 
 async function loadReferenceData(): Promise<ClassificationReferenceData> {
@@ -150,7 +174,7 @@ const STALE_WITHDRAWABLE_LINK_TYPES: readonly string[] = ['internal_transfer', '
 /** History rows per batched INSERT (request body). */
 export const CLASSIFICATION_HISTORY_BATCH = 500;
 
-export async function classifyUserTransactions(userId: string): Promise<ClassificationRunSummary> {
+export async function classifyUserTransactions(userId: string, options: ClassifyOptions = {}): Promise<ClassificationRunSummary> {
   const [transactions, userRulesResult, accountsResult] = await Promise.all([
     loadUserTransactions(userId),
     userClassificationRulesRepository.listForUserAll(userId),
@@ -182,6 +206,7 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
   let classified = 0;
   let unresolved = 0;
   let skippedOverride = 0;
+  let retracted = 0;
   const resolvedByTxnId = new Map<string, ReturnType<typeof classifyTransaction>>();
 
   // Canonical-cert scale finding (2026-09-27): the writes below used to be one request per row (and a
@@ -277,6 +302,38 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
 
     if (result.source.kind === 'unresolved') {
       unresolved += 1;
+      if (options.retractStale && isStaleEngineGuess(txn)) {
+        retracted += 1;
+        queueUpdate({
+          economic_transaction_type: 'unknown',
+          category_id: null,
+          subcategory_id: null,
+          merchant_id: null,
+          transfer_flag: false,
+          subscription_flag: false,
+          classification_confidence: null,
+          classification_method: 'unclassified',
+          review_status: 'pending',
+        }, txn.id);
+        // History records the withdrawal under the method that made the guess (the table has no 'unclassified' value).
+        historyRows.push({
+          user_id: userId,
+          transaction_id: txn.id,
+          previous_economic_transaction_type: txn.economic_transaction_type,
+          new_economic_transaction_type: 'unknown',
+          previous_category_id: txn.category_id,
+          new_category_id: null,
+          previous_subcategory_id: txn.subcategory_id,
+          new_subcategory_id: null,
+          classification_method: txn.classification_method,
+          confidence: null,
+          changed_by_type: 'system',
+          changed_by_user: null,
+          global_rule_id: null,
+          user_rule_id: null,
+        });
+        continue;
+      }
       if (changed || txn.review_status === 'not_required') queueUpdate({ review_status: 'pending' }, txn.id);
       continue;
     }
@@ -493,6 +550,7 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
     transferLinksProposed,
     refundLinksProposed,
     recurringSeriesDetected,
+    ...(options.retractStale ? { transactionsRetracted: retracted } : {}),
   };
 
   await recordDocumentAuditEvent({
