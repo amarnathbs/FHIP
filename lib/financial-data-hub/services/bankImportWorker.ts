@@ -43,6 +43,9 @@ import { csvProcessResponse, pdfProcessResponse } from '../bankImport/processRes
 import {
   AI_PAGE_SEPARATOR,
   aiPartPrompt,
+  dateHintsForParts,
+  datesInForceAtStartOfParts,
+  datePlausibilityWindow,
   mappedPartReading,
   mergePartReadings,
   splitMaskedPagesIntoParts,
@@ -81,6 +84,7 @@ import {
   recordBankPdfAdapterProvenance,
   summariseExisting as summariseExistingPdf,
   unreadBalancesFromDraft,
+  carriedDatesFromDraft,
   type AiReadingContext,
   type BankStatementAiFallbackDraft,
 } from './bankPdfProcessingService';
@@ -106,7 +110,7 @@ import { reviewableMaskedIdentifier } from '@/lib/aie/adapters/shared/reviewDraf
 import { aiFallbackRefusalFromReason } from '@/lib/ai/access/aiFallbackRefusal';
 import type { PdfStatementMetadata } from '../bank-pdf/metadata';
 import type { FdhStatementUpload } from '../domain/types';
-import { AI_BALANCES_NOT_READ_TITLE_CODE, AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
+import { AI_BALANCES_NOT_READ_TITLE_CODE, AI_DATES_CARRIED_TITLE_CODE, AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
 
 // ---------------------------------------------------------------------------
 // Types and small helpers
@@ -179,6 +183,7 @@ const IMPORT_REVIEW_TITLE_CODES = [
   STATEMENT_OVERLAP_TITLE_CODE,
   AI_EXTRACTION_INCOMPLETE_TITLE_CODE,
   AI_BALANCES_NOT_READ_TITLE_CODE,
+  AI_DATES_CARRIED_TITLE_CODE,
 ];
 
 /** Removes what a (partly) run import wrote for a statement: its lines, their duplicate candidates, and the rows finalize derives.
@@ -665,6 +670,11 @@ async function aiReadSlice(c: Ctx): Promise<SliceEnd> {
     // The parts were lost (staging swept): start the reading again from the file.
     return more(c, { phase: 'read', progress_done: 0, progress_total: null });
   }
+  // The date in force where each part starts (the bank prints a date only on the first transaction of a day), computed from the STORED part
+  // texts in order: deterministic, identical on every slice, retry and resume.
+  const partTexts = texts.map((t) => String(t.payload.text ?? ''));
+  const dateHints = dateHintsForParts(partTexts);
+  const datesInForce = datesInForceAtStartOfParts(partTexts);
   const doneSeqs = new Set(results.map((r) => r.seq));
   const pending = texts.filter((t) => !doneSeqs.has(t.seq));
 
@@ -686,15 +696,27 @@ async function aiReadSlice(c: Ctx): Promise<SliceEnd> {
         resumePhase: 'ai_read',
       });
     }
+    const dateHintFor = (seq: number) => {
+      const at = texts.findIndex((t) => t.seq === seq);
+      return at >= 0 ? dateHints[at] : null;
+    };
+    // The safety net (a row that still comes back without a usable date takes the date of the line above) may use the date in force even
+    // when the prompt needed no hint.
+    const dateInForceFor = (seq: number) => {
+      const at = texts.findIndex((t) => t.seq === seq);
+      return at >= 0 ? datesInForce[at] : null;
+    };
     let hardStop: string | null = null;
     await Promise.all(
       batch.map(async (part) => {
         await bumpChunkAttempts(part);
         const outcome = await requestBankStatementAiExtraction({
           // 28-10-2026: after a schema_rejected, the next attempt carries the validation issue PATHS (never values) as a short repair note.
-          maskedText: aiPartPrompt({ seq: part.seq, pageFrom: Number(part.payload.pageFrom), pageTo: Number(part.payload.pageTo), text: String(part.payload.text) }, texts.length, storedRepairCodes(part.payload)),
+          maskedText: aiPartPrompt({ seq: part.seq, pageFrom: Number(part.payload.pageFrom), pageTo: Number(part.payload.pageTo), text: String(part.payload.text) }, texts.length, storedRepairCodes(part.payload), dateHintFor(part.seq)),
           requestId: `${documentId}:part${part.seq}`,
           userId,
+          dateInForceIso: dateInForceFor(part.seq)?.iso ?? null,
+          dateWindow: datePlausibilityWindow(String(part.payload.text), dateInForceFor(part.seq) ?? null),
           timeoutMs: BANK_IMPORT_AI_CALL_TIMEOUT_MS,
           maxTransientRetries: 0,
         });
@@ -765,6 +787,7 @@ async function finishAiReading(c: Ctx, doc: FdhStatementUpload, partsTotal: numb
     warnings: merged.warnings,
     ...(merged.balancesNotRead > 0 ? { balancesNotRead: merged.balancesNotRead } : {}),
     ...(merged.declaredBalancesNotRead > 0 ? { declaredBalancesNotRead: merged.declaredBalancesNotRead } : {}),
+    ...(merged.datesCarriedForward > 0 ? { datesCarriedForward: merged.datesCarriedForward } : {}),
   };
   // Persisted BEFORE the person sees it (migration 0197): the confirm is accepted only against a draft the server issued, once.
   const saved = await saveAiFallbackDraft({
@@ -829,6 +852,7 @@ async function confirmedPlanSlice(c: Ctx): Promise<SliceEnd> {
     rowsRead: Array.isArray(issued.rows) ? issued.rows.length : reviewed.rows.length,
     inParts: Number(job.checkpoint.parts_total ?? 0) > 1,
     ...unreadBalancesFromDraft(issued, reviewed.rows, reviewed),
+    ...carriedDatesFromDraft(issued, reviewed.rows.length),
   };
 
   await clearImportArtifacts(userId, documentId);

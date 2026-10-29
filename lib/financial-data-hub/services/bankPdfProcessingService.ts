@@ -82,7 +82,7 @@ import { loadDedupIndexForAccount, loadPriorStatementDateRanges } from '../bank-
 import { computeStatementOverlap, type BalanceReconciliationResult } from '../bank-csv/reconciliation';
 import { computeAccountFingerprint, normaliseMaskedIdentifier } from '../bank-csv/accountIdentity';
 import { encodeUnreadLines, summariseUnreadLines, type UnreadLinesSummary } from '../domain/unreadLines';
-import { AI_BALANCES_NOT_READ_TITLE_CODE, AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
+import { AI_BALANCES_NOT_READ_TITLE_CODE, AI_DATES_CARRIED_TITLE_CODE, AI_EXTRACTION_INCOMPLETE_TITLE_CODE, STATEMENT_OVERLAP_TITLE_CODE } from '../domain/categoryReview';
 import { moneyEquals } from '../domain/money';
 import { processingRunState, STATEMENT_STILL_BEING_READ_MESSAGE } from './interruptedRun';
 import { checkPasswordAttemptRateLimit } from '../bank-pdf/password';
@@ -205,6 +205,8 @@ export interface BankStatementAiFallbackDraft {
   balancesNotRead?: number;
   /** 0, 1 or 2: the declared opening / closing balance that was printed but could not be read. */
   declaredBalancesNotRead?: number;
+  /** 28-10-2026: lines that printed no date and took the date of the line above (or the date in force at the top of the part). */
+  datesCarriedForward?: number;
 }
 
 export type BankStatementAiDraftRow = Omit<ReadBankStatementRow, 'sourceRowNumber'>;
@@ -780,6 +782,7 @@ export async function finalizeBankPdfImport(input: BankPdfFinalizeInput): Promis
   // DERIVED from the first line that has a balance (that derivation skips every earlier line). "Cannot verify" is not "mismatch":
   // such a statement is not marked failed here; it lands in review for the reason that its balances were not read.
   const balancesPartlyUnread = Boolean(aiContext) && ((aiContext!.balancesNotRead ?? 0) > 0 || (aiContext!.declaredBalancesNotRead ?? 0) > 0);
+  const datesCarried = Boolean(aiContext) && (aiContext!.datesCarriedForward ?? 0) > 0;
   if (pipeline.reconciliation) {
     const declaredOpening = pipeline.statementMetadata?.declaredOpeningBalance;
     if (!balancesPartlyUnread && declaredOpening !== null && declaredOpening !== undefined && pipeline.reconciliation.openingBalance !== null) {
@@ -899,8 +902,8 @@ export async function finalizeBankPdfImport(input: BankPdfFinalizeInput): Promis
   });
   // WP-08 (EXP-G15): a possibly-incomplete AI reading is never certified; it lands in review with a blocking statement-level item
   // the user settles after checking the statement (or by adding the missing lines).
-  const certification = (incompleteExtraction || balancesPartlyUnread) && decidedCertification.certificationStatus === 'certified'
-    ? { ...decidedCertification, certificationStatus: 'review_required' as const, reasonCodes: [...decidedCertification.reasonCodes, ...(balancesPartlyUnread ? ['balances_not_read'] : [])] }
+  const certification = (incompleteExtraction || balancesPartlyUnread || datesCarried) && decidedCertification.certificationStatus === 'certified'
+    ? { ...decidedCertification, certificationStatus: 'review_required' as const, reasonCodes: [...decidedCertification.reasonCodes, ...(balancesPartlyUnread ? ['balances_not_read'] : []), ...(datesCarried ? ['dates_taken_from_previous_line'] : [])] }
     : decidedCertification;
   if (incompleteExtraction) {
     await reviewItemsRepository.create(userId, {
@@ -926,6 +929,18 @@ export async function finalizeBankPdfImport(input: BankPdfFinalizeInput): Promis
       status: 'open',
       title_code: AI_BALANCES_NOT_READ_TITLE_CODE,
       context_json: { lines_not_read: aiContext!.balancesNotRead ?? 0, declared_not_read: aiContext!.declaredBalancesNotRead ?? 0, rows_read: aiContext!.rowsRead },
+    } as never);
+  }
+  if (datesCarried) {
+    await reviewItemsRepository.create(userId, {
+      household_id: document.household_id,
+      statement_upload_id: documentId,
+      transaction_id: null,
+      review_type: 'other',
+      severity: 'blocking',
+      status: 'open',
+      title_code: AI_DATES_CARRIED_TITLE_CODE,
+      context_json: { lines_carried: aiContext!.datesCarriedForward ?? 0, rows_read: aiContext!.rowsRead },
     } as never);
   }
   if (overlap) {
@@ -1071,6 +1086,14 @@ export interface AiReadingContext {
   /** 28-10-2026: printed balances the reading could not make out (see BankStatementAiFallbackDraft). */
   balancesNotRead?: number;
   declaredBalancesNotRead?: number;
+  datesCarriedForward?: number;
+}
+
+/** Lines whose date was taken from the line above, from the server-issued draft (capped by the lines confirmed). */
+export function carriedDatesFromDraft(issued: Partial<BankStatementAiFallbackDraft> | null | undefined, reviewedRowCount: number): { datesCarriedForward?: number } {
+  const n = Number(issued?.datesCarriedForward ?? 0);
+  const capped = Math.max(0, Math.min(Number.isFinite(n) ? n : 0, reviewedRowCount));
+  return capped > 0 ? { datesCarriedForward: capped } : {};
 }
 
 /**
@@ -1267,6 +1290,7 @@ export function toBankStatementAiDraftForReview(mapped: MappedBankStatementDraft
     warnings: mapped.warnings,
     ...(mapped.balancesNotRead ? { balancesNotRead: mapped.balancesNotRead } : {}),
     ...(mapped.declaredBalancesNotRead ? { declaredBalancesNotRead: mapped.declaredBalancesNotRead } : {}),
+    ...(mapped.datesCarriedForward ? { datesCarriedForward: mapped.datesCarriedForward } : {}),
   };
 }
 
@@ -1326,6 +1350,7 @@ export async function confirmAiBankStatementFallback(
     warningCount: Array.isArray(issued?.warnings) ? issued.warnings.length : 0,
     rowsRead: Array.isArray(issued?.rows) ? issued.rows.length : reviewed.rows.length,
     ...unreadBalancesFromDraft(issued, reviewed.rows, reviewed),
+    ...carriedDatesFromDraft(issued, reviewed.rows.length),
   };
   let confirmed: ProcessBankPdfResult;
   try {

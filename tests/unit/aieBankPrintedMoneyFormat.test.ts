@@ -258,8 +258,12 @@ describe('real shared gateway, fake provider: the production failure shapes', ()
     expect(out.notes?.balanceLinesNotRead).toEqual([2]);
   });
 
-  it('structure and dates stay strict: a bad date is still schema_rejected by the wire schema', async () => {
+  it('a FULL printed date (day-first) is re-spelled; an unusable date with nothing to take it from is still schema_rejected', async () => {
     h.state.reply = () => factsJson({ tx: [{ ...tx('1,100.00 CR'), transactionDate: '02/09/2026' }] });
+    const ok = await requestBankStatementAiExtraction({ maskedText: 'synthetic', requestId: 'doc:part7a', userId: USER });
+    expect(ok.outcome).toBe('success');
+    if (ok.outcome === 'success') expect(ok.facts.transactions[0].transactionDate).toBe('2026-09-02');
+    h.state.reply = () => factsJson({ tx: [{ ...tx('1,100.00 CR'), transactionDate: 'sometime in September' }] });
     const out = await requestBankStatementAiExtraction({ maskedText: 'synthetic', requestId: 'doc:part7', userId: USER });
     expect(out.outcome).toBe('schema_rejected');
     expect(out.evidence?.schemaErrorCodes?.[0]).toBe('transactions.0.transactionDate:invalid_string');

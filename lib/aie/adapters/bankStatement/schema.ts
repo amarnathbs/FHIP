@@ -135,7 +135,9 @@ export const bankStatementWireFactsSchema = bankStatementDocumentFactsSchema.ext
   declaredOpeningBalance: wireMoneyField,
   declaredClosingBalance: wireMoneyField,
   transactions: z
-    .array(bankStatementTransactionSchema.extend({ amount: wireMoneyString, balanceAfter: wireMoneyString.nullable() }).strict())
+    // transactionDate is lenient HERE too (the bank prints a date only on the first transaction of a day, so a model may return an empty or
+    // partial one); `normalise.ts` re-spells or carries it forward, and the strict ISO pattern still decides afterwards.
+    .array(bankStatementTransactionSchema.extend({ amount: wireMoneyString, balanceAfter: wireMoneyString.nullable(), transactionDate: wireMoneyString.nullable() }).strict())
     .max(AIE_BANK_STATEMENT_MAX_TRANSACTIONS),
 });
 

@@ -613,11 +613,13 @@ export function linkDecisionForChosenType(
 export const AI_EXTRACTION_INCOMPLETE_TITLE_CODE = 'bank_statement.ai_extraction_incomplete';
 /** title_code of the blocking item raised when the statement printed balances the AI reading could not make out (28-10-2026). */
 export const AI_BALANCES_NOT_READ_TITLE_CODE = 'bank_statement.ai_balances_not_read';
+/** title_code of the blocking item raised when a transaction line printed no date and took the date of the line above (28-10-2026). */
+export const AI_DATES_CARRIED_TITLE_CODE = 'bank_statement.ai_dates_taken_from_previous_line';
 /** title_code of the info note an overlapping statement raises. */
 export const STATEMENT_OVERLAP_TITLE_CODE = 'bank_statement.overlaps_prior_statement';
 /** Statement-level items the user may settle themselves (after checking the
  * statement). Nothing else can be acknowledged away. */
-export const ACKNOWLEDGEABLE_STATEMENT_TITLE_CODES: readonly string[] = [AI_EXTRACTION_INCOMPLETE_TITLE_CODE, AI_BALANCES_NOT_READ_TITLE_CODE];
+export const ACKNOWLEDGEABLE_STATEMENT_TITLE_CODES: readonly string[] = [AI_EXTRACTION_INCOMPLETE_TITLE_CODE, AI_BALANCES_NOT_READ_TITLE_CODE, AI_DATES_CARRIED_TITLE_CODE];
 
 export interface StatementReviewItemRow {
   id: string;
@@ -657,6 +659,11 @@ export function statementNoteText(item: StatementReviewItemRow): string {
       ].filter(Boolean).join(' and ');
       return `This statement prints balances that could not be read (${what || 'some balances'}). The transactions themselves were read, but the check that they add up could not be completed. `
         + 'Compare the balances with your statement, then confirm. Until then this statement cannot be approved.';
+    }
+    case AI_DATES_CARRIED_TITLE_CODE: {
+      const lines = num((ctx as { lines_carried?: unknown }).lines_carried) ?? 0;
+      return `${lines > 0 ? `${lines} transaction${lines === 1 ? '' : 's'} on this statement print no date of their own` : 'Some transactions on this statement print no date of their own'}, so each was given the date of the line above it. `
+        + 'Check the dates against your statement, then confirm. Until then this statement cannot be approved.';
     }
     case STATEMENT_OVERLAP_TITLE_CODE: {
       const from = (ctx as { overlap_from?: unknown }).overlap_from;

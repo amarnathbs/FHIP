@@ -52,12 +52,12 @@ export const BANK_STATEMENT_AI_EXTRACTION_SYSTEM_PROMPT = buildDocumentFactsSyst
  * idempotency key and collapses at the gateway's in-flight layer rather than
  * double-billing a statement that is expensive to re-read.
  */
-export async function requestBankStatementAiExtraction(params: { maskedText: string; requestId?: string; userId: string; timeoutMs?: number; maxTransientRetries?: number }): Promise<BankStatementAiExtractionOutcome> {
+export async function requestBankStatementAiExtraction(params: { maskedText: string; requestId?: string; userId: string; timeoutMs?: number; maxTransientRetries?: number; dateInForceIso?: string | null; dateWindow?: { from: string; to: string } | null }): Promise<BankStatementAiExtractionOutcome> {
   registerBankStatementDocumentFactsSchema();
   return requestAdapterDocumentFacts<typeof bankStatementDocumentFactsSchema, BankFactsNormalisationNotes>({
     schema: bankStatementDocumentFactsSchema,
     // 28-10-2026: printed money shapes ("1,234.56 CR") are re-spelled deterministically BEFORE the strict schema decides.
-    normaliseBeforeParse: normaliseBankStatementRawFacts,
+    normaliseBeforeParse: (data) => normaliseBankStatementRawFacts(data, { dateInForceIso: params.dateInForceIso ?? null, dateWindow: params.dateWindow ?? null }),
     schemaName: AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME,
     schemaVersion: AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION,
     systemPrompt: BANK_STATEMENT_AI_EXTRACTION_SYSTEM_PROMPT,

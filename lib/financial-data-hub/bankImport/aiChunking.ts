@@ -16,6 +16,7 @@
 import type { MappedBankStatementDraft } from '@/lib/aie/adapters/bankStatement/mapping';
 import type { ReadBankStatementRow } from '../bank-pdf/orchestrator';
 import type { PdfStatementMetadata } from '../bank-pdf/metadata';
+import { leadingPrintedDate } from '@/lib/aie/adapters/shared/printedDate';
 
 /** Separator between pages while the text is masked as ONE string (so identifier tokens stay consistent); a form feed never
  * matches a masking rule, and it is split on again straight after masking. */
@@ -122,6 +123,78 @@ export function splitMaskedPagesIntoParts(pages: readonly string[], options: Spl
 }
 
 /**
+ * 28-10-2026 (production defect, NAB): the bank prints the date ONLY on the first transaction of a day. When a day's transactions
+ * continue onto the next page, the part that starts there begins with page headers, "Brought forward", and then transaction lines
+ * with no printed date at all. The date in force is the last line-leading FULL printed date of the text before it. Computed here
+ * from the stored part texts, in order, so it is deterministic and identical on resume and retry. Never invented: a part gets a hint
+ * only when an earlier part really printed a date, and only when this part really starts with undated transaction lines.
+ */
+export interface DateInForce {
+  iso: string;
+  printed: string;
+}
+
+const AMOUNT_IN_LINE = /\d[\d,]*\.\d{2}(?!\d)/;
+const BALANCE_OR_SUMMARY_LINE = /\b(?:brought|carried)\s+(?:forward|fwd)\b|\b[bc]\s*\/\s*f\b|\b(?:opening|closing)\s+balance\b/i;
+
+function lastLeadingDate(text: string): DateInForce | null {
+  const lines = text.split('\n');
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const d = leadingPrintedDate(lines[i]);
+    if (d) return { iso: d.iso, printed: d.printed };
+  }
+  return null;
+}
+
+/** True when this part has a transaction-looking line (it carries an amount and is not a balance / summary line) BEFORE its first
+ * line-leading date, or no dated line at all. */
+export function partStartsWithUndatedTransactions(text: string): boolean {
+  for (const line of text.split('\n')) {
+    if (leadingPrintedDate(line)) return false;
+    if (AMOUNT_IN_LINE.test(line) && !BALANCE_OR_SUMMARY_LINE.test(line)) return true;
+  }
+  return false;
+}
+
+/**
+ * For each part (in the given order): the date in force when it starts, or null. Null for the first part, for a part that starts
+ * with its own dated line (nothing to resolve), and when no earlier text printed a full date.
+ */
+export function dateHintsForParts(texts: readonly string[]): Array<DateInForce | null> {
+  const inForce = datesInForceAtStartOfParts(texts);
+  return texts.map((text, i) => (inForce[i] && partStartsWithUndatedTransactions(text) ? inForce[i] : null));
+}
+
+/**
+ * The range of dates this part can legitimately contain: from the earliest to the latest of the line-leading full dates PRINTED in the
+ * part and the date in force where it starts. A live model, given an undated line whose description holds a time-stamped value date
+ * ("EFTPOS 21/09 16:30"), dated the line 21 September although the statement's posting date was 3 September; such a date is outside
+ * the range. Null when the part prints no such date and none is in force (a layout that does not put the date at the start of the line:
+ * nothing can be concluded, so nothing is checked).
+ */
+export function datePlausibilityWindow(text: string, inForce: DateInForce | null): { from: string; to: string } | null {
+  const dates: string[] = inForce ? [inForce.iso] : [];
+  for (const line of text.split('\n')) {
+    const d = leadingPrintedDate(line);
+    if (d) dates.push(d.iso);
+  }
+  if (dates.length === 0) return null;
+  const sorted = [...dates].sort();
+  return { from: sorted[0], to: sorted[sorted.length - 1] };
+}
+
+/** For each part: the last line-leading full date printed in the parts BEFORE it (null for the first part or when none printed one). */
+export function datesInForceAtStartOfParts(texts: readonly string[]): Array<DateInForce | null> {
+  const out: Array<DateInForce | null> = [];
+  let inForce: DateInForce | null = null;
+  for (const text of texts) {
+    out.push(inForce);
+    inForce = lastLeadingDate(text) ?? inForce;
+  }
+  return out;
+}
+
+/**
  * 28-10-2026 (production defect): the short REPAIR instruction added to the next attempt of a part whose previous answer was
  * `schema_rejected`. Built ONLY from the validation issue PATHS and codes (`transactions.3.balanceAfter:invalid_string`) that the
  * call evidence already records: never a value, never any document text. Row numbers are collapsed ("transactions[*].balanceAfter
@@ -137,23 +210,37 @@ export function aiRepairNote(issueCodes: readonly string[] | undefined | null): 
     counts.set(generic, (counts.get(generic) ?? 0) + 1);
   }
   if (counts.size === 0) return null;
+  const dateFieldRejected = [...counts.keys()].some((k) => /transactionDate$/.test(k));
   const fields = [...counts.entries()].slice(0, 6).map(([path, n]) => (n > 1 && path.includes('[*]') ? `${path} (${n} lines)` : path));
   return (
     `[Your previous answer for this part was rejected because these fields were not in the required format: ${fields.join(', ')}. ` +
     'Write every money value as digits with an optional decimal point and nothing else: no currency symbol, no comma, no CR or DR, no brackets, no trailing minus. ' +
-    'Write a negative or overdrawn balance with one leading minus. Dates are YYYY-MM-DD. Copy only digits that are printed in this part; if a balance is not printed on a line, use null.]'
+    'Write a negative or overdrawn balance with one leading minus. Dates are YYYY-MM-DD. Copy only digits that are printed in this part; if a balance is not printed on a line, use null.' +
+    (dateFieldRejected
+      ? ' A transaction line that prints no date of its own took place on the date of the nearest dated line above it in this part (or on the date given at the top of this note); its transactionDate is never empty. Use the posting date, not a time-stamped value date inside a description.'
+      : '') +
+    ']'
   );
 }
 
 /** The text one part's AI call is given: the part's masked lines under a one-line note that says which part this is. */
-export function aiPartPrompt(part: Pick<AiTextPart, 'seq' | 'pageFrom' | 'pageTo' | 'text'>, totalParts: number, repairIssueCodes?: readonly string[] | null): string {
+export function aiPartPrompt(
+  part: Pick<AiTextPart, 'seq' | 'pageFrom' | 'pageTo' | 'text'>,
+  totalParts: number,
+  repairIssueCodes?: readonly string[] | null,
+  dateInForce?: DateInForce | null,
+): string {
   const pages = part.pageFrom === part.pageTo ? `page ${part.pageFrom}` : `pages ${part.pageFrom} to ${part.pageTo}`;
   const note =
     `[This is part ${part.seq + 1} of ${totalParts} of one bank statement (${pages}). Report only the transaction lines printed in THIS part, in the order printed. ` +
     'Statement header figures (institution, account identifier, period, opening or closing balance) only if they are printed in this part, otherwise null. ' +
     'Set allTransactionsListed to true only if every transaction line in this part is listed.]';
   const repair = aiRepairNote(repairIssueCodes);
-  return `${note}${repair ? `\n${repair}` : ''}\n${part.text}`;
+  // The date in force at the top of this part (see dateHintsForParts): given only when this part starts with transaction lines that print no date.
+  const dateNote = dateInForce
+    ? `[The statement date in force where this part starts is ${dateInForce.printed} (${dateInForce.iso}). Any transaction printed before this part's first dated line, and any transaction line that prints no date of its own, took place on the date of the nearest dated line above it, or on ${dateInForce.iso} when there is none: use that date as its transactionDate. Use the posting date, not a time-stamped value date such as "EFTPOS 21/09 16:30" inside a description.]`
+    : null;
+  return `${note}${dateNote ? `\n${dateNote}` : ''}${repair ? `\n${repair}` : ''}\n${part.text}`;
 }
 
 /** One part's reading, after the shared mapping and the printed-figure check. */
@@ -166,6 +253,8 @@ export interface MappedPartReading {
   warnings: string[];
   /** Kept lines whose running balance was present but unreadable (set to null; the line is kept). */
   balancesNotRead?: number;
+  /** Kept lines whose date was missing and was taken from the line above (or the date in force at the top of the part). */
+  datesCarriedForward?: number;
   /** The declared opening / closing balance this part printed but could not be read. */
   declaredNotRead?: { opening: boolean; closing: boolean };
 }
@@ -197,6 +286,7 @@ export function mappedPartReading(
     institutionName: mapped.institutionName,
     warnings: mapped.warnings,
     ...(mapped.balancesNotRead ? { balancesNotRead: mapped.balancesNotRead } : {}),
+    ...(mapped.datesCarriedForward ? { datesCarriedForward: mapped.datesCarriedForward } : {}),
     ...declared,
   };
 }
@@ -210,6 +300,8 @@ export interface MergedAiReading {
   partsRead: number;
   /** Lines (across all parts) whose running balance was present but unreadable. */
   balancesNotRead: number;
+  /** Lines (across all parts) whose date was taken from the line above. */
+  datesCarriedForward: number;
   /** 0, 1 or 2: the statement's declared opening / closing balance that no part could read (a balance one part could not read
    * and another part read is NOT counted). */
   declaredBalancesNotRead: number;
@@ -230,6 +322,7 @@ export function mergePartReadings(parts: readonly MappedPartReading[]): MergedAi
   const rows: MergedAiReading['rows'] = [];
   const warnings: string[] = [];
   let balancesNotRead = 0;
+  let datesCarriedForward = 0;
   for (const p of ordered) {
     for (const r of p.rows) {
       rows.push({
@@ -242,6 +335,7 @@ export function mergePartReadings(parts: readonly MappedPartReading[]): MergedAi
     }
     for (const w of p.warnings) if (warnings.length < MAX_WARNINGS) warnings.push(`part_${p.seq + 1}:${w}`);
     balancesNotRead += p.balancesNotRead ?? 0;
+    datesCarriedForward += p.datesCarriedForward ?? 0;
   }
   const firstWith = <K extends keyof PdfStatementMetadata>(key: K): PdfStatementMetadata[K] | null => {
     for (const p of ordered) {
@@ -284,6 +378,7 @@ export function mergePartReadings(parts: readonly MappedPartReading[]): MergedAi
     warnings,
     partsRead: ordered.length,
     balancesNotRead,
+    datesCarriedForward,
     declaredBalancesNotRead,
   };
 }

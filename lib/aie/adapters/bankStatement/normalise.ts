@@ -19,18 +19,54 @@
  */
 
 import { normalisePrintedMoney, isNotPrintedPlaceholder } from '../shared/printedMoney';
+import { leadingPrintedDate } from '../shared/printedDate';
 
 export interface BankFactsNormalisationNotes {
   /** 1-based positions (in the model's `transactions` array) whose running balance was present but unreadable and was set to null. */
   balanceLinesNotRead: number[];
   declaredOpeningNotRead: boolean;
   declaredClosingNotRead: boolean;
-  /** How many money values were re-spelled (evidence only: counts, never values). */
+  /** How many money / date values were re-spelled (evidence only: counts, never values). */
   respelled: number;
+  /** 1-based positions whose transaction date was missing or unreadable and was taken from the nearest earlier line (or the date in
+   * force at the top of the part). Never a guess from nothing: with no earlier line and no date in force the row is left alone and the
+   * strict schema rejects it. */
+  datesCarriedForward: number[];
 }
 
 export function emptyBankFactsNotes(): BankFactsNormalisationNotes {
-  return { balanceLinesNotRead: [], declaredOpeningNotRead: false, declaredClosingNotRead: false, respelled: 0 };
+  return { balanceLinesNotRead: [], declaredOpeningNotRead: false, declaredClosingNotRead: false, respelled: 0, datesCarriedForward: [] };
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A transaction date that is not already an ISO date. A FULL printed date ("3 Sep 2025", "03/09/2025", day-first) is re-spelled; a missing or
+ * partial one ("21/09", "") takes the date of the nearest earlier line of the same reading, or the date in force at the top of the part:
+ * the bank prints a date only on the first transaction of a day, so an undated line belongs to the day above it. Returns
+ * value === undefined when nothing can be done (the strict schema then decides).
+ */
+function repairTransactionDate(
+  value: unknown,
+  previous: string | null,
+  window: { from: string; to: string } | null,
+): { value?: string; how?: 'respelled' | 'carried' | 'kept' } {
+  let candidate: string | null = null;
+  let respelled = false;
+  if (typeof value === 'string' && ISO_DATE.test(value)) candidate = value;
+  else if (typeof value === 'string') {
+    const printed = leadingPrintedDate(value);
+    if (printed) {
+      candidate = printed.iso;
+      respelled = true;
+    }
+  }
+  // A date outside the range of dates the part itself prints (and the date in force) is not a posting date of this part: typically a
+  // value date read out of a description. It is treated like a missing date, never trusted.
+  const inRange = candidate !== null && (!window || (candidate >= window.from && candidate <= window.to));
+  if (candidate !== null && inRange) return { value: candidate, how: respelled ? 'respelled' : 'kept' };
+  if (previous) return { value: previous, how: 'carried' };
+  return {};
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -41,8 +77,12 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * Returns a normalised COPY of the provider's parsed object plus the notes. Never throws; a value of an unexpected shape is
  * returned untouched so the strict schema reports it.
  */
-export function normaliseBankStatementRawFacts(raw: unknown): { data: unknown; notes: BankFactsNormalisationNotes } {
+export function normaliseBankStatementRawFacts(
+  raw: unknown,
+  options: { dateInForceIso?: string | null; dateWindow?: { from: string; to: string } | null } = {},
+): { data: unknown; notes: BankFactsNormalisationNotes } {
   const notes = emptyBankFactsNotes();
+  let prevDate: string | null = options.dateInForceIso && ISO_DATE.test(options.dateInForceIso) ? options.dateInForceIso : null;
   if (!isRecord(raw)) return { data: raw, notes };
   const out: Record<string, unknown> = { ...raw };
 
@@ -70,6 +110,13 @@ export function normaliseBankStatementRawFacts(raw: unknown): { data: unknown; n
     out.transactions = raw.transactions.map((t, i) => {
       if (!isRecord(t)) return t;
       const row: Record<string, unknown> = { ...t };
+      const date = repairTransactionDate(t.transactionDate, prevDate, options.dateWindow ?? null);
+      if (date.value !== undefined) {
+        row.transactionDate = date.value;
+        prevDate = date.value;
+        if (date.how === 'respelled') notes.respelled += 1;
+        if (date.how === 'carried') notes.datesCarriedForward.push(i + 1);
+      }
       const direction = t.creditDebit === 'credit' || t.creditDebit === 'debit' ? t.creditDebit : undefined;
       if (typeof t.amount === 'string') {
         const a = normalisePrintedMoney(t.amount, 'amount', direction);

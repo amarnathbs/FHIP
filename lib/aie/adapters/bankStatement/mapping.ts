@@ -53,6 +53,9 @@ export interface MappedBankStatementDraft {
   balancesNotRead?: number;
   /** The statement's declared opening / closing balance that was present but unreadable (0, 1 or 2). */
   declaredBalancesNotRead?: number;
+  /** Kept lines whose transaction date was missing and was taken from the nearest earlier line (or the date in force at the top of
+   * the part). The statement lands in review with a plain reason; the date is never guessed from nothing. */
+  datesCarriedForward?: number;
 }
 
 /**
@@ -135,6 +138,8 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts, 
   const warnings: string[] = [];
   const unreadPositions = new Set(notes?.balanceLinesNotRead ?? []);
   let balancesNotRead = 0;
+  const carriedPositions = new Set(notes?.datesCarriedForward ?? []);
+  let datesCarriedForward = 0;
 
   facts.transactions.forEach((t, index) => {
     const amount = money(t.amount);
@@ -163,6 +168,7 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts, 
       warnings.push(`ai_row_${index + 1}_negative_amount_normalised`);
     }
     if (unreadPositions.has(index + 1)) balancesNotRead += 1;
+    if (carriedPositions.has(index + 1)) datesCarriedForward += 1;
     rows.push({
       sourceRowNumber: index + 1,
       transactionDate: t.transactionDate,
@@ -183,6 +189,7 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts, 
   }
   // One warning per reading (never one per line), so a statement whose every balance was unreadable cannot flood the warning list.
   if (balancesNotRead > 0) warnings.push(`ai_balances_not_read:${balancesNotRead}`);
+  if (datesCarriedForward > 0) warnings.push(`ai_dates_taken_from_previous_line:${datesCarriedForward}`);
   const declaredBalancesNotRead = (notes?.declaredOpeningNotRead ? 1 : 0) + (notes?.declaredClosingNotRead ? 1 : 0);
   if (notes?.declaredOpeningNotRead) warnings.push('ai_opening_balance_not_read');
   if (notes?.declaredClosingNotRead) warnings.push('ai_closing_balance_not_read');
@@ -203,5 +210,6 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts, 
     warnings,
     ...(balancesNotRead > 0 ? { balancesNotRead } : {}),
     ...(declaredBalancesNotRead > 0 ? { declaredBalancesNotRead } : {}),
+    ...(datesCarriedForward > 0 ? { datesCarriedForward } : {}),
   };
 }

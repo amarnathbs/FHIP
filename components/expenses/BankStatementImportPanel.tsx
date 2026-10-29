@@ -131,6 +131,8 @@ interface AiFallbackDraft {
   /** Printed balances the AI reading could not make out (the lines were kept). */
   balancesNotRead?: number;
   declaredBalancesNotRead?: number;
+  /** Lines that print no date of their own and were given the date of the line above. */
+  datesCarriedForward?: number;
 }
 
 const FAILURE_MESSAGES: Record<string, string> = {
@@ -1066,6 +1068,14 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
               {(aiDraft.declaredBalancesNotRead ?? 0) > 0 ? ' and for the opening or closing balance' : ''}. The transactions
               were read, but the check that they add up could not be completed, so this statement will be sent for your
               review instead of being approved automatically. Compare the balances with your statement.
+            </p>
+          )}
+
+          {(aiDraft.datesCarriedForward ?? 0) > 0 && (
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="ai-dates-carried">
+              {aiDraft.datesCarriedForward} transaction{aiDraft.datesCarriedForward === 1 ? '' : 's'} on this statement print no
+              date of their own, so each was given the date of the line above it. Check the dates against your statement; this
+              statement will be sent for your review instead of being approved automatically.
             </p>
           )}
 
