@@ -291,9 +291,11 @@ export function describeTruthBlocker(code: string, fallbackMessage?: string): Tr
 }
 
 /** Human outcome line after a Re-evaluate click. Pure so it can be tested without a UI. */
-export function describeReevaluationOutcome(before: string | null, after: string, blockingMessages: string[]): string {
+export function describeReevaluationOutcome(before: string | null, after: string, blockingMessages: string[], alreadyPublished = false): string {
   const certified = after === 'certified' || after === 'certified_with_warnings';
   if (certified) {
+    // 29-10-2026: a position that is already published is not "ready to publish"; it is published.
+    if (alreadyPublished) return before === after ? 'Re-evaluated. Nothing changed: the published position is still published and up to date.' : 'Re-evaluated. This position is certified; the published position is unchanged.';
     return before === after
       ? 'Re-evaluated. Nothing changed: this position is still ready to publish.'
       : 'Re-evaluated. This position is now ready to publish to FHIP.';

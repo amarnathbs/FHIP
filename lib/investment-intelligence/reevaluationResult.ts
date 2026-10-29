@@ -21,6 +21,11 @@ export interface ReevaluationFacts {
   previousReasonCodes: string[];
   /** "dd-mm-yyyy hh:mm" in the person's own format, supplied by the caller. */
   checkedAtLabel: string;
+  /**
+   * Whether the position is ALREADY published (29-10-2026). A published position must never be told it is "ready to publish": it is
+   * published. Omitted means not published (the earlier behaviour).
+   */
+  publication?: 'not_published' | 'published_current' | 'published_refresh_available';
 }
 
 export interface ReevaluationCard {
@@ -41,8 +46,19 @@ const READY = new Set(['certified', 'certified_with_warnings']);
 export function buildReevaluationCard(f: ReevaluationFacts, date: (iso: string) => string): ReevaluationCard {
   const checkedLine = `Checked just now (${f.checkedAtLabel}).`;
   const sameReasons = f.previousReasonCodes.length === f.blocking.length && f.blocking.every((b) => f.previousReasonCodes.includes(b.code));
+  const publication = f.publication ?? 'not_published';
   if (READY.has(f.after)) {
     const changed = f.before !== f.after;
+    if (publication !== 'not_published') {
+      // Already published: "ready to publish" would be untrue. Say what is true about the PUBLISHED position.
+      const headline =
+        publication === 'published_refresh_available'
+          ? `Re-evaluated: ${changed ? 'this position is certified' : 'nothing changed'}. It is published, and a newer certified statement is available. Use Refresh to bring net worth up to date.`
+          : changed
+            ? 'Re-evaluated: this position is certified. The published position is unchanged and up to date.'
+            : 'Re-evaluated: nothing changed. The published position is still published and up to date.';
+      return { tone: 'ready', headline, changed, checkedLine, lines: [], cta: null };
+    }
     return {
       tone: 'ready',
       headline: changed ? 'Re-evaluated: this position is now ready to publish.' : 'Re-evaluated: nothing changed. This position is still ready to publish.',
@@ -76,6 +92,7 @@ export function buildReevaluationCard(f: ReevaluationFacts, date: (iso: string) 
     for (const o of f.blocking.slice(1)) lines.push(`Also: ${describeTruthBlocker(o.code, o.message).what}`);
   }
   lines.unshift(changed ? 'The result has changed since the last check.' : 'Nothing has changed since the last check: the same reason still applies.');
+  if (publication !== 'not_published') lines.push('This position is still published at its last certified value.');
   return { tone: 'blocked', headline, changed, checkedLine, lines, cta };
 }
 

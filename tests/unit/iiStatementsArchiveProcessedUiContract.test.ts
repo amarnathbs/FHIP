@@ -22,7 +22,7 @@ describe('Previously processed statements section', () => {
   it('partitions the fetched documents via the shared, unit-tested grouping helper', () => {
     // Guards against the rule being re-implemented inline (and drifting from
     // the tested version) instead of imported.
-    expect(src).toContain("import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping'");
+    expect(src).toContain("import { partitionSourceDocumentsByProcessedState, statementPublicationPill } from '@/lib/investment-intelligence/sourceDocumentGrouping'");
     expect(src).toContain('partitionSourceDocumentsByProcessedState(documents ?? [], new Set(Object.keys(followed)))');
   });
 

@@ -553,7 +553,7 @@ function SimulationPanel({ data, currency }: { data: Record<string, unknown>; cu
                 <li>{okVariants[0].assumptions.nonTradingDateRule}</li>
                 <li>{okVariants[0].assumptions.roundingTreatment}</li>
                 <li>
-                  Period: {okVariants[0].assumptions.periodStart} to {okVariants[0].assumptions.periodEnd}.
+                  Period: {fmtDate(okVariants[0].assumptions.periodStart, currency)} to {fmtDate(okVariants[0].assumptions.periodEnd, currency)}.
                 </li>
                 <li>
                   Distributions included in the price series:{' '}

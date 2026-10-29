@@ -14,6 +14,7 @@ import {
   partitionSourceDocumentsByProcessedState,
   statementActionReasons,
   statementNeedsAction,
+  statementPublicationPill,
   type SourceDocumentGroupingSignals,
 } from '@/lib/investment-intelligence/sourceDocumentGrouping';
 
@@ -23,6 +24,7 @@ const DONE: SourceDocumentGroupingSignals = {
   positionsNeedingAttentionCount: 0,
   totalHoldingsCount: 3,
   publishedHoldingsCount: 3,
+  readyToPublishCount: 0,
 };
 
 describe('statementNeedsAction / isSourceDocumentFullyProcessed', () => {
@@ -42,9 +44,15 @@ describe('statementNeedsAction / isSourceDocumentFullyProcessed', () => {
     expect(statementNeedsAction({ status: 'superseded' })).toBe(false);
   });
 
-  it('an open issue is never hidden, not even on an archived statement', () => {
+  it('an open issue is never hidden on a live statement (also superseded)', () => {
     expect(statementNeedsAction({ ...DONE, openReconciliationCaseCount: 1 })).toBe(true);
-    expect(statementNeedsAction({ status: 'archived', openReconciliationCaseCount: 2 })).toBe(true);
+    expect(statementNeedsAction({ status: 'superseded', openReconciliationCaseCount: 2 })).toBe(true);
+  });
+
+  it('PO 29-10-2026: an ARCHIVED statement is never prominent, whatever it still carries (it is history, not to do)', () => {
+    expect(statementNeedsAction({ status: 'archived', openReconciliationCaseCount: 2 })).toBe(false);
+    expect(statementNeedsAction({ status: 'archived', openReconciliationCaseCount: 1, positionsNeedingAttentionCount: 3, readyToPublishCount: 4 })).toBe(false);
+    expect(isSourceDocumentFullyProcessed({ status: 'archived', openReconciliationCaseCount: 1 })).toBe(true);
   });
 
   it('positions needing attention keep the statement prominent', () => {
@@ -52,7 +60,15 @@ describe('statementNeedsAction / isSourceDocumentFullyProcessed', () => {
   });
 
   it('certified but not fully published (a Publish to FHIP click is still to be made) stays prominent', () => {
-    expect(statementNeedsAction({ ...DONE, publishedHoldingsCount: 2 })).toBe(true);
+    expect(statementNeedsAction({ ...DONE, publishedHoldingsCount: 2, readyToPublishCount: 1 })).toBe(true);
+  });
+
+  it('PO 29-10-2026: a statement whose positions are ALL published is quiet, even though they are certified', () => {
+    expect(statementNeedsAction({ status: 'parsed', totalHoldingsCount: 17, publishedHoldingsCount: 17, readyToPublishCount: 0 })).toBe(false);
+  });
+
+  it('what is not published but also not certified/ready does not make a statement prominent by itself (attention covers that)', () => {
+    expect(statementNeedsAction({ status: 'parsed', totalHoldingsCount: 4, publishedHoldingsCount: 1, readyToPublishCount: 0, positionsNeedingAttentionCount: 0 })).toBe(false);
   });
 
   it('a parsed statement that produced no holdings and has no issue is quiet (nothing is waiting on the person)', () => {
@@ -73,9 +89,10 @@ describe('partitionSourceDocumentsByProcessedState', () => {
     const c = { ...DONE, id: 'c', openReconciliationCaseCount: 1 };
     const d = { ...DONE, id: 'd' };
     const e = { id: 'e', status: 'archived' };
-    const { active, previouslyProcessed } = partitionSourceDocumentsByProcessedState([a, b, c, d, e]);
+    const f = { id: 'f', status: 'archived', openReconciliationCaseCount: 1 }; // archived WITH an issue: still history
+    const { active, previouslyProcessed } = partitionSourceDocumentsByProcessedState([a, b, c, d, e, f]);
     expect(active.map((x) => x.id)).toEqual(['a', 'c']);
-    expect(previouslyProcessed.map((x) => x.id)).toEqual(['b', 'd', 'e']);
+    expect(previouslyProcessed.map((x) => x.id)).toEqual(['b', 'd', 'e', 'f']);
   });
 
   it('a statement with a running job is moved to the prominent list', () => {
@@ -96,8 +113,35 @@ describe('statementActionReasons (the chips that say why a statement is prominen
   it('names each reason in plain words', () => {
     expect(statementActionReasons({ status: 'parse_failed' })).toEqual(['Parse failed']);
     expect(statementActionReasons({ ...DONE, openReconciliationCaseCount: 1, positionsNeedingAttentionCount: 15 })).toEqual(['1 issue', '15 positions need attention']);
-    expect(statementActionReasons({ ...DONE, publishedHoldingsCount: 1 })).toEqual(['2 ready to publish']);
+    expect(statementActionReasons({ ...DONE, publishedHoldingsCount: 1, readyToPublishCount: 2 })).toEqual(['2 ready to publish']);
+    expect(statementActionReasons({ status: 'archived', openReconciliationCaseCount: 1, readyToPublishCount: 2 })).toEqual([]);
     expect(statementActionReasons(DONE, true)).toEqual(['Processing']);
     expect(statementActionReasons(DONE)).toEqual([]);
+  });
+});
+
+describe('statementPublicationPill (the publication pill on a row)', () => {
+  it('REGRESSION 29-10-2026: 17 positions, all published, is NOT "ready to publish": it reads "All 17 published"', () => {
+    const pill = statementPublicationPill({ status: 'parsed', totalHoldingsCount: 17, publishedHoldingsCount: 17, readyToPublishCount: 0 });
+    expect(pill).toMatchObject({ tone: 'published', text: 'All 17 published' });
+    expect(pill?.text).not.toMatch(/ready to publish/);
+  });
+
+  it('shows "N ready to publish" only for certified-and-unpublished positions', () => {
+    expect(statementPublicationPill({ status: 'parsed', totalHoldingsCount: 17, publishedHoldingsCount: 10, readyToPublishCount: 7 })).toMatchObject({ tone: 'ready', text: '7 ready to publish' });
+  });
+
+  it('partly published with nothing ready says how many are published', () => {
+    expect(statementPublicationPill({ status: 'parsed', totalHoldingsCount: 4, publishedHoldingsCount: 3, readyToPublishCount: 0 })).toMatchObject({ tone: 'published', text: '3 published' });
+    expect(statementPublicationPill({ status: 'parsed', totalHoldingsCount: 1, publishedHoldingsCount: 1, readyToPublishCount: 0 })?.text).toBe('1 published');
+  });
+
+  it('shows nothing when there is nothing to say, or an issue / attention signal comes first, or the statement is not parsed or is archived', () => {
+    expect(statementPublicationPill({ status: 'parsed' })).toBeNull();
+    expect(statementPublicationPill({ status: 'parsed', totalHoldingsCount: 2, publishedHoldingsCount: 0, readyToPublishCount: 0 })).toBeNull();
+    expect(statementPublicationPill({ status: 'parsed', readyToPublishCount: 2, openReconciliationCaseCount: 1 })).toBeNull();
+    expect(statementPublicationPill({ status: 'parsed', readyToPublishCount: 2, positionsNeedingAttentionCount: 1 })).toBeNull();
+    expect(statementPublicationPill({ status: 'archived', totalHoldingsCount: 3, publishedHoldingsCount: 3 })).toBeNull();
+    expect(statementPublicationPill({ status: 'uploaded', readyToPublishCount: 2 })).toBeNull();
   });
 });

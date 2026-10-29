@@ -232,3 +232,64 @@ describe('statements list exposes has_stored_file without leaking the storage pa
     }
   });
 });
+
+// 29-10-2026 (PO, production): the list said "Parsed / 17 ready to publish" for a statement whose 17 positions were all published, and listed two
+// archived statements with "1 issue". The publication row belongs to the position (made from its LATEST snapshot, here the newer statement's).
+describe('statements list: publication and archived counts through the real route', () => {
+  const OLD = 'old-doc';
+  const NEW = 'new-doc';
+  const ARCH = 'arch-doc';
+  const mkDoc = (id: string, status: string, uploaded: string): Row => ({ ...staleDoc, id, status, storage_purged_at: null, uploaded_at: uploaded, original_filename: `${id}.pdf` });
+  const positions = Array.from({ length: 17 }, (_, i) => i + 1);
+  const world = (publish: number[]) => ({
+    ii_source_documents: [mkDoc(OLD, 'parsed', '2026-10-01T00:00:00Z'), mkDoc(NEW, 'parsed', '2026-10-02T00:00:00Z'), mkDoc(ARCH, 'archived', '2026-10-03T00:00:00Z')],
+    ii_holding_snapshots: [
+      ...positions.map((n) => ({ id: `old-s${n}`, user_id: 'user-1', source_document_id: OLD, account_id: `a${n}`, instrument_id: `i${n}` })),
+      ...positions.map((n) => ({ id: `new-s${n}`, user_id: 'user-1', source_document_id: NEW, account_id: `a${n}`, instrument_id: `i${n}` })),
+    ],
+    ii_portfolio_truth_status: positions.map((n) => ({ id: `t${n}`, user_id: 'user-1', account_id: `a${n}`, instrument_id: `i${n}`, status: 'certified' })),
+    ii_fhip_publications: publish.map((n) => ({ id: `p${n}`, user_id: 'user-1', canonical_position_id: `new-s${n}`, account_id: `a${n}`, instrument_id: `i${n}`, status: 'published' })),
+    ii_reconciliation_cases: [
+      { id: 'c-arch', user_id: 'user-1', source_document_id: ARCH, status: 'open', discrepancy_type: 'unit_mismatch' },
+      { id: 'c-old-resolved', user_id: 'user-1', source_document_id: OLD, status: 'resolved', discrepancy_type: 'unit_mismatch' },
+    ],
+  });
+  const byId = async () => {
+    const docs = (await (await listGET()).json()).data as Row[];
+    return Object.fromEntries(docs.map((d) => [d.id as string, d]));
+  };
+
+  it('REGRESSION: all 17 positions published from the NEWER statement => the older statement reads 17 published, 0 ready', async () => {
+    seed(world(positions));
+    const docs = await byId();
+    expect(docs[OLD]).toMatchObject({ totalHoldingsCount: 17, publishedHoldingsCount: 17, readyToPublishCount: 0, positionsNeedingAttentionCount: 0, openReconciliationCaseCount: 0 });
+  });
+
+  it('partly published: only the certified, unpublished ones are ready', async () => {
+    seed(world(positions.slice(0, 10)));
+    const docs = await byId();
+    expect(docs[OLD]).toMatchObject({ publishedHoldingsCount: 10, readyToPublishCount: 7 });
+  });
+
+  it('an unpublished publication row is not a live publication', async () => {
+    const w = world(positions);
+    (w.ii_fhip_publications[0] as Row).status = 'unpublished';
+    seed(w);
+    const docs = await byId();
+    expect(docs[OLD]).toMatchObject({ publishedHoldingsCount: 16, readyToPublishCount: 1 });
+  });
+
+  it('an archived statement reports no open issue, and an open issue on it is not counted anywhere on the list', async () => {
+    seed(world(positions));
+    const docs = await byId();
+    expect(docs[ARCH]).toMatchObject({ status: 'archived', openReconciliationCaseCount: 0, positionsNeedingAttentionCount: 0, readyToPublishCount: 0 });
+  });
+
+  it('control: the same open case on a LIVE statement IS counted', async () => {
+    const w = world(positions);
+    (w.ii_reconciliation_cases[0] as Row).source_document_id = NEW;
+    seed(w);
+    const docs = await byId();
+    expect(docs[NEW]).toMatchObject({ openReconciliationCaseCount: 1 });
+  });
+});

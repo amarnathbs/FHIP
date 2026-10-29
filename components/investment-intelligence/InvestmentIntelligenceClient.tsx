@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { fmtDate, fmtDateTime } from './dateDisplay';
 import { AiExtractionReviewPanel } from './AiExtractionReviewPanel';
 import { formatMoneyCode } from '@/lib/engines/money';
-import { partitionSourceDocumentsByProcessedState } from '@/lib/investment-intelligence/sourceDocumentGrouping';
+import { partitionSourceDocumentsByProcessedState, statementPublicationPill } from '@/lib/investment-intelligence/sourceDocumentGrouping';
+import { describeStatementPeriod } from '@/lib/investment-intelligence/statementPeriod';
 import { OwnerSelector } from '@/components/ownership/OwnerSelector';
 import { OwnerConflictPanel } from './OwnerConflictPanel';
 import { FullStatementHelp } from './FullStatementHelp';
@@ -40,13 +41,15 @@ interface SourceDocument {
   // "needs attention" signal without an extra click.
   openReconciliationCaseCount?: number;
   positionsNeedingAttentionCount?: number;
-  // 2026-09-29 fix: how many holdings this document produced, and how many
-  // of those are actively published to FHIP (ii_fhip_publications.status =
-  // 'published', keyed off the real canonical_position_id FK — not
-  // inferred). Used to decide "Previously processed" grouping below;
-  // "certified" alone is not "done" — the user still had to click Publish.
+  // 2026-09-29 fix: how many positions this document produced, and how many
+  // of those are actively published to FHIP (an ACTIVE ii_fhip_publications row
+  // for the position). 29-10-2026: counted per POSITION, not per snapshot id,
+  // and `readyToPublishCount` is exactly the certified-and-not-yet-published
+  // ones. Used to decide "Previously processed" grouping below; "certified"
+  // alone is not "done" — the user still had to click Publish.
   totalHoldingsCount?: number;
   publishedHoldingsCount?: number;
+  readyToPublishCount?: number;
   // Document2 (4) WP-B: statement files are deleted shortly after processing, by design. False means the original file can no
   // longer be re-read, so password / Reprocess must not be offered; a replacement copy is the way forward.
   has_stored_file?: boolean;
@@ -773,6 +776,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
           unitVariance: row.unit_variance ?? null,
           earliestTransactionDate: earliest,
           previousReasonCodes,
+          publication: summary?.positions?.[key]?.publication.kind ?? 'not_published',
           checkedAtLabel: fmtDateTime(new Date().toISOString(), 'INR'),
         },
         (iso) => fmtDate(iso, 'INR'),
@@ -1008,7 +1012,9 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               because they mean different things: an open exception
               (something to decide) vs. a position that is not yet
               certified/published (something to finish). */}
-          {!!doc.openReconciliationCaseCount && (
+          {/* 29-10-2026 (PO): an archived statement is history. It shows no issue / attention / publish signal at all, even if the
+              server still sent a count, so an old archived issue can never read as something to do. */}
+          {doc.status !== 'archived' && !!doc.openReconciliationCaseCount && (
             <button
               onClick={() => selectDocument(doc.id)}
               className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 hover:bg-red-200"
@@ -1017,7 +1023,7 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               {doc.openReconciliationCaseCount} issue{doc.openReconciliationCaseCount === 1 ? '' : 's'}
             </button>
           )}
-          {!doc.openReconciliationCaseCount && !!doc.positionsNeedingAttentionCount && (
+          {doc.status !== 'archived' && !doc.openReconciliationCaseCount && !!doc.positionsNeedingAttentionCount && (
             <button
               onClick={() => selectDocument(doc.id)}
               className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
@@ -1026,15 +1032,23 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
               {doc.positionsNeedingAttentionCount} position{doc.positionsNeedingAttentionCount === 1 ? '' : 's'} need attention
             </button>
           )}
-          {!doc.openReconciliationCaseCount && !doc.positionsNeedingAttentionCount && doc.status === 'parsed' && (doc.totalHoldingsCount ?? 0) > (doc.publishedHoldingsCount ?? 0) && (
-            <button
-              onClick={() => selectDocument(doc.id)}
-              className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 hover:bg-blue-200"
-              title="These positions are certified and can be published to FHIP"
-            >
-              {(doc.totalHoldingsCount ?? 0) - (doc.publishedHoldingsCount ?? 0)} ready to publish
-            </button>
-          )}
+          {/* 29-10-2026 (PO): "ready to publish" counts only positions that are certified AND not published yet; a statement whose
+              positions are all published says so in positive words instead. See statementPublicationPill. */}
+          {doc.status !== 'archived' &&
+            (() => {
+              const pill = statementPublicationPill(doc);
+              if (!pill) return null;
+              return (
+                <button
+                  onClick={() => selectDocument(doc.id)}
+                  data-testid={pill.tone === 'ready' ? 'statement-ready-pill' : 'statement-published-pill'}
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${pill.tone === 'ready' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' : 'bg-green-100 text-green-800 hover:bg-green-200'}`}
+                  title={pill.title}
+                >
+                  {pill.text}
+                </button>
+              );
+            })()}
           {/* The password box is shown for 'parsed' documents too (not just
               'password_required') so Reprocess can carry a password for an
               encrypted file. Before this, Reprocess always called
@@ -1267,10 +1281,10 @@ export function InvestmentIntelligenceClient({ initialDocumentId = null }: Inves
                   {documentKindLabel(summary.document.document_type_detected)}
                   {summary.document.source_confidence != null && ` (confidence ${(summary.document.source_confidence * 100).toFixed(0)}%)`}
                 </p>
-                {(summary.document.statement_period_start || summary.document.statement_period_end) && (
-                  <p className="text-xs text-gray-500">
-                    Statement period: {summary.document.statement_period_start ?? '?'} to {summary.document.statement_period_end ?? '?'}
-                  </p>
+                {/* PO date rule (29-10-2026): never the stored ISO date, never a bare "?". A CAMS/KFintech statement is an India
+                    statement, so dd-mm-yyyy through the shared formatter. */}
+                {describeStatementPeriod(summary.document.statement_period_start, summary.document.statement_period_end, (iso) => fmtDate(iso, 'INR')) && (
+                  <p className="text-xs text-gray-500">{describeStatementPeriod(summary.document.statement_period_start, summary.document.statement_period_end, (iso) => fmtDate(iso, 'INR'))}</p>
                 )}
                 {summary.owner?.chosenAtUpload && summary.owner.label && (
                   <p className="text-xs text-gray-500" data-testid="document-owner">

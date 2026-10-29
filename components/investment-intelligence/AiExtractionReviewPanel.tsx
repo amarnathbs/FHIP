@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { DataTable } from '@/components/ui/DataTable';
+import { fmtDate } from './dateDisplay';
 
 // Investment Intelligence — AI-fallback document extraction: explicit
 // accept/reject UI (2026-09-17 Product Owner addendum).
@@ -243,7 +244,7 @@ export function AiExtractionReviewPanel({
                       </div>
                       <div>
                         <p className="text-xs text-muted">As of</p>
-                        <p className="text-ink">{h.asOfDateIso}</p>
+                        <p className="text-ink">{fmtDate(h.asOfDateIso, 'INR')}</p>
                       </div>
                     </div>
                     {h.transactions.length > 0 ? (
@@ -259,7 +260,7 @@ export function AiExtractionReviewPanel({
                         <tbody>
                           {h.transactions.map((t, j) => (
                             <tr key={j} className="border-b border-line">
-                              <td className="py-1 pr-2 tabular-nums text-ink">{t.dateIso}</td>
+                              <td className="py-1 pr-2 tabular-nums text-ink">{fmtDate(t.dateIso, 'INR')}</td>
                               <td className="py-1 pr-2 text-ink">{t.description}</td>
                               <td className="py-1 pr-2 text-right tabular-nums text-ink">{money(t.amount)}</td>
                               <td className="py-1 pr-2 text-right tabular-nums text-muted">{t.units === null ? '—' : t.units.toFixed(3)}</td>

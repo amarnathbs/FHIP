@@ -18,6 +18,7 @@ import { scanRefusalHttp } from '@/lib/services/investment-intelligence/scanRefu
 import { computeSourceDocumentCounts, EMPTY_SOURCE_DOCUMENT_COUNTS, type SourceDocumentCounts } from '@/lib/services/investment-intelligence/sourceDocumentEnrichment';
 import { refuseUnlessFinancialImportAllowed } from '@/lib/entitlements/financialDataImport';
 import { hasStoredFile } from '@/lib/services/investment-intelligence/caseLifecycle';
+import { fetchAllRows } from '@/lib/services/investment-intelligence/pagination';
 
 // Real upload path: multipart form-data with a "file" part and a "meta"
 // JSON part. Service-role storage write happens only AFTER an
@@ -44,30 +45,38 @@ export async function GET() {
   const docIds = documents.map((d) => d.id as string);
   let countsByDoc = new Map<string, SourceDocumentCounts>();
   if (docIds.length > 0) {
-    const [{ data: openCases }, { data: holdings }, { data: truthStatuses }] = await Promise.all([
-      supabase.from('ii_reconciliation_cases').select('source_document_id').eq('user_id', user.id).in('status', ['open', 'user_reviewing']).in('source_document_id', docIds),
-      supabase.from('ii_holding_snapshots').select('id, source_document_id, account_id, instrument_id').eq('user_id', user.id).in('source_document_id', docIds),
-      supabase.from('ii_portfolio_truth_status').select('account_id, instrument_id, status').eq('user_id', user.id),
+    // Every read below is paged (fetchAllRows): PostgREST silently caps a plain select at 1,000 rows, and a count built from a
+    // truncated read is a wrong count with no error anywhere (see pagination.ts).
+    const [openCases, holdings, truthStatuses, publications] = await Promise.all([
+      fetchAllRows<{ id: string; source_document_id: string | null }>(() =>
+        supabase.from('ii_reconciliation_cases').select('id, source_document_id').eq('user_id', user.id).in('status', ['open', 'user_reviewing']).in('source_document_id', docIds).order('id', { ascending: true }),
+      ),
+      fetchAllRows<{ id: string; source_document_id: string | null; account_id: string; instrument_id: string }>(() =>
+        supabase.from('ii_holding_snapshots').select('id, source_document_id, account_id, instrument_id').eq('user_id', user.id).in('source_document_id', docIds).order('id', { ascending: true }),
+      ),
+      fetchAllRows<{ id: string; account_id: string; instrument_id: string; status: string }>(() =>
+        supabase.from('ii_portfolio_truth_status').select('id, account_id, instrument_id, status').eq('user_id', user.id).order('id', { ascending: true }),
+      ),
+      // "Previously processed" grouping (Statements & data list, 2026-09-29 fix) and the "ready to publish" count (29-10-2026 fix):
+      // certified alone does not mean published — a position can sit fully certified for weeks waiting on the user's explicit
+      // Publish click (R3, spec sections 41-42). A position is published when it has an ACTIVE `ii_fhip_publications` row. That
+      // row is one-per-position and is made from the position's LATEST certified snapshot, which is frequently a snapshot of a
+      // different (newer) statement than the one in this list. So it is matched on the POSITION (account + instrument), not on this
+      // statement's snapshot id: matching on the snapshot id showed "17 ready to publish" for a statement whose 17 positions were
+      // all published.
+      fetchAllRows<{ id: string; canonical_position_id: string; account_id: string; instrument_id: string; status: string }>(() =>
+        supabase.from('ii_fhip_publications').select('id, canonical_position_id, account_id, instrument_id, status').eq('user_id', user.id).eq('status', 'published').order('id', { ascending: true }),
+      ),
     ]);
 
-    // "Previously processed" grouping (Statements & data list, 2026-09-29 fix):
-    // certified alone does not mean published — a position can sit fully
-    // certified for weeks waiting on the user's explicit Publish click (R3,
-    // spec sections 41-42). A document only counts as genuinely finished once
-    // EVERY holding it produced has an active `ii_fhip_publications` row,
-    // checked directly off `canonical_position_id` (== ii_holding_snapshots.id,
-    // enforced unique) rather than re-deriving it from account/instrument —
-    // that FK is the actual publish record, not an inference.
-    const holdingIds = (holdings ?? []).map((h) => h.id as string);
-    const { data: publications } = holdingIds.length
-      ? await supabase.from('ii_fhip_publications').select('canonical_position_id, status').eq('user_id', user.id).eq('status', 'published').in('canonical_position_id', holdingIds)
-      : { data: [] as { canonical_position_id: string; status: string }[] };
-
     countsByDoc = computeSourceDocumentCounts({
-      openCases: (openCases ?? []) as { source_document_id: string | null }[],
-      holdings: (holdings ?? []) as { id: string; source_document_id: string | null; account_id: string; instrument_id: string }[],
-      truthStatuses: (truthStatuses ?? []) as { account_id: string; instrument_id: string; status: string }[],
-      publications: (publications ?? []) as { canonical_position_id: string; status: string }[],
+      openCases,
+      holdings,
+      truthStatuses,
+      publications,
+      // An archived statement is history: it is listed under "Processed statements", never as something to act on, and its open
+      // issues are not counted into any "needs attention" signal on this list.
+      archivedDocumentIds: new Set(documents.filter((d) => d.status === 'archived').map((d) => d.id as string)),
     });
   }
 
