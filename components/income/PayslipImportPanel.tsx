@@ -27,6 +27,7 @@
 import { aiFallbackRefusalNote } from '@/lib/ai/access/aiFallbackRefusal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoney, formatMoneyExact } from '@/lib/engines/money';
+import { formatDateInText } from '@/lib/engines/date';
 import { normaliseProposedFields, type ProposedField } from '@/lib/import-bridge/proposedFieldShape';
 import { PayslipDetails } from '@/components/income/PayslipDetails';
 import { OwnerSelector } from '@/components/ownership/OwnerSelector';
@@ -933,7 +934,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
               <li key={`${w.document_id}-${w.stage}`} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 px-3 py-2 text-sm">
                 <span>
                   {w.label ?? 'Employer not identified'}
-                  {w.period_end && ` · period ending ${w.period_end}`}
+                  {w.period_end && ` · period ending ${formatDateInText(w.period_end, w.currency_code)}`}
                   <span className="block text-xs text-muted">{WAITING_STAGE_TEXT[w.stage]}</span>
                 </span>
                 <button
@@ -1107,7 +1108,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
             <dd>{event.employer_name ?? 'Not identified'}</dd>
             <dt className="text-muted">Pay period</dt>
             <dd>
-              {event.pay_period_start && event.pay_period_end ? `${event.pay_period_start} – ${event.pay_period_end}` : 'Not identified'}
+              {event.pay_period_start && event.pay_period_end ? `${formatDateInText(event.pay_period_start, event.currency_code)} – ${formatDateInText(event.pay_period_end, event.currency_code)}` : 'Not identified'}
             </dd>
             <dt className="text-muted">Gross pay</dt>
             <dd>
@@ -1171,7 +1172,7 @@ export function PayslipImportPanel({ onClose, onApplied }: { onClose: () => void
             <div className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-900" data-testid="payslip-revision">
               <p>
                 You already have a payslip from this employer for the period
-                {revisionOf.pay_period_start ? ` ${revisionOf.pay_period_start} –` : ''} {revisionOf.pay_period_end ?? ''}
+                {revisionOf.pay_period_start ? ` ${formatDateInText(revisionOf.pay_period_start, revisionOf.currency_code)} –` : ''} {revisionOf.pay_period_end ? formatDateInText(revisionOf.pay_period_end, revisionOf.currency_code) : ''}
                 {revisionOf.net_pay !== null && ` (net ${money(revisionOf.net_pay, revisionOf.currency_code)})`}.
               </p>
               <label className="mt-1 flex items-center gap-2">

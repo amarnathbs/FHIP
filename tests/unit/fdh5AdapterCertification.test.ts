@@ -11,6 +11,7 @@ import { buildBankPdfFixture } from '../support/buildBankPdfFixture';
 import { classifyPdf } from '@/lib/financial-data-hub/bank-pdf/classification';
 import { detectPdfBankAdapter } from '@/lib/financial-data-hub/bank-pdf/detection';
 import { PDF_BANK_ADAPTER_REGISTRY } from '@/lib/financial-data-hub/bank-pdf/adapters/registry';
+import { buildNabClassicPdf, sampleLedger } from '../support/buildNabClassicPdf';
 import { flattenPdfLines, reconstructRows } from '@/lib/financial-data-hub/bank-pdf/rowReconstruction';
 import { normalizePdfRow } from '@/lib/financial-data-hub/bank-pdf/normalize';
 import { extractPdfStatementMetadata } from '@/lib/financial-data-hub/bank-pdf/metadata';
@@ -108,6 +109,8 @@ const FIXTURES: Record<string, () => Buffer> = {
   au_cba_pdf_v1: cbaFixture,
   au_anz_pdf_v1: anzFixture,
   au_nab_pdf_v1: nabFixture,
+  // The REAL NAB layout (30-10-2026): read by text position, so its fixture is a position-accurate PDF; detection is by the same text markers.
+  au_nab_classic_pdf_v2: () => buildNabClassicPdf({ opening: 1000, entries: sampleLedger(6), notice: true }).pdf,
   au_westpac_pdf_v1: westpacFixture,
   in_sbi_pdf_v1: sbiFixture,
   in_hdfc_pdf_v1: hdfcFixture,
@@ -166,7 +169,9 @@ describe('FDH-5 adapter detection — ambiguity (spec 96)', () => {
 });
 
 describe('FDH-5 full pipeline round trip per adapter (spec 32-41, 91)', () => {
-  for (const adapter of PDF_BANK_ADAPTER_REGISTRY) {
+  // An adapter read by text POSITION is not cut from text lines at all; its round trip is proven by nabClassicPositionalReader.test.ts and
+  // nabClassicPositionalPglite.test.ts (through the same pipeline, to a reconciled statement).
+  for (const adapter of PDF_BANK_ADAPTER_REGISTRY.filter((a) => !a.positionalReaderId)) {
     it(`${adapter.id}: extraction -> row reconstruction -> normalisation -> reconciliation succeeds and reconciles`, async () => {
       const bytes = new Uint8Array(FIXTURES[adapter.id]());
       const classified = await classifyPdf(bytes);

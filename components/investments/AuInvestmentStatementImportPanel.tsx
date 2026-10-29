@@ -960,7 +960,7 @@ export function AuInvestmentStatementImportPanel({
             <div>
               <dt className="text-muted">Period</dt>
               <dd>
-                {aiDraft.statementPeriodStart ?? '?'} to {aiDraft.statementPeriodEnd ?? '?'}
+                {aiDraft.statementPeriodStart ? formatDateInText(aiDraft.statementPeriodStart, 'AUD') : '?'} to {aiDraft.statementPeriodEnd ? formatDateInText(aiDraft.statementPeriodEnd, 'AUD') : '?'}
               </dd>
             </div>
           </dl>

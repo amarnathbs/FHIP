@@ -41,7 +41,11 @@ const QUALITY_TEXT: Record<string, Partial<Record<string, string>> & { default: 
     not_applicable: 'The statement does not print balances we could check the transactions against.',
     default: 'The transactions do not add up to the statement\'s closing balance.',
   },
-  statement_period_found: { pass: 'The statement period was found.', default: 'The statement period was not found.' },
+  statement_period_found: {
+    pass: 'The statement period was found.',
+    warning: 'Check the statement period: it was not found on the statement, or it differs from the period you entered when uploading (the period you entered is the one kept).',
+    default: 'The statement period was not found.',
+  },
   duplicate_file: { pass: 'This file was not uploaded before.', default: 'This file was uploaded before.' },
   low_extraction_confidence: {
     pass: 'The AI reading reported no problems.',

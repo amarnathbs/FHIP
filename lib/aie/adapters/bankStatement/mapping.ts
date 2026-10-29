@@ -14,6 +14,7 @@
 
 import type { PdfStatementMetadata } from '@/lib/financial-data-hub/bank-pdf/metadata';
 import type { ReadBankStatementRow } from '@/lib/financial-data-hub/bank-pdf/orchestrator';
+import { cleanStatementDescriptionOrKeep } from '@/lib/financial-data-hub/bank-pdf/descriptionCleanup';
 import type { BankStatementDocumentFacts } from './schema';
 import { figureIsPrinted, explicitSignOfPrintedFigure } from '../shared/reviewDraft';
 import { isStatementSummaryLine } from '../shared/statementSummaryLines';
@@ -172,7 +173,8 @@ export function mapBankStatementFactsToDraft(facts: BankStatementDocumentFacts, 
     rows.push({
       sourceRowNumber: index + 1,
       transactionDate: t.transactionDate,
-      descriptionRaw: t.descriptionRaw,
+      // 30-10-2026: a dotted leader read off the page is a layout artefact; removed here so the person sees (and confirms) the clean text.
+      descriptionRaw: cleanStatementDescriptionOrKeep(t.descriptionRaw),
       amountOriginal: Math.abs(amount),
       creditDebit: t.creditDebit,
       balanceAfter: nullableMoney(t.balanceAfter),

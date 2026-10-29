@@ -14,6 +14,7 @@
  */
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
+import { formatDateInText } from '@/lib/engines/date';
 import { fdhPages } from '@/lib/import-bridge/fdhRoutes';
 import {
   ACTIVITY_LEDGER_OUTCOME,
@@ -272,7 +273,7 @@ export function LiabilityStatementHistory({ refreshKey = 0 }: { refreshKey?: num
         <details key={s.id} className="rounded border border-gray-100 p-3" open={statements.length === 1}>
           <summary className="cursor-pointer text-sm font-medium">
             {s.institution_name ?? 'Statement'} {s.masked_identifier ? `(${s.masked_identifier})` : ''} —{' '}
-            {s.statement_period_start && s.statement_period_end ? `${s.statement_period_start} to ${s.statement_period_end}` : 'period not shown'}
+            {s.statement_period_start && s.statement_period_end ? `${formatDateInText(s.statement_period_start, s.currency_code)} to ${formatDateInText(s.statement_period_end, s.currency_code)}` : 'period not shown'}
             {' · '}{s.activities.length} line(s)
           </summary>
           <div className="mt-2 space-y-2">

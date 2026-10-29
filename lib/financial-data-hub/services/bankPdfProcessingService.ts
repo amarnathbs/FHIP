@@ -827,6 +827,10 @@ export async function finalizeBankPdfImport(input: BankPdfFinalizeInput): Promis
     || (!aiContext!.inParts && aiContext!.rowsRead >= AIE_BANK_STATEMENT_MAX_TRANSACTIONS && pipeline.reconciliation?.status !== 'reconciled')
   );
 
+  // 30-10-2026: the period typed at upload wins over the printed one (it is never overwritten), so when the two disagree the person
+  // is told, instead of the statement quietly keeping a period the statement itself does not print.
+  const declaredPeriodDiffers = declaredPeriodDiffersFromPrinted(document, pipeline.statementMetadata);
+
   const dqChecks: { check_code: string; status: string; details_sanitised?: string }[] = [
     {
       check_code: 'transaction_count_valid',
@@ -853,7 +857,8 @@ export async function finalizeBankPdfImport(input: BankPdfFinalizeInput): Promis
     },
     {
       check_code: 'statement_period_found',
-      status: (document.statement_period_start && document.statement_period_end) || (pipeline.statementMetadata?.statementPeriodStart && pipeline.statementMetadata?.statementPeriodEnd) ? 'pass' : 'warning',
+      status: declaredPeriodDiffers || !((document.statement_period_start && document.statement_period_end) || (pipeline.statementMetadata?.statementPeriodStart && pipeline.statementMetadata?.statementPeriodEnd)) ? 'warning' : 'pass',
+      details_sanitised: declaredPeriodDiffers ? DECLARED_PERIOD_DIFFERS_DETAIL : undefined,
     },
     { check_code: 'duplicate_file', status: document.duplicate_of_document_id ? 'warning' : 'pass' },
   ];
@@ -1113,6 +1118,18 @@ export function unreadBalancesFromDraft(
   const lines = Math.max(0, Math.min(Number.isFinite(issuedLines) ? issuedLines : 0, stillEmptyLines));
   const declared = Math.max(0, Math.min(Number.isFinite(issuedDeclared) ? issuedDeclared : 0, stillEmptyDeclared));
   return { ...(lines > 0 ? { balancesNotRead: lines } : {}), ...(declared > 0 ? { declaredBalancesNotRead: declared } : {}) };
+}
+
+export const DECLARED_PERIOD_DIFFERS_DETAIL = 'declared_period_differs_from_printed';
+
+/** True when a period was declared at upload AND the statement prints one AND they are not the same range. Pure. */
+export function declaredPeriodDiffersFromPrinted(
+  document: Pick<FdhStatementUpload, 'statement_period_start' | 'statement_period_end'>,
+  printed: { statementPeriodStart: string | null; statementPeriodEnd: string | null } | null | undefined,
+): boolean {
+  if (!document.statement_period_start || !document.statement_period_end) return false;
+  if (!printed?.statementPeriodStart || !printed.statementPeriodEnd) return false;
+  return document.statement_period_start !== printed.statementPeriodStart || document.statement_period_end !== printed.statementPeriodEnd;
 }
 
 /** The period columns to write: the printed period, only where the upload

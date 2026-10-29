@@ -85,6 +85,13 @@ export interface PdfBankAdapter {
    * headers, page-footer boilerplate, "continued" markers (spec 35). */
   headerFooterPatterns: RegExp[];
   metadataPatterns: PdfStatementMetadataPatterns;
+  /**
+   * Set only for a layout whose columns carry meaning the flattened text loses (Debits / Credits / Balance printed as separate
+   * columns). The pipeline then also reads the page's TEXT POSITIONS with the named reader (`positionalReaders.ts`) instead of
+   * reconstructing rows from text lines. When the reader is not confident the pipeline falls back exactly as for an unsupported
+   * layout. Absent for every text-line adapter.
+   */
+  positionalReaderId?: 'nab_classic';
   /** Pure confidence scorer over the WHOLE extracted document text, in
    * [0, 1] — mirrors `scoreHeaderAgainstSignature`'s discipline exactly
    * (bank-csv/adapters/types.ts). */

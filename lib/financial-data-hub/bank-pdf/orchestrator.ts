@@ -21,7 +21,9 @@
 import type { FdhCreditDebit, FdhTransactionDedupStatus, FdhTransactionTypeHint } from '../constants/enums';
 import { classifyPdf } from './classification';
 import { detectPdfBankAdapter, type PdfDetectionResult } from './detection';
-import { flattenPdfLines, reconstructRows } from './rowReconstruction';
+import { flattenPdfLines, reconstructRows, type ReconstructedRow } from './rowReconstruction';
+import { readWithPositionalReader, type PositionalReading } from './positionalReaders';
+import { cleanStatementDescriptionOrKeep } from './descriptionCleanup';
 import { normalizePdfRow } from './normalize';
 // Imported for `runBankPdfPipelineFromReadRows` below — the SAME description
 // cleaning and type-hint inference the CSV and PDF native paths already use,
@@ -170,6 +172,9 @@ export interface RunPdfPipelineInput {
  * takes bytes in, returns a plan out).
  */
 export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<PdfPipelineResult> {
+  // pdf.js detaches the buffer it reads, so the text read below leaves `input.bytes` unusable. A layout read by text POSITION needs
+  // the bytes again; its copy is taken first.
+  const bytesForPositions = input.bytes.slice();
   const classified = await classifyPdf(input.bytes, input.password);
 
   // WP-08 (UPL-01): the read ran out of time -- retryable, not a verdict.
@@ -201,10 +206,24 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
   }
   if (!adapter) return emptyResult('unsupported_layout', detection, fullText, pages);
 
-  const statementMetadata = extractPdfStatementMetadata(fullText, adapter);
-
-  const lines = flattenPdfLines(pages, adapter);
-  const { rows, unparseableBlocks } = reconstructRows(lines, adapter);
+  // A layout whose columns carry meaning the flattened text loses (NAB: Debits / Credits / Balance) is read by text POSITION. If that
+  // reading is not confident, the document is treated exactly like an unsupported layout -- the AI fallback path, as before.
+  let positional: PositionalReading | null = null;
+  let statementMetadata: PdfStatementMetadata;
+  let rows: ReconstructedRow[];
+  let unparseableBlocks: { pageNumber: number; dateRaw: string; text: string }[];
+  if (adapter.positionalReaderId) {
+    const outcome = await readWithPositionalReader(adapter, bytesForPositions, input.password);
+    if (outcome.kind !== 'read') return emptyResult('unsupported_layout', detection, fullText, pages);
+    positional = outcome.reading;
+    statementMetadata = positional.metadata;
+    rows = positional.rows;
+    unparseableBlocks = [];
+  } else {
+    statementMetadata = extractPdfStatementMetadata(fullText, adapter);
+    const lines = flattenPdfLines(pages, adapter);
+    ({ rows, unparseableBlocks } = reconstructRows(lines, adapter));
+  }
 
   if (rows.length > PDF_MAX_TRANSACTION_ROWS) {
     return emptyResult('page_limit_exceeded', detection);
@@ -264,15 +283,17 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
   const nonDuplicateAccepted = accepted.filter((a) => a.dedupStatus !== 'duplicate_confirmed');
   const duplicateConfirmed = accepted.filter((a) => a.dedupStatus === 'duplicate_confirmed');
 
-  const reconciliation = reconcileBalances(
-    nonDuplicateAccepted.map((a) => ({
-      sourceRowNumber: a.sourceRowNumber,
-      amountOriginal: a.amountOriginal,
-      creditDebit: a.creditDebit,
-      balanceAfter: a.balanceAfter,
-    })),
-    input.currencyCode,
-  );
+  const toReconciliationRow = (a: AcceptedPdfTransactionPlan) => ({
+    sourceRowNumber: a.sourceRowNumber,
+    amountOriginal: a.amountOriginal,
+    creditDebit: a.creditDebit,
+    balanceAfter: a.balanceAfter,
+  });
+  // A positional reading prints its balance only at checkpoints, so its rollforward is the checkpoint one, over EVERY row the
+  // statement printed (the statement's arithmetic does not depend on what the database already holds). Any other adapter: unchanged.
+  const reconciliation = positional
+    ? positional.reconcile(accepted.map(toReconciliationRow), input.currencyCode)
+    : reconcileBalances(nonDuplicateAccepted.map(toReconciliationRow), input.currencyCode);
   const dateCoverage = computeDateCoverage(
     nonDuplicateAccepted.map((a) => a.transactionDate),
     input.declaredPeriodStart ?? statementMetadata.statementPeriodStart ?? null,
@@ -286,7 +307,8 @@ export async function runBankPdfPipeline(input: RunPdfPipelineInput): Promise<Pd
   // MIXED_CONTENT document's sparse pages.
   const rowConfidence = rows.length > 0 ? confidenceSum / rows.length : 1;
   const unparseablePenalty = rows.length > 0 ? unparseableBlocks.length / (rows.length + unparseableBlocks.length) : 0;
-  const mixedContentPenalty = classified.sparsePageIndexes.length > 0 ? 0.15 : 0;
+  // A positional reading is judged by its exact rollforward (a page with no text that hid a transaction would break it), not by this.
+  const mixedContentPenalty = !positional && classified.sparsePageIndexes.length > 0 ? 0.15 : 0;
   const statementExtractionConfidence = Math.max(0, rowConfidence - unparseablePenalty - mixedContentPenalty);
 
   if (statementExtractionConfidence < PDF_MIN_EXTRACTION_CONFIDENCE && rows.length > 0) {
@@ -429,7 +451,10 @@ export function reconcileDeclaredOpeningToClosing(
 export function runBankPdfPipelineFromReadRows(input: RunPdfPipelineFromReadRowsInput): PdfPipelineResult {
   const accepted: AcceptedPdfTransactionPlan[] = [];
 
-  for (const row of input.rows) {
+  for (const rawRow of input.rows) {
+    // 30-10-2026: a dotted leader the bank prints between a description and its amount (read as text by the AI) is a layout artefact,
+    // not part of the description. Removed here, before the row is fingerprinted, so a re-read and a reviewed edit agree.
+    const row = { ...rawRow, descriptionRaw: cleanStatementDescriptionOrKeep(rawRow.descriptionRaw) };
     const descriptionClean = normalizeDescription(row.descriptionRaw);
     const transactionTypeHint = inferTypeHint(descriptionClean, row.creditDebit);
     const transaction = {

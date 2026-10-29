@@ -106,6 +106,9 @@ export function createFdhBankStatementParser(ctx: FdhBankStatementParseContext):
     // REG-02: sniff on already-extracted text only, never the filename.
     sniff(extractedText: string): boolean {
       const detection = detectPdfBankAdapter(extractedText);
+      // 30-10-2026: a layout read by text POSITION (Debits / Credits as columns) cannot be cut from the flattened text this bridge
+      // gets, so it is not this parser's to claim; it stays exactly as unsupported here as it was before that reader existed.
+      if (detection.status === 'detected' && detection.adapter?.positionalReaderId) return false;
       return detection.status === 'detected' || detection.status === 'ambiguous';
     },
 
@@ -130,7 +133,7 @@ export function createFdhBankStatementParser(ctx: FdhBankStatementParseContext):
         };
       }
 
-      if (detection.status === 'unsupported_layout' || !detection.adapter) {
+      if (detection.status === 'unsupported_layout' || !detection.adapter || detection.adapter.positionalReaderId) {
         // AIE13-BASE-04 / non-negotiable prohibition: "no unsupported
         // institution/layout certification without corpus evidence" — never
         // silently guessed, never AI-eligible either (AI cannot certify a

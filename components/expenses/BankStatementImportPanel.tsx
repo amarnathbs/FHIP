@@ -61,6 +61,7 @@ import { DateInput } from '@/components/ui/DateInput';
 
 import { useEffect, useRef, useState } from 'react';
 import { bankUploadParams, statementPeriodError } from './bankUploadParams';
+import { draftMoneyText, draftPeriodText } from './aiDraftDisplay';
 import {
   isResumableProcessAttempt,
   PROCESS_RESUME_WAIT_MS,
@@ -1040,17 +1041,15 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
             </div>
             <div>
               <dt className="text-muted">Period</dt>
-              <dd>
-                {aiDraft.statementPeriodStart ?? '?'} to {aiDraft.statementPeriodEnd ?? '?'}
-              </dd>
+              <dd>{draftPeriodText(aiDraft.statementPeriodStart, aiDraft.statementPeriodEnd, currency)}</dd>
             </div>
             <div>
               <dt className="text-muted">Opening balance</dt>
-              <dd>{aiDraft.declaredOpeningBalance ?? 'Not shown'}</dd>
+              <dd>{draftMoneyText(aiDraft.declaredOpeningBalance, currency)}</dd>
             </div>
             <div>
               <dt className="text-muted">Closing balance</dt>
-              <dd>{aiDraft.declaredClosingBalance ?? 'Not shown'}</dd>
+              <dd>{draftMoneyText(aiDraft.declaredClosingBalance, currency)}</dd>
             </div>
           </dl>
 
@@ -1102,7 +1101,7 @@ export function BankStatementImportPanel({ onClose, fixedOwner }: { onClose: () 
                   <tr key={`${row.transactionDate}-${i}`} className="border-t border-gray-100">
                     <td className="px-3 py-2 whitespace-nowrap">{formatDateShort(row.transactionDate, currency)}</td>
                     <td className="px-3 py-2">{row.descriptionRaw}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{row.amountOriginal.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{draftMoneyText(row.amountOriginal, currency)}</td>
                     <td className="px-3 py-2">{row.creditDebit === 'credit' ? 'In' : 'Out'}</td>
                     <td className="px-3 py-2 text-right">
                       <button

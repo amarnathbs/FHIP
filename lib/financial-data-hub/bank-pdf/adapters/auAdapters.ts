@@ -84,6 +84,11 @@ export const AU_ANZ_PDF_V1: PdfBankAdapter = {
     }),
 };
 
+/**
+ * NOTE (30-10-2026): this layout ("Transaction Listing", DD-MM-YYYY, DR suffix) was INVENTED; it is not the layout a real NAB
+ * statement prints (see `AU_NAB_CLASSIC_PDF_V2`). It is kept, unchanged, only so a document that really has this shape still reads
+ * as before; no real statement is known to.
+ */
 export const AU_NAB_PDF_V1: PdfBankAdapter = {
   id: 'au_nab_pdf_v1',
   institutionCode: 'nab',
@@ -110,6 +115,39 @@ export const AU_NAB_PDF_V1: PdfBankAdapter = {
     scoreTextAgainstSignature(fullText, {
       requiredMarkers: ['National Australia Bank', 'Transaction Listing'],
       optionalMarkers: ['Date', 'Description', 'Debit', 'Credit', 'Balance'],
+    }),
+};
+
+/**
+ * The REAL NAB statement layout (read from a real NAB Classic Banking statement, 30-10-2026). `au_nab_pdf_v1` above was built on an
+ * invented layout ("Transaction Listing", DD-MM-YYYY, DR suffix) that no real NAB statement printed, so a real statement was never
+ * detected. The real one prints "Date | Particulars | Debits | Credits | Balance" as COLUMNS, a date only on the first transaction of
+ * a day, a balance only on the last, "Brought forward" / "Carried forward" lines and a multi-line Particulars cell with dotted leaders.
+ * That cannot be read from flattened text, so this adapter is read with text POSITIONS (`positionalReaderId`); the regexes below are
+ * only the detection/metadata contract the registry requires and are not used to cut rows.
+ */
+export const AU_NAB_CLASSIC_PDF_V2: PdfBankAdapter = {
+  id: 'au_nab_classic_pdf_v2',
+  institutionCode: 'nab',
+  country: 'AU',
+  version: '2.0.0',
+  certificationState: 'certified',
+  displayName: 'National Australia Bank — PDF statement (Date / Particulars / Debits / Credits / Balance)',
+  certifiedExtractionMethods: ['native_text'],
+  signature: {
+    requiredMarkers: ['National Australia Bank', 'Particulars', 'Debits', 'Credits', 'Brought forward'],
+    optionalMarkers: ['Transaction Details', 'Carried forward', 'Statement starts', 'Statement ends'],
+  },
+  amountConvention: 'dr_cr_indicator',
+  dateFormat: 'DD Mon YYYY',
+  dateLineRegex: /^(\d{1,2}\s+[A-Za-z]{3,4}\s+\d{4})\s*(.*)$/,
+  headerFooterPatterns: [],
+  metadataPatterns: {},
+  positionalReaderId: 'nab_classic',
+  scoreText: (fullText) =>
+    scoreTextAgainstSignature(fullText, {
+      requiredMarkers: ['National Australia Bank', 'Particulars', 'Debits', 'Credits', 'Brought forward'],
+      optionalMarkers: ['Transaction Details', 'Carried forward', 'Statement starts', 'Statement ends'],
     }),
 };
 
@@ -142,4 +180,4 @@ export const AU_WESTPAC_PDF_V1: PdfBankAdapter = {
     }),
 };
 
-export const AU_PDF_ADAPTERS: PdfBankAdapter[] = [AU_CBA_PDF_V1, AU_ANZ_PDF_V1, AU_NAB_PDF_V1, AU_WESTPAC_PDF_V1];
+export const AU_PDF_ADAPTERS: PdfBankAdapter[] = [AU_CBA_PDF_V1, AU_ANZ_PDF_V1, AU_NAB_PDF_V1, AU_NAB_CLASSIC_PDF_V2, AU_WESTPAC_PDF_V1];
