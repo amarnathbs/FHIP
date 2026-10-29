@@ -365,7 +365,7 @@ export interface SetCategoryResult {
   payee_key: string | null;
 }
 
-async function rememberPayee(
+export async function rememberPayee(
   userId: string,
   payeeKey: string,
   categoryId: string,

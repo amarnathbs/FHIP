@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { displayDate } from '@/lib/engines/statementDisplayDate';
 
 export type WaitingImportKind = 'liability' | 'retirement' | 'investment' | 'bank';
 export type WaitingImportStage = 'ai_draft' | 'review' | 'compare' | 'apply';
@@ -114,7 +115,7 @@ export function WaitingImportsList({
             <span>
               {DOCUMENT_TYPE_TEXT[w.document_type ?? ''] ?? 'Statement'}
               {w.label && ` · ${w.label}`}
-              {w.period_end && ` · to ${w.period_end}`}
+              {w.period_end && ` · to ${displayDate(w.period_end, w.currency_code)}`}
               {' · '}
               {WAITING_STAGE_TEXT[w.stage]}
             </span>

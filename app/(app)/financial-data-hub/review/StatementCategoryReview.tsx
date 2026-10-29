@@ -11,6 +11,20 @@ import { StatementDetailsDrawer } from '@/components/financial-data-hub/Statemen
 // also pins every field this file reads against a real route response.
 import type { CategoryGroup, CategoryReviewMonthTotals, NeedsDecisionItem, StatementNote, SurplusEffect } from '@/lib/financial-data-hub/domain/categoryReview';
 import type { StatementCategoryReview as ReviewPayload, GroupApprovalResult, ApproveAllResult, SetCategoryResult } from '@/lib/financial-data-hub/services/categoryReviewService';
+import type { BulkSetCategoryResult } from '@/lib/financial-data-hub/services/categoryBulkService';
+import { displayDate, displayPeriod } from '@/lib/engines/statementDisplayDate';
+import {
+  BULK_MAX_SELECTION,
+  bulkResultText,
+  cardPageCount,
+  cardPageSummary,
+  confirmCategoryText,
+  confirmSuggestedText,
+  idsLikeThis,
+  itemsOnPage,
+  suggestedPlan,
+  usableSelection,
+} from '@/lib/financial-data-hub/domain/bulkSelection';
 
 interface CategoryOption {
   id: string;
@@ -104,12 +118,6 @@ const OPTION_GROUPS: Array<{ label: string; types: readonly string[] }> = [
   },
 ];
 
-function formatPeriod(start: string | null, end: string | null): string | null {
-  if (!start && !end) return null;
-  if (start && end) return `${start} to ${end}`;
-  return start ?? end;
-}
-
 export function StatementCategoryReview({
   statementId,
   categories,
@@ -131,6 +139,14 @@ export function StatementCategoryReview({
   const [actionError, setActionError] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [remember, setRemember] = useState<Record<string, boolean>>({});
+  // Bulk "Choose a category" tools: which cards are ticked, the one category to apply, and the last result.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [cardPage, setCardPage] = useState(1);
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkRemember, setBulkRemember] = useState(false);
+  const [confirm, setConfirm] = useState<null | 'category' | 'suggested'>(null);
+  const [bulkResult, setBulkResult] = useState<BulkSetCategoryResult | null>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
   // After an action the line or button the user was on may disappear; focus
   // moves to the result message so keyboard and screen-reader users are not
   // left on a detached element.
@@ -163,6 +179,11 @@ export function StatementCategoryReview({
     })();
     return () => { cancelled = true; };
   }, [url]);
+
+  // The confirmation takes focus when it opens, so a keyboard or screen-reader user lands on the question.
+  useEffect(() => {
+    if (confirm) requestAnimationFrame(() => confirmRef.current?.focus());
+  }, [confirm]);
 
   async function run(key: string, action: () => Promise<string>) {
     setBusy(key);
@@ -232,7 +253,56 @@ export function StatementCategoryReview({
   if (loadError || !review) return <ResourceErrorState message={loadError ?? 'We could not load this statement.'} onRetry={() => { void reload(); }} />;
 
   const { counts, totals, groups, needs_decision: needsDecision, statement, months, notes } = review;
-  const period = formatPeriod(statement.period_start, statement.period_end);
+  // Dates are shown day-first in the account's style (dd/mm/yyyy AU, dd-mm-yyyy India), never as yyyy-mm-dd.
+  const dateCurrency = statement.currency ?? groups[0]?.currency ?? needsDecision[0]?.currency ?? null;
+  const period = displayPeriod(statement.period_start, statement.period_end, dateCurrency);
+  const selectedItems = usableSelection(needsDecision, selected);
+  const selectableAll = needsDecision.filter((i) => i.can_choose_category);
+  const cardPages = cardPageCount(needsDecision.length);
+  const shownCardPage = Math.min(cardPage, cardPages);
+  const cardItems = itemsOnPage(needsDecision, shownCardPage);
+  const selectableOnPage = cardItems.filter((i) => i.can_choose_category);
+  const plan = suggestedPlan(selectedItems);
+  const labelOf = (id: string) => categories.find((c) => c.id === id)?.label ?? 'the suggested category';
+  const bulkCategoryLabel = categories.find((c) => c.id === bulkCategory)?.label ?? '';
+  const tooManySelected = selectedItems.length > BULK_MAX_SELECTION;
+
+  function addToSelection(ids: readonly string[]) {
+    setSelected((prev) => new Set([...prev, ...ids]));
+    setConfirm(null);
+  }
+  function toggleSelected(id: string, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    setConfirm(null);
+  }
+  function clearSelection() {
+    setSelected(new Set());
+    setConfirm(null);
+  }
+
+  // ONE request for the whole selection. It only sets categories; approval stays a separate step below.
+  function applyBulk(kind: 'category' | 'suggested') {
+    const chosen = kind === 'category' ? selectedItems : selectedItems.filter((i) => i.suggested_category_id);
+    if (chosen.length === 0 || (kind === 'category' && !bulkCategory)) return;
+    const left = selectedItems.filter((i) => !chosen.includes(i)).map((i) => i.id);
+    void run('bulk', async () => {
+      const result = await apiPost<BulkSetCategoryResult>(`${url}/set-categories`, {
+        transaction_ids: chosen.map((i) => i.id),
+        mode: kind,
+        ...(kind === 'category' ? { category_id: bulkCategory } : {}),
+        remember_payee: bulkRemember,
+      });
+      setBulkResult(result);
+      setSelected(new Set([...left, ...result.failed.map((f) => f.transaction_id)]));
+      setConfirm(null);
+      return bulkResultText(result);
+    });
+  }
   const allApproved = counts.transactions > 0 && counts.waiting_for_approval === 0;
   const readyToApprove = counts.ready_to_approve;
 
@@ -345,26 +415,191 @@ export function StatementCategoryReview({
             Choose a category ({needsDecision.length})
           </h2>
           <p className="mt-1 text-sm text-muted">
-            We could not be sure what these are. Pick a category for each one; it then joins the matching total below.
+            We could not be sure what these are. Pick a category for each one, or tick several and give them all the same
+            category in one go; each then joins the matching total below.
           </p>
+
+          {selectableAll.length > 1 && (
+            <div role="group" aria-labelledby="bulk-heading" className="mt-3 space-y-3 rounded-compact border border-line bg-white p-3">
+              <h3 id="bulk-heading" className="text-sm font-semibold text-ink">Choose a category for many at once</h3>
+              <p className="text-xs text-muted">
+                Tick the transactions, pick one category and apply it. This only sets the category. Nothing is approved, and
+                nothing counts toward your income or spending until you approve it below.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy !== null || selectableOnPage.length === 0}
+                  onClick={() => addToSelection(selectableOnPage.map((i) => i.id))}
+                  className="rounded-compact border border-line px-3 py-1.5 text-sm font-semibold text-trust disabled:opacity-50"
+                >
+                  Select all on this page ({selectableOnPage.length})
+                </button>
+                {selectableAll.length > selectableOnPage.length && (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => addToSelection(selectableAll.map((i) => i.id))}
+                    className="rounded-compact border border-line px-3 py-1.5 text-sm font-semibold text-trust disabled:opacity-50"
+                  >
+                    Select all {selectableAll.length} that need a category
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={busy !== null || selected.size === 0}
+                  onClick={() => clearSelection()}
+                  className="rounded-compact border border-line px-3 py-1.5 text-sm text-ink disabled:opacity-50"
+                >
+                  Clear selection
+                </button>
+              </div>
+              <p role="status" aria-live="polite" className="text-sm font-medium text-ink">
+                {plural(selectedItems.length, 'transaction', 'transactions')} selected
+                {selectedItems.length > 0 ? `, ${plan.covered} with a suggested category` : ''}
+              </p>
+              {tooManySelected && (
+                <p role="alert" className="text-sm text-risk">You can set up to {BULK_MAX_SELECTION} transactions at a time. Clear some of the selection.</p>
+              )}
+              {selectedItems.length > 0 && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col">
+                    <label htmlFor="bulk-category" className="text-xs font-medium text-ink">Category for all selected</label>
+                    <select
+                      id="bulk-category"
+                      value={bulkCategory}
+                      onChange={(e) => { setBulkCategory(e.target.value); setConfirm(null); }}
+                      className="mt-1 rounded-compact border border-line bg-white px-2 py-1 text-sm"
+                    >
+                      <option value="">Choose a category</option>
+                      {OPTION_GROUPS.map((g) => {
+                        const options = categories.filter((c) => g.types.includes(c.economicType));
+                        if (options.length === 0) return null;
+                        return (
+                          <optgroup key={g.label} label={g.label}>
+                            {options.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input id="bulk-remember" type="checkbox" checked={bulkRemember} onChange={(e) => setBulkRemember(e.target.checked)} />
+                    <label htmlFor="bulk-remember" className="text-xs text-ink">Remember each payee next time</label>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy !== null || !bulkCategory || tooManySelected}
+                    onClick={() => setConfirm('category')}
+                    className="rounded-compact bg-trust px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    Apply category to {plural(selectedItems.length, 'selected transaction', 'selected transactions')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy !== null || plan.covered === 0 || tooManySelected}
+                    onClick={() => setConfirm('suggested')}
+                    className="rounded-compact border border-trust px-3 py-1.5 text-sm font-semibold text-trust disabled:opacity-50"
+                  >
+                    Apply the suggested category to the {plan.covered} selected that {plan.covered === 1 ? 'has' : 'have'} one
+                  </button>
+                </div>
+              )}
+              {confirm && selectedItems.length > 0 && (
+                <div ref={confirmRef} tabIndex={-1} role="group" aria-label="Confirm the category" className="space-y-2 rounded-compact border border-attention/50 bg-attention/5 p-3">
+                  <p className="text-sm text-ink">
+                    {confirm === 'category'
+                      ? confirmCategoryText(selectedItems.length, bulkCategoryLabel, bulkRemember)
+                      : confirmSuggestedText(plan, selectedItems.length, labelOf, bulkRemember)}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => applyBulk(confirm)}
+                      className="rounded-compact bg-trust px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {confirm === 'category'
+                        ? `Yes, set ${plural(selectedItems.length, 'transaction', 'transactions')} to ${bulkCategoryLabel}`
+                        : `Yes, apply the suggested category to ${plural(plan.covered, 'transaction', 'transactions')}`}
+                    </button>
+                    <button type="button" onClick={() => setConfirm(null)} className="rounded-compact border border-line px-3 py-1.5 text-sm text-ink">Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {bulkResult && bulkResult.failed.length > 0 && (
+            <div role="alert" className="mt-3 space-y-1 rounded-compact border border-risk/40 bg-risk/5 p-3 text-sm text-ink">
+              <p className="font-semibold">
+                {plural(bulkResult.failed.length, 'transaction', 'transactions')} could not be set. The others were saved.
+              </p>
+              <ul className="list-disc pl-5">
+                {bulkResult.failed.map((f) => (
+                  <li key={f.transaction_id}>{f.description ?? 'Transaction'}: {f.message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {cardPages > 1 && (
+            <nav aria-label="Pages of transactions to categorise" className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+              <button type="button" disabled={shownCardPage <= 1} onClick={() => setCardPage(shownCardPage - 1)} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Previous page</button>
+              <span role="status" aria-live="polite" className="text-muted">{cardPageSummary(shownCardPage, needsDecision.length)}</span>
+              <button type="button" disabled={shownCardPage >= cardPages} onClick={() => setCardPage(shownCardPage + 1)} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Next page</button>
+            </nav>
+          )}
+
           <ul className="mt-3 space-y-3">
-            {needsDecision.map((item) => {
+            {cardItems.map((item) => {
               const selectId = `category-${item.id}`;
               const rememberId = `remember-${item.id}`;
               const chosen = chosenCategory(item);
               const suggested = item.suggested_category_id && item.suggested_category_id !== item.current_category_id
                 ? categories.find((c) => c.id === item.suggested_category_id)?.label
                 : null;
+              const selectBoxId = `select-${item.id}`;
+              const alike = item.can_choose_category ? idsLikeThis(needsDecision, item) : [];
               return (
                 <li key={item.id} className="rounded-compact border border-line bg-white p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-sm font-semibold text-ink">{item.description ?? 'Transaction'}</p>
+                    {item.can_choose_category ? (
+                      <div className="flex items-baseline gap-2">
+                        <input
+                          id={selectBoxId}
+                          type="checkbox"
+                          checked={selected.has(item.id)}
+                          onChange={(e) => toggleSelected(item.id, e.target.checked)}
+                        />
+                        <label htmlFor={selectBoxId} className="text-sm font-semibold text-ink">
+                          {item.description ?? 'Transaction'}<span className="sr-only"> (tick to include in the category for many)</span>
+                        </label>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-semibold text-ink">{item.description ?? 'Transaction'}</p>
+                    )}
                     <p className="text-sm tabular-nums text-ink">
                       {item.direction === 'in' ? 'Money in ' : 'Money out '}
                       {money(item.amount, item.currency)}
                     </p>
                   </div>
-                  <p className="text-xs text-muted">{item.transaction_date}</p>
+                  <p className="text-xs text-muted">
+                    {displayDate(item.transaction_date, item.currency)}
+                    {alike.length > 1 && (
+                      <>
+                        {' · '}
+                        <button
+                          type="button"
+                          disabled={busy !== null}
+                          onClick={() => addToSelection(alike)}
+                          className="font-semibold text-trust underline disabled:opacity-50"
+                        >
+                          Select all {alike.length} like this<span className="sr-only"> ({item.description ?? 'this transaction'})</span>
+                        </button>
+                      </>
+                    )}
+                  </p>
                   <p className="mt-1 text-xs text-muted">{item.reason_text}</p>
                   {item.can_choose_category ? (
                     <div className="mt-2 flex flex-wrap items-end gap-3">
@@ -480,7 +715,7 @@ export function StatementCategoryReview({
                       <ul className="mt-2 space-y-1">
                         {group.lines.map((line) => (
                           <li key={line.id} className="flex flex-wrap justify-between gap-2 border-b border-line/60 py-1">
-                            <span className="text-ink">{line.transaction_date} · {line.description ?? 'Transaction'}</span>
+                            <span className="text-ink">{displayDate(line.transaction_date, group.currency)} · {line.description ?? 'Transaction'}</span>
                             <span className="tabular-nums text-ink">
                               {money(line.amount, group.currency)}
                               {line.approval_status === 'approved' ? ' · approved' : ''}

@@ -7,6 +7,7 @@ import { getTransactions, type TransactionSort } from '@/lib/financial-data-hub/
 import { categoriesRepository, merchantsRepository } from '@/lib/financial-data-hub/repositories/index';
 import type { FdhEconomicTransactionType, FdhTransactionApprovalStatus } from '@/lib/financial-data-hub/constants/enums';
 import { formatMoney } from '@/lib/engines/money';
+import { displayDate } from '@/lib/engines/statementDisplayDate';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { ResourceEmptyState, ResourceErrorState } from '@/components/resources/admin/ResourceStates';
 import { resolveActivityParams, rawParam, type RawSearchParams } from '../_lib/searchParams';
@@ -145,7 +146,7 @@ async function FinancialActivityTransactionsPageContent({
 
                 return (
                   <tr key={t.id} className="border-b border-line/60 align-top">
-                    <td className="py-2 pr-2 whitespace-nowrap text-ink">{t.transaction_date}</td>
+                    <td className="py-2 pr-2 whitespace-nowrap text-ink">{displayDate(t.transaction_date, t.currency_original)}</td>
                     <td className="py-2 pr-2 text-ink">{merchantOrDescription}</td>
                     <td className="py-2 pr-2 text-muted">{categoryLabel}</td>
                     <td className="py-2 pr-2 text-right tabular-nums text-ink">{formatMoney(t.amount_original, currency)}</td>
@@ -162,7 +163,7 @@ async function FinancialActivityTransactionsPageContent({
                     <td className="py-2">
                       <details>
                         <summary className="cursor-pointer text-xs font-medium text-trust">
-                          <span className="sr-only">Details for {merchantOrDescription} on {t.transaction_date}</span>
+                          <span className="sr-only">Details for {merchantOrDescription} on {displayDate(t.transaction_date, t.currency_original)}</span>
                           <span aria-hidden="true">More</span>
                         </summary>
                         <div className="mt-2 space-y-1 text-xs text-muted">

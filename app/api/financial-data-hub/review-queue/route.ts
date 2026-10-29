@@ -169,18 +169,19 @@ export async function GET(req: Request) {
     if (r.statement_upload_id) waitingByStatement.set(r.statement_upload_id, (waitingByStatement.get(r.statement_upload_id) ?? 0) + 1);
   }
   const statementIds = [...waitingByStatement.keys()].slice(0, 100);
-  let statements: Array<{ id: string; period_start: string | null; period_end: string | null; file_name: string | null; waiting: number }> = [];
+  let statements: Array<{ id: string; period_start: string | null; period_end: string | null; currency: string | null; file_name: string | null; waiting: number }> = [];
   if (statementIds.length > 0) {
     const { data } = await supabase
       .from('fdh_statement_uploads')
-      .select('id, statement_period_start, statement_period_end, original_filename_sanitised')
+      .select('id, statement_period_start, statement_period_end, currency_code, original_filename_sanitised')
       .eq('user_id', user.id)
       .in('id', statementIds);
-    statements = ((data ?? []) as Array<{ id: string; statement_period_start: string | null; statement_period_end: string | null; original_filename_sanitised: string | null }>)
+    statements = ((data ?? []) as Array<{ id: string; statement_period_start: string | null; statement_period_end: string | null; currency_code: string | null; original_filename_sanitised: string | null }>)
       .map((s) => ({
         id: s.id,
         period_start: s.statement_period_start,
         period_end: s.statement_period_end,
+        currency: s.currency_code,
         file_name: s.original_filename_sanitised,
         waiting: waitingByStatement.get(s.id) ?? 0,
       }))

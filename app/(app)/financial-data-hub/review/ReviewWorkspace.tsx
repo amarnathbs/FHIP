@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatMoney, formatMoneyCode } from '@/lib/engines/money';
+import { displayDate, displayPeriod } from '@/lib/engines/statementDisplayDate';
 import { ResourceEmptyState, ResourceErrorState, ResourceLoadingSkeleton } from '@/components/resources/admin/ResourceStates';
 // WP-08: rows removed as a duplicate count nowhere and are never approved --
 // the canonical rule, not a copy (spendingRules is pure and client-safe).
@@ -59,6 +60,7 @@ export interface QueueStatement {
   id: string;
   period_start: string | null;
   period_end: string | null;
+  currency?: string | null;
   file_name: string | null;
   waiting: number;
 }
@@ -320,7 +322,7 @@ export function ReviewWorkspace({
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm font-semibold text-ink">{txn.description_clean ?? 'Untitled transaction'}</p>
-                  <p className="text-xs text-muted">{txn.transaction_date} · {txn.economic_transaction_type}</p>
+                  <p className="text-xs text-muted">{displayDate(txn.transaction_date, txn.currency_original)} · {txn.economic_transaction_type}</p>
                 </div>
                 <p className="text-lg font-semibold tabular-nums text-ink">
                   {formatMoney(txn.amount_original, txn.currency_original as 'AUD' | 'INR')}
@@ -527,7 +529,7 @@ export function ReviewWorkspace({
             {statements.map((s) => (
               <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-compact border border-line bg-white px-3 py-2">
                 <span className="text-sm text-ink">
-                  {s.period_start && s.period_end ? `Statement ${s.period_start} to ${s.period_end}` : (s.file_name ?? 'Imported statement')}
+                  {s.period_start && s.period_end ? `Statement ${displayPeriod(s.period_start, s.period_end, s.currency)}` : (s.file_name ?? 'Imported statement')}
                   <span className="text-muted"> · {s.waiting} waiting</span>
                 </span>
                 <Link
@@ -589,7 +591,7 @@ export function ReviewWorkspace({
           <tbody>
             {items.map((it) => (
               <tr key={it.id} className="border-b border-line/60">
-                <td className="py-2 pr-2 text-ink">{it.transaction_date}</td>
+                <td className="py-2 pr-2 text-ink">{displayDate(it.transaction_date, it.currency_original)}</td>
                 <td className="py-2 pr-2 text-ink">{it.description_clean ?? '—'}</td>
                 <td className="py-2 pr-2 text-right tabular-nums text-ink">
                   {formatMoneyCode(it.amount_original, it.currency_original)} {it.currency_original}

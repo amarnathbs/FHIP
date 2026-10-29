@@ -529,3 +529,79 @@ export async function recordUserClassificationDecision(
   });
   if (historyError) throw new Error(`could not record classification history: ${historyError.message}`);
 }
+
+export interface UserClassificationDecisionItem {
+  transactionId: string;
+  previousEconomicType: string;
+  previousCategoryId: string | null;
+  previousSubcategoryId: string | null;
+  clearSubcategory: boolean;
+}
+
+/**
+ * Bulk category assignment (2026-10-29) — the same stamp and history row as
+ * `recordUserClassificationDecision`, for MANY transactions that all received
+ * the SAME new economic type and category: ONE update per <=100 ids (and one
+ * more for those whose old subcategory must be cleared) and one history insert
+ * per chunk, instead of two requests per line. Every row is still scoped by
+ * `.eq('user_id', userId)` and the returned ids are counted: the ids that were
+ * NOT updated are returned so the caller reports them instead of claiming
+ * success. Called only after the caller has recorded the correction evidence.
+ */
+export async function recordUserClassificationDecisionsBatch(
+  userId: string,
+  decision: { newEconomicType: FdhTransaction['economic_transaction_type']; newCategoryId: string },
+  items: readonly UserClassificationDecisionItem[],
+): Promise<{ stampedIds: string[]; failed: Array<{ transactionId: string; message: string }> }> {
+  const admin = createAdminClient();
+  const stampedIds: string[] = [];
+  const failed: Array<{ transactionId: string; message: string }> = [];
+  const base = {
+    classification_method: 'user_manual',
+    classification_confidence: CONFIDENCE_SCORE.HIGH,
+    transfer_flag: decision.newEconomicType === 'transfer',
+  };
+  for (const clear of [false, true]) {
+    const subset = items.filter((i) => i.clearSubcategory === clear);
+    for (let i = 0; i < subset.length; i += CLASSIFICATION_WRITE_BATCH) {
+      const chunk = subset.slice(i, i + CLASSIFICATION_WRITE_BATCH);
+      const ids = chunk.map((c) => c.transactionId);
+      const { data, error } = await admin
+        .from('fdh_transactions')
+        .update(clear ? { ...base, subcategory_id: null } : base)
+        .in('id', ids)
+        .eq('user_id', userId)
+        .select('id');
+      const updated = new Set(!error && Array.isArray(data) ? (data as Array<{ id: string }>).map((r) => r.id) : []);
+      const ok = chunk.filter((c) => updated.has(c.transactionId));
+      for (const c of chunk) {
+        if (!updated.has(c.transactionId)) failed.push({ transactionId: c.transactionId, message: 'We could not record your choice on this transaction.' });
+      }
+      if (ok.length === 0) continue;
+      const { error: historyError } = await admin.from('fdh_classification_history').insert(
+        ok.map((c) => ({
+          user_id: userId,
+          transaction_id: c.transactionId,
+          previous_economic_transaction_type: c.previousEconomicType,
+          new_economic_transaction_type: decision.newEconomicType,
+          previous_category_id: c.previousCategoryId,
+          new_category_id: decision.newCategoryId,
+          previous_subcategory_id: c.previousSubcategoryId,
+          new_subcategory_id: clear ? null : c.previousSubcategoryId,
+          classification_method: 'user_manual',
+          confidence: CONFIDENCE_SCORE.HIGH,
+          changed_by_type: 'user',
+          changed_by_user: userId,
+          global_rule_id: null,
+          user_rule_id: null,
+        })),
+      );
+      if (historyError) {
+        for (const c of ok) failed.push({ transactionId: c.transactionId, message: 'We could not record the history of your choice on this transaction.' });
+      } else {
+        stampedIds.push(...ok.map((c) => c.transactionId));
+      }
+    }
+  }
+  return { stampedIds, failed };
+}

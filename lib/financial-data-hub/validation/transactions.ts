@@ -304,6 +304,33 @@ export const fdhSetTransactionCategorySchema = z.object({
 });
 export type FdhSetTransactionCategoryInput = z.infer<typeof fdhSetTransactionCategorySchema>;
 
+/** Bulk category assignment on one statement's review (2026-10-29). Either ONE
+ * `category_id` for every selected transaction (`mode: 'category'`), or each
+ * transaction's own suggested category (`mode: 'suggested'`, the server looks the
+ * suggestion up itself). It only assigns categories: nothing is approved. The 500
+ * cap matches the bulk-approval cap above. A repeated id is refused, never
+ * silently collapsed. */
+export const FDH_BULK_SET_CATEGORY_MAX = 500;
+export const fdhBulkSetCategorySchema = z
+  .object({
+    transaction_ids: z.array(fdhUuid).min(1).max(FDH_BULK_SET_CATEGORY_MAX),
+    mode: z.enum(['category', 'suggested']).default('category'),
+    category_id: fdhUuid.optional(),
+    remember_payee: z.boolean().optional().default(false),
+  })
+  .superRefine((v, ctx) => {
+    if (new Set(v.transaction_ids).size !== v.transaction_ids.length) {
+      ctx.addIssue({ code: 'custom', path: ['transaction_ids'], message: 'The same transaction was selected twice.' });
+    }
+    if (v.mode === 'category' && !v.category_id) {
+      ctx.addIssue({ code: 'custom', path: ['category_id'], message: 'Choose a category.' });
+    }
+    if (v.mode === 'suggested' && v.category_id) {
+      ctx.addIssue({ code: 'custom', path: ['category_id'], message: 'Suggested mode takes no category.' });
+    }
+  });
+export type FdhBulkSetCategoryInput = z.infer<typeof fdhBulkSetCategorySchema>;
+
 /** Category-totals review: approve every still-pending transaction in ONE
  * category group of one statement. The key is re-derived on the server from
  * the statement's current rows; a stale or invented key simply matches no

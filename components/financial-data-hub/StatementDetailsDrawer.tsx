@@ -18,6 +18,8 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import type { StatementDetails } from '@/lib/financial-data-hub/services/statementDetailsService';
 import { DataTable } from '@/components/ui/DataTable';
+import { displayDate, displayPeriod } from '@/lib/engines/statementDisplayDate';
+import { linesPageSummary } from '@/lib/financial-data-hub/domain/reviewDisplay';
 
 function money(amount: number | null, currency: string | null): string {
   if (amount === null) return 'Not shown on the statement';
@@ -84,7 +86,10 @@ export function StatementDetailsDrawer({ statementId, buttonLabel = 'Statement d
 
   const d = details;
   const cur = d?.statement.currency ?? null;
-  const pages = d ? Math.max(1, Math.ceil(d.lines.total / d.lines.page_size)) : 1;
+  // The summary describes the page the server actually returned (not the one just asked for), so it always matches the rows on screen.
+  const paging = d ? linesPageSummary(d.lines.page, d.lines.page_size, d.lines.total) : null;
+  const pages = paging?.pages ?? 1;
+  const shownPage = d?.lines.page ?? page;
 
   return (
     <div
@@ -105,7 +110,7 @@ export function StatementDetailsDrawer({ statementId, buttonLabel = 'Statement d
         <>
           <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
             <div><dt className="text-muted">File</dt><dd className="text-ink">{d.statement.file_name ?? 'Not recorded'}</dd></div>
-            <div><dt className="text-muted">Period</dt><dd className="text-ink">{d.statement.period_start && d.statement.period_end ? `${d.statement.period_start} to ${d.statement.period_end}` : 'Not shown on the statement'}</dd></div>
+            <div><dt className="text-muted">Period</dt><dd className="text-ink">{d.statement.period_start && d.statement.period_end ? displayPeriod(d.statement.period_start, d.statement.period_end, cur ?? d.reconciliation.currency) : 'Not shown on the statement'}</dd></div>
             <div>
               <dt className="text-muted">Account</dt>
               <dd className="text-ink">
@@ -162,9 +167,9 @@ export function StatementDetailsDrawer({ statementId, buttonLabel = 'Statement d
               <tbody>
                 {d.lines.rows.map((row) => (
                   <tr key={row.id} className="border-t border-line/60">
-                    <td className="px-2 py-1 whitespace-nowrap">{row.transaction_date}</td>
-                    <td className="px-2 py-1 whitespace-nowrap">{row.posting_date ?? '—'}</td>
-                    <td className="px-2 py-1 whitespace-nowrap">{row.value_date ?? '—'}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">{displayDate(row.transaction_date, row.currency)}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">{displayDate(row.posting_date, row.currency, '—')}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">{displayDate(row.value_date, row.currency, '—')}</td>
                     <td className="px-2 py-1">{row.description ?? '—'}</td>
                     <td className="px-2 py-1">{row.reference ?? '—'}</td>
                     <td className="px-2 py-1 text-right tabular-nums">{row.credit_debit === 'credit' ? '+' : '−'}{formatMoneyExact(row.amount, row.currency)}</td>
@@ -179,11 +184,11 @@ export function StatementDetailsDrawer({ statementId, buttonLabel = 'Statement d
               </tbody>
             </DataTable>
             {pages > 1 && (
-              <div className="mt-2 flex items-center gap-3 text-sm">
-                <button type="button" disabled={page <= 1 || loading} onClick={() => goTo(Math.max(1, page - 1))} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Previous lines</button>
-                <span className="text-muted">Page {page} of {pages}</span>
-                <button type="button" disabled={page >= pages || loading} onClick={() => goTo(page + 1)} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Next lines</button>
-              </div>
+              <nav aria-label="Pages of statement lines" className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                <button type="button" disabled={shownPage <= 1 || loading} onClick={() => goTo(Math.max(1, shownPage - 1))} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Previous page</button>
+                <span role="status" aria-live="polite" className="text-muted">{paging?.text}</span>
+                <button type="button" disabled={shownPage >= pages || loading} onClick={() => goTo(shownPage + 1)} className="rounded-compact border border-line px-2 py-1 disabled:opacity-50">Next page</button>
+              </nav>
             )}
           </div>
         </>
