@@ -339,5 +339,7 @@ export const fdhApproveCategoryGroupSchema = z.object({
   group_key: z.string().min(1).max(300),
   /** The person ticked "I checked these lines". Required to approve a PROPOSED group of transfers (see CategoryGroup.requires_acknowledgement). */
   acknowledge_proposed: z.boolean().optional(),
+  /** Remember the payees of the AI-PROPOSED lines in this total (as the person's own rule) once they are approved. Never implied. */
+  remember_ai_payees: z.boolean().optional(),
 });
 export type FdhApproveCategoryGroupInput = z.infer<typeof fdhApproveCategoryGroupSchema>;

@@ -284,6 +284,8 @@ export interface CategoryGroupLine {
   fully_confident: boolean;
   /** True when the category was PROPOSED by a rule or a general wording match: the person has not decided it and no verified merchant backs it. */
   proposed: boolean;
+  /** Who proposed it: the deterministic rules, or the optional Premium AI step (method 'ai'). Null when not proposed. */
+  proposed_by: 'rules' | 'ai' | null;
 }
 
 export interface CategoryGroup {
@@ -304,6 +306,8 @@ export interface CategoryGroup {
   fully_confident: boolean;
   /** Lines in this total whose category is a proposal (see `CategoryGroupLine.proposed`). */
   proposed_count: number;
+  /** Of those, the lines proposed by the optional AI step. */
+  ai_proposed_count: number;
   /**
    * True when approving this total needs the person's explicit "I checked these lines" first: a PROPOSED group of transfers between own accounts
    * or card repayments, which count nowhere once approved and so would hide a wrong guess. The server refuses the approval without it.
@@ -513,6 +517,7 @@ export function buildCategoryReview(
         approved_count: 0,
         fully_confident: true,
         proposed_count: 0,
+        ai_proposed_count: 0,
         requires_acknowledgement: false,
         status: 'waiting',
         lines: [],
@@ -538,10 +543,13 @@ export function buildCategoryReview(
       approval_status: t.approval_status,
       fully_confident: confident,
       proposed: !confident,
+      proposed_by: confident ? null : t.classification_method === 'ai' ? 'ai' : 'rules',
     });
     if (!confident && !isApproved) {
       g.proposed_count += 1;
-      if (type === 'transfer') g.requires_acknowledgement = true;
+      if (t.classification_method === 'ai') g.ai_proposed_count += 1;
+      // AI proposals always need the person's "I checked" before a total is approved, as do transfers.
+      if (type === 'transfer' || t.classification_method === 'ai') g.requires_acknowledgement = true;
     }
 
     const tm = totalsMinor.get(t.currency_original) ?? { wi: 0, ws: 0, ai: 0, as: 0 };

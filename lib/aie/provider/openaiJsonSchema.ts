@@ -59,6 +59,8 @@ import { PAYSLIP_DOCUMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/payslip/o
 // adapter added without this line fails a test rather than failing live.
 import { AIE_BANK_STATEMENT_FACTS_SCHEMA_NAME, AIE_BANK_STATEMENT_FACTS_SCHEMA_VERSION } from '../adapters/bankStatement/schema';
 import { BANK_STATEMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/bankStatement/openaiSchema';
+import { AIE_BANK_CATEGORISE_SCHEMA_NAME, AIE_BANK_CATEGORISE_SCHEMA_VERSION } from '../adapters/bankCategorise/schema';
+import { BANK_CATEGORISE_OPENAI_JSON_SCHEMA } from '../adapters/bankCategorise/openaiSchema';
 import { AIE_AU_INVESTMENT_FACTS_SCHEMA_NAME, AIE_AU_INVESTMENT_FACTS_SCHEMA_VERSION } from '../adapters/auInvestment/schema';
 import { AU_INVESTMENT_FACTS_OPENAI_JSON_SCHEMA } from '../adapters/auInvestment/openaiSchema';
 import { AIE_LIABILITY_FACTS_SCHEMA_NAME, AIE_LIABILITY_FACTS_SCHEMA_VERSION } from '../adapters/liability/schema';
@@ -195,6 +197,8 @@ const KNOWN_SCHEMAS = new Map<string, KnownSchemaSpec | RawKnownSchemaSpec>([
   // No user data is ever sent with it; the answer is re-validated against the document text before any use
   // (lib/services/investment-intelligence/factsheetReader/aiExtractor.ts).
   [`${FACTSHEET_AI_SCHEMA_NAME}@${FACTSHEET_AI_SCHEMA_VERSION}`, { rawSchema: FACTSHEET_AI_OPENAI_JSON_SCHEMA }],
+  // Bank-line categorisation (29-10-2026): payee strings in, a category key per payee out. Flag AIE_BANK_CATEGORISE_AI_ENABLED, default OFF.
+  [`${AIE_BANK_CATEGORISE_SCHEMA_NAME}@${AIE_BANK_CATEGORISE_SCHEMA_VERSION}`, { rawSchema: BANK_CATEGORISE_OPENAI_JSON_SCHEMA }],
 ]);
 
 function isRawSpec(spec: KnownSchemaSpec | RawKnownSchemaSpec): spec is RawKnownSchemaSpec {

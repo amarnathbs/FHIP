@@ -656,3 +656,76 @@ export async function recordUserClassificationDecisionsBatch(
   }
   return { stampedIds, failed };
 }
+
+export interface AiProposalItem {
+  transactionId: string;
+  newEconomicType: FdhTransaction['economic_transaction_type'];
+  newCategoryId: string;
+}
+
+/**
+ * Optional AI categorisation (29-10-2026) -- records the accepted answers as PROPOSALS.
+ *
+ * Sanctioned service-role write (migration 0068's trigger forbids the authenticated role from writing these columns), exactly like the engine's
+ * own writes above. A proposal is written ONLY onto a line that is still unclassified: `economic_transaction_type = 'unknown'`, not approved,
+ * not a person's own decision (`user_override = false`). A person's choice, an approval and a rule's classification are never overwritten, and
+ * the guard is in the UPDATE itself, so a line changed between the AI call and this write is simply not updated (and reported as such).
+ *
+ * Provenance is the existing, CHECK-allowed method 'ai' (FDH_CLASSIFICATION_METHODS) with confidence capped at the MEDIUM bucket, so a proposal is
+ * never HIGH and never "fully confident". It is never approved here. Returns the ids actually written.
+ */
+export async function recordAiProposals(userId: string, items: readonly AiProposalItem[]): Promise<{ writtenIds: string[]; skippedIds: string[] }> {
+  const admin = createAdminClient();
+  const writtenIds: string[] = [];
+  const byDecision = new Map<string, AiProposalItem[]>();
+  for (const it of items) {
+    const key = `${it.newEconomicType}|${it.newCategoryId}`;
+    byDecision.set(key, [...(byDecision.get(key) ?? []), it]);
+  }
+  for (const group of byDecision.values()) {
+    for (let i = 0; i < group.length; i += CLASSIFICATION_WRITE_BATCH) {
+      const chunk = group.slice(i, i + CLASSIFICATION_WRITE_BATCH);
+      const { data, error } = await admin
+        .from('fdh_transactions')
+        .update({
+          economic_transaction_type: chunk[0].newEconomicType,
+          category_id: chunk[0].newCategoryId,
+          subcategory_id: null,
+          classification_method: 'ai',
+          classification_confidence: CONFIDENCE_SCORE.MEDIUM,
+          transfer_flag: false,
+        })
+        .in('id', chunk.map((c) => c.transactionId))
+        .eq('user_id', userId)
+        .eq('economic_transaction_type', 'unknown')
+        .eq('approval_status', 'pending')
+        .eq('user_override', false)
+        .select('id');
+      if (error) throw new Error(`could not record the AI proposals: ${error.message}`);
+      const done = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+      writtenIds.push(...done);
+      if (done.length > 0) {
+        await admin.from('fdh_classification_history').insert(
+          done.map((id) => ({
+            user_id: userId,
+            transaction_id: id,
+            previous_economic_transaction_type: 'unknown',
+            new_economic_transaction_type: chunk[0].newEconomicType,
+            previous_category_id: null,
+            new_category_id: chunk[0].newCategoryId,
+            previous_subcategory_id: null,
+            new_subcategory_id: null,
+            classification_method: 'ai',
+            confidence: CONFIDENCE_SCORE.MEDIUM,
+            changed_by_type: 'system',
+            changed_by_user: null,
+            global_rule_id: null,
+            user_rule_id: null,
+          })),
+        );
+      }
+    }
+  }
+  const written = new Set(writtenIds);
+  return { writtenIds, skippedIds: items.map((i) => i.transactionId).filter((id) => !written.has(id)) };
+}

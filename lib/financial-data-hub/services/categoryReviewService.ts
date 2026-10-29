@@ -20,6 +20,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { isAieBankCategoriseAiEnabled } from '@/lib/aie/adapters/bankCategorise/featureFlags';
 import { isDuplicateExcluded, REFUND_LIKE_LINK_TYPES } from '@/lib/read-models/core/spendingRules';
 import { fetchAllRows, type RangeableQuery } from '../bank-csv/pagination';
 import {
@@ -59,6 +60,8 @@ export class CategoryReviewError extends Error {
 export interface StatementCategoryReview extends CategoryReview {
   /** Open statement-level checks and notes, in words (EXP-G15 / EXP-G17). */
   notes: StatementNote[];
+  /** True when the optional Premium AI step (AIE_BANK_CATEGORISE_AI_ENABLED) is switched on. The page shows its button only then. */
+  ai_categorise_enabled: boolean;
   statement: {
     id: string;
     period_start: string | null;
@@ -245,6 +248,7 @@ export async function getStatementCategoryReview(userId: string, statementId: st
   return {
     ...review,
     notes: buildStatementNotes(statementItems),
+    ai_categorise_enabled: isAieBankCategoriseAiEnabled(),
     statement: {
       id: statement.id,
       period_start: statement.statement_period_start,
@@ -328,7 +332,7 @@ export async function approveCategoryGroup(
   userId: string,
   statementId: string,
   groupKey: string,
-  opts: { acknowledgeProposed?: boolean } = {},
+  opts: { acknowledgeProposed?: boolean; rememberAiPayees?: boolean } = {},
 ): Promise<GroupApprovalResult> {
   const review = await getStatementCategoryReview(userId, statementId);
   const ids = pendingIdsForGroup(review, groupKey);
@@ -355,6 +359,25 @@ export async function approveCategoryGroup(
   await settlePendingLinksForGroup(userId, ids, group.economic_type);
 
   const result = await bulkApproveTransactions(userId, ids);
+
+  // The person accepted a total that includes AI-proposed lines and asked to remember those payees: ONLY NOW (after the approval) is a payee
+  // remembered, as their own rule, per distinct payee, with the category they just approved.
+  if (opts.rememberAiPayees && group.category_id && result.succeeded > 0) {
+    const approvedIds = new Set(result.results.filter((r) => r.ok).map((r) => r.id));
+    const keys = new Set<string>();
+    for (const line of group.lines) {
+      if (line.proposed_by !== 'ai' || !approvedIds.has(line.id)) continue;
+      const key = derivePayeeKey(line.description);
+      if (key) keys.add(key);
+    }
+    for (const key of keys) {
+      try {
+        await rememberPayee(userId, key, group.category_id, group.economic_type);
+      } catch {
+        // The approval stands; the payee is simply asked about again next time.
+      }
+    }
+  }
   const finalise = result.succeeded > 0 ? await finaliseStatementIfComplete(userId, statementId) : { finalised: false, reason: null };
   return {
     outcome: result.failed === 0 ? 'approved' : result.succeeded === 0 ? 'blocked' : 'partly_approved',

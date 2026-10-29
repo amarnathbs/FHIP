@@ -11,6 +11,7 @@ import { StatementDetailsDrawer } from '@/components/financial-data-hub/Statemen
 // also pins every field this file reads against a real route response.
 import type { CategoryGroup, CategoryReviewMonthTotals, NeedsDecisionItem, StatementNote, SurplusEffect } from '@/lib/financial-data-hub/domain/categoryReview';
 import type { StatementCategoryReview as ReviewPayload, GroupApprovalResult, ApproveAllResult, SetCategoryResult } from '@/lib/financial-data-hub/services/categoryReviewService';
+import type { AiCategoriseResult } from '@/lib/financial-data-hub/services/bankAiCategoriseService';
 import type { BulkSetCategoryResult } from '@/lib/financial-data-hub/services/categoryBulkService';
 import { displayDate, displayPeriod } from '@/lib/engines/statementDisplayDate';
 import {
@@ -148,6 +149,8 @@ export function StatementCategoryReview({
   const [bulkResult, setBulkResult] = useState<BulkSetCategoryResult | null>(null);
   // (Declared after the hooks the render test seeds by position.) "I checked these lines" per proposed transfer group (the server refuses the approval without it).
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  // "Remember these payees" per group that holds AI-proposed lines: never implied, only when ticked.
+  const [rememberAi, setRememberAi] = useState<Record<string, boolean>>({});
   const confirmRef = useRef<HTMLDivElement>(null);
   // After an action the line or button the user was on may disappear; focus
   // moves to the result message so keyboard and screen-reader users are not
@@ -225,13 +228,25 @@ export function StatementCategoryReview({
 
   function approveGroup(group: CategoryGroup) {
     void run(`group:${group.group_key}`, async () => {
-      const result = await apiPost<GroupApprovalResult>(`${url}/approve-group`, { group_key: group.group_key, acknowledge_proposed: checked[group.group_key] === true });
+      const result = await apiPost<GroupApprovalResult>(`${url}/approve-group`, { group_key: group.group_key, acknowledge_proposed: checked[group.group_key] === true, remember_ai_payees: rememberAi[group.group_key] === true });
       if (result.outcome === 'already_approved') return `${group.label} was already approved. Nothing changed.`;
       let message = `Approved ${group.label}: ${plural(result.approved, 'transaction', 'transactions')}.`;
       if (result.failed > 0) message += ` ${plural(result.failed, 'transaction', 'transactions')} could not be approved yet and ${result.failed === 1 ? 'is' : 'are'} listed above.`;
       if (result.statement_finalised) message += ' Every transaction on this statement is now approved.';
       else if (result.statement_not_finalised_reason) message += ` ${result.statement_not_finalised_reason}`;
       return message;
+    });
+  }
+
+  function suggestWithAi() {
+    void run('ai-categorise', async () => {
+      const r = await apiPost<AiCategoriseResult>(`${url}/ai-categorise`, {});
+      if (r.status === 'disabled') return 'AI suggestions are not switched on.';
+      if (r.status === 'refused') return r.reason === 'premium_required' ? 'AI suggestions are part of Premium.' : 'AI suggestions are not available right now.';
+      if (r.status === 'nothing_to_do') return 'There is nothing here for AI to suggest. Payments to people are never sent.';
+      const more = r.remaining_payees > 0 ? ` ${plural(r.remaining_payees, 'payee is', 'payees are')} left; run it again for the rest.` : '';
+      const stopped = r.status === 'stopped' ? ' It stopped early (a daily limit or a service problem); what was suggested is kept.' : '';
+      return `AI suggested a category for ${plural(r.proposed_lines, 'transaction', 'transactions')} (${plural(r.proposed_payees, 'payee', 'payees')}). They are proposals: check them, then approve the total.${more}${stopped}`;
     });
   }
 
@@ -409,6 +424,24 @@ export function StatementCategoryReview({
           </div>
         </dl>
       </section>
+
+      {review.ai_categorise_enabled && needsDecision.some((i) => i.reason === 'uncategorised' && i.direction === 'out') && (
+        <section aria-labelledby="ai-heading" className="rounded-compact border border-line bg-white p-4">
+          <h2 id="ai-heading" className="text-base font-semibold text-ink">Suggest categories with AI (Premium)</h2>
+          <p className="mt-1 text-xs text-muted">
+            For payments to shops and businesses we could not recognise. Only the business wording, with numbers removed, is sent; payments to
+            people are never sent. The suggestions are proposals: nothing is approved and nothing counts until you approve the total.
+          </p>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => suggestWithAi()}
+            className="mt-2 rounded-compact border border-line px-3 py-1.5 text-sm font-semibold text-trust disabled:opacity-50"
+          >
+            Suggest categories
+          </button>
+        </section>
+      )}
 
       {/* Lines that need a person */}
       {needsDecision.length > 0 && (
@@ -687,7 +720,7 @@ export function StatementCategoryReview({
                       {group.not_counted_reason && <p className="text-xs text-muted">{group.not_counted_reason}</p>}
                       {group.proposed_count > 0 && group.status !== 'approved' && (
                         <p className="mt-1 text-xs font-medium text-ink">
-                          Proposed, check the lines: {plural(group.proposed_count, 'transaction was', 'transactions were')} put here from the wording on your statement. Nothing counts until you approve.
+                          Proposed, check the lines: {plural(group.proposed_count, 'transaction was', 'transactions were')} put here from the wording on your statement{group.ai_proposed_count > 0 ? ` (${group.ai_proposed_count} by AI)` : ''}. Nothing counts until you approve.
                         </p>
                       )}
                     </div>
@@ -703,6 +736,16 @@ export function StatementCategoryReview({
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
+                    {group.pending_count > 0 && group.ai_proposed_count > 0 && (
+                      <label className="flex items-center gap-2 text-xs text-ink">
+                        <input
+                          type="checkbox"
+                          checked={rememberAi[group.group_key] === true}
+                          onChange={(e) => setRememberAi((c) => ({ ...c, [group.group_key]: e.target.checked }))}
+                        />
+                        Remember the AI-suggested payees next time
+                      </label>
+                    )}
                     {group.pending_count > 0 && group.requires_acknowledgement && (
                       <label className="flex items-center gap-2 text-xs text-ink">
                         <input
@@ -710,7 +753,7 @@ export function StatementCategoryReview({
                           checked={checked[group.group_key] === true}
                           onChange={(e) => setChecked((c) => ({ ...c, [group.group_key]: e.target.checked }))}
                         />
-                        I checked these lines: they are moves between my own accounts or card repayments
+                        I checked these lines and they are right
                       </label>
                     )}
                     {group.pending_count > 0 && (
@@ -732,7 +775,7 @@ export function StatementCategoryReview({
                             <span className="text-ink">{displayDate(line.transaction_date, group.currency)} · {line.description ?? 'Transaction'}</span>
                             <span className="tabular-nums text-ink">
                               {money(line.amount, group.currency)}
-                              {line.approval_status === 'approved' ? ' · approved' : line.proposed ? ' · proposed' : ''}
+                              {line.approval_status === 'approved' ? ' · approved' : line.proposed ? (line.proposed_by === 'ai' ? ' · proposed by AI' : ' · proposed') : ''}
                             </span>
                           </li>
                         ))}
