@@ -143,6 +143,10 @@ describe('card, store-card and buy-now-pay-later repayments', () => {
     expect(result.flaggedCandidate).toBeNull();
     expect(classify('VISA-COLES CARLTON AU#123(Ref.55)').result.flaggedCandidate).toBeNull();
     expect(classify('Direct Debit Gym Memberships Pty Ltd').cat).not.toBe('credit_card_payment');
+    // a purchase the engine CANNOT classify is still just an unknown line: it must not also carry a pending credit-card-settlement question
+    const unknownPurchase = classify('VISA-NOOJEE HOTEL NOOJEE AU#12(Ref.34) Apple Pay');
+    expect(unknownPurchase.result.source.kind).toBe('unresolved');
+    expect(unknownPurchase.result.flaggedCandidate).toBeNull();
   });
 });
 
