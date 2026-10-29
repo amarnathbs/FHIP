@@ -48,6 +48,7 @@ import {
   userClassificationRulesRepository,
 } from '../repositories';
 import { classifyTransaction } from '../classification/economicTypeEngine';
+import { buildOwnIdentity, type OwnIdentity } from '../classification/ownIdentity';
 import { matchInternalTransfers, openCandidateLink, type TransferCandidateTxn } from '../classification/transferMatching';
 import { matchRefundsToOriginals, type RefundCandidateTxn } from '../classification/refundReversalMatching';
 import { detectRecurringSeries, type RecurringCandidateTxn } from '../classification/recurringDetection';
@@ -89,6 +90,33 @@ async function loadReferenceData(): Promise<ClassificationReferenceData> {
   };
 }
 
+/**
+ * The signed-in user's own name, their active household members' names and the last digits of their imported accounts: the evidence the engine
+ * uses to recognise a transfer between the user's OWN accounts (classification/ownIdentity.ts). Read with the RLS-scoped session client and an
+ * explicit user filter. Best-effort by design: if any read fails the engine simply has less evidence (fewer own-account matches), it never
+ * guesses and never fails the run. Names stay in memory for this run only.
+ */
+async function loadOwnIdentity(
+  userId: string,
+  accountIdentifiers: ReadonlyArray<string | null>,
+  narratives: ReadonlyArray<string | null>,
+): Promise<OwnIdentity> {
+  let selfName: string | null = null;
+  let householdNames: string[] = [];
+  try {
+    const supabase = await createClient();
+    const [profile, members] = await Promise.all([
+      supabase.from('user_profiles').select('full_name').eq('user_id', userId).maybeSingle(),
+      supabase.from('household_members').select('full_name').eq('user_id', userId).eq('is_active', true),
+    ]);
+    selfName = (profile?.data as { full_name?: string | null } | null)?.full_name ?? null;
+    householdNames = ((members?.data ?? []) as Array<{ full_name?: string | null }>).map((m) => m.full_name ?? '').filter(Boolean);
+  } catch {
+    // Less evidence, never an error.
+  }
+  return buildOwnIdentity({ selfName, householdNames, accountIdentifiers, narratives });
+}
+
 async function loadUserTransactions(userId: string): Promise<FdhTransaction[]> {
   const supabase = await createClient();
   return fetchAllRows<FdhTransaction>(() =>
@@ -117,6 +145,8 @@ export function keepsSourceEconomicType(txn: Pick<FdhTransaction, 'classificatio
  */
 /** Ids per batched UPDATE (a PostgREST `.in()` list travels in the URL: 100 UUIDs is ~3.7 KB). */
 export const CLASSIFICATION_WRITE_BATCH = 100;
+/** The link types the engine opens as a counterpart-less candidate (transferMatching.openCandidateLink). */
+const STALE_WITHDRAWABLE_LINK_TYPES: readonly string[] = ['internal_transfer', 'credit_card_settlement', 'investment_funding'];
 /** History rows per batched INSERT (request body). */
 export const CLASSIFICATION_HISTORY_BATCH = 500;
 
@@ -130,6 +160,7 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
   ref.userRules = (userRulesResult.data ?? []).filter((r) => r.active);
 
   const accounts = accountsResult.data ?? [];
+  ref.ownIdentity = await loadOwnIdentity(userId, accounts.map((a) => a.masked_identifier), transactions.map((t) => t.description_clean));
   const institutionByAccount = new Map(accounts.map((a) => [a.id, a.institution_id]));
   const accountTypeByAccount = new Map<string, FdhAccountType>(accounts.map((a) => [a.id, a.account_type]));
 
@@ -297,6 +328,26 @@ export async function classifyUserTransactions(userId: string): Promise<Classifi
   }
   for (let i = 0; i < historyRows.length; i += CLASSIFICATION_HISTORY_BATCH) {
     await admin.from('fdh_classification_history').insert(historyRows.slice(i, i + CLASSIFICATION_HISTORY_BATCH));
+  }
+
+  // 28-10-2026: earlier runs opened a pending "possible transfer / card settlement" link on every line whose wording carried a card or Osko
+  // hint, and a pending link blocks approval. The engine no longer proposes one for a line it classified, so the engine's OWN open,
+  // counterpart-less, unconfirmed candidate links on lines it now classifies are withdrawn here (status 'rejected', which is what a person
+  // saying "this is not a transfer" produces). A link the person confirmed, or one with a counterpart, is never touched.
+  const staleOpenLinkIds: string[] = [];
+  for (const link of existingLinksResult.data ?? []) {
+    if (link.status !== 'pending' || link.transaction_id_to || link.user_confirmed || link.created_by_method !== 'algorithm') continue;
+    if (!STALE_WITHDRAWABLE_LINK_TYPES.includes(link.link_type)) continue;
+    const result = resolvedByTxnId.get(link.transaction_id_from);
+    if (result && result.source.kind !== 'unresolved' && !result.flaggedCandidate) staleOpenLinkIds.push(link.id);
+  }
+  for (let i = 0; i < staleOpenLinkIds.length; i += CLASSIFICATION_WRITE_BATCH) {
+    await admin
+      .from('fdh_transaction_links')
+      .update({ status: 'rejected' })
+      .in('id', staleOpenLinkIds.slice(i, i + CLASSIFICATION_WRITE_BATCH))
+      .eq('user_id', userId)
+      .eq('status', 'pending');
   }
 
   // --- Transfer / settlement / loan-payment matching (batch, cross-account) ---

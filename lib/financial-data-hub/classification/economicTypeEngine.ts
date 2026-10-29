@@ -32,14 +32,20 @@
 import { resolvePrecedence, type PrecedenceCandidate } from '../domain/classificationPrecedence';
 import type { FdhCategory } from '../domain/types';
 import type { FdhEconomicTransactionType } from '../constants/enums';
+import { matchBuiltinRule } from './builtinRules';
 import { matchMerchant } from './merchantMatching';
+import { EMPTY_OWN_IDENTITY } from './ownIdentity';
 import { evaluateRules, type RuleMatchTransaction } from './ruleMatching';
+import { toMatchText } from './textMatch';
 import type { ClassificationReferenceData, ClassifiableTransaction, EconomicTypeResult } from './types';
 
 const HINTS_SUGGESTING_TRANSFER: Partial<Record<string, 'transfer_candidate' | 'investment_funding_candidate' | 'liability_settlement_candidate'>> = {
   transfer_candidate: 'transfer_candidate',
   investment_transfer_candidate: 'investment_funding_candidate',
-  card_payment_candidate: 'liability_settlement_candidate',
+  // 28-10-2026: `card_payment_candidate` is deliberately NOT mapped. The structural hint is set by the words VISA / MASTERCARD / POS / CARD
+  // PURCHASE, which are on every card PURCHASE ("VISA-<merchant>"), so mapping it opened a pending credit-card-settlement link on every
+  // purchase and a pending link blocks approval. A real card repayment is recognised by its own wording (global ccpay_* rules and the built-in
+  // card-repayment rules) or by the cross-account matcher that pairs it with the card statement's credit.
 };
 
 function categoryEconomicType(categoryId: string | null, categories: FdhCategory[]): FdhEconomicTransactionType | null {
@@ -263,8 +269,11 @@ export function classifyTransaction(
     const a = rule.action_definition as Extract<typeof rule.action_definition, { action_kind: 'classify' }>;
     const categoryId = a.category_id ?? null;
     const economicType = a.economic_transaction_type ?? categoryEconomicType(categoryId, ref.categories) ?? 'unknown';
+    // 28-10-2026: an INCOME classification never applies to money going OUT ("CENTRELINK ..." on a debit is a payment to an agency, not a
+    // benefit). The rule's wording matched but its direction did not, so it proposes nothing and the line stays a question.
+    const wrongWayIncome = economicType === 'income' && txn.credit_debit === 'debit';
     const precedenceSource = rule.match_definition.match_kind === 'narrative_pattern' ? 'narrative_pattern' : 'verified_global_rule';
-    candidates.push({
+    if (!wrongWayIncome) candidates.push({
       precedence: { source: precedenceSource, categoryKey: categoryId, economicTransactionType: economicType },
       result: {
         economicTransactionType: economicType,
@@ -281,8 +290,43 @@ export function classifyTransaction(
     });
   }
 
+  // Built-in deterministic rules (28-10-2026): the narrative-pattern tier of the precedence order, below a user rule, a verified merchant and an
+  // approved global rule. Evaluated only when nothing above produced a classification, except that a rule marked outranksMerchant (a phrase
+  // MORE specific than the merchant alias, e.g. a wholesale club's fuel pumps) replaces a shorter merchant match.
+  const builtin = matchBuiltinRule(
+    { haystackUpper: toMatchText([txn.description_clean, txn.merchant_raw].filter(Boolean).join(' ')), creditDebit: txn.credit_debit, currency: txn.currency_original },
+    ref.categories,
+    ref.subcategories,
+    ref.ownIdentity ?? EMPTY_OWN_IDENTITY,
+  );
+  if (builtin) {
+    const merchantIdx = candidates.findIndex((c) => c.source.kind === 'verified_merchant_alias');
+    if (builtin.outranksMerchant && merchantIdx !== -1 && merchantMatch && builtin.matchedPhrase.length > merchantMatch.matchedText.length) {
+      candidates.splice(merchantIdx, 1);
+    }
+    if (candidates.length === 0) {
+      candidates.push({
+        precedence: { source: 'narrative_pattern', categoryKey: builtin.categoryId, economicTransactionType: builtin.economicType },
+        result: {
+          economicTransactionType: builtin.economicType,
+          categoryId: builtin.categoryId,
+          subcategoryId: builtin.subcategoryId,
+          merchantId: null,
+          transferFlag: builtin.isOwnTransfer || builtin.isCardRepayment,
+          subscriptionFlag: false,
+          classificationMethod: 'global_rule',
+        },
+        source: { kind: 'builtin_rule', builtinRuleKey: builtin.ruleKey },
+        explanationText: builtin.isOwnTransfer ? `Looks like ${builtin.why}.` : `Matched FHIP's built-in wording rule: ${builtin.why} ("${builtin.matchedPhrase}").`,
+        flaggedCandidate: null,
+      });
+    }
+  }
+
   // Structural hint fallback for candidate-flagging only (never commits an
-  // economic type — see module header).
+  // economic type — see module header). It applies ONLY to a line the engine
+  // could not classify: a line that WAS classified (a merchant, a rule) is not
+  // also a "possible transfer" because the narrative says Osko or UPI.
   const hintCandidate = HINTS_SUGGESTING_TRANSFER[txn.transaction_type_hint] ?? null;
 
   if (candidates.length === 0) {
@@ -312,6 +356,6 @@ export function classifyTransaction(
     confidence,
     source: winner.source,
     explanation: winner.explanationText,
-    flaggedCandidate: globalFlagged ?? hintCandidate,
+    flaggedCandidate: winner.source.kind === 'builtin_rule' ? null : globalFlagged,
   };
 }

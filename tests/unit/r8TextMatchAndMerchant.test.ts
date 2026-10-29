@@ -130,13 +130,13 @@ describe('R8 merchantMatching', () => {
     expect(result?.merchant.id).toBe('m1');
   });
 
-  it('never matches an unrelated merchant with a similar prefix (no fuzzy matching)', () => {
+  it('never matches an unrelated word that merely CONTAINS the merchant name (word-boundary rule, 28-10-2026)', () => {
     const coles = merchant({ id: 'm-coles', canonical_name: 'COLES' });
-    const result = matchMerchant('COLESWORTH PTY LTD', null, [coles], []);
-    // "COLESWORTH" contains "COLES" as a substring, which IS a legitimate
-    // deterministic containment match under this module's own documented
-    // rule (word-boundary-agnostic) — asserting the actual, disclosed
-    // behaviour rather than an aspirational one.
-    expect(result?.merchant.id).toBe('m-coles');
+    // "COLESWORTH" used to match COLES as a bare substring; and "BPAY" matched the fuel brand "BP" on real statements. A letter directly
+    // before or after the name now ends the match. A digit may follow (bank narratives glue a store number on: "WOOLWORTHS1234").
+    expect(matchMerchant('COLESWORTH PTY LTD', null, [coles], [])).toBeNull();
+    expect(matchMerchant('PAYMENT TO NICOLES CAFE', null, [coles], [])).toBeNull();
+    expect(matchMerchant('COLES1234 MELBOURNE', null, [coles], [])?.merchant.id).toBe('m-coles');
+    expect(matchMerchant('VISA-COLES 0455 CARLTON', null, [coles], [])?.merchant.id).toBe('m-coles');
   });
 });

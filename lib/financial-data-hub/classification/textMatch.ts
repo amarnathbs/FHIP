@@ -39,3 +39,26 @@ export function matchesNarrativePattern(
   if (excludedTermsUpper.some((t) => containsTerm(descriptionUpper, t))) return false;
   return true;
 }
+
+/**
+ * Word-boundary phrase match (28-10-2026 coverage work). `needle` must start and end on a LETTER/DIGIT boundary of the haystack:
+ * the character before it, and the character after it, must not be a LETTER. A digit after the phrase is allowed because bank
+ * narratives glue a reference number straight onto the name ("WOOLWORTHS1234"), but a letter is not: "BP" is a fuel brand, "BPAY" is
+ * not, and "COLES" is a supermarket, "COLESWORTH" is not. Used by the built-in rules and the merchant tier; the older
+ * `containsTerm` (any substring) stays for the governed DB rules, whose behaviour is certified and unchanged.
+ */
+export function containsPhrase(haystackUpper: string, phraseUpper: string): boolean {
+  if (phraseUpper.length === 0) return false;
+  let from = 0;
+  for (;;) {
+    const at = haystackUpper.indexOf(phraseUpper, from);
+    if (at === -1) return false;
+    const before = at === 0 ? '' : haystackUpper[at - 1];
+    const after = haystackUpper[at + phraseUpper.length] ?? '';
+    const isLetter = (ch: string) => ch.length === 1 && ch >= 'A' && ch <= 'Z';
+    const phraseStartsWithLetter = isLetter(phraseUpper[0]);
+    const phraseEndsWithLetter = isLetter(phraseUpper[phraseUpper.length - 1]);
+    if (!(phraseStartsWithLetter && isLetter(before)) && !(phraseEndsWithLetter && isLetter(after))) return true;
+    from = at + 1;
+  }
+}

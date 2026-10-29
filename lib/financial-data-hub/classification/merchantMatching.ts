@@ -18,7 +18,8 @@
  */
 
 import type { FdhMerchant, FdhMerchantAlias } from '../domain/types';
-import { toMatchText } from './textMatch';
+import { isPersonToPersonRail } from './paymentShape';
+import { containsPhrase, toMatchText } from './textMatch';
 
 export interface MerchantMatch {
   merchant: FdhMerchant;
@@ -40,6 +41,9 @@ export function matchMerchant(
 ): MerchantMatch | null {
   const haystack = toMatchText([descriptionClean, merchantRaw].filter(Boolean).join(' '));
   if (haystack.length === 0) return null;
+  // 28-10-2026: the text after the rail words of an Osko / PayID / transfer line is a payee name and a reference the payer typed, not a merchant
+  // ("Osko From J SMITH Ref-KFC" is not a KFC purchase), so no merchant decides these.
+  if (isPersonToPersonRail(haystack)) return null;
 
   let best: MerchantMatch | null = null;
   const consider = (candidate: MerchantMatch) => {
@@ -51,7 +55,7 @@ export function matchMerchant(
   for (const alias of aliases) {
     if (!alias.verified) continue;
     const term = toMatchText(alias.alias_normalised);
-    if (term.length === 0 || !haystack.includes(term)) continue;
+    if (term.length === 0 || !containsPhrase(haystack, term)) continue;
     const merchant = merchantById.get(alias.merchant_id);
     if (!merchant || !merchant.active || merchant.verification_status !== 'approved') continue;
     consider({ merchant, matchedOn: 'alias', matchedText: term });
@@ -60,7 +64,7 @@ export function matchMerchant(
   for (const merchant of merchants) {
     if (!merchant.active || merchant.verification_status !== 'approved') continue;
     const term = toMatchText(merchant.canonical_name);
-    if (term.length === 0 || !haystack.includes(term)) continue;
+    if (term.length === 0 || !containsPhrase(haystack, term)) continue;
     consider({ merchant, matchedOn: 'canonical_name', matchedText: term });
   }
 

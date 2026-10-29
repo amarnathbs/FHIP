@@ -20,6 +20,7 @@ import type {
 } from '../domain/types';
 import type { FdhCreditDebit, FdhEconomicTransactionType, FdhTransactionTypeHint } from '../constants/enums';
 import { CLASSIFICATION_CONFIDENCE_SCORE } from './thresholds';
+import type { OwnIdentity } from './ownIdentity';
 
 /** The minimal transaction slice the engine needs. Deliberately narrow —
  * never the full row — so a caller cannot accidentally leak an unrelated
@@ -53,6 +54,8 @@ export interface ClassificationSource {
     | 'verified_merchant_alias'
     | 'verified_global_rule'
     | 'narrative_pattern'
+    /** 28-10-2026: a code-level deterministic rule (classification/builtinRules.ts). Has a `builtinRuleKey`, never a database `ruleId`. */
+    | 'builtin_rule'
     | 'unresolved'
     /** FDH-6 (spec section 57): two or more ACTIVE rules at the SAME
      * precedence tier and the SAME priority proposed genuinely different
@@ -60,6 +63,8 @@ export interface ClassificationSource {
      * order — always routed to `unknown`/review instead. */
     | 'rule_conflict';
   ruleId?: string;
+  /** Present only when `kind === 'builtin_rule'`. */
+  builtinRuleKey?: string;
   merchantId?: string;
   /** Present only when `kind === 'rule_conflict'` — every rule id that
    * tied and disagreed, for the review surface / audit trail. */
@@ -96,4 +101,7 @@ export interface ClassificationReferenceData {
   merchantAliases: FdhMerchantAlias[];
   globalRules: FdhClassificationRule[];
   userRules: FdhUserClassificationRule[];
+  /** 28-10-2026: the signed-in user's own name, household members' names and own account digits, for own-account transfer evidence
+   * (classification/ownIdentity.ts). Optional: absent means "no evidence available", never an error. */
+  ownIdentity?: OwnIdentity;
 }
