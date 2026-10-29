@@ -42,12 +42,14 @@ export const ALLOWED_MACHINE_TOKENS: ReadonlyArray<{ file: string; line: RegExp;
   { file: 'lib/services/investment-intelligence/benchmarkData/fileIngest/dateParsing.ts', line: /case 'MM\/DD\/YYYY':/, why: 'parser branch for that file format' },
   { file: 'lib/services/investment-intelligence/benchmarkData/fileIngest/types.ts', line: /\| 'MM\/DD\/YYYY'/, why: 'format identifier union' },
   { file: 'lib/services/investment-intelligence/marketIndex/dailyFeed.ts', line: /\{YYYY-MM-DD\}/, why: 'URL template token substituted before the request' },
+  { file: 'lib/financial-data-hub/bankImport/aiChunking.ts', line: /Dates are YYYY-MM-DD\. Copy only digits that are printed in this part/, why: 'instruction sent to the AI model (never shown to a person): its answer is parsed as ISO dates, so the model must be told that exact machine format' },
 ];
 
 /** Files whose locale/Intl use is the canonical formatter or a machine date-part reader, not a screen. */
 export const ALLOWED_LOCALE_FILES: ReadonlyArray<{ file: string; why: string }> = [
   { file: 'lib/engines/date.ts', why: 'the canonical day-first formatter: it takes only the 12-hour time from toLocaleTimeString' },
   { file: 'lib/read-models/core/window.ts', why: 'reads year/month/day PARTS in a named time zone (formatToParts) for a window, never shown' },
+  { file: 'lib/reports/printDocumentTitle.ts', why: 'reads year/month/day PARTS in a named time zone (formatToParts) to build a title with the month in WORDS ("20 October 2026"); the locale string itself is never shown' },
   { file: 'lib/services/investment-intelligence/pc6/referenceDataQualityView.ts', why: 'reads year/month/day/hour/minute PARTS in a named time zone (formatToParts) and assembles the day-first dd-mm-yyyy text itself; the locale string is never shown' },
 ];
 
@@ -255,6 +257,22 @@ describe('NEGATIVE CONTROLS: the scanner demonstrably catches each defect (each 
     const f = 'lib/financial-data-hub/bank-csv/dateFormats.ts';
     const v = scanAll((file, s) => (file === f ? `${s}\nexport const HELP = 'Type the date as yyyy-mm-dd';\n` : s));
     expect(v.some((x) => x.file === f && x.rule === 'iso-label')).toBe(true);
+  });
+
+  it('DATEGUARD-NC-8: the AI-prompt allowance is exact: a user-visible ISO date label added to the SAME file still fails, and so does the allowed line reworded', () => {
+    const f = 'lib/financial-data-hub/bankImport/aiChunking.ts';
+    const shown = scanAll((file, s) => (file === f ? `${s}
+export const HELP = 'Type the date as yyyy-mm-dd';
+` : s));
+    expect(shown.some((x) => x.file === f && x.rule === 'iso-label' && /Type the date/.test(x.detail))).toBe(true);
+    const sameLine = scanAll(mutateOne(f, 'Dates are YYYY-MM-DD. Copy only digits', 'Dates are YYYY-MM-DD. Show the user this date. Copy only digits'));
+    expect(sameLine.some((x) => x.file === f && x.rule === 'iso-label')).toBe(true);
+    expect(scanAll().filter((x) => x.file === f)).toEqual([]);
+  });
+
+  it('DATEGUARD-NC-9: the print-title allowance is per file: the same day-bearing Intl call in any other file still fails', () => {
+    expect(scan('lib/reports/printDocumentTitle.ts', "const p = new Intl.DateTimeFormat('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);")).toEqual([]);
+    expect(scan('components/x.tsx', "const p = new Intl.DateTimeFormat('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);").some((x) => x.rule === 'locale-date-formatting')).toBe(true);
   });
 
   it('DATEGUARD-NC-7: the clean sources produce no violation (the controls above are not noise)', () => {
