@@ -85,6 +85,12 @@ export interface NabEntry {
   middle?: string;
   /** A narrative row (no amount) printed AFTER this entry, carrying the running balance, like a rate note. */
   rateNoteAfter?: string;
+  /**
+   * A free-text notice printed on its OWN line BEFORE this entry, carrying this entry's date (when it has one), with no amount and no balance:
+   * how the real statement prints "Please Note From <date> Your Debit Int Rate Is n%" in front of the next transaction. Not part of the
+   * transaction's description.
+   */
+  noticeBefore?: string;
 }
 
 export interface NabSpec {
@@ -247,8 +253,15 @@ export function buildNabClassicPdf(spec: NabSpec): BuiltNab {
       const printed = spec.wrongBalanceOnEntry?.entry === entryNo ? spec.wrongBalanceOnEntry.balance : balance;
       const dx = spec.misplaceAmountOnEntry?.entry === entryNo ? spec.misplaceAmountOnEntry.dx : 0;
       const descParts: string[] = [];
-      const firstLine = () => {
+      // With a notice in front, the entry's date sits on the notice line instead of the entry's own first line.
+      const dateOnEntryLine = Boolean(e.date) && !e.noticeBefore;
+      if (e.noticeBefore) {
         if (e.date) put(g.dateX + 1, y, e.date);
+        put(g.partX, y, e.noticeBefore);
+        y += 11.1;
+      }
+      const firstLine = () => {
+        if (dateOnEntryLine) put(g.dateX + 1, y, e.date as string);
         if (head) {
           let x = g.partX;
           head.forEach((h, i) => {
@@ -283,7 +296,7 @@ export function buildNabClassicPdf(spec: NabSpec): BuiltNab {
         y += 11.1;
       };
       if (head) lines.push(firstLine);
-      else if (e.date) {
+      else if (dateOnEntryLine) {
         lines.push(() => {
           // a single-line transaction still carries its date on that line
           put(g.dateX + 1, y, e.date as string);

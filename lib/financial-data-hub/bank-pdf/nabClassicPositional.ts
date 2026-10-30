@@ -207,6 +207,10 @@ function parseSummaryDate(text: string): string | null {
 
 function isNoticeText(text: string): boolean {
   if (/\.{3,}/.test(text) || ANY_MONEY_NOT_PERCENT.test(text)) return false;
+  // NAB prints its interest-rate notice in Title Case ("Please Note From 11 Aug 2025 Your Debit Int Rate Is 15.41%") on the DATE line of the next
+  // transaction, so the lower-case test below misses it and the notice was glued onto that transaction's description. A sentence that opens
+  // "Please note" and carries no amount and no dotted leader is a notice whatever its capitalisation.
+  if (/^please note\b/i.test(text.trim())) return true;
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length < 5) return false;
   const alphabetic = words.filter((w) => /^[A-Za-z]/.test(w));

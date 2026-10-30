@@ -201,3 +201,42 @@ describe('NAB positional reader: NEGATIVE CONTROLS (change the input, the named 
     expect(p.extractedText).not.toBeNull();
   });
 });
+
+describe('NAB positional reader: an interest-rate notice printed in Title Case in front of a transaction (30-10-2026)', () => {
+  // The real statement prints "Please Note From <date> Your Debit Int Rate Is n%" on the DATE line of the next transaction, whose own text follows
+  // on the next line. Read as a description it produced "Please Note From ... 15.41% Store Id ..." and hid what the payment was.
+  const NOTICE_A = 'Please Note From 11 Mar 2024 Your Debit Int Rate Is 15.41%';
+  const NOTICE_B = 'Please Note From 12 Mar 2024 Your Debit Int Rate Is 20.00%';
+  const entries: NabEntry[] = [
+    { date: '10 Mar 2024', head: ['Online', '1000000007', 'Linked Acc Trns'], payee: 'Sample As', side: 'debit', amount: 100, balance: true },
+    { date: '12 Mar 2024', noticeBefore: NOTICE_A, head: ['Store Id: ,', 'Txn I', 'Sample Pay'], payee: 'Ref 480255', side: 'credit', amount: 257.16, balance: true },
+    { date: '15 Mar 2024', noticeBefore: NOTICE_B, payee: 'Sample Payee One', side: 'debit', amount: 50, balance: true },
+    { payee: 'Please Pay Sample Ltd', side: 'debit', amount: 20.5, balance: true },
+  ];
+  const built = buildNabClassicPdf({ opening: 1234.56, entries, perPage: 12 });
+
+  it('keeps the notice OUT of the description and reads the transaction it sat in front of, with the right date, direction and amount', async () => {
+    const p = await run(built.pdf);
+    expect(p.status).toBe('ok');
+    expect(p.accepted.map((a) => a.descriptionRaw)).toEqual(built.expected.map((e) => e.description));
+    for (const a of p.accepted) expect(a.descriptionRaw).not.toMatch(/Int Rate|Please Note From/i);
+    expect(p.accepted.map((a) => a.transactionDate)).toEqual(['2024-03-10', '2024-03-12', '2024-03-15', '2024-03-15']);
+    expect(p.accepted[1]).toMatchObject({ creditDebit: 'credit', amountOriginal: 257.16 });
+    expect(p.accepted[2]).toMatchObject({ creditDebit: 'debit', amountOriginal: 50 });
+    expect(p.reconciliation).toMatchObject({ status: 'reconciled', variance: 0 });
+  });
+
+  it('counts both notices as excluded lines, and reads exactly the transactions printed (no line lost, none invented)', async () => {
+    const r = readNabClassicStatement((await extractPositionedPdfPages(new Uint8Array(built.pdf)) as { ok: true; pages: never }).pages);
+    expect(r.kind).toBe('read');
+    if (r.kind !== 'read') return;
+    expect(r.rows).toHaveLength(entries.length);
+    expect(r.counts.excluded.noticeLines).toBe(2);
+  });
+
+  it('NEGATIVE: a real transaction whose payee merely STARTS with "Please" (it has its dotted leader and an amount) is still a transaction', async () => {
+    const p = await run(built.pdf);
+    expect(p.accepted[3].descriptionRaw).toBe('Please Pay Sample Ltd');
+    expect(p.accepted[3].amountOriginal).toBe(20.5);
+  });
+});
