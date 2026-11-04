@@ -55,6 +55,7 @@ import { fetchAllRows } from '../bank-csv/pagination';
 // WP-08: the ONE canonical duplicate / refund-link definition (no mirror).
 import { isDuplicateExcluded, REFUND_LIKE_LINK_TYPES } from '@/lib/read-models/core/spendingRules';
 import type { DateRange } from './period';
+import { buildAllocationOverview, type AllocationInputTxn, type AllocationOverviewResult } from './allocationOverview';
 
 // ---------------------------------------------------------------------------
 // Shared scope / filter types
@@ -366,6 +367,36 @@ export async function getOverview(userId: string, filters: ActivityFilters): Pro
       lastStatementProcessedAt: lastStatement.data?.updated_at ?? null,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// getAllocationOverview -- the "Income and expense allocation" table at the top of the Overview (PO 04-11-2026).
+//
+// The approved and the pending list are fetched separately and handed to the pure builder as two separate inputs; the builder computes them in two
+// separate passes and returns two separate columns (see allocationOverview.ts). Nothing here adds one to the other.
+// ---------------------------------------------------------------------------
+
+export async function getAllocationOverview(userId: string, filters: ActivityFilters): Promise<AllocationOverviewResult> {
+  const supabase = await createClient();
+  const [approvedTxns, pendingTxns, categoryMap] = await Promise.all([
+    fetchScopedTransactions(supabase, userId, 'approved', filters),
+    fetchScopedTransactions(supabase, userId, 'pending', filters),
+    loadCategoryMap(),
+  ]);
+  const toInput = (t: ScopedTransaction): AllocationInputTxn => ({
+    creditDebit: t.credit_debit,
+    currency: t.currency_original,
+    amount: t.amount_original,
+    economicType: t.economic_transaction_type,
+    categoryId: t.category_id,
+    dedupStatus: t.dedup_status,
+    allocations: t.allocations.map((a) => ({ amount: a.amount, currency: a.currency_code, economicType: a.economic_transaction_type, categoryId: a.category_id })),
+  });
+  return buildAllocationOverview({
+    approved: approvedTxns.map(toInput),
+    waiting: pendingTxns.map(toInput),
+    categoryLabel: (id) => categoryMap.get(id)?.display_name ?? null,
+  });
 }
 
 // ---------------------------------------------------------------------------

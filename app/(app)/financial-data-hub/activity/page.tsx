@@ -4,7 +4,9 @@ import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { getOverview, getTrend } from '@/lib/financial-data-hub/analytics/financialActivityAnalytics';
+import { getAllocationOverview, getOverview, getTrend } from '@/lib/financial-data-hub/analytics/financialActivityAnalytics';
+import type { AllocationOverviewResult } from '@/lib/financial-data-hub/analytics/allocationOverview';
+import { AllocationOverview } from './_components/AllocationOverview';
 import { resolvePeriod, resolvePreviousPeriod } from '@/lib/financial-data-hub/analytics/period';
 import { todayIsoDate } from '@/lib/financial-data-hub/analytics/requestParams';
 import { comparePeriods } from '@/lib/financial-data-hub/analytics/periodComparison';
@@ -49,6 +51,15 @@ async function FinancialActivityOverviewPageContent({
     overview = await getOverview(user.id, { period, accountId });
   } catch (e) {
     return <ResourceErrorState message={e instanceof Error ? e.message : 'Could not load your financial activity for this period.'} />;
+  }
+
+  // PO 04-11-2026: the income and expense allocation table, then its analysis, at the TOP of the page. Best-effort like the trend: a failure here
+  // must not blank the certified totals below it.
+  let allocation: AllocationOverviewResult = { currencies: [] };
+  try {
+    allocation = await getAllocationOverview(user.id, { period, accountId });
+  } catch {
+    allocation = { currencies: [] };
   }
 
   // Period-over-period comparison — APPROVED totals only, never pending (spec
@@ -97,6 +108,8 @@ async function FinancialActivityOverviewPageContent({
           'no transactions yet'
         )}
       </p>
+
+      <AllocationOverview allocation={allocation} />
 
       {!hasApproved && !hasPending && (
         <ResourceEmptyState
