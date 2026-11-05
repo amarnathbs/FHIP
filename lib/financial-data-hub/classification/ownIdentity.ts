@@ -159,16 +159,34 @@ const NOT_A_PERSON_WORDS = new Set([
  *  - 'joint'  : the surname plus a connector (AND / &) and only the holder's own name or initials, e.g. "A AND S BEKAL", "AMARNATH BEKAL AND";
  *  - 'family' : the surname plus one or two OTHER first names, no connector, no business word, e.g. "SAMAY BEKAL" (the caller decides what a family
  *               payment means; this function never says "own account" for it);
- *  - a lone initial plus the surname, a truncated name, a business word, or any other extra word returns null (a question, not a guess).
+ *  - 'self'   also: the holder's own name CUT OFF by the bank's name field ("AMARNATH SURENDRA BE" + one reference letter), see isTruncatedOwnName;
+ *  - a lone initial plus the surname, any other truncated name, a business word, or any other extra word returns null (a question, not a guess).
  * Initials alone still never prove a person: 'joint' needs the holder's first initial AND a connector AND the surname.
  */
+/** The width of the name field on a bank statement line: a longer name is cut off there (NAB prints 20 characters). */
+const BANK_NAME_FIELD_WIDTH = 18;
+
+/**
+ * The holder's own name CUT OFF by the bank's name field ("AMARNATH SURENDRA BE" for Amarnath Surendra Bekal, optionally followed by one reference
+ * letter). Deliberately narrow, so it is a bank's truncation and not a guess: the first name in full, the text before the reference no shorter than
+ * the field width, and a last word that is a SHORTER start of the surname ("BE" of BEKAL, never "BEDI", never the surname's own first letter alone).
+ */
+function isTruncatedOwnName(haystackUpper: string, first: string, surname: string): boolean {
+  const tokens = haystackUpper.split(/\d/)[0].trim().split(/\s+/).filter(Boolean);
+  if (tokens.length > 1 && tokens[tokens.length - 1].length === 1) tokens.pop(); // the one-letter reference the bank appends
+  if (tokens.length < 2 || tokens.length > 4 || tokens.join(' ').length < BANK_NAME_FIELD_WIDTH) return false;
+  if (!tokens.every((t) => /^[A-Z'-]+$/.test(t) && !NOT_A_PERSON_WORDS.has(t))) return false;
+  const last = tokens[tokens.length - 1];
+  return tokens[0] === first && last.length >= 2 && last.length < surname.length && surname.startsWith(last);
+}
+
 export function nameOnlyNarrativeKind(haystackUpper: string, identity: OwnIdentity): 'self' | 'joint' | 'family' | null {
   const self = identity.people.find((p) => p.kind === 'self');
   if (!self || self.tokens.length < 2) return null;
   const first = self.tokens[0];
   const surname = self.tokens[self.tokens.length - 1];
   const words = wordsOf(haystackUpper);
-  if (!words.has(surname)) return null;
+  if (!words.has(surname)) return isTruncatedOwnName(haystackUpper, first, surname) ? 'self' : null;
   const hasConnector = words.has('AND') || /(^|\s)&(\s|$)/.test(haystackUpper);
   const alpha = [...words].filter((w) => /^[A-Z]+$/.test(w));
   const initials = alpha.filter((w) => w.length === 1);

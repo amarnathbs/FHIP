@@ -10,7 +10,8 @@ import {
   AUTO_SOURCE, AUTO_UNDO_SOURCE, autoBannerLines, emptyAutoSummary, planFixedPlacements, readAutoState, summaryBucket, type AuditEventRow,
 } from '@/lib/financial-data-hub/domain/premiumAutoCategorise';
 import type { NeedsDecisionItem } from '@/lib/financial-data-hub/domain/categoryReview';
-import { allowedAiCategories, buildAiBatches, resolveAiAnswer, type AiCandidateLine } from '@/lib/financial-data-hub/domain/bankAiCategorise';
+import { allowedAiCategories, buildAiBatches, looksLikePersonName, payeeTextForAi, resolveAiAnswer, type AiCandidateLine } from '@/lib/financial-data-hub/domain/bankAiCategorise';
+import { buildOwnIdentity, nameOnlyNarrativeKind } from '@/lib/financial-data-hub/classification/ownIdentity';
 import { bankCategoriseAnswerSchema } from '@/lib/aie/adapters/bankCategorise/schema';
 import { buildBankCategoriseSystemPrompt } from '@/lib/aie/adapters/bankCategorise/gateway';
 
@@ -130,5 +131,76 @@ describe('the words', () => {
   it('the buckets follow the canonical effect of the group', () => {
     expect(['income', 'spending', 'not_counted', 'reduces_spending', 'refund_unlinked', 'split'].map((e) => summaryBucket(e as never)))
       .toEqual(['income_lines', 'spending_lines', 'not_counted_lines', 'other_lines', 'other_lines', 'other_lines']);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Found by running the AI on the PO's two real NAB statements (05-11-2026): names inside bank lines reached the provider, and the model answered with
+// the category's display name instead of its key, which lost half the answers.
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe('a name inside a bank line is never sent to the AI', () => {
+  it('a person\'s name (an initial or a title, no card wrapper, no business word) and a bare bank transfer are not sent', () => {
+    for (const d of ['STEFANIE ZAJAKOVSKI V', 'U RANASINGHE C 12345', 'P HARANI Q', 'AMARNATH SURENDRA BE A', 'MR VIPIN BHATIA R LUNCH', 'U RANASINGHE D PAYMENT FOR FENCE', 'INTERNET TRANSFER FUNDS TRNS 998877']) {
+      expect(payeeTextForAi(d), d).toBeNull();
+    }
+    expect(looksLikePersonName('STEFANIE ZAJAKOVSKI V')).toBe(true);
+  });
+  it('LOOK-ALIKES that are shops stay AI questions: a card purchase that ends in a letter, a company word, a single word', () => {
+    for (const d of ['V SQ ST ALBANS ST A', 'V PAHAL GROUP PTY LTD ST A', 'VISA-SOME NEW CAFE', 'EFTPOS TASMAN BUTCHERS', 'Direct Debit Acme Gym Pty Ltd', 'KRISPY KREME MELBOUR', 'HARTNA']) {
+      expect(payeeTextForAi(d), d).not.toBeNull();
+    }
+    expect(looksLikePersonName('V SQ ST ALBANS ST A')).toBe(false);
+  });
+  it('a person-name money-out line gets the fixed Payments to People answer, and an unreadable one is filed as Other spending', () => {
+    const plan = planFixedPlacements([
+      item({ id: 'n', description: 'STEFANIE ZAJAKOVSKI V' }),
+      item({ id: 'u', description: '12345 6789' }),
+      item({ id: 't', description: 'INTERNET TRANSFER FUNDS TRNS' }),
+    ]);
+    expect(plan).toMatchObject([
+      { id: 'n', categoryKey: 'payments_to_people' },
+      { id: 'u', categoryKey: null, otherSpending: true },
+      { id: 't', categoryKey: 'payments_to_people' },
+    ]);
+  });
+});
+
+describe('the model answering with the category name instead of its key', () => {
+  const lines: AiCandidateLine[] = ['ALPHA CAFE', 'BETA STORE', 'GAMMA CO'].map((n, i) => ({ id: `t${i}`, description: `VISA-${n}`, direction: 'out', reason: 'uncategorised', currentCategoryId: null, suggestedCategoryId: null }));
+  const batch = buildAiBatches(lines)[0];
+  const allowed = allowedAiCategories([
+    { id: 'c-food', category_key: 'food', display_name: 'Food & Dining', economic_type: 'expense' },
+    { id: 'c-house', category_key: 'housing', display_name: 'Housing', economic_type: 'expense' },
+  ]);
+  const key = (t: string) => batch.payees.find((p) => p.text.includes(t))!.key;
+  it('an answer that is exactly an offered NAME (any case or spacing) is that category; any other text is still not in the list', () => {
+    const r = resolveAiAnswer(bankCategoriseAnswerSchema.parse({
+      items: [
+        { key: key('ALPHA'), categoryKey: 'Food & Dining', confidence: 'high' },
+        { key: key('BETA'), categoryKey: '  housing ', confidence: 'medium' }, // not the key exactly, but the name ignoring case and spacing
+        { key: key('GAMMA'), categoryKey: 'Food and Dining', confidence: 'high' }, // not an offered name
+      ],
+    }), batch, allowed);
+    expect([...r.accepted.entries()].map(([t, c]) => [t, c.key]).sort()).toEqual([['ALPHA CAFE', 'food'], ['BETA STORE', 'housing']]);
+    expect(r.rejected.get('GAMMA CO')).toBe('not_in_list');
+  });
+  it('the prompt tells the model to answer with the key, in both modes', () => {
+    for (const bestGuess of [false, true]) {
+      expect(buildBankCategoriseSystemPrompt([{ key: 'food', label: 'Food & Dining' }], { bestGuess })).toContain('categoryKey must be the key written before the bracket');
+    }
+  });
+});
+
+describe('the holder\'s own name cut off by the bank\'s name field is the holder (own-account transfer evidence)', () => {
+  const identity = buildOwnIdentity({ selfName: 'Amarnath Bekal', householdNames: [], accountIdentifiers: [], narratives: [] });
+  it('"AMARNATH SURENDRA BE" + a reference letter and digits is self', () => {
+    expect(nameOnlyNarrativeKind('AMARNATH SURENDRA BE R1234567890', identity)).toBe('self');
+    expect(nameOnlyNarrativeKind('AMARNATH SURENDRA BE', identity)).toBe('self');
+  });
+  it('LOOK-ALIKES stay questions: a different surname, a different first name, a short name, a business word', () => {
+    for (const d of ['AMARNATH SURENDRA BEDI R123', 'AMARNATH SURENDRA BHAT R123', 'RAJESH SURENDRA BE R123', 'AMARNATH B', 'AMARNATH BE', 'AMARNATH SURENDRA BE PTY LTD']) {
+      expect(nameOnlyNarrativeKind(d, identity), d).toBeNull();
+    }
   });
 });

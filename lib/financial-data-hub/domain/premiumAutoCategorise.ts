@@ -17,8 +17,7 @@
  *
  * PURE: no database, no network.
  */
-import { isPersonToPersonRail } from '../classification/paymentShape';
-import { toMatchText } from '../classification/textMatch';
+import { payeeTextForAi } from './bankAiCategorise';
 import type { NeedsDecisionItem, SurplusEffect } from './categoryReview';
 
 /** `metadata.source` on the audit events this feature writes. The three together are the whole state machine (see readAutoState). */
@@ -31,6 +30,8 @@ export interface FixedPlacement {
   /** Exactly one of these is set: a category by key (the fixed answers), or the category id the review already suggested for the line. */
   categoryKey: 'payments_to_people' | 'income' | null;
   categoryId: string | null;
+  /** True for a money-out line with nothing readable in it: filed as Other spending (spending, no category). */
+  otherSpending?: boolean;
   subcategoryKey: string | null;
   /** In words, for the history and the screen. */
   why: string;
@@ -39,7 +40,8 @@ export interface FixedPlacement {
 /**
  * Lines the rules could not classify and the AI is not allowed to see:
  *  - a line the review already has a suggestion for (own-account transfer wording such as "Linked Acc Trns To Savings") -> that suggestion;
- *  - money OUT on a person-to-person rail (Osko, PayID, transfer) -> Payments to People (counts as spending, PO decision 05-11-2026);
+ *  - money OUT that the AI may not be shown (Osko / PayID / transfer wording, or a person's name) -> Payments to People (counts as spending, PO
+ *    decision 05-11-2026); money out with nothing readable in it -> Other spending;
  *  - money IN of any unresolved kind -> Income > Other Income. A credit's wording is never sent to the AI (a bare personal name is the usual case),
  *    and the rules already catch the refunds, interest, dividends, salary and platform payouts that are recognisable from their wording.
  * Money out to a business is NOT here: that is the AI's job, and if the AI could not be asked (switched off, not Premium, daily limit) the line stays a
@@ -53,8 +55,12 @@ export function planFixedPlacements(needsDecision: readonly NeedsDecisionItem[])
       out.push({ id: item.id, categoryKey: null, categoryId: item.suggested_category_id, subcategoryKey: null, why: 'Filed under the category the wording suggests. Change it if it is something else.' });
     } else if (item.direction === 'in') {
       out.push({ id: item.id, categoryKey: 'income', categoryId: null, subcategoryKey: 'other_income', why: 'Money in that we could not identify is filed as Other Income. Change it if it is something else.' });
-    } else if (isPersonToPersonRail(toMatchText(item.description))) {
-      out.push({ id: item.id, categoryKey: 'payments_to_people', categoryId: null, subcategoryKey: null, why: 'A payment to a person is filed as Payments to People. Change it if it is something else.' });
+    } else if (payeeTextForAi(item.description) === null) {
+      if (/[A-Za-z]{3}/.test(item.description ?? '')) {
+        out.push({ id: item.id, categoryKey: 'payments_to_people', categoryId: null, subcategoryKey: null, why: 'A payment to a person is filed as Payments to People. Change it if it is something else.' });
+      } else {
+        out.push({ id: item.id, categoryKey: null, categoryId: null, otherSpending: true, subcategoryKey: null, why: 'We could not read what this was, so it is filed as Other spending. Change it if you know.' });
+      }
     }
   }
   return out;

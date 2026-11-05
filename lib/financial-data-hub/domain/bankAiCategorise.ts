@@ -47,10 +47,39 @@ export function allowedAiCategories(
     .map((c) => ({ id: c.id, key: c.category_key, label: c.display_name, economicType: c.economic_type }));
 }
 
+/** A bank-transfer word that is not an Osko / PayID rail ("INTERNET TRANSFER FUNDS TRNS"): the other side is an account, often a person's. */
+const TRANSFER_WORD = /\b(TRANSFER|TRNS|TRF|TFR)\b/;
+/** Words that make a name-shaped narrative a BUSINESS, so it is not treated as a person. */
+const BUSINESS_WORDS = new Set([
+  'PTY', 'LTD', 'LIMITED', 'INC', 'CO', 'GROUP', 'CAFE', 'RESTAURANT', 'STORE', 'SHOP', 'MARKET', 'BAKERY', 'HOTEL', 'PHARMACY', 'CHEMIST', 'SERVICES',
+  'LAWYERS', 'SOLICITORS', 'CLUB', 'AIRPORT', 'PARKING', 'PETROL', 'FUEL', 'KITCHEN', 'BAR', 'PUB', 'GYM', 'BANK', 'INSURANCE', 'COUNCIL', 'ATO', 'EXPRESS',
+  'DESIGNS', 'CENTRE', 'CENTER', 'MOTORS', 'AUTO', 'TAXI', 'ENERGY', 'WATER', 'TELSTRA', 'OPTUS', 'VODAFONE', 'TRADING', 'HOLDINGS', 'SUPERMARKET',
+]);
+const TITLES = new Set(['MR', 'MRS', 'MS', 'MISS', 'DR']);
+
+/** A card or EFTPOS purchase: the payee is a merchant, never a person (NAB prints a bare "V " for a Visa debit purchase). */
+function isCardLike(upper: string): boolean {
+  return /^(V|VISA|MASTERCARD|MC|EFTPOS|POS|CARD PURCHASE|PURCHASE|DEBIT CARD)\b/.test(upper) || /\b(APPLE PAY|GOOGLE PAY|CARD PURCHASE)\b/.test(upper);
+}
+
+/**
+ * True when a NON-card narrative reads like a person's name: letters only, two to six words, no business word, and a one-letter initial or a title
+ * ("STEFANIE ZAJAKOVSKI V", "U RANASINGHE C", "AMARNATH SURENDRA BE A", "MR VIPIN BHATIA R LUNCH"). The masking only hides names that follow a label
+ * such as "Name:", so a name inside a bank line would reach the provider verbatim: these lines are never sent.
+ */
+export function looksLikePersonName(upper: string): boolean {
+  if (isCardLike(upper)) return false;
+  const tokens = upper.replace(/\d+/g, ' ').split(/\s+/).filter(Boolean);
+  if (tokens.length < 2 || tokens.length > 6) return false;
+  if (!tokens.every((t) => /^[A-Z'-]+$/.test(t))) return false;
+  if (tokens.some((t) => BUSINESS_WORDS.has(t))) return false;
+  return tokens.some((t) => t.length === 1) || TITLES.has(tokens[0]);
+}
+
 /** The payee text shown to the AI for a narrative, or null when the line must not be sent. */
 export function payeeTextForAi(description: string | null | undefined): string | null {
   const upper = toMatchText(description);
-  if (upper.length === 0 || isPersonToPersonRail(upper)) return null;
+  if (upper.length === 0 || isPersonToPersonRail(upper) || TRANSFER_WORD.test(upper) || looksLikePersonName(upper)) return null;
   const text = upper
     .replace(/\S+@\S+/g, ' ') // e-mail addresses
     .replace(/HTTPS?:\/\/\S+|WWW\.\S+/g, ' ')
@@ -133,6 +162,10 @@ export interface ResolveOptions {
 /** Applies the safety rules to a provider answer. Anything not explicitly acceptable is unknown. */
 export function resolveAiAnswer(answer: BankCategoriseAnswer, batch: AiBatch, allowed: readonly AiCategoryOption[], opts: ResolveOptions = {}): AiResolution {
   const byKey = new Map(allowed.map((c) => [c.key, c] as const));
+  // A model sometimes answers with the category's DISPLAY NAME ("Food & Dining") instead of its key (`food`). An answer that is exactly one of the
+  // offered names, ignoring case and spacing, is that category; anything else is still "not in the list".
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const byLabel = new Map(allowed.map((c) => [norm(c.label), c] as const));
   const shown = new Map(batch.payees.map((p) => [p.key, p.text] as const));
   const answersByKey = new Map<string, Array<BankCategoriseAnswer['items'][number]>>();
   for (const item of answer.items) {
@@ -159,7 +192,7 @@ export function resolveAiAnswer(answer: BankCategoriseAnswer, batch: AiBatch, al
       else rejected.set(text, 'unknown_answer');
       continue;
     }
-    const category = byKey.get(item.categoryKey);
+    const category = byKey.get(item.categoryKey) ?? byLabel.get(norm(item.categoryKey));
     if (!category) {
       rejected.set(text, 'not_in_list');
       continue;

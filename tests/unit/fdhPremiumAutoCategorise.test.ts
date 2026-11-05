@@ -165,6 +165,15 @@ describe('the run', () => {
     expect(result.summary!.income_lines + result.summary!.spending_lines + result.summary!.not_counted_lines + result.summary!.other_lines).toBe(13);
   });
 
+  it('a name inside a bank line is never sent: it gets the fixed Payments to People answer, and no part of it is in the prompt', async () => {
+    const NAMED = 'f9000000-0000-4000-8000-000000000007';
+    addLine(NAMED, 'STEFANIE ZAJAKOVSKI V 9876543', 55, 'debit');
+    const { runAutoCategorise } = await import('@/lib/financial-data-hub/services/premiumAutoCategoriseService');
+    await runAutoCategorise(USER_A, STATEMENT_A);
+    expect(h.state.prompts.join(String.fromCharCode(10))).not.toMatch(/STEFANIE|ZAJAKOVSKI/i);
+    expect(row(NAMED)).toMatchObject({ category_id: PEOPLE_CAT, classification_method: 'global_rule', approval_status: 'approved' });
+  });
+
   it('is recorded as automatic: the approvals say system, there is a started marker and one completion event with counts and no payee', async () => {
     const { runAutoCategorise } = await import('@/lib/financial-data-hub/services/premiumAutoCategoriseService');
     await runAutoCategorise(USER_A, STATEMENT_A);

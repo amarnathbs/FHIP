@@ -150,6 +150,10 @@ export async function runAutoCategorise(userId: string, statementId: string, dep
     const subByCatAndKey = new Map((subs.data ?? []).map((s) => [`${s.category_id}|${s.subcategory_key}`, s] as const));
     const items: AiProposalItem[] = [];
     for (const p of placements) {
+      if (p.otherSpending) {
+        items.push({ transactionId: p.id, newEconomicType: 'expense', newCategoryId: null });
+        continue;
+      }
       const category = p.categoryId ? catById.get(p.categoryId) : p.categoryKey ? catByKey.get(p.categoryKey) : undefined;
       if (!category || category.economic_type === 'unknown') continue; // a category that is no longer offered: the line stays a question
       const sub = p.subcategoryKey ? subByCatAndKey.get(`${category.id}|${p.subcategoryKey}`) : undefined;

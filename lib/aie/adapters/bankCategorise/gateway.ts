@@ -33,6 +33,7 @@ export function buildBankCategoriseSystemPrompt(allowed: ReadonlyArray<{ key: st
     allowed.map((c) => `${c.key} (${c.label})`).join('; ') +
     `. ${uncertainty}` +
     'confidence is "high" only when the business is well known and the category is obvious, "medium" when likely, otherwise "low". ' +
+    'categoryKey must be the key written before the bracket (for example food), never the name in brackets. ' +
     `Return one item for every payee shown (at most ${AIE_BANK_CATEGORISE_MAX_PAYEES_PER_CALL}), using the key shown. Never invent a category key, never answer with anything but the closed list or "unknown", and do not return any text of your own.`
   );
 }
