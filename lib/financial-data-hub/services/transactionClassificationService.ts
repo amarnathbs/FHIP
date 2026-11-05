@@ -599,6 +599,8 @@ export async function recordUserClassificationDecision(
     newCategoryId: string | null;
     previousSubcategoryId: string | null;
     clearSubcategory: boolean;
+    /** The detail the person chose under the new category (already checked to belong to it). Overrides `clearSubcategory`. */
+    newSubcategoryId?: string | null;
   },
 ): Promise<void> {
   const admin = createAdminClient();
@@ -607,7 +609,9 @@ export async function recordUserClassificationDecision(
     classification_confidence: CONFIDENCE_SCORE.HIGH,
     transfer_flag: input.newEconomicType === 'transfer',
   };
-  if (input.clearSubcategory) patch.subcategory_id = null;
+  const chosenSubcategory = input.newSubcategoryId ?? null;
+  if (chosenSubcategory) patch.subcategory_id = chosenSubcategory;
+  else if (input.clearSubcategory) patch.subcategory_id = null;
 
   const { data, error } = await admin
     .from('fdh_transactions')
@@ -628,7 +632,7 @@ export async function recordUserClassificationDecision(
     previous_category_id: input.previousCategoryId,
     new_category_id: input.newCategoryId,
     previous_subcategory_id: input.previousSubcategoryId,
-    new_subcategory_id: input.clearSubcategory ? null : input.previousSubcategoryId,
+    new_subcategory_id: chosenSubcategory ?? (input.clearSubcategory ? null : input.previousSubcategoryId),
     classification_method: 'user_manual',
     confidence: CONFIDENCE_SCORE.HIGH,
     changed_by_type: 'user',

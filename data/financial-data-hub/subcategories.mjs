@@ -91,6 +91,7 @@ export const subcategories = [
   sub('lifestyle', 'hobbies_recreation', 'Hobbies & Recreation', { display_order: 30 }),
   sub('lifestyle', 'personal_care', 'Personal Care', { display_order: 40 }),
   sub('lifestyle', 'gifts_general', 'Gifts (General)', { display_order: 50 }),
+  sub('lifestyle', 'pets', 'Pets', { display_order: 55 }),
   sub('lifestyle', 'other_lifestyle', 'Other Lifestyle', { display_order: 60 }),
 
   // --- shopping (6) ---
@@ -190,6 +191,7 @@ export const subcategories = [
   sub('refund_reversal', 'purchase_refund', 'Purchase Refund', { display_order: 10 }),
   sub('refund_reversal', 'transaction_reversal_chargeback', 'Transaction Reversal / Chargeback', { display_order: 20 }),
   sub('refund_reversal', 'tax_refund', 'Tax Refund', { display_order: 30 }),
+  sub('refund_reversal', 'reimbursement', 'Reimbursement (expenses paid back to you)', { display_order: 35, description: 'Money paid back to you for something you paid for, such as a work expense or a shared cost. It is not income.' }),
   sub('refund_reversal', 'other_refund', 'Other Refund', { display_order: 40 }),
 
   // --- unknown (1) ---

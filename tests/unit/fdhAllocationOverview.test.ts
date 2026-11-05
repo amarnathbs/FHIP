@@ -163,3 +163,62 @@ describe('the analysis', () => {
     expect(merged.sections.spending.approvedTotal).not.toBe(result().sections.spending.approvedTotal);
   });
 });
+
+describe('the types under a category (PO 05-11-2026: reports stay by main category, the type is detail)', () => {
+  const SUBS: Record<string, string> = { wages: 'Salary & Wages', interest: 'Interest Income', groceries: 'Groceries' };
+  const subLabel = (id: string) => SUBS[id] ?? null;
+  const build = (approved: AllocationInputTxn[], waiting: AllocationInputTxn[] = []) =>
+    buildAllocationOverview({ approved, waiting, categoryLabel: label, subcategoryLabel: subLabel }).currencies[0];
+
+  const LINES: AllocationInputTxn[] = [
+    txn({ creditDebit: 'credit', amount: 5000, economicType: 'income', categoryId: 'salary', subcategoryId: 'wages' }),
+    txn({ creditDebit: 'credit', amount: 200, economicType: 'income', categoryId: 'salary', subcategoryId: 'interest' }),
+    txn({ creditDebit: 'credit', amount: 100, economicType: 'income', categoryId: 'salary' }),
+    txn({ creditDebit: 'debit', amount: 400, economicType: 'expense', categoryId: 'food', subcategoryId: 'groceries' }),
+  ];
+
+  it('lists the types under their category, biggest first, with "No specific type" last', () => {
+    const row = build(LINES).sections.income.rows[0];
+    expect(row.subRows.map((r) => [r.label, r.approvedTotal, r.approvedCount])).toEqual([['Salary & Wages', 5000, 1], ['Interest Income', 200, 1], ['No specific type', 100, 1]]);
+  });
+
+  it('INVARIANT: the types add up to their category row, in count and amount', () => {
+    const row = build(LINES).sections.income.rows[0];
+    expect(row.subRows.reduce((n, r) => n + r.approvedTotal, 0)).toBe(row.approvedTotal);
+    expect(row.subRows.reduce((n, r) => n + r.approvedCount, 0)).toBe(row.approvedCount);
+  });
+
+  it('INVARIANT: choosing types never moves money between categories or sections: the main rows and totals are identical with and without types', () => {
+    const plain = LINES.map((l) => ({ ...l, subcategoryId: null }));
+    const typed = build(LINES);
+    const untyped = build(plain);
+    for (const s of ['income', 'spending', 'not_counted', 'needs_category'] as const) {
+      expect(typed.sections[s].approvedTotal).toBe(untyped.sections[s].approvedTotal);
+      expect(typed.sections[s].rows.map((r) => [r.label, r.approvedTotal, r.approvedCount, r.approvedSharePct])).toEqual(
+        untyped.sections[s].rows.map((r) => [r.label, r.approvedTotal, r.approvedCount, r.approvedSharePct]),
+      );
+    }
+  });
+
+  it('a category where nobody chose a type has no type rows at all (nothing to break down)', () => {
+    const c = build([txn({ creditDebit: 'debit', amount: 100, economicType: 'expense', categoryId: 'food' })]);
+    expect(c.sections.spending.rows[0].subRows).toEqual([]);
+  });
+
+  it('approved and waiting types are separate: a waiting line only fills the waiting column of its type', () => {
+    const c = build(LINES, [txn({ creditDebit: 'credit', amount: 70, economicType: 'income', categoryId: 'salary', subcategoryId: 'wages' })]);
+    const wages = c.sections.income.rows[0].subRows.find((r) => r.label === 'Salary & Wages')!;
+    expect(wages).toMatchObject({ approvedTotal: 5000, approvedCount: 1, waitingTotal: 70, waitingCount: 1 });
+  });
+
+  it('a line with no category never shows a type row', () => {
+    const c = build([txn({ creditDebit: 'debit', amount: 50, economicType: 'unknown', categoryId: null, subcategoryId: 'groceries' })]);
+    expect(c.sections.needs_category.rows[0].subRows).toEqual([]);
+  });
+
+  it('NEGATIVE CONTROL: counting each type as its own category row would change the number of main rows, which the invariant above would catch', () => {
+    const typed = build(LINES);
+    expect(typed.sections.income.rows).toHaveLength(1);
+    expect(typed.sections.income.rows[0].subRows.length).toBeGreaterThan(1);
+  });
+});

@@ -50,7 +50,7 @@ import {
 import { fromMinorUnits, sumMoney, toMinorUnits } from '../domain/money';
 import type { FdhCategory, FdhMerchant } from '../domain/types';
 import type { FdhEconomicTransactionType, FdhTransactionApprovalStatus } from '../constants/enums';
-import { categoriesRepository, merchantsRepository } from '../repositories/index';
+import { categoriesRepository, merchantsRepository, subcategoriesRepository } from '../repositories/index';
 import { fetchAllRows } from '../bank-csv/pagination';
 // WP-08: the ONE canonical duplicate / refund-link definition (no mirror).
 import { isDuplicateExcluded, REFUND_LIKE_LINK_TYPES } from '@/lib/read-models/core/spendingRules';
@@ -383,12 +383,16 @@ export async function getAllocationOverview(userId: string, filters: ActivityFil
     fetchScopedTransactions(supabase, userId, 'pending', filters),
     loadCategoryMap(),
   ]);
+  // The type under a category is detail only. If its names cannot be read the table still renders, with the types labelled generically.
+  const { data: subs } = await subcategoriesRepository.listActiveAll();
+  const subLabel = new Map((subs ?? []).map((s) => [s.id, s.display_name]));
   const toInput = (t: ScopedTransaction): AllocationInputTxn => ({
     creditDebit: t.credit_debit,
     currency: t.currency_original,
     amount: t.amount_original,
     economicType: t.economic_transaction_type,
     categoryId: t.category_id,
+    subcategoryId: t.subcategory_id,
     dedupStatus: t.dedup_status,
     allocations: t.allocations.map((a) => ({ amount: a.amount, currency: a.currency_code, economicType: a.economic_transaction_type, categoryId: a.category_id })),
   });
@@ -396,6 +400,7 @@ export async function getAllocationOverview(userId: string, filters: ActivityFil
     approved: approvedTxns.map(toInput),
     waiting: pendingTxns.map(toInput),
     categoryLabel: (id) => categoryMap.get(id)?.display_name ?? null,
+    subcategoryLabel: (id) => subLabel.get(id) ?? null,
   });
 }
 

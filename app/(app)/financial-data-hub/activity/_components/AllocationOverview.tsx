@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { SectionCard } from '@/components/dashboard/SectionCard';
 import { DataTable } from '@/components/ui/DataTable';
@@ -43,13 +44,25 @@ function AllocationTable({ c }: { c: AllocationCurrencyResult }) {
               </th>
             </tr>
             {sec.rows.map((r) => (
-              <tr key={`${s}|${r.categoryId ?? 'none'}`} className="border-b border-line/60">
-                <th scope="row" className="py-1.5 pr-3 text-left font-normal text-ink">{r.label}</th>
-                <td className="py-1.5 pr-3 text-right tabular-nums text-muted">{r.approvedCount + r.waitingCount}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums text-ink">{r.approvedCount > 0 ? money(r.approvedTotal) : '—'}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums text-muted">{r.approvedSharePct !== null ? `${r.approvedSharePct}%` : '—'}</td>
-                <td className="py-1.5 text-right tabular-nums text-muted">{r.waitingCount > 0 ? `${money(r.waitingTotal)} (${r.waitingCount})` : '—'}</td>
-              </tr>
+              <Fragment key={`${s}|${r.categoryId ?? 'none'}`}>
+                <tr className="border-b border-line/60">
+                  <th scope="row" className="py-1.5 pr-3 text-left font-normal text-ink">{r.label}</th>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-muted">{r.approvedCount + r.waitingCount}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-ink">{r.approvedCount > 0 ? money(r.approvedTotal) : '—'}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-muted">{r.approvedSharePct !== null ? `${r.approvedSharePct}%` : '—'}</td>
+                  <td className="py-1.5 text-right tabular-nums text-muted">{r.waitingCount > 0 ? `${money(r.waitingTotal)} (${r.waitingCount})` : '—'}</td>
+                </tr>
+                {/* The types under this category (e.g. Income > Salary & Wages). Detail only: they add up to the row above and are not extra totals. */}
+                {r.subRows.map((sr) => (
+                  <tr key={`${s}|${r.categoryId ?? 'none'}|${sr.subcategoryId ?? 'none'}`} className="border-b border-line/40 text-xs" data-testid="allocation-subrow">
+                    <th scope="row" className="py-1 pl-5 pr-3 text-left font-normal text-muted">{sr.label}</th>
+                    <td className="py-1 pr-3 text-right tabular-nums text-muted">{sr.approvedCount + sr.waitingCount}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums text-muted">{sr.approvedCount > 0 ? money(sr.approvedTotal) : '—'}</td>
+                    <td className="py-1 pr-3" />
+                    <td className="py-1 text-right tabular-nums text-muted">{sr.waitingCount > 0 ? `${money(sr.waitingTotal)} (${sr.waitingCount})` : '—'}</td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
             <tr className="border-b border-line">
               <th scope="row" className="py-1.5 pr-3 text-left font-semibold text-ink">Total {ALLOCATION_SECTION_TITLE[s].toLowerCase()}</th>

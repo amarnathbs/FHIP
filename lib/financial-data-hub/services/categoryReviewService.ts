@@ -479,7 +479,7 @@ export async function rememberPayee(
 export async function setTransactionCategory(
   userId: string,
   transactionId: string,
-  input: { category_id: string; remember_payee?: boolean },
+  input: { category_id: string; subcategory_id?: string; remember_payee?: boolean },
 ): Promise<SetCategoryResult> {
   const { data: txn } = await transactionsRepository.getForUser(userId, transactionId);
   if (!txn) throw new CategoryReviewError('not_found', 'This transaction was not found.');
@@ -493,6 +493,16 @@ export async function setTransactionCategory(
   }
   const newType = category.economic_type;
   const reason = 'Chosen by you in the statement review.';
+
+  // The optional detail under the category must be a real, active one OF THIS category, so a request cannot pair "Groceries" with "Income".
+  let chosenSubcategoryId: string | null = null;
+  if (input.subcategory_id) {
+    const { data: chosen } = await subcategoriesRepository.getById(input.subcategory_id);
+    if (!chosen || !chosen.active || chosen.category_id !== category.id) {
+      throw new CategoryReviewError('invalid_input', 'Choose the type from the list shown under that category.');
+    }
+    chosenSubcategoryId = chosen.id;
+  }
 
   if (txn.economic_transaction_type !== newType) {
     await correctTransaction(userId, transactionId, { field_name: 'economic_transaction_type', corrected_value: newType, reason });
@@ -515,6 +525,7 @@ export async function setTransactionCategory(
     newCategoryId: category.id,
     previousSubcategoryId: txn.subcategory_id,
     clearSubcategory,
+    newSubcategoryId: chosenSubcategoryId,
   });
 
   // Settle any still-pending transfer-type match this answer decides.

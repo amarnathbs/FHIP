@@ -37,6 +37,7 @@ export interface AllocationInputAllocation {
   currency: string;
   economicType: FdhEconomicTransactionType;
   categoryId: string | null;
+  subcategoryId?: string | null;
 }
 
 export interface AllocationInputTxn {
@@ -46,8 +47,20 @@ export interface AllocationInputTxn {
   amount: number;
   economicType: FdhEconomicTransactionType;
   categoryId: string | null;
+  /** The optional type under the category (Income > Salary & Wages). Detail only: it never changes which section or category a line is in. */
+  subcategoryId?: string | null;
   dedupStatus: ApprovedSummaryTransaction['dedup_status'];
   allocations: AllocationInputAllocation[];
+}
+
+/** One type under a category row. The types of a row add up to that row; a line with no type chosen is the "No specific type" entry (subcategoryId null). */
+export interface AllocationSubRow {
+  subcategoryId: string | null;
+  label: string;
+  approvedCount: number;
+  approvedTotal: number;
+  waitingCount: number;
+  waitingTotal: number;
 }
 
 export interface AllocationRow {
@@ -61,6 +74,8 @@ export interface AllocationRow {
   approvedSharePct: number | null;
   waitingCount: number;
   waitingTotal: number;
+  /** Empty unless at least one line in this row has a type chosen. Biggest first, "No specific type" last. */
+  subRows: AllocationSubRow[];
 }
 
 export interface AllocationSectionResult {
@@ -93,6 +108,7 @@ interface Flat {
   amount: number;
   economicType: FdhEconomicTransactionType;
   categoryId: string | null;
+  subcategoryId: string | null;
 }
 
 function flatten(txns: readonly AllocationInputTxn[]): Flat[] {
@@ -100,9 +116,9 @@ function flatten(txns: readonly AllocationInputTxn[]): Flat[] {
   for (const t of txns) {
     if (isDuplicateExcluded(t.dedupStatus)) continue;
     if (t.allocations.length > 0) {
-      for (const a of t.allocations) out.push({ currency: a.currency, creditDebit: t.creditDebit, amount: Math.abs(a.amount), economicType: a.economicType, categoryId: a.categoryId });
+      for (const a of t.allocations) out.push({ currency: a.currency, creditDebit: t.creditDebit, amount: Math.abs(a.amount), economicType: a.economicType, categoryId: a.categoryId, subcategoryId: a.subcategoryId ?? null });
     } else {
-      out.push({ currency: t.currency, creditDebit: t.creditDebit, amount: Math.abs(t.amount), economicType: t.economicType, categoryId: t.categoryId });
+      out.push({ currency: t.currency, creditDebit: t.creditDebit, amount: Math.abs(t.amount), economicType: t.economicType, categoryId: t.categoryId, subcategoryId: t.subcategoryId ?? null });
     }
   }
   return out;
@@ -118,7 +134,7 @@ export function sectionOf(economicType: FdhEconomicTransactionType, creditDebit:
 }
 
 interface Cell { count: number; minor: number }
-type PassResult = Map<string, { section: AllocationSection; categoryId: string | null; cell: Cell }>; // key: `${currency}|${section}|${categoryId ?? ''}`
+type PassResult = Map<string, { section: AllocationSection; categoryId: string | null; cell: Cell; subs: Map<string, Cell> }>; // key: `${currency}|${section}|${categoryId ?? ''}`; subs key: subcategory id, '' = no type
 
 /** ONE pass over ONE list (approved, or waiting). Never sees the other list. */
 function pass(lines: readonly Flat[]): PassResult {
@@ -127,12 +143,40 @@ function pass(lines: readonly Flat[]): PassResult {
     const section = sectionOf(l.economicType, l.creditDebit);
     const categoryId = section === 'needs_category' ? null : l.categoryId;
     const key = `${l.currency}|${section}|${categoryId ?? ''}`;
-    const cur = m.get(key) ?? { section, categoryId, cell: { count: 0, minor: 0 } };
+    const cur = m.get(key) ?? { section, categoryId, cell: { count: 0, minor: 0 }, subs: new Map<string, Cell>() };
+    const minor = toMinorUnits(l.amount, l.currency);
     cur.cell.count += 1;
-    cur.cell.minor += toMinorUnits(l.amount, l.currency);
+    cur.cell.minor += minor;
+    // The type is detail under the row; a line with no category has no type to show.
+    const subKey = categoryId === null ? '' : l.subcategoryId ?? '';
+    const sub = cur.subs.get(subKey) ?? { count: 0, minor: 0 };
+    sub.count += 1;
+    sub.minor += minor;
+    cur.subs.set(subKey, sub);
     m.set(key, cur);
   }
   return m;
+}
+
+/** The types under one category row, from the approved and the waiting pass of that row. Approved and waiting stay in their own fields. Empty when no line has a type. */
+function buildSubRows(
+  approvedSubs: Map<string, Cell> | undefined,
+  waitingSubs: Map<string, Cell> | undefined,
+  currency: string,
+  label: ((id: string) => string | null) | undefined,
+): AllocationSubRow[] {
+  const keys = new Set<string>([...(approvedSubs?.keys() ?? []), ...(waitingSubs?.keys() ?? [])]);
+  if (![...keys].some((k) => k !== '')) return [];
+  const rows: AllocationSubRow[] = [...keys].map((k) => ({
+    subcategoryId: k === '' ? null : k,
+    label: k === '' ? 'No specific type' : label?.(k) ?? 'Other type',
+    approvedCount: approvedSubs?.get(k)?.count ?? 0,
+    approvedTotal: fromMinorUnits(approvedSubs?.get(k)?.minor ?? 0, currency),
+    waitingCount: waitingSubs?.get(k)?.count ?? 0,
+    waitingTotal: fromMinorUnits(waitingSubs?.get(k)?.minor ?? 0, currency),
+  }));
+  rows.sort((x, y) => Number(x.subcategoryId === null) - Number(y.subcategoryId === null) || y.approvedTotal - x.approvedTotal || y.waitingTotal - x.waitingTotal || x.label.localeCompare(y.label));
+  return rows;
 }
 
 export function buildAllocationOverview(input: {
@@ -140,6 +184,8 @@ export function buildAllocationOverview(input: {
   waiting: readonly AllocationInputTxn[];
   /** category id -> display name (active categories). */
   categoryLabel: (categoryId: string) => string | null;
+  /** subcategory id -> display name. Optional: without it, types are labelled "Other type". */
+  subcategoryLabel?: (subcategoryId: string) => string | null;
 }): AllocationOverviewResult {
   const approvedPass = pass(flatten(input.approved));
   const waitingPass = pass(flatten(input.waiting));
@@ -171,6 +217,7 @@ export function buildAllocationOverview(input: {
           approvedSharePct: null,
           waitingCount: w?.cell.count ?? 0,
           waitingTotal: fromMinorUnits(w?.cell.minor ?? 0, currency),
+          subRows: buildSubRows(a?.subs, w?.subs, currency, input.subcategoryLabel),
         });
       }
       for (const r of rows) {

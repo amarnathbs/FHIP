@@ -35,6 +35,13 @@ interface CategoryOption {
   economicType: string;
 }
 
+/** The optional detail under a category (Income > Salary & Wages). Reports stay by main category. */
+interface SubcategoryOption {
+  id: string;
+  categoryId: string;
+  label: string;
+}
+
 /**
  * Category-totals review of one imported bank statement (PDF or CSV — the
  * review reads the statement's saved transactions, whichever way they were
@@ -124,12 +131,14 @@ const OPTION_GROUPS: Array<{ label: string; types: readonly string[] }> = [
 export function StatementCategoryReview({
   statementId,
   categories,
+  subcategories = [],
   backHref,
   backLabel,
   fromParam,
 }: {
   statementId: string;
   categories: CategoryOption[];
+  subcategories?: SubcategoryOption[];
   backHref: string;
   backLabel: string;
   fromParam: string;
@@ -149,6 +158,8 @@ export function StatementCategoryReview({
   const [bulkRemember, setBulkRemember] = useState(false);
   const [confirm, setConfirm] = useState<null | 'category' | 'suggested'>(null);
   const [bulkResult, setBulkResult] = useState<BulkSetCategoryResult | null>(null);
+  // Added LAST on purpose: tests/unit/fdhCategoryReviewBulkRender.test.ts feeds state by position, so the hooks above must not move.
+  const [subChoices, setSubChoices] = useState<Record<string, string>>({});
   // (Declared after the hooks the render test seeds by position.) "I checked these lines" per proposed transfer group (the server refuses the approval without it).
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   // "Remember these payees" per group that holds AI-proposed lines: never implied, only when ticked.
@@ -217,11 +228,15 @@ export function StatementCategoryReview({
       setActionError('Choose a category first.');
       return;
     }
-    const label = categories.find((c) => c.id === categoryId)?.label ?? 'the chosen category';
+    const categoryLabel = categories.find((c) => c.id === categoryId)?.label ?? 'the chosen category';
+    // The detail is only sent when it belongs to the category being saved (a stale pick from another category is dropped).
+    const sub = subcategories.find((s) => s.id === subChoices[item.id] && s.categoryId === categoryId);
+    const label = sub ? `${categoryLabel} > ${sub.label}` : categoryLabel;
     const rememberPayee = remember[item.id] ?? false; // off unless the user ticks it (R8 spec 47: personal rules only from deliberate action; PO 2026-09-26)
     void run(`cat:${item.id}`, async () => {
       const result = await apiPost<SetCategoryResult>(`/api/financial-data-hub/bank-transactions/${item.id}/set-category`, {
         category_id: categoryId,
+        ...(sub ? { subcategory_id: sub.id } : {}),
         remember_payee: rememberPayee,
       });
       return `Saved. "${item.description ?? 'This transaction'}" is now ${label}.${result.payee_remembered ? ' We will remember this payee next time.' : ''}`;
@@ -615,7 +630,9 @@ export function StatementCategoryReview({
             {cardItems.map((item) => {
               const selectId = `category-${item.id}`;
               const rememberId = `remember-${item.id}`;
+              const subSelectId = `subcategory-${item.id}`;
               const chosen = chosenCategory(item);
+              const subsOfChosen = subcategories.filter((s) => s.categoryId === chosen);
               const suggested = item.suggested_category_id && item.suggested_category_id !== item.current_category_id
                 ? categories.find((c) => c.id === item.suggested_category_id)?.label
                 : null;
@@ -671,7 +688,10 @@ export function StatementCategoryReview({
                         <select
                           id={selectId}
                           value={chosen}
-                          onChange={(e) => setChoices((c) => ({ ...c, [item.id]: e.target.value }))}
+                          onChange={(e) => {
+                            setChoices((c) => ({ ...c, [item.id]: e.target.value }));
+                            setSubChoices((s) => ({ ...s, [item.id]: '' })); // a different category starts with no detail chosen
+                          }}
                           className="mt-1 rounded-compact border border-line bg-white px-2 py-1 text-sm"
                         >
                           <option value="">Choose a category</option>
@@ -686,6 +706,22 @@ export function StatementCategoryReview({
                           })}
                         </select>
                       </div>
+                      {subsOfChosen.length > 0 && (
+                        <div className="flex flex-col">
+                          <label htmlFor={subSelectId} className="text-xs font-medium text-ink">
+                            Type (optional)<span className="sr-only"> for {item.description ?? 'this transaction'}</span>
+                          </label>
+                          <select
+                            id={subSelectId}
+                            value={subChoices[item.id] ?? ''}
+                            onChange={(e) => setSubChoices((s) => ({ ...s, [item.id]: e.target.value }))}
+                            className="mt-1 rounded-compact border border-line bg-white px-2 py-1 text-sm"
+                          >
+                            <option value="">No specific type</option>
+                            {subsOfChosen.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                          </select>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <input
                           id={rememberId}

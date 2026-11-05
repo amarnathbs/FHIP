@@ -1,7 +1,7 @@
 import { PageBackLink } from '@/components/navigation/PageBackLink';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { categoriesRepository } from '@/lib/financial-data-hub/repositories/index';
+import { categoriesRepository, subcategoriesRepository } from '@/lib/financial-data-hub/repositories/index';
 import { ReviewWorkspace } from './ReviewWorkspace';
 import { StatementCategoryReview } from './StatementCategoryReview';
 
@@ -50,6 +50,13 @@ async function FinancialDataHubReviewPageContent({
     .filter((c) => c.economic_type !== 'unknown')
     .map((c) => ({ id: c.id, label: c.display_name, economicType: c.economic_type }))
     .sort((a, b) => a.label.localeCompare(b.label));
+  // PO 05-11-2026: a second, optional choice under the category (Income > Salary & Wages). Reports stay by main category; this is the detail.
+  // If the list cannot be read the review still works: the main category is all that is required.
+  const { data: subcategories } = await subcategoriesRepository.listActiveAll();
+  const subcategoryOptions = (subcategories ?? [])
+    .map((s) => ({ id: s.id, categoryId: s.category_id, label: s.display_name, order: s.display_order }))
+    .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
+    .map(({ id, categoryId, label }) => ({ id, categoryId, label }));
 
   const backTarget = RETURN_TARGETS[sp.from ?? ''] ?? RETURN_TARGETS.expenses;
   const fromParam = sp.from && RETURN_TARGETS[sp.from] ? sp.from : 'expenses';
@@ -60,6 +67,7 @@ async function FinancialDataHubReviewPageContent({
         <StatementCategoryReview
           statementId={sp.statement}
           categories={categoryOptions}
+          subcategories={subcategoryOptions}
           backHref={backTarget.href}
           backLabel={backTarget.label}
           fromParam={fromParam}

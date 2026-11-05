@@ -300,6 +300,8 @@ export type FdhBulkTransactionApprovalInput = z.infer<typeof fdhBulkTransactionA
  * this decision into a personal rule (R8 spec 47: only by deliberate action). */
 export const fdhSetTransactionCategorySchema = z.object({
   category_id: fdhUuid,
+  /** Optional detail under the chosen category (e.g. Income > Salary & Wages). Must belong to that category; the server checks it. Absent = no change to the detail. */
+  subcategory_id: fdhUuid.optional(),
   remember_payee: z.boolean().optional().default(false),
 });
 export type FdhSetTransactionCategoryInput = z.infer<typeof fdhSetTransactionCategorySchema>;
