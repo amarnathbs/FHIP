@@ -21,14 +21,17 @@
  *  - spending rules apply to money OUT only; a credit with the same words stays a question (it may be a refund);
  *  - a person-to-person Osko / PayID line is never decided by a merchant word in the payer's typed reference;
  *  - when two rules of the same priority disagree the engine proposes nothing (it asks) rather than picking one;
- *  - a payment to another person is NEVER given a spending category here: FHIP's category list has no "payment to a person" category,
- *    so those lines stay a question (and are grouped by payee so one answer covers them all).
+ *  - a payment to another person is NOT given a spending category here, with ONE narrow exception (05-11-2026): a line that is nothing but a name
+ *    sharing the account holder's surname is proposed as "Payments to People" (a family payment). Every other person-to-person line stays a
+ *    question (and is grouped by payee so one answer covers them all).
+ *  - a line that is only the holder's own name, or a joint-account title (holder's name or first initial, a connector, the surname), is proposed as
+ *    an own-account transfer even with no transfer word on it (NAB prints transfers that way).
  */
 
 import type { FdhEconomicTransactionType } from '../constants/enums';
 import type { FdhCategory, FdhSubcategory } from '../domain/types';
 import { isCardPurchaseShape, isPersonToPersonRail } from './paymentShape';
-import { mentionsOwnAccount, matchOwnPerson, onlyOwnNameWords, ownMaskedAccountKind, type OwnIdentity } from './ownIdentity';
+import { mentionsOwnAccount, matchOwnPerson, nameOnlyNarrativeKind, onlyOwnNameWords, ownMaskedAccountKind, type OwnIdentity } from './ownIdentity';
 import { containsPhrase } from './textMatch';
 
 export interface BuiltinRuleDef {
@@ -111,6 +114,18 @@ export const BUILTIN_RULES: readonly BuiltinRuleDef[] = [
     anyOf: ['SUPERHERO', 'COMMSEC', 'COMMONWEALTH SECURITIES', 'SELFWEALTH', 'CMC MARKETS', 'NABTRADE', 'INTERACTIVE BROKERS', 'RAIZ', 'SPACESHIP', 'BETASHARES', 'VANGUARD', 'COINSPOT', 'SWYFTX', 'INDEPENDENT RESERVE', 'BINANCE', 'ETORO', 'COINJAR', 'COINBASE', 'KRAKEN', 'BTC MARKETS'],
     noneOf: ['REFUND', 'DIVIDEND', 'DISTRIBUTION'], category: 'investment_sale', subcategory: 'other_investment_sale', priority: 300, allowOnPersonToPerson: true,
     why: 'money returned from an investment platform or broker',
+  },
+
+  // ---- Payout platforms (money IN is earnings, not a refund) ----------------------------------------------------------------------------------
+  // PO's NAB statements 05-11-2026: "Uber BV" and "Stripe" credits were filed as Transport (the Uber merchant) and so became refunds. A credit
+  // from the platform that PAYS the holder (rides and delivery payouts, card-processor payouts, Google payouts) is gig or business income.
+  // Credits only; a debit to the same names stays with the merchant. Words that name a refund are excluded.
+  {
+    key: 'au_platform_payout_credit', region: 'AU', direction: 'credit',
+    anyOf: ['UBER BV', 'UBER PAYMENTS', 'STRIPE', 'GOOGLE IRELAND'],
+    noneOf: [...REFUND_WORDS],
+    category: 'income', subcategory: 'self_employment_income', priority: 290, outranksMerchant: true,
+    why: 'a payout from a ride, delivery, payment or ad platform, which is gig or business income',
   },
 
   // ---- Government and tax ---------------------------------------------------------------------------------------------------------------
@@ -326,7 +341,15 @@ function firstPhrase(hay: string, phrases: readonly string[] | undefined): strin
 /** Structural own-account transfer evidence: returns the plain-words reason, or null. */
 export function ownTransferEvidence(hay: string, identity: OwnIdentity): { why: string; phrase: string; kind?: 'transfer' | 'loan' } | null {
   const rail = ['OSKO', 'PAYID', 'TRANSFER', 'TFR', 'TRF', 'FAST PAYMENT', 'PAY ANYONE', 'RECEIVED FROM', 'LINKED ACC', 'LINKED ACCOUNT'].find((p) => containsPhrase(hay, p));
-  if (!rail) return null;
+  if (!rail) {
+    // 05-11-2026 (PO's AI-categorised NAB reference): NAB prints a transfer as just the name, with no transfer word. A narrative that is ONLY the
+    // holder's own name (plus codes), or a joint-account title made of the holder's name or initials and a connector, is a move between own accounts.
+    // A line naming anyone or anything else falls through to a question.
+    const nameOnly = nameOnlyNarrativeKind(hay, identity);
+    if (nameOnly === 'self') return { why: 'a line that is only your name, so it looks like a move between your own accounts', phrase: 'your name only' };
+    if (nameOnly === 'joint') return { why: 'a line that is a joint account title with your name, so it looks like a move to or from a joint account', phrase: 'joint account name' };
+    return null;
+  }
   const masked = ownMaskedAccountKind(hay, identity);
   if (masked === 'loan') return { why: 'a payment into one of your own loan accounts', phrase: 'your loan account', kind: 'loan' };
   if (masked === 'share') return { why: 'a transfer between your own accounts', phrase: 'your account', kind: 'transfer' };
@@ -372,6 +395,19 @@ export function matchBuiltinRule(
       ruleKey: 'own_account_transfer', categoryId: transferCat.id, subcategoryId: subKey(transferCat.id, own.kind === 'loan' ? 'other_loan_principal' : 'internal_transfer'), economicType: transferCat.economic_type,
       priority: 250, why: own.why, matchedPhrase: own.phrase, isOwnTransfer: own.kind !== 'loan', isCardRepayment: false, outranksMerchant: false,
     });
+  }
+
+  // Money OUT to someone who shares the holder's surname and is not the holder (a family member): "Payments to People" (PO 05-11-2026: it counts as
+  // spending). Only for a line that is nothing but that person's name. A credit from family is left as a question (it may be a gift, a loan back or rent).
+  if (input.creditDebit === 'debit' && !own) {
+    const peopleCat = catByKey.get('payments_to_people');
+    if (peopleCat && nameOnlyNarrativeKind(hay, identity) === 'family') {
+      matches.push({
+        ruleKey: 'family_name_payment', categoryId: peopleCat.id, subcategoryId: null, economicType: peopleCat.economic_type,
+        priority: 260, why: 'a payment to a person who shares your surname, so it looks like a payment to family', matchedPhrase: 'family name only',
+        isOwnTransfer: false, isCardRepayment: false, outranksMerchant: false,
+      });
+    }
   }
 
   const purchase = isCardPurchaseShape(hay);

@@ -142,6 +142,50 @@ export function matchOwnPerson(haystackUpper: string, identity: OwnIdentity): 's
   return found;
 }
 
+const NAME_ONLY_CODE_WORDS = new Set(['OTHER']);
+/** Words that make a "name" a business, a trust or a fund, not a person. */
+const NOT_A_PERSON_WORDS = new Set([
+  'PTY', 'LTD', 'LIMITED', 'INC', 'TRUST', 'FUND', 'SUPER', 'SMSF', 'SERVICES', 'GROUP', 'HOLDINGS', 'ENTERPRISES', 'INVESTMENTS', 'PROPERTIES',
+  'CONSULTING', 'CAFE', 'RESTAURANT', 'STORE', 'SHOP', 'PHARMACY', 'MEDICAL', 'DENTAL', 'LEGAL', 'LAW', 'BANK', 'INSURANCE', 'ENERGY', 'TRANSPORT',
+]);
+
+/**
+ * A narrative that is ONLY a person's name plus codes, with no transfer word (NAB prints "Amarnath S Bekal", "A and S Bekal", "Samay Bekal 123").
+ * The PO's own AI-categorised reference (05-11-2026) files these as moves between own accounts, a joint account, and payments to family.
+ *
+ * Deliberately narrow, because a wrong automatic answer is worse than a question and the result is only ever a PROPOSAL the person approves by total:
+ *  - the narrative must carry the account holder's SURNAME, and nothing else that is a word of three or more letters except names;
+ *  - 'self'   : the holder's first name (and surname) and nothing else, e.g. "AMARNATH S BEKAL 123";
+ *  - 'joint'  : the surname plus a connector (AND / &) and only the holder's own name or initials, e.g. "A AND S BEKAL", "AMARNATH BEKAL AND";
+ *  - 'family' : the surname plus one or two OTHER first names, no connector, no business word, e.g. "SAMAY BEKAL" (the caller decides what a family
+ *               payment means; this function never says "own account" for it);
+ *  - a lone initial plus the surname, a truncated name, a business word, or any other extra word returns null (a question, not a guess).
+ * Initials alone still never prove a person: 'joint' needs the holder's first initial AND a connector AND the surname.
+ */
+export function nameOnlyNarrativeKind(haystackUpper: string, identity: OwnIdentity): 'self' | 'joint' | 'family' | null {
+  const self = identity.people.find((p) => p.kind === 'self');
+  if (!self || self.tokens.length < 2) return null;
+  const first = self.tokens[0];
+  const surname = self.tokens[self.tokens.length - 1];
+  const words = wordsOf(haystackUpper);
+  if (!words.has(surname)) return null;
+  const hasConnector = words.has('AND') || /(^|\s)&(\s|$)/.test(haystackUpper);
+  const alpha = [...words].filter((w) => /^[A-Z]+$/.test(w));
+  const initials = alpha.filter((w) => w.length === 1);
+  const others = alpha.filter((w) => w.length >= 3 && w !== 'AND' && w !== surname && !NAME_ONLY_CODE_WORDS.has(w));
+  if (others.some((w) => NOT_A_PERSON_WORDS.has(w))) return null;
+  const hasFirst = words.has(first);
+  const rest = others.filter((w) => w !== first);
+
+  if (hasFirst) {
+    if (rest.length === 0) return hasConnector ? 'joint' : 'self';
+    return hasConnector && rest.length <= 2 ? 'joint' : null;
+  }
+  if (rest.length === 0 && hasConnector && initials.includes(first[0])) return 'joint';
+  if (rest.length >= 1 && rest.length <= 2 && !hasConnector) return 'family';
+  return null;
+}
+
 /** True when every alphabetic word of three or more letters in `text` is one of the household's own name tokens (or there is none). Used for the
  * title printed after "SAV <digits>": a title made only of the household's own names (or of initials) is an own account. */
 export function onlyOwnNameWords(text: string, identity: OwnIdentity): boolean {
