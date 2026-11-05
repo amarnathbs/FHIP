@@ -20,13 +20,18 @@ import {
 export type BankCategoriseOutcome = AieAdapterExtractionOutcome<BankCategoriseAnswer>;
 
 /** The prompt names the closed category list, so the model has nothing to invent. Exported so a live proof uses the EXACT production prompt. */
-export function buildBankCategoriseSystemPrompt(allowed: ReadonlyArray<{ key: string; label: string }>): string {
+export function buildBankCategoriseSystemPrompt(allowed: ReadonlyArray<{ key: string; label: string }>, opts: { bestGuess?: boolean } = {}): string {
+  // Premium automatic mode (PO 05-11-2026): the person will not approve each line first, so the model is asked for its closest category every time and
+  // to mark a guess as low. It may still answer "unknown", and the code files that under Other spending rather than inventing a category.
+  const uncertainty = opts.bestGuess
+    ? 'Always choose the closest category on the list, even when you are unsure; mark a guess with confidence "low". Answer "unknown" only if no category on the list could possibly apply. '
+    : 'If you are not sure, or it could reasonably be several categories, or you cannot tell what the business is, answer "unknown" with confidence "low". ';
   return (
     `${AIE_DOCUMENT_FACTS_BASE_PROMPT} ` +
     'The evidence is a numbered list of payee descriptions copied from a bank statement (p1, p2, ...), with numbers removed. ' +
     'For each one choose the single category key that best fits what was bought, from this closed list only: ' +
     allowed.map((c) => `${c.key} (${c.label})`).join('; ') +
-    '. If you are not sure, or it could reasonably be several categories, or you cannot tell what the business is, answer "unknown" with confidence "low". ' +
+    `. ${uncertainty}` +
     'confidence is "high" only when the business is well known and the category is obvious, "medium" when likely, otherwise "low". ' +
     `Return one item for every payee shown (at most ${AIE_BANK_CATEGORISE_MAX_PAYEES_PER_CALL}), using the key shown. Never invent a category key, never answer with anything but the closed list or "unknown", and do not return any text of your own.`
   );
@@ -37,6 +42,8 @@ export async function requestBankCategorisation(params: {
   allowed: ReadonlyArray<{ key: string; label: string }>;
   userId: string;
   requestId?: string;
+  /** Premium automatic mode: ask for the closest category every time (see buildBankCategoriseSystemPrompt). */
+  bestGuess?: boolean;
   timeoutMs?: number;
   maxTransientRetries?: number;
 }): Promise<BankCategoriseOutcome> {
@@ -45,7 +52,7 @@ export async function requestBankCategorisation(params: {
     schema: bankCategoriseAnswerSchema,
     schemaName: AIE_BANK_CATEGORISE_SCHEMA_NAME,
     schemaVersion: AIE_BANK_CATEGORISE_SCHEMA_VERSION,
-    systemPrompt: buildBankCategoriseSystemPrompt(params.allowed),
+    systemPrompt: buildBankCategoriseSystemPrompt(params.allowed, { bestGuess: params.bestGuess }),
     maskedText: params.maskedText,
     idempotencyPrefix: 'bank-categorise-ai',
     requestId: params.requestId,

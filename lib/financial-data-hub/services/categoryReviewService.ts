@@ -276,7 +276,7 @@ export interface GroupApprovalResult {
  * itself through the existing `approveStatement` (lifecycle, Approved
  * Financial Summary, raw-file purge). Best-effort: the transactions are
  * already approved and counted whether or not this succeeds. */
-async function finaliseStatementIfComplete(userId: string, statementId: string): Promise<{ finalised: boolean; reason: string | null }> {
+export async function finaliseStatementIfComplete(userId: string, statementId: string): Promise<{ finalised: boolean; reason: string | null }> {
   const { transactions } = await loadReviewInputs(userId, statementId);
   const counted = transactions.filter((t) => !isDuplicateExcluded(t.dedup_status));
   if (counted.length === 0 || counted.some((t) => t.approval_status !== 'approved')) return { finalised: false, reason: null };
@@ -295,7 +295,7 @@ async function finaliseStatementIfComplete(userId: string, statementId: string):
 }
 
 /** Confirms the pending transfer-like links on `transactionIds` that agree with `groupType` (see linkDecisionForChosenType). Best-effort per link. */
-async function settlePendingLinksForGroup(userId: string, transactionIds: readonly string[], groupType: FdhEconomicTransactionType): Promise<number> {
+export async function settlePendingLinksForGroup(userId: string, transactionIds: readonly string[], groupType: FdhEconomicTransactionType): Promise<number> {
   const supabase = await createClient();
   const seen = new Set<string>();
   let settled = 0;

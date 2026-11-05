@@ -58,7 +58,12 @@ async function statementHasBlockingIssue(userId: string, statementId: string): P
 /** Transaction approval (spec 26, 52, 55). A deliberate, single, idempotent
  * action — approving an already-approved transaction is a no-op success
  * (spec 73), never a duplicate audit row. */
-export async function approveTransaction(userId: string, transactionId: string): Promise<FdhTransaction> {
+export interface ApprovalActorOptions {
+  /** Who is recorded as acting. Always 'user' for a person's own approval; 'system' only for the Premium automatic categorisation (PO 05-11-2026), so the audit trail can tell the two apart. */
+  actorType?: 'user' | 'system';
+}
+
+export async function approveTransaction(userId: string, transactionId: string, opts: ApprovalActorOptions = {}): Promise<FdhTransaction> {
   const { data: transaction } = await transactionsRepository.getForUser(userId, transactionId);
   if (!transaction) throw new ApprovalError('not_found', 'transaction not found');
   if (transaction.approval_status === 'approved') return transaction; // idempotent (spec 73)
@@ -91,7 +96,7 @@ export async function approveTransaction(userId: string, transactionId: string):
     userId,
     documentId: transaction.statement_upload_id,
     eventType: 'transaction_approved',
-    actorType: 'user',
+    actorType: opts.actorType ?? 'user',
     actorId: userId,
     metadata: { transaction_id: transactionId },
   });
@@ -171,14 +176,14 @@ async function statementIdsFor(userId: string, ids: readonly string[]): Promise<
   return map;
 }
 
-async function auditApproved(userId: string, approvedIds: readonly string[], statementId?: string): Promise<void> {
+async function auditApproved(userId: string, approvedIds: readonly string[], statementId?: string, actorType: 'user' | 'system' = 'user'): Promise<void> {
   if (approvedIds.length === 0) return;
   const docs = statementId ? null : await statementIdsFor(userId, approvedIds);
   await recordDocumentAuditEvents(approvedIds.map((id) => ({
     userId,
     documentId: statementId ?? docs?.get(id) ?? null,
     eventType: 'transaction_approved' as const,
-    actorType: 'user' as const,
+    actorType,
     actorId: userId,
     metadata: { transaction_id: id },
   })));
@@ -190,7 +195,7 @@ async function auditApproved(userId: string, approvedIds: readonly string[], sta
  * (spec 51). WP-08: set-based through 0212 when it is applied (one request
  * per 500 ids instead of three per id); the per-item result contract is
  * unchanged, and a removed duplicate is reported, never approved. */
-export async function bulkApproveTransactions(userId: string, transactionIds: readonly string[]): Promise<BulkActionResult> {
+export async function bulkApproveTransactions(userId: string, transactionIds: readonly string[], opts: ApprovalActorOptions = {}): Promise<BulkActionResult> {
   const rpc = await bulkApproveViaRpc(transactionIds);
   let result: BulkActionResult;
   if (rpc) {
@@ -206,17 +211,17 @@ export async function bulkApproveTransactions(userId: string, transactionIds: re
     });
     const succeeded = results.filter((r) => r.ok).length;
     result = { contract: FDH7_BULK_ACTION_CONTRACT, requested: transactionIds.length, succeeded, failed: results.length - succeeded, results };
-    await auditApproved(userId, rpc.approved);
+    await auditApproved(userId, rpc.approved, undefined, opts.actorType ?? 'user');
   } else {
     result = await runBulkAction(transactionIds, async (id) => {
-      await approveTransaction(userId, id);
+      await approveTransaction(userId, id, opts);
     });
   }
   await recordDocumentAuditEvent({
     userId,
     documentId: null,
     eventType: 'bulk_review_action_completed',
-    actorType: 'user',
+    actorType: opts.actorType ?? 'user',
     actorId: userId,
     metadata: { requested: result.requested, succeeded: result.succeeded, failed: result.failed, set_based: Boolean(rpc) },
   });
@@ -485,6 +490,35 @@ export async function approveStatement(
   return { statement: approvedStatement, blockedTransactionIds: [] };
 }
 
+/**
+ * Puts every approved line of one statement back to waiting (the lines keep their categories; only the approval is withdrawn). The one shared
+ * implementation for "reopen an approved statement" and for undoing the Premium automatic categorisation on a statement that was not yet complete.
+ * WP-08 (EXP-G8): ONE set-based UPDATE (the guard trigger clears approved_at/approved_by on every row), then a count check -- before, an unpaged select
+ * reverted only the first 1,000 lines and a zero-row write was never noticed. Returns how many lines were reverted.
+ */
+export async function revertStatementTransactionApprovals(userId: string, statementId: string): Promise<number | null> {
+  const supabase = await createClient();
+  const { error: revertError, count: revertedCount } = await supabase
+    .from('fdh_transactions')
+    .update({ approval_status: 'pending' }, { count: 'exact' })
+    .eq('user_id', userId)
+    .eq('statement_upload_id', statementId)
+    .eq('approval_status', 'approved');
+  if (revertError) {
+    throw new ApprovalError('invalid_state', `could not revert the statement's approvals: ${revertError.message}`);
+  }
+  const { count: stillApproved, error: countError } = await supabase
+    .from('fdh_transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('statement_upload_id', statementId)
+    .eq('approval_status', 'approved');
+  if (countError || (stillApproved ?? 0) > 0) {
+    throw new ApprovalError('invalid_state', `could not revert every approval on this statement (${stillApproved ?? 'unknown'} still approved)`);
+  }
+  return revertedCount ?? null;
+}
+
 /** Reopen (spec 63-64) — explicit user action, preserves every prior
  * approval record (marks it superseded, never deletes it). */
 export async function reopenStatement(userId: string, statementId: string, reason: string): Promise<FdhStatementUpload> {
@@ -507,29 +541,7 @@ export async function reopenStatement(userId: string, statementId: string, reaso
     throw new ApprovalError('invalid_state', `could not mark the prior summary superseded: ${supersedeError.message}`);
   }
 
-  // Revert every transaction's approval so corrections can be made again.
-  // WP-08 (EXP-G8): ONE set-based UPDATE (the guard trigger clears
-  // approved_at/approved_by on every row), then a count check -- before,
-  // an unpaged select reverted only the first 1,000 lines and a zero-row
-  // write was never noticed.
-  const { error: revertError, count: revertedCount } = await supabase
-    .from('fdh_transactions')
-    .update({ approval_status: 'pending' }, { count: 'exact' })
-    .eq('user_id', userId)
-    .eq('statement_upload_id', statementId)
-    .eq('approval_status', 'approved');
-  if (revertError) {
-    throw new ApprovalError('invalid_state', `could not revert the statement's approvals: ${revertError.message}`);
-  }
-  const { count: stillApproved, error: countError } = await supabase
-    .from('fdh_transactions')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('statement_upload_id', statementId)
-    .eq('approval_status', 'approved');
-  if (countError || (stillApproved ?? 0) > 0) {
-    throw new ApprovalError('invalid_state', `could not revert every approval on this statement (${stillApproved ?? 'unknown'} still approved)`);
-  }
+  const revertedCount = await revertStatementTransactionApprovals(userId, statementId);
 
   const { data: reopened, error } = await supabase
     .from('fdh_statement_uploads')

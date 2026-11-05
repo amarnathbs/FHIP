@@ -53,6 +53,9 @@ export interface AiCategoriseResult {
   calls: number;
   proposed_lines: number;
   proposed_payees: number;
+  /** Best-guess mode only: lines filed as Other spending because the model answered "unknown", and lines placed on a low-confidence guess. */
+  other_spending_lines: number;
+  guessed_lines: number;
   unknown_payees: number;
   remaining_payees: number;
   input_tokens: number;
@@ -68,12 +71,17 @@ export interface AiCategoriseDeps {
   /** Test seam: replaces the provider call. Production never sets it. */
   request?: typeof requestBankCategorisation;
   maxCalls?: number;
+  /**
+   * Premium automatic mode (PO 05-11-2026): the model is asked for its closest category every time, a low-confidence answer is accepted as a guess and
+   * "unknown" becomes Other spending. The same gates, masking, candidate rules (money out only, never person-to-person) and cost caps apply.
+   */
+  bestGuess?: boolean;
 }
 
 function emptyResult(status: AiCategoriseStatus, reason: AiCategoriseResult['reason'] = null): AiCategoriseResult {
   return {
     status, reason, eligible_lines: 0, not_sent_lines: 0, distinct_payees: 0, calls: 0, proposed_lines: 0, proposed_payees: 0,
-    unknown_payees: 0, remaining_payees: 0, input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0,
+    other_spending_lines: 0, guessed_lines: 0, unknown_payees: 0, remaining_payees: 0, input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0,
   };
 }
 
@@ -125,7 +133,7 @@ export async function aiCategoriseStatement(userId: string, statementId: string,
       break;
     }
     result.calls += 1;
-    const outcome = await request({ maskedText: gate.maskedText, allowed: allowed.map((c) => ({ key: c.key, label: c.label })), userId, requestId: `${statementId}:${index}` });
+    const outcome = await request({ maskedText: gate.maskedText, allowed: allowed.map((c) => ({ key: c.key, label: c.label })), userId, requestId: `${statementId}:${index}`, ...(deps.bestGuess ? { bestGuess: true } : {}) });
     result.input_tokens += outcome.evidence?.inputTokens ?? 0;
     result.output_tokens += outcome.evidence?.outputTokens ?? 0;
     if (outcome.outcome !== 'success') {
@@ -135,18 +143,30 @@ export async function aiCategoriseStatement(userId: string, statementId: string,
       result.remaining_payees += batches.slice(index).reduce((n, b) => n + b.payees.length, 0);
       break;
     }
-    const resolution = resolveAiAnswer(outcome.facts, batch, allowed);
+    const resolution = resolveAiAnswer(outcome.facts, batch, allowed, { bestGuess: deps.bestGuess });
     result.unknown_payees += resolution.rejected.size;
     const items: AiProposalItem[] = [];
+    const guessedIds = new Set<string>();
+    const otherIds = new Set<string>();
     for (const [text, category] of resolution.accepted) {
       for (const id of batch.idsByText.get(text) ?? []) {
         items.push({ transactionId: id, newEconomicType: category.economicType as FdhEconomicTransactionType, newCategoryId: category.id });
+        if (resolution.guessed.has(text)) guessedIds.add(id);
+      }
+    }
+    // "Unknown" in best-guess mode is a counted, visible Other spending line, not a parked question.
+    for (const text of resolution.otherSpending) {
+      for (const id of batch.idsByText.get(text) ?? []) {
+        items.push({ transactionId: id, newEconomicType: 'expense', newCategoryId: null });
+        otherIds.add(id);
       }
     }
     if (items.length > 0) {
       const written = await recordAiProposals(userId, items);
       result.proposed_lines += written.writtenIds.length;
-      result.proposed_payees += resolution.accepted.size;
+      result.proposed_payees += resolution.accepted.size + resolution.otherSpending.size;
+      result.guessed_lines += written.writtenIds.filter((id) => guessedIds.has(id)).length;
+      result.other_spending_lines += written.writtenIds.filter((id) => otherIds.has(id)).length;
     }
   }
 
@@ -159,7 +179,7 @@ export async function aiCategoriseStatement(userId: string, statementId: string,
       actorType: 'user',
       actorId: userId,
       // Counts only -- never a payee, a description or a category choice.
-      metadata: { source: 'ai_categorise', status: result.status, calls: result.calls, proposed_lines: result.proposed_lines, unknown_payees: result.unknown_payees, reason: result.reason },
+      metadata: { source: deps.bestGuess ? 'ai_categorise_best_guess' : 'ai_categorise', status: result.status, calls: result.calls, proposed_lines: result.proposed_lines, guessed_lines: result.guessed_lines, other_spending_lines: result.other_spending_lines, unknown_payees: result.unknown_payees, reason: result.reason },
     });
   } catch {
     // Best-effort evidence.

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoneyExact } from '@/lib/engines/money';
 import { ResourceErrorState, ResourceLoadingSkeleton } from '@/components/resources/admin/ResourceStates';
 import { StatementDetailsDrawer } from '@/components/financial-data-hub/StatementDetailsDrawer';
+import { AutoCategoriseBanner } from './AutoCategoriseBanner';
 // Type-only imports (erased at build): the page renders EXACTLY the
 // snake_case shape the API returns, so a camelCase mismatch is a compile
 // error, not a blank screen. `tests/unit/fdhCategoryReviewRoutes.test.ts`
@@ -385,6 +386,9 @@ export function StatementCategoryReview({
       {actionError && (
         <p role="alert" className="rounded-compact bg-risk/10 px-3 py-2 text-sm text-risk">{actionError}</p>
       )}
+
+      {/* Premium automatic categorisation (PO 05-11-2026): starts once, says what it did, offers Undo. Renders nothing unless the server says it is on. */}
+      <AutoCategoriseBanner statementId={statementId} onChanged={reload} />
 
       {/* Summary */}
       <section aria-labelledby="summary-heading" className="rounded-compact border border-line bg-white p-4">

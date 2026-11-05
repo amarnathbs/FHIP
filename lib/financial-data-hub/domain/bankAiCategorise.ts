@@ -112,10 +112,26 @@ export interface AiResolution {
   accepted: Map<string, AiCategoryOption>;
   /** payee text -> why it stays unknown. */
   rejected: Map<string, AiRejectionReason>;
+  /**
+   * BEST-GUESS MODE ONLY (Premium automatic categorisation, PO 05-11-2026): payees the model answered "unknown" for. They are filed as Other spending
+   * (a counted, visible group) instead of being parked as a question. Always empty outside best-guess mode.
+   */
+  otherSpending: Set<string>;
+  /** Payees whose accepted answer was a low-confidence guess (best-guess mode only; counted for the banner). */
+  guessed: Set<string>;
+}
+
+export interface ResolveOptions {
+  /**
+   * The Premium automatic mode: a LOW-confidence answer from the list is accepted as a guess, and "unknown" becomes Other spending. Everything that
+   * signals a misbehaving model (a key we did not show, a category outside the list, a missing item, two different answers for one payee) is still
+   * left unresolved, in either mode.
+   */
+  bestGuess?: boolean;
 }
 
 /** Applies the safety rules to a provider answer. Anything not explicitly acceptable is unknown. */
-export function resolveAiAnswer(answer: BankCategoriseAnswer, batch: AiBatch, allowed: readonly AiCategoryOption[]): AiResolution {
+export function resolveAiAnswer(answer: BankCategoriseAnswer, batch: AiBatch, allowed: readonly AiCategoryOption[], opts: ResolveOptions = {}): AiResolution {
   const byKey = new Map(allowed.map((c) => [c.key, c] as const));
   const shown = new Map(batch.payees.map((p) => [p.key, p.text] as const));
   const answersByKey = new Map<string, Array<BankCategoriseAnswer['items'][number]>>();
@@ -125,6 +141,8 @@ export function resolveAiAnswer(answer: BankCategoriseAnswer, batch: AiBatch, al
   }
   const accepted = new Map<string, AiCategoryOption>();
   const rejected = new Map<string, AiRejectionReason>();
+  const otherSpending = new Set<string>();
+  const guessed = new Set<string>();
   for (const [key, text] of shown) {
     const given = answersByKey.get(key);
     if (!given) {
@@ -137,7 +155,8 @@ export function resolveAiAnswer(answer: BankCategoriseAnswer, batch: AiBatch, al
     }
     const item = given[0];
     if (item.categoryKey === 'unknown') {
-      rejected.set(text, 'unknown_answer');
+      if (opts.bestGuess) otherSpending.add(text);
+      else rejected.set(text, 'unknown_answer');
       continue;
     }
     const category = byKey.get(item.categoryKey);
@@ -146,12 +165,15 @@ export function resolveAiAnswer(answer: BankCategoriseAnswer, batch: AiBatch, al
       continue;
     }
     if (item.confidence === 'low') {
-      rejected.set(text, 'low_confidence');
-      continue;
+      if (!opts.bestGuess) {
+        rejected.set(text, 'low_confidence');
+        continue;
+      }
+      guessed.add(text);
     }
     accepted.set(text, category);
   }
-  return { accepted, rejected };
+  return { accepted, rejected, otherSpending, guessed };
 }
 
 /** Published price list for the one permitted model class (gpt-4o-mini), USD per million tokens. Used ONLY for the estimate shown to the person. */

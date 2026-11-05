@@ -776,8 +776,14 @@ export async function recordUserClassificationDecisionsBatch(
 export interface AiProposalItem {
   transactionId: string;
   newEconomicType: FdhTransaction['economic_transaction_type'];
-  newCategoryId: string;
+  /** Null only for "Other spending": a spending line the AI could not name a category for (Premium automatic mode). */
+  newCategoryId: string | null;
+  /** Optional type under the category (Premium automatic fallback, e.g. Income > Other Income). */
+  newSubcategoryId?: string | null;
 }
+
+/** Who made the proposal. 'ai' is the AI step; 'global_rule' is a fixed built-in answer (Premium automatic fallback for payments to and from people). */
+export type ProposalMethod = 'ai' | 'global_rule';
 
 /**
  * Optional AI categorisation (29-10-2026) -- records the accepted answers as PROPOSALS.
@@ -790,12 +796,17 @@ export interface AiProposalItem {
  * Provenance is the existing, CHECK-allowed method 'ai' (FDH_CLASSIFICATION_METHODS) with confidence capped at the MEDIUM bucket, so a proposal is
  * never HIGH and never "fully confident". It is never approved here. Returns the ids actually written.
  */
-export async function recordAiProposals(userId: string, items: readonly AiProposalItem[]): Promise<{ writtenIds: string[]; skippedIds: string[] }> {
+export async function recordAiProposals(
+  userId: string,
+  items: readonly AiProposalItem[],
+  opts: { method?: ProposalMethod } = {},
+): Promise<{ writtenIds: string[]; skippedIds: string[] }> {
+  const method: ProposalMethod = opts.method ?? 'ai';
   const admin = createAdminClient();
   const writtenIds: string[] = [];
   const byDecision = new Map<string, AiProposalItem[]>();
   for (const it of items) {
-    const key = `${it.newEconomicType}|${it.newCategoryId}`;
+    const key = `${it.newEconomicType}|${it.newCategoryId}|${it.newSubcategoryId ?? ''}`;
     byDecision.set(key, [...(byDecision.get(key) ?? []), it]);
   }
   for (const group of byDecision.values()) {
@@ -806,8 +817,8 @@ export async function recordAiProposals(userId: string, items: readonly AiPropos
         .update({
           economic_transaction_type: chunk[0].newEconomicType,
           category_id: chunk[0].newCategoryId,
-          subcategory_id: null,
-          classification_method: 'ai',
+          subcategory_id: chunk[0].newSubcategoryId ?? null,
+          classification_method: method,
           classification_confidence: CONFIDENCE_SCORE.MEDIUM,
           transfer_flag: false,
         })
@@ -830,8 +841,8 @@ export async function recordAiProposals(userId: string, items: readonly AiPropos
             previous_category_id: null,
             new_category_id: chunk[0].newCategoryId,
             previous_subcategory_id: null,
-            new_subcategory_id: null,
-            classification_method: 'ai',
+            new_subcategory_id: chunk[0].newSubcategoryId ?? null,
+            classification_method: method,
             confidence: CONFIDENCE_SCORE.MEDIUM,
             changed_by_type: 'system',
             changed_by_user: null,
