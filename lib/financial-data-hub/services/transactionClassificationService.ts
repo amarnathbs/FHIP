@@ -52,6 +52,7 @@ import { buildOwnIdentity, type OwnIdentity } from '../classification/ownIdentit
 import { matchInternalTransfers, openCandidateLink, type TransferCandidateTxn } from '../classification/transferMatching';
 import { matchRefundsToOriginals, type RefundCandidateTxn } from '../classification/refundReversalMatching';
 import { detectRecurringSeries, type RecurringCandidateTxn } from '../classification/recurringDetection';
+import { proposeRecurringPayers, type RecurringPayerLine } from '../classification/recurringPayer';
 import { CONFIDENCE_SCORE, type ClassifiableTransaction, type ClassificationReferenceData } from '../classification/types';
 import type { FdhAccountType } from '../constants/enums';
 import type { FdhTransaction } from '../domain/types';
@@ -222,6 +223,17 @@ export async function classifyUserTransactions(userId: string, options: Classify
     else pendingUpdates.set(key, { patch, ids: [id] });
   };
   const historyRows: Record<string, unknown>[] = [];
+  // Lines the rules could not classify and that are (or, on a re-check, have just been put back to) "unknown": offered to the repeating-payer rule
+  // after the loop, which needs to see the whole history of a payer (classification/recurringPayer.ts).
+  const payerRuleCandidates: Array<{ line: RecurringPayerLine; txn: FdhTransaction; retracted: boolean }> = [];
+  const offerToRecurringPayerRule = (t: FdhTransaction, retracted: boolean) => {
+    if (!t.transaction_date || t.amount_original == null) return;
+    payerRuleCandidates.push({
+      line: { id: t.id, description: t.description_clean, creditDebit: t.credit_debit, amount: Math.abs(Number(t.amount_original)), currency: t.currency_original, date: t.transaction_date },
+      txn: t,
+      retracted,
+    });
+  };
 
   for (const txn of transactions) {
     if (txn.user_override) {
@@ -332,9 +344,11 @@ export async function classifyUserTransactions(userId: string, options: Classify
           global_rule_id: null,
           user_rule_id: null,
         });
+        offerToRecurringPayerRule(txn, true);
         continue;
       }
       if (changed || txn.review_status === 'not_required') queueUpdate({ review_status: 'pending' }, txn.id);
+      if (txn.economic_transaction_type === 'unknown') offerToRecurringPayerRule(txn, false);
       continue;
     }
 
@@ -368,6 +382,46 @@ export async function classifyUserTransactions(userId: string, options: Classify
       global_rule_id: result.source.kind === 'verified_global_rule' || result.source.kind === 'narrative_pattern' ? (result.source.ruleId ?? null) : null,
       user_rule_id: result.source.kind === 'user_rule' ? (result.source.ruleId ?? null) : null,
     });
+  }
+
+  // Repeating payer -> salary or loan (PO 05-11-2026). Runs on the lines nothing else could classify. Each answer is a MEDIUM proposal (method
+  // 'global_rule', like every code-level rule), approved by total like the others; a re-check withdraws and re-proposes it with the rest.
+  if (payerRuleCandidates.length > 0) {
+    const byId = new Map(payerRuleCandidates.map((c) => [c.line.id, c]));
+    for (const p of proposeRecurringPayers(payerRuleCandidates.map((c) => c.line))) {
+      const cand = byId.get(p.id);
+      const cat = ref.categories.find((c) => c.category_key === p.categoryKey && c.active);
+      if (!cand || !cat) continue;
+      const sub = p.subcategoryKey ? ref.subcategories.find((s) => s.category_id === cat.id && s.subcategory_key === p.subcategoryKey && s.active) : undefined;
+      classified += 1;
+      unresolved = Math.max(0, unresolved - 1);
+      queueUpdate({
+        economic_transaction_type: cat.economic_type,
+        category_id: cat.id,
+        subcategory_id: sub?.id ?? null,
+        merchant_id: null,
+        transfer_flag: false,
+        subscription_flag: false,
+        classification_confidence: CONFIDENCE_SCORE.MEDIUM,
+        classification_method: 'global_rule',
+      }, cand.txn.id);
+      historyRows.push({
+        user_id: userId,
+        transaction_id: cand.txn.id,
+        previous_economic_transaction_type: cand.retracted ? 'unknown' : cand.txn.economic_transaction_type,
+        new_economic_transaction_type: cat.economic_type,
+        previous_category_id: cand.retracted ? null : cand.txn.category_id,
+        new_category_id: cat.id,
+        previous_subcategory_id: cand.retracted ? null : cand.txn.subcategory_id,
+        new_subcategory_id: sub?.id ?? null,
+        classification_method: 'global_rule',
+        confidence: CONFIDENCE_SCORE.MEDIUM,
+        changed_by_type: 'system',
+        changed_by_user: null,
+        global_rule_id: null,
+        user_rule_id: null,
+      });
+    }
   }
 
   // Flush the batched classification writes (see above). A failed transaction batch throws: a partial
