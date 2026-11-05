@@ -48,7 +48,7 @@ The first time a Premium person opens the review page of a statement that is sti
 
 593 lines, 588 matched to the PO's AI-categorised reference. After the rules, the repeating-payer rule, the fixed answers and the AI:
 - no line left unplaced;
-- the same bucket (income / spending / not counted / refund) as the reference on 580 of 588 (98.6%); the 8 others are refunds the reference files as refunds and we file as Other Income;
+- the same bucket (income / spending / not counted / refund) as the reference on 580 of 588 (98.6%); the 8 others are 4 refunds and reimbursements (an ATO refund, a legal refund, two SMSF fee reimbursements) that the reference files as refunds and we file as income, and 4 one-off lines;
 - the same category as the reference's on 534 of 588 (90.8%). 22 more are spending in the right bucket but filed as Other spending because the AI answered unknown.
 
 The run also found and fixed two defects before this was ever switched on: the model answered with a category's display name instead of its key (now accepted when it is exactly an offered name, and the prompt asks for the key), and a person's name inside a bank line reached the provider (now never sent). It also taught the rules the holder's own name cut off by the bank's 20-character name field ("AMARNATH SURENDRA BE"), which had been counted as spending instead of an own-account transfer.
