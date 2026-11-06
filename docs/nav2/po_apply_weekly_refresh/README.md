@@ -28,6 +28,7 @@ RBI's terms: the site says "All Rights Reserved". You accepted that risk on 03-1
 | 2 | `2_SWITCH_ON.sql` | Turns the switch on. Alone it does nothing: no schedule exists yet and manual calls are dry runs. | "done" |
 | 3 | `3_DRY_RUN_request.sql` | Sends one dry run to the app. Reads RBI, writes nothing. The secret never leaves the database. | the request id |
 | 4 | `4_READ_ONLY_dry_run_response.sql` | Wait about 60 seconds after step 3. Shows the refresh job's answer (other jobs share the same response table, so it filters on the job's version text): counts, outcomes and reasons only. | the whole row |
+| 4b | `4b_READ_ONLY_response_by_request_id.sql` | The sure way to find the answer: change the 0 in it to the request id step 3 returned. Other scheduled jobs write to the same response table every minute, so step 4 can miss a late or failed answer. | the whole row |
 | | | **Compare by eye:** open the RBI release for the 04-11-2026 auction and check the yield the dry run says it would publish. I will compare it too. Only go on if they agree. | |
 | 5 | `5_SCHEDULE_weekly_refresh.sql` | Registers the two schedules (this is migration 0317). Wednesday 21:00 India time, then Thursday and Friday 09:00 India time. | "done" |
 | 6 | `6_READ_ONLY_after.sql` | Read only. Shows the two jobs, the switch, the latest series rows and the last runs. Run it again after the first Wednesday run. | the result |

@@ -105,6 +105,7 @@ describe('the pack', () => {
     expect(after.rows.map((r) => r.what)).toContain('switch');
     expect(after.rows.filter((r) => r.what === 'cron job')).toHaveLength(2);
     await db.query(pack('4_READ_ONLY_dry_run_response.sql').replace(/;\s*$/, ''));
+    expect((await db.query(pack('4b_READ_ONLY_response_by_request_id.sql').replace(/;\s*$/, ''))).rows).toEqual([]); // the 0 as shipped matches nothing
     // The dry run request calls the (stubbed) http function with an empty body: it must not say dryRun false.
     expect(pack('3_DRY_RUN_request.sql')).toContain("body := '{}'::jsonb");
     expect(pack('3_DRY_RUN_request.sql')).not.toMatch(/dryRun/);
@@ -143,7 +144,7 @@ export function hazards(sql: string): string[] {
 }
 
 describe('NC-W5: editor safety', () => {
-  const files = ['1_READ_ONLY_prechecks.sql', '2_SWITCH_ON.sql', '3_DRY_RUN_request.sql', '4_READ_ONLY_dry_run_response.sql', '5_SCHEDULE_weekly_refresh.sql', '6_READ_ONLY_after.sql', 'ROLLBACK_switch_off_and_unschedule.sql'];
+  const files = ['1_READ_ONLY_prechecks.sql', '2_SWITCH_ON.sql', '3_DRY_RUN_request.sql', '4_READ_ONLY_dry_run_response.sql', '4b_READ_ONLY_response_by_request_id.sql', '5_SCHEDULE_weekly_refresh.sql', '6_READ_ONLY_after.sql', 'ROLLBACK_switch_off_and_unschedule.sql'];
   it('the migration and every pack SQL file are clean', () => {
     expect(hazards(read(path.join(MIG_DIR, MIGRATION)))).toEqual([]);
     for (const f of files) expect(hazards(pack(f)), f).toEqual([]);
