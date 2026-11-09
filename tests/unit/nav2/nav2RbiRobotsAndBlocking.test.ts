@@ -258,6 +258,8 @@ describe('monitoring signal (source contract)', () => {
     expect(page).toContain('RBI is blocking the weekly read');
     const cron = read('app/api/investment-intelligence/cron/nav2-risk-free-refresh/route.ts');
     expect(cron).toContain("from('ii_risk_free_refresh_attempts')");
-    expect(cron).toContain('robots_outcome: report.robots');
+    const steps = read('lib/services/investment-intelligence/nav2/riskFreeRefreshSteps.ts');
+    expect(steps).toContain('robots_outcome: robots');
+    expect(cron).toContain('runRefreshStep');
   });
 });

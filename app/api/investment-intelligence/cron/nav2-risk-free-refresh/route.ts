@@ -1,28 +1,36 @@
 import { ok, bad } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { stepFetchPolicy } from '@/lib/engines/nav2/riskFreeRefreshGate';
 import { isNav2FlagOn, NAV2_JOB_KEYS } from '@/lib/services/investment-intelligence/nav2/nav2Flags';
 import { createGatewayAiReader } from '@/lib/services/investment-intelligence/nav2/rbiAiReader';
+import { liveFetcherDeps, PoliteRbiFetcher } from '@/lib/services/investment-intelligence/nav2/rbiFetcher';
 import { createLiveRbiSource } from '@/lib/services/investment-intelligence/nav2/rbiSource';
-import { runRiskFreeRefresh } from '@/lib/services/investment-intelligence/nav2/riskFreeRefreshJob';
+import { createSupabaseStageStore, runRefreshStep } from '@/lib/services/investment-intelligence/nav2/riskFreeRefreshSteps';
 
 /**
- * NAV2 Stage 2 -- the weekly RBI risk-free refresh (PO decision 03-10-2026: automated, AI-assisted, default OFF with a dry run).
+ * NAV2 Stage 2 -- the weekly RBI risk-free refresh (PO decision 03-10-2026: automated, default OFF with a dry run).
  *
  * Same scheduled-job shape as every other cron route here: POST with the shared `x-cron-secret` header compared against CRON_SECRET.
+ *
+ * ONE STEP PER CALL (09-11-2026). Amplify ends every request at 28 seconds whatever `maxDuration` says, and the whole read (robots.txt, the month
+ * listing, the release, the weekly page, paced politely) did not fit: the first production dry run came back as HTTP 504. So each call does the
+ * NEXT of three short steps -- listing, release, decide -- and remembers what it read in ii_risk_free_refresh_stage; the schedule calls the route a
+ * few times, five minutes apart. A call with nothing to do (the week is done, or RBI refused and the job is cooling off) makes no request to RBI.
+ * See lib/services/investment-intelligence/nav2/riskFreeRefreshSteps.ts.
  *
  * TWO INDEPENDENT SAFETY LAYERS, both fail closed:
  *   1. KILL SWITCH: the row nav2_risk_free_weekly_refresh in ii_reference_job_control (migration 0260 ships it DISABLED; a missing row or an
  *      unreadable switch is OFF). Off = the job makes NO request to RBI and writes nothing; the answer says so.
- *   2. DRY RUN BY DEFAULT: the job writes only when the body says `"dryRun": false` explicitly. Anything else (no body, true, a string) is a
- *      dry run: it reads RBI, decides, reports what it WOULD do, and writes nothing.
- * The AI second opinion additionally needs the AIE gateway switch (AIE_AI_FALLBACK_ENABLED) ON; with it off the job runs on the parser
- * alone and a changed layout becomes an admin review item rather than a guess.
+ *   2. DRY RUN BY DEFAULT: the job writes a rate or a review item only when the body says `"dryRun": false` explicitly. Anything else (no body, true,
+ *      a string) is a dry run: it reads RBI, decides, reports what it WOULD do, and writes no rate. (A dry run's only write is the scratch row in the
+ *      stage table, which is how the three steps hand their readings on.)
+ * The AI second opinion needs the AIE gateway switch AND a person to attribute the call to; the cron has no person, so the cron run is the fixed
+ * reader plus the weekly-page cross-check, and a changed layout becomes an administrator review item rather than a guess.
  *
- * NOT SCHEDULED by this change: registering the weekly schedule, switching the row on, and the first live run are deliberate human steps
- * after a DEV dry run (Stage 3). The answer is sanitised: counts, outcomes and reasons only, never a page body, URL query or credential.
+ * The answer is sanitised: counts, outcomes and reasons only, never a page body, URL query or credential.
  */
 export const dynamic = 'force-dynamic';
-export const maxDuration = 90;
+export const maxDuration = 28;
 
 export async function POST(req: Request) {
   const secret = req.headers.get('x-cron-secret');
@@ -38,25 +46,26 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
   const enabled = await isNav2FlagOn(admin, NAV2_JOB_KEYS.riskFreeWeeklyRefresh);
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const now = new Date();
   try {
-    const report = await runRiskFreeRefresh({ admin, source: createLiveRbiSource(), ai: createGatewayAiReader(), enabled, dryRun, todayIso });
-    if (report.mode === 'live') {
+    const { report, attempt } = await runRefreshStep({
+      admin,
+      store: createSupabaseStageStore(admin),
+      makeSource: (step, robots) => createLiveRbiSource(new PoliteRbiFetcher(liveFetcherDeps, stepFetchPolicy(step), robots)),
+      ai: createGatewayAiReader(),
+      enabled,
+      dryRun,
+      todayIso: now.toISOString().slice(0, 10),
+      nowIso: now.toISOString(),
+      nowMs: () => Date.now(),
+    });
+    if (attempt) {
       const nowIso = new Date().toISOString();
-      const failed = report.fetchProblem !== null;
-      // One row per LIVE attempt (migration 0263): what robots.txt did and whether RBI blocked a content page. Best effort: the run's own
-      // result never depends on it, and an unapplied migration only means the monitoring page shows "not available".
-      const attempt = await admin.from('ii_risk_free_refresh_attempts').insert({
-        job_version: report.version,
-        robots_outcome: report.robots,
-        source_status: report.sourceStatus,
-        fetch_problem_code: report.fetchProblem?.code ?? null,
-        tbill_outcome: report.tbill?.outcome ?? null,
-        repo_outcome: report.repo?.outcome ?? null,
-        pages_requested: report.requests.pages,
-        robots_requests: report.requests.robots,
-      });
-      if (attempt.error) console.error('[nav2] refresh attempt record failed', attempt.error.message);
+      // One row per LIVE week-ending or failed call (migration 0263): what robots.txt did and whether RBI blocked a content page. Best effort: the
+      // run's own result never depends on it, and an unapplied migration only means the monitoring page shows "not available".
+      const { failed, ...row } = attempt;
+      const logged = await admin.from('ii_risk_free_refresh_attempts').insert(row);
+      if (logged.error) console.error('[nav2] refresh attempt record failed', logged.error.message);
       if (failed) {
         const { data } = await admin.from('ii_reference_job_control').select('consecutive_failures').eq('job_key', NAV2_JOB_KEYS.riskFreeWeeklyRefresh).maybeSingle();
         await admin.from('ii_reference_job_control').update({ last_failure_at: nowIso, consecutive_failures: ((data as { consecutive_failures?: number } | null)?.consecutive_failures ?? 0) + 1, updated_at: nowIso }).eq('job_key', NAV2_JOB_KEYS.riskFreeWeeklyRefresh);

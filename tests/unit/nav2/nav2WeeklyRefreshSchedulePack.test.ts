@@ -1,14 +1,17 @@
 /**
- * The weekly RBI refresh pack (Product Owner decision 05-11-2026: automate the 91-day T-bill read) -- migration 0317 and docs/nav2/po_apply_weekly_refresh.
+ * The weekly RBI refresh pack (Product Owner decision 05-11-2026: automate the 91-day T-bill read) -- migrations 0318 (the step table) and 0319 (the schedule)
+ * and docs/nav2/po_apply_weekly_refresh. 0317 was the first schedule (one call per run); the 09-11-2026 production dry run answered HTTP 504 because Amplify ends every
+ * request at 28 seconds, so the job now runs as three short steps and 0319 replaces 0317's two jobs.
  *
  * Proven against the repository's OWN full migration chain in an in-process Postgres (PGlite; pg_cron and pg_net are the project's stubs from
  * scripts/db-rebuild-check/shim.sql, so a real scheduler clock and a real HTTP call are NOT proven here -- that is what the dry run in the pack is for).
  *
  * NAMED NEGATIVE CONTROLS
  *   NC-W1  no production marker row -> the migration registers nothing (a DEV database or a replay never schedules calls to the production app);
- *   NC-W2  with the marker -> exactly the two jobs, with the exact cadence, route, vault secret name and a body that says dryRun false;
+ *   NC-W2  with the marker -> exactly the two jobs, four calls five minutes apart, the exact route, vault secret name and a body that says dryRun false;
+ *   NC-W9  0317 then 0319 leaves ONLY the new cadence (an old schedule can never keep calling the one-request way); 0318 is idempotent, private and closed to anon;
  *   NC-W3  running it twice leaves exactly two jobs (idempotent), never four;
- *   NC-W4  the pack's step 5 file is byte-equal to the migration, so what is pasted is what the repository holds;
+ *   NC-W4  the pack's step 5 file is byte-equal to 0319 and step 1b to 0318, so what is pasted is what the repository holds;
  *   NC-W5  the editor-safety rules hold for the migration and every pack SQL file, and each rule really flags a bad snippet;
  *   NC-W6  every pack SQL file RUNS on the replayed schema (a wrong column or table name in a file nobody has run is the usual failure);
  *   NC-W7  switching on then off through the pack files respects the mandatory-reason constraint and restores the OFF state;
@@ -23,7 +26,9 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 const MIG_DIR = path.join(ROOT, 'supabase', 'migrations');
 const PACK = path.join(ROOT, 'docs', 'nav2', 'po_apply_weekly_refresh');
 const SHIM = path.join(ROOT, 'scripts', 'db-rebuild-check', 'shim.sql');
-const MIGRATION = '0317_nav2_schedule_risk_free_weekly_refresh.sql';
+const MIGRATION = '0319_nav2_schedule_risk_free_weekly_refresh_steps.sql';
+const OLD_MIGRATION = '0317_nav2_schedule_risk_free_weekly_refresh.sql';
+const STAGE_MIGRATION = '0318_nav2_risk_free_refresh_stage.sql';
 const read = (p: string) => fs.readFileSync(p, 'utf8');
 const pack = (f: string) => read(path.join(PACK, f));
 const stripExtensions = (sql: string) => sql.replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, '');
@@ -36,7 +41,7 @@ beforeAll(async () => {
   db = await PGlite.create();
   await db.exec(read(SHIM));
   const seed = read(path.join(ROOT, 'supabase', 'seed.sql'));
-  const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql') && f < '0317').sort();
+  const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql') && f < '0319').sort();
   for (const f of files) {
     await db.exec(stripExtensions(read(path.join(MIG_DIR, f))));
     if (f.startsWith('0001')) await db.exec(seed);
@@ -69,14 +74,14 @@ describe('the schedule migration', () => {
     await db.exec(stripExtensions(read(path.join(MIG_DIR, MIGRATION))));
     const rows = await jobs();
     expect(rows.map((r) => [r.jobname, r.schedule])).toEqual([
-      ['nav2-risk-free-refresh-thu-fri', '30 3 * * 4,5'],
-      ['nav2-risk-free-refresh-wed', '30 15 * * 3'],
+      ['nav2-risk-free-refresh-thu-fri', '30,35,40,45 3 * * 4,5'],
+      ['nav2-risk-free-refresh-wed', '30,35,40,45 15 * * 3'],
     ]);
     for (const r of rows) {
       expect(r.command).toContain("url := 'https://app.financialhealthplatform.com/api/investment-intelligence/cron/nav2-risk-free-refresh'");
       expect(r.command).toContain("where name = 'pc6_reference_ingest_cron_secret'");
       expect(r.command).toContain("body := jsonb_build_object('dryRun', false)");
-      expect(r.command).toContain('timeout_milliseconds := 90000');
+      expect(r.command).toContain('timeout_milliseconds := 40000');
     }
   }, 60_000);
 
@@ -91,24 +96,29 @@ describe('the schedule migration', () => {
 });
 
 describe('the pack', () => {
-  it('NC-W4: the step 5 file is byte-equal to the migration', () => {
+  it('NC-W4: the step 5 file is byte-equal to 0319 and the step 1b file to 0318', () => {
     expect(Buffer.compare(fs.readFileSync(path.join(PACK, '5_SCHEDULE_weekly_refresh.sql')), fs.readFileSync(path.join(MIG_DIR, MIGRATION)))).toBe(0);
+    expect(Buffer.compare(fs.readFileSync(path.join(PACK, '1b_APPLY_0318_stage_table.sql')), fs.readFileSync(path.join(MIG_DIR, STAGE_MIGRATION)))).toBe(0);
   });
 
   it('NC-W6: every read-only pack file runs on the replayed schema and answers', async () => {
     await db.exec(`insert into vault.secrets (name) values ('pc6_reference_ingest_cron_secret')`);
     const pre = await db.query<{ check_name: string; ok: boolean }>(pack('1_READ_ONLY_prechecks.sql').replace(/;\s*$/, ''));
     // Every check is answerable. (The replay has the production marker from above and the schedule registered, so two of them differ from production-before.)
-    expect(pre.rows.length).toBe(9);
-    expect(pre.rows.filter((r) => ['switch row exists', 'attempt log table exists (0263)', 'refresh write function exists (0260)'].includes(r.check_name)).every((r) => r.ok)).toBe(true);
-    const after = await db.query<{ what: string }>(pack('6_READ_ONLY_after.sql').replace(/;\s*$/, ''));
+    expect(pre.rows.length).toBe(10);
+    expect(pre.rows.filter((r) => ['switch row exists', 'attempt log table exists (0263)', 'refresh write function exists (0260)', 'step table exists (0318, apply 1b_APPLY_0318_stage_table.sql first if this says false)'].includes(r.check_name)).every((r) => r.ok)).toBe(true);
+    await db.exec(`insert into ii_risk_free_refresh_stage (expected_auction_date, step, evidence) values ('2026-09-30', 'release_done', '{"counts":{"pages":3,"robots":1}}'::jsonb)`);
+    const after = await db.query<{ what: string; detail: string }>(pack('6_READ_ONLY_after.sql').replace(/;\s*$/, ''));
     expect(after.rows.map((r) => r.what)).toContain('switch');
+    expect(after.rows.find((r) => r.what === 'step row')?.detail).toContain('2026-09-30 | release_done | decided=no | wait_until=none | pages=3 robots=1');
+    await db.exec(`delete from ii_risk_free_refresh_stage`);
     expect(after.rows.filter((r) => r.what === 'cron job')).toHaveLength(2);
     await db.query(pack('4_READ_ONLY_dry_run_response.sql').replace(/;\s*$/, ''));
     expect((await db.query(pack('4b_READ_ONLY_response_by_request_id.sql').replace(/;\s*$/, ''))).rows).toEqual([]); // the 0 as shipped matches nothing
     // The dry run request calls the (stubbed) http function with an empty body: it must not say dryRun false.
     expect(pack('3_DRY_RUN_request.sql')).toContain("body := '{}'::jsonb");
     expect(pack('3_DRY_RUN_request.sql')).not.toMatch(/dryRun/);
+    expect(pack('3_DRY_RUN_request.sql')).toMatch(/THREE times/); // one request does one of three steps
     await db.exec(pack('3_DRY_RUN_request.sql'));
   }, 60_000);
 
@@ -121,6 +131,37 @@ describe('the pack', () => {
     expect(off.disabled_reason).toMatch(/switched off by the Product Owner/);
     expect(await jobs()).toEqual([]); // and the rollback removed both schedules
   }, 60_000);
+});
+
+describe('the step table and the replacement of the first schedule (NC-W9)', () => {
+  it('0318 is idempotent, row level security is on, anon and authenticated have no rights, and the step column is checked', async () => {
+    await db.exec(read(path.join(MIG_DIR, STAGE_MIGRATION)));
+    await db.exec(read(path.join(MIG_DIR, STAGE_MIGRATION)));
+    const rls = await db.query<{ relrowsecurity: boolean }>(`select relrowsecurity from pg_class where oid = 'public.ii_risk_free_refresh_stage'::regclass`);
+    expect(rls.rows[0].relrowsecurity).toBe(true);
+    for (const role of ['anon', 'authenticated']) {
+      for (const priv of ['select', 'insert', 'update', 'delete']) {
+        const r = await db.query<{ ok: boolean }>(`select has_table_privilege('${role}', 'public.ii_risk_free_refresh_stage', '${priv}') as ok`);
+        expect(r.rows[0].ok, `${role} ${priv}`).toBe(false);
+      }
+    }
+    await expect(db.exec(`insert into ii_risk_free_refresh_stage (expected_auction_date, step, evidence) values ('2026-10-07', 'bogus', '{}'::jsonb)`)).rejects.toThrow();
+    await db.exec(`insert into ii_risk_free_refresh_stage (expected_auction_date, step, evidence) values ('2026-10-07', 'listing_done', '{}'::jsonb)`);
+    await expect(db.exec(`insert into ii_risk_free_refresh_stage (expected_auction_date, step, evidence) values ('2026-10-07', 'release_done', '{}'::jsonb)`)).rejects.toThrow(); // one row per auction
+    await db.exec(`delete from ii_risk_free_refresh_stage`);
+  });
+
+  it('0317 (one call per run) followed by 0319 leaves ONLY the new schedule: the old way can never keep calling', async () => {
+    await db.exec(`delete from cron.job where jobname like 'nav2-risk-free-refresh%'`);
+    await db.exec(`insert into platform_deployment_environment (environment) values ('production') on conflict (environment) do nothing;`);
+    await db.exec(stripExtensions(read(path.join(MIG_DIR, OLD_MIGRATION))));
+    expect((await jobs()).map((r) => r.schedule)).toEqual(['30 3 * * 4,5', '30 15 * * 3']); // what 0317 alone would leave
+    await db.exec(stripExtensions(read(path.join(MIG_DIR, MIGRATION))));
+    const rows = await jobs();
+    expect(rows.map((r) => r.schedule)).toEqual(['30,35,40,45 3 * * 4,5', '30,35,40,45 15 * * 3']);
+    for (const r of rows) expect(r.command).not.toContain('timeout_milliseconds := 90000');
+    await db.exec(`delete from cron.job where jobname like 'nav2-risk-free-refresh%'`);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
@@ -144,9 +185,10 @@ export function hazards(sql: string): string[] {
 }
 
 describe('NC-W5: editor safety', () => {
-  const files = ['1_READ_ONLY_prechecks.sql', '2_SWITCH_ON.sql', '3_DRY_RUN_request.sql', '4_READ_ONLY_dry_run_response.sql', '4b_READ_ONLY_response_by_request_id.sql', '5_SCHEDULE_weekly_refresh.sql', '6_READ_ONLY_after.sql', 'ROLLBACK_switch_off_and_unschedule.sql'];
+  const files = ['1_READ_ONLY_prechecks.sql', '1b_APPLY_0318_stage_table.sql', '2_SWITCH_ON.sql', '3_DRY_RUN_request.sql', '4_READ_ONLY_dry_run_response.sql', '4b_READ_ONLY_response_by_request_id.sql', '5_SCHEDULE_weekly_refresh.sql', '6_READ_ONLY_after.sql', 'ROLLBACK_switch_off_and_unschedule.sql'];
   it('the migration and every pack SQL file are clean', () => {
     expect(hazards(read(path.join(MIG_DIR, MIGRATION)))).toEqual([]);
+    expect(hazards(read(path.join(MIG_DIR, STAGE_MIGRATION)))).toEqual([]);
     for (const f of files) expect(hazards(pack(f)), f).toEqual([]);
   });
   it('the rules really bite: each is shown to flag a bad snippet', () => {

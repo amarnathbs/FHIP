@@ -22,6 +22,7 @@ import {
   decideTbillRefresh,
   planRefreshRun,
   type NsdpReading,
+  type RefreshRunPlan,
   type ParsedAuction,
   type RepoRefreshOutcome,
   type StoredTbill,
@@ -78,7 +79,7 @@ interface RpcReview {
   evidence: unknown;
 }
 
-async function lastValue(admin: SupabaseClient, seriesId: string): Promise<StoredTbill | null> {
+export async function lastValue(admin: SupabaseClient, seriesId: string): Promise<StoredTbill | null> {
   const { data, error } = await admin.from('ii_risk_free_observations').select('observation_date, value_percent').eq('series_id', seriesId).eq('kind', 'value').order('observation_date', { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error('The stored series could not be read.');
   if (!data) return null;
@@ -103,6 +104,20 @@ function candidateFrom(read: ParsedAuction | null, url: string | null, todayIso:
   if (read.noAcceptedBids) return { date: read.auctionDate, kind: 'gap', value_percent: null, gap_reason: 'no_accepted_bids', source_document: sourceDocument(read), source_url: url, retrieved_on: todayIso, notes: null, extraction };
   if (read.cutoffYieldPercent === null) return null;
   return { date: read.auctionDate, kind: 'value', value_percent: read.cutoffYieldPercent, gap_reason: null, source_document: sourceDocument(read), source_url: url, retrieved_on: todayIso, notes: read.cutoffPrice !== null ? `cut-off price ${read.cutoffPrice}` : null, extraction };
+}
+
+/**
+ * A refusal by RBI is LOUD, never quiet: it queues ONE open review item (the same case is never queued twice) so it shows in the review queue.
+ * Nothing is bypassed or retried. Returns whether the item was recorded. Shared by the one-request run and the staged run.
+ */
+export async function queueBlockedAlert(admin: SupabaseClient, problem: { code: string; message: string }, expected: string, todayIso: string): Promise<boolean> {
+  try {
+    const alert: RpcReview = { observation_date: null, reasons: ['blocked_by_source'], candidate: null, evidence: { code: problem.code, message: problem.message, expectedAuctionDate: expected, detectedOn: todayIso, action: 'RBI refused a content page. The weekly refresh stopped and made no further request. Load the rates by upload until RBI allows the read again.' } };
+    const { error } = await admin.rpc('record_risk_free_refresh_results', { p_series_id: TBILL_SERIES, p_rows: [], p_review_items: [alert], p_verified_through: null });
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 export interface RefreshJobInput {
@@ -156,43 +171,67 @@ export async function runRiskFreeRefresh(input: RefreshJobInput): Promise<Refres
     report.repo = { outcome: 'not_attempted', detail: 'The read stopped before a decision could be made.' };
     // LOUD, never quiet: a block queues ONE open review item (the same case is never queued twice) so it shows in the review queue, and the
     // freshness figures keep ageing until someone loads the rates by upload. Nothing is bypassed or retried. A dry run writes nothing.
-    if (plan.mayWrite && report.sourceStatus === 'blocked_by_source') {
-      try {
-        const alert: RpcReview = { observation_date: null, reasons: ['blocked_by_source'], candidate: null, evidence: { code: report.fetchProblem.code, message: report.fetchProblem.message, expectedAuctionDate: expected, detectedOn: input.todayIso, action: 'RBI refused a content page. The weekly refresh stopped and made no further request. Load the rates by upload until RBI allows the read again.' } };
-        const { error } = await input.admin.rpc('record_risk_free_refresh_results', { p_series_id: TBILL_SERIES, p_rows: [], p_review_items: [alert], p_verified_through: null });
-        report.wrote.alert = !error;
-      } catch {
-        report.wrote.alert = false;
-      }
-    }
+    if (plan.mayWrite && report.sourceStatus === 'blocked_by_source') report.wrote.alert = await queueBlockedAlert(input.admin, report.fetchProblem, expected, input.todayIso);
     return report;
   }
   report.requests = input.source.requestsMade();
   report.robots = input.source.robotsOutcome?.() ?? 'not_read';
 
+  const { parser, ai } = await readReleaseFacts(release, input.ai);
+  return finishRefresh({ admin: input.admin, plan, report, expected, todayIso: input.todayIso, tbillDue, lastTbill, release, parser, ai, nsdp });
+}
+
+/**
+ * What the parser and (when there is a reader) the AI make of a release page. The date on the page must be the date the listing gave it; a
+ * mismatch means the reader is confused, so the parser's reading is not trusted. Shared by the one-request run above and the staged run.
+ */
+export async function readReleaseFacts(release: { found: boolean; releaseDate?: string; html?: string }, aiReader: AiAuctionReader | null): Promise<{ parser: ParsedAuction | null; ai: ParsedAuction | null }> {
+  let parser: ParsedAuction | null = release.found && release.html ? parseAuctionResultHtml(release.html) : null;
+  if (parser && release.releaseDate && parser.auctionDate !== release.releaseDate) parser = null;
+  let ai: ParsedAuction | null = null;
+  if (release.found && release.html && aiReader) {
+    try {
+      ai = await aiReader.read(auctionTextForAi(release.html));
+    } catch {
+      ai = null;
+    }
+  }
+  return { parser, ai };
+}
+
+export interface FinishInput {
+  admin: SupabaseClient;
+  plan: RefreshRunPlan;
+  report: RefreshRunReport;
+  expected: string;
+  todayIso: string;
+  tbillDue: boolean;
+  lastTbill: StoredTbill | null;
+  /** Where the release was (no page text is needed any more: the readings are in parser and ai). */
+  release: { found: boolean; url?: string; releaseDate?: string };
+  parser: ParsedAuction | null;
+  ai: ParsedAuction | null;
+  nsdp: NsdpReading;
+}
+
+/**
+ * Everything AFTER the pages are read: the T-bill decision, the repo-rate decision and the writes. The same function finishes the one-request run
+ * and the last step of the staged run, so the two cannot decide differently.
+ */
+export async function finishRefresh(f: FinishInput): Promise<RefreshRunReport> {
+  const { report, plan, expected, nsdp, release, parser, ai } = f;
   const tbillRows: RpcRow[] = [];
   const tbillReviews: RpcReview[] = [];
   const repoReviews: RpcReview[] = [];
   let repoVerifiedThrough: string | null = null;
 
   // ---- T-bill ---------------------------------------------------------------------------------------------------
-  if (!tbillDue) {
+  if (!f.tbillDue) {
     report.tbill = { outcome: 'up_to_date', detail: `The stored series already reaches the expected auction (${dmy(expected)}); nothing was fetched for it.` };
   } else {
-    let parser: ParsedAuction | null = release.found && release.html ? parseAuctionResultHtml(release.html) : null;
-    // The date on the page must be the date the listing gave it; a mismatch means the reader is confused, so it is not trusted.
-    if (parser && release.releaseDate && parser.auctionDate !== release.releaseDate) parser = null;
-    let ai: ParsedAuction | null = null;
-    if (release.found && release.html && input.ai) {
-      try {
-        ai = await input.ai.read(auctionTextForAi(release.html));
-      } catch {
-        ai = null;
-      }
-    }
     const candidateDate = parser?.auctionDate ?? ai?.auctionDate ?? null;
-    const stored = candidateDate ? await storedOn(input.admin, TBILL_SERIES, candidateDate) : null;
-    const decision = decideTbillRefresh({ releaseFound: release.found, parser, ai, nsdp, lastStored: lastTbill, storedOnDate: stored, extractionVersion: RISK_FREE_REFRESH_JOB_VERSION });
+    const stored = candidateDate ? await storedOn(f.admin, TBILL_SERIES, candidateDate) : null;
+    const decision = decideTbillRefresh({ releaseFound: release.found, parser, ai, nsdp, lastStored: f.lastTbill, storedOnDate: stored, extractionVersion: RISK_FREE_REFRESH_JOB_VERSION });
     const detailFor = (d: TbillRefreshOutcome): string =>
       d.outcome === 'publish' ? `Published ${dmy(d.auctionDate)} at ${d.yieldPercent}% (checks: ${d.extraction.checksPassed.join(', ')}).`
       : d.outcome === 'record_gap' ? `Recorded a gap for ${dmy(d.auctionDate)}: no accepted bids.`
@@ -201,18 +240,18 @@ export async function runRiskFreeRefresh(input: RefreshJobInput): Promise<Refres
       : `Not published: sent to review (${d.reasons.join(', ')}).`;
     report.tbill = { outcome: decision.outcome, detail: detailFor(decision), ...(decision.outcome === 'review' ? { reasons: decision.reasons } : {}), ...(decision.outcome === 'publish' ? { auctionDate: decision.auctionDate, yieldPercent: decision.yieldPercent } : {}) };
     if (decision.outcome === 'publish') {
-      tbillRows.push({ date: decision.auctionDate, kind: 'value', value_percent: decision.yieldPercent, gap_reason: null, source_document: sourceDocument((parser ?? ai) as ParsedAuction), source_url: release.url ?? null, retrieved_on: input.todayIso, notes: (parser ?? ai)?.cutoffPrice != null ? `cut-off price ${(parser ?? ai)?.cutoffPrice}` : null, extraction: decision.extraction });
+      tbillRows.push({ date: decision.auctionDate, kind: 'value', value_percent: decision.yieldPercent, gap_reason: null, source_document: sourceDocument((parser ?? ai) as ParsedAuction), source_url: release.url ?? null, retrieved_on: f.todayIso, notes: (parser ?? ai)?.cutoffPrice != null ? `cut-off price ${(parser ?? ai)?.cutoffPrice}` : null, extraction: decision.extraction });
     } else if (decision.outcome === 'record_gap') {
-      tbillRows.push({ date: decision.auctionDate, kind: 'gap', value_percent: null, gap_reason: 'no_accepted_bids', source_document: sourceDocument((parser ?? ai) as ParsedAuction), source_url: release.url ?? null, retrieved_on: input.todayIso, notes: null, extraction: decision.extraction });
+      tbillRows.push({ date: decision.auctionDate, kind: 'gap', value_percent: null, gap_reason: 'no_accepted_bids', source_document: sourceDocument((parser ?? ai) as ParsedAuction), source_url: release.url ?? null, retrieved_on: f.todayIso, notes: null, extraction: decision.extraction });
     } else if (decision.outcome === 'review') {
       const best = parser ?? ai;
-      tbillReviews.push({ observation_date: best?.auctionDate ?? release.releaseDate ?? null, reasons: decision.reasons, candidate: candidateFrom(best, release.url ?? null, input.todayIso, { pressReleaseNumber: best?.releaseNumber ?? null, method: parser && ai ? 'parser+ai' : parser ? 'parser' : 'ai', version: RISK_FREE_REFRESH_JOB_VERSION, checksPassed: [] }), evidence: decision.evidence });
+      tbillReviews.push({ observation_date: best?.auctionDate ?? release.releaseDate ?? null, reasons: decision.reasons, candidate: candidateFrom(best, release.url ?? null, f.todayIso, { pressReleaseNumber: best?.releaseNumber ?? null, method: parser && ai ? 'parser+ai' : parser ? 'parser' : 'ai', version: RISK_FREE_REFRESH_JOB_VERSION, checksPassed: [] }), evidence: decision.evidence });
     }
   }
 
   // ---- repo -------------------------------------------------------------------------------------------------------
-  const lastRepo = await lastValue(input.admin, REPO_SERIES);
-  const repoDecision = decideRepoRefresh({ stored: lastRepo ? { effectiveDate: lastRepo.observationDate, ratePercent: lastRepo.yieldPercent } : null, nsdp, policyEvidence: null, adminConfirmed: null, todayIso: input.todayIso });
+  const lastRepo = await lastValue(f.admin, REPO_SERIES);
+  const repoDecision = decideRepoRefresh({ stored: lastRepo ? { effectiveDate: lastRepo.observationDate, ratePercent: lastRepo.yieldPercent } : null, nsdp, policyEvidence: null, adminConfirmed: null, todayIso: f.todayIso });
   report.repo = {
     outcome: repoDecision.outcome,
     detail:
@@ -229,7 +268,7 @@ export async function runRiskFreeRefresh(input: RefreshJobInput): Promise<Refres
   // ---- writes: one service-role function call per series that has something to record ---------------------------
   const call = async (seriesId: string, rows: RpcRow[], reviews: RpcReview[], verified: string | null): Promise<{ inserted: number; identical: number; queued: number } | null> => {
     if (rows.length === 0 && reviews.length === 0 && verified === null) return null;
-    const { data, error } = await input.admin.rpc('record_risk_free_refresh_results', { p_series_id: seriesId, p_rows: rows, p_review_items: reviews, p_verified_through: verified });
+    const { data, error } = await f.admin.rpc('record_risk_free_refresh_results', { p_series_id: seriesId, p_rows: rows, p_review_items: reviews, p_verified_through: verified });
     if (error) throw new Error('The refresh results could not be recorded.');
     const o = data as { inserted?: number; identical?: number; queued?: number };
     return { inserted: o.inserted ?? 0, identical: o.identical ?? 0, queued: o.queued ?? 0 };

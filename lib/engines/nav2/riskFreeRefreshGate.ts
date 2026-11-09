@@ -66,6 +66,42 @@ export const RISK_FREE_REFRESH_FETCH_POLICY = {
   bypassHumanVerification: false,
 } as const;
 
+/** The shape of a fetch policy (the constants above are one; the staged steps below are others). */
+export interface FetchPolicy {
+  maxRequestsPerRun: number;
+  minSpacingMs: number;
+  userAgent: string;
+  conditionalRequests: boolean;
+  honourRobotsTxt: boolean;
+  maxResponseBytes: number;
+  perRequestTimeoutMs: number;
+  runDeadlineMs: number;
+  allowPdf: boolean;
+  bypassHumanVerification: boolean;
+}
+
+/**
+ * THE 28-SECOND RULE (found 09-11-2026 by the first real production dry run: HTTP 504, empty body). Amplify ends every request at 28 seconds
+ * whatever the route declares (docs/nav2/NAV2_PRODUCTION_RELEASE_PLAN.md), and one run of robots + listing + release + weekly page at 4 seconds
+ * spacing over a slow site does not fit. The run is therefore cut into three STEPS, each its own short request, each remembering what it read
+ * in ii_risk_free_refresh_stage so the next one needs nothing from the page:
+ *   listing  robots.txt + the month listing (+ the month archive when the listing shows another month)  -> where the release is
+ *   release  the one "Treasury Bills: Full Auction Result" release -> the numbers on it
+ *   decide   the weekly NSDP page -> cross-check, decision, writes
+ * A step never starts a request after STEP_DEADLINE_MS and no request may last longer than the per-request timeout, so a step ends in about
+ * 12 + 10 seconds at the very worst, plus the database. The request budget over the three steps is the same four pages as before.
+ */
+export type RefreshStep = 'listing' | 'release' | 'decide';
+export const RISK_FREE_REFRESH_STEP_MAX_REQUESTS: Record<RefreshStep, number> = { listing: 2, release: 1, decide: 1 };
+export const RISK_FREE_REFRESH_STEP_DEADLINE_MS = 12_000;
+export const RISK_FREE_REFRESH_STEP_REQUEST_TIMEOUT_MS = 10_000;
+/** After a refusal (a verification page, a robots refusal) or a release that is not out yet, the job makes NO further request for this long. */
+export const RISK_FREE_REFRESH_COOL_OFF_HOURS = 6;
+
+export function stepFetchPolicy(step: RefreshStep): FetchPolicy {
+  return { ...RISK_FREE_REFRESH_FETCH_POLICY, maxRequestsPerRun: RISK_FREE_REFRESH_STEP_MAX_REQUESTS[step], runDeadlineMs: RISK_FREE_REFRESH_STEP_DEADLINE_MS, perRequestTimeoutMs: RISK_FREE_REFRESH_STEP_REQUEST_TIMEOUT_MS };
+}
+
 export interface RefreshRunPlan {
   mode: 'skipped_kill_switch' | 'dry_run' | 'live';
   /** The most provider requests the run may make: ZERO when the kill switch is off. */

@@ -42,7 +42,8 @@ function world(over: { observations?: Row[]; release?: 'found' | 'missing' | 'th
     if (over.nsdpThrows) throw new RbiFetchError('timeout', 'The request timed out.');
     return over.nsdp === undefined ? nsdpHtml({ yields: ['5.47', '5.26', '5.26', '5.21', '5.28', '5.20'] }) : over.nsdp;
   });
-  const source: RbiSource = { findAuctionRelease, readNsdp, requestsMade: () => ({ pages: 3, robots: 1 }) };
+  // The one-request run uses findAuctionRelease; the listing and release halves belong to the staged run (nav2RiskFreeRefreshSteps.test.ts).
+  const source: RbiSource = { findAuctionRelease, findAuctionListing: vi.fn(), readReleasePage: vi.fn(), readNsdp, requestsMade: () => ({ pages: 3, robots: 1 }) };
   return { db, admin, rpc, source, findAuctionRelease, readNsdp };
 }
 

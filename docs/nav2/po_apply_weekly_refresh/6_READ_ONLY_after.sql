@@ -7,6 +7,9 @@ select 'switch', 'enabled=' || enabled::text || ' | last_success=' || coalesce(l
   from public.ii_reference_job_control
  where job_key = 'nav2_risk_free_weekly_refresh'
 union all
+select 'step row', expected_auction_date::text || ' | ' || step || ' | decided=' || coalesce(decided_live_at::text, 'no') || ' | wait_until=' || coalesce(retry_not_before::text, 'none') || ' | pages=' || (evidence -> 'counts' ->> 'pages') || ' robots=' || (evidence -> 'counts' ->> 'robots')
+  from (select * from public.ii_risk_free_refresh_stage order by expected_auction_date desc limit 3) st
+union all
 select 'series row', observation_date::text || ' | ' || kind || ' | ' || coalesce(value_percent::text, 'gap') || ' | ' || entry_kind
   from (select * from public.ii_risk_free_observations where series_id = 'RBI_91D_TBILL_CUTOFF_YIELD' order by observation_date desc limit 4) s
 union all

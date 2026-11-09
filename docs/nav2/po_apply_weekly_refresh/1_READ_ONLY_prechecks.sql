@@ -8,6 +8,8 @@ select 'switch is OFF at the moment (expected before step 2)',
 union all
 select 'attempt log table exists (0263)', to_regclass('public.ii_risk_free_refresh_attempts') is not null
 union all
+select 'step table exists (0318, apply 1b_APPLY_0318_stage_table.sql first if this says false)', to_regclass('public.ii_risk_free_refresh_stage') is not null
+union all
 select 'refresh write function exists (0260)',
        exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'record_risk_free_refresh_results')
 union all

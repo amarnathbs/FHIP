@@ -20,7 +20,7 @@
 //
 // Nothing here parses a page (rbiHtml.ts does) and nothing here writes to a database.
 
-import { RISK_FREE_REFRESH_FETCH_POLICY as POLICY } from '@/lib/engines/nav2/riskFreeRefreshGate';
+import { RISK_FREE_REFRESH_FETCH_POLICY as POLICY, type FetchPolicy } from '@/lib/engines/nav2/riskFreeRefreshGate';
 
 export const RBI_HOST = 'www.rbi.org.in';
 export const RBI_ORIGIN = `https://${RBI_HOST}`;
@@ -125,8 +125,31 @@ export class PoliteRbiFetcher {
   private startedAt: number | null = null;
   private robotsTxt: string | null = null;
   private robotsOutcomeValue: RobotsOutcome = 'not_read';
+  private readonly millis: number[] = [];
 
-  constructor(private readonly deps: FetcherDeps = liveFetcherDeps, private readonly policy = POLICY) {}
+  /**
+   * `preloadedRobots`: what an EARLIER step of the same weekly run already read from robots.txt (see ii_risk_free_refresh_stage). The rules are
+   * applied exactly as if they had just been fetched, and no robots request is made. Only a usable outcome can be preloaded: one that
+   * stopped the run (robots_unreachable) or was never read (not_read) cannot, so those steps always ask again.
+   */
+  constructor(private readonly deps: FetcherDeps = liveFetcherDeps, private readonly policy: FetchPolicy = POLICY, preloadedRobots: { outcome: RobotsOutcome; text: string } | null = null) {
+    if (preloadedRobots && (preloadedRobots.outcome === 'robots_ok' || preloadedRobots.outcome === 'robots_unavailable_continued')) {
+      this.robotsTxt = preloadedRobots.text;
+      this.robotsOutcomeValue = preloadedRobots.outcome;
+    }
+  }
+
+  /** What was learned about robots.txt, for the next step to reuse; null when nothing usable was read. */
+  robotsSnapshot(): { outcome: RobotsOutcome; text: string } | null {
+    if (this.robotsTxt === null) return null;
+    if (this.robotsOutcomeValue !== 'robots_ok' && this.robotsOutcomeValue !== 'robots_unavailable_continued') return null;
+    return { outcome: this.robotsOutcomeValue, text: this.robotsTxt };
+  }
+
+  /** How long each request took in milliseconds, in order (robots.txt included): shown in the report so a slow site is visible. */
+  get requestMillis(): number[] {
+    return [...this.millis];
+  }
 
   get pageRequestsMade(): number {
     return this.pageRequests;
@@ -165,6 +188,7 @@ export class PoliteRbiFetcher {
   private async request(u: URL, init: { method: 'GET' | 'POST'; body?: string; headers?: Record<string, string> }, asText: boolean): Promise<{ status: number; text: string | null; etag: string | null; lastModified: string | null; contentType: string }> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.policy.perRequestTimeoutMs);
+    const began = this.deps.nowMs();
     try {
       const res = await this.deps.fetchImpl(u.toString(), {
         method: init.method,
@@ -189,6 +213,7 @@ export class PoliteRbiFetcher {
       throw new RbiFetchError('network', 'The request failed.');
     } finally {
       clearTimeout(timer);
+      this.millis.push(Math.max(0, this.deps.nowMs() - began));
     }
   }
 
