@@ -19,13 +19,30 @@ export const NAV2_JOB_KEYS = {
 
 export type Nav2JobKey = (typeof NAV2_JOB_KEYS)[keyof typeof NAV2_JOB_KEYS];
 
-/** true only when the row exists and is enabled. */
-export async function isNav2FlagOn(client: SupabaseClient, key: Nav2JobKey): Promise<boolean> {
+/** Why a switch reads the way it does. Only `on` lets anything run; the other three all read as OFF, but they are NOT the same thing. */
+export interface Nav2FlagRead {
+  on: boolean;
+  /** on / off = the row says so; missing = no such row; read_failed = the database could not be read (reported as OFF, fail closed). */
+  state: 'on' | 'off' | 'missing' | 'read_failed';
+  /** Present only when state is read_failed: the database error code and a short message, so a restricted or unreachable project is not mistaken for a switched-off job. */
+  failure?: { code: string | null; message: string };
+}
+
+const shortMessage = (m: unknown): string => String(m ?? 'unknown error').replace(/\s+/g, ' ').slice(0, 120);
+
+/** Same fail-closed answer as isNav2FlagOn, but it says WHY (found 13-11-2026: a failed read looked exactly like a switched-off job). */
+export async function readNav2Flag(client: SupabaseClient, key: Nav2JobKey): Promise<Nav2FlagRead> {
   try {
     const { data, error } = await client.from('ii_reference_job_control').select('enabled').eq('job_key', key).maybeSingle();
-    if (error) return false;
-    return (data as { enabled?: boolean } | null)?.enabled === true;
-  } catch {
-    return false;
+    if (error) return { on: false, state: 'read_failed', failure: { code: (error as { code?: string }).code ?? null, message: shortMessage(error.message) } };
+    if (data === null || data === undefined) return { on: false, state: 'missing' };
+    return (data as { enabled?: boolean }).enabled === true ? { on: true, state: 'on' } : { on: false, state: 'off' };
+  } catch (e) {
+    return { on: false, state: 'read_failed', failure: { code: null, message: shortMessage(e instanceof Error ? e.message : e) } };
   }
+}
+
+/** true only when the row exists and is enabled. */
+export async function isNav2FlagOn(client: SupabaseClient, key: Nav2JobKey): Promise<boolean> {
+  return (await readNav2Flag(client, key)).on;
 }

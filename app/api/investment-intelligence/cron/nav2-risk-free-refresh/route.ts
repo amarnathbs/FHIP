@@ -1,7 +1,7 @@
 import { ok, bad } from '@/lib/api';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { stepFetchPolicy } from '@/lib/engines/nav2/riskFreeRefreshGate';
-import { isNav2FlagOn, NAV2_JOB_KEYS } from '@/lib/services/investment-intelligence/nav2/nav2Flags';
+import { NAV2_JOB_KEYS, readNav2Flag } from '@/lib/services/investment-intelligence/nav2/nav2Flags';
 import { createGatewayAiReader } from '@/lib/services/investment-intelligence/nav2/rbiAiReader';
 import { liveFetcherDeps, PoliteRbiFetcher } from '@/lib/services/investment-intelligence/nav2/rbiFetcher';
 import { createLiveRbiSource } from '@/lib/services/investment-intelligence/nav2/rbiSource';
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   const dryRun = body.dryRun !== false;
 
   const admin = createAdminClient();
-  const enabled = await isNav2FlagOn(admin, NAV2_JOB_KEYS.riskFreeWeeklyRefresh);
+  const flag = await readNav2Flag(admin, NAV2_JOB_KEYS.riskFreeWeeklyRefresh);
   const now = new Date();
   try {
     const { report, attempt } = await runRefreshStep({
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       store: createSupabaseStageStore(admin),
       makeSource: (step, robots) => createLiveRbiSource(new PoliteRbiFetcher(liveFetcherDeps, stepFetchPolicy(step), robots)),
       ai: createGatewayAiReader(),
-      enabled,
+      enabled: flag.on,
       dryRun,
       todayIso: now.toISOString().slice(0, 10),
       nowIso: now.toISOString(),
@@ -73,7 +73,9 @@ export async function POST(req: Request) {
         await admin.from('ii_reference_job_control').update({ last_success_at: nowIso, consecutive_failures: 0, updated_at: nowIso }).eq('job_key', NAV2_JOB_KEYS.riskFreeWeeklyRefresh);
       }
     }
-    return ok(report);
+    // The answer says WHY the switch read as it did: a failed read of the switch (an unreachable or restricted database) is reported as OFF, fail
+    // closed, and must not look like a job that was switched off on purpose.
+    return ok({ ...report, switchRead: flag });
   } catch (e) {
     console.error('[nav2] risk-free refresh failed', e instanceof Error ? e.message : e);
     return bad('The risk-free refresh failed.', 500);
