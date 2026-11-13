@@ -32,6 +32,7 @@ Each step keeps what it read in a small table, `ii_risk_free_refresh_stage` (mig
 | RBI has published a result, the parser reads it, the release's own checks pass and the weekly page matches **or has not reached that week yet** | The yield is written as a new row (entry kind `weekly_refresh_job`). A stored value is never overwritten. When the page had not reached the week, the row carries `nsdp_pending` and is compared with the page later. |
 | RBI printed "-" and no bids were accepted (like 21-10-2026) | A documented gap row is written, reason `no_accepted_bids`. |
 | The parser failed (changed layout), a release check fails, the weekly page covers the week and **differs**, the page cannot be read, or its week is already later than the auction's | **Nothing is published.** A review item with the evidence is queued for you. |
+| The week is missed (RBI had no release in any window) | The next windows look for it again for four weeks and load it with the same checks. If the current week is still not loaded after Saturday 03:44 UTC, one review item and one e-mail say so. |
 | An earlier `nsdp_pending` value differs from the weekly page once the page shows its week | The stored value is **left as it is**. A review item `nsdp_backcheck_mismatch` with both figures is queued: compare with the RBI release and correct by upload if the release was misread. |
 | The release is not out yet | Nothing is written. The job waits 6 hours and then the next window starts the week again. |
 | RBI refuses a page (403, 429, a verification page, a robots refusal) | The job stops, makes **no further request for 6 hours**, queues one review item, and the failure counter goes up. Load the rate by upload until RBI allows the read again. |
@@ -41,6 +42,19 @@ Each step keeps what it read in a small table, `ii_risk_free_refresh_stage` (mig
 Failure alerting today: a review item for a blocked or doubtful read, plus the failure counter and last success time on the switch row (shown by `6_READ_ONLY_after.sql`). There is no e-mail alert.
 
 RBI's terms: the site says "All Rights Reserved". You accepted that risk on 03-10-2026, and the report keeps "Source: Reserve Bank of India".
+
+## Catch-up and the e-mail alert (Product Owner decision 13-11-2026)
+
+**Catch-up.** Each call first works out which of the last **four** weekly auctions has no stored row. A week counts as covered when a row (a value or a documented gap) is dated Monday to Friday of that week, so a holiday-shifted Thursday auction is not mistaken for a missing Wednesday. The job works on the current week first. When that is done (or waiting for a release that is not out yet) it works on the **newest missing earlier week**, with the same three steps and the same gate, one auction per three calls. Rules that keep it safe:
+
+- an earlier week that was already decided (for example sent to review) is never retried; a week that is cooling off is skipped;
+- **a refusal by RBI on any auction stops requests for every auction** until its six hours are over; a release that is merely not out yet for an old week does not block the current one;
+- the gate publishes a catch-up on the release's own checks, comparing with the nearest earlier stored value (not the latest) for the 0.5 point band, and marks it `nsdp_not_comparable` when the weekly page has already moved past that week (or `nsdp_pending` when it is only a week behind). Every other check still applies: weekday, the yield following from the printed price, nothing already stored for that date, a covering page still decides, an AI-only reading still needs the page;
+- a catch-up of an earlier month uses the month archive form of RBI's listing page, which has **not** been exercised against the live site yet (the current month, which covers a missed 04-11-2026, does not need it).
+
+**E-mail alert.** An e-mail goes out through the same Resend mail path as the Contact form, only on a **live** call and only **once per case**. The case is first recorded as one open review item (the database keeps one open item per date), and the e-mail is sent only when that item is new. Three cases: RBI refused a page; a result was not published and waits in the review queue; the current week is still not loaded after the Friday windows and the **Saturday retry** (checked after Saturday 03:44 UTC, just before the last call of the Saturday window). A dry run never sends. A missing setting, a provider that is down or a slow answer never fails the step; the answer shows a `mail` line (`sent`, `not_configured`, `failed`, `skipped_time`).
+
+**One setting is needed for the e-mail:** `RISK_FREE_ALERT_TO_EMAIL`, the address that receives the alert, as an environment variable in the Amplify app (the build already forwards names beginning `RISK_FREE_ALERT_`, and the sender and API key are the ones the Contact form uses). Without it nothing is sent and the review item still records the case.
 
 ## Steps (production, project `twwpnltizhtjxhamyoxt`; each file in a new empty SQL tab)
 
@@ -53,7 +67,7 @@ RBI's terms: the site says "All Rights Reserved". You accepted that risk on 03-1
 | 4b | `4b_READ_ONLY_response_by_request_id.sql` | After each call, wait about 40 seconds, change the 0 in it to that call's request id and run it. | each whole row |
 | 4 | `4_READ_ONLY_dry_run_response.sql` | The answer of the latest refresh call, found by its version text (other jobs share the response table). 4b is the sure way. | the whole row |
 | | | **Compare by eye:** the release call (second) shows the yield the parser read; open the RBI release for the 04-11-2026 auction and check it. The third call says what the job would publish. I will compare too. Only go on if they agree. | |
-| 5 | `5_SCHEDULE_weekly_refresh.sql` | Registers the two schedules (migration 0319). Wednesday 21:00 to 21:15 India time, then Thursday and Friday 09:00 to 09:15 India time, four calls five minutes apart. | "done" |
+| 5 | `5_SCHEDULE_weekly_refresh.sql` | Registers the two schedules (migration 0320, which replaces what 0319 registered, so it is right whether or not 0319 was applied). Wednesday 21:00 to 21:15 India time, then Thursday, Friday and Saturday 09:00 to 09:15 India time, four calls five minutes apart. | "done" |
 | 6 | `6_READ_ONLY_after.sql` | Read only. Shows the two jobs, the switch, the latest step rows, the latest series rows and the last runs. Run it again after the first Wednesday. | the result |
 
 What each dry-run answer should say (`content_start` of 4b):

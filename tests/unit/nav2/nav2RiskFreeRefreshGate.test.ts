@@ -18,11 +18,18 @@
 //   NC-A6  a repo change seen only on the NSDP page is never appended without policy evidence.
 import { describe, expect, it } from 'vitest';
 import {
+  CATCH_UP_LOOKBACK_WEEKS,
+  NSDP_NOT_COMPARABLE_CHECK,
   NSDP_PENDING_CHECK,
   RISK_FREE_REFRESH_FETCH_POLICY,
   RISK_FREE_REFRESH_RULES,
   daysOverdue,
   decideNsdpBackCheck,
+  earlierAuctionWednesdays,
+  isAuctionWeekCovered,
+  missedDeadlineMs,
+  missingEarlierAuctions,
+  wednesdayOnOrBefore,
   decideRepoRefresh,
   decideTbillRefresh,
   nsdpCoverage,
@@ -416,5 +423,107 @@ describe('option A: the NSDP page is compared only when it covers the auction we
       expect(decideNsdpBackCheck(weekOf('2026-12-04', 5.9), pending).checked).toBe(0);
       expect(decideNsdpBackCheck(weekOf('2026-11-13', 5.87), []).checked).toBe(0);
     });
+  });
+});
+
+// CATCH-UP (PO decision 13-11-2026): an auction that was missed is loaded later by the same gate.
+//   NC-C7  the slot helpers: which Wednesdays are looked at, when a week counts as covered, the "missed" deadline;
+//   NC-C8  a catch-up earlier than the latest stored value publishes on the release's own checks with the value BEFORE it as the band reference,
+//          marked nsdp_not_comparable; without catchUp the same input is still rejected;
+//   NC-C9  a catch-up waives ONLY the "later than stored" rule and the moved-on weekly page: every other check still applies.
+describe('catch-up: the slot helpers', () => {
+  it('NC-C7: the latest Wednesday on or before a date', () => {
+    expect(wednesdayOnOrBefore('2026-11-11')).toBe('2026-11-11'); // a Wednesday
+    expect(wednesdayOnOrBefore('2026-11-12')).toBe('2026-11-11');
+    expect(wednesdayOnOrBefore('2026-11-13')).toBe('2026-11-11'); // Friday
+    expect(wednesdayOnOrBefore('2026-11-14')).toBe('2026-11-11'); // Saturday
+    expect(wednesdayOnOrBefore('2026-11-17')).toBe('2026-11-11'); // Tuesday
+    expect(wednesdayOnOrBefore('2026-11-18')).toBe('2026-11-18');
+    expect(wednesdayOnOrBefore('2026-01-01')).toBe('2025-12-31'); // across a year end
+  });
+
+  it('NC-C7: the look-back is four earlier Wednesdays, newest first, and never the current one', () => {
+    expect(CATCH_UP_LOOKBACK_WEEKS).toBe(4);
+    expect(earlierAuctionWednesdays('2026-11-13')).toEqual(['2026-11-04', '2026-10-28', '2026-10-21', '2026-10-14']);
+    expect(earlierAuctionWednesdays('2026-11-18')).toEqual(['2026-11-11', '2026-11-04', '2026-10-28', '2026-10-21']);
+  });
+
+  it('NC-C7: a week is covered by ANY row dated Monday to Friday of it (a holiday-shifted Thursday auction), and not by the day before or after', () => {
+    expect(isAuctionWeekCovered('2026-11-11', ['2026-11-09'])).toBe(true); // Monday
+    expect(isAuctionWeekCovered('2026-11-11', ['2026-11-11'])).toBe(true);
+    expect(isAuctionWeekCovered('2026-11-11', ['2026-11-12'])).toBe(true); // Thursday
+    expect(isAuctionWeekCovered('2026-11-11', ['2026-11-13'])).toBe(true); // Friday
+    expect(isAuctionWeekCovered('2026-11-11', ['2026-11-08', '2026-11-14'])).toBe(false); // the Sunday before, the Saturday after
+    expect(isAuctionWeekCovered('2026-11-11', [])).toBe(false);
+  });
+
+  it('NC-C7: the missing earlier auctions of the real production series on 13-11-2026 are exactly 04-11 (28-10, the 21-10 gap row and 14-10 are stored)', () => {
+    expect(missingEarlierAuctions('2026-11-13', ['2026-10-07', '2026-10-14', '2026-10-21', '2026-10-28'])).toEqual(['2026-11-04']);
+    expect(missingEarlierAuctions('2026-11-13', ['2026-10-14', '2026-10-21', '2026-10-28', '2026-11-04', '2026-11-11'])).toEqual([]);
+  });
+
+  it('NC-C7: a current week is MISSED only after Saturday 03:44 UTC (just before the last call of the Saturday window)', () => {
+    expect(new Date(missedDeadlineMs('2026-11-11')).toISOString()).toBe('2026-11-14T03:44:00.000Z');
+    expect(new Date(missedDeadlineMs('2026-12-30')).toISOString()).toBe('2027-01-02T03:44:00.000Z');
+  });
+});
+
+describe('catch-up: the decision for an earlier missed auction', () => {
+  const sep16 = auction({ auctionDate: '2026-09-16', cutoffYieldPercent: 5.17, cutoffPrice: priceFor(5.17) }); // a Wednesday
+  const catchUpInput = (over: Partial<TbillRefreshInput> = {}): TbillRefreshInput =>
+    input({
+      parser: sep16,
+      ai: null,
+      nsdp: nsdp(5.19, 5.25, '2026-09-25'), // the page has moved past the week of 16-09
+      lastStored: { observationDate: '2026-09-23', yieldPercent: 5.19 },
+      previousStored: { observationDate: '2026-09-09', yieldPercent: 5.15 },
+      catchUp: true,
+      ...over,
+    });
+
+  it('NC-C8: an earlier week is rejected without catchUp (the old rule: later than the stored value)', () => {
+    const r = decideTbillRefresh(catchUpInput({ catchUp: false }));
+    expect(r.outcome === 'review' && r.reasons).toContain('auction_date_not_later_than_stored');
+  });
+
+  it('NC-C8: with catchUp it publishes on the release\'s own checks, band against the value BEFORE it, marked nsdp_not_comparable (not nsdp_pending)', () => {
+    const r = decideTbillRefresh(catchUpInput());
+    if (r.outcome !== 'publish') throw new Error(r.outcome === 'review' ? r.reasons.join(',') : r.outcome);
+    expect(r).toMatchObject({ auctionDate: '2026-09-16', yieldPercent: 5.17 });
+    expect(r.extraction).toMatchObject({ method: 'parser' });
+    expect(r.extraction.checksPassed).toEqual(['price_recompute', 'plausible_band', NSDP_NOT_COMPARABLE_CHECK, 'auction_date']);
+    expect(r.checks).toEqual({ agreement: 'unavailable', priceRecompute: 'pass', plausibleBand: 'pass', nsdpCrossCheck: 'not_yet', auctionDate: 'pass' });
+  });
+
+  it('NC-C8: a catch-up whose page is only one week behind is marked nsdp_pending (the back-check will still compare it)', () => {
+    const r = decideTbillRefresh(catchUpInput({ nsdp: nsdp(5.19, 5.25, '2026-09-11') }));
+    if (r.outcome !== 'publish') throw new Error(r.outcome);
+    expect(r.extraction.checksPassed).toContain(NSDP_PENDING_CHECK);
+    expect(r.extraction.checksPassed).not.toContain(NSDP_NOT_COMPARABLE_CHECK);
+  });
+
+  it('NC-C9: the band is checked against the value before it, never against the latest stored value', () => {
+    const farFromBefore = decideTbillRefresh(catchUpInput({ previousStored: { observationDate: '2026-09-09', yieldPercent: 4.5 } })); // 0.67 away from 5.17
+    expect(farFromBefore.outcome === 'review' && farFromBefore.reasons).toEqual(['outside_plausible_band']);
+    const noneBefore = decideTbillRefresh(catchUpInput({ previousStored: null }));
+    expect(noneBefore.outcome === 'review' && noneBefore.reasons).toEqual(['no_previous_observation_needs_nsdp_match']);
+  });
+
+  it('NC-C9: a catch-up still needs every other check: a weekday, a yield that follows from the price, a stored-on-date check, and a covering page still decides', () => {
+    const sat = decideTbillRefresh(catchUpInput({ parser: auction({ ...sep16, auctionDate: '2026-09-19' }) }));
+    expect(sat.outcome === 'review' && sat.reasons).toContain('auction_date_not_a_weekday');
+    const wrongYield = decideTbillRefresh(catchUpInput({ parser: auction({ ...sep16, cutoffYieldPercent: 5.27 }) }));
+    expect(wrongYield.outcome === 'review' && wrongYield.reasons).toContain('printed_yield_mismatch_with_price');
+    const stored = decideTbillRefresh(catchUpInput({ storedOnDate: { kind: 'value', yieldPercent: 5.3 } }));
+    expect(stored.outcome === 'review' && stored.reasons).toEqual(['conflicts_with_stored_value']);
+    const covering = decideTbillRefresh(catchUpInput({ nsdp: nsdp(5.5, 5.25, '2026-09-18') })); // the page DOES show that week, and it differs
+    expect(covering.outcome === 'review' && covering.reasons).toEqual(['nsdp_mismatch']);
+    const aiOnly = decideTbillRefresh(catchUpInput({ parser: null, ai: sep16 }));
+    expect(aiOnly.outcome === 'review' && aiOnly.reasons).toEqual(['single_read_needs_nsdp_match']);
+  });
+
+  it('NC-C9: without catchUp a page that moved past the auction week is still a review (the rule of option A is unchanged)', () => {
+    const r = decideTbillRefresh(catchUpInput({ catchUp: false, lastStored: { observationDate: '2026-09-09', yieldPercent: 5.15 } })); // a "normal" later date, page moved on
+    expect(r.outcome === 'review' && r.reasons).toEqual(['single_read_needs_nsdp_match']);
   });
 });

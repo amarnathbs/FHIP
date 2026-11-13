@@ -1,9 +1,9 @@
 -- ROLLBACK. Stops the automatic RBI refresh completely. Nothing already stored is deleted or changed. Safe to run twice.
 -- The small table ii_risk_free_refresh_stage (migration 0318) is left in place: it holds numbers only and nothing depends on it being empty.
--- 1. remove the two schedules if they exist
+-- 1. remove the schedules if they exist (the Saturday window of 0320 has its own name)
 select cron.unschedule(jobname)
   from cron.job
- where jobname in ('nav2-risk-free-refresh-wed', 'nav2-risk-free-refresh-thu-fri');
+ where jobname in ('nav2-risk-free-refresh-wed', 'nav2-risk-free-refresh-thu-fri', 'nav2-risk-free-refresh-thu-sat');
 -- 2. switch the job off (a reason is mandatory when switching off)
 update public.ii_reference_job_control
    set enabled = false, disabled_reason = 'weekly RBI refresh switched off by the Product Owner, see docs/nav2/po_apply_weekly_refresh.', updated_at = now()

@@ -61,7 +61,7 @@ export interface RefreshRunReport {
   fetchProblem: { code: string; message: string } | null;
   tbill: { outcome: TbillRefreshOutcome['outcome'] | 'up_to_date' | 'not_attempted'; detail: string; reasons?: string[]; auctionDate?: string; yieldPercent?: number } | null;
   repo: { outcome: RepoRefreshOutcome['outcome'] | 'not_attempted'; detail: string } | null;
-  wrote: { tbill: { inserted: number; identical: number; queued: number } | null; repo: { inserted: number; identical: number; queued: number } | null; alert?: boolean };
+  wrote: { tbill: { inserted: number; identical: number; queued: number } | null; repo: { inserted: number; identical: number; queued: number } | null; alert?: boolean; /** True when the refusal alert item was NEWLY recorded (what decides whether an e-mail goes out). */ alertNew?: boolean };
   /** Values published before the weekly page reached their week, compared with it now (option A). Absent when the page was not read. */
   backCheck?: { checked: number; matched: number; mismatched: number; detail: string };
 }
@@ -91,6 +91,37 @@ export async function lastValue(admin: SupabaseClient, seriesId: string): Promis
   if (!data) return null;
   const r = data as { observation_date: string; value_percent: number | string };
   return { observationDate: String(r.observation_date).slice(0, 10), yieldPercent: Number(r.value_percent) };
+}
+
+/** Every stored T-bill row date (a value OR a documented gap) on or after `fromIso`, ascending. Used to see which weekly auctions have no row. */
+export async function storedAuctionDates(admin: SupabaseClient, fromIso: string): Promise<string[]> {
+  const { data, error } = await admin.from('ii_risk_free_observations').select('observation_date').eq('series_id', TBILL_SERIES).gte('observation_date', fromIso).order('observation_date', { ascending: true });
+  if (error) throw new Error('The stored series could not be read.');
+  return ((data ?? []) as Array<{ observation_date: string }>).map((r) => String(r.observation_date).slice(0, 10));
+}
+
+/** The latest stored VALUE strictly before `date`: the band reference for a catch-up that is earlier than the latest stored value. */
+export async function lastValueBefore(admin: SupabaseClient, seriesId: string, date: string): Promise<StoredTbill | null> {
+  const { data, error } = await admin.from('ii_risk_free_observations').select('observation_date, value_percent').eq('series_id', seriesId).eq('kind', 'value').lt('observation_date', date).order('observation_date', { ascending: false }).limit(1).maybeSingle();
+  if (error) throw new Error('The stored series could not be read.');
+  if (!data) return null;
+  const r = data as { observation_date: string; value_percent: number | string };
+  return { observationDate: String(r.observation_date).slice(0, 10), yieldPercent: Number(r.value_percent) };
+}
+
+/**
+ * Queue ONE open review item that exists only to be noticed (a refusal, a week that was not loaded). The database keeps one open item per series and
+ * date, so the same case is never queued twice: `newlyQueued` is true only the first time, and it is what decides whether an e-mail goes out.
+ */
+export async function queueAlertItem(admin: SupabaseClient, item: { date: string | null; reasons: string[]; evidence: unknown }): Promise<{ recorded: boolean; newlyQueued: boolean }> {
+  try {
+    const review: RpcReview = { observation_date: item.date, reasons: item.reasons, candidate: null, evidence: item.evidence };
+    const { data, error } = await admin.rpc('record_risk_free_refresh_results', { p_series_id: TBILL_SERIES, p_rows: [], p_review_items: [review], p_verified_through: null });
+    if (error) return { recorded: false, newlyQueued: false };
+    return { recorded: true, newlyQueued: Number((data as { queued?: number } | null)?.queued ?? 0) > 0 };
+  } catch {
+    return { recorded: false, newlyQueued: false };
+  }
 }
 
 async function storedOn(admin: SupabaseClient, seriesId: string, date: string): Promise<{ kind: 'value'; yieldPercent: number } | { kind: 'gap' } | null> {
@@ -158,14 +189,12 @@ function candidateFrom(read: ParsedAuction | null, url: string | null, todayIso:
  * A refusal by RBI is LOUD, never quiet: it queues ONE open review item (the same case is never queued twice) so it shows in the review queue.
  * Nothing is bypassed or retried. Returns whether the item was recorded. Shared by the one-request run and the staged run.
  */
+export async function queueBlockedAlertResult(admin: SupabaseClient, problem: { code: string; message: string }, expected: string, todayIso: string): Promise<{ recorded: boolean; newlyQueued: boolean }> {
+  return queueAlertItem(admin, { date: null, reasons: ['blocked_by_source'], evidence: { code: problem.code, message: problem.message, expectedAuctionDate: expected, detectedOn: todayIso, action: 'RBI refused a content page. The weekly refresh stopped and made no further request. Load the rates by upload until RBI allows the read again.' } });
+}
+
 export async function queueBlockedAlert(admin: SupabaseClient, problem: { code: string; message: string }, expected: string, todayIso: string): Promise<boolean> {
-  try {
-    const alert: RpcReview = { observation_date: null, reasons: ['blocked_by_source'], candidate: null, evidence: { code: problem.code, message: problem.message, expectedAuctionDate: expected, detectedOn: todayIso, action: 'RBI refused a content page. The weekly refresh stopped and made no further request. Load the rates by upload until RBI allows the read again.' } };
-    const { error } = await admin.rpc('record_risk_free_refresh_results', { p_series_id: TBILL_SERIES, p_rows: [], p_review_items: [alert], p_verified_through: null });
-    return !error;
-  } catch {
-    return false;
-  }
+  return (await queueBlockedAlertResult(admin, problem, expected, todayIso)).recorded;
 }
 
 export interface RefreshJobInput {
@@ -260,6 +289,10 @@ export interface FinishInput {
   parser: ParsedAuction | null;
   ai: ParsedAuction | null;
   nsdp: NsdpReading;
+  /** A CATCH-UP of an earlier missed auction (see decideTbillRefresh). */
+  catchUp?: boolean;
+  /** The latest stored value before the candidate date, for a catch-up earlier than the latest stored value. */
+  previousStored?: StoredTbill | null;
 }
 
 /**
@@ -279,10 +312,10 @@ export async function finishRefresh(f: FinishInput): Promise<RefreshRunReport> {
   } else {
     const candidateDate = parser?.auctionDate ?? ai?.auctionDate ?? null;
     const stored = candidateDate ? await storedOn(f.admin, TBILL_SERIES, candidateDate) : null;
-    const decision = decideTbillRefresh({ releaseFound: release.found, parser, ai, nsdp, lastStored: f.lastTbill, storedOnDate: stored, extractionVersion: RISK_FREE_REFRESH_JOB_VERSION });
+    const decision = decideTbillRefresh({ releaseFound: release.found, parser, ai, nsdp, lastStored: f.lastTbill, storedOnDate: stored, extractionVersion: RISK_FREE_REFRESH_JOB_VERSION, catchUp: f.catchUp === true, previousStored: f.previousStored ?? null });
     const detailFor = (d: TbillRefreshOutcome): string =>
-      d.outcome === 'publish' ? `Published ${dmy(d.auctionDate)} at ${d.yieldPercent}% (checks: ${d.extraction.checksPassed.join(', ')}).`
-      : d.outcome === 'record_gap' ? `Recorded a gap for ${dmy(d.auctionDate)}: no accepted bids.`
+      d.outcome === 'publish' ? `${plan.mayWrite ? 'Published' : 'Would publish (dry run, nothing written)'} ${dmy(d.auctionDate)} at ${d.yieldPercent}% (checks: ${d.extraction.checksPassed.join(', ')}).`
+      : d.outcome === 'record_gap' ? `${plan.mayWrite ? 'Recorded' : 'Would record (dry run, nothing written)'} a gap for ${dmy(d.auctionDate)}: no accepted bids.`
       : d.outcome === 'noop_duplicate' ? `${dmy(d.auctionDate)} is already stored with the same value.`
       : d.outcome === 'no_release_yet' ? d.reason
       : `Not published: sent to review (${d.reasons.join(', ')}).`;

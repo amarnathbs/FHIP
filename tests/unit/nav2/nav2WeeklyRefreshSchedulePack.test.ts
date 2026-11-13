@@ -15,7 +15,9 @@
  *   NC-W5  the editor-safety rules hold for the migration and every pack SQL file, and each rule really flags a bad snippet;
  *   NC-W6  every pack SQL file RUNS on the replayed schema (a wrong column or table name in a file nobody has run is the usual failure);
  *   NC-W7  switching on then off through the pack files respects the mandatory-reason constraint and restores the OFF state;
- *   NC-W8  the schedule never switches the job on by itself.
+ *   NC-W8  the schedule never switches the job on by itself;
+ *   NC-W10 0320 (catch-up and the Saturday retry window, PO decision 13-11-2026) replaces 0319 whether or not 0319 was applied: exactly the Wednesday job and the
+ *          Thursday, Friday and Saturday job, the old thu-fri name gone, nothing registered without the production marker, running it twice leaves two jobs.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
@@ -29,6 +31,7 @@ const SHIM = path.join(ROOT, 'scripts', 'db-rebuild-check', 'shim.sql');
 const MIGRATION = '0319_nav2_schedule_risk_free_weekly_refresh_steps.sql';
 const OLD_MIGRATION = '0317_nav2_schedule_risk_free_weekly_refresh.sql';
 const STAGE_MIGRATION = '0318_nav2_risk_free_refresh_stage.sql';
+const CATCH_UP_MIGRATION = '0320_nav2_schedule_risk_free_weekly_refresh_catch_up.sql';
 const read = (p: string) => fs.readFileSync(p, 'utf8');
 const pack = (f: string) => read(path.join(PACK, f));
 const stripExtensions = (sql: string) => sql.replace(/create\s+extension\s+if\s+not\s+exists\s+(pg_cron|pg_net)\s*;/gi, '');
@@ -66,6 +69,8 @@ describe('the schedule migration', () => {
   it('NC-W1: without the production marker it registers nothing', async () => {
     await db.exec(stripExtensions(read(path.join(MIG_DIR, MIGRATION))));
     expect(await jobs()).toEqual([]);
+    await db.exec(stripExtensions(read(path.join(MIG_DIR, CATCH_UP_MIGRATION))));
+    expect(await jobs()).toEqual([]); // NC-W10: 0320 without the marker registers nothing either
   }, 60_000);
 
   it('NC-W2/W3: with the marker it registers exactly the two jobs; a second run leaves exactly two', async () => {
@@ -85,6 +90,23 @@ describe('the schedule migration', () => {
     }
   }, 60_000);
 
+  it('NC-W10: 0320 after 0319 leaves exactly the Wednesday job and the Thursday, Friday and Saturday job; run twice it still leaves two', async () => {
+    await db.exec(stripExtensions(read(path.join(MIG_DIR, CATCH_UP_MIGRATION))));
+    await db.exec(stripExtensions(read(path.join(MIG_DIR, CATCH_UP_MIGRATION))));
+    const rows = await jobs();
+    expect(rows.map((r) => [r.jobname, r.schedule])).toEqual([
+      ['nav2-risk-free-refresh-thu-sat', '30,35,40,45 3 * * 4,5,6'],
+      ['nav2-risk-free-refresh-wed', '30,35,40,45 15 * * 3'],
+    ]);
+    expect(rows.some((r) => r.jobname === 'nav2-risk-free-refresh-thu-fri')).toBe(false); // the 0319 calendar can no longer keep calling
+    for (const r of rows) {
+      expect(r.command).toContain("url := 'https://app.financialhealthplatform.com/api/investment-intelligence/cron/nav2-risk-free-refresh'");
+      expect(r.command).toContain("where name = 'pc6_reference_ingest_cron_secret'");
+      expect(r.command).toContain("body := jsonb_build_object('dryRun', false)");
+      expect(r.command).toContain('timeout_milliseconds := 40000');
+    }
+  }, 60_000);
+
   it('NC-W8: the schedule never switches the job on by itself', async () => {
     const sw = await db.query<{ enabled: boolean }>(`select enabled from ii_reference_job_control where job_key = 'nav2_risk_free_weekly_refresh'`);
     expect(sw.rows).toEqual([{ enabled: false }]);
@@ -96,8 +118,8 @@ describe('the schedule migration', () => {
 });
 
 describe('the pack', () => {
-  it('NC-W4: the step 5 file is byte-equal to 0319 and the step 1b file to 0318', () => {
-    expect(Buffer.compare(fs.readFileSync(path.join(PACK, '5_SCHEDULE_weekly_refresh.sql')), fs.readFileSync(path.join(MIG_DIR, MIGRATION)))).toBe(0);
+  it('NC-W4: the step 5 file is byte-equal to 0320 and the step 1b file to 0318', () => {
+    expect(Buffer.compare(fs.readFileSync(path.join(PACK, '5_SCHEDULE_weekly_refresh.sql')), fs.readFileSync(path.join(MIG_DIR, CATCH_UP_MIGRATION)))).toBe(0);
     expect(Buffer.compare(fs.readFileSync(path.join(PACK, '1b_APPLY_0318_stage_table.sql')), fs.readFileSync(path.join(MIG_DIR, STAGE_MIGRATION)))).toBe(0);
   });
 
@@ -160,6 +182,8 @@ describe('the step table and the replacement of the first schedule (NC-W9)', () 
     const rows = await jobs();
     expect(rows.map((r) => r.schedule)).toEqual(['30,35,40,45 3 * * 4,5', '30,35,40,45 15 * * 3']);
     for (const r of rows) expect(r.command).not.toContain('timeout_milliseconds := 90000');
+    await db.exec(stripExtensions(read(path.join(MIG_DIR, CATCH_UP_MIGRATION)))); // NC-W10: and 0320 after 0319 after 0317 leaves only the final calendar
+    expect((await jobs()).map((r) => r.schedule)).toEqual(['30,35,40,45 3 * * 4,5,6', '30,35,40,45 15 * * 3']);
     await db.exec(`delete from cron.job where jobname like 'nav2-risk-free-refresh%'`);
   });
 });
@@ -188,6 +212,7 @@ describe('NC-W5: editor safety', () => {
   const files = ['1_READ_ONLY_prechecks.sql', '1b_APPLY_0318_stage_table.sql', '2_SWITCH_ON.sql', '3_DRY_RUN_request.sql', '4_READ_ONLY_dry_run_response.sql', '4b_READ_ONLY_response_by_request_id.sql', '5_SCHEDULE_weekly_refresh.sql', '6_READ_ONLY_after.sql', 'ROLLBACK_switch_off_and_unschedule.sql'];
   it('the migration and every pack SQL file are clean', () => {
     expect(hazards(read(path.join(MIG_DIR, MIGRATION)))).toEqual([]);
+    expect(hazards(read(path.join(MIG_DIR, CATCH_UP_MIGRATION)))).toEqual([]);
     expect(hazards(read(path.join(MIG_DIR, STAGE_MIGRATION)))).toEqual([]);
     for (const f of files) expect(hazards(pack(f)), f).toEqual([]);
   });

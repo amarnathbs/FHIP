@@ -6,6 +6,7 @@ import { createGatewayAiReader } from '@/lib/services/investment-intelligence/na
 import { liveFetcherDeps, PoliteRbiFetcher } from '@/lib/services/investment-intelligence/nav2/rbiFetcher';
 import { createLiveRbiSource } from '@/lib/services/investment-intelligence/nav2/rbiSource';
 import { createSupabaseStageStore, runRefreshStep } from '@/lib/services/investment-intelligence/nav2/riskFreeRefreshSteps';
+import { createResendMailer } from '@/lib/services/premiumReminderMailer';
 
 /**
  * NAV2 Stage 2 -- the weekly RBI risk-free refresh (PO decision 03-10-2026: automated, default OFF with a dry run).
@@ -27,6 +28,11 @@ import { createSupabaseStageStore, runRefreshStep } from '@/lib/services/investm
  * The AI second opinion needs the AIE gateway switch AND a person to attribute the call to; the cron has no person, so the cron run is the fixed
  * reader plus the weekly-page cross-check, and a changed layout becomes an administrator review item rather than a guess.
  *
+ * CATCH-UP AND ALERT (PO decision 13-11-2026). Each call first works out which of the last four weekly auctions has no stored row and works on the
+ * current week, then on a missed earlier one. A case that needs a person (RBI refused a page, a result was not published, the week is still not loaded
+ * after the Saturday retry) is recorded once as a review item and e-mailed once, to RISK_FREE_ALERT_TO_EMAIL through the existing Resend path. Without
+ * that setting nothing is sent and everything else is unchanged. A dry run never sends.
+ *
  * The answer is sanitised: counts, outcomes and reasons only, never a page body, URL query or credential.
  */
 export const dynamic = 'force-dynamic';
@@ -47,6 +53,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const flag = await readNav2Flag(admin, NAV2_JOB_KEYS.riskFreeWeeklyRefresh);
   const now = new Date();
+  const alertTo = (process.env.RISK_FREE_ALERT_TO_EMAIL ?? '').trim();
   try {
     const { report, attempt } = await runRefreshStep({
       admin,
@@ -58,6 +65,7 @@ export async function POST(req: Request) {
       todayIso: now.toISOString().slice(0, 10),
       nowIso: now.toISOString(),
       nowMs: () => Date.now(),
+      alert: alertTo ? { mailer: createResendMailer(), to: alertTo } : null,
     });
     if (attempt) {
       const nowIso = new Date().toISOString();

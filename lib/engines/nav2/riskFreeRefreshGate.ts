@@ -34,7 +34,7 @@
 //   admin's confirmation); otherwise it is a review item. An unchanged rate advances the
 //   dataset's verified-through date and writes no observation.
 
-import { daysBetweenIso, isValidIsoDate } from './dates';
+import { addDaysIso, daysBetweenIso, isValidIsoDate } from './dates';
 import type { RiskFreeExtractionProvenance } from './riskFree';
 
 export const RISK_FREE_REFRESH_RULES_VERSION = 'nav2-risk-free-refresh-rules-v1';
@@ -162,6 +162,14 @@ export interface TbillRefreshInput {
   /** Whatever is already stored for the candidate auction date (a value or a gap), or null. */
   storedOnDate: { kind: 'value'; yieldPercent: number } | { kind: 'gap' } | null;
   extractionVersion: string;
+  /**
+   * True when this is a CATCH-UP: an earlier missed auction being loaded now. The caller asserts that no row exists for that week. Then (and only
+   * then) a date EARLIER than the latest stored value is acceptable, and a weekly page that has already moved past the auction's week is "not
+   * comparable" instead of a reason to review.
+   */
+  catchUp?: boolean;
+  /** The latest stored value strictly BEFORE the candidate date: the band reference for a catch-up that is earlier than the latest stored value. */
+  previousStored?: StoredTbill | null;
 }
 
 export type ReviewReason =
@@ -187,6 +195,53 @@ export type CheckState = 'pass' | 'fail' | 'unavailable' | 'not_yet' | 'not_run'
 
 /** Written into `checksPassed` of a value published before the weekly page reached its week: the mark the later back-check looks for. */
 export const NSDP_PENDING_CHECK = 'nsdp_pending';
+/**
+ * Written instead of nsdp_pending for a CATCH-UP value (an earlier missed auction loaded later) whose week the weekly page has already moved past:
+ * the page can never be compared with it, so the back-check does not look for it. It is published on the release's own checks only.
+ */
+export const NSDP_NOT_COMPARABLE_CHECK = 'nsdp_not_comparable';
+
+// ---------------------------------------------------------------------------
+// CATCH-UP (PO decision 13-11-2026): an auction that was missed (the release was out of reach in every window of its week) is loaded later,
+// while it is still inside the look-back window, by the same gate. Pure helpers: which Wednesdays to look at, and which of them have no row.
+// ---------------------------------------------------------------------------
+/** How many weeks before the current one a missed auction is still looked for. */
+export const CATCH_UP_LOOKBACK_WEEKS = 4;
+
+/** The latest Wednesday on or before the date (ISO). */
+export function wednesdayOnOrBefore(iso: string): string {
+  const dow = new Date(`${iso}T00:00:00.000Z`).getUTCDay(); // 0 Sunday .. 6 Saturday
+  return addDaysIso(iso, -((dow + 4) % 7));
+}
+
+/** The Wednesdays of the look-back window, newest first, NOT including the current week's one. */
+export function earlierAuctionWednesdays(todayIso: string, lookbackWeeks: number = CATCH_UP_LOOKBACK_WEEKS): string[] {
+  const current = wednesdayOnOrBefore(todayIso);
+  return Array.from({ length: lookbackWeeks }, (_, i) => addDaysIso(current, -7 * (i + 1)));
+}
+
+/**
+ * A week's auction is "covered" when ANY stored row (a value or a documented gap) is dated Monday to Friday of that week. That is what keeps a
+ * holiday-shifted Thursday auction from being mistaken for a missing Wednesday.
+ */
+export function isAuctionWeekCovered(wednesday: string, storedDates: readonly string[]): boolean {
+  const from = addDaysIso(wednesday, -2);
+  const to = addDaysIso(wednesday, 2);
+  return storedDates.some((d) => d >= from && d <= to);
+}
+
+/** The earlier Wednesdays with no stored row, newest first. */
+export function missingEarlierAuctions(todayIso: string, storedDates: readonly string[], lookbackWeeks: number = CATCH_UP_LOOKBACK_WEEKS): string[] {
+  return earlierAuctionWednesdays(todayIso, lookbackWeeks).filter((w) => !isAuctionWeekCovered(w, storedDates));
+}
+
+/**
+ * The moment after which a current week that is still not loaded counts as MISSED (an e-mail is sent once): Saturday 03:44 UTC, just before the
+ * last call of the Saturday window, which is the final retry of the week. Wednesday + 3 days = Saturday.
+ */
+export function missedDeadlineMs(wednesday: string): number {
+  return Date.parse(`${addDaysIso(wednesday, 3)}T03:44:00.000Z`);
+}
 
 export type NsdpCoverage = 'covers' | 'not_yet' | 'later_week' | 'no_reading';
 
@@ -292,9 +347,12 @@ export function decideTbillRefresh(input: TbillRefreshInput): TbillRefreshOutcom
   const dow = dayOfWeek(date);
   const weekday = dow >= 1 && dow <= 5;
   const later = input.lastStored === null || date > input.lastStored.observationDate;
-  checks.auctionDate = weekday && later ? 'pass' : 'fail';
+  // A catch-up is, by definition, an earlier week that has no row yet: "later than the stored value" does not apply to it (the stored-on-date
+  // checks above already guarantee nothing is stored for this exact date). Everything else about the date still applies.
+  const backfill = input.catchUp === true && !later;
+  checks.auctionDate = weekday && (later || backfill) ? 'pass' : 'fail';
   if (!weekday) reasons.push('auction_date_not_a_weekday');
-  if (!later) reasons.push('auction_date_not_later_than_stored');
+  if (!later && !backfill) reasons.push('auction_date_not_later_than_stored');
 
   // ---- (b) recompute from the printed price ----------------------------------------
   if (read.cutoffPrice === null) {
@@ -307,9 +365,11 @@ export function decideTbillRefresh(input: TbillRefreshInput): TbillRefreshOutcom
   }
 
   // ---- (c) plausibility ------------------------------------------------------------
-  if (input.lastStored === null) checks.plausibleBand = 'unavailable';
+  // The band reference is the latest stored value; for a catch-up earlier than that it is the nearest stored value BEFORE the date.
+  const bandReference = backfill ? (input.previousStored ?? null) : input.lastStored;
+  if (bandReference === null) checks.plausibleBand = 'unavailable';
   else {
-    checks.plausibleBand = Math.abs(y - input.lastStored.yieldPercent) <= RISK_FREE_REFRESH_RULES.weekOnWeekBandPp ? 'pass' : 'fail';
+    checks.plausibleBand = Math.abs(y - bandReference.yieldPercent) <= RISK_FREE_REFRESH_RULES.weekOnWeekBandPp ? 'pass' : 'fail';
     if (checks.plausibleBand === 'fail') reasons.push('outside_plausible_band');
   }
   // The weekly page is compared ONLY when its week is the week of this auction (option A, see the header). A page that has not reached the week yet
@@ -319,7 +379,9 @@ export function decideTbillRefresh(input: TbillRefreshInput): TbillRefreshOutcom
     checks.nsdpCrossCheck = Math.abs(round2(y) - input.nsdp.yield91dPercent) < RISK_FREE_REFRESH_RULES.nsdpToleranceUpToPp ? 'pass' : 'fail';
     if (checks.nsdpCrossCheck === 'fail') reasons.push('nsdp_mismatch');
   } else {
-    checks.nsdpCrossCheck = coverage === 'not_yet' ? 'not_yet' : 'unavailable';
+    // A catch-up whose week the page has already moved past can never be compared with it: not comparable (published on the release's own checks).
+    const notComparable = input.catchUp === true && coverage === 'later_week';
+    checks.nsdpCrossCheck = coverage === 'not_yet' || notComparable ? 'not_yet' : 'unavailable';
   }
 
   // ---- rules that need the NSDP match when the evidence is thinner -----------------
@@ -339,7 +401,7 @@ export function decideTbillRefresh(input: TbillRefreshInput): TbillRefreshOutcom
     'price_recompute',
     ...(checks.plausibleBand === 'pass' ? ['plausible_band'] : []),
     ...(nsdpMatches ? ['nsdp_cross_check'] : []),
-    ...(nsdpPending ? [NSDP_PENDING_CHECK] : []),
+    ...(nsdpPending ? [coverage === 'later_week' ? NSDP_NOT_COMPARABLE_CHECK : NSDP_PENDING_CHECK] : []),
     'auction_date',
   ];
   return { outcome: 'publish', auctionDate: date, yieldPercent: y, extraction: provenance(passed), checks };

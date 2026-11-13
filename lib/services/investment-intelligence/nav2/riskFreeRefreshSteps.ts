@@ -17,12 +17,15 @@
 // hours; every decision and every write is exactly the gate's (finishRefresh), so the staged run cannot decide differently from the one-request run.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { planRefreshRun, RISK_FREE_REFRESH_COOL_OFF_HOURS, type NsdpReading, type ParsedAuction, type RefreshStep } from '@/lib/engines/nav2/riskFreeRefreshGate';
+import { isAuctionWeekCovered, missedDeadlineMs, missingEarlierAuctions, earlierAuctionWednesdays, planRefreshRun, RISK_FREE_REFRESH_COOL_OFF_HOURS, type NsdpReading, type ParsedAuction, type RefreshStep } from '@/lib/engines/nav2/riskFreeRefreshGate';
+import { addDaysIso } from '@/lib/engines/nav2/dates';
+import type { Mailer } from '@/lib/services/premiumReminderMailer';
+import { sendRefreshAlert, type MailOutcome, type RefreshAlertInput } from './riskFreeRefreshAlert';
 import { RbiFetchError, type RobotsOutcome } from './rbiFetcher';
 import { parseNsdpHtml } from './rbiHtml';
 import type { AiAuctionReader } from './rbiAiReader';
 import type { ListingSearch, RbiSource } from './rbiSource';
-import { finishRefresh, lastValue, latestWednesdayOnOrBefore, queueBlockedAlert, readReleaseFacts, RISK_FREE_REFRESH_JOB_VERSION, TBILL_SERIES, type RefreshRunReport } from './riskFreeRefreshJob';
+import { finishRefresh, lastValue, lastValueBefore, latestWednesdayOnOrBefore, queueAlertItem, queueBlockedAlertResult, readReleaseFacts, RISK_FREE_REFRESH_JOB_VERSION, storedAuctionDates, TBILL_SERIES, type RefreshRunReport } from './riskFreeRefreshJob';
 import { dmy } from './riskFreeCsv';
 
 export const STAGE_TABLE = 'ii_risk_free_refresh_stage';
@@ -45,6 +48,8 @@ export interface StageEvidence {
   listing: ListingSearch | null;
   reading: { parser: ParsedAuction | null; ai: ParsedAuction | null } | null;
   nsdpTries: number;
+  /** True when the cooling-off period of this row was started by a REFUSAL by RBI (not by a release that is merely not out yet): a refusal stops every auction. */
+  refused?: boolean;
 }
 
 export interface StageRow {
@@ -84,6 +89,7 @@ export function parseEvidence(x: unknown): StageEvidence | null {
     listing: l as ListingSearch | null,
     reading: r as StageEvidence['reading'],
     nsdpTries: typeof x.nsdpTries === 'number' ? x.nsdpTries : 0,
+    refused: x.refused === true,
   };
 }
 
@@ -131,6 +137,10 @@ export interface StepReport {
   wrote?: RefreshRunReport['wrote'];
   /** Earlier values published before the weekly page reached their week, compared with it now. Present on the decide step when the page was read. */
   backCheck?: RefreshRunReport['backCheck'];
+  /** True when this call worked on an EARLIER missed auction (catch-up) instead of the current week's. */
+  catchUp?: boolean;
+  /** What happened to the alert e-mail of this call, when one was due. */
+  mail?: MailOutcome;
   /** The whole week so far (all steps). Present on the decide step. */
   weekRequests?: { pages: number; robots: number };
 }
@@ -159,6 +169,8 @@ export interface StepInput {
   todayIso: string;
   nowIso: string;
   nowMs: () => number;
+  /** Where an alert e-mail goes (live calls only). Absent or null = not configured: the review item still records the case. */
+  alert?: { mailer: Mailer; to: string } | null;
 }
 
 export interface StepResult {
@@ -174,20 +186,47 @@ function robotsToKeep(src: RbiSource, previous: StageEvidence['robots']): StageE
   return snap ? null : previous;
 }
 
-export async function runRefreshStep(input: StepInput): Promise<StepResult> {
+async function runRefreshStepCore(input: StepInput): Promise<StepResult> {
   const t0 = input.nowMs();
   const plan = planRefreshRun({ enabled: input.enabled, dryRun: input.dryRun });
-  const expected = latestWednesdayOnOrBefore(input.todayIso);
+  const currentWed = latestWednesdayOnOrBefore(input.todayIso);
+  // The auction THIS call works on: the current week's, or (catch-up) an earlier one that was missed. Chosen below, once the switch is known to be on.
+  let expected = currentWed;
+  let catchUp = false;
   const finish = (r: Omit<StepReport, 'version' | 'mode' | 'asOfDate' | 'expectedAuctionDate' | 'elapsedMs' | 'requestMillis' | 'requests' | 'robots' | 'sourceStatus' | 'fetchProblem'> & Partial<Pick<StepReport, 'requestMillis' | 'requests' | 'robots' | 'sourceStatus' | 'fetchProblem'>>, attempt: AttemptRecord | null = null): StepResult => ({
-    report: { version: RISK_FREE_REFRESH_JOB_VERSION, mode: plan.mode, asOfDate: input.todayIso, expectedAuctionDate: expected, requests: { pages: 0, robots: 0 }, requestMillis: [], robots: 'not_read', sourceStatus: 'ok', fetchProblem: null, ...r, elapsedMs: Math.max(0, input.nowMs() - t0) },
+    report: { version: RISK_FREE_REFRESH_JOB_VERSION, mode: plan.mode, asOfDate: input.todayIso, expectedAuctionDate: expected, requests: { pages: 0, robots: 0 }, requestMillis: [], robots: 'not_read', sourceStatus: 'ok', fetchProblem: null, ...(catchUp ? { catchUp: true } : {}), ...r, elapsedMs: Math.max(0, input.nowMs() - t0) },
     attempt: plan.mayWrite ? attempt : null,
   });
 
   if (plan.mode === 'skipped_kill_switch') return finish({ step: 'skipped_kill_switch', detail: 'The weekly refresh switch is off, so no request was made to RBI and nothing was read or written.' });
 
-  // ---- which step is next -------------------------------------------------------------------------------------
-  let row = await input.store.load(expected);
+  // ---- which auction: this week's, or an earlier one that was missed (catch-up) ---------------------------------
   const nowMs = Date.parse(input.nowIso);
+  const candidates = [currentWed, ...earlierAuctionWednesdays(input.todayIso)];
+  const rows = new Map<string, StageRow | null>();
+  for (const w of candidates) rows.set(w, await input.store.load(w));
+  const waitingFor = (r: StageRow | null | undefined): boolean => !!r?.retryNotBefore && Date.parse(r.retryNotBefore) > nowMs;
+  // A refusal by RBI stops the WHOLE job, whichever auction was being read: no request for any week until the waiting time is over.
+  const refusal = candidates.map((w) => rows.get(w)).find((r): r is StageRow => !!r && waitingFor(r) && r.evidence.refused === true);
+  if (refusal && refusal.expectedAuctionDate !== currentWed) {
+    return finish({ step: 'waiting', detail: `RBI refused a page while the auction of ${dmy(refusal.expectedAuctionDate)} was being read. No request is made for any auction before ${refusal.retryNotBefore}.`, retryNotBefore: refusal.retryNotBefore! });
+  }
+  // Catch-up: only once the current week is finished (done, or waiting for a release that is not out yet), newest missing week first, never a week that
+  // was already decided or is cooling off.
+  const currentRow = rows.get(currentWed) ?? null;
+  if (!refusal && (currentRow?.decidedLiveAt || waitingFor(currentRow))) {
+    const stored = await storedAuctionDates(input.admin, addDaysIso(candidates[candidates.length - 1], -2));
+    for (const w of missingEarlierAuctions(input.todayIso, stored)) {
+      const r = rows.get(w) ?? null;
+      if (r?.decidedLiveAt || waitingFor(r)) continue;
+      expected = w;
+      catchUp = true;
+      break;
+    }
+  }
+
+  // ---- which step is next -------------------------------------------------------------------------------------
+  let row = rows.get(expected) ?? null;
   if (row) {
     if (row.decidedLiveAt) return finish({ step: 'complete', detail: `The refresh for the auction of ${dmy(expected)} is already done (${row.decidedLiveAt}); nothing was requested.` });
     if (row.retryNotBefore) {
@@ -207,20 +246,25 @@ export async function runRefreshStep(input: StepInput): Promise<StepResult> {
     let retryNotBefore: string | undefined;
     if (COOL_OFF_CODES.has(problem.code)) {
       retryNotBefore = addHours(input.nowIso, RISK_FREE_REFRESH_COOL_OFF_HOURS);
-      await input.store.save({ expectedAuctionDate: expected, step: keepStep, evidence: { ...evidence, counts: total }, retryNotBefore, decidedLiveAt: null }, input.nowIso);
+      await input.store.save({ expectedAuctionDate: expected, step: keepStep, evidence: { ...evidence, counts: total, refused: true }, retryNotBefore, decidedLiveAt: null }, input.nowIso);
     }
     let alert: boolean | undefined;
-    if (plan.mayWrite && sourceStatus === 'blocked_by_source') alert = await queueBlockedAlert(input.admin, problem, expected, input.todayIso);
+    let alertNew = false;
+    if (plan.mayWrite && sourceStatus === 'blocked_by_source') {
+      const queued = await queueBlockedAlertResult(input.admin, problem, expected, input.todayIso);
+      alert = queued.recorded;
+      alertNew = queued.newlyQueued;
+    }
     return finish(
-      { step, detail: retryNotBefore ? `RBI refused or could not serve a page (${problem.code}). The job stops and makes no further request before ${retryNotBefore}.` : `A page could not be read (${problem.code}). Nothing was decided; the next call tries this step again.`, requests, requestMillis: src.requestMillis?.() ?? [], robots, sourceStatus, fetchProblem: problem, ...(retryNotBefore ? { retryNotBefore } : {}), ...(alert !== undefined ? { wrote: { tbill: null, repo: null, alert } } : {}) },
+      { step, detail: retryNotBefore ? `RBI refused or could not serve a page (${problem.code}). The job stops and makes no further request before ${retryNotBefore}.` : `A page could not be read (${problem.code}). Nothing was decided; the next call tries this step again.`, requests, requestMillis: src.requestMillis?.() ?? [], robots, sourceStatus, fetchProblem: problem, ...(retryNotBefore ? { retryNotBefore } : {}), ...(alert !== undefined ? { wrote: { tbill: null, repo: null, alert, ...(alertNew ? { alertNew: true } : {}) } } : {}) },
       { job_version: RISK_FREE_REFRESH_JOB_VERSION, robots_outcome: robots, source_status: sourceStatus, fetch_problem_code: problem.code, tbill_outcome: 'not_attempted', repo_outcome: 'not_attempted', pages_requested: total.pages, robots_requests: total.robots, failed: true },
     );
   };
 
   // ---- LISTING --------------------------------------------------------------------------------------------------
   if (step === 'listing') {
-    const lastTbill = await lastValue(input.admin, TBILL_SERIES);
-    const tbillDue = lastTbill === null || lastTbill.observationDate < expected;
+    const lastTbill = catchUp ? null : await lastValue(input.admin, TBILL_SERIES);
+    const tbillDue = catchUp || lastTbill === null || lastTbill.observationDate < expected;
     const base: StageEvidence = { v: 1, jobVersion: RISK_FREE_REFRESH_JOB_VERSION, startedOn: input.todayIso, tbillDue, robots: null, counts: { pages: 0, robots: 0 }, listing: null, reading: null, nsdpTries: 0 };
     if (!tbillDue) {
       await input.store.save({ expectedAuctionDate: expected, step: 'release_done', evidence: base, retryNotBefore: null, decidedLiveAt: null }, input.nowIso);
@@ -304,6 +348,8 @@ export async function runRefreshStep(input: StepInput): Promise<StepResult> {
     todayIso: input.todayIso,
     tbillDue: ev.tbillDue,
     lastTbill,
+    catchUp,
+    previousStored: catchUp ? await lastValueBefore(input.admin, TBILL_SERIES, expected) : null,
     release: ev.listing?.found ? { found: true, url: ev.listing.url, releaseDate: ev.listing.releaseDate } : { found: false },
     parser: ev.reading?.parser ?? null,
     ai: ev.reading?.ai ?? null,
@@ -321,4 +367,50 @@ export async function runRefreshStep(input: StepInput): Promise<StepResult> {
     { step, detail: done.tbill?.detail ?? done.repo?.detail ?? 'Decided.', requests: made, requestMillis: src.requestMillis?.() ?? [], robots, tbill: done.tbill, repo: done.repo, wrote: done.wrote, ...(done.backCheck ? { backCheck: done.backCheck } : {}), weekRequests: total, ...(retryNotBefore ? { retryNotBefore } : {}) },
     { job_version: RISK_FREE_REFRESH_JOB_VERSION, robots_outcome: robots, source_status: 'ok', fetch_problem_code: null, tbill_outcome: done.tbill?.outcome ?? null, repo_outcome: done.repo?.outcome ?? null, pages_requested: total.pages, robots_requests: total.robots, failed: false },
   );
+}
+
+/**
+ * The current week's auction is MISSED when, after the Saturday retry window, it is still undecided and the series has no row for that week.
+ * Records ONE open review item (the database keeps one per series and date) and answers an alert only when it is NEW. Never throws.
+ */
+async function missedWeekAlert(input: StepInput, currentWed: string): Promise<RefreshAlertInput | null> {
+  try {
+    if (Date.parse(input.nowIso) < missedDeadlineMs(currentWed)) return null;
+    const row = await input.store.load(currentWed);
+    if (row?.decidedLiveAt) return null;
+    const stored = await storedAuctionDates(input.admin, addDaysIso(currentWed, -2));
+    if (isAuctionWeekCovered(currentWed, stored)) return null;
+    const queued = await queueAlertItem(input.admin, {
+      date: currentWed,
+      reasons: ['week_not_loaded_after_retries'],
+      evidence: { expectedAuctionDate: currentWed, detectedOn: input.todayIso, action: 'The weekly refresh could not load this auction in the Wednesday, Thursday, Friday and Saturday windows. It keeps looking back for four weeks. If RBI has published it, load it by upload.' },
+    });
+    return queued.newlyQueued ? { kind: 'week_not_loaded', auctionDate: currentWed } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One call of the weekly refresh: the step itself (runRefreshStepCore), then, for a LIVE call only, the alert e-mail when a case was NEWLY recorded
+ * (RBI refused a page, a result needs review, or the week is still not loaded after the Saturday retry). A dry run never sends. A missing setting,
+ * a mail provider that is down or a slow answer never changes the step's answer except for the `mail` line.
+ */
+export async function runRefreshStep(input: StepInput): Promise<StepResult> {
+  const t0 = input.nowMs();
+  const result = await runRefreshStepCore(input);
+  const r = result.report;
+  if (r.mode !== 'live') return result;
+  let alert: RefreshAlertInput | null = null;
+  if (r.sourceStatus === 'blocked_by_source' && r.wrote?.alertNew === true) {
+    alert = { kind: 'blocked', auctionDate: r.expectedAuctionDate };
+  } else if (r.step === 'decide') {
+    const queued = (r.wrote?.tbill?.queued ?? 0) + (r.wrote?.repo?.queued ?? 0);
+    const needsAttention = r.tbill?.outcome === 'review' || r.repo?.outcome === 'review' || (r.backCheck?.mismatched ?? 0) > 0;
+    if (needsAttention && queued > 0) alert = { kind: 'needs_review', auctionDate: r.expectedAuctionDate, reasons: r.tbill?.reasons };
+  }
+  if (!alert) alert = await missedWeekAlert(input, latestWednesdayOnOrBefore(input.todayIso));
+  if (!alert) return result;
+  const mail = await sendRefreshAlert({ mailer: input.alert?.mailer, to: input.alert?.to, alert, usedMs: input.nowMs() - t0 });
+  return { ...result, report: { ...result.report, mail } };
 }
