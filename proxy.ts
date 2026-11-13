@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { loadCountryRegistrySnapshot } from '@/lib/services/countryGate';
 import { isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
+import { describeProfileReadError, PROFILE_READ_HEADER } from '@/lib/services/profileReadDiagnostic';
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
@@ -119,17 +120,27 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAppRoute && user) {
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('onboarding_completed, country_of_residence, country_confirmed_at')
       .eq('user_id', user.id)
       .single();
 
+    // TEMPORARY DIAGNOSTIC (13-11-2026). On production a signed-in user was sent to /onboarding although the profile row exists and is
+    // completed, and the database never received the profile query, so the read fails before it reaches Postgres. Until now the error of this
+    // read was thrown away, so nobody could see why. When the read returns an error, its code and a short message (never data) go out in the
+    // response header below, where the signed-in user's own browser can show it (Network tab, the document request). It changes NO decision:
+    // every redirect below is exactly as before. Remove it once the cause is fixed.
+    const tag = <T extends NextResponse>(r: T): T => {
+      if (profileError) r.headers.set(PROFILE_READ_HEADER, describeProfileReadError(profileError));
+      return r;
+    };
+
     if (!profile?.onboarding_completed && !isOnboardingRoute) {
-      return NextResponse.redirect(new URL('/onboarding', request.url));
+      return tag(NextResponse.redirect(new URL('/onboarding', request.url)));
     }
     if (profile?.onboarding_completed && isOnboardingRoute) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      return tag(NextResponse.redirect(new URL('/dashboard', request.url)));
     }
 
     // G3: generic-experience containment. Only evaluated for a user who has
@@ -146,9 +157,10 @@ export async function proxy(request: NextRequest) {
       const registry = await loadCountryRegistrySnapshot(supabase);
       const entry = registry?.get(String(profile.country_of_residence).trim().toUpperCase());
       if (entry?.experienceLevel === 'GENERIC') {
-        return NextResponse.redirect(new URL('/global-setup', request.url));
+        return tag(NextResponse.redirect(new URL('/global-setup', request.url)));
       }
     }
+    return tag(response);
   }
 
   return response;
