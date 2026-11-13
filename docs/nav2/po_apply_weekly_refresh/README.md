@@ -14,16 +14,25 @@ The first real production dry run (request 199247) came back **HTTP 504 with an 
 
 Each step keeps what it read in a small table, `ii_risk_free_refresh_stage` (migration 0318): numbers and pointers only, never page text. The route simply does "the next step", so the schedule calls it four times, five minutes apart (three steps and one spare for a slow answer). A call that finds the week already done makes no request. A step never starts a request after 12 seconds and no request may last more than 10, so a step ends in about 22 seconds at the very worst. The request budget for the week is the same four pages as before.
 
-**Correction to what I said earlier.** The cron run has no AI second opinion. The AI reader needs a person to attribute the cost to (the per-user daily cap, migration 0284), and a scheduled run has none, so the run is the fixed parser plus the NSDP cross-check. That is enough to publish (a single reading with a matching NSDP value is published, and a mismatch or a missing NSDP page goes to review), but it is not "two independent readings".
+**Correction to what I said earlier.** The cron run has no AI second opinion. The AI reader needs a person to attribute the cost to (the per-user daily cap, migration 0284), and a scheduled run has none, so the run is the fixed parser alone. It is not "two independent readings".
+
+**Second correction, and the Product Owner decision of 13-11-2026 ("option A").** The first real production dry run found that RBI's weekly NSDP page runs about **two weeks behind** the auction: on Friday 13-11-2026 its latest week was the one ended 30-10-2026, while the auction was 11-11-2026. The gate used to compare the auction with that older week, so every fresh auction (11-11-2026 at 5.8681%) was sent to review as `nsdp_mismatch` and nothing could ever publish automatically. The rule is now:
+
+- The NSDP figure is compared **only when its week is the auction's week**. A page that has not reached that week is "not yet", never a mismatch.
+- When the page is "not yet", the **parser's reading publishes on the release's own checks**: the yield follows from the printed cut-off price, the auction is a Wednesday, it is later than the stored value, and it is within 0.5 percentage points of the previous stored value. With no previous stored value, a Thursday auction, a changed layout, or any failed check, the case goes to review as before.
+- Such a value carries the mark **`nsdp_pending`** in its checks (step 6 shows it as `checks=`).
+- When the page catches up (about two weeks later) the same week is **compared**: a match changes nothing; a difference queues a review item `nsdp_backcheck_mismatch` with both figures. **The stored value is never changed by the job.**
+- A page that cannot be read, or whose week is already **later** than the auction's, still sends the case to review.
 
 ## What the job does on each week
 
 | Case | What happens |
 |---|---|
 | The latest Wednesday auction is already stored | No T-bill request. Only the weekly page is read, to confirm the policy rate. |
-| RBI has published a result, the parser reads it and the NSDP value matches | The yield is written as a new row (entry kind `weekly_refresh_job`). A stored value is never overwritten. |
+| RBI has published a result, the parser reads it, the release's own checks pass and the weekly page matches **or has not reached that week yet** | The yield is written as a new row (entry kind `weekly_refresh_job`). A stored value is never overwritten. When the page had not reached the week, the row carries `nsdp_pending` and is compared with the page later. |
 | RBI printed "-" and no bids were accepted (like 21-10-2026) | A documented gap row is written, reason `no_accepted_bids`. |
-| The parser failed (changed layout) or the NSDP value differs or is missing | **Nothing is published.** A review item with the evidence is queued for you. |
+| The parser failed (changed layout), a release check fails, the weekly page covers the week and **differs**, the page cannot be read, or its week is already later than the auction's | **Nothing is published.** A review item with the evidence is queued for you. |
+| An earlier `nsdp_pending` value differs from the weekly page once the page shows its week | The stored value is **left as it is**. A review item `nsdp_backcheck_mismatch` with both figures is queued: compare with the RBI release and correct by upload if the release was misread. |
 | The release is not out yet | Nothing is written. The job waits 6 hours and then the next window starts the week again. |
 | RBI refuses a page (403, 429, a verification page, a robots refusal) | The job stops, makes **no further request for 6 hours**, queues one review item, and the failure counter goes up. Load the rate by upload until RBI allows the read again. |
 | A slow answer or a timeout | Nothing is decided; the next call tries the same step again. |
@@ -51,7 +60,7 @@ What each dry-run answer should say (`content_start` of 4b):
 
 - call 1: `"step":"listing"`, `"mode":"dry_run"`, `listing` found with the release date, `requests` pages 1 and robots 1, `elapsedMs` well under 25000;
 - call 2: `"step":"release"`, `reading.parser` with the auction date, cut-off price and yield, `requests` pages 1 and robots 0;
-- call 3: `"step":"decide"`, `tbill` with the outcome (`publish` and the yield, or `no_release_yet`), `repo`, `wrote` both null.
+- call 3: `"step":"decide"`, `tbill` with the outcome (`publish` and the yield, or `no_release_yet`), `repo`, `wrote` both null, and a `backCheck` line when the weekly page was read. With the weekly page behind the auction, the outcome is `publish` and its detail lists `nsdp_pending` among the checks.
 
 A dry run's only write is the scratch row in the step table; it never writes a rate or a review item and never marks the week done. If a call says `"step":"waiting"`, RBI refused something and the job is cooling off: send me the row.
 

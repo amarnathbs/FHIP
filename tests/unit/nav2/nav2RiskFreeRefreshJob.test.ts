@@ -27,6 +27,12 @@ const EXPECTED = '2026-09-30';
 const URL = 'https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid=63696';
 
 const stored = (date: string, v: number, series = TBILL_SERIES): Row => ({ series_id: series, observation_date: date, kind: 'value', value_percent: v });
+// PO decision 13-11-2026 (option A): the weekly page's 91-day figure is compared ONLY when its latest week is the auction's week. The default page of
+// this file ends with the week ended 25-09-2026, a week BEFORE the 30-09 auction (the real situation: the page runs about two weeks behind). This page ends
+// with the week ended 02-10-2026, which covers it.
+const COVERING_NSDP = (last: string): string => nsdpHtml({ dates: ['Aug. 28', 'Sep. 4', 'Sep. 11', 'Sep. 18', 'Sep. 25', 'Oct. 2'], yields: ['5.47', '5.26', '5.26', '5.21', '5.28', last] });
+/** A value published on the release's own checks before the weekly page reached its week. */
+const pendingRow = (date: string, v: number): Row => ({ ...stored(date, v), entry_kind: 'weekly_refresh_job', extraction: { method: 'parser', checksPassed: ['price_recompute', 'plausible_band', 'nsdp_pending', 'auction_date'] } });
 
 function world(over: { observations?: Row[]; release?: 'found' | 'missing' | 'throws'; releaseHtml?: string; releaseDate?: string; nsdp?: string | null; nsdpThrows?: boolean } = {}) {
   const db = createInMemoryDb({ strictSchema: true });
@@ -85,7 +91,7 @@ describe('switch and dry run (NC-J1, NC-J2)', () => {
 
 describe('publication (matrix 73, 77)', () => {
   it('parser + AI agree and the NSDP matches: ONE function call publishes the row with its provenance, day-first source text and the release URL', async () => {
-    const w = world();
+    const w = world({ nsdp: COVERING_NSDP('5.20') });
     const r = await run(w, { ai: agreeing() });
     expect(r.tbill).toMatchObject({ outcome: 'publish' });
     const call = w.rpc.mock.calls.find((c) => c[1].p_series_id === TBILL_SERIES)!;
@@ -143,7 +149,7 @@ describe('review, never a guess (matrix 74, NC-J3, NC-J4, NC-J5)', () => {
   });
 
   it('an NSDP value that does not match is a review item (nsdp_mismatch) even with two agreeing reads', async () => {
-    const w = world({ nsdp: nsdpHtml({ yields: ['5.47', '5.26', '5.26', '5.21', '5.28', '5.33'] }) });
+    const w = world({ nsdp: COVERING_NSDP('5.33') });
     const r = await run(w, { ai: agreeing() });
     expect(r.tbill).toMatchObject({ outcome: 'review' });
     expect(r.tbill?.reasons).toContain('nsdp_mismatch');
@@ -258,5 +264,129 @@ describe('the repo rate (matrix 78, NC-J6)', () => {
     expect(w.findAuctionRelease).not.toHaveBeenCalled();
     expect(w.readNsdp).toHaveBeenCalledTimes(1);
     expect(r.repo?.outcome).toBe('confirm_unchanged');
+  });
+});
+
+// PO DECISION 13-11-2026 ("option A"). The first real production dry run found that the weekly page runs about two weeks BEHIND the auction (on Friday
+// 13-11-2026 its latest week ended 30-10-2026), so every fresh auction was sent to review as nsdp_mismatch and nothing could ever publish.
+//   NC-N1  a parser-only read is PUBLISHED when the page has not reached the auction week, marked nsdp_pending (and not nsdp_cross_check);
+//   NC-N2  "not yet" waives only the page: no previous value, or a page whose week is LATER than the auction week, still go to review;
+//   NC-N3  the later back-check compares ONLY marked values whose week the page now shows; a match changes nothing, a difference is a review item;
+//   NC-N4  the back-check never changes a stored value, never fails the run, and a dry run reports it but writes nothing.
+describe('option A: the weekly page runs behind the auction (PO decision 13-11-2026)', () => {
+  const tbillCall = (w: ReturnType<typeof world>) => w.rpc.mock.calls.find((c) => c[1].p_series_id === TBILL_SERIES);
+  const reviewsOf = (w: ReturnType<typeof world>) => (tbillCall(w)?.[1].p_review_items ?? []) as Array<Record<string, unknown>>;
+  const rowsOf = (w: ReturnType<typeof world>) => (tbillCall(w)?.[1].p_rows ?? []) as Array<Record<string, unknown>>;
+  const repoRow = stored('2025-12-05', 5.25, REPO_SERIES);
+
+  it('NC-N1: a parser-only read with a page one week behind PUBLISHES, marked nsdp_pending and without the nsdp_cross_check mark', async () => {
+    const w = world(); // default page: latest week ended 25-09-2026, the auction is 30-09-2026
+    const r = await run(w); // no AI: the scheduled run has none
+    expect(r.tbill).toMatchObject({ outcome: 'publish', auctionDate: EXPECTED, yieldPercent: 5.2 });
+    const row = rowsOf(w)[0];
+    expect(row).toMatchObject({ date: EXPECTED, kind: 'value', value_percent: 5.2 });
+    expect(row.extraction).toMatchObject({ method: 'parser', checksPassed: ['price_recompute', 'plausible_band', 'nsdp_pending', 'auction_date'] });
+    expect((row.extraction as { checksPassed: string[] }).checksPassed).not.toContain('nsdp_cross_check');
+    expect(reviewsOf(w)).toEqual([]);
+  });
+
+  it('NC-N1: a dry run reaches the same decision and writes nothing', async () => {
+    const w = world();
+    const r = await run(w, { dryRun: true });
+    expect(r.tbill).toMatchObject({ outcome: 'publish', yieldPercent: 5.2 });
+    expect(w.rpc).not.toHaveBeenCalled();
+  });
+
+  it('control: when the page DOES cover the auction week, the match is recorded as nsdp_cross_check and the mark is not set', async () => {
+    const w = world({ nsdp: COVERING_NSDP('5.20') });
+    await run(w);
+    const checks = (rowsOf(w)[0].extraction as { checksPassed: string[] }).checksPassed;
+    expect(checks).toContain('nsdp_cross_check');
+    expect(checks).not.toContain('nsdp_pending');
+  });
+
+  it('NC-N2: with no previous value there is no band, so "not yet" is NOT enough: review', async () => {
+    const w = world({ observations: [repoRow] });
+    const r = await run(w);
+    expect(r.tbill).toMatchObject({ outcome: 'review' });
+    expect(r.tbill?.reasons).toContain('no_previous_observation_needs_nsdp_match');
+    expect(rowsOf(w)).toEqual([]);
+  });
+
+  it('NC-N2: a page whose latest week is LATER than the auction week (it no longer shows that week) still sends a parser-only read to review', async () => {
+    const w = world({ nsdp: nsdpHtml({ dates: ['Sep. 4', 'Sep. 11', 'Sep. 18', 'Sep. 25', 'Oct. 2', 'Oct. 16'], yields: ['5.26', '5.26', '5.21', '5.28', '5.20', '5.20'] }) });
+    const r = await run(w);
+    expect(r.tbill).toMatchObject({ outcome: 'review' });
+    expect(r.tbill?.reasons).toContain('single_read_needs_nsdp_match');
+    expect(rowsOf(w)).toEqual([]);
+  });
+
+  it('NC-N2: a page that cannot be read at all still sends a parser-only read to review (a changed layout must not switch the cross-check off silently)', async () => {
+    const w = world({ nsdp: null });
+    const r = await run(w);
+    expect(r.tbill).toMatchObject({ outcome: 'review' });
+    expect(rowsOf(w)).toEqual([]);
+  });
+
+  it('NC-N3: a marked value whose week the page now shows and that MATCHES it: compared, nothing queued, nothing written for it', async () => {
+    const w = world({ observations: [pendingRow('2026-09-23', 5.2), repoRow] }); // the page ends with the week ended 25-09-2026 at 5.20
+    const r = await run(w);
+    expect(r.backCheck).toMatchObject({ checked: 1, matched: 1, mismatched: 0 });
+    expect(reviewsOf(w).filter((i) => (i.reasons as string[]).includes('nsdp_backcheck_mismatch'))).toEqual([]);
+    expect(rowsOf(w).map((x) => x.date)).toEqual([EXPECTED]); // only the new week; the 23-09 value is not rewritten
+  });
+
+  it('NC-N3: a marked value that DIFFERS from the page is queued as a review item with both figures; the stored value is never changed', async () => {
+    const w = world({ observations: [pendingRow('2026-09-23', 5.19), repoRow] });
+    const r = await run(w);
+    expect(r.backCheck).toMatchObject({ checked: 1, matched: 0, mismatched: 1 });
+    const item = reviewsOf(w).find((i) => (i.reasons as string[]).includes('nsdp_backcheck_mismatch'))!;
+    expect(item).toMatchObject({ observation_date: '2026-09-23', candidate: null });
+    expect(item.evidence).toMatchObject({ stored: { observationDate: '2026-09-23', yieldPercent: 5.19 }, weeklyPage: { weekEnded: '2026-09-25', yield91dPercent: 5.2 } });
+    expect(rowsOf(w).map((x) => x.date)).toEqual([EXPECTED]);
+    expect(w.db.tables.ii_risk_free_observations.find((x) => x.observation_date === '2026-09-23')).toMatchObject({ value_percent: 5.19 });
+  });
+
+  it('NC-N3: only MARKED values are back-checked: a manual upload or a value already matched against the page is left alone', async () => {
+    const matched: Row = { ...stored('2026-09-23', 5.19), entry_kind: 'weekly_refresh_job', extraction: { method: 'parser+ai', checksPassed: ['parser_ai_agreement', 'price_recompute', 'nsdp_cross_check', 'auction_date'] } };
+    const manual: Row = { ...stored('2026-09-24', 5.19), entry_kind: 'admin_upload', extraction: null };
+    const w = world({ observations: [matched, manual, repoRow] });
+    const r = await run(w);
+    expect(r.backCheck).toMatchObject({ checked: 0, matched: 0, mismatched: 0 });
+    expect(reviewsOf(w)).toEqual([]);
+  });
+
+  it('NC-N3: a marked value of ANOTHER week is not compared with this page (its own week has to be the one shown)', async () => {
+    const w = world({ observations: [pendingRow('2026-09-09', 5.1), repoRow] }); // the page week ended 25-09-2026: 09-09 belongs to the week ended 11-09
+    const r = await run(w);
+    expect(r.backCheck).toMatchObject({ checked: 0 });
+    expect(reviewsOf(w)).toEqual([]);
+  });
+
+  it('NC-N4: a dry run reports the back-check difference but writes nothing', async () => {
+    const w = world({ observations: [pendingRow('2026-09-23', 5.19), repoRow] });
+    const r = await run(w, { dryRun: true });
+    expect(r.backCheck).toMatchObject({ checked: 1, mismatched: 1 });
+    expect(w.rpc).not.toHaveBeenCalled();
+  });
+
+  it('NC-N4: when the stored rows cannot be read for the back-check the run still finishes and says the check did not run', async () => {
+    const w = world();
+    const original = (w.admin as unknown as { from: (t: string) => Record<string, unknown> }).from;
+    (w.admin as unknown as { from: (t: string) => unknown }).from = (t: string) => {
+      const chain = original.call(w.admin, t);
+      if (t === 'ii_risk_free_observations') chain.gte = () => { throw new Error('read failed'); }; // only the back-check uses a date range on this table
+      return chain;
+    };
+    const r = await run(w);
+    expect(r.tbill).toMatchObject({ outcome: 'publish' });
+    expect(r.backCheck).toMatchObject({ checked: 0, detail: expect.stringContaining('did not run') });
+    expect(rowsOf(w).map((x) => x.date)).toEqual([EXPECTED]);
+  });
+
+  it('no weekly page read, no back-check line (nothing to compare with)', async () => {
+    const w = world({ nsdp: null });
+    const r = await run(w);
+    expect(r.backCheck).toBeUndefined();
   });
 });

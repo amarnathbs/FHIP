@@ -18,11 +18,14 @@
 //   NC-A6  a repo change seen only on the NSDP page is never appended without policy evidence.
 import { describe, expect, it } from 'vitest';
 import {
+  NSDP_PENDING_CHECK,
   RISK_FREE_REFRESH_FETCH_POLICY,
   RISK_FREE_REFRESH_RULES,
   daysOverdue,
+  decideNsdpBackCheck,
   decideRepoRefresh,
   decideTbillRefresh,
+  nsdpCoverage,
   planRefreshRun,
   recomputeYieldPercent,
   type NsdpReading,
@@ -291,5 +294,127 @@ describe('run planning and politeness (NC-A5)', () => {
   it('days overdue (for the late-release alert): zero until the expected Wednesday, then whole days', () => {
     expect(daysOverdue('2026-10-07', '2026-10-03')).toBe(0);
     expect(daysOverdue('2026-10-07', '2026-10-10')).toBe(3);
+  });
+});
+
+// PO DECISION 13-11-2026 ("option A"): the weekly NSDP page runs about two weeks behind the auction, so it is compared ONLY when its week is the auction
+// week. When it has not reached that week ("not_yet") the parser's reading publishes on the release's own checks, marked nsdp_pending, and is
+// compared later (decideNsdpBackCheck). Found by the first real production dry run: auction 11-11-2026 (5.8681) against a page whose latest week
+// ended 30-10-2026 was sent to review as nsdp_mismatch, every week, so nothing could ever publish.
+//   NC-N1  not_yet publishes a parser-only read, marked nsdp_pending; the real production case publishes;
+//   NC-N2  not_yet waives ONLY the page: every other check, and the "AI alone" and "later week" and "unreadable page" cases, still go to review;
+//   NC-N3  a page that covers the week still decides: a mismatch blocks, even with the parser alone;
+//   NC-N4  the back-check compares only the week the page shows, tolerates two decimals, and never changes anything itself.
+describe('option A: the NSDP page is compared only when it covers the auction week', () => {
+  const weekOf = (weekEnded: string, yield91d: number | null = 5.93): NsdpReading => ({ state: 'value', weekEnded, yield91dPercent: yield91d, policyRepoPercent: 5.5 });
+
+  it('which week the page covers: the week ended 0 to 6 days after the auction; earlier = not yet; later = the page moved on; no yield = no reading', () => {
+    expect(nsdpCoverage(weekOf('2026-11-13'), '2026-11-11')).toBe('covers'); // Wednesday auction, Friday week end
+    expect(nsdpCoverage(weekOf('2026-11-11'), '2026-11-11')).toBe('covers'); // 0 days
+    expect(nsdpCoverage(weekOf('2026-11-17'), '2026-11-11')).toBe('covers'); // 6 days
+    expect(nsdpCoverage(weekOf('2026-11-18'), '2026-11-11')).toBe('later_week'); // 7 days
+    expect(nsdpCoverage(weekOf('2026-11-10'), '2026-11-11')).toBe('not_yet'); // the day before
+    expect(nsdpCoverage(weekOf('2026-10-30'), '2026-11-11')).toBe('not_yet'); // the production case
+    expect(nsdpCoverage(weekOf('2026-11-13', null), '2026-11-11')).toBe('no_reading');
+    expect(nsdpCoverage({ state: 'unavailable' }, '2026-11-11')).toBe('no_reading');
+  });
+
+  const production = auction({ releaseNumber: '2026-2027/1478', auctionDate: '2026-11-11', cutoffPrice: 98.5581, cutoffYieldPercent: 5.8681 });
+  const productionInput = (over: Partial<TbillRefreshInput> = {}): TbillRefreshInput =>
+    input({ parser: production, ai: null, nsdp: weekOf('2026-10-30'), lastStored: { observationDate: '2026-10-28', yieldPercent: 5.9337 }, ...over });
+
+  it('NC-N1: the REAL production case (auction 11-11-2026 at 5.8681, the page at the week ended 30-10-2026, parser only) now publishes, marked nsdp_pending', () => {
+    const r = decideTbillRefresh(productionInput());
+    if (r.outcome !== 'publish') throw new Error(r.outcome === 'review' ? r.reasons.join(',') : r.outcome);
+    expect(r).toMatchObject({ auctionDate: '2026-11-11', yieldPercent: 5.8681 });
+    expect(r.extraction).toMatchObject({ method: 'parser', pressReleaseNumber: '2026-2027/1478' });
+    expect(r.extraction.checksPassed).toEqual(['price_recompute', 'plausible_band', NSDP_PENDING_CHECK, 'auction_date']);
+    expect(r.checks).toEqual({ agreement: 'unavailable', priceRecompute: 'pass', plausibleBand: 'pass', nsdpCrossCheck: 'not_yet', auctionDate: 'pass' });
+  });
+
+  it('NC-N1: the page does not matter when it is behind: a different figure on an EARLIER week is not a mismatch, an absent figure is not a block', () => {
+    expect(decideTbillRefresh(productionInput({ nsdp: weekOf('2026-10-30', 5.5) })).outcome).toBe('publish');
+    expect(decideTbillRefresh(productionInput({ nsdp: weekOf('2026-10-30', 5.87) })).outcome).toBe('publish');
+  });
+
+  it('NC-N2: "not yet" waives ONLY the page: a move beyond the band, a Thursday auction, no previous value, a price that does not follow, a missing price: all review', () => {
+    const reasons = (i: TbillRefreshInput): string[] => {
+      const r = decideTbillRefresh(i);
+      if (r.outcome !== 'review') throw new Error(`expected review, got ${r.outcome}`);
+      return r.reasons;
+    };
+    const big = auction({ ...production, cutoffYieldPercent: 6.6, cutoffPrice: priceFor(6.6) });
+    expect(reasons(productionInput({ parser: big }))).toEqual(['outside_plausible_band']);
+    const thursday = auction({ ...production, auctionDate: '2026-11-12' });
+    expect(reasons(productionInput({ parser: thursday }))).toEqual(['non_wednesday_needs_nsdp_match']);
+    expect(reasons(productionInput({ lastStored: null }))).toEqual(['no_previous_observation_needs_nsdp_match']);
+    expect(reasons(productionInput({ parser: auction({ ...production, cutoffYieldPercent: 5.9681 }) }))).toContain('printed_yield_mismatch_with_price');
+    expect(reasons(productionInput({ parser: auction({ ...production, cutoffPrice: null }) }))).toContain('cutoff_price_missing_cannot_recompute');
+    expect(reasons(productionInput({ lastStored: { observationDate: '2026-11-18', yieldPercent: 5.9 } }))).toContain('auction_date_not_later_than_stored');
+    const sat = auction({ ...production, auctionDate: '2026-11-14' });
+    expect(reasons(productionInput({ parser: sat }))).toContain('auction_date_not_a_weekday');
+  });
+
+  it('NC-N2: a reading that is the AI\'s ALONE (the parser failed) still needs the NSDP match: "not yet" does not help it', () => {
+    const r = decideTbillRefresh(productionInput({ parser: null, ai: production }));
+    expect(r.outcome === 'review' && r.reasons).toEqual(['single_read_needs_nsdp_match']);
+  });
+
+  it('NC-N2: a page whose week is LATER than the auction, or that cannot be read, keeps the original rule (a single read needs the match): review', () => {
+    const later = decideTbillRefresh(productionInput({ nsdp: weekOf('2026-11-27') }));
+    expect(later.outcome === 'review' && later.reasons).toEqual(['single_read_needs_nsdp_match']);
+    expect(later.outcome === 'review' && later.checks.nsdpCrossCheck).toBe('unavailable');
+    const unreadable = decideTbillRefresh(productionInput({ nsdp: NSDP_NONE }));
+    expect(unreadable.outcome === 'review' && unreadable.reasons).toEqual(['single_read_needs_nsdp_match']);
+    const noYield = decideTbillRefresh(productionInput({ nsdp: weekOf('2026-10-30', null) }));
+    expect(noYield.outcome === 'review' && noYield.checks.nsdpCrossCheck).toBe('unavailable');
+  });
+
+  it('NC-N2: parser + AI agreeing is unchanged: it publishes with a "not yet" page and is marked pending too', () => {
+    const r = decideTbillRefresh(productionInput({ ai: production }));
+    if (r.outcome !== 'publish') throw new Error(r.outcome);
+    expect(r.extraction.method).toBe('parser+ai');
+    expect(r.extraction.checksPassed).toEqual(['parser_ai_agreement', 'price_recompute', 'plausible_band', NSDP_PENDING_CHECK, 'auction_date']);
+  });
+
+  it('NC-N3: a page that DOES cover the auction week still decides: a mismatch blocks even a parser-only read, a match publishes without the mark', () => {
+    const mismatch = decideTbillRefresh(productionInput({ nsdp: weekOf('2026-11-13', 5.93) }));
+    expect(mismatch.outcome === 'review' && mismatch.reasons).toEqual(['nsdp_mismatch']);
+    const match = decideTbillRefresh(productionInput({ nsdp: weekOf('2026-11-13', 5.87) }));
+    if (match.outcome !== 'publish') throw new Error(match.outcome);
+    expect(match.extraction.checksPassed).toContain('nsdp_cross_check');
+    expect(match.extraction.checksPassed).not.toContain(NSDP_PENDING_CHECK);
+  });
+
+  describe('the back-check of a value published before the page reached its week', () => {
+    const pending = [
+      { observationDate: '2026-11-04', yieldPercent: 5.9337 },
+      { observationDate: '2026-11-11', yieldPercent: 5.8681 },
+    ];
+
+    it('NC-N4: compares only the value whose week the page shows; two decimals match; the other week is left for its own turn', () => {
+      const r = decideNsdpBackCheck(weekOf('2026-11-13', 5.87), pending);
+      expect(r.checked).toBe(1);
+      expect(r.matched).toEqual([{ observationDate: '2026-11-11', yieldPercent: 5.8681 }]);
+      expect(r.mismatched).toEqual([]);
+      const earlier = decideNsdpBackCheck(weekOf('2026-11-06', 5.93), pending);
+      expect(earlier.checked).toBe(1);
+      expect(earlier.matched.map((m) => m.observationDate)).toEqual(['2026-11-04']);
+    });
+
+    it('NC-N4: a difference at two decimals is returned with both figures and the week; nothing is changed (the function only reports)', () => {
+      const r = decideNsdpBackCheck(weekOf('2026-11-13', 5.9), pending);
+      expect(r.checked).toBe(1);
+      expect(r.matched).toEqual([]);
+      expect(r.mismatched).toEqual([{ observationDate: '2026-11-11', yieldPercent: 5.8681, nsdpYieldPercent: 5.9, nsdpWeekEnded: '2026-11-13' }]);
+      expect(pending[1].yieldPercent).toBe(5.8681);
+    });
+
+    it('NC-N4: a page that cannot be read, shows no yield, or shows a week nobody is waiting for checks nothing', () => {
+      expect(decideNsdpBackCheck({ state: 'unavailable' }, pending).checked).toBe(0);
+      expect(decideNsdpBackCheck(weekOf('2026-11-13', null), pending).checked).toBe(0);
+      expect(decideNsdpBackCheck(weekOf('2026-12-04', 5.9), pending).checked).toBe(0);
+      expect(decideNsdpBackCheck(weekOf('2026-11-13', 5.87), []).checked).toBe(0);
+    });
   });
 });

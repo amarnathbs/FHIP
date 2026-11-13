@@ -129,6 +129,8 @@ export interface StepReport {
   tbill?: RefreshRunReport['tbill'];
   repo?: RefreshRunReport['repo'];
   wrote?: RefreshRunReport['wrote'];
+  /** Earlier values published before the weekly page reached their week, compared with it now. Present on the decide step when the page was read. */
+  backCheck?: RefreshRunReport['backCheck'];
   /** The whole week so far (all steps). Present on the decide step. */
   weekRequests?: { pages: number; robots: number };
 }
@@ -316,7 +318,7 @@ export async function runRefreshStep(input: StepInput): Promise<StepResult> {
     await input.store.save({ expectedAuctionDate: expected, step: 'release_done', evidence: { ...ev, counts: total }, retryNotBefore: retryNotBefore ?? null, decidedLiveAt: notOutYet ? null : input.nowIso }, input.nowIso);
   }
   return finish(
-    { step, detail: done.tbill?.detail ?? done.repo?.detail ?? 'Decided.', requests: made, requestMillis: src.requestMillis?.() ?? [], robots, tbill: done.tbill, repo: done.repo, wrote: done.wrote, weekRequests: total, ...(retryNotBefore ? { retryNotBefore } : {}) },
+    { step, detail: done.tbill?.detail ?? done.repo?.detail ?? 'Decided.', requests: made, requestMillis: src.requestMillis?.() ?? [], robots, tbill: done.tbill, repo: done.repo, wrote: done.wrote, ...(done.backCheck ? { backCheck: done.backCheck } : {}), weekRequests: total, ...(retryNotBefore ? { retryNotBefore } : {}) },
     { job_version: RISK_FREE_REFRESH_JOB_VERSION, robots_outcome: robots, source_status: 'ok', fetch_problem_code: null, tbill_outcome: done.tbill?.outcome ?? null, repo_outcome: done.repo?.outcome ?? null, pages_requested: total.pages, robots_requests: total.robots, failed: false },
   );
 }

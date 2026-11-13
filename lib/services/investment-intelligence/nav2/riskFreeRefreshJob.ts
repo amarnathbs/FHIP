@@ -17,11 +17,15 @@
 // The job NEVER bypasses a verification page, never requests a document, and stops at the first fetch problem (the report names it).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { addDaysIso } from '@/lib/engines/nav2/dates';
 import {
+  NSDP_PENDING_CHECK,
+  decideNsdpBackCheck,
   decideRepoRefresh,
   decideTbillRefresh,
   planRefreshRun,
   type NsdpReading,
+  type PendingStoredValue,
   type RefreshRunPlan,
   type ParsedAuction,
   type RepoRefreshOutcome,
@@ -58,6 +62,8 @@ export interface RefreshRunReport {
   tbill: { outcome: TbillRefreshOutcome['outcome'] | 'up_to_date' | 'not_attempted'; detail: string; reasons?: string[]; auctionDate?: string; yieldPercent?: number } | null;
   repo: { outcome: RepoRefreshOutcome['outcome'] | 'not_attempted'; detail: string } | null;
   wrote: { tbill: { inserted: number; identical: number; queued: number } | null; repo: { inserted: number; identical: number; queued: number } | null; alert?: boolean };
+  /** Values published before the weekly page reached their week, compared with it now (option A). Absent when the page was not read. */
+  backCheck?: { checked: number; matched: number; mismatched: number; detail: string };
 }
 
 interface RpcRow {
@@ -93,6 +99,48 @@ async function storedOn(admin: SupabaseClient, seriesId: string, date: string): 
   if (!data) return null;
   const r = data as { kind: string; value_percent: number | string | null };
   return r.kind === 'gap' ? { kind: 'gap' } : { kind: 'value', yieldPercent: Number(r.value_percent) };
+}
+
+/**
+ * The back-check of option A: values published on the release's own checks (marked nsdp_pending) whose week the weekly page now shows are compared
+ * with it. A match changes nothing. A disagreement queues ONE review item for that date (never a change to the stored value). A failure to read the
+ * stored rows never fails the run: the report says the check did not run.
+ */
+async function backCheckPendingValues(admin: SupabaseClient, nsdp: NsdpReading): Promise<{ report: NonNullable<RefreshRunReport['backCheck']> | undefined; reviews: RpcReview[] }> {
+  if (nsdp.state !== 'value' || nsdp.yield91dPercent === null) return { report: undefined, reviews: [] };
+  let pending: PendingStoredValue[];
+  try {
+    const { data, error } = await admin
+      .from('ii_risk_free_observations')
+      .select('observation_date, value_percent, extraction')
+      .eq('series_id', TBILL_SERIES)
+      .eq('kind', 'value')
+      .eq('entry_kind', 'weekly_refresh_job')
+      .gte('observation_date', addDaysIso(nsdp.weekEnded, -6))
+      .lte('observation_date', nsdp.weekEnded);
+    if (error) throw new Error('read failed');
+    pending = ((data ?? []) as Array<{ observation_date: string; value_percent: number | string; extraction: { checksPassed?: unknown } | null }>)
+      .filter((r) => Array.isArray(r.extraction?.checksPassed) && (r.extraction!.checksPassed as unknown[]).includes(NSDP_PENDING_CHECK))
+      .map((r) => ({ observationDate: String(r.observation_date).slice(0, 10), yieldPercent: Number(r.value_percent) }));
+  } catch {
+    return { report: { checked: 0, matched: 0, mismatched: 0, detail: 'The earlier values could not be read, so the back-check against the weekly page did not run this time.' }, reviews: [] };
+  }
+  const result = decideNsdpBackCheck(nsdp, pending);
+  const reviews: RpcReview[] = result.mismatched.map((m) => ({
+    observation_date: m.observationDate,
+    reasons: ['nsdp_backcheck_mismatch'],
+    candidate: null,
+    evidence: {
+      stored: { observationDate: m.observationDate, yieldPercent: m.yieldPercent },
+      weeklyPage: { weekEnded: m.nsdpWeekEnded, yield91dPercent: m.nsdpYieldPercent },
+      action: 'This value was published from the release alone, before the weekly page reached its week. The page now shows a different figure. Compare both with the RBI release and correct the stored value by upload if the release was misread. Nothing was changed automatically.',
+    },
+  }));
+  const detail =
+    result.checked === 0
+      ? `No earlier value is waiting for the week ended ${dmy(nsdp.weekEnded)}.`
+      : `${result.checked} earlier value(s) published before the weekly page reached their week were compared with the week ended ${dmy(nsdp.weekEnded)}: ${result.matched.length} match, ${result.mismatched.length} differ${result.mismatched.length ? ' (sent to review)' : ''}.`;
+  return { report: { checked: result.checked, matched: result.matched.length, mismatched: result.mismatched.length, detail }, reviews };
 }
 
 function sourceDocument(read: ParsedAuction): string {
@@ -262,6 +310,11 @@ export async function finishRefresh(f: FinishInput): Promise<RefreshRunReport> {
   };
   if (repoDecision.outcome === 'confirm_unchanged') repoVerifiedThrough = repoDecision.verifiedThroughDate;
   else if (repoDecision.outcome === 'review') repoReviews.push({ observation_date: nsdp.state === 'value' ? nsdp.weekEnded : null, reasons: [repoDecision.reason], candidate: null, evidence: { nsdp, stored: lastRepo } });
+
+  // ---- back-check of earlier values that were published before the weekly page reached their week -------------------
+  const back = await backCheckPendingValues(f.admin, nsdp);
+  if (back.report) report.backCheck = back.report;
+  tbillReviews.push(...back.reviews);
 
   if (!plan.mayWrite) return report; // dry run: decisions only
 

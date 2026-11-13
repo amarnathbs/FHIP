@@ -19,6 +19,13 @@
 //       the RBI weekly NSDP page has the week, equal to it at its two decimals;
 //   (d) the date is a weekday, later than the last stored observation (a Wednesday auction;
 //       a Thursday holiday-shifted auction needs the NSDP match as well).
+//   (e) PO DECISION 13-11-2026 ("option A"). The first real production dry run found that RBI's weekly NSDP page runs about two weeks BEHIND the
+//       auction (on Friday 13-11-2026 its latest week was the one ended 30-10-2026), so a fresh auction can never be matched against it, and the
+//       scheduled run has no AI second reading. The NSDP value is therefore compared ONLY when its week is the week of the auction. When the
+//       page has not reached that week yet ("not_yet"), the parser's reading is published on the release's OWN checks alone: the yield follows
+//       from the printed price, a Wednesday auction, later than the stored date, within the week-on-week band of a stored previous value. The row
+//       carries the mark `nsdp_pending`, and when the page catches up the same week is compared (decideNsdpBackCheck): a disagreement is a review
+//       item, never a silent change. An NSDP page that cannot be read, or whose week is LATER than the auction's, still sends the case to review.
 //   Idempotent: the same week again changes nothing; a DIFFERENT value for a stored date is
 //   a review item, never an overwrite.
 //   No accepted bids: a GAP row is recorded, never a value.
@@ -171,9 +178,28 @@ export type ReviewReason =
   | 'single_read_needs_nsdp_match'
   | 'no_previous_observation_needs_nsdp_match'
   | 'non_wednesday_needs_nsdp_match'
-  | 'conflicts_with_stored_value';
+  | 'conflicts_with_stored_value'
+  /** A value published before the NSDP page reached its week was compared with that week later and DIFFERS. */
+  | 'nsdp_backcheck_mismatch';
 
-export type CheckState = 'pass' | 'fail' | 'unavailable' | 'not_run';
+/** not_yet = the weekly page has not reached the auction's week (it runs about two weeks behind); unavailable = unreadable, or its week is later than the auction's. */
+export type CheckState = 'pass' | 'fail' | 'unavailable' | 'not_yet' | 'not_run';
+
+/** Written into `checksPassed` of a value published before the weekly page reached its week: the mark the later back-check looks for. */
+export const NSDP_PENDING_CHECK = 'nsdp_pending';
+
+export type NsdpCoverage = 'covers' | 'not_yet' | 'later_week' | 'no_reading';
+
+/**
+ * Does the weekly page's (latest) week contain this auction? The page's week ends on a Friday, so a Wednesday auction is covered when the week
+ * ended 0 to 6 days after it. An earlier week = the page has not caught up (not_yet); a later one = the page no longer shows the auction's week.
+ */
+export function nsdpCoverage(nsdp: NsdpReading, auctionDate: string): NsdpCoverage {
+  if (nsdp.state !== 'value' || nsdp.yield91dPercent === null) return 'no_reading';
+  const days = daysBetweenIso(auctionDate, nsdp.weekEnded);
+  if (days < 0) return 'not_yet';
+  return days <= 6 ? 'covers' : 'later_week';
+}
 
 export interface RefreshChecks {
   agreement: CheckState;
@@ -286,17 +312,23 @@ export function decideTbillRefresh(input: TbillRefreshInput): TbillRefreshOutcom
     checks.plausibleBand = Math.abs(y - input.lastStored.yieldPercent) <= RISK_FREE_REFRESH_RULES.weekOnWeekBandPp ? 'pass' : 'fail';
     if (checks.plausibleBand === 'fail') reasons.push('outside_plausible_band');
   }
-  if (input.nsdp.state === 'value' && input.nsdp.yield91dPercent !== null) {
+  // The weekly page is compared ONLY when its week is the week of this auction (option A, see the header). A page that has not reached the week yet
+  // is "not_yet", never a mismatch: comparing it with an older week's yield would reject nearly every fresh auction.
+  const coverage = nsdpCoverage(input.nsdp, date);
+  if (coverage === 'covers' && input.nsdp.state === 'value' && input.nsdp.yield91dPercent !== null) {
     checks.nsdpCrossCheck = Math.abs(round2(y) - input.nsdp.yield91dPercent) < RISK_FREE_REFRESH_RULES.nsdpToleranceUpToPp ? 'pass' : 'fail';
     if (checks.nsdpCrossCheck === 'fail') reasons.push('nsdp_mismatch');
   } else {
-    checks.nsdpCrossCheck = 'unavailable';
+    checks.nsdpCrossCheck = coverage === 'not_yet' ? 'not_yet' : 'unavailable';
   }
 
   // ---- rules that need the NSDP match when the evidence is thinner -----------------
   const nsdpMatches = checks.nsdpCrossCheck === 'pass';
+  const nsdpPending = checks.nsdpCrossCheck === 'not_yet';
   if (!nsdpMatches && checks.nsdpCrossCheck !== 'fail') {
-    if (method !== 'parser+ai') reasons.push('single_read_needs_nsdp_match');
+    // Pending: the parser's reading stands on the release's own checks (the other rules below still apply), but a reading that is the AI's ALONE, with
+    // the fixed parser failed, still needs the NSDP match. Everything else (unreadable page, a later week) keeps the original rule.
+    if (nsdpPending ? method === 'ai' : method !== 'parser+ai') reasons.push('single_read_needs_nsdp_match');
     if (checks.plausibleBand === 'unavailable') reasons.push('no_previous_observation_needs_nsdp_match');
     if (dow !== 3) reasons.push('non_wednesday_needs_nsdp_match');
   }
@@ -307,9 +339,43 @@ export function decideTbillRefresh(input: TbillRefreshInput): TbillRefreshOutcom
     'price_recompute',
     ...(checks.plausibleBand === 'pass' ? ['plausible_band'] : []),
     ...(nsdpMatches ? ['nsdp_cross_check'] : []),
+    ...(nsdpPending ? [NSDP_PENDING_CHECK] : []),
     'auction_date',
   ];
   return { outcome: 'publish', auctionDate: date, yieldPercent: y, extraction: provenance(passed), checks };
+}
+
+// ---------------------------------------------------------------------------
+// The later back-check of a value published before the weekly page reached its week
+// ---------------------------------------------------------------------------
+
+export interface PendingStoredValue {
+  observationDate: string;
+  yieldPercent: number;
+}
+
+export interface NsdpBackCheck {
+  /** Stored values (marked nsdp_pending) whose week the page now shows. */
+  checked: number;
+  matched: PendingStoredValue[];
+  mismatched: Array<PendingStoredValue & { nsdpYieldPercent: number; nsdpWeekEnded: string }>;
+}
+
+/**
+ * Pure. For each stored value that was published on the release's own checks (the caller passes only those), compare it with the weekly page when the
+ * page's week is that value's week. Values of other weeks are left alone (they are checked on the run where the page shows their week). A match
+ * changes nothing. A disagreement is returned for a REVIEW ITEM: the stored value is never changed here.
+ */
+export function decideNsdpBackCheck(nsdp: NsdpReading, pending: PendingStoredValue[]): NsdpBackCheck {
+  const out: NsdpBackCheck = { checked: 0, matched: [], mismatched: [] };
+  if (nsdp.state !== 'value' || nsdp.yield91dPercent === null) return out;
+  for (const p of pending) {
+    if (nsdpCoverage(nsdp, p.observationDate) !== 'covers') continue;
+    out.checked += 1;
+    if (Math.abs(round2(p.yieldPercent) - nsdp.yield91dPercent) < RISK_FREE_REFRESH_RULES.nsdpToleranceUpToPp) out.matched.push(p);
+    else out.mismatched.push({ ...p, nsdpYieldPercent: nsdp.yield91dPercent, nsdpWeekEnded: nsdp.weekEnded });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

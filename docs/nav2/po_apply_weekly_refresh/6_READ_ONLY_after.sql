@@ -10,7 +10,7 @@ union all
 select 'step row', expected_auction_date::text || ' | ' || step || ' | decided=' || coalesce(decided_live_at::text, 'no') || ' | wait_until=' || coalesce(retry_not_before::text, 'none') || ' | pages=' || (evidence -> 'counts' ->> 'pages') || ' robots=' || (evidence -> 'counts' ->> 'robots')
   from (select * from public.ii_risk_free_refresh_stage order by expected_auction_date desc limit 3) st
 union all
-select 'series row', observation_date::text || ' | ' || kind || ' | ' || coalesce(value_percent::text, 'gap') || ' | ' || entry_kind
+select 'series row', observation_date::text || ' | ' || kind || ' | ' || coalesce(value_percent::text, 'gap') || ' | ' || entry_kind || ' | checks=' || coalesce((extraction -> 'checksPassed')::text, 'none')
   from (select * from public.ii_risk_free_observations where series_id = 'RBI_91D_TBILL_CUTOFF_YIELD' order by observation_date desc limit 4) s
 union all
 select 'attempt', attempted_at::text || ' | ' || source_status || ' | tbill=' || coalesce(tbill_outcome, '-') || ' | repo=' || coalesce(repo_outcome, '-') || ' | pages=' || pages_requested::text
