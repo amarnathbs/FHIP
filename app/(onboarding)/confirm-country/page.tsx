@@ -12,6 +12,7 @@ import {
   LANDING_COUNTRY_COOKIE_NAME,
   parseLandingCountryCookie,
 } from '@/lib/services/landingCountryContext';
+import { sessionCheckUrl } from '@/lib/services/profileReadOutcome';
 import { ConfirmCountryForm } from './ConfirmCountryForm';
 
 // Mandatory Country Confirmation — the compulsory screen itself. Lives under
@@ -24,8 +25,9 @@ import { ConfirmCountryForm } from './ConfirmCountryForm';
 // Server-rendered classification (never client-guessed) decides what to
 // show: a user who is already CONFIRMED is bounced straight to /dashboard
 // (defends against someone bookmarking this URL or using browser back after
-// confirming); PROFILE_INCOMPLETE/DB_ERROR fall back to /onboarding, since
-// this page has nothing meaningful to update without a profile row.
+// confirming); PROFILE_INCOMPLETE falls back to /onboarding, since this page has
+// nothing meaningful to update without a profile row, and DB_ERROR goes to the
+// /session-check retry page (a database error is not an incomplete profile).
 //
 // =============================================================================
 // G3 — the landing handoff (spec section 6.2)
@@ -60,7 +62,9 @@ export default async function ConfirmCountryPage() {
   if (gate.state === 'CONFIRMED') {
     redirect(gate.experienceLevel === 'GENERIC' ? '/global-setup' : '/dashboard');
   }
-  if (gate.state === 'PROFILE_INCOMPLETE' || gate.state === 'DB_ERROR') redirect('/onboarding');
+  if (gate.state === 'PROFILE_INCOMPLETE') redirect('/onboarding');
+  // A database ERROR is not an incomplete profile (25-11-2026): it used to send the visitor to the blank /onboarding wizard. They go to the retry page instead, which comes back here.
+  if (gate.state === 'DB_ERROR') redirect(sessionCheckUrl('/confirm-country'));
 
   const registry = await loadCountryRegistrySnapshot(supabase);
 

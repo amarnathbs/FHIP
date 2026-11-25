@@ -4,7 +4,7 @@
 //
 // NAMED NEGATIVE CONTROLS
 //   NC-P1  a failed read puts code + short message in x-fhip-profile-read on the document, on the redirect to /onboarding too;
-//   NC-P2  the decisions are exactly the old ones: a failed read still redirects an app page to /onboarding and still stays on /onboarding;
+//   NC-P2  (superseded 25-11-2026, see proxyProfileReadResilience.test.ts) a failed read used to keep the old decisions; it now goes to /session-check, and only "no row" still means "no profile";
 //   NC-P3  a read that works adds no header, and a completed profile still moves from /onboarding to /dashboard;
 //   NC-P4  the header never carries more than a code and 100 plain ASCII characters, and nothing but the error text (no row data);
 //   NC-P5  a signed-out visitor is untouched.
@@ -43,14 +43,19 @@ describe('proxy profile read diagnostic', () => {
     expect(onDashboard.headers.get(PROFILE_READ_HEADER)).toBe('PGRST301: JWSError JWSInvalidSignature');
   });
 
-  it('NC-P2: a failed read changes no decision: an app page still goes to /onboarding, /onboarding still stays', async () => {
+  it('NC-P2 (SUPERSEDED 25-11-2026 on purpose): a failed read used to change no decision. It now goes to /session-check instead of the blank wizard; the DIAGNOSTIC (NC-P1) is unchanged. See proxyProfileReadResilience.test.ts', async () => {
     read = { data: null, error: { code: 'PGRST002', message: 'Could not query the database for the schema cache. Retrying.' } };
     const dash = await call('/dashboard');
     expect(dash.status).toBe(307);
-    expect(new URL(dash.headers.get('location')!).pathname).toBe('/onboarding');
-    const stay = await call('/onboarding');
-    expect(stay.status).toBe(200);
-    expect(stay.headers.get('location')).toBeNull();
+    expect(new URL(dash.headers.get('location')!).pathname).toBe('/session-check');
+    const onboarding = await call('/onboarding');
+    expect(onboarding.status).toBe(307);
+    expect(new URL(onboarding.headers.get('location')!).pathname).toBe('/session-check');
+    // what did NOT change: the database's own "no row" answer still means "no profile"
+    read = { data: null, error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' } };
+    const missing = await call('/dashboard');
+    expect(new URL(missing.headers.get('location')!).pathname).toBe('/onboarding');
+    expect((await call('/onboarding')).status).toBe(200);
   });
 
   it('NC-P3: a read that works adds no header, and a completed profile still leaves /onboarding for /dashboard', async () => {

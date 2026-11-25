@@ -3,6 +3,7 @@ import { createServerClient, type SetAllCookies } from '@supabase/ssr';
 import { loadCountryRegistrySnapshot } from '@/lib/services/countryGate';
 import { isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
 import { describeProfileReadError, PROFILE_READ_HEADER } from '@/lib/services/profileReadDiagnostic';
+import { classifyProfileRead, safeInternalPath, sessionCheckUrl } from '@/lib/services/profileReadOutcome';
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
@@ -120,21 +121,37 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAppRoute && user) {
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('onboarding_completed, country_of_residence, country_confirmed_at')
-      .eq('user_id', user.id)
-      .single();
+    const readProfile = async () =>
+      supabase
+        .from('user_profiles')
+        .select('onboarding_completed, country_of_residence, country_confirmed_at')
+        .eq('user_id', user.id)
+        .single();
+    let { data: profile, error: profileError } = await readProfile();
+    // A failed read is not a missing profile (25-11-2026; see lib/services/profileReadOutcome.ts). One quick second try covers a network blip or a schema-cache reload; a token that the data API
+    // refuses because it was issued only seconds ago needs longer than a proxy should wait, so that case goes to /session-check below.
+    if (classifyProfileRead(profile, profileError) === 'failed') {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      ({ data: profile, error: profileError } = await readProfile());
+    }
+    const outcome = classifyProfileRead(profile, profileError);
 
-    // TEMPORARY DIAGNOSTIC (13-11-2026). On production a signed-in user was sent to /onboarding although the profile row exists and is
-    // completed, and the database never received the profile query, so the read fails before it reaches Postgres. Until now the error of this
-    // read was thrown away, so nobody could see why. When the read returns an error, its code and a short message (never data) go out in the
-    // response header below, where the signed-in user's own browser can show it (Network tab, the document request). It changes NO decision:
-    // every redirect below is exactly as before. Remove it once the cause is fixed.
+    // DIAGNOSTIC (13-11-2026, kept). When the read returns an error, its code and a short message (never data) go out in the response header below, where the signed-in
+    // user's own browser can show it (Network tab, the document request). Since 25-11-2026 it is no longer only a diagnostic: see the failed-read branch just below.
     const tag = <T extends NextResponse>(r: T): T => {
       if (profileError) r.headers.set(PROFILE_READ_HEADER, describeProfileReadError(profileError));
       return r;
     };
+
+    // A failed read is NOT "no profile" (25-11-2026). On production a signed-in user with a complete profile was twice sent to /onboarding (a blank wizard asking for everything again)
+    // because the read failed: the data API refused a token issued only seconds earlier (PGRST303, a clock difference inside Supabase). The visitor is sent to /session-check instead, which
+    // says their data is safe, tries again a few times at spaced intervals and then asks them to try again. Only the database's own "no row" answer (PGRST116) still means "no profile".
+    // The refreshed session cookies travel with the redirect, so a token refreshed on this very request is not lost.
+    if (outcome === 'failed') {
+      const redirect = NextResponse.redirect(new URL(sessionCheckUrl(safeInternalPath(`${pathname}${request.nextUrl.search}`)), request.url));
+      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+      return tag(redirect);
+    }
 
     if (!profile?.onboarding_completed && !isOnboardingRoute) {
       return tag(NextResponse.redirect(new URL('/onboarding', request.url)));

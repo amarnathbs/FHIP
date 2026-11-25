@@ -157,6 +157,7 @@ Pages are wrapped (`export default function XPage(props) { return <><PageBackLin
 | `/retirement` | `app/(app)/retirement/page.tsx` | `/investments`: "Back to Investments" | Done |
 | `/score` | `app/(app)/score/page.tsx` | `/dashboard`: "Back to Dashboard" | Done |
 | `/security` | `app/(marketing)/security/page.tsx` | `/`: "Back to home" | Done |
+| `/session-check` | `app/(onboarding)/session-check/page.tsx` | `/login`: "Back to sign in" | Done |
 | `/signup` | `app/(auth)/signup/page.tsx` | none | Exempt: Authentication page. |
 | `/terms` | `app/(marketing)/terms/page.tsx` | `/`: "Back to home" | Done |
 
