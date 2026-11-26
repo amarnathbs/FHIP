@@ -4,6 +4,7 @@ import { loadCountryRegistrySnapshot } from '@/lib/services/countryGate';
 import { isG4CapabilityLayerEnabled } from '@/lib/services/appCapabilityFlag';
 import { describeProfileReadError, PROFILE_READ_HEADER } from '@/lib/services/profileReadDiagnostic';
 import { classifyProfileRead, safeInternalPath, sessionCheckUrl } from '@/lib/services/profileReadOutcome';
+import { mustNotBeShared, PRIVATE_CACHE_CONTROL } from '@/lib/services/responseCaching';
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
@@ -68,6 +69,18 @@ export async function proxy(request: NextRequest) {
     /^\/(dashboard|onboarding|confirm-country|global-setup|income|expenses|assets|liabilities|investments|investment-intelligence|retirement|insurance|score|dna|resilience|goals|twin|financial-twin|financial-data-hub|forecast|profile|recommendations|reports|coach|settings|admin|ai-insights|companies|aie-review)/
   );
 
+  // EVERY response this function returns goes through here (26-11-2026; see lib/services/responseCaching.ts). A CDN in front of the app once saved /onboarding for a year and served it without
+  // running this proxy at all; and a response that writes a refreshed session cookie must never be saved and replayed to someone else.
+  const seal = <T extends NextResponse>(r: T): T => {
+    const facts = {
+      isAppRoute: Boolean(isAppRoute),
+      requestCookieNames: request.cookies.getAll().map((c) => c.name),
+      responseCookieCount: r.cookies.getAll().length,
+    };
+    if (mustNotBeShared(facts)) r.headers.set('Cache-Control', PRIVATE_CACHE_CONTROL);
+    return r;
+  };
+
   // ---------------------------------------------------------------------
   // G3 section 10 — the interim pre-G4 boundary, at the routing layer
   // ---------------------------------------------------------------------
@@ -117,7 +130,7 @@ export async function proxy(request: NextRequest) {
   const isTokenAuthorizedPrintRoute = /^\/(reports\/[^/]+|forecast\/report)\/print$/.test(pathname) && request.nextUrl.searchParams.has('token');
 
   if (isAppRoute && !user && !isTokenAuthorizedPrintRoute) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return seal(NextResponse.redirect(new URL('/login', request.url)));
   }
 
   if (isAppRoute && user) {
@@ -140,7 +153,7 @@ export async function proxy(request: NextRequest) {
     // user's own browser can show it (Network tab, the document request). Since 25-11-2026 it is no longer only a diagnostic: see the failed-read branch just below.
     const tag = <T extends NextResponse>(r: T): T => {
       if (profileError) r.headers.set(PROFILE_READ_HEADER, describeProfileReadError(profileError));
-      return r;
+      return seal(r);
     };
 
     // A failed read is NOT "no profile" (25-11-2026). On production a signed-in user with a complete profile was twice sent to /onboarding (a blank wizard asking for everything again)
@@ -180,7 +193,7 @@ export async function proxy(request: NextRequest) {
     return tag(response);
   }
 
-  return response;
+  return seal(response);
 }
 
 export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'] };
